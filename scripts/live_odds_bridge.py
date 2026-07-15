@@ -542,6 +542,7 @@ class BridgeStore:
         self.events_path = self.run_dir / f"{self.stamp}_live_odds_events.jsonl"
         self.normalized_path = self.run_dir / f"{self.stamp}_normalized_market_events.jsonl"
         self.manifest_path = self.run_dir / f"{self.stamp}_bridge_manifest.json"
+        self.first_quotes_path = Path(output_root).parent / "first_quotes.json"
         self._lock = threading.Lock()
         self._fingerprints: deque[str] = deque(maxlen=10000)
         self._fingerprint_set: set[str] = set()
@@ -562,7 +563,29 @@ class BridgeStore:
         self.match_clock_updates = 0
         self.match_metadata_updates = 0
         self.market_definitions = 0
+        self._first_quote_archive = self._load_first_quote_archive()
         self._write_manifest()
+
+    def _load_first_quote_archive(self) -> dict:
+        try:
+            value = json.loads(self.first_quotes_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            value = {}
+        if not isinstance(value, dict):
+            value = {}
+        value.setdefault("schema_version", "1.0")
+        value.setdefault("matches", {})
+        return value
+
+    def _write_first_quote_archive(self) -> None:
+        self.first_quotes_path.parent.mkdir(parents=True, exist_ok=True)
+        self._first_quote_archive["updated_at"] = _now().isoformat()
+        temporary = self.first_quotes_path.with_name(f".{self.first_quotes_path.name}.tmp")
+        temporary.write_text(
+            json.dumps(self._first_quote_archive, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        temporary.replace(self.first_quotes_path)
 
     @staticmethod
     def _unique_run_dir(root: Path, stamp: str) -> Path:
@@ -645,6 +668,7 @@ class BridgeStore:
                 with self.events_path.open("a", encoding="utf-8", newline="\n") as handle:
                     handle.write(json.dumps(stored_event, ensure_ascii=False, separators=(",", ":")) + "\n")
             if normalized_rows:
+                archive_changed = False
                 directly_verified_matches = {
                     str(row.get("match_id") or "")
                     for row in normalized_rows
@@ -675,12 +699,28 @@ class BridgeStore:
                                 str(row.get("selection_code") or ""),
                             )
                             self._latest_quotes[key] = row
+                            if row.get("odds_scale_verified") is True and row.get("inferred_decimal_odds") is not None:
+                                match_id = str(row.get("match_id") or "")
+                                archive_match = self._first_quote_archive["matches"].setdefault(
+                                    match_id, {"metadata": None, "quotes": {}}
+                                )
+                                archive_key = "|".join(key[1:])
+                                if archive_key not in archive_match["quotes"]:
+                                    archive_match["quotes"][archive_key] = row
+                                    archive_changed = True
                         elif row.get("record_type") == "match_clock":
                             self.match_clock_updates += 1
                             self._latest_clocks[str(row.get("match_id") or "")] = row
                         elif row.get("record_type") == "match_metadata":
                             self.match_metadata_updates += 1
                             self._latest_match_metadata[str(row.get("match_id") or "")] = row
+                            match_id = str(row.get("match_id") or "")
+                            archive_match = self._first_quote_archive["matches"].setdefault(
+                                match_id, {"metadata": None, "quotes": {}}
+                            )
+                            if archive_match.get("metadata") is None:
+                                archive_match["metadata"] = row
+                                archive_changed = True
                         elif row.get("record_type") == "market_definition":
                             self.market_definitions += 1
                             definition_key = (
@@ -688,6 +728,8 @@ class BridgeStore:
                                 str(row.get("market_code") or ""),
                             )
                             self._market_definitions[definition_key] = row
+                if archive_changed:
+                    self._write_first_quote_archive()
             self.stored += 1
             return True, fingerprint
 

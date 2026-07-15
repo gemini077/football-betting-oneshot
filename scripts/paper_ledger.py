@@ -11,6 +11,9 @@ from typing import Any
 
 MIN_STAKE = 2.0
 STAKE_STEP = 0.01
+PAPER_BANKROLL = 100.0
+KELLY_FRACTION = 0.25
+MAX_STAKE_PCT = 0.05
 
 
 def norm(value: Any) -> str:
@@ -27,6 +30,56 @@ def number(value: Any) -> float | None:
         return parsed if math.isfinite(parsed) else None
     except (TypeError, ValueError):
         return None
+
+
+def round_stake(value: float) -> float:
+    """Round down to the platform's executable stake increment."""
+    steps = math.floor((value + 1e-12) / STAKE_STEP)
+    return round(steps * STAKE_STEP, 2)
+
+
+def apply_ev_staking(contract: dict) -> dict:
+    """Size a paper bet from EV; never turn the minimum into a forced bet.
+
+    Conservative probability is preferred when the report provides one.
+    Correct-score reports currently expose only a point probability, which is
+    kept explicit in ``sizing_probability_basis`` instead of inventing a
+    confidence haircut.
+    """
+    item = dict(contract)
+    odds = number(item.get("odds"))
+    point = number(item.get("probability"))
+    conservative = number(item.get("conservative_probability"))
+    sizing_probability = conservative if conservative is not None else point
+    item["point_ev"] = point * odds - 1 if point is not None and odds is not None else None
+    item["sizing_probability"] = sizing_probability
+    item["sizing_probability_basis"] = (
+        "conservative_probability" if conservative is not None else "model_point_probability"
+    )
+    item["sizing_ev"] = (
+        sizing_probability * odds - 1
+        if sizing_probability is not None and odds is not None
+        else None
+    )
+    item["stake_units"] = 0.0
+    item["kelly_fraction"] = None
+    if odds is None or sizing_probability is None:
+        item["sizing_status"] = "missing_price_or_probability"
+        return item
+    if item["sizing_ev"] <= 0:
+        item["sizing_status"] = "rejected_non_positive_ev"
+        return item
+    full_kelly = item["sizing_ev"] / (odds - 1)
+    fractional_kelly = max(0.0, full_kelly * KELLY_FRACTION)
+    item["kelly_fraction"] = fractional_kelly
+    raw_stake = min(PAPER_BANKROLL * fractional_kelly, PAPER_BANKROLL * MAX_STAKE_PCT)
+    stake = round_stake(raw_stake)
+    if stake < MIN_STAKE:
+        item["sizing_status"] = "rejected_below_platform_minimum"
+        return item
+    item["stake_units"] = stake
+    item["sizing_status"] = "paper_candidate"
+    return item
 
 
 def parse_score(value: Any) -> tuple[int, int] | None:
@@ -48,7 +101,7 @@ def primary_contract(payload: dict) -> dict:
         "odds": None,
         "probability": None,
         "ev": None,
-        "stake_units": MIN_STAKE,
+        "stake_units": 0.0,
         "price_source": None,
     }
 
@@ -128,7 +181,7 @@ def score_contract(payload: dict) -> dict | None:
         "odds": None,
         "probability": probability,
         "ev": None,
-        "stake_units": MIN_STAKE,
+        "stake_units": 0.0,
         "price_source": None,
     }
     if chosen:
@@ -149,6 +202,13 @@ def settle_ticket(ticket: dict, score: tuple[int, int] | None) -> dict:
     stake = number(item.get("stake_units")) or 0.0
     if odds is None:
         item.update(status="observed_no_price", settlement="无有效赛前价格", profit_units=None)
+        return item
+    if item.get("sizing_status") in {
+        "rejected_non_positive_ev",
+        "rejected_below_platform_minimum",
+    }:
+        label = "EV不通过" if item.get("sizing_status") == "rejected_non_positive_ev" else "低于最低投注额"
+        item.update(status="rejected_by_ev", settlement=label, profit_units=0.0)
         return item
     if score is None:
         item.update(status="pending", settlement="待赛果", profit_units=None)
@@ -208,6 +268,7 @@ def summarize(tickets: list[dict]) -> dict:
     settled = [row for row in tickets if row.get("status") == "settled"]
     pending = [row for row in tickets if row.get("status") == "pending"]
     observations = [row for row in tickets if str(row.get("status", "")).startswith("observed_")]
+    rejected = [row for row in tickets if row.get("status") == "rejected_by_ev"]
     stake = sum(number(row.get("stake_units")) or 0 for row in settled)
     profit = sum(number(row.get("profit_units")) or 0 for row in settled)
     wins = sum(1 for row in settled if (number(row.get("profit_units")) or 0) > 0)
@@ -223,6 +284,7 @@ def summarize(tickets: list[dict]) -> dict:
         "pending": len(pending),
         "settled": len(settled),
         "observations": len(observations),
+        "rejected": len(rejected),
         "stake_units": round(stake, 4),
         "profit_units": round(profit, 4),
         "roi": profit / stake if stake else None,
@@ -262,9 +324,6 @@ def build_paper_ledger(
     frozen_by_key = {}
     for row in frozen_tickets:
         migrated = dict(row)
-        # Explicit platform-policy migration: preserve selection and price, but
-        # bring historical paper stakes up to the current executable minimum.
-        migrated["stake_units"] = max(MIN_STAKE, round(number(migrated.get("stake_units")) or 0.0, 2))
         # A frozen direction remains immutable. If the first captured market
         # quote was indexed only after freezing, recover that historical quote
         # without substituting a later price or changing the selection.
@@ -276,6 +335,11 @@ def build_paper_ledger(
             ):
                 if field in override:
                     migrated[field] = override[field]
+        # Settled paper history remains immutable. Pending/observed contracts
+        # are re-sized because the old implementation incorrectly forced every
+        # contract to the 2-yuan minimum without checking EV.
+        if migrated.get("status") != "settled":
+            migrated = apply_ev_staking(migrated)
         frozen_by_key[freeze_key(migrated)] = migrated
     tickets_by_key = dict(frozen_by_key)
     used_ids = [
@@ -308,6 +372,7 @@ def build_paper_ledger(
             if contract is None:
                 continue
             candidate = {"ticket_id": f"SIM-{next_id:04d}", **base, **contract}
+            candidate = apply_ev_staking(candidate)
             candidate_key = freeze_key(candidate)
             if candidate_key in tickets_by_key:
                 continue
@@ -329,8 +394,10 @@ def build_paper_ledger(
         "policy": {
             "minimum_stake": MIN_STAKE,
             "stake_step": STAKE_STEP,
-            "primary_stake_units": MIN_STAKE,
-            "correct_score_stake_units": MIN_STAKE,
+            "paper_bankroll": PAPER_BANKROLL,
+            "staking_method": "quarter_kelly_positive_ev_only",
+            "kelly_fraction": KELLY_FRACTION,
+            "maximum_stake_pct": MAX_STAKE_PCT,
             "currency": "CNY",
             "real_balance_affected": False,
             "frozen_snapshot_only": True,
