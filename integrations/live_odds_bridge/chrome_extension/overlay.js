@@ -17,6 +17,7 @@
   let latestPayload = null;
   let verifiedQuotes = [];
   let currentMatchId = null;
+  let currentMatchMetadata = {};
   let quoteTimer = null;
   let repriceTimer = null;
   let routeTimer = null;
@@ -491,7 +492,8 @@
     ui.minimumEv.value = (Number(profile.execution?.minimum_conservative_ev || 0) * 100).toFixed(1);
     ui.freshness.value = Math.max(1, Number(profile.price?.max_quote_age_ms || 15000) / 1000).toFixed(0);
     ui.confirmed.checked = profile.probability?.confirmed_model_output === true;
-    ui.probSource.textContent = `已同步 ${profile.model_version || ""}`.trim();
+    const sourceLabel = String(profile.sync_source || "").startsWith("github-pages") ? "GitHub" : "本地";
+    ui.probSource.textContent = `已同步 ${profile.model_version || ""} · ${sourceLabel}`.trim();
     if (verifiedQuotes.length) rebuildContractSelectors(selectorProfileFromRemote(profile));
   }
 
@@ -499,7 +501,12 @@
     if (!currentMatchId || profileBusy) return;
     profileBusy = true;
     try {
-      const response = await sendMessage({ type: "FBOS_EV_PROFILE", matchId: currentMatchId });
+      const response = await sendMessage({
+        type: "FBOS_EV_PROFILE",
+        matchId: currentMatchId,
+        homeName: currentMatchMetadata.home_name || "",
+        awayName: currentMatchMetadata.away_name || ""
+      });
       if (!response?.ok) throw new Error(response?.error || "分析配置服务无响应");
       const result = response.data || {};
       if (!result.found || !result.profile) {
@@ -538,6 +545,7 @@
         quote.odds_scale_verified === true && quote.market_status === 0 && quote.selection_status === 1
       );
       const metadata = (latestPayload.match_metadata || [])[0] || {};
+      currentMatchMetadata = metadata;
       ui.matchName.textContent = metadata.home_name && metadata.away_name ? `${metadata.home_name} vs ${metadata.away_name}` : `比赛 ${currentMatchId}`;
       ui.matchMeta.textContent = metadata.tournament_name || "赛事信息待同步";
       ui.quoteCount.textContent = `${verifiedQuotes.length}个已核验报价`;
@@ -673,11 +681,13 @@
     verifiedQuotes = [];
     latestPayload = null;
     currentRemoteProfile = null;
+    currentMatchMetadata = {};
     clearAnalysisProfile();
     const profile = await loadProfile(matchId);
     await refreshModelState();
-    await refreshAnalysisProfile();
     await refreshQuotes(profile);
+    await refreshAnalysisProfile();
+    if (currentRemoteProfile?.active && verifiedQuotes.length) rebuildContractSelectors(selectorProfileFromRemote(currentRemoteProfile));
     await reprice();
   }
 

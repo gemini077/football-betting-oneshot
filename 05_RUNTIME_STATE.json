@@ -85,8 +85,8 @@
     "bankroll_state_changed": false
   },
   "live_odds_bridge": {
-    "module_version": "v0.8.1",
-    "status": "service_v0.8.1_listening_extension_v0.8.1_pending_reload",
+    "module_version": "v0.9.0",
+    "status": "extension_v0.9.0_local_and_github_profile_sync_pending_browser_reload",
     "mode": "read_only_shadow",
     "target_page_host": "user-pc-new.hl99yjjpf.com",
     "receiver": "scripts/live_odds_bridge.py",
@@ -108,7 +108,7 @@
     "odds_scale_status": "scaled_integer_1e5_direct_display_crosscheck_or_same_match_ov_field_peer_crosscheck",
     "last_live_verified_at": "2026-07-14T17:40:52+08:00",
     "last_extension_reload_verified": false,
-    "extension_version_pending_reload": "0.8.0",
+    "extension_version_pending_reload": "0.9.0",
     "last_reload_observation": {
       "window_seconds": 0,
       "received_delta": 281,
@@ -163,12 +163,13 @@
     "bankroll_state_changed": false
   },
   "live_ev_profile": {
-    "module_version": "v0.8.1",
-    "status": "analysis_probability_publishes_independently_of_current_ev_candidate",
+    "module_version": "v0.9.0",
+    "status": "analysis_probability_publishes_current_profile_and_remote_team_index",
     "publisher": "scripts/live_ev_profile.py",
     "schema": "schemas/live_ev_profile.schema.json",
     "output_root": "data/live_ev_profiles",
     "current_path_pattern": "data/live_ev_profiles/current/<match_id>.json",
+    "remote_index": "data/live_ev_profiles/current/index.json",
     "history_path_pattern": "data/live_ev_profiles/history/YYYYMMDD_HHMMSS/",
     "service_endpoint": "http://127.0.0.1:8765/v1/ev-profile?match_id=<match_id>",
     "requires_exact_contract_mapping": true,
@@ -182,8 +183,8 @@
     "bankroll_state_changed": false
   },
   "live_ev_overlay": {
-    "module_version": "v0.8.1",
-    "status": "report_probability_assignment_fixed_exact_primary_contract_guard_pending_browser_reload",
+    "module_version": "v0.9.0",
+    "status": "newest_local_or_github_profile_with_live_id_or_team_pair_matching_pending_browser_reload",
     "chrome_extension": "integrations/live_odds_bridge/chrome_extension",
     "script": "integrations/live_odds_bridge/chrome_extension/overlay.js",
     "style": "integrations/live_odds_bridge/chrome_extension/overlay.css",
@@ -192,6 +193,8 @@
     "clicks_odds": false,
     "submits_orders": false,
     "automatic_betting": false,
+    "profile_sources": ["local_bridge", "github_pages"],
+    "profile_match_policy": "exact_live_match_id_then_normalized_home_away_pair",
     "execution_authorized": false,
     "requires_report_published_model_probability": true,
     "manual_probability_entry_enabled": false,

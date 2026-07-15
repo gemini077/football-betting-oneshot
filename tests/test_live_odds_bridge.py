@@ -83,11 +83,12 @@ class LiveOddsBridgeTests(unittest.TestCase):
                 encoding="utf-8"
             )
         )
-        self.assertEqual("0.8.1", manifest["version"])
+        self.assertEqual("0.9.0", manifest["version"])
+        self.assertIn("https://gemini077.github.io/football-betting-oneshot/*", manifest["host_permissions"])
         overlay = next(item for item in manifest["content_scripts"] if "overlay.js" in item.get("js", []))
         self.assertEqual("document_idle", overlay["run_at"])
 
-    def test_background_exposes_only_local_latest_reprice_and_model_state_messages(self):
+    def test_background_exposes_local_and_remote_analysis_profile_sync(self):
         source = (ROOT / "integrations" / "live_odds_bridge" / "chrome_extension" / "background.js").read_text(
             encoding="utf-8"
         )
@@ -96,6 +97,10 @@ class LiveOddsBridgeTests(unittest.TestCase):
         self.assertIn('"/v1/latest"', source)
         self.assertIn('"/v1/ev-profile"', source)
         self.assertIn("FBOS_EV_PROFILE", source)
+        self.assertIn("REMOTE_PROFILE_ROOT", source)
+        self.assertIn("index.json", source)
+        self.assertIn("sameTeamPair", source)
+        self.assertIn("loadNewestAnalysisProfile", source)
         self.assertNotIn("user-pc-new.hl99yjjpf.com/#/", source)
 
     def test_overlay_auto_loads_analysis_profile_and_does_not_require_manual_probability(self):
@@ -105,6 +110,9 @@ class LiveOddsBridgeTests(unittest.TestCase):
         self.assertIn("refreshAnalysisProfile", source)
         self.assertIn("applyAnalysisProfile", source)
         self.assertIn('type: "FBOS_EV_PROFILE"', source)
+        self.assertIn("homeName: currentMatchMetadata.home_name", source)
+        self.assertIn("awayName: currentMatchMetadata.away_name", source)
+        self.assertIn("GitHub", source)
         self.assertIn("分析后自动赋值", source)
         self.assertIn("clearAnalysisProfile", source)
 

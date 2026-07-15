@@ -2,6 +2,7 @@
 
 const TARGET_HOST = "user-pc-new.hl99yjjpf.com";
 const DEFAULT_ENDPOINT = "http://127.0.0.1:8765/v1/events";
+const REMOTE_PROFILE_ROOT = "https://gemini077.github.io/football-betting-oneshot/live_ev_profiles/current";
 
 async function loadSettings() {
   return chrome.storage.local.get({
@@ -35,6 +36,68 @@ async function fetchServiceJson(path, options = {}) {
 
 async function updateStatus(patch) {
   await chrome.storage.local.set(patch);
+}
+
+function normalizedTeamName(value) {
+  return String(value || "")
+    .normalize("NFKC")
+    .toLocaleLowerCase()
+    .replace(/[\s\-_.·'’()（）]/g, "");
+}
+
+function sameTeamPair(profile, homeName, awayName) {
+  const expectedHome = normalizedTeamName(homeName);
+  const expectedAway = normalizedTeamName(awayName);
+  const actualHome = normalizedTeamName(profile?.match?.home);
+  const actualAway = normalizedTeamName(profile?.match?.away);
+  if (!expectedHome || !expectedAway || !actualHome || !actualAway) return false;
+  const homeMatches = actualHome === expectedHome || actualHome.includes(expectedHome) || expectedHome.includes(actualHome);
+  const awayMatches = actualAway === expectedAway || actualAway.includes(expectedAway) || expectedAway.includes(actualAway);
+  return homeMatches && awayMatches;
+}
+
+function profileTimestamp(profile) {
+  const value = Date.parse(profile?.published_at || profile?.analysis_timestamp || "");
+  return Number.isFinite(value) ? value : 0;
+}
+
+async function fetchRemoteJson(url) {
+  const response = await fetch(url, { cache: "no-store" });
+  if (!response.ok) return null;
+  return response.json().catch(() => null);
+}
+
+async function fetchRemoteProfile(matchId, homeName, awayName) {
+  const exact = await fetchRemoteJson(`${REMOTE_PROFILE_ROOT}/${encodeURIComponent(String(matchId))}.json`);
+  if (exact?.match) return { ...exact, sync_source: "github-pages" };
+  if (!homeName || !awayName) return null;
+  const index = await fetchRemoteJson(`${REMOTE_PROFILE_ROOT}/index.json`);
+  const matched = (index?.profiles || [])
+    .filter((profile) => sameTeamPair(profile, homeName, awayName))
+    .sort((left, right) => profileTimestamp(right) - profileTimestamp(left))[0];
+  return matched ? { ...matched, sync_source: "github-pages-team-match" } : null;
+}
+
+async function loadNewestAnalysisProfile(settings, message) {
+  let localResult = null;
+  try {
+    const url = serviceUrl(settings.endpoint, "/v1/ev-profile");
+    url.searchParams.set("match_id", String(message.matchId));
+    const response = await fetch(url, { cache: "no-store" });
+    const result = await response.json().catch(() => ({}));
+    if (response.ok && result?.found && result?.profile) {
+      localResult = { ...result.profile, sync_source: "local-bridge" };
+    }
+  } catch {
+    localResult = null;
+  }
+  const remoteResult = await fetchRemoteProfile(message.matchId, message.homeName, message.awayName).catch(() => null);
+  const profile = !localResult ? remoteResult
+    : !remoteResult ? localResult
+      : profileTimestamp(remoteResult) >= profileTimestamp(localResult) ? remoteResult : localResult;
+  return profile
+    ? { found: true, profile, sync_source: profile.sync_source }
+    : { found: false, profile: null, sync_source: null };
 }
 
 async function forwardEvent(event) {
@@ -131,11 +194,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message?.type === "FBOS_EV_PROFILE" && message.matchId) {
     loadSettings().then(async (settings) => {
       try {
-        const url = serviceUrl(settings.endpoint, "/v1/ev-profile");
-        url.searchParams.set("match_id", String(message.matchId));
-        const response = await fetch(url, { cache: "no-store" });
-        const result = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(result.error || `HTTP ${response.status}`);
+        const result = await loadNewestAnalysisProfile(settings, message);
         sendResponse({ ok: true, data: result });
       } catch (error) {
         sendResponse({ ok: false, error: String(error.message || error) });
