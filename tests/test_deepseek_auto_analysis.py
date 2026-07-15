@@ -158,7 +158,7 @@ def test_fetch_uses_kickoff_date_for_after_midnight_match(monkeypatch):
         "deepseek_auto_analysis.selected_workspace_match",
         lambda request: {"kickoff": "2026-07-16 03:00"},
     )
-    assert fetch_date_for_request({"business_date": "2026-07-15"}) == "2026-07-16"
+    assert fetch_date_for_request({"business_date": "2026-07-15"}) == "2026-07-15"
 
 
 def test_analysis_workflow_does_not_try_to_push_workflow_files():

@@ -15,6 +15,7 @@ PUBLIC_DATA_DIRS = (
     "live_ev_profiles",
     "match_workspace",
     "postmatch_dashboard",
+    "postmatch_reviews",
 )
 
 

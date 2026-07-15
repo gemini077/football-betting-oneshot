@@ -36,6 +36,7 @@ import sys
 import argparse
 import time
 import random
+import html as html_lib
 from collections import OrderedDict
 
 # ─── Configuration ──────────────────────────────────────────
@@ -490,68 +491,56 @@ def parse_daxiao(html_text):
 
 # ─── Shuju (数据分析) Parser ─────────────────────────────────
 def parse_shuju(html_text):
-    """Extract pre-match analysis data from shuju page."""
+    """Extract stable UTF-8 form summaries from the 500 pre-match page."""
     result = OrderedDict()
 
-    # Clean text for extraction
-    plain = re.sub(r'<[^>]+>', ' ', html_text)
-    plain = re.sub(r'\s+', ' ', plain)
+    def clean(fragment):
+        text = re.sub(r'<script\b[^>]*>.*?</script>', ' ', fragment, flags=re.I | re.S)
+        text = re.sub(r'<style\b[^>]*>.*?</style>', ' ', text, flags=re.I | re.S)
+        text = re.sub(r'<[^>]+>', ' ', text)
+        return re.sub(r'\s+', ' ', html_lib.unescape(text)).strip()
 
-    # FIFA ranking
-    rank_matches = re.findall(r'\[世(\d+)\]', plain)
-    if len(rank_matches) >= 2:
-        result["home_rank"] = int(rank_matches[0])
-        result["away_rank"] = int(rank_matches[1])
-    elif len(rank_matches) == 1:
-        result["home_rank"] = int(rank_matches[0])
+    def section(section_id):
+        start = re.search(rf'<div\b[^>]*\bid=["\']{re.escape(section_id)}["\'][^>]*>', html_text, re.I)
+        if not start:
+            return ''
+        tail = html_text[start.end():]
+        end = re.search(r'<div\b[^>]*\bid=["\']team_zhanji(?:2)?_[01]["\'][^>]*>', tail, re.I)
+        return tail[:end.start()] if end else tail
 
-    # Formation
-    fm_match = re.search(r'(\d-\d-\d)', plain)
-    if fm_match:
-        result["formation"] = fm_match.group(1)
+    def form_summary(fragment):
+        paragraph = re.search(r'<p>\s*<strong>.*?</strong>\s*近\d+场战绩.*?</p>', fragment, re.I | re.S)
+        text = clean(paragraph.group(0)) if paragraph else ''
+        match = re.search(
+            r'^(?P<team>[\u4e00-\u9fffA-Za-z0-9·._ -]+?)\s*近(?P<matches>\d+)场战绩\s*'
+            r'(?P<wins>\d+)胜\s*(?P<draws>\d+)平\s*(?P<losses>\d+)负\s*'
+            r'进\s*(?P<goals_for>\d+)球\s*失\s*(?P<goals_against>\d+)球', text)
+        if not match:
+            return None
+        return OrderedDict([
+            ("team", match.group("team").strip()), ("matches", int(match.group("matches"))),
+            ("wins", int(match.group("wins"))), ("draws", int(match.group("draws"))),
+            ("losses", int(match.group("losses"))), ("goals_for", int(match.group("goals_for"))),
+            ("goals_against", int(match.group("goals_against"))),
+        ])
 
-    # H2H
+    names = [clean(value) for value in re.findall(r'<div\s+class=["\']team_name["\']>([^<]+)', html_text, re.I)]
+    if len(names) >= 2:
+        result["home_team"] = names[0]
+        result["away_team"] = names[1]
     h2h = re.search(
-        r'近(\d+)次交战[,，]\s*(\S+?)\s*(\d+)胜(\d+)平(\d+)负[,，]\s*进(\d+)球[,，]\s*失(\d+)球',
-        plain
-    )
+        r'双方近(?P<matches>\d+)次交战，(?P<team>[^\s]+)\s*(?P<wins>\d+)胜\s*'
+        r'(?P<draws>\d+)平\s*(?P<losses>\d+)负\s*，?\s*进\s*(?P<goals_for>\d+)球\s*，?\s*失\s*(?P<goals_against>\d+)球', clean(html_text))
     if h2h:
-        result["h2h"] = OrderedDict([
-            ("matches", int(h2h.group(1))),
-            ("team", h2h.group(2)),
-            ("wins", int(h2h.group(3))),
-            ("draws", int(h2h.group(4))),
-            ("losses", int(h2h.group(5))),
-            ("goals_for", int(h2h.group(6))),
-            ("goals_against", int(h2h.group(7))),
-        ])
-
-    # Recent form (home or general)
-    form = re.search(
-        r'近(\d+)场\S*[：:]?\s*(\d+)胜(\d+)平(\d+)负[,，]?\s*进(\d+)球[,，]?\s*失(\d+)球',
-        plain
-    )
-    if form:
-        result["recent_form"] = OrderedDict([
-            ("matches", int(form.group(1))),
-            ("wins", int(form.group(2))),
-            ("draws", int(form.group(3))),
-            ("losses", int(form.group(4))),
-            ("goals_for", int(form.group(5))),
-            ("goals_against", int(form.group(6))),
-        ])
-
-    # Avg goals (look for 场均)
-    avg_goals = re.findall(r'场均[：:]?\s*([\d.]+)\s*球', plain)
-    if len(avg_goals) >= 2:
-        result["avg_goals_scored"] = float(avg_goals[0])
-        result["avg_goals_conceded"] = float(avg_goals[1])
-
-    # Injuries/Suspensions
-    injuries = re.findall(r'(停赛|伤病|伤缺|缺席)[：:]*\s*([\u4e00-\u9fff·]{2,20})', plain)
-    if injuries:
-        result["absences"] = [{"reason": r, "player": n.strip()} for r, n in injuries[:5]]
-
+        result["h2h"] = OrderedDict((key, int(h2h.group(key)) if key != "team" else h2h.group(key)) for key in ("matches", "team", "wins", "draws", "losses", "goals_for", "goals_against"))
+    recent = OrderedDict()
+    for key, section_id in (("home_overall", "team_zhanji_1"), ("away_overall", "team_zhanji_0"), ("home_home", "team_zhanji2_1"), ("away_away", "team_zhanji2_0")):
+        summary = form_summary(section(section_id))
+        if summary:
+            recent[key] = summary
+    if recent:
+        result["recent_form"] = recent
+    result["source_note"] = "500.com pre-match summaries; actual goals, not xG"
     return result
 
 

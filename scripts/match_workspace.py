@@ -229,10 +229,15 @@ def workbook_table_rows(path: Path, sheet_name: str, header_row: int = 3) -> lis
 
 
 def review_rows(runtime: dict) -> list[dict]:
+    automatic = []
+    for path in sorted((DATA / "postmatch_reviews").glob("*.json")):
+        payload = load_json(path, {})
+        if payload.get("实际90分钟比分") and payload.get("赛事与对阵"):
+            automatic.append(payload)
     configured = runtime.get("latest_review_workbook")
     path = ROOT / configured if configured else None
     if not path or not path.exists():
-        return []
+        return automatic
     signals = workbook_table_rows(path, "02_赛前信号与赛果归因")
     timelines = workbook_table_rows(path, "03_时间轴与盘口验证")
     roots = workbook_table_rows(path, "05_根因决策树与修正池")
@@ -242,7 +247,7 @@ def review_rows(runtime: dict) -> list[dict]:
         match_id = str(row.get("MatchID") or "")
         row["_timeline"] = timeline_by_id.get(match_id)
         row["_root_cause"] = root_by_id.get(match_id)
-    return signals
+    return signals + automatic
 
 
 def find_review(home: str, away: str, rows: list[dict]) -> dict | None:

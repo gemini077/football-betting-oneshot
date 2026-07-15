@@ -1,7 +1,7 @@
 {
   "model_name": "Football Betting OneShot",
   "model_id": "football-betting-oneshot",
-  "model_version": "v0.13.6",
+  "model_version": "v0.14.0",
   "versioning_policy": {
     "scheme": "SemVer",
     "patch": "实现修复、文案或兼容性调整，不改变模型行为",
@@ -85,8 +85,8 @@
     "bankroll_state_changed": false
   },
   "live_odds_bridge": {
-    "module_version": "v0.9.0",
-    "status": "extension_v0.9.0_local_and_github_profile_sync_pending_browser_reload",
+    "module_version": "v0.9.3",
+    "status": "extension_v0.9.3_local_live_quotes_and_github_profile_sync_pending_browser_reload",
     "mode": "read_only_shadow",
     "target_page_host": "user-pc-new.hl99yjjpf.com",
     "receiver": "scripts/live_odds_bridge.py",
@@ -183,8 +183,8 @@
     "bankroll_state_changed": false
   },
   "live_ev_overlay": {
-    "module_version": "v0.9.0",
-    "status": "newest_local_or_github_profile_with_live_id_or_team_pair_matching_pending_browser_reload",
+    "module_version": "v0.9.3",
+    "status": "github_profile_status_fallback_and_local_live_quotes_pending_browser_reload",
     "chrome_extension": "integrations/live_odds_bridge/chrome_extension",
     "script": "integrations/live_odds_bridge/chrome_extension/overlay.js",
     "style": "integrations/live_odds_bridge/chrome_extension/overlay.css",
@@ -225,7 +225,7 @@
     "formal_in_play_probability_requires_major_version": "v1.0.0"
   },
   "match_workspace": {
-    "module_version": "v0.13.6",
+    "module_version": "v0.14.0",
     "status": "owner_authorized_analysis_with_workspace_odds_evidence_gate",
     "generator": "scripts/match_workspace.py",
     "daily_schedule_updater": "scripts/daily_schedule_workspace.py",
@@ -243,13 +243,15 @@
     "bankroll_state_changed": false
   },
   "deepseek_automation": {
-    "module_version": "v0.13.6",
+    "module_version": "v0.14.0",
     "workflow": ".github/workflows/analyze-selected.yml",
     "entrypoint": "scripts/deepseek_auto_analysis.py",
     "secret_name": "DEEPSEEK_API_KEY",
     "default_model": "deepseek-v4-pro",
     "trigger_policy": "repository_owner_issue_or_manual_dispatch_only",
     "synthesis_layer_only": true,
+    "deterministic_probability_core": "recent_venue_form_market_calibrated_poisson_v1",
+    "llm_probability_generation_allowed": false,
     "workspace_odds_injected": true,
     "minimum_evidence_gate": "official_market_baseline_or_matched_source_snapshot",
     "provider_sentinel_values_rejected": true,
