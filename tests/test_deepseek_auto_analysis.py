@@ -9,6 +9,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 from deepseek_auto_analysis import (  # noqa: E402
     attach_workspace_evidence,
     devig_three_way,
+    fetch_date_for_request,
     has_minimum_analysis_evidence,
     normalize_analysis,
     request_from_event,
@@ -141,6 +142,14 @@ def test_workspace_official_odds_create_market_baseline_without_model_probabilit
 
 def test_empty_context_is_not_publishable():
     assert not has_minimum_analysis_evidence({"official_market_baseline": None, "source_snapshots": {}})
+
+
+def test_fetch_uses_kickoff_date_for_after_midnight_match(monkeypatch):
+    monkeypatch.setattr(
+        "deepseek_auto_analysis.selected_workspace_match",
+        lambda request: {"kickoff": "2026-07-16 03:00"},
+    )
+    assert fetch_date_for_request({"business_date": "2026-07-15"}) == "2026-07-16"
 
 
 def test_analysis_workflow_does_not_try_to_push_workflow_files():
