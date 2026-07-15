@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Football Betting OneShot analysis-to-overlay live EV profile",
+  "type": "object",
+  "required": [
+    "schema_version", "profile_id", "active", "model_name", "model_version",
+    "published_at", "match", "analysis_input_only", "execution_authorized",
+    "explicit_lock_required", "lock_state_changed", "bankroll_state_changed"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "profile_id": {"type": "string"},
+    "active": {"type": "boolean"},
+    "inactive_reason": {"type": ["string", "null"]},
+    "model_name": {"const": "Football Betting OneShot"},
+    "model_version": {"type": "string", "pattern": "^v[0-9]+\\.[0-9]+\\.[0-9]+$"},
+    "analysis_timestamp": {"type": ["string", "null"]},
+    "published_at": {"type": "string"},
+    "report_payload_path": {"type": ["string", "null"]},
+    "match": {
+      "type": "object",
+      "required": ["match_id"],
+      "properties": {
+        "match_id": {"type": "string", "pattern": "^[0-9]{1,30}$"},
+        "home": {"type": ["string", "null"]},
+        "away": {"type": ["string", "null"]},
+        "competition": {"type": ["string", "null"]},
+        "kickoff_local": {"type": ["string", "null"]}
+      }
+    },
+    "contract": {"type": ["object", "null"]},
+    "probability": {"type": ["object", "null"]},
+    "price": {"type": ["object", "null"]},
+    "execution": {"type": ["object", "null"]},
+    "analysis_input_only": {"const": true},
+    "execution_authorized": {"const": false},
+    "explicit_lock_required": {"const": true},
+    "lock_state_changed": {"const": false},
+    "bankroll_state_changed": {"const": false}
+  }
+}

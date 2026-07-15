@@ -1,0 +1,57 @@
+{
+  "manifest_version": 3,
+  "name": "Football Betting OneShot 实时EV浮窗",
+  "version": "0.8.1",
+  "description": "只读捕获比赛赔率，在网页悬浮窗实时计算EV、价格门槛和固定小额候选金额；不自动下注。",
+  "permissions": [
+    "storage"
+  ],
+  "host_permissions": [
+    "https://user-pc-new.hl99yjjpf.com/*",
+    "http://127.0.0.1:8765/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "Football Betting OneShot 滚球桥接",
+    "default_popup": "popup.html"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["overlay.css"],
+      "matches": ["https://user-pc-new.hl99yjjpf.com/*"]
+    }
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "https://user-pc-new.hl99yjjpf.com/*"
+      ],
+      "js": [
+        "main-hook.js"
+      ],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": [
+        "https://user-pc-new.hl99yjjpf.com/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "run_at": "document_start"
+    },
+    {
+      "matches": [
+        "https://user-pc-new.hl99yjjpf.com/*"
+      ],
+      "js": [
+        "overlay.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ]
+}
+

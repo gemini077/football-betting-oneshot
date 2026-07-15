@@ -1,0 +1,123 @@
+{
+  "schema_version": "1.0",
+  "generated_at": "2026-07-15T13:20:00+08:00",
+  "source_report": "data/analysis_reports/20260714_204522/20260714_204522_法国_vs_西班牙_盘口解析.json",
+  "match": {
+    "competition": "世界杯",
+    "home": "法国",
+    "away": "西班牙",
+    "kickoff_local": "2026-07-15 03:00",
+    "shuju_id": 1359162
+  },
+  "result": {
+    "score_90m": "0-2",
+    "after_extra_time": null,
+    "penalty_shootout": null,
+    "verified_at": "2026-07-15T13:20:00+08:00",
+    "sources": [
+      "https://apnews.com/article/87fb7740fa552edf4bfd28d0e8727c23",
+      "https://www.aljazeera.com/sports/liveblog/2026/7/14/france-vs-spain-live-fifa-world-cup-2026-semifinal"
+    ],
+    "key_statistics": [
+      "西班牙90分钟2-0击败法国晋级决赛",
+      "小2.5方向命中，总进球2",
+      "唯一比分1-1未命中，法国未进球"
+    ]
+  },
+  "pre_match": {
+    "cross_validation": "Poisson+Dixon-Coles完成；杯赛低比分修正；市场仅校验不替代模型",
+    "market_nature": "竞彩2.08/3.08/3.09对应EV约-9.2%/-11.7%/-14.6%；Pinnacle小2.5@1.90点估计EV约+9.7%，但保守概率下沿54%仅+2.6%，不足覆盖模型与首发误差，执行线取≥2.02",
+    "unique_score": "法国 1-1 西班牙（90分钟）",
+    "primary_dimension": "小2.5（方向保留，未通过保守EV）",
+    "asian_direction": "小2.5（方向保留，未通过保守EV）",
+    "total_direction": "模型总进球均值 2.37",
+    "btts": "BTTS No 52.0%，优势很弱，不单独执行",
+    "maximum_error_point": "法国高效进攻把低比分分布推向2-1或2-0；西班牙长期零封样本可能被法国转换速度打破；确认首发若改变法国中场拦截能力，双方λ都需重估",
+    "final_state": "空仓｜方向存在但保守EV未过线｜等待用户渠道赔率复算｜未锁单"
+  },
+  "audit": {
+    "primary_hit": "是",
+    "score_hit": "否",
+    "adjacent_pollution": "是",
+    "tail_pollution": "否",
+    "error_attribution": "小球判断正确，但1X2分布高估法国与平局，低估西班牙零封胜",
+    "logic_classification": "红且逻辑对",
+    "random_event": "否",
+    "maximum_error_type": "法国进攻效率与西班牙零封能力错估",
+    "summary": "赛前主维度为小2.5且方向命中，实际法国0-2西班牙；唯一比分1-1未命中。价格层未过保守执行线，继续按空仓处理。",
+    "model_effective_coefficient": 0.7,
+    "valid_sample": 1
+  },
+  "timeline": {
+    "countdown": "T-赛前报告冻结",
+    "compliance": "未锁单，符合空仓纪律",
+    "opening": "世界杯半决赛低比分修正，小2.5为主维度",
+    "closing": "保守EV未达执行线，空仓",
+    "change": "西班牙2-0，低比分成立但胜负方向偏离",
+    "triggers": "西班牙中场控制与零封能力压低法国进球",
+    "direction_result": "小2.5命中",
+    "theory_validation": "杯赛低比分修正有效；法国进球均值需复核",
+    "final_validation": "0-2；无加时点球",
+    "completeness": "高",
+    "sources_note": "AP match report 与 Al Jazeera liveblog 交叉核验"
+  },
+  "root_cause": {
+    "decision_audit": "主维度小球正确；1X2和比分层偏向法国/平局错误",
+    "counterfactual": "赛前若更强调西班牙零封样本，应降低法国1球与1-1首位",
+    "identifiability": "部分可识别",
+    "modify_model": "否",
+    "recommendation": "将西班牙连续零封视为观察项，不因单场直接上调规则",
+    "convergence": "红且逻辑对；唯一比分错误",
+    "maximum_error_type": "强队零封能力与法国进攻效率估计",
+    "status": "观察",
+    "priority": "中"
+  },
+  "nine_layers": [
+    {
+      "layer": 1,
+      "name": "原始数据",
+      "summary": "90分钟比分 0-2；加时 无；点球 无；双源：https://apnews.com/article/87fb7740fa552edf4bfd28d0e8727c23；https://www.aljazeera.com/sports/liveblog/2026/7/14/france-vs-spain-live-fifa-world-cup-2026-semifinal"
+    },
+    {
+      "layer": 2,
+      "name": "多假设检验",
+      "summary": "假设A：低比分平局；假设B：西班牙低比分零封胜。赛果支持B，主维度小球仍成立。"
+    },
+    {
+      "layer": 3,
+      "name": "关键信号拆解",
+      "summary": "杯赛低比分信号有效，BTTS No弱信号也有效；法国主胜概率明显偏高。"
+    },
+    {
+      "layer": 4,
+      "name": "反事实推演",
+      "summary": "赛前可从西班牙防守稳定性降低1-1权重，但小2.5仍是合理主维度。"
+    },
+    {
+      "layer": 5,
+      "name": "决策节点审计",
+      "summary": "价格纪律正确，未锁单不产生盈亏。"
+    },
+    {
+      "layer": 6,
+      "name": "根因决策树",
+      "summary": "直接原因是法国进球被高估；系统原因是零封队伍防守状态未充分进入λ；结构原因是国家队淘汰赛状态样本难校准。"
+    },
+    {
+      "layer": 7,
+      "name": "时间旅行验证",
+      "summary": "可调整排序但不足以事前锁单。"
+    },
+    {
+      "layer": 8,
+      "name": "模型观察项",
+      "summary": "单场n=1，记录强防守队零封观察项。"
+    },
+    {
+      "layer": 9,
+      "name": "收敛结论",
+      "summary": "主维度命中、唯一比分未命中、空仓无结算。"
+    }
+  ],
+  "lock_settlements": []
+}

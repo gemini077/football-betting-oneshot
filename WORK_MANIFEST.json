@@ -1,0 +1,118 @@
+{
+  "name": "football-betting-oneshot",
+  "display_name": "Football Betting OneShot",
+  "version": "v0.12.0",
+  "version_policy": "SemVer：修复升补丁，新模块或正式规则升次版本，不兼容架构大改升主版本",
+  "priority_order": [
+    "00_PROJECT_INSTRUCTIONS_粘贴到项目指令.md",
+    "01_MODEL_CORE_赛前流程.md",
+    "02_BETTING_SOP_投注层.md",
+    "03_POSTMATCH_赛后复盘.md",
+    "04_CORRECTIONS_模型修正池.md",
+    "05_RUNTIME_STATE.json",
+    "06_INPUT_SCHEMA_输入规范.md",
+    "07_OUTPUT_TEMPLATES_输出模板.md"
+  ],
+  "mutable_files": [
+    "04_CORRECTIONS_模型修正池.md",
+    "05_RUNTIME_STATE.json"
+  ],
+  "immutable_after_lock": [
+    "锁单时间戳",
+    "玩法",
+    "方向",
+    "赔率",
+    "金额",
+    "赔率来源"
+  ],
+  "optional_external_files": [
+    "data/postmatch_reviews/*.xlsx"
+  ],
+  "data_acquisition": {
+    "instructions": "09_DATA_FETCHING_数据抓取.md",
+    "skill": "skills/500com-football-scraper/SKILL.md",
+    "entrypoint": "scripts/fetch_football_data.py",
+    "cache_root": "data/source_cache",
+    "snapshot_root": "data/fetch_runs"
+  },
+  "polymarket_analysis": {
+    "instructions": "12_POLYMARKET_PUBLIC_ANALYSIS_只读市场证据.md",
+    "client": "scripts/polymarket_public.py",
+    "schema": "schemas/polymarket_analysis_snapshot.schema.json",
+    "mode": "public_read_only_analysis_evidence",
+    "analysis_input_only": true,
+    "used_for_model_probability": false,
+    "used_for_ev": false,
+    "execution_source": false,
+    "account_connected": false,
+    "trading_enabled": false,
+    "explicit_lock_required": true
+  },
+  "report_generation": {
+    "instructions": "10_HTML_REPORT_网页报告.md",
+    "entrypoint": "scripts/generate_analysis_report.py",
+    "schema": "schemas/analysis_report.schema.json",
+    "output_root": "data/analysis_reports",
+    "default_after_complete_analysis": true,
+    "explicit_lock_required": true
+  },
+  "betting_portfolio": {
+    "schema": "schemas/analysis_report.schema.json",
+    "layers": ["保本层", "中轴层", "博上层"],
+    "multiple_tickets_allowed": true,
+    "audited_parlays_allowed": true,
+    "same_match_overlap_audit_required": true,
+    "explicit_lock_required": true
+  },
+  "postmatch_automation": {
+    "instructions": "docs/AUTOMATIC_POSTMATCH_自动赛后复盘.md",
+    "queue_builder": "scripts/postmatch_queue.py",
+    "schedule_builder": "scripts/postmatch_schedule.py",
+    "workbook_updater": "scripts/postmatch_workbook_update.mjs",
+    "dashboard_generator": "scripts/postmatch_dashboard.py",
+    "review_schema": "schemas/postmatch_review.schema.json",
+    "dashboard_latest": "data/postmatch_dashboard/latest.html",
+    "result_scope": "90分钟含伤停，不含加时和点球",
+    "minimum_result_sources": 2,
+    "scheduling": "event_driven_one_shot_standard_135m_single_leg_knockout_195m_one_retry_45m",
+    "automatic_betting": false,
+    "explicit_lock_required": true
+  },
+  "live_odds_bridge": {
+    "instructions": "11_LIVE_ODDS_BRIDGE_滚球只读桥接.md",
+    "receiver": "scripts/live_odds_bridge.py",
+    "chrome_extension": "integrations/live_odds_bridge/chrome_extension",
+    "schema": "schemas/live_odds_event.schema.json",
+    "normalized_schema": "schemas/live_odds_normalized_event.schema.json",
+    "output_root": "data/live_odds_bridge/captures",
+    "mode": "read_only_shadow",
+    "in_play_betting_enabled": false,
+    "explicit_lock_required": true
+  },
+  "live_ev_reprice": {
+    "entrypoint": "scripts/live_ev_reprice.py",
+    "schema": "schemas/live_ev_reprice.schema.json",
+    "output_root": "data/live_ev_reprices",
+    "supported_contracts": ["binary_no_push", "three_way_selection"],
+    "execution_authorized": false,
+    "explicit_lock_required": true
+  },
+  "live_ev_profile": {
+    "publisher": "scripts/live_ev_profile.py",
+    "schema": "schemas/live_ev_profile.schema.json",
+    "output_root": "data/live_ev_profiles",
+    "service_endpoint": "/v1/ev-profile?match_id=<match_id>",
+    "analysis_input_only": true,
+    "execution_authorized": false,
+    "explicit_lock_required": true
+  },
+  "live_ev_overlay": {
+    "script": "integrations/live_odds_bridge/chrome_extension/overlay.js",
+    "style": "integrations/live_odds_bridge/chrome_extension/overlay.css",
+    "refresh_interval_ms": 1000,
+    "reads_page_dom": false,
+    "automatic_betting": false,
+    "explicit_lock_required": true
+  }
+}
+
