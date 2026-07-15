@@ -197,6 +197,37 @@ def _history_dir(root: Path, stamp: str) -> Path:
     return candidate
 
 
+def rebuild_current_profile_index(
+    output_root: Path | str = DEFAULT_OUTPUT_ROOT,
+    *,
+    now: datetime | None = None,
+) -> Path:
+    """Rebuild the public current-profile index used by the browser extension."""
+
+    current_dir = Path(output_root) / "current"
+    current_dir.mkdir(parents=True, exist_ok=True)
+    indexed_profiles = []
+    for profile_path in sorted(current_dir.glob("*.json")):
+        if profile_path.name == "index.json":
+            continue
+        try:
+            indexed = json.loads(profile_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if isinstance(indexed, dict) and isinstance(indexed.get("match"), dict):
+            indexed_profiles.append(indexed)
+    instant = now or datetime.now().astimezone()
+    index_path = current_dir / "index.json"
+    _atomic_json(index_path, {
+        "schema_version": "1.0",
+        "generated_at": instant.isoformat(),
+        "profiles": indexed_profiles,
+        "analysis_input_only": True,
+        "execution_authorized": False,
+    })
+    return index_path
+
+
 def publish_live_ev_profiles(
     payload: dict,
     *,
@@ -288,6 +319,8 @@ def publish_live_ev_profiles(
             "current_path": str(current_path),
             "history_path": str(history_path),
         })
+
+    rebuild_current_profile_index(root, now=instant)
 
     return {
         "status": "published",

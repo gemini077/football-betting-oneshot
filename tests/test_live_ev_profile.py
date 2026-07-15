@@ -80,6 +80,10 @@ class LiveEvProfileTests(unittest.TestCase):
             self.assertFalse(current["lock_state_changed"])
             self.assertFalse(current["bankroll_state_changed"])
             self.assertTrue(list((root / "history" / "20260714_090000").glob("*.json")))
+            index = json.loads((root / "current" / "index.json").read_text(encoding="utf-8"))
+            self.assertEqual(1, len(index["profiles"]))
+            self.assertEqual("5503037", index["profiles"][0]["match"]["match_id"])
+            self.assertFalse(index["execution_authorized"])
 
     def test_invalid_probability_replaces_known_match_with_inactive_profile(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -102,6 +102,7 @@
     "schema": "schemas/live_ev_profile.schema.json",
     "output_root": "data/live_ev_profiles",
     "service_endpoint": "/v1/ev-profile?match_id=<match_id>",
+    "remote_index": "data/live_ev_profiles/current/index.json",
     "analysis_input_only": true,
     "execution_authorized": false,
     "explicit_lock_required": true
@@ -110,6 +111,8 @@
     "script": "integrations/live_odds_bridge/chrome_extension/overlay.js",
     "style": "integrations/live_odds_bridge/chrome_extension/overlay.css",
     "refresh_interval_ms": 1000,
+    "profile_sources": ["local_bridge", "github_pages"],
+    "profile_match_policy": "exact_live_match_id_then_normalized_home_away_pair",
     "reads_page_dom": false,
     "automatic_betting": false,
     "explicit_lock_required": true
