@@ -1,4 +1,7 @@
 import json
+import re
+import shutil
+import subprocess
 import tempfile
 import unittest
 from datetime import date, timedelta
@@ -8,6 +11,20 @@ from scripts.match_workspace import RUNTIME, build, build_daily_portfolio, creat
 
 
 class MatchWorkspacePortfolioTests(unittest.TestCase):
+    @unittest.skipUnless(shutil.which("node"), "Node.js is required for inline-script syntax validation")
+    def test_rendered_inline_scripts_have_valid_javascript_syntax(self):
+        scripts = re.findall(r"<script>([\s\S]*?)</script>", render("{}"))
+        self.assertGreaterEqual(len(scripts), 2)
+        for index, script in enumerate(scripts):
+            checked = subprocess.run(
+                ["node", "--check"],
+                input=script.encode("utf-8"),
+                capture_output=True,
+                check=False,
+            )
+            error = checked.stderr.decode("utf-8", errors="replace")
+            self.assertEqual(0, checked.returncode, f"inline script {index}: {error}")
+
     def test_same_second_rebuild_uses_a_unique_output_directory(self):
         with tempfile.TemporaryDirectory() as temp:
             output = Path(temp)
