@@ -1,0 +1,287 @@
+{
+  "report": {
+    "model_name": "Football Betting OneShot",
+    "model_version": "v0.13.5",
+    "report_type": "DeepSeek辅助赛前分析（基础内核审计后发布）",
+    "analysis_timestamp": "2026-07-15T10:51:37+00:00",
+    "snapshot_timestamp": "2026-07-15T10:49:57.969650+00:00",
+    "final_execution_version": false,
+    "data_run_id": "20260715_104957",
+    "ai_summary": "本报告为辅助分析草稿，基于仅有的官方赔率信息进行去水市场基线分析。由于缺乏基本面数据（如球队实力、伤停、首发、xG等）及其他市场数据，无法进行深入的泊松模型预测。根据官方赔率，客队阿拉木图被看好（胜赔1.59），但市场存在一定水分（overround 1.129）。公平概率显示客胜概率约55.7%，主胜20.36%，平局23.94%。让球盘（主队+1）选项表明市场预期客队可能净胜1球以上。然而，由于信息严重不足，本报告不能作为投注决策依据。",
+    "ai_provider": "DeepSeek",
+    "ai_model": "deepseek-v4-pro",
+    "live_ev_profile_publication": {
+      "status": "published",
+      "published": [
+        {
+          "match_id": "2040514",
+          "active": false,
+          "profile_id": "20260715_105138-2040514-1",
+          "current_path": "/home/runner/work/football-betting-oneshot/football-betting-oneshot/data/live_ev_profiles/current/2040514.json",
+          "history_path": "/home/runner/work/football-betting-oneshot/football-betting-oneshot/data/live_ev_profiles/history/20260715_105138/20260715_105138_2040514_live_ev_profile.json"
+        }
+      ],
+      "skipped": [],
+      "analysis_input_only": true,
+      "execution_authorized": false,
+      "lock_state_changed": false,
+      "bankroll_state_changed": false
+    }
+  },
+  "match": {
+    "competition": "欧冠",
+    "stage": "未核到",
+    "home": "苏捷斯卡",
+    "away": "阿拉木图",
+    "business_date": "2026-07-15",
+    "kickoff_local": "2026-07-16 03:00",
+    "match_num": "周三202",
+    "shuju_id": null,
+    "single_match_available": null,
+    "league": "欧冠",
+    "kickoff": "2026-07-16T03:00:00+08:00",
+    "match_id": "2040514"
+  },
+  "market": {
+    "official_spf": {
+      "home": 4.35,
+      "draw": 3.7,
+      "away": 1.59
+    },
+    "official_rqspf": {
+      "handicap": 1,
+      "home": 2.07,
+      "draw": 3.34,
+      "away": 2.88
+    },
+    "pinnacle": {},
+    "consensus": {
+      "open": null,
+      "current": null
+    },
+    "betfair": {},
+    "polymarket": {
+      "schema_version": "1.0",
+      "source": "polymarket_public_gamma",
+      "analysis_input_only": true,
+      "authentication_used": false,
+      "account_connected": false,
+      "trading_enabled": false,
+      "match": {
+        "status": "NO_MATCH_IDENTITY"
+      },
+      "quality_flags": [
+        "NO_MATCH_IDENTITY"
+      ]
+    },
+    "euro_bookmaker_count": 0,
+    "asian_company_count": 0,
+    "rq_company_count": 0,
+    "totals_company_count": 0,
+    "official_market_baseline": {
+      "prices": {
+        "home": 4.35,
+        "draw": 3.7,
+        "away": 1.59
+      },
+      "overround": 1.129086,
+      "payout_rate": 0.885672,
+      "fair_probabilities": {
+        "home": 0.203603,
+        "draw": 0.239371,
+        "away": 0.557026
+      },
+      "role": "official_market_baseline_only_not_model_probability"
+    }
+  },
+  "data_quality": {
+    "status": "仅市场基线",
+    "missing": [
+      "球队实力数据",
+      "伤停信息",
+      "首发阵容",
+      "历史交锋",
+      "近期状态",
+      "xG数据",
+      "其他博彩公司赔率对比"
+    ],
+    "notes": [
+      "已从所选主页场次注入体彩胜平负赔率，并计算去水市场基线；该基线不是模型概率。"
+    ],
+    "level": "LOW",
+    "reason": "仅拥有官方胜平负赔率作为有效证据，缺乏球队基本面、市场深度、交易量等数据。"
+  },
+  "fundamentals": {
+    "status": "待复核",
+    "items": []
+  },
+  "model": {
+    "status": "DeepSeek辅助综合；未替代本地概率校准",
+    "lambda_home": null,
+    "lambda_away": null,
+    "rho": null,
+    "expected_goals": null,
+    "probabilities": null,
+    "total_goals_buckets": [],
+    "btts": {
+      "yes": null,
+      "no": null,
+      "judgement": "数据不足，暂不判断"
+    },
+    "score_probabilities": []
+  },
+  "decisions": {
+    "unique_primary_dimension": "spf",
+    "unique_score": "数据不足，暂不形成结论",
+    "mathematical_first": "数据不足，暂不形成结论",
+    "market_first": "体彩去水市场基线：主胜20.4%、平局23.9%、客胜55.7%；仅作定价基准。",
+    "maximum_error_points": [
+      "基本面数据完全缺失，无法评估球队实际实力",
+      "无泊松模型参数，无法计算预期进球及概率",
+      "缺少多市场赔率对比，无法检测赔率异常或价值投注机会",
+      "让球盘数据存在但未做深度分析"
+    ],
+    "value_judgement": "无足够证据判断是否存在价值投注",
+    "final_state": "空仓｜DeepSeek辅助分析已生成，等待模型与价格复核｜未锁单"
+  },
+  "betting": {
+    "balance": 51.43,
+    "open_bets": [],
+    "candidates": [],
+    "current_exposure": 0,
+    "remaining_cash": 51.43,
+    "state": "空仓｜未锁单",
+    "execution_authorized": false,
+    "lock_state_changed": false,
+    "bankroll_state_changed": false,
+    "price_audit": [],
+    "layers": [
+      {
+        "label": "保本层",
+        "display": "保本层｜低波动",
+        "purpose": "承担组合稳定器角色，但不承诺保本；只收价格合格、误差较小的合约。",
+        "guardrail": "不得用多场热门串关伪装低风险。",
+        "candidate_count": 0,
+        "locked_count": 0,
+        "proposed_exposure": 0,
+        "committed_exposure": 0,
+        "status": "暂无合格候选"
+      },
+      {
+        "label": "中轴层",
+        "display": "中轴层｜主收益",
+        "purpose": "承载当日主要正EV暴露，可为单关或经审核的跨场组合。",
+        "guardrail": "每一腿必须独立通过价格审核。",
+        "candidate_count": 0,
+        "locked_count": 0,
+        "proposed_exposure": 0,
+        "committed_exposure": 0,
+        "status": "暂无合格候选"
+      },
+      {
+        "label": "博上层",
+        "display": "博上层｜高方差",
+        "purpose": "小额使用高赔率正EV；正确比分只能进入本层。",
+        "guardrail": "不得承担回本任务，不得覆盖一串相邻比分。",
+        "candidate_count": 0,
+        "locked_count": 0,
+        "proposed_exposure": 0,
+        "committed_exposure": 0,
+        "status": "暂无合格候选"
+      }
+    ],
+    "parlays": [],
+    "overlap_audit": [],
+    "candidate_exposure": 0,
+    "portfolio_state": "三层均为空仓",
+    "parlay_policy": "串关只在每腿独立正EV、价格同时可得且相关性通过审核时成立"
+  },
+  "evidence_chain": [],
+  "market_intelligence": {},
+  "risk_engine": {},
+  "base_engine_audit": {
+    "policy": "未明确废弃即继续生效",
+    "source_version": "football-odds-analyst v3.10.8 + Football Betting OneShot v0.13.5",
+    "completion_status": "incomplete",
+    "modules": {
+      "global_consensus": {
+        "label": "30家公司分层共识",
+        "data_status": "degraded",
+        "calculation_status": "not_run",
+        "detail": "0家公司具备欧赔开盘与即时；三层权重尚待计算"
+      },
+      "scs": {
+        "label": "SCS共识度",
+        "data_status": "missing",
+        "calculation_status": "not_run",
+        "detail": "开盘与即时数据可用，但缺完整多帧时间序列和历史噪声基线"
+      },
+      "dri": {
+        "label": "DRI离散风险",
+        "data_status": "degraded",
+        "calculation_status": "not_run",
+        "detail": "当前缺联赛历史中位DRI校准库"
+      },
+      "lead_lag": {
+        "label": "Lead-Lag领涨跟随",
+        "data_status": "missing",
+        "calculation_status": "not_run",
+        "detail": "0家公司具备亚盘开盘、即时与变动时间"
+      },
+      "water_flow": {
+        "label": "水位流向",
+        "data_status": "degraded",
+        "calculation_status": "not_run",
+        "detail": "0家公司可做同盘口水位比较；大小球时间轴可用0家"
+      },
+      "exchange": {
+        "label": "交易所背离与量价验证",
+        "data_status": "missing",
+        "calculation_status": "not_run",
+        "detail": "必发快照可用，近期交易0条；尚不足正式4小时基线"
+      },
+      "kelly": {
+        "label": "页面凯利指数共识",
+        "data_status": "degraded",
+        "calculation_status": "not_run",
+        "detail": "0家公司具备即时页面凯利指数；尚待三层聚合，不得视为仓位凯利公式"
+      },
+      "shin": {
+        "label": "Shin去水",
+        "data_status": "missing",
+        "calculation_status": "not_run",
+        "detail": "赔率输入可用；必须由分析层输出正式Shin结果"
+      },
+      "six_d": {
+        "label": "正式6D",
+        "data_status": "missing",
+        "calculation_status": "not_run",
+        "detail": "shuju结构化结果为空，需联网补齐基本面"
+      },
+      "traps": {
+        "label": "陷阱扫描",
+        "data_status": "degraded",
+        "calculation_status": "not_run",
+        "detail": "21条欧亚专项与49条全量规则尚待执行"
+      }
+    },
+    "incomplete_modules": [
+      "global_consensus",
+      "scs",
+      "dri",
+      "lead_lag",
+      "water_flow",
+      "exchange",
+      "kelly",
+      "shin",
+      "six_d",
+      "traps"
+    ]
+  },
+  "automation": {
+    "provider": "DeepSeek",
+    "model": "deepseek-v4-pro",
+    "generated_at": "2026-07-15T10:51:37+00:00",
+    "owner_authorized_request": true
+  }
+}

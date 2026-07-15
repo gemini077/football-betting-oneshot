@@ -1,0 +1,113 @@
+{
+  "report": {
+    "ai_summary": "本报告为辅助分析草稿，基于仅有的官方赔率信息进行去水市场基线分析。由于缺乏基本面数据（如球队实力、伤停、首发、xG等）及其他市场数据，无法进行深入的泊松模型预测。根据官方赔率，客队阿拉木图被看好（胜赔1.59），但市场存在一定水分（overround 1.129）。公平概率显示客胜概率约55.7%，主胜20.36%，平局23.94%。让球盘（主队+1）选项表明市场预期客队可能净胜1球以上。然而，由于信息严重不足，本报告不能作为投注决策依据。",
+    "model_name": "Football Betting OneShot",
+    "model_version": "v0.13.5",
+    "report_type": "DeepSeek辅助赛前分析（基础内核审计后发布）",
+    "analysis_timestamp": "2026-07-15T10:51:37+00:00",
+    "final_execution_version": false,
+    "ai_provider": "DeepSeek",
+    "ai_model": "deepseek-v4-pro"
+  },
+  "match": {
+    "home": "苏捷斯卡",
+    "away": "阿拉木图",
+    "league": "欧冠",
+    "kickoff": "2026-07-16T03:00:00+08:00",
+    "match_id": "2040514",
+    "match_num": "周三202",
+    "business_date": "2026-07-15",
+    "competition": "欧冠",
+    "kickoff_local": "2026-07-16 03:00"
+  },
+  "data_quality": {
+    "level": "LOW",
+    "reason": "仅拥有官方胜平负赔率作为有效证据，缺乏球队基本面、市场深度、交易量等数据。",
+    "missing": [
+      "球队实力数据",
+      "伤停信息",
+      "首发阵容",
+      "历史交锋",
+      "近期状态",
+      "xG数据",
+      "其他博彩公司赔率对比"
+    ],
+    "notes": [
+      "已从所选主页场次注入体彩胜平负赔率，并计算去水市场基线；该基线不是模型概率。"
+    ],
+    "status": "仅市场基线"
+  },
+  "fundamentals": {
+    "status": "待复核",
+    "items": []
+  },
+  "model": {
+    "probabilities": null,
+    "lambda_home": null,
+    "lambda_away": null,
+    "expected_goals": null,
+    "score_probabilities": [],
+    "btts": {
+      "judgement": "数据不足，暂不判断"
+    },
+    "total_goals_buckets": [],
+    "status": "DeepSeek辅助综合；未替代本地概率校准"
+  },
+  "decisions": {
+    "unique_primary_dimension": "spf",
+    "unique_score": "数据不足，暂不形成结论",
+    "mathematical_first": "数据不足，暂不形成结论",
+    "market_first": "体彩去水市场基线：主胜20.4%、平局23.9%、客胜55.7%；仅作定价基准。",
+    "maximum_error_points": [
+      "基本面数据完全缺失，无法评估球队实际实力",
+      "无泊松模型参数，无法计算预期进球及概率",
+      "缺少多市场赔率对比，无法检测赔率异常或价值投注机会",
+      "让球盘数据存在但未做深度分析"
+    ],
+    "value_judgement": "无足够证据判断是否存在价值投注",
+    "final_state": "空仓｜DeepSeek辅助分析已生成，等待模型与价格复核｜未锁单"
+  },
+  "betting": {
+    "candidates": [],
+    "state": "空仓｜未锁单",
+    "execution_authorized": false,
+    "lock_state_changed": false,
+    "bankroll_state_changed": false,
+    "price_audit": []
+  },
+  "evidence_chain": [],
+  "automation": {
+    "provider": "DeepSeek",
+    "model": "deepseek-v4-pro",
+    "generated_at": "2026-07-15T10:51:37+00:00",
+    "owner_authorized_request": true
+  },
+  "market": {
+    "official_spf": {
+      "home": 4.35,
+      "draw": 3.7,
+      "away": 1.59
+    },
+    "official_rqspf": {
+      "handicap": 1,
+      "home": 2.07,
+      "draw": 3.34,
+      "away": 2.88
+    },
+    "official_market_baseline": {
+      "prices": {
+        "home": 4.35,
+        "draw": 3.7,
+        "away": 1.59
+      },
+      "overround": 1.129086,
+      "payout_rate": 0.885672,
+      "fair_probabilities": {
+        "home": 0.203603,
+        "draw": 0.239371,
+        "away": 0.557026
+      },
+      "role": "official_market_baseline_only_not_model_probability"
+    }
+  }
+}
