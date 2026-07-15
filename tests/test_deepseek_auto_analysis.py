@@ -6,7 +6,14 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
-from deepseek_auto_analysis import normalize_analysis, request_from_event, validate_request  # noqa: E402
+from deepseek_auto_analysis import (  # noqa: E402
+    attach_workspace_evidence,
+    devig_three_way,
+    has_minimum_analysis_evidence,
+    normalize_analysis,
+    request_from_event,
+    validate_request,
+)
 
 
 def test_issue_request_is_parsed_and_validated(tmp_path):
@@ -93,3 +100,44 @@ def test_normalizer_filters_nested_non_object_rows():
     assert len(result["model"]["total_goals_buckets"]) == 1
     assert len(result["fundamentals"]["items"]) == 1
     assert len(result["evidence_chain"]) == 1
+
+
+def test_normalizer_replaces_provider_sentinel_values():
+    result = normalize_analysis(
+        {
+            "decisions": {
+                "unique_primary_dimension": "NONE",
+                "unique_score": -999,
+                "mathematical_first": "NO_DATA",
+                "market_first": "INSUFFICIENT_DATA",
+                "value_judgement": None,
+                "maximum_error_points": [{"type": "NO_DATA", "value": 1.0}],
+            }
+        },
+        {"business_date": "2026-07-15", "match_id": "2040514", "match": "苏捷斯卡 vs 阿拉木图"},
+        "deepseek-v4-pro",
+    )
+    assert result["decisions"]["unique_primary_dimension"] == "数据不足，暂不形成结论"
+    assert result["decisions"]["unique_score"] == "数据不足，暂不形成结论"
+    assert result["decisions"]["maximum_error_points"] == ["输入数据不足，无法形成模型结论"]
+
+
+def test_workspace_official_odds_create_market_baseline_without_model_probability():
+    workspace = {
+        "id": "2040514", "home": "苏捷斯卡", "away": "阿拉木图", "league": "欧冠",
+        "kickoff": "2026-07-16 03:00", "business_date": "2026-07-15",
+        "spf": {"home": 4.35, "draw": 3.7, "away": 1.59},
+        "rqspf": {"handicap": 1, "home": 2.07, "draw": 3.34, "away": 2.88},
+    }
+    baseline = devig_three_way(workspace["spf"])
+    context = {"selected_workspace_match": workspace, "official_market_baseline": baseline, "source_snapshots": {}}
+    analysis = normalize_analysis({}, {"business_date": "2026-07-15", "match_id": "2040514", "match": "苏捷斯卡 vs 阿拉木图"}, "deepseek-v4-pro")
+    enriched = attach_workspace_evidence(analysis, context)
+    assert enriched["market"]["official_spf"]["away"] == 1.59
+    assert enriched["model"]["probabilities"] is None
+    assert "客胜" in enriched["decisions"]["market_first"]
+    assert has_minimum_analysis_evidence(context)
+
+
+def test_empty_context_is_not_publishable():
+    assert not has_minimum_analysis_evidence({"official_market_baseline": None, "source_snapshots": {}})

@@ -26,8 +26,9 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 API_URL = "https://api.deepseek.com/chat/completions"
 DEFAULT_MODEL = "deepseek-v4-pro"
-MODEL_VERSION = "v0.13.3"
+MODEL_VERSION = "v0.13.5"
 AUTO_INPUT_ROOT = ROOT / "data" / "analysis_inputs" / "automated"
+WORKSPACE_PATH = ROOT / "data" / "match_workspace" / "latest.json"
 
 
 def load_json(path: Path) -> Any:
@@ -73,6 +74,43 @@ def prune(value: Any, depth: int = 0) -> Any:
     return value
 
 
+def selected_workspace_match(request: dict) -> dict:
+    if not WORKSPACE_PATH.exists():
+        return {}
+    try:
+        workspace = load_json(WORKSPACE_PATH)
+    except (OSError, json.JSONDecodeError):
+        return {}
+    requested_id = str(request.get("match_id") or "")
+    requested_name = re.sub(r"\s+", "", str(request.get("match") or "")).casefold()
+    for match in workspace.get("matches") or []:
+        if not isinstance(match, dict):
+            continue
+        match_name = re.sub(r"\s+", "", f"{match.get('home', '')}vs{match.get('away', '')}").casefold()
+        if (requested_id and str(match.get("id") or "") == requested_id) or match_name == requested_name:
+            return prune(match)
+    return {}
+
+
+def devig_three_way(odds: dict) -> dict | None:
+    keys = ("home", "draw", "away")
+    try:
+        prices = {key: float(odds[key]) for key in keys}
+    except (KeyError, TypeError, ValueError):
+        return None
+    if any(price <= 1 for price in prices.values()):
+        return None
+    raw = {key: 1 / price for key, price in prices.items()}
+    overround = sum(raw.values())
+    return {
+        "prices": prices,
+        "overround": round(overround, 6),
+        "payout_rate": round(1 / overround, 6),
+        "fair_probabilities": {key: round(raw[key] / overround, 6) for key in keys},
+        "role": "official_market_baseline_only_not_model_probability",
+    }
+
+
 def analysis_context(manifest_path: Path, request: dict) -> dict:
     manifest = load_json(manifest_path)
     sources = {}
@@ -90,8 +128,11 @@ def analysis_context(manifest_path: Path, request: dict) -> dict:
                 loaded.append(prune(load_json(path)))
         if loaded:
             sources[name] = {"metadata": sources[name], "snapshots": loaded}
+    workspace_match = selected_workspace_match(request)
     return {
         "request": request,
+        "selected_workspace_match": workspace_match,
+        "official_market_baseline": devig_three_way(workspace_match.get("spf") or {}),
         "manifest": prune(manifest),
         "source_snapshots": sources,
         "hard_rules": {
@@ -106,6 +147,8 @@ def analysis_context(manifest_path: Path, request: dict) -> dict:
 
 
 SYSTEM_PROMPT = """你是 Football Betting OneShot 的辅助分析层。只使用给定 JSON 证据，禁止联网假装、禁止补造伤停、首发、xG、赔率或概率。缺失就明确写缺失。输出必须是单个 JSON 对象，不要 Markdown。
+
+selected_workspace_match 是用户在主页明确选择的体彩在售场次，里面的 spf/rqspf、开赛时间和赛事名称属于有效证据；即使其他抓取源失败，也必须使用这些官方赔率做去水市场基线分析，不得声称“无任何赔率”。official_market_baseline 只能叫市场基线，不能冒充模型概率。
 
 必须输出这些顶层字段：report, match, data_quality, fundamentals, model, decisions, betting, evidence_chain。
 decisions 必须包含 unique_primary_dimension、unique_score、mathematical_first、market_first、maximum_error_points（至少1项）、value_judgement、final_state。
@@ -181,10 +224,24 @@ def normalize_analysis(raw: dict, request: dict, model_name: str) -> dict:
         "unique_primary_dimension", "unique_score", "mathematical_first",
         "market_first", "value_judgement",
     )
+    invalid_tokens = {"", "none", "null", "n/a", "na", "-999", "insufficient_data", "no_data"}
     for key in required_text:
-        decisions[key] = str(decisions.get(key) or "数据不足，暂不形成结论")
+        value = decisions.get(key)
+        text = str(value).strip() if isinstance(value, (str, int, float)) else ""
+        decisions[key] = "数据不足，暂不形成结论" if text.casefold() in invalid_tokens else text
     errors = decisions.get("maximum_error_points")
-    decisions["maximum_error_points"] = [str(item) for item in errors] if isinstance(errors, list) and errors else ["自动分析可能受缺失首发、伤停或盘口时间轴影响"]
+    cleaned_errors = []
+    if isinstance(errors, list):
+        for item in errors:
+            if isinstance(item, dict):
+                if str(item.get("type") or "").upper() == "NO_DATA":
+                    cleaned_errors.append("输入数据不足，无法形成模型结论")
+                else:
+                    cleaned_errors.append(json.dumps(item, ensure_ascii=False, sort_keys=True))
+            else:
+                text = str(item).strip()
+                cleaned_errors.append("输入数据不足，无法形成模型结论" if "NO_DATA" in text.upper() else text)
+    decisions["maximum_error_points"] = [item for item in cleaned_errors if item] or ["自动分析可能受缺失首发、伤停或盘口时间轴影响"]
     decisions["final_state"] = "空仓｜DeepSeek辅助分析已生成，等待模型与价格复核｜未锁单"
 
     model = raw.get("model") if isinstance(raw.get("model"), dict) else {}
@@ -239,6 +296,53 @@ def normalize_analysis(raw: dict, request: dict, model_name: str) -> dict:
     return raw
 
 
+def attach_workspace_evidence(analysis: dict, context: dict) -> dict:
+    workspace = context.get("selected_workspace_match") or {}
+    baseline = context.get("official_market_baseline")
+    if not workspace:
+        return analysis
+    match = analysis.setdefault("match", {})
+    for target, source in (
+        ("match_id", "id"), ("match_num", "match_num"), ("home", "home"),
+        ("away", "away"), ("competition", "league"), ("league", "league"),
+        ("kickoff_local", "kickoff"), ("business_date", "business_date"),
+    ):
+        if workspace.get(source) not in (None, ""):
+            match[target] = workspace[source]
+    market = analysis.setdefault("market", {})
+    market["official_spf"] = workspace.get("spf") or None
+    market["official_rqspf"] = workspace.get("rqspf") or None
+    market["official_market_baseline"] = baseline
+    quality = analysis.setdefault("data_quality", {})
+    notes = quality.setdefault("notes", [])
+    if baseline:
+        note = "已从所选主页场次注入体彩胜平负赔率，并计算去水市场基线；该基线不是模型概率。"
+        if note not in notes:
+            notes.append(note)
+        if str(quality.get("overall") or "").upper() == "ALL_SOURCES_MISSING":
+            quality["overall"] = "OFFICIAL_MARKET_ONLY"
+        quality["status"] = "仅市场基线" if analysis.get("model", {}).get("probabilities") is None else quality.get("status", "部分完整")
+    decisions = analysis.setdefault("decisions", {})
+    if baseline and decisions.get("market_first") == "数据不足，暂不形成结论":
+        probabilities = baseline["fair_probabilities"]
+        decisions["market_first"] = (
+            f"体彩去水市场基线：主胜{probabilities['home']:.1%}、"
+            f"平局{probabilities['draw']:.1%}、客胜{probabilities['away']:.1%}；仅作定价基准。"
+        )
+    if baseline and decisions.get("unique_primary_dimension") == "数据不足，暂不形成结论":
+        decisions["unique_primary_dimension"] = "数据不足，仅保留体彩去水市场基线"
+    return analysis
+
+
+def has_minimum_analysis_evidence(context: dict) -> bool:
+    if context.get("official_market_baseline"):
+        return True
+    for source in (context.get("source_snapshots") or {}).values():
+        if isinstance(source, dict) and source.get("snapshots"):
+            return True
+    return False
+
+
 def run_json_command(command: list[str], allow_failure: bool = False, timeout: int = 180) -> dict:
     try:
         completed = subprocess.run(
@@ -267,10 +371,13 @@ def run_pipeline(request: dict, api_key: str, model_name: str) -> dict:
     if not manifest_path.exists():
         raise RuntimeError("Fetch completed without a manifest")
 
+    context = analysis_context(manifest_path, request)
+    if not has_minimum_analysis_evidence(context):
+        raise RuntimeError("Analysis aborted: no official odds or matched source evidence; no report was published")
     print("[phase 2/5] calling DeepSeek", file=sys.stderr, flush=True)
-    raw = call_deepseek(analysis_context(manifest_path, request), api_key, model_name)
+    raw = call_deepseek(context, api_key, model_name)
     print("[phase 3/5] normalizing and validating response", file=sys.stderr, flush=True)
-    analysis = normalize_analysis(raw, request, model_name)
+    analysis = attach_workspace_evidence(normalize_analysis(raw, request, model_name), context)
     AUTO_INPUT_ROOT.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now().astimezone().strftime("%Y%m%d_%H%M%S")
     safe_id = re.sub(r"[^A-Za-z0-9_-]", "_", request.get("match_id") or "match")
