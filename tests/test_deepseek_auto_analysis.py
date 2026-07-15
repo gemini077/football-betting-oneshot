@@ -13,6 +13,7 @@ from deepseek_auto_analysis import (  # noqa: E402
     fetch_date_for_request,
     has_minimum_analysis_evidence,
     normalize_analysis,
+    report_manifest,
     request_from_event,
     run_json_command,
     validate_request,
@@ -175,3 +176,13 @@ def test_json_command_accepts_progress_before_final_envelope(monkeypatch):
         lambda *args, **kwargs: SimpleNamespace(returncode=0, stdout='[FETCH] source\n{"manifest":"ok.json"}\n', stderr=""),
     )
     assert run_json_command(["python", "fetch.py"])["manifest"] == "ok.json"
+
+
+def test_report_manifest_uses_same_fallback_as_model(tmp_path):
+    source = tmp_path / "manifest.json"
+    source.write_text(json.dumps({"sources": {"500_deep": {"matches": [{"shuju_id": 1, "file": "empty.json"}]}}}), encoding="utf-8")
+    context = {"source_snapshots": {"500_deep": {"metadata": {"fallback_file": "data/source_cache/deep_fallback/1.json"}}}}
+    output = report_manifest(source, context)
+    payload = json.loads(output.read_text(encoding="utf-8"))
+    assert payload["sources"]["500_deep"]["status"] == "VERIFIED_LOCAL_FALLBACK"
+    assert payload["sources"]["500_deep"]["matches"][0]["file"].endswith("1.json")
