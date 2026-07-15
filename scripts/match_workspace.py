@@ -544,13 +544,13 @@ def build(target_date: str, output_root: Path = OUTPUT) -> tuple[Path, Path]:
             existing["bet_locked"] = row.get("bet_locked") is True
             if not existing.get("kickoff"):
                 existing_report = find_report_for_pair(home, away, reports)
-                existing["kickoff"] = ((existing_report or {}).get("payload") or {}).get("match", {}).get("kickoff_local")
+                existing["kickoff"] = row.get("kickoff_local") or ((existing_report or {}).get("payload") or {}).get("match", {}).get("kickoff_local")
             continue
         report = find_report_for_pair(home, away, reports)
         completed.append({
             "id": review_id, "home": home, "away": away,
             "result_90m": row.get("result_90m"), "after_extra_time": row.get("after_extra_time"),
-            "kickoff": ((report or {}).get("payload") or {}).get("match", {}).get("kickoff_local"),
+            "kickoff": row.get("kickoff_local") or ((report or {}).get("payload") or {}).get("match", {}).get("kickoff_local"),
             "bet_locked": row.get("bet_locked") is True,
             "classification": (
                 row.get("review_classification")
