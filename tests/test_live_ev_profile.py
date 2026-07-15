@@ -12,7 +12,7 @@ from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
-from live_ev_profile import publish_live_ev_profiles  # noqa: E402
+from live_ev_profile import enrich_profile_match_aliases, publish_live_ev_profiles  # noqa: E402
 from generate_analysis_report import main as generate_report_main  # noqa: E402
 from build_public_site import PUBLIC_DATA_DIRS  # noqa: E402
 
@@ -65,6 +65,21 @@ def payload_with_candidate(*, conservative=0.53, confirmed=True):
 class LiveEvProfileTests(unittest.TestCase):
     def test_public_site_includes_live_ev_profiles(self):
         self.assertIn("live_ev_profiles", PUBLIC_DATA_DIRS)
+
+    def test_confirmed_provider_aliases_are_embedded_without_fuzzy_matching(self):
+        profile = {"match": {
+            "match_id": "2040514",
+            "home": "苏捷斯卡",
+            "away": "阿拉木图",
+            "competition": "欧冠",
+            "kickoff_local": "2026-07-16 03:00",
+        }}
+        registry = json.loads((ROOT / "data" / "team_aliases.json").read_text(encoding="utf-8"))
+        enriched = enrich_profile_match_aliases(profile, registry)
+        self.assertIn("尼克希奇", enriched["match"]["home_aliases"])
+        self.assertIn("海拉提", enriched["match"]["away_aliases"])
+        self.assertIn("欧洲冠军联赛资格赛", enriched["match"]["competition_aliases"])
+        self.assertFalse(enriched["identity_match_policy"]["fuzzy_edit_distance_enabled"])
 
     def test_publishes_history_and_current_without_execution_authority(self):
         with tempfile.TemporaryDirectory() as tmp:

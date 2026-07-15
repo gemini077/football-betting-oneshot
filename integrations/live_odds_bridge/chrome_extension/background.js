@@ -45,15 +45,38 @@ function normalizedTeamName(value) {
     .replace(/[\s\-_.·'’()（）]/g, "");
 }
 
-function sameTeamPair(profile, homeName, awayName) {
-  const expectedHome = normalizedTeamName(homeName);
-  const expectedAway = normalizedTeamName(awayName);
-  const actualHome = normalizedTeamName(profile?.match?.home);
-  const actualAway = normalizedTeamName(profile?.match?.away);
-  if (!expectedHome || !expectedAway || !actualHome || !actualAway) return false;
-  const homeMatches = actualHome === expectedHome || actualHome.includes(expectedHome) || expectedHome.includes(actualHome);
-  const awayMatches = actualAway === expectedAway || actualAway.includes(expectedAway) || expectedAway.includes(actualAway);
-  return homeMatches && awayMatches;
+function nameMatchesAny(value, candidates) {
+  const expected = normalizedTeamName(value);
+  if (!expected) return false;
+  return (candidates || []).some((candidate) => {
+    const actual = normalizedTeamName(candidate);
+    return actual && (actual === expected || actual.includes(expected) || expected.includes(actual));
+  });
+}
+
+function kickoffCompatible(profile, kickoffTimestamp) {
+  if (!kickoffTimestamp || !profile?.match?.kickoff_local) return true;
+  let expected = Number(kickoffTimestamp);
+  if (Number.isFinite(expected) && expected < 1e12) expected *= 1000;
+  const rawKickoff = String(profile.match.kickoff_local).trim().replace(" ", "T");
+  const actual = Date.parse(/[zZ]|[+\-]\d{2}:?\d{2}$/.test(rawKickoff) ? rawKickoff : `${rawKickoff}+08:00`);
+  if (!Number.isFinite(expected) || !Number.isFinite(actual)) return false;
+  const maximumMinutes = Number(profile?.identity_match_policy?.maximum_kickoff_difference_minutes || 180);
+  return Math.abs(expected - actual) <= maximumMinutes * 60 * 1000;
+}
+
+function competitionCompatible(profile, tournamentName) {
+  if (!tournamentName || !profile?.match?.competition) return true;
+  return nameMatchesAny(tournamentName, [profile.match.competition, ...(profile.match.competition_aliases || [])]);
+}
+
+function sameTeamPair(profile, homeName, awayName, tournamentName, kickoffTimestamp) {
+  const homeCandidates = [profile?.match?.home, ...(profile?.match?.home_aliases || [])];
+  const awayCandidates = [profile?.match?.away, ...(profile?.match?.away_aliases || [])];
+  return nameMatchesAny(homeName, homeCandidates) &&
+    nameMatchesAny(awayName, awayCandidates) &&
+    competitionCompatible(profile, tournamentName) &&
+    kickoffCompatible(profile, kickoffTimestamp);
 }
 
 function profileTimestamp(profile) {
@@ -67,13 +90,13 @@ async function fetchRemoteJson(url) {
   return response.json().catch(() => null);
 }
 
-async function fetchRemoteProfile(matchId, homeName, awayName) {
+async function fetchRemoteProfile(matchId, homeName, awayName, tournamentName, kickoffTimestamp) {
   const exact = await fetchRemoteJson(`${REMOTE_PROFILE_ROOT}/${encodeURIComponent(String(matchId))}.json`);
   if (exact?.match) return { ...exact, sync_source: "github-pages" };
   if (!homeName || !awayName) return null;
   const index = await fetchRemoteJson(`${REMOTE_PROFILE_ROOT}/index.json`);
   const matched = (index?.profiles || [])
-    .filter((profile) => sameTeamPair(profile, homeName, awayName))
+    .filter((profile) => sameTeamPair(profile, homeName, awayName, tournamentName, kickoffTimestamp))
     .sort((left, right) => profileTimestamp(right) - profileTimestamp(left))[0];
   return matched ? { ...matched, sync_source: "github-pages-team-match" } : null;
 }
@@ -91,7 +114,13 @@ async function loadNewestAnalysisProfile(settings, message) {
   } catch {
     localResult = null;
   }
-  const remoteResult = await fetchRemoteProfile(message.matchId, message.homeName, message.awayName).catch(() => null);
+  const remoteResult = await fetchRemoteProfile(
+    message.matchId,
+    message.homeName,
+    message.awayName,
+    message.tournamentName,
+    message.kickoffTimestamp
+  ).catch(() => null);
   const profile = !localResult ? remoteResult
     : !remoteResult ? localResult
       : profileTimestamp(remoteResult) >= profileTimestamp(localResult) ? remoteResult : localResult;
