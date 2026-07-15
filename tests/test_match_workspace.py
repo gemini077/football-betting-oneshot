@@ -104,11 +104,13 @@ class MatchWorkspacePortfolioTests(unittest.TestCase):
 
             self.assertEqual("KEEP_CURRENT", latest.read_text(encoding="utf-8"))
 
-    def test_homepage_has_separate_review_and_prematch_actions(self):
+    def test_homepage_uses_unified_report_actions_and_compact_sections(self):
         page = render("{}")
 
         self.assertIn("data-review", page)
-        self.assertIn("data-prematch", page)
+        self.assertIn("completedRow=m=>", page)
+        self.assertIn("document.querySelector('.rules')?.remove()", page)
+        self.assertIn("m.kickoff", page)
         self.assertIn("赛前各维度逐项复核", page)
         self.assertIn("根因、反事实与模型修正", page)
 

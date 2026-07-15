@@ -116,6 +116,15 @@ def verified_result_map() -> dict[str, tuple[int, int]]:
         score = parse_score(payload.get("result_90m"))
         if payload.get("home") and payload.get("away") and score is not None:
             results[pair_key(payload.get("home"), payload.get("away"))] = score
+    # Runtime rows are populated only after the post-match verification flow;
+    # include them so older frozen paper tickets can settle even when their
+    # review lives in the workbook rather than a standalone JSON file.
+    runtime = load_json(RUNTIME, {}) or {}
+    for row in runtime.get("latest_reviewed_matches") or []:
+        parts = re.split(r"\s+vs\s+", str(row.get("match") or ""), maxsplit=1, flags=re.IGNORECASE)
+        score = parse_score(row.get("result_90m"))
+        if len(parts) == 2 and score is not None:
+            results[pair_key(parts[0], parts[1])] = score
     return results
 
 
@@ -417,6 +426,7 @@ def completed_row(review: dict, report: dict | None, output_dir: Path, fallback_
         "away": away,
         "result_90m": review.get("实际90分钟比分"),
         "after_extra_time": None,
+        "kickoff": ((report or {}).get("payload") or {}).get("match", {}).get("kickoff_local"),
         "bet_locked": False,
         "classification": review.get("红黑与模型逻辑分类") or "模型复盘已记录",
         "prematch_report_url": relative_uri(report.get("html") if report else None, output_dir),
@@ -532,11 +542,15 @@ def build(target_date: str, output_root: Path = OUTPUT) -> tuple[Path, Path]:
             existing = next(item for item in completed if str(item.get("id")) == review_id)
             existing["after_extra_time"] = row.get("after_extra_time")
             existing["bet_locked"] = row.get("bet_locked") is True
+            if not existing.get("kickoff"):
+                existing_report = find_report_for_pair(home, away, reports)
+                existing["kickoff"] = ((existing_report or {}).get("payload") or {}).get("match", {}).get("kickoff_local")
             continue
         report = find_report_for_pair(home, away, reports)
         completed.append({
             "id": review_id, "home": home, "away": away,
             "result_90m": row.get("result_90m"), "after_extra_time": row.get("after_extra_time"),
+            "kickoff": ((report or {}).get("payload") or {}).get("match", {}).get("kickoff_local"),
             "bet_locked": row.get("bet_locked") is True,
             "classification": (
                 row.get("review_classification")
@@ -547,7 +561,7 @@ def build(target_date: str, output_root: Path = OUTPUT) -> tuple[Path, Path]:
             "review": review,
         })
         completed_ids.add(review_id)
-    completed.sort(key=lambda item: int((re.search(r"\d+", str(item.get("id") or "")) or re.match(r"", "")).group(0) or 10**9))
+    completed.sort(key=lambda item: str(item.get("kickoff") or ""), reverse=True)
     portfolio = build_daily_portfolio(matches, runtime)
     paper_root = DATA / "paper_ledger"
     paper_root.mkdir(parents=True, exist_ok=True)
@@ -558,10 +572,13 @@ def build(target_date: str, output_root: Path = OUTPUT) -> tuple[Path, Path]:
             frozen_tickets = (json.loads(frozen_path.read_text(encoding="utf-8")) or {}).get("tickets") or []
         except (OSError, json.JSONDecodeError, AttributeError):
             frozen_tickets = []
+    price_overrides_payload = load_json(paper_root / "initial_price_overrides.json", {}) or {}
+    initial_price_overrides = price_overrides_payload.get("tickets") or {}
     paper_ledger = build_paper_ledger(
         list(reports.values()),
         verified_result_map(),
         frozen_tickets=frozen_tickets,
+        initial_price_overrides=initial_price_overrides,
     )
     for item in matches:
         item.pop("portfolio_candidates", None)
@@ -656,6 +673,17 @@ $('#tabPrematch').onclick=()=>current?showPrematch():showEmpty('请先选择比�
   $('#closePaperTickets').onclick=()=>paperDialog.close();
   portfolio.querySelector('.portfolio-intro b').textContent='保本／中轴／博上属于真实决策层';
   portfolio.querySelector('.portfolio-intro span').textContent='模拟注单不会自动进入这里；只有明确“锁单/已下单”才计入真实暴露与余额。';
+  // Homepage interaction cleanup: analyzed fixtures have one report action,
+  // completed fixtures have one unified report action, and kickoff is visible.
+  const upcomingSection=document.querySelector('#upcoming').closest('section.card');
+  const completedSection=document.querySelector('#completed').closest('section.card');
+  upcomingSection.querySelector('.card-title h2').textContent='\u25b6 \u672a\u5f00\u8d5b';
+  completedSection.querySelector('.card-title h2').textContent='\u2713 \u5df2\u5b8c\u8d5b';
+  completedSection.querySelector('thead tr').innerHTML='<th>\u5f00\u8d5b\uff08\u5317\u4eac\uff09</th><th>\u6bd4\u8d5b</th><th>90\u5206\u949f\u6bd4\u5206</th><th>\u52a0\u65f6\u540e</th><th>\u9501\u5355\u72b6\u6001</th><th>\u590d\u76d8\u7ed3\u8bba</th><th>\u64cd\u4f5c</th>';
+  document.querySelector('.rules')?.remove();
+  upcomingRow=m=>{const spf=m.spf||{},analyzed=Boolean(m.report_url);const actions=analyzed?`<button class="action primary" data-open="${key(m)}">\u6253\u5f00\u62a5\u544a</button>`:`<button class="action ${isSelected(m)?'selected':'primary'}" data-select="${key(m)}">${isSelected(m)?'\u2713 \u5f85\u5206\u6790':'\u52a0\u5165\u5f85\u5206\u6790'}</button><button class="action" data-open="${key(m)}">\u67e5\u770b\u72b6\u6001</button>`;return `<tr data-row="${key(m)}"><td><b>${m.kickoff||'\u2014'}</b><div class="muted">${m.match_num||'\u2014'} \u00b7 ${m.league||'\u2014'}</div></td><td><div class="match-name">${m.home} <span class="muted">vs</span> ${m.away}</div><div class="muted">${m.official?'\u4f53\u5f69\u5728\u552e':'\u989d\u5916\u5173\u6ce8'}</div></td><td><div class="odds-inline"><span class="odd">\u80dc ${spf.home??'\u2014'}</span><span class="odd">\u5e73 ${spf.draw??'\u2014'}</span><span class="odd">\u8d1f ${spf.away??'\u2014'}</span></div></td><td><span class="badge ${analyzed?'good':'blue'}">${m.report_state}</span> ${isSelected(m)?'<span class="badge gold">\u5df2\u9009\u62e9</span>':''}</td><td><b>${m.primary||'\u2014'}</b><div class="risk-line">\u9519\u70b9\uff1a${m.primary_error||'\u2014'}</div><div class="muted">${m.betting_state||'\u672a\u9501\u5355'}</div></td><td><div class="actions">${actions}</div></td></tr>`};
+  completedRow=m=>`<tr><td><b>${m.kickoff||'\u2014'}</b></td><td><div class="match-name">${m.home} <span class="muted">vs</span> ${m.away}</div></td><td><b>${m.result_90m||'\u2014'}</b></td><td>${m.after_extra_time||'\u2014'}</td><td><span class="badge ${m.bet_locked?'gold':'blue'}">${m.bet_locked?'\u5df2\u9501\u5355':'\u672a\u9501\u5355'}</span></td><td>${m.classification||'\u2014'}</td><td><button class="action primary" data-review="${m.id}">\u6253\u5f00\u62a5\u544a</button></td></tr>`;
+  render();
 })();
 </script></body></html>'''
 
