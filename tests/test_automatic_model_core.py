@@ -22,6 +22,8 @@ def test_deterministic_model_generates_complete_probability_matrix():
     assert model["lambda_home"] > 0 and model["lambda_away"] > 0
     assert abs(sum(model["probabilities"].values()) - 1) < 1e-5
     assert len(model["score_probabilities"]) == 10
+    assert model["score_probabilities"][0]["fair_odds"] > 1
+    assert any(row["market"] == "SPF主胜" for row in result["price_audit"])
     assert result["decisions"]["unique_score"] == model["score_probabilities"][0]["score"]
     assert result["live_ev_profiles"]["active"] is True
     assert result["live_ev_profiles"]["contract"]["market_name"] == "全场独赢"

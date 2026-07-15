@@ -66,6 +66,8 @@ jobs:
         run: python scripts/postmatch_result.py
       - name: Replace completed trigger or schedule one bounded retry
         run: python scripts/sync_postmatch_workflow.py
+      - name: Generate strict full post-match reviews
+        run: python scripts/automatic_postmatch_review.py
       - name: Rebuild public pages
         run: |
           FBOS_DATE=$(TZ=Asia/Shanghai date +%F)
@@ -76,7 +78,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add .github/workflows/postmatch-once.yml data/postmatch_automation data/match_workspace data/postmatch_dashboard data/paper_ledger
+          git add .github/workflows/postmatch-once.yml data/postmatch_automation data/postmatch_reviews data/match_workspace data/postmatch_dashboard data/paper_ledger
           if ! git diff --cached --quiet; then
             git commit -m "verify scheduled match result [skip ci]"
             git push

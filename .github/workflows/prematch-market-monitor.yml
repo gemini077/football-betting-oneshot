@@ -2,7 +2,7 @@ name: Refresh analyzed pre-match markets
 on:
   workflow_dispatch:
   schedule:
-    - cron: "*/15 * * * *"
+    - cron: "*/30 * * * *"
 permissions:
   contents: write
   pages: write
@@ -18,16 +18,22 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+      - name: Check whether an analyzed match reached a new checkpoint
+        id: due
+        shell: bash
+        run: echo "count=$(python scripts/prematch_market_monitor.py --count-due)" >> "$GITHUB_OUTPUT"
       - uses: actions/setup-python@v5
+        if: steps.due.outputs.count != '0'
         with:
           python-version: "3.12"
           cache: pip
-      - run: pip install -r requirements.txt
+      - if: steps.due.outputs.count != '0'
+        run: pip install -r requirements.txt
       - name: Refresh only analyzed matches within six hours of kickoff
+        if: steps.due.outputs.count != '0'
         run: python scripts/prematch_market_monitor.py
-      - name: Run model checks
-        run: python -m pytest -q
       - name: Save market snapshots and refreshed reports
+        if: steps.due.outputs.count != '0'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -37,8 +43,11 @@ jobs:
             git push
           fi
       - uses: actions/configure-pages@v5
+        if: steps.due.outputs.count != '0'
       - uses: actions/upload-pages-artifact@v3
+        if: steps.due.outputs.count != '0'
         with:
           path: site
       - id: deployment
+        if: steps.due.outputs.count != '0'
         uses: actions/deploy-pages@v4

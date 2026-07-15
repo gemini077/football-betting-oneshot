@@ -32,7 +32,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_OUTPUT_ROOT = PROJECT_ROOT / "data" / "live_odds_bridge" / "captures"
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8765
-MODEL_VERSION = "v0.14.0"
+MODEL_VERSION = "v0.14.1"
 MODULE_VERSION = "v0.8.1"
 
 CORRECT_SCORE_MARKET_CODES = {
@@ -535,7 +535,7 @@ def event_fingerprint(event: dict) -> str:
 class BridgeStore:
     """Thread-safe append-only event store with bounded fingerprint memory."""
 
-    def __init__(self, output_root: Path = DEFAULT_OUTPUT_ROOT, *, stamp: str | None = None):
+    def __init__(self, output_root: Path = DEFAULT_OUTPUT_ROOT, *, stamp: str | None = None, store_raw_events: bool = False):
         self.started_at = _now()
         self.stamp = stamp or self.started_at.strftime("%Y%m%d_%H%M%S")
         self.run_dir = self._unique_run_dir(Path(output_root), self.stamp)
@@ -546,6 +546,8 @@ class BridgeStore:
         self._fingerprints: deque[str] = deque(maxlen=10000)
         self._fingerprint_set: set[str] = set()
         self._latest_quotes: dict[tuple[str, str, str, str], dict] = {}
+        self._normalized_state: dict[tuple[str, str, str, str, str], str] = {}
+        self.store_raw_events = store_raw_events
         self._latest_clocks: dict[str, dict] = {}
         self._latest_match_metadata: dict[str, dict] = {}
         self._latest_match_activity_ms: dict[str, int] = {}
@@ -582,7 +584,8 @@ class BridgeStore:
             "started_at": self.started_at.isoformat(),
             "schema": "schemas/live_odds_event.schema.json",
             "normalized_schema": "schemas/live_odds_normalized_event.schema.json",
-            "events_file": self.events_path.name,
+            "events_file": self.events_path.name if self.store_raw_events else None,
+            "raw_event_storage": self.store_raw_events,
             "normalized_events_file": self.normalized_path.name,
             "analysis_input_only": True,
             "lock_state_changed": False,
@@ -612,9 +615,35 @@ class BridgeStore:
             self._fingerprints.append(fingerprint)
             self._fingerprint_set.add(fingerprint)
             stored_event = {**event, "fingerprint": fingerprint}
-            with self.events_path.open("a", encoding="utf-8", newline="\n") as handle:
-                handle.write(json.dumps(stored_event, ensure_ascii=False, separators=(",", ":")) + "\n")
             normalized_rows = normalize_event(stored_event)
+            if not normalized_rows:
+                if self.store_raw_events:
+                    with self.events_path.open("a", encoding="utf-8", newline="\n") as handle:
+                        handle.write(json.dumps(stored_event, ensure_ascii=False, separators=(",", ":")) + "\n")
+                self.stored += 1
+                return True, fingerprint
+            changed_rows = []
+            for row in normalized_rows:
+                state_key = (
+                    str(row.get("record_type") or ""), str(row.get("match_id") or ""),
+                    str(row.get("market_code") or ""), str(row.get("handicap_line") or ""),
+                    str(row.get("selection_code") or ""),
+                )
+                stable = {key: value for key, value in row.items() if key not in {
+                    "captured_at", "received_at", "source_timestamp_ms", "fingerprint", "sequence", "session_id"
+                }}
+                state_hash = hashlib.sha256(json.dumps(stable, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
+                if self._normalized_state.get(state_key) == state_hash:
+                    continue
+                self._normalized_state[state_key] = state_hash
+                changed_rows.append(row)
+            normalized_rows = changed_rows
+            if not normalized_rows:
+                self.deduplicated += 1
+                return False, fingerprint
+            if self.store_raw_events:
+                with self.events_path.open("a", encoding="utf-8", newline="\n") as handle:
+                    handle.write(json.dumps(stored_event, ensure_ascii=False, separators=(",", ":")) + "\n")
             if normalized_rows:
                 directly_verified_matches = {
                     str(row.get("match_id") or "")
@@ -749,6 +778,7 @@ class BridgeStore:
             "match_metadata_updates": self.match_metadata_updates,
             "market_definitions": self.market_definitions,
             "normalized_events_file": str(self.normalized_path),
+            "raw_event_storage": self.store_raw_events,
             "analysis_input_only": True,
             "lock_state_changed": False,
             "bankroll_state_changed": False,
@@ -1016,6 +1046,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--host", default=DEFAULT_HOST)
     parser.add_argument("--port", type=int, default=DEFAULT_PORT)
     parser.add_argument("--output-root", default=str(DEFAULT_OUTPUT_ROOT))
+    parser.add_argument("--store-raw-events", action="store_true", help="调试时才保存完整原始事件；默认仅保存变化后的标准化赔率")
     parser.add_argument(
         "--allowed-page-host",
         action="append",
@@ -1030,7 +1061,7 @@ def main() -> int:
     if args.host not in {"127.0.0.1", "localhost", "::1"}:
         raise SystemExit("安全限制：桥接器只能绑定本机回环地址")
     allowed_hosts = set(args.allowed_page_host) or set(DEFAULT_ALLOWED_PAGE_HOSTS)
-    store = BridgeStore(Path(args.output_root))
+    store = BridgeStore(Path(args.output_root), store_raw_events=args.store_raw_events)
     server = ThreadingHTTPServer((args.host, args.port), make_handler(store, allowed_page_hosts=allowed_hosts))
     print(json.dumps({
         "service": "Football Betting OneShot live odds bridge",

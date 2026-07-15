@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run one owner-authorized DeepSeek-assisted pre-match analysis.
+"""Run one owner-authorized deterministic pre-match analysis.
 
 DeepSeek is a synthesis layer. It never authorizes execution, changes the
 bankroll, or creates a locked bet. Generated output is passed through the
@@ -26,7 +26,7 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 API_URL = "https://api.deepseek.com/chat/completions"
 DEFAULT_MODEL = "deepseek-v4-pro"
-MODEL_VERSION = "v0.14.0"
+MODEL_VERSION = "v0.14.1"
 AUTO_INPUT_ROOT = ROOT / "data" / "analysis_inputs" / "automated"
 WORKSPACE_PATH = ROOT / "data" / "match_workspace" / "latest.json"
 DEEP_FALLBACK_ROOT = ROOT / "data" / "source_cache" / "deep_fallback"
@@ -200,9 +200,8 @@ def call_deepseek(context: dict, api_key: str, model: str = DEFAULT_MODEL, opene
             {"role": "user", "content": "请分析以下赛前证据并输出 json：\n" + json.dumps(context, ensure_ascii=False)},
         ],
         "response_format": {"type": "json_object"},
-        "thinking": {"type": "enabled"},
-        "reasoning_effort": "medium",
-        "max_tokens": 5000,
+        "thinking": {"type": "disabled"},
+        "max_tokens": 900,
         "stream": False,
     }
     request = urllib.request.Request(
@@ -352,6 +351,19 @@ def attach_workspace_evidence(analysis: dict, context: dict) -> dict:
     market["official_spf"] = workspace.get("spf") or None
     market["official_rqspf"] = workspace.get("rqspf") or None
     market["official_market_baseline"] = baseline
+    official_spf = workspace.get("spf") or {}
+    for row in (analysis.get("betting") or {}).get("price_audit") or []:
+        outcome = "home" if row.get("market") == "SPF主胜" else "draw" if row.get("market") == "SPF平局" else "away" if row.get("market") == "SPF客胜" else None
+        if not outcome:
+            continue
+        try:
+            odds = float(official_spf[outcome])
+            probability = float(row.get("model_probability"))
+        except (KeyError, TypeError, ValueError):
+            continue
+        row["odds"] = odds
+        row["ev"] = round(probability * odds - 1, 6)
+        row["price_source"] = "竞彩赛前SPF"
     quality = analysis.setdefault("data_quality", {})
     notes = quality.setdefault("notes", [])
     if baseline:
@@ -391,11 +403,66 @@ def apply_deterministic_core(analysis: dict, context: dict) -> dict:
         fundamentals["items"] = core_fundamentals["items"]
         fundamentals["status"] = core_fundamentals.get("status")
         fundamentals["sources"] = core_fundamentals.get("sources") or []
-    evidence = analysis.setdefault("evidence_chain", [])
-    evidence.insert(0, {
-        "source": "Football Betting OneShot deterministic core",
-        "role": "probability_calculation",
-        "note": "概率、λ、总进球、BTTS与比分矩阵由固定公式生成；DeepSeek仅负责解释。",
+    betting = analysis.setdefault("betting", {})
+    betting["price_audit"] = core.get("price_audit") or []
+    calibration = (core.get("model") or {}).get("calibration") or {}
+    market = calibration.get("market_probabilities") or {}
+    fundamentals = core.get("fundamentals") or {}
+    analysis["evidence_chain"] = [
+        {
+            "title": "模型底盘｜60%近期主客场攻防",
+            "items": [
+                f"近期攻防推导λ：主队{calibration.get('form_lambda_home', 0):.2f}，客队{calibration.get('form_lambda_away', 0):.2f}",
+                "这一层决定基础进球强度；实际进球数据不是xG，报告不冒充高级统计。",
+            ],
+        },
+        {
+            "title": "市场校准｜40%多公司共识",
+            "items": [
+                f"去水共识：主胜{market.get('home', 0):.1%}、平局{market.get('draw', 0):.1%}、客胜{market.get('away', 0):.1%}",
+                f"大小球中轴：{calibration.get('market_total_line_median') if calibration.get('market_total_line_median') is not None else '未取得'}；只校准，不替代模型。",
+            ],
+        },
+        {
+            "title": "价格审核｜8%安全边际",
+            "items": [
+                "每个玩法分别展示当前价、模型概率、EV与最低可接受赔率；低于门槛一律不过线。",
+                "模型包含市场校准，因此正EV仅是价格复核信号，不宣称独立套利优势。",
+            ],
+        },
+        {
+            "title": "临场事实｜单独核验，不重复加权",
+            "items": [
+                f"公开事实核验状态：{fundamentals.get('status') or '待核验'}。",
+                "确认首发、关键伤停、天气或盘口换线与假设冲突时，必须重算而非沿用旧报告。",
+            ],
+        },
+    ]
+    return analysis
+
+
+def deterministic_analysis(context: dict, request: dict) -> dict:
+    """Build the complete publishable payload without an LLM round-trip."""
+    analysis = normalize_analysis({}, request, "fixed-python-core")
+    analysis = apply_deterministic_core(analysis, context)
+    analysis = attach_workspace_evidence(analysis, context)
+    now = datetime.now().astimezone().isoformat(timespec="seconds")
+    analysis["report"].update({
+        "model_name": "Football Betting OneShot",
+        "model_version": MODEL_VERSION,
+        "report_type": "确定性赛前分析",
+        "analysis_timestamp": now,
+        "ai_provider": None,
+        "ai_model": None,
+    })
+    analysis["automation"] = {
+        "provider": "fixed-python-core", "generated_at": now,
+        "owner_authorized_request": True, "llm_used": False,
+    }
+    analysis["decisions"]["final_state"] = "空仓｜未锁单"
+    analysis["betting"].update({
+        "state": "空仓｜未锁单", "execution_authorized": False,
+        "lock_state_changed": False, "bankroll_state_changed": False,
     })
     return analysis
 
@@ -412,7 +479,7 @@ def has_minimum_analysis_evidence(context: dict) -> bool:
 def run_json_command(command: list[str], allow_failure: bool = False, timeout: int = 180) -> dict:
     try:
         completed = subprocess.run(
-            command, cwd=ROOT, text=True, capture_output=True, encoding="utf-8", timeout=timeout,
+            command, cwd=ROOT, text=True, capture_output=True, encoding="utf-8", errors="replace", timeout=timeout,
         )
     except subprocess.TimeoutExpired as error:
         raise RuntimeError(f"Command timed out after {timeout}s: {' '.join(command)}") from error
@@ -448,7 +515,26 @@ def report_manifest(manifest_path: Path, context: dict) -> Path:
     return output
 
 
-def run_pipeline(request: dict, api_key: str, model_name: str) -> dict:
+def mark_initial_market_checkpoint(context: dict) -> None:
+    """Prevent the monitor from immediately repeating the just-fetched snapshot."""
+    from prematch_market_monitor import STATE_PATH, due_stage
+    match = context.get("selected_workspace_match") or {}
+    match_id = str(match.get("id") or "")
+    stage = due_stage(match, datetime.now().astimezone()) if match_id else None
+    if not stage:
+        return
+    try:
+        state = load_json(STATE_PATH) if STATE_PATH.exists() else {}
+    except (OSError, json.JSONDecodeError):
+        state = {}
+    state.setdefault(match_id, {})[stage] = datetime.now().astimezone().isoformat(timespec="seconds")
+    STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    temporary = STATE_PATH.with_suffix(".tmp")
+    temporary.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
+    temporary.replace(STATE_PATH)
+
+
+def run_pipeline(request: dict, api_key: str = "", model_name: str = DEFAULT_MODEL, *, use_llm: bool = False) -> dict:
     print("[phase 1/5] fetching match evidence", file=sys.stderr, flush=True)
     fetch_date = fetch_date_for_request(request)
     fetch = run_json_command([
@@ -465,12 +551,15 @@ def run_pipeline(request: dict, api_key: str, model_name: str) -> dict:
     context = analysis_context(manifest_path, request)
     if not has_minimum_analysis_evidence(context):
         raise RuntimeError("Analysis aborted: no official odds or matched source evidence; no report was published")
-    print("[phase 2/5] calling DeepSeek", file=sys.stderr, flush=True)
-    raw = call_deepseek(context, api_key, model_name)
-    print("[phase 3/5] normalizing and validating response", file=sys.stderr, flush=True)
-    analysis = normalize_analysis(raw, request, model_name)
-    analysis = apply_deterministic_core(analysis, context)
-    analysis = attach_workspace_evidence(analysis, context)
+    if use_llm and api_key:
+        print("[phase 2/5] optional compact DeepSeek narration", file=sys.stderr, flush=True)
+        raw = call_deepseek(context, api_key, model_name)
+        analysis = normalize_analysis(raw, request, model_name)
+        analysis = apply_deterministic_core(analysis, context)
+        analysis = attach_workspace_evidence(analysis, context)
+    else:
+        print("[phase 2/5] deterministic core (no LLM tokens)", file=sys.stderr, flush=True)
+        analysis = deterministic_analysis(context, request)
     AUTO_INPUT_ROOT.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now().astimezone().strftime("%Y%m%d_%H%M%S")
     safe_id = re.sub(r"[^A-Za-z0-9_-]", "_", request.get("match_id") or "match")
@@ -486,6 +575,7 @@ def run_pipeline(request: dict, api_key: str, model_name: str) -> dict:
         sys.executable, "scripts/generate_analysis_report.py",
         "--fetch-manifest", str(render_manifest), "--analysis-json", str(output),
     ])
+    mark_initial_market_checkpoint(context)
     print("[phase 5/5] rebuilding homepage", file=sys.stderr, flush=True)
     run_json_command([sys.executable, "scripts/match_workspace.py", "--date", request["business_date"]])
     subprocess.run([sys.executable, "scripts/build_public_site.py"], cwd=ROOT, check=True)
@@ -503,10 +593,9 @@ def main() -> int:
         "business_date": args.date, "match": args.match, "match_id": args.match_id,
     })
     api_key = os.environ.get("DEEPSEEK_API_KEY", "")
-    if not api_key:
-        raise SystemExit("DEEPSEEK_API_KEY is not configured")
     model_name = os.environ.get("DEEPSEEK_MODEL", DEFAULT_MODEL)
-    print(json.dumps(run_pipeline(request, api_key, model_name), ensure_ascii=False, indent=2))
+    use_llm = os.environ.get("FBOS_USE_LLM", "0").strip() == "1"
+    print(json.dumps(run_pipeline(request, api_key, model_name, use_llm=use_llm), ensure_ascii=False, indent=2))
     return 0
 
 

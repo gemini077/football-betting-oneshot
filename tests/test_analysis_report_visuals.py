@@ -11,12 +11,16 @@ from generate_analysis_report import (  # noqa: E402
     score_matrix_summary,
     sensitivity_scenarios,
     timeline_svg,
+    pct,
 )
 
 
 class AnalysisReportVisualTests(unittest.TestCase):
     def setUp(self):
         self.model = {"lambda_home": 1.10, "lambda_away": 0.98, "rho": -0.06}
+
+    def test_negative_ev_is_rendered_as_a_fractional_percentage(self):
+        self.assertEqual("-17.5%", pct(-0.175))
 
     def test_score_matrix_is_normalized_and_has_a_top_score(self):
         summary = score_matrix_summary(self.model)
@@ -37,7 +41,9 @@ class AnalysisReportVisualTests(unittest.TestCase):
             {"time": "t1", "home": 2.0, "draw": 3.0, "away": 4.0},
             {"time": "t2", "home": 1.9, "draw": 3.1, "away": 4.2},
         ]
-        self.assertEqual("", timeline_svg(two_points))
+        rendered = timeline_svg(two_points)
+        self.assertIn("尚未形成至少3个独立时间点", rendered)
+        self.assertNotIn("<svg", rendered)
         self.assertIn("真实多快照赔率轨迹", timeline_svg(two_points + [{"time": "t3", "home": 1.8, "draw": 3.2, "away": 4.4}]))
 
     def test_betting_portfolio_keeps_three_layers_without_forcing_candidates(self):

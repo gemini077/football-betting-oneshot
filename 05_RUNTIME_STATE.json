@@ -1,7 +1,7 @@
 {
   "model_name": "Football Betting OneShot",
   "model_id": "football-betting-oneshot",
-  "model_version": "v0.14.0",
+  "model_version": "v0.14.1",
   "versioning_policy": {
     "scheme": "SemVer",
     "patch": "实现修复、文案或兼容性调整，不改变模型行为",
@@ -9,7 +9,7 @@
     "major": "架构、概率体系、结算口径或执行逻辑发生不兼容的大变动",
     "datetime_usage": "仅用于数据批次、报告和文件名，不作为模型版本"
   },
-  "updated_at": "2026-07-15T18:42:00+08:00",
+  "updated_at": "2026-07-15T22:05:00+08:00",
   "settlement_scope": "90分钟含伤停，不含加时和点球",
   "bankroll": {
     "initial_principal": 100,
@@ -225,7 +225,7 @@
     "formal_in_play_probability_requires_major_version": "v1.0.0"
   },
   "match_workspace": {
-    "module_version": "v0.14.0",
+    "module_version": "v0.14.1",
     "status": "owner_authorized_analysis_with_workspace_odds_evidence_gate",
     "generator": "scripts/match_workspace.py",
     "daily_schedule_updater": "scripts/daily_schedule_workspace.py",
@@ -243,10 +243,12 @@
     "bankroll_state_changed": false
   },
   "deepseek_automation": {
-    "module_version": "v0.14.0",
+    "module_version": "v0.14.1",
     "workflow": ".github/workflows/analyze-selected.yml",
     "entrypoint": "scripts/deepseek_auto_analysis.py",
-    "secret_name": "DEEPSEEK_API_KEY",
+    "default_execution": "deterministic_no_llm",
+    "llm_opt_in_env": "FBOS_USE_LLM=1",
+    "secret_name_optional": "DEEPSEEK_API_KEY",
     "default_model": "deepseek-v4-pro",
     "trigger_policy": "repository_owner_issue_or_manual_dispatch_only",
     "synthesis_layer_only": true,

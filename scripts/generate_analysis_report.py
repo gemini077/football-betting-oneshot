@@ -44,7 +44,7 @@ def pct(value, digits=1) -> str:
     if value is None:
         return "—"
     numeric = float(value)
-    if 0 <= numeric <= 1:
+    if -1 <= numeric <= 1:
         numeric *= 100
     return f"{numeric:.{digits}f}%"
 
@@ -477,7 +477,7 @@ def genuine_market_timeline(match: dict) -> list[dict]:
 
 def timeline_svg(points: list[dict]) -> str:
     if len(points) < 3:
-        return ""
+        return '<div class="timeline empty-panel">尚未形成至少3个独立时间点的赔率轨迹；当前开盘/即时值只作快照对照，不伪装成时间序列。</div>'
     width, height, pad = 760, 250, 34
     values = [float(point[key]) for point in points for key in ("home", "draw", "away")]
     low, high = min(values), max(values)
@@ -1027,7 +1027,10 @@ def render(payload: dict) -> str:
         odds = item.get("odds")
         probabilities = item.get("model_probabilities", item.get("model_probability"))
         ev_value = item.get("ev")
-        if isinstance(ev_value, dict):
+        minimum = item.get("minimum_acceptable_decimal_odds", item.get("conservative_fair_odds"))
+        if isinstance(odds, (int, float)) and isinstance(minimum, (int, float)):
+            result = "达到执行线" if float(odds) >= float(minimum) else "不过执行线"
+        elif isinstance(ev_value, dict):
             ev_cells = [value for value in ev_value.values() if isinstance(value, (int, float))]
             result = "不过线" if ev_cells and max(ev_cells) <= 0 else "存在正EV方向"
         elif isinstance(ev_value, (int, float)):
@@ -1039,7 +1042,7 @@ def render(payload: dict) -> str:
             format_market_vector(odds),
             format_market_vector(probabilities, probability=True),
             format_market_vector(ev_value, probability=True),
-            item.get("minimum_acceptable_decimal_odds", item.get("conservative_fair_odds")),
+            minimum,
             result,
         ])
     price_audit_content = table(
@@ -1108,9 +1111,7 @@ def render(payload: dict) -> str:
     if script_items:
         script_content += f'<div class="plain-conclusion"><b>比赛剧本</b><ul>{script_items}</ul></div>'
 
-    timeline_content = timeline_svg(genuine_market_timeline(match))
-    if timeline_content:
-        market_content += timeline_content
+    market_content += timeline_svg(genuine_market_timeline(match))
 
     cards = [
         card("先看答案", "01", headline, True),
