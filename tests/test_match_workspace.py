@@ -114,6 +114,15 @@ class MatchWorkspacePortfolioTests(unittest.TestCase):
         self.assertIn("赛前各维度逐项复核", page)
         self.assertIn("根因、反事实与模型修正", page)
 
+    def test_unanalyzed_match_opens_owner_authorized_github_request(self):
+        page = render("{}")
+
+        self.assertIn("function analysisRequestUrl", page)
+        self.assertIn("gemini077/football-betting-oneshot/issues/new", page)
+        self.assertIn("[自动分析]", page)
+        self.assertIn("business_date:", page)
+        self.assertIn("if(m.report_state==='已分析')", page)
+
 
 if __name__ == "__main__":
     unittest.main()
