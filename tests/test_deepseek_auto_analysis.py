@@ -1,5 +1,6 @@
 import json
 import sys
+from types import SimpleNamespace
 from pathlib import Path
 
 
@@ -13,6 +14,7 @@ from deepseek_auto_analysis import (  # noqa: E402
     has_minimum_analysis_evidence,
     normalize_analysis,
     request_from_event,
+    run_json_command,
     validate_request,
 )
 
@@ -165,3 +167,11 @@ def test_analysis_workflow_does_not_try_to_push_workflow_files():
     workflow = (ROOT / ".github" / "workflows" / "analyze-selected.yml").read_text(encoding="utf-8")
     save_step = workflow.split("git add", 1)[1].split("\n", 1)[0]
     assert ".github/workflows" not in save_step
+
+
+def test_json_command_accepts_progress_before_final_envelope(monkeypatch):
+    monkeypatch.setattr(
+        "deepseek_auto_analysis.subprocess.run",
+        lambda *args, **kwargs: SimpleNamespace(returncode=0, stdout='[FETCH] source\n{"manifest":"ok.json"}\n', stderr=""),
+    )
+    assert run_json_command(["python", "fetch.py"])["manifest"] == "ok.json"

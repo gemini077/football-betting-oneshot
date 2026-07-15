@@ -29,6 +29,7 @@ DEFAULT_MODEL = "deepseek-v4-pro"
 MODEL_VERSION = "v0.14.0"
 AUTO_INPUT_ROOT = ROOT / "data" / "analysis_inputs" / "automated"
 WORKSPACE_PATH = ROOT / "data" / "match_workspace" / "latest.json"
+DEEP_FALLBACK_ROOT = ROOT / "data" / "source_cache" / "deep_fallback"
 
 
 def load_json(path: Path) -> Any:
@@ -136,6 +137,22 @@ def analysis_context(manifest_path: Path, request: dict) -> dict:
                 loaded.append(prune(load_json(path)))
         if loaded:
             sources[name] = {"metadata": sources[name], "snapshots": loaded}
+    deep_source = sources.get("500_deep") or {}
+    deep_snapshots = deep_source.get("snapshots") if isinstance(deep_source, dict) else []
+    usable_deep = any(
+        (snapshot.get("ouzhi") or {}).get("bookmakers") and (snapshot.get("shuju") or {}).get("recent_form")
+        for snapshot in (deep_snapshots or []) if isinstance(snapshot, dict)
+    )
+    if not usable_deep:
+        metadata = deep_source.get("metadata") if isinstance(deep_source, dict) else deep_source
+        matches = (metadata or {}).get("matches") if isinstance(metadata, dict) else []
+        shuju_id = next((row.get("shuju_id") for row in (matches or []) if row.get("shuju_id")), None)
+        fallback = DEEP_FALLBACK_ROOT / f"{shuju_id}.json" if shuju_id else None
+        if fallback and fallback.exists():
+            sources["500_deep"] = {
+                "metadata": {**(metadata or {}), "fallback_snapshot_used": True, "fallback_reason": "cloud_source_blocked"},
+                "snapshots": [prune(load_json(fallback))],
+            }
     workspace_match = selected_workspace_match(request)
     return {
         "request": request,
@@ -387,7 +404,14 @@ def run_json_command(command: list[str], allow_failure: bool = False, timeout: i
         raise RuntimeError(completed.stderr or completed.stdout)
     try:
         return json.loads(completed.stdout)
-    except json.JSONDecodeError as error:
+    except json.JSONDecodeError:
+        # Some fetchers print progress before their final JSON envelope.
+        for match in reversed(list(re.finditer(r"(?m)^\s*\{", completed.stdout))):
+            try:
+                return json.loads(completed.stdout[match.start():])
+            except json.JSONDecodeError:
+                continue
+        error = json.JSONDecodeError("no JSON envelope found", completed.stdout, 0)
         raise RuntimeError(f"Command did not return JSON: {' '.join(command)}\n{completed.stdout}\n{completed.stderr}") from error
 
 
