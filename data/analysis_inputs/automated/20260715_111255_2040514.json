@@ -1,0 +1,116 @@
+{
+  "report": {
+    "ai_summary": "本场欧冠资格赛赛前证据严重不足：仅能获取体彩官方胜平负赔率（主胜4.35、平局3.70、客胜1.59），返奖率88.6%，隐含客胜概率约55.7%。所有外部数据源（竞彩API、500.com、Polymarket）均未成功提供额外赔率、基本面或模型参数，无法构建泊松模型，无法评估价值或形成下注建议。当前仅作为市场基线草稿，不构成投注依据。",
+    "model_name": "Football Betting OneShot",
+    "model_version": "v0.13.6",
+    "report_type": "DeepSeek辅助赛前分析（基础内核审计后发布）",
+    "analysis_timestamp": "2026-07-15T11:12:55+00:00",
+    "final_execution_version": false,
+    "ai_provider": "DeepSeek",
+    "ai_model": "deepseek-v4-pro"
+  },
+  "match": {
+    "id": "2040514",
+    "match_num": "周三202",
+    "home": "苏捷斯卡",
+    "away": "阿拉木图",
+    "league": "欧冠",
+    "kickoff": "2026-07-16 03:00",
+    "business_date": "2026-07-15",
+    "match_id": "2040514",
+    "competition": "欧冠",
+    "kickoff_local": "2026-07-16 03:00"
+  },
+  "data_quality": {
+    "sources": {
+      "sporttery": "NO_MATCHES_AFTER_FILTER",
+      "500_trade": "未匹配到该场次",
+      "polymarket": "NO_MATCH_IDENTITY"
+    },
+    "overall": "极差：所有外部源均未提供有效赔率或球队数据，仅依赖体彩市场基线",
+    "warnings": [
+      "中国竞彩主源未返回目标日期的有效赔率，需要使用500.com可见官方行降级。",
+      "500竞彩列表中未找到匹配筛选条件的比赛。",
+      "Polymarket未可靠匹配目标赛事；该来源已降级，不影响其他赛前数据。",
+      "已请求深层抓取，但没有可用的shuju_id。"
+    ],
+    "missing": [],
+    "notes": [
+      "已从所选主页场次注入体彩胜平负赔率，并计算去水市场基线；该基线不是模型概率。"
+    ],
+    "status": "仅市场基线"
+  },
+  "fundamentals": {
+    "available": false,
+    "details": "无球队实力、伤停、历史交锋或近期状态等基本面数据",
+    "items": []
+  },
+  "model": {
+    "probabilities": null,
+    "lambda_home": null,
+    "lambda_away": null,
+    "expected_goals": null,
+    "score_probabilities": [],
+    "btts": {
+      "judgement": "数据不足，暂不判断"
+    },
+    "total_goals_buckets": [],
+    "status": "DeepSeek辅助综合；未替代本地概率校准"
+  },
+  "decisions": {
+    "unique_primary_dimension": "市场基线客队占优",
+    "unique_score": "数据不足，暂不形成结论",
+    "mathematical_first": "客队（体彩赔率最低）",
+    "market_first": "客队（市场基线隐含概率55.7%）",
+    "maximum_error_points": [
+      "仅依赖单一体彩市场基线，无模型或多市场交叉验证",
+      "缺少球队实力、状态、伤停等关键信息，市场赔率可能未反映真实实力",
+      "欧冠资格赛涉及低级别联赛队伍，未知因素多，易出现冷门"
+    ],
+    "value_judgement": "无价值判断：缺少模型概率，无法比较市场基线是否存在偏差",
+    "final_state": "空仓｜DeepSeek辅助分析已生成，等待模型与价格复核｜未锁单"
+  },
+  "betting": {
+    "candidates": [],
+    "state": "空仓｜未锁单",
+    "execution_authorized": false,
+    "lock_state_changed": false,
+    "bankroll_state_changed": false,
+    "price_audit": []
+  },
+  "evidence_chain": [],
+  "automation": {
+    "provider": "DeepSeek",
+    "model": "deepseek-v4-pro",
+    "generated_at": "2026-07-15T11:12:55+00:00",
+    "owner_authorized_request": true
+  },
+  "market": {
+    "official_spf": {
+      "home": 4.35,
+      "draw": 3.7,
+      "away": 1.59
+    },
+    "official_rqspf": {
+      "handicap": 1,
+      "home": 2.07,
+      "draw": 3.34,
+      "away": 2.88
+    },
+    "official_market_baseline": {
+      "prices": {
+        "home": 4.35,
+        "draw": 3.7,
+        "away": 1.59
+      },
+      "overround": 1.129086,
+      "payout_rate": 0.885672,
+      "fair_probabilities": {
+        "home": 0.203603,
+        "draw": 0.239371,
+        "away": 0.557026
+      },
+      "role": "official_market_baseline_only_not_model_probability"
+    }
+  }
+}
