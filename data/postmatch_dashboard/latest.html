@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Football Betting OneShot｜赛后复盘工作台</title>
+<style>
+:root{--bg:#090d18;--panel:#11182a;--panel2:#161f35;--line:#293653;--text:#edf2ff;--muted:#94a3be;--accent:#7c3aed;--accent2:#ec4899;--good:#21c77a;--bad:#fb5b68;--warn:#f4b942;--blue:#46a5ff}
+*{box-sizing:border-box} body{margin:0;background:radial-gradient(circle at 12% 0,#22153f 0,transparent 32%),radial-gradient(circle at 90% 10%,#182f52 0,transparent 28%),var(--bg);color:var(--text);font:14px/1.55 "Microsoft YaHei",system-ui,sans-serif}
+.shell{max-width:1500px;margin:auto;padding:28px} .hero{display:flex;justify-content:space-between;gap:24px;align-items:flex-end;margin-bottom:22px} .eyebrow{color:#c4b5fd;font-weight:700;letter-spacing:.12em} h1{font-size:34px;margin:6px 0} .hero p{margin:0;color:var(--muted)} .sync{min-width:280px;background:#0e1526;border:1px solid var(--line);border-radius:16px;padding:15px 18px} .sync strong{display:block;color:var(--good);font-size:16px} .kpis{display:grid;grid-template-columns:repeat(7,minmax(120px,1fr));gap:12px;margin-bottom:20px} .kpi{background:linear-gradient(145deg,var(--panel2),var(--panel));border:1px solid var(--line);border-radius:16px;padding:16px} .kpi span{color:var(--muted);font-size:12px} .kpi b{display:block;font-size:23px;margin-top:5px} .toolbar{position:sticky;top:0;z-index:9;background:rgba(9,13,24,.88);backdrop-filter:blur(12px);display:flex;gap:10px;padding:12px 0} button,.filter,input{border:1px solid var(--line);background:#11192b;color:var(--text);border-radius:10px;padding:10px 13px} button{cursor:pointer} button.active{background:linear-gradient(90deg,var(--accent),var(--accent2));border-color:transparent} input{flex:1;min-width:220px} .view{display:none} .view.active{display:block} .match-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px} .match-card{background:linear-gradient(150deg,#151e34,#0f1626);border:1px solid var(--line);border-radius:18px;padding:18px;box-shadow:0 14px 40px rgba(0,0,0,.16)} .card-head{display:flex;align-items:center;gap:10px} .card-head h3{font-size:17px;margin:0;flex:1} .match-id{font-weight:800;color:#c4b5fd} .score-strip{display:flex;gap:18px;background:#0b1120;border-radius:12px;padding:12px;margin:14px 0} .score-strip b{font-size:17px} .detail-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px} .detail-grid div{border-left:2px solid #3b4b6c;padding-left:9px} label{color:var(--muted);font-size:11px} p{margin:3px 0} .summary{color:#c8d1e5;margin:15px 0} .card-foot{display:flex;justify-content:space-between;gap:10px;color:var(--muted)} .badge{display:inline-flex;align-items:center;padding:3px 9px;border-radius:999px;font-size:12px;white-space:nowrap} .badge.good{background:#123b2c;color:#62e4a6} .badge.bad{background:#451d27;color:#ff8c98} .badge.warn{background:#453717;color:#ffd36e} .badge.neutral{background:#25324a;color:#c1cbe0} .table-wrap{overflow:auto;background:#0f1626;border:1px solid var(--line);border-radius:16px} table{border-collapse:collapse;width:100%;min-width:1100px} th{position:sticky;top:0;background:#1b2540;color:#cbd5e9;text-align:left;padding:12px;border-bottom:1px solid var(--line);font-size:12px} td{padding:11px 12px;border-bottom:1px solid #222e48;vertical-align:top;max-width:320px} tr:hover td{background:#141e33} .section-head{display:flex;justify-content:space-between;align-items:center;margin:10px 0 14px} .section-head h2{margin:0} .empty{display:none;padding:35px;text-align:center;color:var(--muted)} footer{color:var(--muted);margin-top:22px;padding:15px 0;border-top:1px solid var(--line)}
+@media(max-width:1050px){.kpis{grid-template-columns:repeat(3,1fr)}.match-grid{grid-template-columns:1fr}.detail-grid{grid-template-columns:repeat(2,1fr)}} @media(max-width:650px){.shell{padding:16px}.hero{display:block}.sync{margin-top:14px}.kpis{grid-template-columns:repeat(2,1fr)}.toolbar{flex-wrap:wrap}.score-strip{flex-wrap:wrap}}
+</style></head><body><main class="shell">
+<header class="hero"><div><div class="eyebrow">FOOTBALL BETTING ONESHOT · v0.12.0</div><h1>赛后复盘工作台</h1><p>90分钟赛果口径｜记录ID递增｜赛前冻结、赛后归因</p></div><div class="sync"><strong>● 自动复盘已接入</strong><span>待核验 0 场 · 等待结束 1 场</span><br><small>页面生成：2026-07-15 14:49:21</small></div></header>
+<section class="kpis"><div class="kpi"><span>有效复盘</span><b>18</b></div><div class="kpi"><span>已结注单</span><b>6</b></div><div class="kpi"><span>注单命中率</span><b>16.7%</b></div><div class="kpi"><span>累计投注</span><b>¥20.20</b></div><div class="kpi"><span>净盈亏</span><b>¥-13.76</b></div><div class="kpi"><span>ROI</span><b>-68.1%</b></div><div class="kpi"><span>当前余额</span><b>¥51.43</b></div></section>
+<nav class="toolbar"><button class="tab active" data-view="signals">比赛复盘</button><button class="tab" data-view="locks">注单结算</button><button class="tab" data-view="timeline">盘口时间轴</button><button class="tab" data-view="roots">根因与修正</button><input id="search" placeholder="搜索球队、记录ID、玩法或错点…"><select id="hit-filter" class="filter"><option value="">全部命中状态</option><option>是</option><option>否</option></select></nav>
+<section id="signals" class="view active"><div class="section-head"><h2>赛前信号与赛果归因</h2><span>18 场</span></div><div class="match-grid"><article class="match-card" data-search="m019 世界杯｜法国 vs 西班牙 poisson+dixon-coles完成；杯赛低比分修正；市场仅校验不替代模型 竞彩2.08/3.08/3.09对应ev约-9.2%/-11.7%/-14.6%；pinnacle小2.5@1.90点估计ev约+9.7%，但保守概率下沿54%仅+2.6%，不足覆盖模型与首发误差，执行线取≥2.02 法国 1-1 西班牙（90分钟） 小2.5（方向保留，未通过保守ev） 小2.5（方向保留，未通过保守ev） 模型总进球均值 2.37 btts no 52.0%，优势很弱，不单独执行 0-2 是｜小2.5命中 否 否｜实际0-2与唯一首推1-1的比分格距离为2，且赛前仅列第8，不能算相邻 是｜西班牙零封客胜属于低概率冷门分支；不是总进球右尾 小球方向正确，但1x2分布高估法国与平局；0-2仅排第8，低估西班牙零封客胜 主维度命中，但比分与胜负结构错误 否 法国进攻效率与西班牙零封客胜概率错估 法国2-1、2-0属于赛前法国占优错点；实际0-2未进入核心比分层，只排第8，不能事后扩张为相邻命中 赛前小2.5方向命中，实际法国0-2西班牙；唯一比分1-1未中，0-2赛前概率4.86%、排序第8，不构成相邻比分。价格未过执行线，空仓纪律正确；比分与1x2结构应明确判错。 0.5 1" data-hit="是｜小2.5命中">
+              <div class="card-head"><span class="match-id">M019</span><h3>世界杯｜法国 vs 西班牙</h3><span class="badge good">主维度严格结算 是｜小2.5命中</span></div>
+              <div class="score-strip"><span>赛前唯一比分 <b>法国 1-1 西班牙（90分钟）</b></span><span>实际90分钟 <b>0-2</b></span><span class="badge bad">唯一比分精确命中 否</span></div>
+              <div class="detail-grid">
+                <div><label>赛前主维度</label><p>小2.5（方向保留，未通过保守EV）</p></div>
+                <div><label>亚盘方向</label><p>小2.5（方向保留，未通过保守EV）</p></div>
+                <div><label>大小球</label><p>模型总进球均值 2.37</p></div>
+                <div><label>BTTS</label><p>BTTS No 52.0%，优势很弱，不单独执行</p></div>
+              </div>
+              <p class="summary">赛前小2.5方向命中，实际法国0-2西班牙；唯一比分1-1未中，0-2赛前概率4.86%、排序第8，不构成相邻比分。价格未过执行线，空仓纪律正确；比分与1X2结构应明确判错。</p>
+              <div class="card-foot"><span class="badge good">主维度命中，但比分与胜负结构错误</span><span>最大错点：法国进攻效率与西班牙零封客胜概率错估</span></div>
+            </article>
+<article class="match-card" data-search="m018 欧洲冠军联赛｜新圣徒 vs 萨巴赫 poisson+dixon-coles完成；次回合比分状态与潜在停赛修正 竞彩5.40/4.25/1.41对应ev约-7.9%/-6.2%/-14.1%；pinnacle萨巴赫-1@1.94的点估计亦未形成足够安全边际 新圣徒 0-2 萨巴赫 萨巴赫90分钟客胜（方向保留，价格层不执行） 萨巴赫90分钟客胜（方向保留，价格层不执行） 模型总进球均值 2.88 btts yes 52.2%，优势不足 1-2 是｜90分钟客胜命中 否 是｜1-2与0-2距离1，且赛前已明确主队1球路径；仍计唯一比分未中 否 客胜方向正确，但主队追回一球概率被低估 红且逻辑对 否 btts与主队1球概率低估 sabah总比分领先2球后可能主动降速，使客胜迁移为平局；solvet若停赛削弱客队防线与出球，主队1球概率会上升；新圣徒早段进球会把比赛推向高比分尾部 赛前萨巴赫90分钟客胜命中，实际1-2；唯一比分0-2偏离一球。价格层未执行仍正确，不制造注单盈亏。 0.75 1" data-hit="是｜90分钟客胜命中">
+              <div class="card-head"><span class="match-id">M018</span><h3>欧洲冠军联赛｜新圣徒 vs 萨巴赫</h3><span class="badge good">主维度严格结算 是｜90分钟客胜命中</span></div>
+              <div class="score-strip"><span>赛前唯一比分 <b>新圣徒 0-2 萨巴赫</b></span><span>实际90分钟 <b>1-2</b></span><span class="badge bad">唯一比分精确命中 否</span></div>
+              <div class="detail-grid">
+                <div><label>赛前主维度</label><p>萨巴赫90分钟客胜（方向保留，价格层不执行）</p></div>
+                <div><label>亚盘方向</label><p>萨巴赫90分钟客胜（方向保留，价格层不执行）</p></div>
+                <div><label>大小球</label><p>模型总进球均值 2.88</p></div>
+                <div><label>BTTS</label><p>BTTS Yes 52.2%，优势不足</p></div>
+              </div>
+              <p class="summary">赛前萨巴赫90分钟客胜命中，实际1-2；唯一比分0-2偏离一球。价格层未执行仍正确，不制造注单盈亏。</p>
+              <div class="card-foot"><span class="badge neutral">红且逻辑对</span><span>最大错点：BTTS与主队1球概率低估</span></div>
+            </article>
+<article class="match-card" data-search="m017 欧洲冠军联赛｜杰尔 vs 雷克雅未克维京人 poisson+dixon-coles完成；次回合领先/追分脚本修正 竞彩1.47/4.20/4.75对应ev约-10.6%/-10.3%/-15.5%；pinnacle杰尔-1@2.01按赢2+、净胜1走盘计算，点估计ev约-1.6%，不过线 杰尔 2-1 雷克雅未克维京人 杰尔90分钟主胜（方向保留，价格层不执行） 杰尔90分钟主胜（方向保留，价格层不执行） 模型总进球均值 3.07 btts yes 56.0%，但次回合状态依赖较强 2-2 否｜90分钟主胜未中 否 否｜实际2-2虽与2-1距离1，但赛前仅列概率榜第7，未进入明确紧邻层 是 次回合追分脚本低估维京人反击与平局韧性，主胜概率偏高 黑且逻辑错误 否 两回合状态依赖与客队反击尾部低估 杰尔早段未进球会显著抬高平局和客队反击概率；维京人若先入球，杰尔需至少3球才能翻盘，比分尾部迅速变厚；资格赛球队数据与阵容信息不足，λ误差高于世界杯场次 赛前唯一主维度杰尔90分钟主胜未中，唯一比分2-1未中；实际2-2虽距离1，但赛前仅列概率榜第7，未进入明确紧邻层，不能标记相邻。空仓纪律正确。 0.25 1" data-hit="否｜90分钟主胜未中">
+              <div class="card-head"><span class="match-id">M017</span><h3>欧洲冠军联赛｜杰尔 vs 雷克雅未克维京人</h3><span class="badge bad">主维度严格结算 否｜90分钟主胜未中</span></div>
+              <div class="score-strip"><span>赛前唯一比分 <b>杰尔 2-1 雷克雅未克维京人</b></span><span>实际90分钟 <b>2-2</b></span><span class="badge bad">唯一比分精确命中 否</span></div>
+              <div class="detail-grid">
+                <div><label>赛前主维度</label><p>杰尔90分钟主胜（方向保留，价格层不执行）</p></div>
+                <div><label>亚盘方向</label><p>杰尔90分钟主胜（方向保留，价格层不执行）</p></div>
+                <div><label>大小球</label><p>模型总进球均值 3.07</p></div>
+                <div><label>BTTS</label><p>BTTS Yes 56.0%，但次回合状态依赖较强</p></div>
+              </div>
+              <p class="summary">赛前唯一主维度杰尔90分钟主胜未中，唯一比分2-1未中；实际2-2虽距离1，但赛前仅列概率榜第7，未进入明确紧邻层，不能标记相邻。空仓纪律正确。</p>
+              <div class="card-foot"><span class="badge neutral">黑且逻辑错误</span><span>最大错点：两回合状态依赖与客队反击尾部低估</span></div>
+            </article>
+<article class="match-card" data-search="m016 瑞典超｜佐加顿斯 vs 哈尔姆斯塔德 足球与市场同向主队大胜；交易所主胜极热，价格层警报 主让1.75升2、总球3升3.5；主队净胜2+真实，但公开价无正ev 3-1 让球/净胜球 佐加顿斯净胜至少2球；-2仅≥2.30执行 3—4球中枢；缺两侧价格不执行 yes轻微（52.6%） 3-0 是｜净胜至少2球命中 否 是｜3-0为赛前市场第一且距离1；仍计唯一比分未中 否｜总进球3命中中枢 精确比分排序偏差 未投注｜主维度命中、唯一比分未中、价格纪律正确 否｜主队防守失误未发生；客队1.08 xg未进属于可接受随机波动 弱方进球落点/市场第一未上位 2-0、3-0、2-1（3-0为市场第一） 主队净胜2+与3球中枢正确；3-0在赛前已列市场第一。客队12射、1.08 xg却未进，不应因零封结果追改弱方λ。-2@2.04虽赛果赢盘，但赛前ev约-5.3%，空仓仍正确。 0.75 1" data-hit="是｜净胜至少2球命中">
+              <div class="card-head"><span class="match-id">M016</span><h3>瑞典超｜佐加顿斯 vs 哈尔姆斯塔德</h3><span class="badge good">主维度严格结算 是｜净胜至少2球命中</span></div>
+              <div class="score-strip"><span>赛前唯一比分 <b>3-1</b></span><span>实际90分钟 <b>3-0</b></span><span class="badge bad">唯一比分精确命中 否</span></div>
+              <div class="detail-grid">
+                <div><label>赛前主维度</label><p>让球/净胜球</p></div>
+                <div><label>亚盘方向</label><p>佐加顿斯净胜至少2球；-2仅≥2.30执行</p></div>
+                <div><label>大小球</label><p>3—4球中枢；缺两侧价格不执行</p></div>
+                <div><label>BTTS</label><p>Yes轻微（52.6%）</p></div>
+              </div>
+              <p class="summary">主队净胜2+与3球中枢正确；3-0在赛前已列市场第一。客队12射、1.08 xG却未进，不应因零封结果追改弱方λ。-2@2.04虽赛果赢盘，但赛前EV约-5.3%，空仓仍正确。</p>
+              <div class="card-foot"><span class="badge bad">未投注｜主维度命中、唯一比分未中、价格纪律正确</span><span>最大错点：弱方进球落点/市场第一未上位</span></div>
+            </article>
+<article class="match-card" data-search="m015 世界杯｜阿根廷 vs 瑞士 足球与市场同向阿根廷小胜/低总球，但阿根廷与小球均价格压缩 阿根廷胜真实但未升-1强防；2.25长期压小，瑞士进球路径被低估 1-0 大小球 阿根廷-0.75不买 小2.25 no 1-1 半红｜小2.25，实际2球 否 是｜1-1与1-0距离1且赛前明确列为错点；仍计唯一比分未中 是｜btts反向＋平局；加时3-1不计入90分钟 模型排序错误 未投注｜主维度半红、比分/btts/胜负错误、价格纪律正确 否｜埃博洛红牌发生在1-1之后，不解释90分钟预测错误 弱方进球率低估/平局污染 2-0、1-1、2-1 90分钟1-1，小2.25按亚洲盘严格结算为半红，不得写成全赢；唯一比分、阿根廷90分钟胜与btts no均未中。加时3-1不参与90分钟结算。 0.5 1" data-hit="半红｜小2.25，实际2球">
+              <div class="card-head"><span class="match-id">M015</span><h3>世界杯｜阿根廷 vs 瑞士</h3><span class="badge warn">主维度严格结算 半红｜小2.25，实际2球</span></div>
+              <div class="score-strip"><span>赛前唯一比分 <b>1-0</b></span><span>实际90分钟 <b>1-1</b></span><span class="badge bad">唯一比分精确命中 否</span></div>
+              <div class="detail-grid">
+                <div><label>赛前主维度</label><p>大小球</p></div>
+                <div><label>亚盘方向</label><p>阿根廷-0.75不买</p></div>
+                <div><label>大小球</label><p>小2.25</p></div>
+                <div><label>BTTS</label><p>No</p></div>
+              </div>
+              <p class="summary">90分钟1-1，小2.25按亚洲盘严格结算为半红，不得写成全赢；唯一比分、阿根廷90分钟胜与BTTS No均未中。加时3-1不参与90分钟结算。</p>
+              <div class="card-foot"><span class="badge neutral">未投注｜主维度半红、比分/BTTS/胜负错误、价格纪律正确</span><span>最大错点：弱方进球率低估/平局污染</span></div>
+            </article>
+<article class="match-card" data-search="m014 世界杯｜挪威 vs 英格兰 三维同向于双方进球；英格兰胜仅轻优且价格警报 英格兰与大球同步强化，但90分钟胜率不足50%；btts结构真实 1-2 btts 英格兰-0.5/-0.75不买 3球中枢；大2.75不买 yes 1-1 是｜btts yes命中 否 是｜1-1为数学第一且赛前明确列为错点；仍计唯一比分未中 是｜平局污染；加时1-2不计入90分钟比分命中 人工融合排序错误 未投注｜主维度命中、90分钟胜负与唯一比分错误、价格纪律正确 否｜镜头线争议未被官方技术数据支持，不作为赛前模型解释 平局低估/人工融合覆盖数学第一 1-1、0-1、2-2 90分钟1-1；btts yes判断正确。模型数学第一本为1-1，却因英格兰盘面强化人工改选1-2。英格兰加时2-1晋级不计入90分钟命中；btts yes仅1.40，赛前不下注仍属正确价格纪律。 0.75 1" data-hit="是｜BTTS Yes命中">
+              <div class="card-head"><span class="match-id">M014</span><h3>世界杯｜挪威 vs 英格兰</h3><span class="badge good">主维度严格结算 是｜BTTS Yes命中</span></div>
+              <div class="score-strip"><span>赛前唯一比分 <b>1-2</b></span><span>实际90分钟 <b>1-1</b></span><span class="badge bad">唯一比分精确命中 否</span></div>
+              <div class="detail-grid">
+                <div><label>赛前主维度</label><p>BTTS</p></div>
+                <div><label>亚盘方向</label><p>英格兰-0.5/-0.75不买</p></div>
+                <div><label>大小球</label><p>3球中枢；大2.75不买</p></div>
+                <div><label>BTTS</label><p>Yes</p></div>
+              </div>
+              <p class="summary">90分钟1-1；BTTS Yes判断正确。模型数学第一本为1-1，却因英格兰盘面强化人工改选1-2。英格兰加时2-1晋级不计入90分钟命中；BTTS Yes仅1.40，赛前不下注仍属正确价格纪律。</p>
+              <div class="card-foot"><span class="badge good">未投注｜主维度命中、90分钟胜负与唯一比分错误、价格纪律正确</span><span>最大错点：平局低估/人工融合覆盖数学第一</span></div>
+            </article>
+<article class="match-card" data-search="m013 挪超｜特罗姆瑟 vs 瓦勒伦加 主队与大球双热，但小球盘口持续保护 主胜真实＋大球89%拥挤；小2.75低水 1-0 大小球 特罗姆瑟-0.75不买 小2.5/3 no极轻 1-0 是｜小2.75全赢，实际1球 是 否 否 模型判断正确 未投注｜价格未达线，足球与比分模型命中 否 无｜执行阈值待长期验证 2-1、1-1、2-0 主胜、小球、btts no与1-0全部命中；不能因单场结果直接下调执行线，应继续积累clv与价格样本。 1 1" data-hit="是｜小2.75全赢，实际1球">
+              <div class="card-head"><span class="match-id">M013</span><h3>挪超｜特罗姆瑟 vs 瓦勒伦加</h3><span class="badge good">主维度严格结算 是｜小2.75全赢，实际1球</span></div>
+              <div class="score-strip"><span>赛前唯一比分 <b>1-0</b></span><span>实际90分钟 <b>1-0</b></span><span class="badge good">唯一比分精确命中 是</span></div>
+              <div class="detail-grid">
+                <div><label>赛前主维度</label><p>大小球</p></div>
+                <div><label>亚盘方向</label><p>特罗姆瑟-0.75不买</p></div>
+                <div><label>大小球</label><p>小2.5/3</p></div>
+                <div><label>BTTS</label><p>No极轻</p></div>
+              </div>
+              <p class="summary">主胜、小球、BTTS No与1-0全部命中；不能因单场结果直接下调执行线，应继续积累CLV与价格样本。</p>
+              <div class="card-foot"><span class="badge good">未投注｜价格未达线，足球与比分模型命中</span><span>最大错点：无｜执行阈值待长期验证</span></div>
+            </article>
+<article class="match-card" data-search="m012 瑞典超｜奥尔格里特 vs 赫根 足球强弱与市场同向赫根，大球热度高 客胜真实但赫根防线脆弱；3.5并非足够右尾屏障 1-2 大小球 赫根-1不买 小3.5 yes 4-3 否｜小3.5，实际7球 否 否 是｜7球极端右尾＋主队爆冷 模型判断错误 未投注｜价格纪律保护本金，但方向严重错误 否 极端右尾/弱方多球/热门防线崩盘 0-3、1-3、2-2 低估德比波动、奥尔格里特主场持续进球和赫根连续防守崩盘；3.5不应被当作安全上限。 0 1" data-hit="否｜小3.5，实际7球">
+              <div class="card-head"><span class="match-id">M012</span><h3>瑞典超｜奥尔格里特 vs 赫根</h3><span class="badge bad">主维度严格结算 否｜小3.5，实际7球</span></div>
+              <div class="score-strip"><span>赛前唯一比分 <b>1-2</b></span><span>实际90分钟 <b>4-3</b></span><span class="badge bad">唯一比分精确命中 否</span></div>
+              <div class="detail-grid">
+                <div><label>赛前主维度</label><p>大小球</p></div>
+                <div><label>亚盘方向</label><p>赫根-1不买</p></div>
+                <div><label>大小球</label><p>小3.5</p></div>
+                <div><label>BTTS</label><p>Yes</p></div>
+              </div>
+              <p class="summary">低估德比波动、奥尔格里特主场持续进球和赫根连续防守崩盘；3.5不应被当作安全上限。</p>
+              <div class="card-foot"><span class="badge neutral">未投注｜价格纪律保护本金，但方向严重错误</span><span>最大错点：极端右尾/弱方多球/热门防线崩盘</span></div>
+            </article>
+<article class="match-card" data-search="m011 挪超｜奥勒松 vs 莫尔德 足球维度偏莫尔德，交易维度平局强警报 客胜保护真实但平局成交异常；高总球线持续压小 1-2 大小球 莫尔德-0.25不买 小3.25 yes 2-2 否｜小3.25，实际4球 否 是｜2-2与1-2距离1且赛前明确列为错点；仍计唯一比分未中 是｜4球边界＋平局 模型排序错误 未投注｜价格否决正确，方向模型错误 否 平局低估/4球边界 1-1、2-2、0-2 btts yes正确，2-2已列错点；但平局成交占比异常未被充分上调，仍错误首推客胜与小3.25。 0.5 1" data-hit="否｜小3.25，实际4球">
+              <div class="card-head"><span class="match-id">M011</span><h3>挪超｜奥勒松 vs 莫尔德</h3><span class="badge bad">主维度严格结算 否｜小3.25，实际4球</span></div>
+              <div class="score-strip"><span>赛前唯一比分 <b>1-2</b></span><span>实际90分钟 <b>2-2</b></span><span class="badge bad">唯一比分精确命中 否</span></div>
+              <div class="detail-grid">
+                <div><label>赛前主维度</label><p>大小球</p></div>
+                <div><label>亚盘方向</label><p>莫尔德-0.25不买</p></div>
+                <div><label>大小球</label><p>小3.25</p></div>
+                <div><label>BTTS</label><p>Yes</p></div>
+              </div>
+              <p class="summary">BTTS Yes正确，2-2已列错点；但平局成交占比异常未被充分上调，仍错误首推客胜与小3.25。</p>
+              <div class="card-foot"><span class="badge neutral">未投注｜价格否决正确，方向模型错误</span><span>最大错点：平局低估/4球边界</span></div>
+            </article>
+<article class="match-card" data-search="m010 芬超｜tps土尔库 vs ac奥卢 市场与盘口同向转向tps，大小球市场背离 客让退平＋主胜压低真实；小2.75低水保护不足 1-1 大小球 tps平手略优但不买 小2.5/3 yes轻微 3-0 半黑｜小2.75，实际3球 否 否 是｜主队零封三球 模型判断错误 未投注｜候选未锁，避免半黑 否 主队进球数低估/零封反向/3球边界 2-1、1-0、0-1 市场完整翻转至tps已被识别，却未充分进入主队进球λ；错误把升档后小球低水解释为主要保护。 0.25 1" data-hit="半黑｜小2.75，实际3球">
+              <div class="card-head"><span class="match-id">M010</span><h3>芬超｜TPS土尔库 vs AC奥卢</h3><span class="badge warn">主维度严格结算 半黑｜小2.75，实际3球</span></div>
+              <div class="score-strip"><span>赛前唯一比分 <b>1-1</b></span><span>实际90分钟 <b>3-0</b></span><span class="badge bad">唯一比分精确命中 否</span></div>
+              <div class="detail-grid">
+                <div><label>赛前主维度</label><p>大小球</p></div>
+                <div><label>亚盘方向</label><p>TPS平手略优但不买</p></div>
+                <div><label>大小球</label><p>小2.5/3</p></div>
+                <div><label>BTTS</label><p>Yes轻微</p></div>
+              </div>
+              <p class="summary">市场完整翻转至TPS已被识别，却未充分进入主队进球λ；错误把升档后小球低水解释为主要保护。</p>
+              <div class="card-foot"><span class="badge neutral">未投注｜候选未锁，避免半黑</span><span>最大错点：主队进球数低估/零封反向/3球边界</span></div>
+            </article>
+<article class="match-card" data-search="m009 芬超｜格尼斯坦 vs 玛丽港 三维同向但价格警报 真实防主胜与穿盘；大球市场过热但右尾真实 2-0 让球 格尼斯坦-1.5（≥1.98执行） 不追大3/3.25 no轻微 4-2 是｜-1.5全赢；仅方向评估，未锁单 否 否 是｜6球＋btts反向 模型局部正确 未投注｜主维度命中，但比分与总球逻辑错误 否 btts反向/右尾大比分 2-1、1-0、3-0 主队强势盘与净胜两球判断正确；严重低估玛丽港进球及比赛右尾。 0.5 1" data-hit="是｜-1.5全赢；仅方向评估，未锁单">
+              <div class="card-head"><span class="match-id">M009</span><h3>芬超｜格尼斯坦 vs 玛丽港</h3><span class="badge good">主维度严格结算 是｜-1.5全赢；仅方向评估，未锁单</span></div>
+              <div class="score-strip"><span>赛前唯一比分 <b>2-0</b></span><span>实际90分钟 <b>4-2</b></span><span class="badge bad">唯一比分精确命中 否</span></div>
+              <div class="detail-grid">
+                <div><label>赛前主维度</label><p>让球</p></div>
+                <div><label>亚盘方向</label><p>格尼斯坦-1.5（≥1.98执行）</p></div>
+                <div><label>大小球</label><p>不追大3/3.25</p></div>
+                <div><label>BTTS</label><p>No轻微</p></div>
+              </div>
+              <p class="summary">主队强势盘与净胜两球判断正确；严重低估玛丽港进球及比赛右尾。</p>
+              <div class="card-foot"><span class="badge good">未投注｜主维度命中，但比分与总球逻辑错误</span><span>最大错点：BTTS反向/右尾大比分</span></div>
+            </article>
+<article class="match-card" data-search="m007 世界杯｜法国 vs 摩洛哥 三维同向 法国优势真实+主胜过热+小球分流 1-0 大小球 摩洛哥+1/法国赢不穿 小2.5/3 no略优 2-0 是｜小2.75全赢，实际2球 否 是｜距离1且赛前明确列入紧邻层；仍计唯一比分未中 否 模型判断错误 主仓红且逻辑正确；波胆黑但主线正确 否 相邻比分污染/第二球效率 1-1、0-1、2-0、0-0 玩法选择正确，小球/btts no/法国方向正确；精确落点偏左 1 1" data-hit="是｜小2.75全赢，实际2球">
+              <div class="card-head"><span class="match-id">M007</span><h3>世界杯｜法国 vs 摩洛哥</h3><span class="badge good">主维度严格结算 是｜小2.75全赢，实际2球</span></div>
+              <div class="score-strip"><span>赛前唯一比分 <b>1-0</b></span><span>实际90分钟 <b>2-0</b></span><span class="badge bad">唯一比分精确命中 否</span></div>
+              <div class="detail-grid">
+                <div><label>赛前主维度</label><p>大小球</p></div>
+                <div><label>亚盘方向</label><p>摩洛哥+1/法国赢不穿</p></div>
+                <div><label>大小球</label><p>小2.5/3</p></div>
+                <div><label>BTTS</label><p>No略优</p></div>
+              </div>
+              <p class="summary">玩法选择正确，小球/BTTS No/法国方向正确；精确落点偏左</p>
+              <div class="card-foot"><span class="badge neutral">主仓红且逻辑正确；波胆黑但主线正确</span><span>最大错点：相邻比分污染/第二球效率</span></div>
+            </article>
+<article class="match-card" data-search="m006 欧战资格赛｜伏伊伏丁那 vs 费伦茨瓦罗斯 两维同向一维中立 客强浅盘被误读为平局保护 1-1 btts/客不败观察 费伦茨不败；主队受让不宜重 2球第一 yes 1-2 不可计入｜赛前并列btts yes与客不败，未设唯一主维度；两项分别命中 否 是｜1-2与唯一比分1-1距离1，且赛前明确列为最大错点；仍计唯一比分未中 是｜1-2客胜污染 模型判断错误 未投注｜并列两项分别命中，但无唯一主维度，不计主维度命中率 否 客胜污染/平局模型误判 1-2、2-1 btts yes与客不败分别成立，但赛前把两个玩法并列成主维度，因此本场不得计入唯一主维度命中率；唯一比分1-1仍未中。 0.5 1" data-hit="不可计入｜赛前并列BTTS Yes与客不败，未设唯一主维度；两项分别命中">
+              <div class="card-head"><span class="match-id">M006</span><h3>欧战资格赛｜伏伊伏丁那 vs 费伦茨瓦罗斯</h3><span class="badge neutral">主维度严格结算 不可计入｜赛前并列BTTS Yes与客不败，未设唯一主维度；两项分别命中</span></div>
+              <div class="score-strip"><span>赛前唯一比分 <b>1-1</b></span><span>实际90分钟 <b>1-2</b></span><span class="badge bad">唯一比分精确命中 否</span></div>
+              <div class="detail-grid">
+                <div><label>赛前主维度</label><p>BTTS/客不败观察</p></div>
+                <div><label>亚盘方向</label><p>费伦茨不败；主队受让不宜重</p></div>
+                <div><label>大小球</label><p>2球第一</p></div>
+                <div><label>BTTS</label><p>Yes</p></div>
+              </div>
+              <p class="summary">BTTS Yes与客不败分别成立，但赛前把两个玩法并列成主维度，因此本场不得计入唯一主维度命中率；唯一比分1-1仍未中。</p>
+              <div class="card-foot"><span class="badge good">未投注｜并列两项分别命中，但无唯一主维度，不计主维度命中率</span><span>最大错点：客胜污染/平局模型误判</span></div>
+            </article>
+<article class="match-card" data-search="m005 欧战资格赛｜斯普利特海杜克 vs 日利纳 三维同向 真实防主胜，首回合两球卡位 3-0 胜平负 海杜克-1/-1.25 3球第一，2球强污染 no 2-0 是｜90分钟主胜命中 否 是｜距离1且赛前明确列入紧邻层；仍计唯一比分未中 否 模型判断错误 串关腿命中且逻辑局部正确 否 相邻比分污染/右尾不足 2-0、2-1 主胜与零封正确，唯一比分右移一球；首回合2-0应上调 0.5 1" data-hit="是｜90分钟主胜命中">
+              <div class="card-head"><span class="match-id">M005</span><h3>欧战资格赛｜斯普利特海杜克 vs 日利纳</h3><span class="badge good">主维度严格结算 是｜90分钟主胜命中</span></div>
+              <div class="score-strip"><span>赛前唯一比分 <b>3-0</b></span><span>实际90分钟 <b>2-0</b></span><span class="badge bad">唯一比分精确命中 否</span></div>
+              <div class="detail-grid">
+                <div><label>赛前主维度</label><p>胜平负</p></div>
+                <div><label>亚盘方向</label><p>海杜克-1/-1.25</p></div>
+                <div><label>大小球</label><p>3球第一，2球强污染</p></div>
+                <div><label>BTTS</label><p>No</p></div>
+              </div>
+              <p class="summary">主胜与零封正确，唯一比分右移一球；首回合2-0应上调</p>
+              <div class="card-foot"><span class="badge good">串关腿命中且逻辑局部正确</span><span>最大错点：相邻比分污染/右尾不足</span></div>
+            </article>
+<article class="match-card" data-search="m004 欧战资格赛｜索菲亚中央陆军 vs 德里城 两维同向一维中立 真实防主胜但零封误判 3-0 胜平负 索陆军主胜；深让谨慎 3球第一 no略优 3-2 是｜90分钟主胜命中 否 否 是｜右尾5球+btts反向 模型判断错误 串关腿命中但模型逻辑部分错 否 btts反向/右尾大比分 2-0、2-1 胜方向对，零封与总进球错；主胜不能自动绑定btts no 0.5 1" data-hit="是｜90分钟主胜命中">
+              <div class="card-head"><span class="match-id">M004</span><h3>欧战资格赛｜索菲亚中央陆军 vs 德里城</h3><span class="badge good">主维度严格结算 是｜90分钟主胜命中</span></div>
+              <div class="score-strip"><span>赛前唯一比分 <b>3-0</b></span><span>实际90分钟 <b>3-2</b></span><span class="badge bad">唯一比分精确命中 否</span></div>
+              <div class="detail-grid">
+                <div><label>赛前主维度</label><p>胜平负</p></div>
+                <div><label>亚盘方向</label><p>索陆军主胜；深让谨慎</p></div>
+                <div><label>大小球</label><p>3球第一</p></div>
+                <div><label>BTTS</label><p>No略优</p></div>
+              </div>
+              <p class="summary">胜方向对，零封与总进球错；主胜不能自动绑定BTTS No</p>
+              <div class="card-foot"><span class="badge good">串关腿命中但模型逻辑部分错</span><span>最大错点：BTTS反向/右尾大比分</span></div>
+            </article>
+<article class="match-card" data-search="m003 欧战资格赛｜谢里夫 vs 亚穆尼积 两维同向一维中立 热门主胜防范不足/低比分风险 2-0 胜平负 谢里夫-1/-1.25 小球倾向但未压到0球 no 0-0 否｜90分钟主胜未中 否 否 是｜0-0冷平 模型判断错误 黑且逻辑错 否 0-0冷平/热门主胜误判 3-0、2-1（赛前漏0-0） 名气和经验被过度转成进球兑现；同场胜平负+波胆重复暴露 0 1" data-hit="否｜90分钟主胜未中">
+              <div class="card-head"><span class="match-id">M003</span><h3>欧战资格赛｜谢里夫 vs 亚穆尼积</h3><span class="badge bad">主维度严格结算 否｜90分钟主胜未中</span></div>
+              <div class="score-strip"><span>赛前唯一比分 <b>2-0</b></span><span>实际90分钟 <b>0-0</b></span><span class="badge bad">唯一比分精确命中 否</span></div>
+              <div class="detail-grid">
+                <div><label>赛前主维度</label><p>胜平负</p></div>
+                <div><label>亚盘方向</label><p>谢里夫-1/-1.25</p></div>
+                <div><label>大小球</label><p>小球倾向但未压到0球</p></div>
+                <div><label>BTTS</label><p>No</p></div>
+              </div>
+              <p class="summary">名气和经验被过度转成进球兑现；同场胜平负+波胆重复暴露</p>
+              <div class="card-foot"><span class="badge neutral">黑且逻辑错</span><span>最大错点：0-0冷平/热门主胜误判</span></div>
+            </article>
+<article class="match-card" data-search="m002 欧战资格赛｜基辅迪纳摩 vs 克卢日大学 两维同向一维中立 热门主胜防范不足/低比分风险 2-0 胜平负 基辅-1/-1.25 小球倾向但未压到0球 no略优 0-0 否｜90分钟主胜未中 否 否 是｜0-0冷平 模型判断错误 黑且逻辑错 否 0-0冷平/热门主胜误判 3-0、2-1（赛前漏0-0） btts no对，但把no错误转成热门2-0；保本命门选择错误 0 1" data-hit="否｜90分钟主胜未中">
+              <div class="card-head"><span class="match-id">M002</span><h3>欧战资格赛｜基辅迪纳摩 vs 克卢日大学</h3><span class="badge bad">主维度严格结算 否｜90分钟主胜未中</span></div>
+              <div class="score-strip"><span>赛前唯一比分 <b>2-0</b></span><span>实际90分钟 <b>0-0</b></span><span class="badge bad">唯一比分精确命中 否</span></div>
+              <div class="detail-grid">
+                <div><label>赛前主维度</label><p>胜平负</p></div>
+                <div><label>亚盘方向</label><p>基辅-1/-1.25</p></div>
+                <div><label>大小球</label><p>小球倾向但未压到0球</p></div>
+                <div><label>BTTS</label><p>No略优</p></div>
+              </div>
+              <p class="summary">BTTS No对，但把No错误转成热门2-0；保本命门选择错误</p>
+              <div class="card-foot"><span class="badge neutral">黑且逻辑错</span><span>最大错点：0-0冷平/热门主胜误判</span></div>
+            </article>
+<article class="match-card" data-search="m001 欧战资格赛｜卡拉巴克 vs 维斯特瑞 两维同向一维中立 真实大胜+深盘卡盘并存 4-0 正确比分/深盘观察 卡拉巴克-3/-3.25可看，-3.5谨慎 4球第一，3球污染 no 3-0 不可计入｜赛前混合‘正确比分/深盘观察’；4-0未中，-3走水，-3.25半黑 否 是｜距离1且赛前明确列入紧邻层；仍计唯一比分未中 否 模型判断错误 未投注｜无唯一主维度；比分未中，-3走水/-3.25半黑 否 相邻比分污染/深盘卡盘 3-0、5-0 赛前没有唯一主维度：4-0波胆未中；若按-3结算为走水，按-3.25结算为半黑。三种结果必须拆开，不能合并成一次命中或未中。 0.5 1" data-hit="不可计入｜赛前混合‘正确比分/深盘观察’；4-0未中，-3走水，-3.25半黑">
+              <div class="card-head"><span class="match-id">M001</span><h3>欧战资格赛｜卡拉巴克 vs 维斯特瑞</h3><span class="badge neutral">主维度严格结算 不可计入｜赛前混合‘正确比分/深盘观察’；4-0未中，-3走水，-3.25半黑</span></div>
+              <div class="score-strip"><span>赛前唯一比分 <b>4-0</b></span><span>实际90分钟 <b>3-0</b></span><span class="badge bad">唯一比分精确命中 否</span></div>
+              <div class="detail-grid">
+                <div><label>赛前主维度</label><p>正确比分/深盘观察</p></div>
+                <div><label>亚盘方向</label><p>卡拉巴克-3/-3.25可看，-3.5谨慎</p></div>
+                <div><label>大小球</label><p>4球第一，3球污染</p></div>
+                <div><label>BTTS</label><p>No</p></div>
+              </div>
+              <p class="summary">赛前没有唯一主维度：4-0波胆未中；若按-3结算为走水，按-3.25结算为半黑。三种结果必须拆开，不能合并成一次命中或未中。</p>
+              <div class="card-foot"><span class="badge bad">未投注｜无唯一主维度；比分未中，-3走水/-3.25半黑</span><span>最大错点：相邻比分污染/深盘卡盘</span></div>
+            </article></div></section>
+<section id="locks" class="view"><div class="section-head"><h2>锁单与结算明细</h2><span>6 单</span></div><div class="table-wrap"><table id="locks-table"><thead><tr><th>注单ID</th><th>比赛ID与对阵</th><th>主维度玩法</th><th>投注方向</th><th>下注赔率</th><th>下注金额</th><th>赛果</th><th>注单状态</th><th>实际回收金额</th><th>模型逻辑分类</th><th>备注</th></tr></thead><tbody><tr data-search="b001 m002/m003/m005/m004｜欧战资格赛｜基辅胜×谢里夫胜×海杜克胜×索陆军胜 胜平负 四场主胜串关 2.48 6.4 基辅0-0；谢里夫0-0；海杜克2-0；索陆军3-2 黑 0 逻辑错误 基辅、谢里夫两个同构热门同时做命门"><td>B001</td><td>M002/M003/M005/M004｜欧战资格赛｜基辅胜×谢里夫胜×海杜克胜×索陆军胜</td><td>胜平负</td><td>四场主胜串关</td><td>2.48</td><td>6.4</td><td>基辅0-0；谢里夫0-0；海杜克2-0；索陆军3-2</td><td>黑</td><td>0</td><td>逻辑错误</td><td>基辅、谢里夫两个同构热门同时做命门</td></tr><tr data-search="b002 m002/m003/m005｜欧战资格赛｜基辅胜×谢里夫胜×海杜克胜 胜平负 三场主胜串关 2.16 3.6 基辅0-0；谢里夫0-0；海杜克2-0 黑 0 逻辑错误 同构热门风险过高"><td>B002</td><td>M002/M003/M005｜欧战资格赛｜基辅胜×谢里夫胜×海杜克胜</td><td>胜平负</td><td>三场主胜串关</td><td>2.16</td><td>3.6</td><td>基辅0-0；谢里夫0-0；海杜克2-0</td><td>黑</td><td>0</td><td>逻辑错误</td><td>同构热门风险过高</td></tr><tr data-search="b003 m003｜欧战资格赛｜谢里夫 vs 亚穆尼积 正确比分 谢里夫2-0 6.5 2.1 0-0 黑 0 逻辑错误 btts no方向对，但强队进球数判断错误"><td>B003</td><td>M003｜欧战资格赛｜谢里夫 vs 亚穆尼积</td><td>正确比分</td><td>谢里夫2-0</td><td>6.5</td><td>2.1</td><td>0-0</td><td>黑</td><td>0</td><td>逻辑错误</td><td>BTTS No方向对，但强队进球数判断错误</td></tr><tr data-search="b004 m002｜欧战资格赛｜基辅迪纳摩 vs 克卢日大学 正确比分 基辅2-0 8 2.1 0-0 黑 0 逻辑错误 btts no方向对，但强队进球数判断错误"><td>B004</td><td>M002｜欧战资格赛｜基辅迪纳摩 vs 克卢日大学</td><td>正确比分</td><td>基辅2-0</td><td>8</td><td>2.1</td><td>0-0</td><td>黑</td><td>0</td><td>逻辑错误</td><td>BTTS No方向对，但强队进球数判断错误</td></tr><tr data-search="b005 m007｜世界杯｜法国 vs 摩洛哥 大小球 小2.5/3 1.61 4 法国2-0摩洛哥 红 6.44 逻辑正确 主仓命中；玩法选择优于胜平负/深让"><td>B005</td><td>M007｜世界杯｜法国 vs 摩洛哥</td><td>大小球</td><td>小2.5/3</td><td>1.61</td><td>4</td><td>法国2-0摩洛哥</td><td>红</td><td>6.44</td><td>逻辑正确</td><td>主仓命中；玩法选择优于胜平负/深让</td></tr><tr data-search="b006 m007｜世界杯｜法国 vs 摩洛哥 正确比分 法国1-0 6.1 2 法国2-0摩洛哥 黑 0 局部正确 小球与btts no主线正确，精确落点偏左"><td>B006</td><td>M007｜世界杯｜法国 vs 摩洛哥</td><td>正确比分</td><td>法国1-0</td><td>6.1</td><td>2</td><td>法国2-0摩洛哥</td><td>黑</td><td>0</td><td>局部正确</td><td>小球与BTTS No主线正确，精确落点偏左</td></tr></tbody></table></div></section>
+<section id="timeline" class="view"><div class="section-head"><h2>时间轴与盘口有效性</h2><span>18 条</span></div><div class="table-wrap"><table id="timeline-table"><thead><tr><th>记录ID</th><th>比赛ID与对阵</th><th>开赛倒计时</th><th>锁单窗口合规性</th><th>初盘定位</th><th>终盘定位（临场15min）</th><th>终盘对比初盘变化</th><th>最终赛果验证</th><th>数据完整度</th></tr></thead><tbody><tr data-search="t001 m001｜卡拉巴克 vs 维斯特瑞 t-30m左右 符合赛前sop 极深盘，约-3/-3.5区间 未完整核到最终15m 深盘维持，未见4球强防确认 3-0验证深盘卡盘 中低"><td>T001</td><td>M001｜卡拉巴克 vs 维斯特瑞</td><td>T-30m左右</td><td>符合赛前SOP</td><td>极深盘，约-3/-3.5区间</td><td>未完整核到最终15m</td><td>深盘维持，未见4球强防确认</td><td>3-0验证深盘卡盘</td><td>中低</td></tr><tr data-search="t002 m002｜基辅迪纳摩 vs 克卢日大学 t-73m 符合赛前sop 基辅-1附近 未完整核到最终15m 未形成-1.5强防 0-0验证热门打不开 中低"><td>T002</td><td>M002｜基辅迪纳摩 vs 克卢日大学</td><td>T-73m</td><td>符合赛前SOP</td><td>基辅-1附近</td><td>未完整核到最终15m</td><td>未形成-1.5强防</td><td>0-0验证热门打不开</td><td>中低</td></tr><tr data-search="t003 m003｜谢里夫 vs 亚穆尼积 t-70m 符合赛前sop 谢里夫-1附近 未完整核到最终15m 未形成强穿确认 0-0验证0球污染 中低"><td>T003</td><td>M003｜谢里夫 vs 亚穆尼积</td><td>T-70m</td><td>符合赛前SOP</td><td>谢里夫-1附近</td><td>未完整核到最终15m</td><td>未形成强穿确认</td><td>0-0验证0球污染</td><td>中低</td></tr><tr data-search="t004 m004｜索陆军 vs 德里城 t-125m 符合赛前sop 索陆军-1.5 未核到t-15；记录t-125m为-1.75附近 升盘但深盘卡盘风险 3-2验证主胜对、零封错 中"><td>T004</td><td>M004｜索陆军 vs 德里城</td><td>T-125m</td><td>符合赛前SOP</td><td>索陆军-1.5</td><td>未核到T-15；记录T-125m为-1.75附近</td><td>升盘但深盘卡盘风险</td><td>3-2验证主胜对、零封错</td><td>中</td></tr><tr data-search="t005 m005｜海杜克 vs 日利纳 t-120m 符合赛前sop 海杜克-1 未核到t-15；记录t-120m为-1.25附近 升盘，-1.5不追 2-0验证卡两球 中"><td>T005</td><td>M005｜海杜克 vs 日利纳</td><td>T-120m</td><td>符合赛前SOP</td><td>海杜克-1</td><td>未核到T-15；记录T-120m为-1.25附近</td><td>升盘，-1.5不追</td><td>2-0验证卡两球</td><td>中</td></tr><tr data-search="t006 m006｜伏伊伏丁那 vs 费伦茨瓦罗斯 t-116m 符合赛前sop 客让0.25/0.5 未核到t-15；记录回流主队/浅盘 客队优势削弱 1-2验证客胜降热 中"><td>T006</td><td>M006｜伏伊伏丁那 vs 费伦茨瓦罗斯</td><td>T-116m</td><td>符合赛前SOP</td><td>客让0.25/0.5</td><td>未核到T-15；记录回流主队/浅盘</td><td>客队优势削弱</td><td>1-2验证客胜降热</td><td>中</td></tr><tr data-search="t007 m007｜法国 vs 摩洛哥 t-5m左右 符合赛前sop｜强临场 法国-1；大小2.5 法国-1中高水；摩洛哥+1低水；大小仍2.5 主胜继续过热，但未升-1.25强防；大球低水回拉 法国2-0：主胜、小球、btts no验证；比分偏左 高"><td>T007</td><td>M007｜法国 vs 摩洛哥</td><td>T-5m左右</td><td>符合赛前SOP｜强临场</td><td>法国-1；大小2.5</td><td>法国-1中高水；摩洛哥+1低水；大小仍2.5</td><td>主胜继续过热，但未升-1.25强防；大球低水回拉</td><td>法国2-0：主胜、小球、BTTS No验证；比分偏左</td><td>高</td></tr><tr data-search="t009 m009｜格尼斯坦 vs 玛丽港 t-23m 符合sop｜因价格不合格未下注 格尼斯坦-1/-1.25；大小2.5/3 格尼斯坦-1.5约1.90；大小3/3.25 让球、主胜与总球同步强化 4-2验证主队穿盘，也验证btts与6球右尾 高"><td>T009</td><td>M009｜格尼斯坦 vs 玛丽港</td><td>T-23m</td><td>符合SOP｜因价格不合格未下注</td><td>格尼斯坦-1/-1.25；大小2.5/3</td><td>格尼斯坦-1.5约1.90；大小3/3.25</td><td>让球、主胜与总球同步强化</td><td>4-2验证主队穿盘，也验证BTTS与6球右尾</td><td>高</td></tr><tr data-search="t010 m010｜tps土尔库 vs ac奥卢 t-21m 符合sop｜22:00前未确认锁单 奥卢-0.25/-0.5；大小2.5 平手tps低水；大小2.75小球低水 欧亚完整转向tps；总球升档 3-0验证市场转向tps，否定1-1与小球优先级 高"><td>T010</td><td>M010｜TPS土尔库 vs AC奥卢</td><td>T-21m</td><td>符合SOP｜22:00前未确认锁单</td><td>奥卢-0.25/-0.5；大小2.5</td><td>平手TPS低水；大小2.75小球低水</td><td>欧亚完整转向TPS；总球升档</td><td>3-0验证市场转向TPS，否定1-1与小球优先级</td><td>高</td></tr><tr data-search="t011 m011｜奥勒松 vs 莫尔德 t-19m 符合sop｜价格低于执行线未下注 莫尔德-0.25；大小3附近 莫尔德-0.25低水；大小3.25/3.5小球低水 客胜压低但平局成交异常；总球高档压小 2-2验证平局警报与4球边界 高"><td>T011</td><td>M011｜奥勒松 vs 莫尔德</td><td>T-19m</td><td>符合SOP｜价格低于执行线未下注</td><td>莫尔德-0.25；大小3附近</td><td>莫尔德-0.25低水；大小3.25/3.5小球低水</td><td>客胜压低但平局成交异常；总球高档压小</td><td>2-2验证平局警报与4球边界</td><td>高</td></tr><tr data-search="t012 m012｜奥尔格里特 vs 赫根 t-80m 符合sop｜价格低于执行线未下注 赫根-0.75/-1；大小3/3.25 赫根-1低水；大小3.5 客队与大球同步走热 4-3验证弱方多球与极端右尾 中高"><td>T012</td><td>M012｜奥尔格里特 vs 赫根</td><td>T-80m</td><td>符合SOP｜价格低于执行线未下注</td><td>赫根-0.75/-1；大小3/3.25</td><td>赫根-1低水；大小3.5</td><td>客队与大球同步走热</td><td>4-3验证弱方多球与极端右尾</td><td>中高</td></tr><tr data-search="t013 m013｜特罗姆瑟 vs 瓦勒伦加 t-114m 符合sop｜价格低于执行线未下注 特罗姆瑟-0.5/-0.75；大小2.5/2.75 特罗姆瑟-0.75；大小2.75小球受护 主胜压低；大球成交89%但盘口未升3 1-0完整验证赛前链条 高"><td>T013</td><td>M013｜特罗姆瑟 vs 瓦勒伦加</td><td>T-114m</td><td>符合SOP｜价格低于执行线未下注</td><td>特罗姆瑟-0.5/-0.75；大小2.5/2.75</td><td>特罗姆瑟-0.75；大小2.75小球受护</td><td>主胜压低；大球成交89%但盘口未升3</td><td>1-0完整验证赛前链条</td><td>高</td></tr><tr data-search="t014 m014｜挪威 vs 英格兰 t-62m 符合sop｜btts yes仅1.40，价格不合格未下注 英格兰-0.5；大小2.5 英格兰-0.5低水/少数-0.75；大小2.75；btts yes 1.40 英格兰与总球同步强化；btts价格严重压缩 90分钟1-1；加时英格兰2-1。只验证双方进球，不验证90分钟1-2 高"><td>T014</td><td>M014｜挪威 vs 英格兰</td><td>T-62m</td><td>符合SOP｜BTTS Yes仅1.40，价格不合格未下注</td><td>英格兰-0.5；大小2.5</td><td>英格兰-0.5低水/少数-0.75；大小2.75；BTTS Yes 1.40</td><td>英格兰与总球同步强化；BTTS价格严重压缩</td><td>90分钟1-1；加时英格兰2-1。只验证双方进球，不验证90分钟1-2</td><td>高</td></tr><tr data-search="t015 m015｜阿根廷 vs 瑞士 t-287m｜用户明确不再更新临盘 符合sop｜所有可得小球价格均低于执行线，未下注 阿根廷-0.75/-1；大小2.25/2.5 阿根廷-0.75低水；大小2.25小球低水；可得小2@2.14、小2.5@1.62、小2.75@1.46 阿根廷胜压低但未统一升-1；低总球持续受护 90分钟1-1；加时阿根廷3-1。2球验证低总球，不验证零封 高"><td>T015</td><td>M015｜阿根廷 vs 瑞士</td><td>T-287m｜用户明确不再更新临盘</td><td>符合SOP｜所有可得小球价格均低于执行线，未下注</td><td>阿根廷-0.75/-1；大小2.25/2.5</td><td>阿根廷-0.75低水；大小2.25小球低水；可得小2@2.14、小2.5@1.62、小2.75@1.46</td><td>阿根廷胜压低但未统一升-1；低总球持续受护</td><td>90分钟1-1；加时阿根廷3-1。2球验证低总球，不验证零封</td><td>高</td></tr><tr data-search="t016 m016｜佐加顿斯 vs 哈尔姆斯塔德 t-12m 符合sop｜公开价格不合格未下注 主让1.75；总球3.0 主让2 @2.04；总球3.5（两侧价未可靠解析） 让球升0.25；总球升0.5；主胜压低且交易所主胜占比90.1% 3-0验证主队净胜3与市场第一比分；不证明2.04有正ev 高（赛前基础内核仍降级）"><td>T016</td><td>M016｜佐加顿斯 vs 哈尔姆斯塔德</td><td>T-12m</td><td>符合SOP｜公开价格不合格未下注</td><td>主让1.75；总球3.0</td><td>主让2 @2.04；总球3.5（两侧价未可靠解析）</td><td>让球升0.25；总球升0.5；主胜压低且交易所主胜占比90.1%</td><td>3-0验证主队净胜3与市场第一比分；不证明2.04有正EV</td><td>高（赛前基础内核仍降级）</td></tr><tr data-search="t017 m017｜杰尔 vs 雷克雅未克维京人 t-赛前报告冻结 未锁单，符合空仓纪律 杰尔主胜倾向，维京人首回合1-0领先 主胜方向未过价格执行线 90分钟实际转为2-2高波动平局 2-2；维京人总比分3-2晋级 高"><td>T017</td><td>M017｜杰尔 vs 雷克雅未克维京人</td><td>T-赛前报告冻结</td><td>未锁单，符合空仓纪律</td><td>杰尔主胜倾向，维京人首回合1-0领先</td><td>主胜方向未过价格执行线</td><td>90分钟实际转为2-2高波动平局</td><td>2-2；维京人总比分3-2晋级</td><td>高</td></tr><tr data-search="t018 m018｜新圣徒 vs 萨巴赫 t-赛前报告冻结 未锁单，符合空仓纪律 萨巴赫首回合2-0领先，客胜方向占优 客胜价格未过保守执行线 实际为萨巴赫2-1客胜，主队有一球 1-2；萨巴赫总比分4-1晋级 高"><td>T018</td><td>M018｜新圣徒 vs 萨巴赫</td><td>T-赛前报告冻结</td><td>未锁单，符合空仓纪律</td><td>萨巴赫首回合2-0领先，客胜方向占优</td><td>客胜价格未过保守执行线</td><td>实际为萨巴赫2-1客胜，主队有一球</td><td>1-2；萨巴赫总比分4-1晋级</td><td>高</td></tr><tr data-search="t019 m019｜法国 vs 西班牙 t-赛前报告冻结 未锁单，符合空仓纪律 世界杯半决赛低比分修正，小2.5为主维度 保守ev未达执行线，空仓 西班牙2-0，低比分成立但胜负方向偏离 0-2；无加时点球 高"><td>T019</td><td>M019｜法国 vs 西班牙</td><td>T-赛前报告冻结</td><td>未锁单，符合空仓纪律</td><td>世界杯半决赛低比分修正，小2.5为主维度</td><td>保守EV未达执行线，空仓</td><td>西班牙2-0，低比分成立但胜负方向偏离</td><td>0-2；无加时点球</td><td>高</td></tr></tbody></table></div></section>
+<section id="roots" class="view"><div class="section-head"><h2>根因决策树与修正池</h2><span>18 条</span></div><div class="table-wrap"><table id="root-table"><thead><tr><th>比赛场次</th><th>决策节点审计</th><th>反事实推演</th><th>赛前可识别性</th><th>是否修改模型</th><th>具体修改建议</th><th>收敛结论</th><th>最大错点类型</th><th>生效状态</th><th>优先级</th></tr></thead><tbody><tr data-search="m001｜卡拉巴克3-0维斯特瑞 赛前混合波胆与深盘观察，缺少唯一可结算主维度；4-0未中，-3走水，-3.25半黑 若只按初盘与深盘卡盘，首推应为3-0 是｜深盘-3.5与3-0污染赛前可识别 是 深盘-3/-3.5若无大小球/正确比分同步右移，优先3-0而非4-0 禁止把不同玩法和不同盘口线合并成一次命中判断 相邻比分污染/深盘卡盘 已启用 高"><td>M001｜卡拉巴克3-0维斯特瑞</td><td>赛前混合波胆与深盘观察，缺少唯一可结算主维度；4-0未中，-3走水，-3.25半黑</td><td>若只按初盘与深盘卡盘，首推应为3-0</td><td>是｜深盘-3.5与3-0污染赛前可识别</td><td>是</td><td>深盘-3/-3.5若无大小球/正确比分同步右移，优先3-0而非4-0</td><td>禁止把不同玩法和不同盘口线合并成一次命中判断</td><td>相邻比分污染/深盘卡盘</td><td>已启用</td><td>高</td></tr><tr data-search="m002｜基辅0-0克卢日 把热门压制和btts no直接转成2-0，并做双层命门 若不看临场热度，只按首回合保守，应提高0-0/1-0 是｜未升-1.5、交易所/比分未核到 是 首回合热门λ下调0.25-0.45；0-0/1-0进入核心污染；禁止同构热门双命门 稳不丢球不等于稳胜 0-0冷平/热门主胜误判 已启用 最高"><td>M002｜基辅0-0克卢日</td><td>把热门压制和BTTS No直接转成2-0，并做双层命门</td><td>若不看临场热度，只按首回合保守，应提高0-0/1-0</td><td>是｜未升-1.5、交易所/比分未核到</td><td>是</td><td>首回合热门λ下调0.25-0.45；0-0/1-0进入核心污染；禁止同构热门双命门</td><td>稳不丢球不等于稳胜</td><td>0-0冷平/热门主胜误判</td><td>已启用</td><td>最高</td></tr><tr data-search="m003｜谢里夫0-0亚穆尼积 过度相信名气、主场和经验；同场胜平负+波胆重复 若只按首回合进攻效率不明，应降为1-0/0-0 是｜缺少强穿证据 是 btts no必须重排0-0/1-0/2-0/3-0；不再默认2-0 盘口防主胜不等于进球兑现 0-0冷平/热门主胜误判 已启用 最高"><td>M003｜谢里夫0-0亚穆尼积</td><td>过度相信名气、主场和经验；同场胜平负+波胆重复</td><td>若只按首回合进攻效率不明，应降为1-0/0-0</td><td>是｜缺少强穿证据</td><td>是</td><td>BTTS No必须重排0-0/1-0/2-0/3-0；不再默认2-0</td><td>盘口防主胜不等于进球兑现</td><td>0-0冷平/热门主胜误判</td><td>已启用</td><td>最高</td></tr><tr data-search="m004｜索陆军3-2德里城 把主胜与零封绑定，低估客队反击和尾部进球 若拆分胜与零封，应保留2-1/3-1和btts yes污染 是｜客队并非无攻击点 是 深盘强队必须分别建模胜率与零封率；客队有反击点时btts yes上调 主胜可以正确，零封仍可能错误 btts反向/右尾大比分 已启用 高"><td>M004｜索陆军3-2德里城</td><td>把主胜与零封绑定，低估客队反击和尾部进球</td><td>若拆分胜与零封，应保留2-1/3-1和BTTS Yes污染</td><td>是｜客队并非无攻击点</td><td>是</td><td>深盘强队必须分别建模胜率与零封率；客队有反击点时BTTS Yes上调</td><td>主胜可以正确，零封仍可能错误</td><td>BTTS反向/右尾大比分</td><td>已启用</td><td>高</td></tr><tr data-search="m005｜海杜克2-0日利纳 首回合强队进球λ偏高，2-0强污染未上位 若只按两球优势足够，首推2-0 是｜-1.5不追和2球污染已出现 是 首回合两球优势后控局权重上调；3-0需强临场证据 主胜零封对，右尾偏高一球 相邻比分污染/右尾不足 已启用 高"><td>M005｜海杜克2-0日利纳</td><td>首回合强队进球λ偏高，2-0强污染未上位</td><td>若只按两球优势足够，首推2-0</td><td>是｜-1.5不追和2球污染已出现</td><td>是</td><td>首回合两球优势后控局权重上调；3-0需强临场证据</td><td>主胜零封对，右尾偏高一球</td><td>相邻比分污染/右尾不足</td><td>已启用</td><td>高</td></tr><tr data-search="m006｜伏伊伏丁那1-2费伦茨 btts yes与客不败分别成立，但赛前没有唯一主维度；不得合并计为一次主维度命中 若只按客队实力与后程资源，客不败/dnb优先 是｜1-2已列最大错点 是 客强浅盘优先客不败/dnb；平局不能自动居首 相关玩法分别结算；无唯一主维度则退出主维度命中率样本 客胜污染/平局模型误判 已启用 中高"><td>M006｜伏伊伏丁那1-2费伦茨</td><td>BTTS Yes与客不败分别成立，但赛前没有唯一主维度；不得合并计为一次主维度命中</td><td>若只按客队实力与后程资源，客不败/DNB优先</td><td>是｜1-2已列最大错点</td><td>是</td><td>客强浅盘优先客不败/DNB；平局不能自动居首</td><td>相关玩法分别结算；无唯一主维度则退出主维度命中率样本</td><td>客胜污染/平局模型误判</td><td>已启用</td><td>中高</td></tr><tr data-search="m007｜法国2-0摩洛哥 唯一比分在1-0与2-0间选择偏左；主玩法选择正确 若不买波胆只做小2.5/3，本场稳定小红 部分｜2-0为高位污染，但第二球具体不可精确识别 观察 1-0与2-0同为强污染且赔率接近时，可评估分拆；本金修复期仍以主仓优先 玩法候选池有效，精确比分仍需控制暴露 相邻比分污染/第二球效率 观察 中高"><td>M007｜法国2-0摩洛哥</td><td>唯一比分在1-0与2-0间选择偏左；主玩法选择正确</td><td>若不买波胆只做小2.5/3，本场稳定小红</td><td>部分｜2-0为高位污染，但第二球具体不可精确识别</td><td>观察</td><td>1-0与2-0同为强污染且赔率接近时，可评估分拆；本金修复期仍以主仓优先</td><td>玩法候选池有效，精确比分仍需控制暴露</td><td>相邻比分污染/第二球效率</td><td>观察</td><td>中高</td></tr><tr data-search="m009｜格尼斯坦4-2玛丽港 主队穿盘方向正确，但把大球过热解释成右尾受限 若将玛丽港反击与格尼斯坦高位失位纳入，应上调2-1/3-1/4-1及btts yes 是｜玛丽港虽弱仍有反击与定位球路径 是 强弱悬殊场若总球与让球同步升档，不能只因大球拥挤压右尾；需单独评估弱方1球及强队4球上限 穿盘正确不代表零封或小球正确 btts反向/右尾大比分 已启用 高"><td>M009｜格尼斯坦4-2玛丽港</td><td>主队穿盘方向正确，但把大球过热解释成右尾受限</td><td>若将玛丽港反击与格尼斯坦高位失位纳入，应上调2-1/3-1/4-1及BTTS Yes</td><td>是｜玛丽港虽弱仍有反击与定位球路径</td><td>是</td><td>强弱悬殊场若总球与让球同步升档，不能只因大球拥挤压右尾；需单独评估弱方1球及强队4球上限</td><td>穿盘正确不代表零封或小球正确</td><td>BTTS反向/右尾大比分</td><td>已启用</td><td>高</td></tr><tr data-search="m010｜tps3-0ac奥卢 识别欧亚完整转向tps，却仍让小球低水压过主队进球数上修 若市场翻转进入平手主队低水且主胜持续压低，应先上调主队λ，再决定大小球 是｜盘口与欧赔多公司同步 是 客让退平并转主队低水时，主队进球λ至少重新估计一次；总球升档不可仅解释为诱大 方向转主队真实，错误在进球兑现不足 主队进球数低估/3球边界 已启用 高"><td>M010｜TPS3-0AC奥卢</td><td>识别欧亚完整转向TPS，却仍让小球低水压过主队进球数上修</td><td>若市场翻转进入平手主队低水且主胜持续压低，应先上调主队λ，再决定大小球</td><td>是｜盘口与欧赔多公司同步</td><td>是</td><td>客让退平并转主队低水时，主队进球λ至少重新估计一次；总球升档不可仅解释为诱大</td><td>方向转主队真实，错误在进球兑现不足</td><td>主队进球数低估/3球边界</td><td>已启用</td><td>高</td></tr><tr data-search="m011｜奥勒松2-2莫尔德 平局成交47%已是强警报，却仍把1-2放在2-2之前 若交易所平局占比远高于隐含概率且平赔未抬升，应把1-1/2-2提升为核心 是｜赛前交易结构明确 是 平局成交异常必须进入比分排序，不只写风险提示；btts yes＋高总球时优先审核2-2 交易警报不能只做备注 平局低估/4球边界 已启用 高"><td>M011｜奥勒松2-2莫尔德</td><td>平局成交47%已是强警报，却仍把1-2放在2-2之前</td><td>若交易所平局占比远高于隐含概率且平赔未抬升，应把1-1/2-2提升为核心</td><td>是｜赛前交易结构明确</td><td>是</td><td>平局成交异常必须进入比分排序，不只写风险提示；BTTS Yes＋高总球时优先审核2-2</td><td>交易警报不能只做备注</td><td>平局低估/4球边界</td><td>已启用</td><td>高</td></tr><tr data-search="m012｜奥尔格里特4-3赫根 用3.5高门槛压右尾，低估德比、主队持续进球与热门防线连续崩盘 若把赫根连续失4球、奥尔格里特主场场场进球与德比波动合并，主维度应放弃小球 是｜主要风险赛前可识别 是 热门防线连续崩盘＋弱方主场稳定进球＋德比时，禁止仅因高盘选择小球；提高5+尾部与弱方2球概率 这是结构性右尾误判，不是单纯随机 极端右尾/弱方多球/热门防线崩盘 已启用 最高"><td>M012｜奥尔格里特4-3赫根</td><td>用3.5高门槛压右尾，低估德比、主队持续进球与热门防线连续崩盘</td><td>若把赫根连续失4球、奥尔格里特主场场场进球与德比波动合并，主维度应放弃小球</td><td>是｜主要风险赛前可识别</td><td>是</td><td>热门防线连续崩盘＋弱方主场稳定进球＋德比时，禁止仅因高盘选择小球；提高5+尾部与弱方2球概率</td><td>这是结构性右尾误判，不是单纯随机</td><td>极端右尾/弱方多球/热门防线崩盘</td><td>已启用</td><td>最高</td></tr><tr data-search="m013｜特罗姆瑟1-0瓦勒伦加 足球链与比分全部正确，但执行线高于实际可得价格 反事实买入会盈利，但单场赛果不足以证明阈值错误 部分｜结果支持模型，价格优势仍需长期clv验证 观察 保留小2.75≥1.92阈值；累计同类样本后再评估是否降至1.88-1.90 正确模型与未下注可同时成立 价格阈值过严待观察 观察 中"><td>M013｜特罗姆瑟1-0瓦勒伦加</td><td>足球链与比分全部正确，但执行线高于实际可得价格</td><td>反事实买入会盈利，但单场赛果不足以证明阈值错误</td><td>部分｜结果支持模型，价格优势仍需长期CLV验证</td><td>观察</td><td>保留小2.75≥1.92阈值；累计同类样本后再评估是否降至1.88-1.90</td><td>正确模型与未下注可同时成立</td><td>价格阈值过严待观察</td><td>观察</td><td>中</td></tr><tr data-search="m014｜挪威1-1英格兰（90分钟） 数学第一比分是1-1，但人工融合因英格兰胜盘与1-2市场低赔覆盖了数学第一 若英格兰90分钟胜率仍低于50%、平局约25%，应保留1-1为唯一比分；btts yes可独立作为主维度 是｜1-1在赛前矩阵居首且明确列为第一错点 是 新增 draw-top-01：当数学第一为平局、热门90分钟胜率&lt;50%且平局≥24%时，除非确认首发/交易所提供新的强证据，不得仅凭热门盘面和正确比分低赔把平局降出首位。加时比分不得反向记作90分钟命中。 主维度btts正确；错在人工融合越权，不在poisson底盘 平局低估/人工融合覆盖数学第一 已启用 最高"><td>M014｜挪威1-1英格兰（90分钟）</td><td>数学第一比分是1-1，但人工融合因英格兰胜盘与1-2市场低赔覆盖了数学第一</td><td>若英格兰90分钟胜率仍低于50%、平局约25%，应保留1-1为唯一比分；BTTS Yes可独立作为主维度</td><td>是｜1-1在赛前矩阵居首且明确列为第一错点</td><td>是</td><td>新增 DRAW-TOP-01：当数学第一为平局、热门90分钟胜率&lt;50%且平局≥24%时，除非确认首发/交易所提供新的强证据，不得仅凭热门盘面和正确比分低赔把平局降出首位。加时比分不得反向记作90分钟命中。</td><td>主维度BTTS正确；错在人工融合越权，不在Poisson底盘</td><td>平局低估/人工融合覆盖数学第一</td><td>已启用</td><td>最高</td></tr><tr data-search="m015｜阿根廷1-1瑞士（90分钟） 小2.25实际2球应严格记半红；不得把亚洲四分之一盘的半赢写成全赢 若弱方λ≥0.65、平局≥25%、1-1概率≥10%，即便btts no略优，也应降低零封比分置信度并把1-1提升为第一污染/竞争比分 是｜瑞士定位球、边路推进和阿根廷近期防线波动赛前均可识别 是 新增 lowtotal-btts-02：低总球不等于零封。弱方λ≥0.65且具备定位球/边路传中/转换至少两条路径时，必须单列1-1与2-1；btts no不足60%不得作为高置信零封依据。红牌若发生在扳平之后，不用于解释90分钟赛前错误。 主维度半红；唯一比分、胜负与btts错误；价格空仓正确 弱方进球率低估/平局污染 已启用 高"><td>M015｜阿根廷1-1瑞士（90分钟）</td><td>小2.25实际2球应严格记半红；不得把亚洲四分之一盘的半赢写成全赢</td><td>若弱方λ≥0.65、平局≥25%、1-1概率≥10%，即便BTTS No略优，也应降低零封比分置信度并把1-1提升为第一污染/竞争比分</td><td>是｜瑞士定位球、边路推进和阿根廷近期防线波动赛前均可识别</td><td>是</td><td>新增 LOWTOTAL-BTTS-02：低总球不等于零封。弱方λ≥0.65且具备定位球/边路传中/转换至少两条路径时，必须单列1-1与2-1；BTTS No不足60%不得作为高置信零封依据。红牌若发生在扳平之后，不用于解释90分钟赛前错误。</td><td>主维度半红；唯一比分、胜负与BTTS错误；价格空仓正确</td><td>弱方进球率低估/平局污染</td><td>已启用</td><td>高</td></tr><tr data-search="m016｜佐加顿斯3-0哈尔姆斯塔德 主维度和总球中枢正确；人工唯一比分在3-0与3-1间选择了后者 若机械选择市场第一会命中3-0，但赛前客队λ0.82与两条进球路径使3-1仍有合理依据；投注决策不变 部分｜3-0赛前已列市场第一；客队最终1.08 xg说明零封不可确定 观察 新增观察：精确比分复盘同时比较赛果与实际xg；零封但对手xg≥1时，不得把结果直接解释为弱方进球概率应下调 足球/主维度正确，精确比分落点错；空仓和价格纪律正确 弱方进球落点/市场第一未上位 观察 中"><td>M016｜佐加顿斯3-0哈尔姆斯塔德</td><td>主维度和总球中枢正确；人工唯一比分在3-0与3-1间选择了后者</td><td>若机械选择市场第一会命中3-0，但赛前客队λ0.82与两条进球路径使3-1仍有合理依据；投注决策不变</td><td>部分｜3-0赛前已列市场第一；客队最终1.08 xG说明零封不可确定</td><td>观察</td><td>新增观察：精确比分复盘同时比较赛果与实际xG；零封但对手xG≥1时，不得把结果直接解释为弱方进球概率应下调</td><td>足球/主维度正确，精确比分落点错；空仓和价格纪律正确</td><td>弱方进球落点/市场第一未上位</td><td>观察</td><td>中</td></tr><tr data-search="m017｜杰尔2-2雷克雅未克维京人 主胜与2-1均未中；2-2仅在概率榜第7，虽距离1但不满足赛前紧邻层条件 赛前若把维京人首回合领先后的反击/守平权重上调，主胜应降级为观察 部分可识别 否 记录为次回合状态依赖观察项，至少再等2场独立样本再改规则 方向和唯一比分均未中；不使用top-n或距离事后扩大覆盖 两回合状态依赖与平局尾部 观察 中"><td>M017｜杰尔2-2雷克雅未克维京人</td><td>主胜与2-1均未中；2-2仅在概率榜第7，虽距离1但不满足赛前紧邻层条件</td><td>赛前若把维京人首回合领先后的反击/守平权重上调，主胜应降级为观察</td><td>部分可识别</td><td>否</td><td>记录为次回合状态依赖观察项，至少再等2场独立样本再改规则</td><td>方向和唯一比分均未中；不使用Top-N或距离事后扩大覆盖</td><td>两回合状态依赖与平局尾部</td><td>观察</td><td>中</td></tr><tr data-search="m018｜新圣徒1-2萨巴赫 主维度正确；比分层对主队进球保护不足 赛前已识别新圣徒早段进球会推高尾部，但唯一比分仍压在0-2 是 否 杯赛次回合领先方客胜模型中保留主队1球邻近污染标记 红且逻辑对；比分未中不升级规则 btts邻近污染 观察 低"><td>M018｜新圣徒1-2萨巴赫</td><td>主维度正确；比分层对主队进球保护不足</td><td>赛前已识别新圣徒早段进球会推高尾部，但唯一比分仍压在0-2</td><td>是</td><td>否</td><td>杯赛次回合领先方客胜模型中保留主队1球邻近污染标记</td><td>红且逻辑对；比分未中不升级规则</td><td>BTTS邻近污染</td><td>观察</td><td>低</td></tr><tr data-search="m019｜法国0-2西班牙 小2.5主维度命中；1x2与唯一比分结构错误；0-2仅排第8，不得记作相邻 若赛前提高西班牙零封客胜权重，0-1/0-2应进入核心竞争层；但不能在赛后把第8名包装为命中 部分可识别｜西班牙零封趋势可观察，但0-2精确落点仍属低概率分支 是｜只修改比分评价与复盘口径，不因单场直接修改概率模型 严格区分：唯一比分命中、相邻误差、方向命中。相邻仅限比分格曼哈顿距离1且赛前已进入相邻竞争层；top-n出现不等于命中 主维度方向命中；唯一比分、1x2结构错误；价格空仓正确 强队零封能力与法国进攻效率估计 立即生效｜复盘评价口径 高"><td>M019｜法国0-2西班牙</td><td>小2.5主维度命中；1X2与唯一比分结构错误；0-2仅排第8，不得记作相邻</td><td>若赛前提高西班牙零封客胜权重，0-1/0-2应进入核心竞争层；但不能在赛后把第8名包装为命中</td><td>部分可识别｜西班牙零封趋势可观察，但0-2精确落点仍属低概率分支</td><td>是｜只修改比分评价与复盘口径，不因单场直接修改概率模型</td><td>严格区分：唯一比分命中、相邻误差、方向命中。相邻仅限比分格曼哈顿距离1且赛前已进入相邻竞争层；Top-N出现不等于命中</td><td>主维度方向命中；唯一比分、1X2结构错误；价格空仓正确</td><td>强队零封能力与法国进攻效率估计</td><td>立即生效｜复盘评价口径</td><td>高</td></tr></tbody></table></div></section>
+<div id="empty" class="empty">没有符合筛选条件的记录</div><footer>数据源：足彩复盘数据工作台_20260715_全玩法严格结算修正.xlsx｜本页为Excel的只读可视化，不改变锁单、账户余额或执行状态。</footer>
+</main><script>
+const tabs=[...document.querySelectorAll('.tab')], views=[...document.querySelectorAll('.view')], search=document.querySelector('#search'), hit=document.querySelector('#hit-filter'), empty=document.querySelector('#empty');
+tabs.forEach(b=>b.onclick=()=>{tabs.forEach(x=>x.classList.toggle('active',x===b));views.forEach(v=>v.classList.toggle('active',v.id===b.dataset.view));applyFilter();});
+function applyFilter(){const q=search.value.trim().toLowerCase(), active=document.querySelector('.view.active');let shown=0;active.querySelectorAll('[data-search]').forEach(el=>{const ok=el.dataset.search.includes(q)&&(!hit.value||active.id!=='signals'||el.dataset.hit===hit.value);el.style.display=ok?'':'none';if(ok)shown++;});empty.style.display=shown?'none':'block';}
+search.addEventListener('input',applyFilter);hit.addEventListener('change',applyFilter);
+</script></body></html>

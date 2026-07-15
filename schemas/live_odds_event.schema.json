@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://football-betting-oneshot.local/schemas/live_odds_event.schema.json",
+  "title": "Football Betting OneShot live odds bridge event",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "captured_at",
+    "source_type",
+    "page_url",
+    "session_id",
+    "sequence",
+    "payload"
+  ],
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "captured_at": { "type": "string", "format": "date-time" },
+    "source_type": {
+      "enum": ["api_response", "worker_message", "shared_worker_message", "websocket_message"]
+    },
+    "page_url": {
+      "type": "string",
+      "pattern": "^https://user-pc-new\\.hl99yjjpf\\.com/"
+    },
+    "page_title": { "type": "string" },
+    "session_id": { "type": "string", "maxLength": 120 },
+    "sequence": { "type": "integer", "minimum": 0 },
+    "transport_meta": { "type": "object" },
+    "payload": {}
+  },
+  "additionalProperties": true
+}

@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Football Betting OneShot live/manual odds EV reprice request",
+  "type": "object",
+  "required": ["contract", "probability", "price"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "validation_only": {"type": "boolean"},
+    "contract": {
+      "type": "object",
+      "required": ["match_id", "handicap_line", "contract_type"],
+      "properties": {
+        "match_id": {"type": ["string", "integer"]},
+        "market_code": {"type": ["string", "integer"]},
+        "market_name": {"type": "string"},
+        "child_market_code": {"type": ["string", "integer"]},
+        "market_id": {"type": ["string", "integer"]},
+        "handicap_line": {"type": ["string", "number"]},
+        "selection_code": {"type": "string"},
+        "selection_name": {"type": "string"},
+        "contract_type": {"enum": ["binary_no_push", "three_way_selection"]}
+      },
+      "anyOf": [{"required": ["market_code"]}, {"required": ["market_name"]}],
+      "allOf": [{"anyOf": [{"required": ["selection_code"]}, {"required": ["selection_name"]}]}],
+      "additionalProperties": false
+    },
+    "probability": {
+      "type": "object",
+      "required": ["point", "source", "calibration_status"],
+      "properties": {
+        "point": {"type": "number", "exclusiveMinimum": 0, "exclusiveMaximum": 1},
+        "conservative": {"type": "number", "exclusiveMinimum": 0, "exclusiveMaximum": 1},
+        "confirmed_model_output": {"type": "boolean"},
+        "source": {"type": "string", "minLength": 1},
+        "calibration_status": {"type": "string", "minLength": 1}
+      },
+      "additionalProperties": false
+    },
+    "price": {
+      "type": "object",
+      "required": ["source"],
+      "properties": {
+        "source": {"enum": ["bridge", "manual", "user_channel_manual"]},
+        "bridge_url": {"type": "string"},
+        "timeout_seconds": {"type": "number", "exclusiveMinimum": 0},
+        "max_quote_age_ms": {"type": "integer", "minimum": 0},
+        "decimal_odds": {"type": "number", "exclusiveMinimum": 1},
+        "odds_format": {"const": "decimal"},
+        "handicap_line": {"type": ["string", "number"]},
+        "selection_code": {"type": "string"},
+        "observed_at": {"type": "string"}
+      },
+      "additionalProperties": false
+    },
+    "execution": {
+      "type": "object",
+      "properties": {
+        "minimum_conservative_ev": {"type": "number", "minimum": 0}
+      },
+      "additionalProperties": false
+    },
+    "staking": {
+      "type": "object",
+      "required": ["bankroll"],
+      "properties": {
+        "bankroll": {"type": "number", "exclusiveMinimum": 0},
+        "current_daily_exposure": {"type": "number", "minimum": 0},
+        "daily_exposure_cap_pct": {"type": "number", "exclusiveMinimum": 0, "maximum": 0.1},
+        "single_match_cap_pct": {"type": "number", "exclusiveMinimum": 0, "maximum": 0.05},
+        "fixed_stake_min": {"type": "number", "exclusiveMinimum": 0},
+        "fixed_stake_max": {"type": "number", "exclusiveMinimum": 0},
+        "high_quality_conservative_ev": {"type": "number", "minimum": 0},
+        "currency": {"type": "string"}
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

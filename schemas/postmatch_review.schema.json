@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "postmatch_review.schema.json",
+  "title": "Football Betting OneShot automatic post-match review",
+  "type": "object",
+  "required": ["schema_version", "generated_at", "match", "result", "pre_match", "audit", "timeline", "root_cause"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "generated_at": {"type": "string", "format": "date-time"},
+    "source_report": {"type": "string"},
+    "match": {
+      "type": "object",
+      "required": ["competition", "home", "away", "kickoff_local"],
+      "properties": {
+        "competition": {"type": "string"},
+        "home": {"type": "string"},
+        "away": {"type": "string"},
+        "kickoff_local": {"type": "string"},
+        "shuju_id": {"type": ["integer", "string", "null"]}
+      }
+    },
+    "result": {
+      "type": "object",
+      "required": ["score_90m", "verified_at", "sources"],
+      "properties": {
+        "score_90m": {"type": "string", "pattern": "^[0-9]+-[0-9]+$"},
+        "after_extra_time": {"type": ["string", "null"]},
+        "penalty_shootout": {"type": ["string", "null"]},
+        "verified_at": {"type": "string", "format": "date-time"},
+        "sources": {"type": "array", "minItems": 2, "items": {"type": "string", "format": "uri"}},
+        "key_statistics": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "pre_match": {"type": "object"},
+    "audit": {"type": "object"},
+    "timeline": {"type": "object"},
+    "root_cause": {"type": "object"},
+    "nine_layers": {"type": "array", "minItems": 9, "maxItems": 9, "items": {"type": "object"}},
+    "lock_settlements": {"type": "array", "default": [], "items": {"type": "object"}}
+  }
+}

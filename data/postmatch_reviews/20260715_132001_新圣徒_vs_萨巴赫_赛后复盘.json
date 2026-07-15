@@ -1,0 +1,123 @@
+{
+  "schema_version": "1.0",
+  "generated_at": "2026-07-15T13:20:00+08:00",
+  "source_report": "data/analysis_reports/20260714_204532/20260714_204532_新圣徒_vs_萨巴赫_盘口解析.json",
+  "match": {
+    "competition": "欧洲冠军联赛",
+    "home": "新圣徒",
+    "away": "萨巴赫",
+    "kickoff_local": "2026-07-15 01:30",
+    "shuju_id": 1427681
+  },
+  "result": {
+    "score_90m": "1-2",
+    "after_extra_time": null,
+    "penalty_shootout": null,
+    "verified_at": "2026-07-15T13:20:00+08:00",
+    "sources": [
+      "https://www.espn.co.uk/football/match/_/gameId/401877817/sabah-fk-the-new-saints",
+      "https://www.footboom1.com/en/football/game/the-new-saints-fc-sabah-masazir-2026-07-14"
+    ],
+    "key_statistics": [
+      "萨巴赫客场2-1取胜，总比分4-1晋级",
+      "赛前客胜主维度命中",
+      "唯一比分0-2未命中，TNS有进球"
+    ]
+  },
+  "pre_match": {
+    "cross_validation": "Poisson+Dixon-Coles完成；次回合比分状态与潜在停赛修正",
+    "market_nature": "竞彩5.40/4.25/1.41对应EV约-7.9%/-6.2%/-14.1%；Pinnacle萨巴赫-1@1.94的点估计亦未形成足够安全边际",
+    "unique_score": "新圣徒 0-2 萨巴赫",
+    "primary_dimension": "萨巴赫90分钟客胜（方向保留，价格层不执行）",
+    "asian_direction": "萨巴赫90分钟客胜（方向保留，价格层不执行）",
+    "total_direction": "模型总进球均值 2.88",
+    "btts": "BTTS Yes 52.2%，优势不足",
+    "maximum_error_point": "Sabah总比分领先2球后可能主动降速，使客胜迁移为平局；Solvet若停赛削弱客队防线与出球，主队1球概率会上升；新圣徒早段进球会把比赛推向高比分尾部",
+    "final_state": "空仓｜客胜方向保留但抓取价未过线｜等待用户渠道赔率复算｜未锁单"
+  },
+  "audit": {
+    "primary_hit": "是",
+    "score_hit": "否",
+    "adjacent_pollution": "是",
+    "tail_pollution": "否",
+    "error_attribution": "客胜方向正确，但主队追回一球概率被低估",
+    "logic_classification": "红且逻辑对",
+    "random_event": "否",
+    "maximum_error_type": "BTTS与主队1球概率低估",
+    "summary": "赛前萨巴赫90分钟客胜命中，实际1-2；唯一比分0-2偏离一球。价格层未执行仍正确，不制造注单盈亏。",
+    "model_effective_coefficient": 0.75,
+    "valid_sample": 1
+  },
+  "timeline": {
+    "countdown": "T-赛前报告冻结",
+    "compliance": "未锁单，符合空仓纪律",
+    "opening": "萨巴赫首回合2-0领先，客胜方向占优",
+    "closing": "客胜价格未过保守执行线",
+    "change": "实际为萨巴赫2-1客胜，主队有一球",
+    "triggers": "领先方仍具进攻效率，但主队追分动机带来BTTS",
+    "direction_result": "客胜方向命中",
+    "theory_validation": "方向有效，比分层需保留主队1球邻近项",
+    "final_validation": "1-2；萨巴赫总比分4-1晋级",
+    "completeness": "高",
+    "sources_note": "ESPN UK final score 与 FootBoom match result 交叉核验"
+  },
+  "root_cause": {
+    "decision_audit": "主维度正确；比分层对主队进球保护不足",
+    "counterfactual": "赛前已识别新圣徒早段进球会推高尾部，但唯一比分仍压在0-2",
+    "identifiability": "是",
+    "modify_model": "否",
+    "recommendation": "杯赛次回合领先方客胜模型中保留主队1球邻近污染标记",
+    "convergence": "红且逻辑对；比分未中不升级规则",
+    "maximum_error_type": "BTTS邻近污染",
+    "status": "观察",
+    "priority": "低"
+  },
+  "nine_layers": [
+    {
+      "layer": 1,
+      "name": "原始数据",
+      "summary": "90分钟比分 1-2；加时 无；点球 无；双源：https://www.espn.co.uk/football/match/_/gameId/401877817/sabah-fk-the-new-saints；https://www.footboom1.com/en/football/game/the-new-saints-fc-sabah-masazir-2026-07-14"
+    },
+    {
+      "layer": 2,
+      "name": "多假设检验",
+      "summary": "假设A：萨巴赫延续优势客胜；假设B：领先后降速转平。赛果支持A，但主队进球存在。"
+    },
+    {
+      "layer": 3,
+      "name": "关键信号拆解",
+      "summary": "首回合2-0与客队质量信号有效；BTTS Yes 52.2%的弱信号被低估。"
+    },
+    {
+      "layer": 4,
+      "name": "反事实推演",
+      "summary": "赛前不需要改变客胜方向，但应把1-2列为强邻近比分。"
+    },
+    {
+      "layer": 5,
+      "name": "决策节点审计",
+      "summary": "未锁单正确；价格未过线不应事后改写为投注成功。"
+    },
+    {
+      "layer": 6,
+      "name": "根因决策树",
+      "summary": "直接原因是主队1球概率低估；系统原因是追分方进球动机权重不足；结构原因是比分层过度集中0-2。"
+    },
+    {
+      "layer": 7,
+      "name": "时间旅行验证",
+      "summary": "可识别但不构成硬修正。"
+    },
+    {
+      "layer": 8,
+      "name": "模型观察项",
+      "summary": "单场n=1，作为BTTS邻近污染样本。"
+    },
+    {
+      "layer": 9,
+      "name": "收敛结论",
+      "summary": "主维度命中，唯一比分未命中，空仓无盈亏。"
+    }
+  ],
+  "lock_settlements": []
+}

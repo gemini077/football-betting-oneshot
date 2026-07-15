@@ -1,0 +1,123 @@
+{
+  "schema_version": "1.0",
+  "generated_at": "2026-07-15T13:20:00+08:00",
+  "source_report": "data/analysis_reports/20260714_204527/20260714_204527_杰尔_vs_雷克雅未克维京人_盘口解析.json",
+  "match": {
+    "competition": "欧洲冠军联赛",
+    "home": "杰尔",
+    "away": "雷克雅未克维京人",
+    "kickoff_local": "2026-07-15 01:00",
+    "shuju_id": 1427687
+  },
+  "result": {
+    "score_90m": "2-2",
+    "after_extra_time": null,
+    "penalty_shootout": null,
+    "verified_at": "2026-07-15T13:20:00+08:00",
+    "sources": [
+      "https://www.espn.com/soccer/team/results/_/id/8249/league/UEFA.CHAMPIONS_QUAL",
+      "https://sports.yahoo.com/soccer/champions-league/vikingur-reykjavik-eto-gyor-13595566/"
+    ],
+    "key_statistics": [
+      "维京人首回合1-0领先，次回合2-2后总比分3-2晋级",
+      "杰尔主胜方向未打出，90分钟为平局",
+      "无加时与点球"
+    ]
+  },
+  "pre_match": {
+    "cross_validation": "Poisson+Dixon-Coles完成；次回合领先/追分脚本修正",
+    "market_nature": "竞彩1.47/4.20/4.75对应EV约-10.6%/-10.3%/-15.5%；Pinnacle杰尔-1@2.01按赢2+、净胜1走盘计算，点估计EV约-1.6%，不过线",
+    "unique_score": "杰尔 2-1 雷克雅未克维京人",
+    "primary_dimension": "杰尔90分钟主胜（方向保留，价格层不执行）",
+    "asian_direction": "杰尔90分钟主胜（方向保留，价格层不执行）",
+    "total_direction": "模型总进球均值 3.07",
+    "btts": "BTTS Yes 56.0%，但次回合状态依赖较强",
+    "maximum_error_point": "杰尔早段未进球会显著抬高平局和客队反击概率；维京人若先入球，杰尔需至少3球才能翻盘，比分尾部迅速变厚；资格赛球队数据与阵容信息不足，λ误差高于世界杯场次",
+    "final_state": "空仓｜主胜方向保留但抓取价均未过线｜等待用户渠道赔率复算｜未锁单"
+  },
+  "audit": {
+    "primary_hit": "否",
+    "score_hit": "否",
+    "adjacent_pollution": "是",
+    "tail_pollution": "是",
+    "error_attribution": "次回合追分脚本低估维京人反击与平局韧性，主胜概率偏高",
+    "logic_classification": "黑且逻辑错误",
+    "random_event": "否",
+    "maximum_error_type": "两回合状态依赖与客队反击尾部低估",
+    "summary": "赛前保留杰尔90分钟主胜但未执行；实际2-2，方向与唯一比分均未命中。空仓纪律正确，错误集中在主队追分叙事对平局/客队进球的压低。",
+    "model_effective_coefficient": 0.25,
+    "valid_sample": 1
+  },
+  "timeline": {
+    "countdown": "T-赛前报告冻结",
+    "compliance": "未锁单，符合空仓纪律",
+    "opening": "杰尔主胜倾向，维京人首回合1-0领先",
+    "closing": "主胜方向未过价格执行线",
+    "change": "90分钟实际转为2-2高波动平局",
+    "triggers": "客队反击进球与总比分领先心态改变主队净胜路径",
+    "direction_result": "主胜方向未命中",
+    "theory_validation": "次回合资格赛需提高总比分状态依赖权重",
+    "final_validation": "2-2；维京人总比分3-2晋级",
+    "completeness": "高",
+    "sources_note": "ESPN results 与 Yahoo Sports final score 交叉核验"
+  },
+  "root_cause": {
+    "decision_audit": "方向保留但价格层空仓，执行纪律正确；方向模型错误",
+    "counterfactual": "赛前若把维京人首回合领先后的反击/守平权重上调，主胜应降级为观察",
+    "identifiability": "部分可识别",
+    "modify_model": "否",
+    "recommendation": "记录为次回合状态依赖观察项，至少再等2场独立样本再改规则",
+    "convergence": "黑且逻辑错误；空仓避免损失",
+    "maximum_error_type": "两回合状态依赖与平局尾部",
+    "status": "观察",
+    "priority": "中"
+  },
+  "nine_layers": [
+    {
+      "layer": 1,
+      "name": "原始数据",
+      "summary": "90分钟比分 2-2；加时 无；点球 无；双源：https://www.espn.com/soccer/team/results/_/id/8249/league/UEFA.CHAMPIONS_QUAL；https://sports.yahoo.com/soccer/champions-league/vikingur-reykjavik-eto-gyor-13595566/"
+    },
+    {
+      "layer": 2,
+      "name": "多假设检验",
+      "summary": "假设A：杰尔追分兑现主胜；假设B：维京人领先总比分后以反击与守平兑现。赛果支持B。"
+    },
+    {
+      "layer": 3,
+      "name": "关键信号拆解",
+      "summary": "λ与主场优势有效性不足，比分尾部和BTTS信号比主胜方向更接近实际。"
+    },
+    {
+      "layer": 4,
+      "name": "反事实推演",
+      "summary": "不使用赛后信息，仅按首回合0-1落后与资格赛信息不完备，主胜执行应继续被价格层拦截。"
+    },
+    {
+      "layer": 5,
+      "name": "决策节点审计",
+      "summary": "未锁单正确；唯一比分2-1未覆盖2-2平局尾部。"
+    },
+    {
+      "layer": 6,
+      "name": "根因决策树",
+      "summary": "直接原因是客队进球数低估；系统原因是两回合领先方反击权重不足；结构原因是资格赛球队样本稀薄。"
+    },
+    {
+      "layer": 7,
+      "name": "时间旅行验证",
+      "summary": "可改进的是主胜置信度，不应新增硬规则。"
+    },
+    {
+      "layer": 8,
+      "name": "模型观察项",
+      "summary": "单场n=1，仅登记两回合状态依赖观察。"
+    },
+    {
+      "layer": 9,
+      "name": "收敛结论",
+      "summary": "模型方向未命中，价格纪律命中，无需结算。"
+    }
+  ],
+  "lock_settlements": []
+}

@@ -1,0 +1,178 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "football-betting-oneshot analysis report overlay",
+  "type": "object",
+  "properties": {
+    "report": {
+      "type": "object",
+      "properties": {
+        "model_name": {"type": "string"},
+        "model_version": {"type": "string", "pattern": "^v[0-9]+\\.[0-9]+\\.[0-9]+$"},
+        "report_type": {"type": "string"},
+        "analysis_timestamp": {"type": "string"},
+        "final_execution_version": {"type": "boolean"}
+      }
+    },
+    "match": {"type": "object"},
+    "fundamentals": {
+      "type": "object",
+      "properties": {
+        "status": {"type": "string"},
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["label", "value"],
+            "properties": {"label": {"type": "string"}, "value": {"type": "string"}}
+          }
+        }
+      }
+    },
+    "model": {
+      "type": "object",
+      "properties": {
+        "status": {"type": "string"},
+        "lambda_home": {"type": ["number", "null"]},
+        "lambda_away": {"type": ["number", "null"]},
+        "rho": {"type": ["number", "null"]},
+        "expected_goals": {"type": ["number", "null"]},
+        "probabilities": {"type": ["object", "null"]},
+        "total_goals_buckets": {"type": "array"},
+        "btts": {"type": "object"},
+        "score_probabilities": {"type": "array"}
+      }
+    },
+    "base_engine_audit": {
+      "type": "object",
+      "required": ["completion_status", "modules"],
+      "properties": {
+        "policy": {"type": "string"},
+        "source_version": {"type": "string"},
+        "completion_status": {"enum": ["complete", "incomplete"]},
+        "incomplete_modules": {"type": "array", "items": {"type": "string"}},
+        "modules": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "required": ["label", "data_status", "calculation_status", "detail"],
+            "properties": {
+              "label": {"type": "string"},
+              "data_status": {"enum": ["ready", "degraded", "missing"]},
+              "calculation_status": {"enum": ["completed", "degraded", "not_run"]},
+              "detail": {"type": "string"}
+            }
+          }
+        }
+      }
+    },
+    "market_intelligence": {"type": "object"},
+    "risk_engine": {"type": "object"},
+    "decisions": {
+      "type": "object",
+      "required": ["unique_primary_dimension", "unique_score", "value_judgement", "final_state"],
+      "properties": {
+        "unique_primary_dimension": {"type": "string"},
+        "unique_score": {"type": "string"},
+        "mathematical_first": {"type": "string"},
+        "market_first": {"type": "string"},
+        "maximum_error_points": {"type": "array", "items": {"type": "string"}},
+        "value_judgement": {"type": "string"},
+        "final_state": {"type": "string"}
+      }
+    },
+    "betting": {
+      "type": "object",
+      "properties": {
+        "candidates": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "ticket_id": {"type": "string"},
+              "tier": {"enum": ["保本层", "中轴层", "博上层"]},
+              "portfolio_role": {"type": "string"},
+              "form": {"type": "string"},
+              "status": {"type": "string"},
+              "live_ev_profile": {
+                "type": "object",
+                "required": ["active", "contract", "probability"],
+                "properties": {
+                  "active": {"const": true},
+                  "overlay_primary": {"type": "boolean"},
+                  "contract": {
+                    "type": "object",
+                    "required": ["match_id", "handicap_line", "contract_type"],
+                    "properties": {
+                      "match_id": {"type": ["string", "integer"]},
+                      "market_code": {"type": ["string", "integer"]},
+                      "market_name": {"type": "string"},
+                      "child_market_code": {"type": ["string", "integer"]},
+                      "market_id": {"type": ["string", "integer"]},
+                      "handicap_line": {"type": ["string", "number"]},
+                      "selection_code": {"type": "string"},
+                      "selection_name": {"type": "string"},
+                      "contract_type": {"enum": ["binary_no_push", "three_way_selection"]}
+                    }
+                  },
+                  "probability": {
+                    "type": "object",
+                    "required": ["point", "conservative", "confirmed_model_output", "source", "calibration_status"],
+                    "properties": {
+                      "point": {"type": "number", "exclusiveMinimum": 0, "exclusiveMaximum": 1},
+                      "conservative": {"type": "number", "exclusiveMinimum": 0, "exclusiveMaximum": 1},
+                      "confirmed_model_output": {"const": true},
+                      "source": {"type": "string", "minLength": 1},
+                      "calibration_status": {"type": "string", "minLength": 1}
+                    }
+                  },
+                  "price": {"type": "object"},
+                  "execution": {"type": "object"}
+                }
+              }
+            }
+          }
+        },
+        "layers": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["label", "status", "candidate_count", "proposed_exposure"],
+            "properties": {
+              "label": {"enum": ["保本层", "中轴层", "博上层"]},
+              "status": {"type": "string"},
+              "candidate_count": {"type": "integer", "minimum": 0},
+              "locked_count": {"type": "integer", "minimum": 0},
+              "proposed_exposure": {"type": "number", "minimum": 0},
+              "committed_exposure": {"type": "number", "minimum": 0}
+            }
+          }
+        },
+        "parlays": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["ticket_id", "tier", "legs", "status"],
+            "properties": {
+              "ticket_id": {"type": "string"},
+              "tier": {"enum": ["保本层", "中轴层", "博上层"]},
+              "legs": {"type": "array", "minItems": 2},
+              "combined_odds": {"type": ["number", "null"]},
+              "joint_probability": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+              "ev": {"type": ["number", "null"]},
+              "correlation_status": {"type": "string"},
+              "amount": {"type": ["number", "null"], "minimum": 0},
+              "status": {"type": "string"},
+              "cancel_condition": {"type": ["string", "null"]}
+            }
+          }
+        },
+        "overlap_audit": {"type": "array"},
+        "candidate_exposure": {"type": "number", "minimum": 0},
+        "portfolio_state": {"type": "string"},
+        "parlay_policy": {"type": "string"},
+        "state": {"type": "string"}
+      }
+    },
+    "evidence_chain": {"type": "array"}
+  }
+}

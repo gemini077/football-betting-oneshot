@@ -1,0 +1,80 @@
+name: Refresh data and deploy Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+  schedule:
+    # 09:05, 17:05 and 01:05 in Asia/Shanghai.
+    - cron: "5 1,9,17 * * *"
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: football-betting-oneshot-pages
+  cancel-in-progress: false
+
+jobs:
+  refresh-build-deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Resolve China business date
+        shell: bash
+        run: echo "FBOS_DATE=$(TZ=Asia/Shanghai date +%F)" >> "$GITHUB_ENV"
+
+      - name: Refresh Sporttery schedule
+        continue-on-error: true
+        run: python scripts/daily_schedule_workspace.py --date "$FBOS_DATE" --no-cache
+
+      - name: Refresh post-match queue and dashboards
+        run: |
+          python scripts/postmatch_queue.py
+          python scripts/postmatch_dashboard.py
+          python scripts/match_workspace.py --date "$FBOS_DATE"
+
+      - name: Run model checks
+        run: python -m pytest -q
+
+      - name: Build public site
+        run: python scripts/build_public_site.py
+
+      - name: Save generated public data
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/schedule_updates data/match_workspace data/postmatch_automation data/postmatch_dashboard
+          if ! git diff --cached --quiet; then
+            git commit -m "refresh public football data [skip ci]"
+            git push
+          fi
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - name: Deploy Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>滚球只读桥接</title>
+  <style>
+    body { width: 320px; margin: 0; padding: 16px; font: 14px/1.5 system-ui, sans-serif; color: #172033; background: #f6f8fb; }
+    h1 { margin: 0 0 12px; font-size: 17px; }
+    .card { background: white; border: 1px solid #dce3ef; border-radius: 10px; padding: 12px; margin-bottom: 10px; }
+    .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .status { margin-top: 8px; color: #566176; word-break: break-word; }
+    .ok { color: #087b4b; } .bad { color: #b42318; }
+    button { width: 100%; border: 0; border-radius: 8px; padding: 9px 12px; background: #2056d8; color: white; cursor: pointer; }
+    button:focus-visible, input:focus-visible { outline: 2px solid #2056d8; outline-offset: 2px; }
+    small { color: #667085; }
+  </style>
+</head>
+<body>
+  <h1>Football Betting OneShot</h1>
+  <div class="card">
+    <div class="row">
+      <strong>只读采集</strong>
+      <input id="enabled" type="checkbox">
+    </div>
+    <div class="status" id="captureStatus">尚未启用</div>
+  </div>
+  <div class="card">
+    <div class="row">
+      <strong>实时EV悬浮窗</strong>
+      <input id="overlayEnabled" type="checkbox" aria-label="显示实时EV悬浮窗">
+    </div>
+    <div class="status" id="overlayStatus">已显示</div>
+  </div>
+  <div class="card">
+    <button id="health">检查本地服务</button>
+    <div class="status" id="healthStatus">等待检查</div>
+  </div>
+  <small>扩展只处理脱敏盘口消息，不读取页面DOM、密码、Cookie或网站账户余额。悬浮窗只显示候选，不点击赔率、不提交订单、不自动锁单。</small>
+  <script src="popup.js"></script>
+</body>
+</html>

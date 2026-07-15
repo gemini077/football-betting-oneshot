@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Football Betting OneShot Polymarket public analysis snapshot",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "source",
+    "analysis_input_only",
+    "authentication_used",
+    "account_connected",
+    "trading_enabled",
+    "match",
+    "quality_flags"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "source": {"const": "polymarket_public_gamma"},
+    "captured_at": {"type": "string"},
+    "analysis_input_only": {"const": true},
+    "uncalibrated_signal_only": {"type": "boolean"},
+    "used_for_model_probability": {"type": "boolean"},
+    "used_for_ev": {"type": "boolean"},
+    "execution_source": {"type": "boolean"},
+    "authentication_used": {"const": false},
+    "account_connected": {"const": false},
+    "trading_enabled": {"const": false},
+    "target": {"type": "object"},
+    "match": {"type": "object"},
+    "settlement": {"type": "object"},
+    "three_way_consensus": {"type": "object"},
+    "correct_score": {"type": "object"},
+    "markets": {"type": "array"},
+    "quality_flags": {"type": "array", "items": {"type": "string"}}
+  }
+}
