@@ -18,7 +18,8 @@ def test_paper_ledger_settles_primary_but_keeps_score_without_price_as_observati
     payload = report()
     ledger = build_paper_ledger([payload], {pair_key("甲", "乙"): (0, 2)})
     assert ledger["summary"]["settled"] == 1
-    assert ledger["summary"]["observations"] == 1
+    assert ledger["summary"]["observations"] == 0
+    assert len(ledger["price_pending_candidates"]) == 1
     primary = next(row for row in ledger["tickets"] if row["ticket_type"] == "primary")
     assert ledger["summary"]["profit_units"] == round(primary["stake_units"] * 0.9, 4)
     assert ledger["tickets"][0]["settlement"] == "赢"
@@ -56,22 +57,23 @@ def test_existing_pending_paper_stake_is_resized_from_ev_not_forced_to_minimum()
 
 def test_negative_ev_contract_has_price_but_is_rejected_without_stake():
     ledger = build_paper_ledger([report(odds=1.5)], {})
-    primary = next(row for row in ledger["tickets"] if row["ticket_type"] == "primary")
+    primary = next(row for row in ledger["rejected_candidates"] if row["ticket_type"] == "primary")
     assert primary["odds"] == 1.5
     assert primary["sizing_ev"] < 0
     assert primary["stake_units"] == 0
     assert primary["status"] == "rejected_by_ev"
+    assert all(row["ticket_id"] != primary["ticket_id"] for row in ledger["tickets"])
 
 
 def test_first_captured_price_repairs_frozen_observation_without_reselecting():
     first = build_paper_ledger([report(odds=None)], {})
-    primary = next(row for row in first["tickets"] if row["ticket_type"] == "primary")
+    primary = next(row for row in first["price_pending_candidates"] if row["ticket_type"] == "primary")
     assert primary["odds"] is None
 
     repaired = build_paper_ledger(
         [],
         {primary["match_key"]: (0, 2)},
-        frozen_tickets=first["tickets"],
+        frozen_tickets=first["_frozen_records"],
         initial_price_overrides={
             primary["ticket_id"]: {
                 "odds": 1.61,

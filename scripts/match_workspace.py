@@ -601,6 +601,7 @@ def build(target_date: str, output_root: Path = OUTPUT) -> tuple[Path, Path]:
         frozen_tickets=frozen_tickets,
         initial_price_overrides=initial_price_overrides,
     )
+    frozen_records = paper_ledger.pop("_frozen_records", paper_ledger["tickets"])
     for item in matches:
         item.pop("portfolio_candidates", None)
     payload = {
@@ -625,7 +626,7 @@ def build(target_date: str, output_root: Path = OUTPUT) -> tuple[Path, Path]:
     (output_dir / "workspace.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     (paper_root / "latest.json").write_text(json.dumps(paper_ledger, ensure_ascii=False, indent=2), encoding="utf-8")
     frozen_path.write_text(
-        json.dumps({"schema_version": "1.0", "tickets": paper_ledger["tickets"]}, ensure_ascii=False, indent=2),
+        json.dumps({"schema_version": "1.0", "tickets": frozen_records}, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
     latest = output_root / "latest.html"

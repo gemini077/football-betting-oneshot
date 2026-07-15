@@ -379,9 +379,23 @@ def build_paper_ledger(
             tickets_by_key[candidate_key] = candidate
             next_id += 1
 
-    tickets = []
+    frozen_records = []
     for ticket in sorted(tickets_by_key.values(), key=lambda row: str(row.get("ticket_id") or "")):
-        tickets.append(settle_ticket(ticket, results.get(str(ticket.get("match_key") or ""))))
+        frozen_records.append(settle_ticket(ticket, results.get(str(ticket.get("match_key") or ""))))
+
+    # “模拟注单”只记录真正通过价格审核并获得有效模拟金额的合约。
+    # 负 EV、低于平台最低金额和无有效赛前价格的候选仍保留在冻结审计中，
+    # 但不能进入注单数量、命中率、ROI 或盈亏统计。
+    tickets = [
+        row for row in frozen_records
+        if row.get("status") in {"pending", "settled"}
+        and (number(row.get("stake_units")) or 0) >= MIN_STAKE
+    ]
+    rejected_candidates = [row for row in frozen_records if row.get("status") == "rejected_by_ev"]
+    price_pending_candidates = [
+        row for row in frozen_records
+        if str(row.get("status") or "").startswith("observed_")
+    ]
     summary = summarize(tickets)
     groups = []
     for group in ("胜平负", "亚盘", "大小球", "波胆", "其他"):
@@ -406,4 +420,15 @@ def build_paper_ledger(
         "summary": summary,
         "groups": groups,
         "tickets": tickets,
+        "screening_summary": {
+            "passed": len(tickets),
+            "rejected": len(rejected_candidates),
+            "waiting_for_price": len(price_pending_candidates),
+        },
+        "rejected_candidates": rejected_candidates,
+        "price_pending_candidates": price_pending_candidates,
+        # Only the workspace builder persists this internal collection. It is
+        # removed before publishing so rejected candidates never masquerade as
+        # simulated bets while immutable directions/first prices remain auditable.
+        "_frozen_records": frozen_records,
     }
