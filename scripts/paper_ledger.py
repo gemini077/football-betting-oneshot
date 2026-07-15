@@ -9,6 +9,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+MIN_STAKE = 2.0
+STAKE_STEP = 0.01
+
 
 def norm(value: Any) -> str:
     return re.sub(r"[^0-9a-z\u4e00-\u9fff]", "", str(value or "").casefold())
@@ -45,7 +48,7 @@ def primary_contract(payload: dict) -> dict:
         "odds": None,
         "probability": None,
         "ev": None,
-        "stake_units": 1.0,
+        "stake_units": MIN_STAKE,
         "price_source": None,
     }
 
@@ -125,7 +128,7 @@ def score_contract(payload: dict) -> dict | None:
         "odds": None,
         "probability": probability,
         "ev": None,
-        "stake_units": 0.1,
+        "stake_units": MIN_STAKE,
         "price_source": None,
     }
     if chosen:
@@ -246,7 +249,13 @@ def build_paper_ledger(
     frozen_tickets: list[dict] | None = None,
 ) -> dict:
     frozen_tickets = frozen_tickets or []
-    frozen_by_key = {freeze_key(row): dict(row) for row in frozen_tickets}
+    frozen_by_key = {}
+    for row in frozen_tickets:
+        migrated = dict(row)
+        # Explicit platform-policy migration: preserve selection and price, but
+        # bring historical paper stakes up to the current executable minimum.
+        migrated["stake_units"] = max(MIN_STAKE, round(number(migrated.get("stake_units")) or 0.0, 2))
+        frozen_by_key[freeze_key(migrated)] = migrated
     tickets_by_key = dict(frozen_by_key)
     used_ids = [
         int(match.group(1))
@@ -297,8 +306,11 @@ def build_paper_ledger(
         "schema_version": "1.0",
         "generated_at": datetime.now().astimezone().isoformat(),
         "policy": {
-            "primary_stake_units": 1.0,
-            "correct_score_stake_units": 0.1,
+            "minimum_stake": MIN_STAKE,
+            "stake_step": STAKE_STEP,
+            "primary_stake_units": MIN_STAKE,
+            "correct_score_stake_units": MIN_STAKE,
+            "currency": "CNY",
             "real_balance_affected": False,
             "frozen_snapshot_only": True,
             "missing_price_policy": "observation_only_no_profit",

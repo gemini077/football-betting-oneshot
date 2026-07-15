@@ -19,7 +19,7 @@ def test_paper_ledger_settles_primary_but_keeps_score_without_price_as_observati
     ledger = build_paper_ledger([payload], {pair_key("甲", "乙"): (0, 2)})
     assert ledger["summary"]["settled"] == 1
     assert ledger["summary"]["observations"] == 1
-    assert ledger["summary"]["profit_units"] == 0.9
+    assert ledger["summary"]["profit_units"] == 1.8
     assert ledger["tickets"][0]["settlement"] == "赢"
 
 
@@ -42,3 +42,11 @@ def test_frozen_contract_is_not_repriced_by_a_later_report():
     primary = next(row for row in later["tickets"] if row["ticket_type"] == "primary")
     assert primary["odds"] == 1.9
     assert primary["ticket_id"] == "SIM-0001"
+
+
+def test_existing_paper_stake_migrates_to_platform_minimum():
+    first = build_paper_ledger([report()], {})
+    first["tickets"][0]["stake_units"] = 0.1
+    migrated = build_paper_ledger([], {}, frozen_tickets=first["tickets"])
+    assert migrated["tickets"][0]["stake_units"] == 2.0
+    assert migrated["policy"]["stake_step"] == 0.01
