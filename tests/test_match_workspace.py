@@ -126,10 +126,8 @@ class MatchWorkspacePortfolioTests(unittest.TestCase):
     def test_market_only_report_is_not_marked_as_analyzed(self):
         report = {
             "payload": {
-                "analysis": {
-                    "data_quality": {"status": "仅市场基线"},
-                    "model": {"probabilities": None},
-                },
+                "data_quality": {"status": "仅市场基线"},
+                "model": {"probabilities": None},
                 "betting": {"state": "空仓｜未锁单"},
             }
         }

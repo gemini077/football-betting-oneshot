@@ -273,9 +273,16 @@ def report_summary(report: dict | None) -> dict:
     analysis = payload.get("analysis") or {}
     decisions = payload.get("decisions") or {}
     betting = payload.get("betting") or {}
-    quality_status = str((analysis.get("data_quality") or {}).get("status") or "")
-    serialized_errors = json.dumps(analysis.get("errors") or [], ensure_ascii=False).upper()
-    market_only = quality_status == "仅市场基线"
+    data_quality = payload.get("data_quality") or analysis.get("data_quality") or {}
+    quality_status = str(data_quality.get("status") or "")
+    serialized_errors = json.dumps(
+        [analysis.get("errors") or [], data_quality, decisions.get("maximum_error_points") or []],
+        ensure_ascii=False,
+    ).upper()
+    model = payload.get("model") or analysis.get("model") or {}
+    market_only = quality_status == "仅市场基线" or (
+        model.get("probabilities") is None and data_quality.get("only_official_odds_available") is True
+    )
     no_data = any(marker in serialized_errors for marker in ("NO_DATA", "INSUFFICIENT_DATA"))
     if market_only or no_data:
         return {
