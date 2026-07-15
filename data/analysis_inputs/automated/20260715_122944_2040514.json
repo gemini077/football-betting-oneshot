@@ -1,0 +1,155 @@
+{
+  "report": {
+    "ai_summary": "辅助分析草稿：仅基于市场基线，无模型输出。提供市场赔率与交易数据作为证据，未形成投注建议。",
+    "model_name": "Football Betting OneShot",
+    "model_version": "v0.14.0",
+    "report_type": "DeepSeek辅助赛前分析（基础内核审计后发布）",
+    "analysis_timestamp": "2026-07-15T12:29:44+00:00",
+    "final_execution_version": false,
+    "ai_provider": "DeepSeek",
+    "ai_model": "deepseek-v4-pro"
+  },
+  "match": {
+    "id": "2040514",
+    "match_num": "周三202",
+    "home": "苏捷斯卡",
+    "away": "阿拉木图",
+    "league": "欧冠",
+    "kickoff": "2026-07-16 03:00",
+    "business_date": "2026-07-15",
+    "match_id": "2040514",
+    "competition": "欧冠",
+    "kickoff_local": "2026-07-16 03:00"
+  },
+  "data_quality": {
+    "status": "仅市场基线",
+    "missing": [
+      "可解析的主客场近期攻防样本（如xG）",
+      "竞彩官方赔率（中国竞彩主源未返回）"
+    ],
+    "available_sources": [
+      "selected_workspace_match官方市场基线",
+      "500.com欧赔、亚盘、大小球、基本面、交易数据"
+    ],
+    "notes": [
+      "已从所选主页场次注入体彩胜平负赔率，并计算去水市场基线；该基线不是模型概率。"
+    ]
+  },
+  "fundamentals": {
+    "home_team": "苏捷斯卡（尼克希奇）",
+    "away_team": "阿拉木图凯拉特",
+    "recent_form": {
+      "home_overall": {
+        "matches": 10,
+        "wins": 3,
+        "draws": 2,
+        "losses": 5,
+        "goals_for": 12,
+        "goals_against": 13
+      },
+      "home_home": {
+        "matches": 10,
+        "wins": 6,
+        "draws": 2,
+        "losses": 2,
+        "goals_for": 19,
+        "goals_against": 11
+      },
+      "away_overall": {
+        "matches": 10,
+        "wins": 6,
+        "draws": 3,
+        "losses": 1,
+        "goals_for": 22,
+        "goals_against": 9
+      },
+      "away_away": {
+        "matches": 10,
+        "wins": 5,
+        "draws": 2,
+        "losses": 3,
+        "goals_for": 16,
+        "goals_against": 13
+      }
+    },
+    "note": "数据来自500.com赛前近期战绩总结，非xG",
+    "items": []
+  },
+  "model": {
+    "probabilities": null,
+    "lambda_home": null,
+    "lambda_away": null,
+    "expected_goals": null,
+    "score_probabilities": [],
+    "btts": {
+      "judgement": "数据不足，暂不判断"
+    },
+    "total_goals_buckets": [],
+    "status": "DeepSeek辅助综合；未替代本地概率校准"
+  },
+  "decisions": {
+    "unique_primary_dimension": "market_baseline",
+    "unique_score": "数据不足，暂不形成结论",
+    "mathematical_first": "无（无模型概率）",
+    "market_first": "官方市场基线：客胜赔率1.59，对应公平概率0.557",
+    "maximum_error_points": [
+      "缺少球队实力评估模型，仅依赖赔率去水，可能忽略真实实力差距",
+      "无xG、伤停等数据，基本面仅为近期战绩，不够精细",
+      "竞彩官方源失败，使用500.com可见赔率，可能与竞彩官方略有差异"
+    ],
+    "value_judgement": "无（未形成价值判断）",
+    "final_state": "空仓｜DeepSeek辅助分析已生成，等待模型与价格复核｜未锁单"
+  },
+  "betting": {
+    "candidates": [],
+    "state": "空仓｜未锁单",
+    "execution_authorized": false,
+    "lock_state_changed": false,
+    "bankroll_state_changed": false,
+    "price_audit": []
+  },
+  "evidence_chain": [],
+  "automation": {
+    "provider": "DeepSeek",
+    "model": "deepseek-v4-pro",
+    "generated_at": "2026-07-15T12:29:44+00:00",
+    "owner_authorized_request": true
+  },
+  "market": {
+    "official_spf": {
+      "home": 4.35,
+      "draw": 3.7,
+      "away": 1.59
+    },
+    "official_rqspf": {
+      "handicap": 1,
+      "home": 2.07,
+      "draw": 3.34,
+      "away": 2.88
+    },
+    "official_market_baseline": {
+      "prices": {
+        "home": 4.35,
+        "draw": 3.7,
+        "away": 1.59
+      },
+      "overround": 1.129086,
+      "payout_rate": 0.885672,
+      "fair_probabilities": {
+        "home": 0.203603,
+        "draw": 0.239371,
+        "away": 0.557026
+      },
+      "role": "official_market_baseline_only_not_model_probability",
+      "deterministic_core": {
+        "model": null,
+        "data_quality": {
+          "status": "仅市场基线",
+          "missing": [
+            "可解析的主客场近期攻防样本"
+          ]
+        }
+      }
+    }
+  }
+}
