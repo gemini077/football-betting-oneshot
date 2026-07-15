@@ -19,6 +19,7 @@ from typing import Any
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_OUTPUT_ROOT = PROJECT_ROOT / "data" / "live_ev_profiles"
+DEFAULT_ALIAS_REGISTRY = PROJECT_ROOT / "data" / "team_aliases.json"
 MODEL_NAME = "Football Betting OneShot"
 MODEL_VERSION = "v0.14.1"
 MATCH_ID = re.compile(r"^[0-9]{1,30}$")
@@ -187,6 +188,49 @@ def _atomic_json(path: Path, value: dict) -> None:
     temporary.replace(path)
 
 
+def _load_alias_registry(path: Path | str = DEFAULT_ALIAS_REGISTRY) -> dict:
+    try:
+        value = json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {"teams": [], "competitions": [], "safety": {}}
+    return value if isinstance(value, dict) else {"teams": [], "competitions": [], "safety": {}}
+
+
+def _aliases_for(value: Any, rows: Any) -> list[str]:
+    canonical = _text(value)
+    if not canonical or not isinstance(rows, list):
+        return []
+    for row in rows:
+        if not isinstance(row, dict) or _text(row.get("canonical")) != canonical:
+            continue
+        aliases = []
+        for alias in row.get("aliases") or []:
+            text = _text(alias)
+            if text and text != canonical and text not in aliases:
+                aliases.append(text)
+        return aliases
+    return []
+
+
+def enrich_profile_match_aliases(profile: dict, registry: dict) -> dict:
+    """Attach explicit aliases; never invent fuzzy team equivalence."""
+
+    enriched = dict(profile)
+    match = dict(enriched.get("match") or {})
+    match["home_aliases"] = _aliases_for(match.get("home"), registry.get("teams"))
+    match["away_aliases"] = _aliases_for(match.get("away"), registry.get("teams"))
+    match["competition_aliases"] = _aliases_for(match.get("competition"), registry.get("competitions"))
+    enriched["match"] = match
+    enriched["identity_match_policy"] = {
+        "requires_home_away_order": True,
+        "maximum_kickoff_difference_minutes": int(
+            (registry.get("safety") or {}).get("maximum_kickoff_difference_minutes", 180)
+        ),
+        "fuzzy_edit_distance_enabled": False,
+    }
+    return enriched
+
+
 def _history_dir(root: Path, stamp: str) -> Path:
     candidate = root / "history" / stamp
     suffix = 1
@@ -207,6 +251,7 @@ def rebuild_current_profile_index(
     current_dir = Path(output_root) / "current"
     current_dir.mkdir(parents=True, exist_ok=True)
     indexed_profiles = []
+    alias_registry = _load_alias_registry()
     for profile_path in sorted(current_dir.glob("*.json")):
         if profile_path.name == "index.json":
             continue
@@ -215,7 +260,7 @@ def rebuild_current_profile_index(
         except (OSError, json.JSONDecodeError):
             continue
         if isinstance(indexed, dict) and isinstance(indexed.get("match"), dict):
-            indexed_profiles.append(indexed)
+            indexed_profiles.append(enrich_profile_match_aliases(indexed, alias_registry))
     instant = now or datetime.now().astimezone()
     index_path = current_dir / "index.json"
     _atomic_json(index_path, {

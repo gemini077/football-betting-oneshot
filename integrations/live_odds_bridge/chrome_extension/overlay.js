@@ -507,7 +507,9 @@
         type: "FBOS_EV_PROFILE",
         matchId: currentMatchId,
         homeName: currentMatchMetadata.home_name || "",
-        awayName: currentMatchMetadata.away_name || ""
+        awayName: currentMatchMetadata.away_name || "",
+        tournamentName: currentMatchMetadata.tournament_name || "",
+        kickoffTimestamp: currentMatchMetadata.kickoff_timestamp || ""
       });
       if (!response?.ok) throw new Error(response?.error || "分析配置服务无响应");
       const result = response.data || {};
