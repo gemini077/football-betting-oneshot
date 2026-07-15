@@ -9,6 +9,7 @@
   const QUOTE_REFRESH_MS = 8000;
   const REPRICE_MS = 1000;
   const PROFILE_REFRESH_MS = 5000;
+  const MODEL_STATE_REFRESH_MS = 10000;
   const PROFILE_PREFIX = "fbosOverlayProfile:";
   let contextValid = true;
   let host = null;
@@ -22,6 +23,7 @@
   let repriceTimer = null;
   let routeTimer = null;
   let profileTimer = null;
+  let modelStateTimer = null;
   let quoteBusy = false;
   let repriceBusy = false;
   let profileBusy = false;
@@ -696,9 +698,11 @@
     clearInterval(repriceTimer);
     clearInterval(routeTimer);
     clearInterval(profileTimer);
+    clearInterval(modelStateTimer);
     quoteTimer = setInterval(() => refreshQuotes().catch(() => {}), QUOTE_REFRESH_MS);
     repriceTimer = setInterval(() => reprice().catch(() => {}), REPRICE_MS);
     profileTimer = setInterval(() => refreshAnalysisProfile().catch(() => {}), PROFILE_REFRESH_MS);
+    modelStateTimer = setInterval(() => refreshModelState().catch(() => {}), MODEL_STATE_REFRESH_MS);
     routeTimer = setInterval(() => {
       const nextMatchId = matchIdFromUrl();
       if (nextMatchId && nextMatchId !== currentMatchId) switchMatch(nextMatchId).catch(() => {});

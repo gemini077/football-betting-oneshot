@@ -83,7 +83,7 @@ class LiveOddsBridgeTests(unittest.TestCase):
                 encoding="utf-8"
             )
         )
-        self.assertEqual("0.9.0", manifest["version"])
+        self.assertEqual("0.9.1", manifest["version"])
         self.assertIn("https://gemini077.github.io/football-betting-oneshot/*", manifest["host_permissions"])
         overlay = next(item for item in manifest["content_scripts"] if "overlay.js" in item.get("js", []))
         self.assertEqual("document_idle", overlay["run_at"])
