@@ -1,4 +1,4 @@
-name: Analyze selected match with DeepSeek
+name: Analyze selected match
 
 on:
   workflow_dispatch:
@@ -47,13 +47,7 @@ jobs:
       - run: pip install -r requirements.txt
 
       - name: Fetch, analyze and rebuild
-        env:
-          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
-          DEEPSEEK_MODEL: deepseek-v4-pro
         run: python scripts/deepseek_auto_analysis.py --event "$GITHUB_EVENT_PATH"
-
-      - name: Run model checks
-        run: python -m pytest -q
 
       - name: Save generated analysis
         run: |

@@ -10,20 +10,30 @@ from prematch_fundamentals import collect_prematch_fundamentals
 ROOT = Path(__file__).resolve().parents[1]
 WORKSPACE = ROOT / "data" / "match_workspace" / "latest.json"
 INPUT_ROOT = ROOT / "data" / "analysis_inputs" / "automated"
+STATE_PATH = ROOT / "data" / "market_history" / "monitor_state.json"
 
 def load_json(path): return json.loads(Path(path).read_text(encoding="utf-8"))
 def parse_time(value):
     try: return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
     except (TypeError, ValueError): return None
 
-def due_matches(workspace, now, hours_before=6.0):
+def due_stage(match, now, hours_before=6.0):
+    kickoff=parse_time(match.get("kickoff"))
+    if kickoff is None: return None
+    if kickoff.tzinfo is None and now.tzinfo is not None: kickoff=kickoff.replace(tzinfo=now.tzinfo)
+    minutes=(kickoff-now).total_seconds()/60
+    if 90 < minutes <= hours_before*60: return "T-6H"
+    if 5 <= minutes <= 90: return "T-90M"
+    return None
+
+def due_matches(workspace, now, hours_before=6.0, state=None):
+    state=state or {}
     rows=[]
     for match in workspace.get("matches") or []:
         if match.get("report_state") != "已分析": continue
-        kickoff=parse_time(match.get("kickoff"))
-        if kickoff is None: continue
-        if kickoff.tzinfo is None and now.tzinfo is not None: kickoff=kickoff.replace(tzinfo=now.tzinfo)
-        if timedelta(minutes=5) <= kickoff-now <= timedelta(hours=hours_before): rows.append(match)
+        stage=due_stage(match,now,hours_before)
+        if stage and stage not in (state.get(str(match.get("id") or "")) or {}):
+            rows.append({**match,"_monitor_stage":stage})
     return sorted(rows,key=lambda row:row.get("kickoff") or "")
 
 def matching_analysis(match):
@@ -65,14 +75,24 @@ def refresh_match(match):
     return {"match":label,"status":"refreshed","report":report.get("html"),"fundamentals":fundamentals_status}
 
 def main():
-    parser=argparse.ArgumentParser(description=__doc__); parser.add_argument("--now"); parser.add_argument("--hours-before",type=float,default=6.0); args=parser.parse_args()
+    parser=argparse.ArgumentParser(description=__doc__); parser.add_argument("--now"); parser.add_argument("--hours-before",type=float,default=6.0); parser.add_argument("--count-due",action="store_true"); args=parser.parse_args()
     now=parse_time(args.now) if args.now else datetime.now().astimezone()
     if now is None: raise SystemExit("--now must be an ISO timestamp")
-    workspace=load_json(WORKSPACE) if WORKSPACE.exists() else {"matches":[]}; results=[]
-    for match in due_matches(workspace,now,args.hours_before):
-        try: results.append(refresh_match(match))
+    workspace=load_json(WORKSPACE) if WORKSPACE.exists() else {"matches":[]}
+    state=load_json(STATE_PATH) if STATE_PATH.exists() else {}
+    due=due_matches(workspace,now,args.hours_before,state)
+    if args.count_due:
+        print(len(due)); return 0
+    results=[]
+    for match in due:
+        try:
+            result=refresh_match(match); result["stage"]=match["_monitor_stage"]; results.append(result)
+            if result.get("status") == "refreshed":
+                state.setdefault(str(match.get("id") or ""),{})[match["_monitor_stage"]]=now.isoformat()
         except Exception as error: results.append({"match":f"{match.get('home')} vs {match.get('away')}","status":"error","error":str(error)[:500]})
     if any(row.get("status") == "refreshed" for row in results):
+        STATE_PATH.parent.mkdir(parents=True,exist_ok=True)
+        STATE_PATH.write_text(json.dumps(state,ensure_ascii=False,indent=2),encoding="utf-8")
         run_json([sys.executable,"scripts/match_workspace.py","--date",str(workspace.get("target_date") or now.date().isoformat())])
         subprocess.run([sys.executable,"scripts/build_public_site.py"],cwd=ROOT,check=True)
     print(json.dumps({"checked_at":now.isoformat(),"due":len(results),"results":results},ensure_ascii=False,indent=2))

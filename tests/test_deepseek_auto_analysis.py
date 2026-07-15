@@ -11,9 +11,11 @@ from deepseek_auto_analysis import (  # noqa: E402
     analysis_context,
     attach_workspace_evidence,
     devig_three_way,
+    deterministic_analysis,
     fetch_date_for_request,
     has_minimum_analysis_evidence,
     normalize_analysis,
+    mark_initial_market_checkpoint,
     report_manifest,
     request_from_event,
     run_json_command,
@@ -174,10 +176,23 @@ def test_analysis_context_places_deterministic_core_at_top_level(tmp_path, monke
     })
     context = analysis_context(manifest, {"match_id": "123", "match": "甲 vs 乙", "business_date": "2026-07-15"})
     assert context["deterministic_core"]["model"]["probabilities"]["home"] > 0
+    output = deterministic_analysis(context, {"match_id": "123", "match": "甲 vs 乙", "business_date": "2026-07-15"})
+    assert output["automation"]["llm_used"] is False
+    assert output["report"]["model_version"] == "v0.14.1"
+    assert output["betting"]["state"] == "空仓｜未锁单"
+    assert len(output["evidence_chain"]) == 4
 
 
 def test_empty_context_is_not_publishable():
     assert not has_minimum_analysis_evidence({"official_market_baseline": None, "source_snapshots": {}})
+
+
+def test_initial_analysis_marks_current_monitor_checkpoint(tmp_path, monkeypatch):
+    state = tmp_path / "monitor_state.json"
+    monkeypatch.setattr("prematch_market_monitor.STATE_PATH", state)
+    monkeypatch.setattr("prematch_market_monitor.due_stage", lambda match, now: "T-6H")
+    mark_initial_market_checkpoint({"selected_workspace_match": {"id": "123", "kickoff": "2026-07-16 03:00"}})
+    assert json.loads(state.read_text(encoding="utf-8"))["123"]["T-6H"]
 
 
 def test_fetch_uses_kickoff_date_for_after_midnight_match(monkeypatch):

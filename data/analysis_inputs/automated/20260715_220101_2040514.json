@@ -1,0 +1,620 @@
+{
+  "report": {
+    "model_name": "Football Betting OneShot",
+    "model_version": "v0.14.1",
+    "report_type": "确定性赛前分析",
+    "analysis_timestamp": "2026-07-15T22:01:01+08:00",
+    "final_execution_version": false,
+    "ai_provider": null,
+    "ai_model": null
+  },
+  "match": {
+    "business_date": "2026-07-15",
+    "match_id": "2040514",
+    "home": "苏捷斯卡",
+    "away": "阿拉木图",
+    "match_num": "周三202",
+    "competition": "欧冠",
+    "league": "欧冠",
+    "kickoff_local": "2026-07-16 03:00"
+  },
+  "decisions": {
+    "unique_primary_dimension": "胜平负：客胜（模型45.3%）",
+    "unique_score": "1-1",
+    "mathematical_first": "90分钟主胜30.0%、平局24.7%、客胜45.3%；λ=1.25-1.59。",
+    "market_first": "多公司去水共识主胜20.0%、平局23.2%、客胜56.8%；大小球中轴2.75。",
+    "maximum_error_points": [
+      "首发或关键伤停与当前假设不一致，会直接改变双方λ",
+      "近期样本跨联赛/友谊赛且对手强度未完全校正，强弱差可能被放大",
+      "临盘若出现跨公司同步升降盘，本次赛前快照的价格结构会失效"
+    ],
+    "value_judgement": "仅完成模型概率与市场基线；须取得用户渠道即时赔率后才计算EV。",
+    "final_state": "空仓｜未锁单"
+  },
+  "model": {
+    "status": "确定性融合模型（近期主客场攻防 + 多公司市场校准）",
+    "method": "recent_venue_form_market_calibrated_poisson_v1",
+    "lambda_home": 1.249682,
+    "lambda_away": 1.590318,
+    "rho": 0.0,
+    "expected_goals": 2.84,
+    "probabilities": {
+      "home": 0.300252,
+      "draw": 0.246687,
+      "away": 0.453061
+    },
+    "total_goals_buckets": [
+      {
+        "goals": "0",
+        "probability": 0.058426
+      },
+      {
+        "goals": "1",
+        "probability": 0.165929
+      },
+      {
+        "goals": "2",
+        "probability": 0.235619
+      },
+      {
+        "goals": "3",
+        "probability": 0.223053
+      },
+      {
+        "goals": "4",
+        "probability": 0.158367
+      },
+      {
+        "goals": "5",
+        "probability": 0.089953
+      },
+      {
+        "goals": "6+",
+        "probability": 0.068654
+      }
+    ],
+    "btts": {
+      "yes": 0.567969,
+      "no": 0.432031,
+      "judgement": "双方进球偏是"
+    },
+    "score_probabilities": [
+      {
+        "score": "1-1",
+        "probability": 0.116115,
+        "fair_odds": 8.6122,
+        "rank": 1
+      },
+      {
+        "score": "0-1",
+        "probability": 0.092915,
+        "fair_odds": 10.7625,
+        "rank": 2
+      },
+      {
+        "score": "1-2",
+        "probability": 0.09233,
+        "fair_odds": 10.8308,
+        "rank": 3
+      },
+      {
+        "score": "0-2",
+        "probability": 0.073883,
+        "fair_odds": 13.535,
+        "rank": 4
+      },
+      {
+        "score": "1-0",
+        "probability": 0.073013,
+        "fair_odds": 13.6961,
+        "rank": 5
+      },
+      {
+        "score": "2-1",
+        "probability": 0.072553,
+        "fair_odds": 13.783,
+        "rank": 6
+      },
+      {
+        "score": "0-0",
+        "probability": 0.058426,
+        "fair_odds": 17.1158,
+        "rank": 7
+      },
+      {
+        "score": "2-2",
+        "probability": 0.057691,
+        "fair_odds": 17.3336,
+        "rank": 8
+      },
+      {
+        "score": "1-3",
+        "probability": 0.048945,
+        "fair_odds": 20.4313,
+        "rank": 9
+      },
+      {
+        "score": "2-0",
+        "probability": 0.045622,
+        "fair_odds": 21.9193,
+        "rank": 10
+      }
+    ],
+    "calibration": {
+      "form_lambda_home": 1.416667,
+      "form_lambda_away": 1.483333,
+      "market_total_line_median": 2.75,
+      "market_probabilities": {
+        "home": 0.20004223129327867,
+        "draw": 0.23178458648062444,
+        "away": 0.5681731822260969
+      },
+      "form_weight": 0.6,
+      "market_weight": 0.4
+    },
+    "limitations": [
+      "近期样本含不同赛事与对手强度，尚未完成逐队Elo/xG对手校正",
+      "确认首发、即时伤停、天气与临场战术需在开赛前另行修正",
+      "市场信息用于校准，因此该概率不是完全独立于赔率的纯基本面概率"
+    ]
+  },
+  "data_quality": {
+    "status": "模型已计算，临场信息待补",
+    "missing": [
+      "确认首发",
+      "即时伤停",
+      "天气场地",
+      "用户渠道即时赔率"
+    ],
+    "notes": [
+      "模型数值由固定公式生成，DeepSeek不参与概率计算。",
+      "已从所选主页场次注入体彩胜平负赔率，并计算去水市场基线；该基线不是模型概率。"
+    ],
+    "overall": "FORM_AND_MULTI_MARKET_MODEL"
+  },
+  "fundamentals": {
+    "status": "近期攻防已核验；未能唯一匹配外部赛程",
+    "items": [
+      {
+        "label": "主队近10场",
+        "value": "3胜2平5负，进12球/失13球",
+        "source": "500.com赛前数据快照"
+      },
+      {
+        "label": "主队近10个主场",
+        "value": "6胜2平2负，进19球/失11球",
+        "source": "500.com赛前数据快照"
+      },
+      {
+        "label": "客队近10场",
+        "value": "6胜3平1负，进22球/失9球",
+        "source": "500.com赛前数据快照"
+      },
+      {
+        "label": "客队近10个客场",
+        "value": "5胜2平3负，进16球/失13球",
+        "source": "500.com赛前数据快照"
+      },
+      {
+        "label": "外部赛程",
+        "value": "已按开赛时间核验，候选3场，未强行匹配"
+      }
+    ],
+    "structured_form": {
+      "recent_form": {
+        "home_overall": {
+          "team": "尼克希奇",
+          "matches": 10,
+          "wins": 3,
+          "draws": 2,
+          "losses": 5,
+          "goals_for": 12,
+          "goals_against": 13
+        },
+        "away_overall": {
+          "team": "凯拉特",
+          "matches": 10,
+          "wins": 6,
+          "draws": 3,
+          "losses": 1,
+          "goals_for": 22,
+          "goals_against": 9
+        },
+        "home_home": {
+          "team": "尼克希奇",
+          "matches": 10,
+          "wins": 6,
+          "draws": 2,
+          "losses": 2,
+          "goals_for": 19,
+          "goals_against": 11
+        },
+        "away_away": {
+          "team": "凯拉特",
+          "matches": 10,
+          "wins": 5,
+          "draws": 2,
+          "losses": 3,
+          "goals_for": 16,
+          "goals_against": 13
+        }
+      },
+      "metric": "recent actual goals, not xG",
+      "status": "近期攻防已核验；未能唯一匹配外部赛程",
+      "checked_at": "2026-07-15T14:01:00+00:00",
+      "items": [
+        {
+          "label": "主队近10场",
+          "value": "3胜2平5负，进12球/失13球",
+          "source": "500.com赛前数据快照"
+        },
+        {
+          "label": "主队近10个主场",
+          "value": "6胜2平2负，进19球/失11球",
+          "source": "500.com赛前数据快照"
+        },
+        {
+          "label": "客队近10场",
+          "value": "6胜3平1负，进22球/失9球",
+          "source": "500.com赛前数据快照"
+        },
+        {
+          "label": "客队近10个客场",
+          "value": "5胜2平3负，进16球/失13球",
+          "source": "500.com赛前数据快照"
+        },
+        {
+          "label": "外部赛程",
+          "value": "已按开赛时间核验，候选3场，未强行匹配"
+        }
+      ],
+      "sources": []
+    },
+    "sources": []
+  },
+  "evidence_chain": [
+    {
+      "title": "模型底盘｜60%近期主客场攻防",
+      "items": [
+        "近期攻防推导λ：主队1.42，客队1.48",
+        "这一层决定基础进球强度；实际进球数据不是xG，报告不冒充高级统计。"
+      ]
+    },
+    {
+      "title": "市场校准｜40%多公司共识",
+      "items": [
+        "去水共识：主胜20.0%、平局23.2%、客胜56.8%",
+        "大小球中轴：2.75；只校准，不替代模型。"
+      ]
+    },
+    {
+      "title": "价格审核｜8%安全边际",
+      "items": [
+        "每个玩法分别展示当前价、模型概率、EV与最低可接受赔率；低于门槛一律不过线。",
+        "模型包含市场校准，因此正EV仅是价格复核信号，不宣称独立套利优势。"
+      ]
+    },
+    {
+      "title": "临场事实｜单独核验，不重复加权",
+      "items": [
+        "公开事实核验状态：近期攻防已核验；未能唯一匹配外部赛程。",
+        "确认首发、关键伤停、天气或盘口换线与假设冲突时，必须重算而非沿用旧报告。"
+      ]
+    }
+  ],
+  "betting": {
+    "candidates": [],
+    "state": "空仓｜未锁单",
+    "execution_authorized": false,
+    "lock_state_changed": false,
+    "bankroll_state_changed": false,
+    "price_audit": [
+      {
+        "market": "SPF主胜",
+        "model_probability": 0.300252,
+        "conservative_probability": 0.225252,
+        "minimum_acceptable_decimal_odds": 4.795,
+        "odds": 4.35,
+        "ev": 0.306096,
+        "audit_role": "模型价格门槛，不是投注指令",
+        "price_source": "竞彩赛前SPF"
+      },
+      {
+        "market": "SPF平局",
+        "model_probability": 0.246687,
+        "conservative_probability": 0.171687,
+        "minimum_acceptable_decimal_odds": 6.291,
+        "odds": 3.7,
+        "ev": -0.087258,
+        "audit_role": "模型价格门槛，不是投注指令",
+        "price_source": "竞彩赛前SPF"
+      },
+      {
+        "market": "SPF客胜",
+        "model_probability": 0.453061,
+        "conservative_probability": 0.378061,
+        "minimum_acceptable_decimal_odds": 2.857,
+        "odds": 1.59,
+        "ev": -0.279633,
+        "audit_role": "模型价格门槛，不是投注指令",
+        "price_source": "竞彩赛前SPF"
+      },
+      {
+        "market": "威*** 大2.5",
+        "model_probability": 0.540026,
+        "push_probability": 0.0,
+        "odds": 1.65,
+        "ev": -0.108956,
+        "minimum_acceptable_decimal_odds": 2.0,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "威*** 小2.5",
+        "model_probability": 0.459974,
+        "push_probability": 0.0,
+        "odds": 2.15,
+        "ev": -0.011057,
+        "minimum_acceptable_decimal_odds": 2.348,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "*门 大2.75",
+        "model_probability": 0.4285,
+        "push_probability": 0.111526,
+        "odds": 1.82,
+        "ev": -0.108604,
+        "minimum_acceptable_decimal_odds": 2.239,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "*门 小2.75",
+        "model_probability": 0.459974,
+        "push_probability": 0.111526,
+        "odds": 1.9,
+        "ev": -0.014524,
+        "minimum_acceptable_decimal_odds": 2.086,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "立* 大2.5",
+        "model_probability": 0.540026,
+        "push_probability": 0.0,
+        "odds": 1.65,
+        "ev": -0.108956,
+        "minimum_acceptable_decimal_odds": 2.0,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "立* 小2.5",
+        "model_probability": 0.459974,
+        "push_probability": 0.0,
+        "odds": 2.15,
+        "ev": -0.011057,
+        "minimum_acceptable_decimal_odds": 2.348,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "B***** 大2.75",
+        "model_probability": 0.4285,
+        "push_probability": 0.111526,
+        "odds": 1.8,
+        "ev": -0.117174,
+        "minimum_acceptable_decimal_odds": 2.239,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "B***** 小2.75",
+        "model_probability": 0.459974,
+        "push_probability": 0.111526,
+        "odds": 2.0,
+        "ev": 0.031474,
+        "minimum_acceptable_decimal_odds": 2.086,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "I********** 大2.5",
+        "model_probability": 0.540026,
+        "push_probability": 0.0,
+        "odds": 1.65,
+        "ev": -0.108956,
+        "minimum_acceptable_decimal_odds": 2.0,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "I********** 小2.5",
+        "model_probability": 0.459974,
+        "push_probability": 0.0,
+        "odds": 2.1,
+        "ev": -0.034055,
+        "minimum_acceptable_decimal_odds": 2.348,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "*冠 大2.75",
+        "model_probability": 0.4285,
+        "push_probability": 0.111526,
+        "odds": 1.8,
+        "ev": -0.117174,
+        "minimum_acceptable_decimal_odds": 2.239,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "*冠 小2.75",
+        "model_probability": 0.459974,
+        "push_probability": 0.111526,
+        "odds": 2.0,
+        "ev": 0.031474,
+        "minimum_acceptable_decimal_odds": 2.086,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "威*** 主+0.75",
+        "model_probability": 0.546939,
+        "push_probability": 0.110715,
+        "odds": 1.89,
+        "ev": 0.14443,
+        "minimum_acceptable_decimal_odds": 1.756,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "威*** 客-0.75",
+        "model_probability": 0.342346,
+        "push_probability": 0.110715,
+        "odds": 1.74,
+        "ev": -0.293603,
+        "minimum_acceptable_decimal_odds": 2.805,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "*门 主+0.75",
+        "model_probability": 0.546939,
+        "push_probability": 0.110715,
+        "odds": 1.98,
+        "ev": 0.193654,
+        "minimum_acceptable_decimal_odds": 1.756,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "*门 客-0.75",
+        "model_probability": 0.342346,
+        "push_probability": 0.110715,
+        "odds": 1.8,
+        "ev": -0.273062,
+        "minimum_acceptable_decimal_odds": 2.805,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "立* 主+0.5",
+        "model_probability": 0.546939,
+        "push_probability": 0.0,
+        "odds": 2.2,
+        "ev": 0.203266,
+        "minimum_acceptable_decimal_odds": 1.975,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "立* 客-0.5",
+        "model_probability": 0.453061,
+        "push_probability": 0.0,
+        "odds": 1.6,
+        "ev": -0.275102,
+        "minimum_acceptable_decimal_odds": 2.384,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "B***** 主+1",
+        "model_probability": 0.546939,
+        "push_probability": 0.221431,
+        "odds": 1.8,
+        "ev": 0.205921,
+        "minimum_acceptable_decimal_odds": 1.537,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "B***** 客-1",
+        "model_probability": 0.23163,
+        "push_probability": 0.221431,
+        "odds": 2.0,
+        "ev": -0.315309,
+        "minimum_acceptable_decimal_odds": 3.63,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "I********** 主+1",
+        "model_probability": 0.546939,
+        "push_probability": 0.221431,
+        "odds": 1.7,
+        "ev": 0.151227,
+        "minimum_acceptable_decimal_odds": 1.537,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "I********** 客-1",
+        "model_probability": 0.23163,
+        "push_probability": 0.221431,
+        "odds": 2.05,
+        "ev": -0.303727,
+        "minimum_acceptable_decimal_odds": 3.63,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "*冠 主+0.75",
+        "model_probability": 0.546939,
+        "push_probability": 0.110715,
+        "odds": 2.08,
+        "ev": 0.248348,
+        "minimum_acceptable_decimal_odds": 1.756,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "*冠 客-0.75",
+        "model_probability": 0.342346,
+        "push_probability": 0.110715,
+        "odds": 1.74,
+        "ev": -0.293603,
+        "minimum_acceptable_decimal_odds": 2.805,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      }
+    ]
+  },
+  "automation": {
+    "provider": "fixed-python-core",
+    "generated_at": "2026-07-15T22:01:01+08:00",
+    "owner_authorized_request": true,
+    "llm_used": false
+  },
+  "live_ev_profiles": {
+    "active": true,
+    "overlay_primary": true,
+    "contract": {
+      "match_id": "2040514",
+      "market_code": "1",
+      "market_name": "全场独赢",
+      "handicap_line": "",
+      "selection_code": "2",
+      "selection_name": "阿拉木图",
+      "contract_type": "three_way_selection"
+    },
+    "probability": {
+      "point": 0.453061,
+      "conservative": 0.378061,
+      "confirmed_model_output": true,
+      "source": "recent_venue_form_market_calibrated_poisson_v1",
+      "calibration_status": "market_calibrated_with_uncertainty_haircut_not_holdout_calibrated"
+    },
+    "price": {
+      "max_quote_age_ms": 15000
+    },
+    "execution": {
+      "minimum_conservative_ev": 0.08
+    }
+  },
+  "market": {
+    "official_spf": {
+      "home": 4.35,
+      "draw": 3.7,
+      "away": 1.59
+    },
+    "official_rqspf": {
+      "handicap": 1,
+      "home": 2.07,
+      "draw": 3.34,
+      "away": 2.88
+    },
+    "official_market_baseline": {
+      "prices": {
+        "home": 4.35,
+        "draw": 3.7,
+        "away": 1.59
+      },
+      "overround": 1.129086,
+      "payout_rate": 0.885672,
+      "fair_probabilities": {
+        "home": 0.203603,
+        "draw": 0.239371,
+        "away": 0.557026
+      },
+      "role": "official_market_baseline_only_not_model_probability"
+    }
+  }
+}

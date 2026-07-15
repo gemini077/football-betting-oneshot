@@ -70,3 +70,5 @@ def test_generated_cron_contains_only_future_active_schedule(tmp_path):
     assert len(due_times) == 1
     assert 'cron: "15 22 15 7 *"' in workflow
     assert "football-betting-oneshot-write" in workflow
+    assert "automatic_postmatch_review.py" in workflow
+    assert "data/postmatch_reviews" in workflow

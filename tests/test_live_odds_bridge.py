@@ -410,13 +410,29 @@ class LiveOddsBridgeTests(unittest.TestCase):
             self.assertEqual(store.stored, 1)
             self.assertEqual(store.deduplicated, 1)
             self.assertEqual(store.events_path.name, "20260714_143000_live_odds_events.jsonl")
-            rows = [json.loads(line) for line in store.events_path.read_text(encoding="utf-8").splitlines()]
-            self.assertEqual(len(rows), 1)
+            self.assertFalse(store.events_path.exists())
             manifest = json.loads(store.manifest_path.read_text(encoding="utf-8"))
             self.assertEqual(manifest["mode"], "read_only_shadow")
             self.assertFalse(manifest["lock_state_changed"])
             self.assertFalse(manifest["bankroll_state_changed"])
             self.assertFalse(manifest["in_play_betting_enabled"])
+            self.assertFalse(manifest["raw_event_storage"])
+
+    def test_store_writes_only_changed_normalized_market_state(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = BridgeStore(Path(tmp), stamp="20260714_143001")
+            event = sample_event()
+            event["payload"] = {"cd": {"hls2": {"115": [{
+                "hpid": "115", "mid": "5503037", "hv": "2.5", "hs": 0,
+                "ol": [{"oid": "o1", "ot": "Over", "os": 1, "ov": "193000", "ov2": "0.93"}],
+            }]}}}
+            first = validate_event(event)
+            second = dict(first)
+            second["captured_at"] = "2026-07-14T06:30:02.000Z"
+            second["sequence"] = 2
+            self.assertTrue(store.record(first)[0])
+            self.assertFalse(store.record(second)[0])
+            self.assertEqual(1, len(store.normalized_path.read_text(encoding="utf-8").splitlines()))
 
     def test_store_exposes_latest_quote_by_match_id(self):
         with tempfile.TemporaryDirectory() as tmp:
