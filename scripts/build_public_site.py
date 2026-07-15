@@ -12,6 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_OUTPUT = ROOT / "site"
 PUBLIC_DATA_DIRS = (
     "analysis_reports",
+    "live_ev_profiles",
     "match_workspace",
     "postmatch_dashboard",
 )
