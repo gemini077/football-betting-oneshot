@@ -8,6 +8,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
 from deepseek_auto_analysis import (  # noqa: E402
+    analysis_context,
     attach_workspace_evidence,
     devig_three_way,
     fetch_date_for_request,
@@ -150,6 +151,29 @@ def test_workspace_official_odds_create_market_baseline_without_model_probabilit
     assert enriched["model"]["probabilities"] is None
     assert "客胜" in enriched["decisions"]["market_first"]
     assert has_minimum_analysis_evidence(context)
+
+
+def test_analysis_context_places_deterministic_core_at_top_level(tmp_path, monkeypatch):
+    deep = {
+        "shuju_id": 1,
+        "shuju": {"recent_form": {
+            "home_overall": {"matches": 10, "goals_for": 14, "goals_against": 10},
+            "away_overall": {"matches": 10, "goals_for": 12, "goals_against": 13},
+            "home_home": {"matches": 10, "goals_for": 16, "goals_against": 9},
+            "away_away": {"matches": 10, "goals_for": 11, "goals_against": 14},
+        }},
+        "ouzhi": {"bookmakers": [{"spf_current": {"home": 2.0, "draw": 3.4, "away": 3.8}}]},
+        "daxiao": {"companies": [{"current_line": 2.5}]},
+    }
+    snapshot = tmp_path / "deep.json"
+    snapshot.write_text(json.dumps(deep, ensure_ascii=False), encoding="utf-8")
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text(json.dumps({"sources": {"500_deep": {"matches": [{"file": str(snapshot)}]}}}), encoding="utf-8")
+    monkeypatch.setattr("deepseek_auto_analysis.selected_workspace_match", lambda request: {
+        "id": "123", "home": "甲", "away": "乙", "spf": {"home": 2.0, "draw": 3.4, "away": 3.8}
+    })
+    context = analysis_context(manifest, {"match_id": "123", "match": "甲 vs 乙", "business_date": "2026-07-15"})
+    assert context["deterministic_core"]["model"]["probabilities"]["home"] > 0
 
 
 def test_empty_context_is_not_publishable():

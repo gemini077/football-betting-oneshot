@@ -115,8 +115,6 @@ def devig_three_way(odds: dict) -> dict | None:
         "fair_probabilities": {key: round(raw[key] / overround, 6) for key in keys},
         "role": "official_market_baseline_only_not_model_probability",
     }
-    from automatic_model_core import build_automatic_model
-    context["deterministic_core"] = build_automatic_model(context)
     return context
 
 
@@ -158,7 +156,7 @@ def analysis_context(manifest_path: Path, request: dict) -> dict:
                 "snapshots": [prune(load_json(fallback))],
             }
     workspace_match = selected_workspace_match(request)
-    return {
+    context = {
         "request": request,
         "selected_workspace_match": workspace_match,
         "official_market_baseline": devig_three_way(workspace_match.get("spf") or {}),
@@ -173,6 +171,9 @@ def analysis_context(manifest_path: Path, request: dict) -> dict:
             "bankroll_state_changed": False,
         },
     }
+    from automatic_model_core import build_automatic_model
+    context["deterministic_core"] = build_automatic_model(context)
+    return context
 
 
 SYSTEM_PROMPT = """你是 Football Betting OneShot 的辅助分析层。deterministic_core 已由固定公式完成概率、lambda、总进球、BTTS和比分计算；你只能解释它，绝对不得改写、替换或自行生成这些数值。只使用给定 JSON 证据，禁止联网假装、禁止补造伤停、首发、xG、赔率或概率。缺失就明确写缺失。输出必须是单个 JSON 对象，不要 Markdown。
