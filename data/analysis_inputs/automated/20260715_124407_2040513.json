@@ -1,0 +1,336 @@
+{
+  "report": {
+    "ai_summary": "辅助分析草稿：基于近期主客场攻防及多公司市场校准的泊松模型，计算出主胜概率40.7%，平局25.2%，客胜34.2%；预期总进球2.81球；双方进球概率56.8%；最可能比分1-1。市场基线（去水）主胜38.5%，平局26.3%，客胜35.2%。仅根据固定公式生成，不构成最终投注建议。",
+    "model_name": "Football Betting OneShot",
+    "model_version": "v0.14.0",
+    "report_type": "DeepSeek辅助赛前分析（基础内核审计后发布）",
+    "analysis_timestamp": "2026-07-15T12:44:07+00:00",
+    "final_execution_version": false,
+    "ai_provider": "DeepSeek",
+    "ai_model": "deepseek-v4-pro"
+  },
+  "match": {
+    "match_id": "2040513",
+    "match_num": "周三201",
+    "home": "比森",
+    "away": "克拉克斯",
+    "league": "欧冠",
+    "business_date": "2026-07-15",
+    "kickoff": "2026-07-16 02:15",
+    "spf": {
+      "home": 2.62,
+      "draw": 3.35,
+      "away": 2.23
+    },
+    "rqspf": {
+      "handicap": 1,
+      "home": 1.51,
+      "draw": 3.9,
+      "away": 4.75
+    },
+    "competition": "欧冠",
+    "kickoff_local": "2026-07-16 02:15"
+  },
+  "data_quality": {
+    "status": "模型已计算，临场信息待补",
+    "overall": "FORM_AND_MULTI_MARKET_MODEL",
+    "missing": [
+      "确认首发",
+      "即时伤停",
+      "天气场地",
+      "用户渠道即时赔率"
+    ],
+    "notes": [
+      "模型数值由固定公式生成，DeepSeek不参与概率计算。",
+      "已从所选主页场次注入体彩胜平负赔率，并计算去水市场基线；该基线不是模型概率。"
+    ]
+  },
+  "fundamentals": {
+    "recent_form": {
+      "home_overall": {
+        "team": "阿特比森",
+        "matches": 10,
+        "wins": 7,
+        "draws": 1,
+        "losses": 2,
+        "goals_for": 25,
+        "goals_against": 10
+      },
+      "away_overall": {
+        "team": "克拉克斯维克",
+        "matches": 10,
+        "wins": 6,
+        "draws": 2,
+        "losses": 2,
+        "goals_for": 20,
+        "goals_against": 12
+      },
+      "home_home": {
+        "team": "阿特比森",
+        "matches": 10,
+        "wins": 8,
+        "draws": 1,
+        "losses": 1,
+        "goals_for": 19,
+        "goals_against": 8
+      },
+      "away_away": {
+        "team": "克拉克斯维克",
+        "matches": 10,
+        "wins": 4,
+        "draws": 5,
+        "losses": 1,
+        "goals_for": 17,
+        "goals_against": 8
+      }
+    },
+    "metric": "recent actual goals, not xG",
+    "items": [],
+    "structured_form": {
+      "recent_form": {
+        "home_overall": {
+          "team": "阿特比森",
+          "matches": 10,
+          "wins": 7,
+          "draws": 1,
+          "losses": 2,
+          "goals_for": 25,
+          "goals_against": 10
+        },
+        "away_overall": {
+          "team": "克拉克斯维克",
+          "matches": 10,
+          "wins": 6,
+          "draws": 2,
+          "losses": 2,
+          "goals_for": 20,
+          "goals_against": 12
+        },
+        "home_home": {
+          "team": "阿特比森",
+          "matches": 10,
+          "wins": 8,
+          "draws": 1,
+          "losses": 1,
+          "goals_for": 19,
+          "goals_against": 8
+        },
+        "away_away": {
+          "team": "克拉克斯维克",
+          "matches": 10,
+          "wins": 4,
+          "draws": 5,
+          "losses": 1,
+          "goals_for": 17,
+          "goals_against": 8
+        }
+      },
+      "metric": "recent actual goals, not xG"
+    }
+  },
+  "model": {
+    "status": "确定性融合模型（近期主客场攻防 + 多公司市场校准）",
+    "method": "recent_venue_form_market_calibrated_poisson_v1",
+    "lambda_home": 1.476533,
+    "lambda_away": 1.333467,
+    "rho": 0.0,
+    "expected_goals": 2.81,
+    "probabilities": {
+      "home": 0.406587,
+      "draw": 0.251557,
+      "away": 0.341857
+    },
+    "total_goals_buckets": [
+      {
+        "goals": "0",
+        "probability": 0.060205
+      },
+      {
+        "goals": "1",
+        "probability": 0.169176
+      },
+      {
+        "goals": "2",
+        "probability": 0.237692
+      },
+      {
+        "goals": "3",
+        "probability": 0.222638
+      },
+      {
+        "goals": "4",
+        "probability": 0.156404
+      },
+      {
+        "goals": "5",
+        "probability": 0.087899
+      },
+      {
+        "goals": "6+",
+        "probability": 0.065986
+      }
+    ],
+    "btts": {
+      "yes": 0.568215,
+      "no": 0.431785,
+      "judgement": "双方进球偏是"
+    },
+    "score_probabilities": [
+      {
+        "score": "1-1",
+        "probability": 0.118538,
+        "rank": 1
+      },
+      {
+        "score": "1-0",
+        "probability": 0.088895,
+        "rank": 2
+      },
+      {
+        "score": "2-1",
+        "probability": 0.087513,
+        "rank": 3
+      },
+      {
+        "score": "0-1",
+        "probability": 0.080281,
+        "rank": 4
+      },
+      {
+        "score": "1-2",
+        "probability": 0.079033,
+        "rank": 5
+      },
+      {
+        "score": "2-0",
+        "probability": 0.065628,
+        "rank": 6
+      },
+      {
+        "score": "0-0",
+        "probability": 0.060205,
+        "rank": 7
+      },
+      {
+        "score": "2-2",
+        "probability": 0.058348,
+        "rank": 8
+      },
+      {
+        "score": "0-2",
+        "probability": 0.053526,
+        "rank": 9
+      },
+      {
+        "score": "3-1",
+        "probability": 0.043072,
+        "rank": 10
+      }
+    ],
+    "calibration": {
+      "form_lambda_home": 1.516667,
+      "form_lambda_away": 1.333333,
+      "market_total_line_median": 2.75,
+      "market_probabilities": {
+        "home": 0.38497973318247525,
+        "draw": 0.2626898128061887,
+        "away": 0.35233045401133606
+      },
+      "form_weight": 0.6,
+      "market_weight": 0.4
+    },
+    "limitations": [
+      "近期样本含不同赛事与对手强度，尚未完成逐队Elo/xG对手校正",
+      "确认首发、即时伤停、天气与临场战术需在开赛前另行修正",
+      "市场信息用于校准，因此该概率不是完全独立于赔率的纯基本面概率"
+    ]
+  },
+  "decisions": {
+    "unique_primary_dimension": "胜平负：主胜（模型40.7%）",
+    "unique_score": "1-1",
+    "mathematical_first": "90分钟主胜40.7%、平局25.2%、客胜34.2%；λ=1.48-1.33。",
+    "market_first": "多公司去水共识主胜38.5%、平局26.3%、客胜35.2%；大小球中轴2.75。",
+    "maximum_error_points": [
+      "首发或关键伤停与当前假设不一致，会直接改变双方λ",
+      "近期样本跨联赛/友谊赛且对手强度未完全校正，强弱差可能被放大",
+      "临盘若出现跨公司同步升降盘，本次赛前快照的价格结构会失效"
+    ],
+    "value_judgement": "仅完成模型概率与市场基线；须取得用户渠道即时赔率后才计算EV。",
+    "final_state": "空仓｜未锁单"
+  },
+  "betting": {
+    "candidates": [],
+    "state": "空仓｜未锁单",
+    "execution_authorized": false,
+    "lock_state_changed": false,
+    "bankroll_state_changed": false,
+    "price_audit": []
+  },
+  "evidence_chain": [
+    {
+      "source": "Football Betting OneShot deterministic core",
+      "role": "probability_calculation",
+      "note": "概率、λ、总进球、BTTS与比分矩阵由固定公式生成；DeepSeek仅负责解释。"
+    }
+  ],
+  "automation": {
+    "provider": "DeepSeek",
+    "model": "deepseek-v4-pro",
+    "generated_at": "2026-07-15T12:44:07+00:00",
+    "owner_authorized_request": true
+  },
+  "live_ev_profiles": {
+    "active": true,
+    "overlay_primary": true,
+    "contract": {
+      "match_id": "2040513",
+      "market_code": "1",
+      "market_name": "全场独赢",
+      "handicap_line": "",
+      "selection_code": "1",
+      "selection_name": "比森",
+      "contract_type": "three_way_selection"
+    },
+    "probability": {
+      "point": 0.406587,
+      "conservative": 0.331587,
+      "confirmed_model_output": true,
+      "source": "recent_venue_form_market_calibrated_poisson_v1",
+      "calibration_status": "market_calibrated_with_uncertainty_haircut_not_holdout_calibrated"
+    },
+    "price": {
+      "max_quote_age_ms": 15000
+    },
+    "execution": {
+      "minimum_conservative_ev": 0.08
+    }
+  },
+  "market": {
+    "official_spf": {
+      "home": 2.62,
+      "draw": 3.35,
+      "away": 2.23
+    },
+    "official_rqspf": {
+      "handicap": 1,
+      "home": 1.51,
+      "draw": 3.9,
+      "away": 4.75
+    },
+    "official_market_baseline": {
+      "prices": {
+        "home": 2.62,
+        "draw": 3.35,
+        "away": 2.23
+      },
+      "overround": 1.128617,
+      "payout_rate": 0.88604,
+      "fair_probabilities": {
+        "home": 0.338183,
+        "draw": 0.26449,
+        "away": 0.397327
+      },
+      "role": "official_market_baseline_only_not_model_probability"
+    }
+  }
+}
