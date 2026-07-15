@@ -178,6 +178,14 @@ def settle_ticket(ticket: dict, score: tuple[int, int] | None) -> dict:
                 delta = -delta
             parts.append(1 if delta > 0 else 0 if delta == 0 else -1)
         result_factor = sum(parts) / len(parts)
+    elif selection == "home_handicap":
+        margin = home - away
+        adjusted = margin + float(item["line"])
+        result_factor = 1 if adjusted > 0 else 0 if adjusted == 0 else -1
+    elif selection == "away_handicap":
+        margin = away - home
+        adjusted = margin + float(item["line"])
+        result_factor = 1 if adjusted > 0 else 0 if adjusted == 0 else -1
     elif isinstance(selection, str) and parse_score(selection):
         result_factor = 1 if parse_score(selection) == score else -1
 
@@ -247,14 +255,27 @@ def build_paper_ledger(
     reports: list[dict],
     results: dict[str, tuple[int, int]],
     frozen_tickets: list[dict] | None = None,
+    initial_price_overrides: dict[str, dict] | None = None,
 ) -> dict:
     frozen_tickets = frozen_tickets or []
+    initial_price_overrides = initial_price_overrides or {}
     frozen_by_key = {}
     for row in frozen_tickets:
         migrated = dict(row)
         # Explicit platform-policy migration: preserve selection and price, but
         # bring historical paper stakes up to the current executable minimum.
         migrated["stake_units"] = max(MIN_STAKE, round(number(migrated.get("stake_units")) or 0.0, 2))
+        # A frozen direction remains immutable. If the first captured market
+        # quote was indexed only after freezing, recover that historical quote
+        # without substituting a later price or changing the selection.
+        override = initial_price_overrides.get(str(migrated.get("ticket_id") or "")) or {}
+        if number(migrated.get("odds")) is None and number(override.get("odds")) is not None:
+            for field in (
+                "odds", "probability", "ev", "price_source", "price_captured_at",
+                "selection", "line", "market", "market_group",
+            ):
+                if field in override:
+                    migrated[field] = override[field]
         frozen_by_key[freeze_key(migrated)] = migrated
     tickets_by_key = dict(frozen_by_key)
     used_ids = [

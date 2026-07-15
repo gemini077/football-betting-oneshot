@@ -50,3 +50,33 @@ def test_existing_paper_stake_migrates_to_platform_minimum():
     migrated = build_paper_ledger([], {}, frozen_tickets=first["tickets"])
     assert migrated["tickets"][0]["stake_units"] == 2.0
     assert migrated["policy"]["stake_step"] == 0.01
+
+
+def test_first_captured_price_repairs_frozen_observation_without_reselecting():
+    first = build_paper_ledger([report(odds=None)], {})
+    primary = next(row for row in first["tickets"] if row["ticket_type"] == "primary")
+    assert primary["odds"] is None
+
+    repaired = build_paper_ledger(
+        [],
+        {primary["match_key"]: (0, 2)},
+        frozen_tickets=first["tickets"],
+        initial_price_overrides={
+            primary["ticket_id"]: {
+                "odds": 1.61,
+                "probability": 0.655,
+                "ev": 0.05455,
+                "price_source": "first capture",
+            }
+        },
+    )
+    item = next(row for row in repaired["tickets"] if row["ticket_id"] == primary["ticket_id"])
+    assert item["selection"] == primary["selection"]
+    assert item["odds"] == 1.61
+    assert item["profit_units"] > 0
+
+
+def test_home_handicap_settlement_supports_push_and_win():
+    ticket = {"selection": "home_handicap", "line": -2, "odds": 2.04, "stake_units": 2}
+    assert settle_ticket(ticket, (2, 0))["settlement"] == "走"
+    assert settle_ticket(ticket, (3, 0))["profit_units"] == 2.08
