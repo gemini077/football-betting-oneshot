@@ -1,0 +1,97 @@
+{
+  "report": {
+    "ai_summary": "所有数据源均未返回有效赔率或匹配信息：中国竞彩 API 失败，500.com 列表无匹配，Polymarket 无法识别该赛事。无任何概率、赔率、伤停、首发或预期进球数据，分析无法进行。建议等待数据更新或更换数据源。",
+    "model_name": "Football Betting OneShot",
+    "model_version": "v0.13.3",
+    "report_type": "DeepSeek辅助赛前分析（基础内核审计后发布）",
+    "analysis_timestamp": "2026-07-15T10:20:09+00:00",
+    "final_execution_version": false,
+    "ai_provider": "DeepSeek",
+    "ai_model": "deepseek-v4-pro"
+  },
+  "match": {
+    "match_id": "2040514",
+    "name": "苏捷斯卡 vs 阿拉木图",
+    "business_date": "2026-07-15",
+    "home": "苏捷斯卡",
+    "away": "阿拉木图"
+  },
+  "data_quality": {
+    "sporttery": "NO_MATCHES_AFTER_FILTER",
+    "500_trade": "OK but 0 matches after filter",
+    "polymarket": "NO_MATCH_IDENTITY",
+    "warnings": [
+      "中国竞彩主源未返回目标日期的有效赔率，需要使用500.com可见官方行降级。",
+      "500竞彩列表中未找到匹配筛选条件的比赛。",
+      "Polymarket未可靠匹配目标赛事；该来源已降级，不影响其他赛前数据。",
+      "已请求深层抓取，但没有可用的shuju_id。"
+    ],
+    "missing": [],
+    "notes": []
+  },
+  "fundamentals": {
+    "home_team": null,
+    "away_team": null,
+    "injuries": [],
+    "suspensions": [],
+    "lineups": null,
+    "recent_form": null,
+    "head_to_head": null,
+    "items": []
+  },
+  "model": {
+    "lambda_home": null,
+    "lambda_away": null,
+    "probabilities": null,
+    "expected_goals": null,
+    "btts": {
+      "judgement": "数据不足，暂不判断"
+    },
+    "score_probabilities": [],
+    "total_goals_buckets": [],
+    "status": "DeepSeek辅助综合；未替代本地概率校准"
+  },
+  "decisions": {
+    "unique_primary_dimension": "NONE",
+    "unique_score": "-999",
+    "mathematical_first": "NONE",
+    "market_first": "NONE",
+    "maximum_error_points": [
+      "{'type': 'NO_DATA', 'value': 1.0}"
+    ],
+    "value_judgement": "INSUFFICIENT_DATA",
+    "final_state": "空仓｜DeepSeek辅助分析已生成，等待模型与价格复核｜未锁单"
+  },
+  "betting": {
+    "candidates": [],
+    "state": "空仓｜未锁单",
+    "locked": false,
+    "execution_authorized": false,
+    "lock_state_changed": false,
+    "bankroll_state_changed": false,
+    "price_audit": []
+  },
+  "evidence_chain": [
+    {
+      "source": "sporttery",
+      "timestamp": "2026-07-15T10:19:48.337302+00:00",
+      "evidence": "API_FAILED, 无匹配数据"
+    },
+    {
+      "source": "500_trade",
+      "timestamp": "2026-07-15T10:19:54.189390+00:00",
+      "evidence": "成功获取3场非目标比赛，无目标比赛"
+    },
+    {
+      "source": "polymarket",
+      "timestamp": "2026-07-15T10:19:48.337036+00:00",
+      "evidence": "NO_MATCH_IDENTITY，无法匹配"
+    }
+  ],
+  "automation": {
+    "provider": "DeepSeek",
+    "model": "deepseek-v4-pro",
+    "generated_at": "2026-07-15T10:20:09+00:00",
+    "owner_authorized_request": true
+  }
+}
