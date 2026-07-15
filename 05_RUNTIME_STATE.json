@@ -1,7 +1,7 @@
 {
   "model_name": "Football Betting OneShot",
   "model_id": "football-betting-oneshot",
-  "model_version": "v0.12.0",
+  "model_version": "v0.13.0",
   "versioning_policy": {
     "scheme": "SemVer",
     "patch": "实现修复、文案或兼容性调整，不改变模型行为",
@@ -222,8 +222,8 @@
     "formal_in_play_probability_requires_major_version": "v1.0.0"
   },
   "match_workspace": {
-    "module_version": "v0.12.0",
-    "status": "review_aware_schedule_and_context_preserving_dialog_enabled",
+    "module_version": "v0.13.0",
+    "status": "owner_authorized_deepseek_analysis_request_enabled",
     "generator": "scripts/match_workspace.py",
     "daily_schedule_updater": "scripts/daily_schedule_workspace.py",
     "latest": "data/match_workspace/latest.html",
@@ -232,12 +232,24 @@
     "daily_schedule_automation": "football-oneshot",
     "daily_schedule_time_local": "10:00",
     "sporttery_schedule_only": true,
-    "automatic_analysis": false,
+    "automatic_analysis": "selected_match_only_via_owner_github_issue_or_manual_dispatch",
     "automatic_betting": false,
     "requires_user_match_selection": true,
     "requires_explicit_lock_confirmation": true,
     "lock_state_changed": false,
     "bankroll_state_changed": false
+  },
+  "deepseek_automation": {
+    "module_version": "v0.13.0",
+    "workflow": ".github/workflows/analyze-selected.yml",
+    "entrypoint": "scripts/deepseek_auto_analysis.py",
+    "secret_name": "DEEPSEEK_API_KEY",
+    "default_model": "deepseek-v4-pro",
+    "trigger_policy": "repository_owner_issue_or_manual_dispatch_only",
+    "synthesis_layer_only": true,
+    "creates_real_bets": false,
+    "changes_bankroll": false,
+    "requires_explicit_lock_confirmation": true
   },
   "base_architecture": {
     "source": "huqiwengithub/football-odds-analyst",
