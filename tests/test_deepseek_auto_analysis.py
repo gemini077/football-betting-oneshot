@@ -123,6 +123,15 @@ def test_normalizer_replaces_provider_sentinel_values():
     assert result["decisions"]["maximum_error_points"] == ["输入数据不足，无法形成模型结论"]
 
 
+def test_normalizer_rejects_non_score_numeric_value():
+    result = normalize_analysis(
+        {"decisions": {"unique_score": 0.1}},
+        {"business_date": "2026-07-15", "match_id": "2040513", "match": "比森 vs 克拉克斯"},
+        "deepseek-v4-pro",
+    )
+    assert result["decisions"]["unique_score"] == "数据不足，暂不形成结论"
+
+
 def test_workspace_official_odds_create_market_baseline_without_model_probability():
     workspace = {
         "id": "2040514", "home": "苏捷斯卡", "away": "阿拉木图", "league": "欧冠",

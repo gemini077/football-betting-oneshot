@@ -239,6 +239,9 @@ def normalize_analysis(raw: dict, request: dict, model_name: str) -> dict:
         value = decisions.get(key)
         text = str(value).strip() if isinstance(value, (str, int, float)) else ""
         decisions[key] = "数据不足，暂不形成结论" if text.casefold() in invalid_tokens else text
+    score_text = decisions.get("unique_score") or ""
+    if not re.fullmatch(r"\d+\s*[-:]\s*\d+", score_text):
+        decisions["unique_score"] = "数据不足，暂不形成结论"
     errors = decisions.get("maximum_error_points")
     cleaned_errors = []
     if isinstance(errors, list):
