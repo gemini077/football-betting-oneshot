@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 from datetime import datetime
 from pathlib import Path
 
@@ -53,13 +54,35 @@ def _parse_ids(raw_ids: list[str]) -> list[int]:
 def _match_filter(matches: list[dict], query: str | None) -> list[dict]:
     if not query:
         return matches
-    query_folded = query.casefold()
+
+    def folded(value: object) -> str:
+        return re.sub(r"[^0-9a-z\u4e00-\u9fff]", "", str(value or "").casefold())
+
+    def same_team(left: str, right: str) -> bool:
+        return bool(left and right and (left == right or left in right or right in left))
+
+    query_text = str(query).strip()
+    pair = re.split(r"\s*(?:vs?\.?|对阵)\s*|\s+[—–-]\s+", query_text, maxsplit=1, flags=re.IGNORECASE)
+    if len(pair) == 2 and all(folded(value) for value in pair):
+        query_home, query_away = map(folded, pair)
+        paired_matches = []
+        for match in matches:
+            home = folded(match.get("home_team") or match.get("homeTeam"))
+            away = folded(match.get("away_team") or match.get("awayTeam"))
+            if (same_team(query_home, home) and same_team(query_away, away)) or (
+                same_team(query_home, away) and same_team(query_away, home)
+            ):
+                paired_matches.append(match)
+        return paired_matches
+
+    query_folded = folded(query_text)
     return [
         match for match in matches
-        if query_folded in str(match.get("home_team") or match.get("homeTeam") or "").casefold()
-        or query_folded in str(match.get("away_team") or match.get("awayTeam") or "").casefold()
-        or query_folded in str(match.get("competition") or match.get("league") or "").casefold()
-        or query_folded in str(match.get("match_num") or match.get("matchNum") or "").casefold()
+        if query_folded in folded(match.get("home_team") or match.get("homeTeam"))
+        or query_folded in folded(match.get("away_team") or match.get("awayTeam"))
+        or query_folded in folded(match.get("competition") or match.get("league"))
+        or query_folded in folded(match.get("match_num") or match.get("matchNum"))
+        or query_folded == folded(match.get("match_id") or match.get("matchId"))
     ]
 
 

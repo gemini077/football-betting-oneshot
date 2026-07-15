@@ -7,7 +7,7 @@ import unittest
 from datetime import date, timedelta
 from pathlib import Path
 
-from scripts.match_workspace import RUNTIME, build, build_daily_portfolio, create_unique_output_dir, find_review, render, report_candidates, review_rows
+from scripts.match_workspace import RUNTIME, build, build_daily_portfolio, create_unique_output_dir, find_review, render, report_candidates, report_summary, review_rows
 
 
 class MatchWorkspacePortfolioTests(unittest.TestCase):
@@ -122,6 +122,23 @@ class MatchWorkspacePortfolioTests(unittest.TestCase):
         self.assertIn("[自动分析]", page)
         self.assertIn("business_date:", page)
         self.assertIn("if(m.report_state==='已分析')", page)
+
+    def test_market_only_report_is_not_marked_as_analyzed(self):
+        report = {
+            "payload": {
+                "analysis": {
+                    "data_quality": {"status": "仅市场基线"},
+                    "model": {"probabilities": None},
+                },
+                "betting": {"state": "空仓｜未锁单"},
+            }
+        }
+
+        summary = report_summary(report)
+
+        self.assertEqual("仅市场基线", summary["state"])
+        self.assertNotEqual("已分析", summary["state"])
+        self.assertIn("尚未形成模型结论", summary["primary"])
 
 
 if __name__ == "__main__":

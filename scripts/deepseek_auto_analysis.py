@@ -26,7 +26,7 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 API_URL = "https://api.deepseek.com/chat/completions"
 DEFAULT_MODEL = "deepseek-v4-pro"
-MODEL_VERSION = "v0.13.5"
+MODEL_VERSION = "v0.13.6"
 AUTO_INPUT_ROOT = ROOT / "data" / "analysis_inputs" / "automated"
 WORKSPACE_PATH = ROOT / "data" / "match_workspace" / "latest.json"
 
@@ -90,6 +90,16 @@ def selected_workspace_match(request: dict) -> dict:
         if (requested_id and str(match.get("id") or "") == requested_id) or match_name == requested_name:
             return prune(match)
     return {}
+
+
+def fetch_date_for_request(request: dict) -> str:
+    """Use the actual kickoff date when a business-day match starts after midnight."""
+    workspace_match = selected_workspace_match(request)
+    kickoff = str(workspace_match.get("kickoff") or "")
+    kickoff_date = kickoff[:10]
+    if re.fullmatch(r"\d{4}-\d{2}-\d{2}", kickoff_date):
+        return kickoff_date
+    return request["business_date"]
 
 
 def devig_three_way(odds: dict) -> dict | None:
@@ -360,9 +370,10 @@ def run_json_command(command: list[str], allow_failure: bool = False, timeout: i
 
 def run_pipeline(request: dict, api_key: str, model_name: str) -> dict:
     print("[phase 1/5] fetching match evidence", file=sys.stderr, flush=True)
+    fetch_date = fetch_date_for_request(request)
     fetch = run_json_command([
         sys.executable, "scripts/fetch_football_data.py",
-        "--date", request["business_date"], "--match", request["match"],
+        "--date", fetch_date, "--match", request["match"],
         "--deep", "--no-cache",
     ], allow_failure=True, timeout=240)
     manifest_path = Path(fetch["manifest"])
