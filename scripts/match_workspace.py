@@ -119,6 +119,17 @@ def verified_result_map() -> dict[str, tuple[int, int]]:
     return results
 
 
+def create_unique_output_dir(output_root: Path, stamp: str) -> Path:
+    """Create a timestamp directory without failing on same-second rebuilds."""
+    candidate = output_root / stamp
+    suffix = 1
+    while candidate.exists():
+        suffix += 1
+        candidate = output_root / f"{stamp}_{suffix:02d}"
+    candidate.mkdir(parents=True, exist_ok=False)
+    return candidate
+
+
 def _xlsx_sheet_values(path: Path, sheet_name: str) -> list[list[Any]]:
     """Read a worksheet with stdlib only when openpyxl is unavailable."""
     main_ns = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
@@ -451,8 +462,7 @@ def build(target_date: str, output_root: Path = OUTPUT) -> tuple[Path, Path]:
     reviews = review_rows(runtime)
     generated = datetime.now().astimezone()
     stamp = generated.strftime("%Y%m%d_%H%M%S")
-    output_dir = output_root / stamp
-    output_dir.mkdir(parents=True, exist_ok=False)
+    output_dir = create_unique_output_dir(output_root, stamp)
     matches = []
     completed = []
     completed_ids: set[str] = set()
