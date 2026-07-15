@@ -17,6 +17,9 @@ from live_ev_profile import DEFAULT_OUTPUT_ROOT as DEFAULT_PROFILE_OUTPUT_ROOT
 from live_ev_profile import publish_live_ev_profiles
 from risk_engine import analyze as analyze_risk_engine
 from risk_engine import dixon_coles_score_matrix
+from postmatch_schedule import create_schedule
+from sync_postmatch_workflow import sync as sync_postmatch_workflow
+from postmatch_queue import SHANGHAI
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -1255,7 +1258,26 @@ def main() -> int:
     )
     payload_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     report_path.write_text(render(payload), encoding="utf-8")
-    print(json.dumps({"report": str(report_path), "payload": str(payload_path), "report_type": payload["report"]["report_type"], "final_execution_version": payload["report"]["final_execution_version"]}, ensure_ascii=False, indent=2))
+    schedule_path = None
+    schedule_error = None
+    workflow_path = None
+    try:
+        schedule_path, _schedule = create_schedule(payload_path)
+        workflow_path, _due_times = sync_postmatch_workflow(
+            datetime.now().astimezone(SHANGHAI),
+            PROJECT_ROOT / "data" / "postmatch_automation" / "schedules",
+        )
+    except (OSError, ValueError, json.JSONDecodeError) as error:
+        schedule_error = str(error)
+    print(json.dumps({
+        "report": str(report_path),
+        "payload": str(payload_path),
+        "report_type": payload["report"]["report_type"],
+        "final_execution_version": payload["report"]["final_execution_version"],
+        "postmatch_schedule": str(schedule_path) if schedule_path else None,
+        "postmatch_workflow": str(workflow_path) if workflow_path else None,
+        "postmatch_schedule_error": schedule_error,
+    }, ensure_ascii=False, indent=2))
     return 0
 
 

@@ -14,7 +14,7 @@ permissions:
   id-token: write
 
 concurrency:
-  group: football-betting-oneshot-pages
+  group: football-betting-oneshot-write
   cancel-in-progress: false
 
 jobs:
@@ -44,11 +44,8 @@ jobs:
         continue-on-error: true
         run: python scripts/daily_schedule_workspace.py --date "$FBOS_DATE" --no-cache
 
-      - name: Refresh post-match queue and dashboards
-        run: |
-          python scripts/postmatch_queue.py
-          python scripts/postmatch_dashboard.py
-          python scripts/match_workspace.py --date "$FBOS_DATE"
+      - name: Rebuild schedule workspace
+        run: python scripts/match_workspace.py --date "$FBOS_DATE"
 
       - name: Run model checks
         run: python -m pytest -q
@@ -61,7 +58,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/schedule_updates data/match_workspace data/postmatch_automation data/postmatch_dashboard
+          git add data/schedule_updates data/match_workspace
           if ! git diff --cached --quiet; then
             git commit -m "refresh public football data [skip ci]"
             git push
