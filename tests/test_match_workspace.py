@@ -4,10 +4,18 @@ import unittest
 from datetime import date, timedelta
 from pathlib import Path
 
-from scripts.match_workspace import RUNTIME, build, build_daily_portfolio, find_review, render, report_candidates, review_rows
+from scripts.match_workspace import RUNTIME, build, build_daily_portfolio, create_unique_output_dir, find_review, render, report_candidates, review_rows
 
 
 class MatchWorkspacePortfolioTests(unittest.TestCase):
+    def test_same_second_rebuild_uses_a_unique_output_directory(self):
+        with tempfile.TemporaryDirectory() as temp:
+            output = Path(temp)
+            first = create_unique_output_dir(output, "20260715_075740")
+            second = create_unique_output_dir(output, "20260715_075740")
+            self.assertEqual("20260715_075740", first.name)
+            self.assertEqual("20260715_075740_02", second.name)
+
     def test_empty_portfolio_keeps_all_three_layers_empty(self):
         portfolio = build_daily_portfolio([], {"exposure": {"open_bets": [], "current_open_exposure": 0}})
 
