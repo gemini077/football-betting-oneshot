@@ -5,6 +5,8 @@ import argparse, json, subprocess, sys
 from datetime import datetime, timedelta
 from pathlib import Path
 
+from prematch_fundamentals import collect_prematch_fundamentals
+
 ROOT = Path(__file__).resolve().parents[1]
 WORKSPACE = ROOT / "data" / "match_workspace" / "latest.json"
 INPUT_ROOT = ROOT / "data" / "analysis_inputs" / "automated"
@@ -38,13 +40,29 @@ def run_json(command, timeout=240):
     if completed.returncode: raise RuntimeError(completed.stderr or completed.stdout)
     return json.loads(completed.stdout)
 
+def refresh_fundamentals(analysis_path, match):
+    """Re-check time-sensitive public facts without discarding existing form rows."""
+    payload=load_json(analysis_path)
+    checked=collect_prematch_fundamentals(match,{})
+    fundamentals=payload.setdefault("fundamentals",{})
+    merged={str(item.get("label") or ""):item for item in fundamentals.get("items") or [] if item.get("label")}
+    for item in checked.get("items") or []:
+        label=str(item.get("label") or "")
+        if label: merged[label]=item
+    fundamentals["items"]=list(merged.values())
+    fundamentals["status"]=checked.get("status") or fundamentals.get("status")
+    fundamentals["sources"]=checked.get("sources") or fundamentals.get("sources") or []
+    Path(analysis_path).write_text(json.dumps(payload,ensure_ascii=False,indent=2),encoding="utf-8")
+    return checked.get("status")
+
 def refresh_match(match):
     analysis=matching_analysis(match)
     label=f"{match.get('home')} vs {match.get('away')}"
     if analysis is None: return {"match":label,"status":"skipped_missing_analysis"}
     fetched=run_json([sys.executable,"scripts/fetch_football_data.py","--date",str(match.get("business_date")),"--match",label,"--deep","--no-cache"])
+    fundamentals_status=refresh_fundamentals(analysis,match)
     report=run_json([sys.executable,"scripts/generate_analysis_report.py","--fetch-manifest",fetched["manifest"],"--analysis-json",str(analysis)])
-    return {"match":label,"status":"refreshed","report":report.get("html")}
+    return {"match":label,"status":"refreshed","report":report.get("html"),"fundamentals":fundamentals_status}
 
 def main():
     parser=argparse.ArgumentParser(description=__doc__); parser.add_argument("--now"); parser.add_argument("--hours-before",type=float,default=6.0); args=parser.parse_args()

@@ -138,6 +138,13 @@ class MatchWorkspacePortfolioTests(unittest.TestCase):
         self.assertNotEqual("已分析", summary["state"])
         self.assertIn("尚未形成模型结论", summary["primary"])
 
+    def test_prematch_report_uses_direct_navigation_not_iframe(self):
+        page = render("{}")
+
+        self.assertIn("function openReport", page)
+        self.assertIn("window.location.assign(url)", page)
+        self.assertNotIn('iframe title="赛前分析"', page)
+
 
 if __name__ == "__main__":
     unittest.main()

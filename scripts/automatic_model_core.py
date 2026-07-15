@@ -178,6 +178,10 @@ def build_automatic_model(context: dict) -> dict:
     return {
         "model": model, "decisions": decisions,
         "data_quality": {"status": "模型已计算，临场信息待补", "overall": "FORM_AND_MULTI_MARKET_MODEL", "missing": ["确认首发", "即时伤停", "天气场地", "用户渠道即时赔率"], "notes": ["模型数值由固定公式生成，DeepSeek不参与概率计算。"]},
-        "fundamentals": {"recent_form": form, "metric": "recent actual goals, not xG"},
+        "fundamentals": {
+            "recent_form": form,
+            "metric": "recent actual goals, not xG",
+            **(context.get("prematch_fundamentals") or {}),
+        },
         "live_ev_profiles": live_profile,
     }
