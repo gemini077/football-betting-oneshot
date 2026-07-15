@@ -1,0 +1,326 @@
+{
+  "report": {
+    "ai_summary": "本报告由 Football Betting OneShot 系统基于赛前抓取的多源证据生成，使用确定性融合模型进行胜平负、总进球和比分概率估计。所有概率均由固定公式计算，仅供辅助参考，不作为最终投注依据。",
+    "model_name": "Football Betting OneShot",
+    "model_version": "v0.14.0",
+    "report_type": "DeepSeek辅助赛前分析（基础内核审计后发布）",
+    "analysis_timestamp": "2026-07-15T12:41:36+00:00",
+    "final_execution_version": false,
+    "ai_provider": "DeepSeek",
+    "ai_model": "deepseek-v4-pro"
+  },
+  "match": {
+    "id": "2040514",
+    "match_num": "周三202",
+    "home": "苏捷斯卡",
+    "away": "阿拉木图",
+    "league": "欧冠",
+    "business_date": "2026-07-15",
+    "kickoff": "2026-07-16 03:00",
+    "match_id": "2040514",
+    "competition": "欧冠",
+    "kickoff_local": "2026-07-16 03:00"
+  },
+  "data_quality": {
+    "status": "模型已计算，临场信息待补",
+    "overall": "FORM_AND_MULTI_MARKET_MODEL",
+    "missing": [
+      "确认首发",
+      "即时伤停",
+      "天气场地",
+      "用户渠道即时赔率"
+    ],
+    "notes": [
+      "模型数值由固定公式生成，DeepSeek不参与概率计算。",
+      "已从所选主页场次注入体彩胜平负赔率，并计算去水市场基线；该基线不是模型概率。"
+    ]
+  },
+  "fundamentals": {
+    "recent_form": {
+      "home_overall": {
+        "team": "尼克希奇",
+        "matches": 10,
+        "wins": 3,
+        "draws": 2,
+        "losses": 5,
+        "goals_for": 12,
+        "goals_against": 13
+      },
+      "away_overall": {
+        "team": "凯拉特",
+        "matches": 10,
+        "wins": 6,
+        "draws": 3,
+        "losses": 1,
+        "goals_for": 22,
+        "goals_against": 9
+      },
+      "home_home": {
+        "team": "尼克希奇",
+        "matches": 10,
+        "wins": 6,
+        "draws": 2,
+        "losses": 2,
+        "goals_for": 19,
+        "goals_against": 11
+      },
+      "away_away": {
+        "team": "凯拉特",
+        "matches": 10,
+        "wins": 5,
+        "draws": 2,
+        "losses": 3,
+        "goals_for": 16,
+        "goals_against": 13
+      }
+    },
+    "metric": "recent actual goals, not xG",
+    "items": [],
+    "structured_form": {
+      "recent_form": {
+        "home_overall": {
+          "team": "尼克希奇",
+          "matches": 10,
+          "wins": 3,
+          "draws": 2,
+          "losses": 5,
+          "goals_for": 12,
+          "goals_against": 13
+        },
+        "away_overall": {
+          "team": "凯拉特",
+          "matches": 10,
+          "wins": 6,
+          "draws": 3,
+          "losses": 1,
+          "goals_for": 22,
+          "goals_against": 9
+        },
+        "home_home": {
+          "team": "尼克希奇",
+          "matches": 10,
+          "wins": 6,
+          "draws": 2,
+          "losses": 2,
+          "goals_for": 19,
+          "goals_against": 11
+        },
+        "away_away": {
+          "team": "凯拉特",
+          "matches": 10,
+          "wins": 5,
+          "draws": 2,
+          "losses": 3,
+          "goals_for": 16,
+          "goals_against": 13
+        }
+      },
+      "metric": "recent actual goals, not xG"
+    }
+  },
+  "model": {
+    "status": "确定性融合模型（近期主客场攻防 + 多公司市场校准）",
+    "method": "recent_venue_form_market_calibrated_poisson_v1",
+    "lambda_home": 1.262604,
+    "lambda_away": 1.577396,
+    "rho": 0.0,
+    "expected_goals": 2.84,
+    "probabilities": {
+      "home": 0.305706,
+      "draw": 0.247277,
+      "away": 0.447017
+    },
+    "total_goals_buckets": [
+      {
+        "goals": "0",
+        "probability": 0.058426
+      },
+      {
+        "goals": "1",
+        "probability": 0.165929
+      },
+      {
+        "goals": "2",
+        "probability": 0.235619
+      },
+      {
+        "goals": "3",
+        "probability": 0.223053
+      },
+      {
+        "goals": "4",
+        "probability": 0.158367
+      },
+      {
+        "goals": "5",
+        "probability": 0.089953
+      },
+      {
+        "goals": "6+",
+        "probability": 0.068654
+      }
+    ],
+    "btts": {
+      "yes": 0.568997,
+      "no": 0.431003,
+      "judgement": "双方进球偏是"
+    },
+    "score_probabilities": [
+      {
+        "score": "1-1",
+        "probability": 0.116362,
+        "rank": 1
+      },
+      {
+        "score": "0-1",
+        "probability": 0.09216,
+        "rank": 2
+      },
+      {
+        "score": "1-2",
+        "probability": 0.091775,
+        "rank": 3
+      },
+      {
+        "score": "1-0",
+        "probability": 0.073768,
+        "rank": 4
+      },
+      {
+        "score": "2-1",
+        "probability": 0.07346,
+        "rank": 5
+      },
+      {
+        "score": "0-2",
+        "probability": 0.072687,
+        "rank": 6
+      },
+      {
+        "score": "0-0",
+        "probability": 0.058426,
+        "rank": 7
+      },
+      {
+        "score": "2-2",
+        "probability": 0.057937,
+        "rank": 8
+      },
+      {
+        "score": "1-3",
+        "probability": 0.048255,
+        "rank": 9
+      },
+      {
+        "score": "2-0",
+        "probability": 0.04657,
+        "rank": 10
+      }
+    ],
+    "calibration": {
+      "form_lambda_home": 1.416667,
+      "form_lambda_away": 1.483333,
+      "market_total_line_median": 2.75,
+      "market_probabilities": {
+        "home": 0.2126258191045799,
+        "draw": 0.2380544168545507,
+        "away": 0.5493197640408695
+      },
+      "form_weight": 0.6,
+      "market_weight": 0.4
+    },
+    "limitations": [
+      "近期样本含不同赛事与对手强度，尚未完成逐队Elo/xG对手校正",
+      "确认首发、即时伤停、天气与临场战术需在开赛前另行修正",
+      "市场信息用于校准，因此该概率不是完全独立于赔率的纯基本面概率"
+    ]
+  },
+  "decisions": {
+    "unique_primary_dimension": "胜平负：客胜（模型44.7%）",
+    "unique_score": "1-1",
+    "mathematical_first": "90分钟主胜30.6%、平局24.7%、客胜44.7%；λ=1.26-1.58。",
+    "market_first": "多公司去水共识主胜21.3%、平局23.8%、客胜54.9%；大小球中轴2.75。",
+    "maximum_error_points": [
+      "首发或关键伤停与当前假设不一致，会直接改变双方λ",
+      "近期样本跨联赛/友谊赛且对手强度未完全校正，强弱差可能被放大",
+      "临盘若出现跨公司同步升降盘，本次赛前快照的价格结构会失效"
+    ],
+    "value_judgement": "仅完成模型概率与市场基线；须取得用户渠道即时赔率后才计算EV。",
+    "final_state": "空仓｜未锁单"
+  },
+  "betting": {
+    "candidates": [],
+    "state": "空仓｜未锁单",
+    "execution_authorized": false,
+    "lock_state_changed": false,
+    "bankroll_state_changed": false,
+    "price_audit": []
+  },
+  "evidence_chain": [
+    {
+      "source": "Football Betting OneShot deterministic core",
+      "role": "probability_calculation",
+      "note": "概率、λ、总进球、BTTS与比分矩阵由固定公式生成；DeepSeek仅负责解释。"
+    }
+  ],
+  "automation": {
+    "provider": "DeepSeek",
+    "model": "deepseek-v4-pro",
+    "generated_at": "2026-07-15T12:41:36+00:00",
+    "owner_authorized_request": true
+  },
+  "live_ev_profiles": {
+    "active": true,
+    "overlay_primary": true,
+    "contract": {
+      "match_id": "2040514",
+      "market_code": "1",
+      "market_name": "全场独赢",
+      "handicap_line": "",
+      "selection_code": "2",
+      "selection_name": "阿拉木图",
+      "contract_type": "three_way_selection"
+    },
+    "probability": {
+      "point": 0.447017,
+      "conservative": 0.372017,
+      "confirmed_model_output": true,
+      "source": "recent_venue_form_market_calibrated_poisson_v1",
+      "calibration_status": "market_calibrated_with_uncertainty_haircut_not_holdout_calibrated"
+    },
+    "price": {
+      "max_quote_age_ms": 15000
+    },
+    "execution": {
+      "minimum_conservative_ev": 0.08
+    }
+  },
+  "market": {
+    "official_spf": {
+      "home": 4.35,
+      "draw": 3.7,
+      "away": 1.59
+    },
+    "official_rqspf": {
+      "handicap": 1,
+      "home": 2.07,
+      "draw": 3.34,
+      "away": 2.88
+    },
+    "official_market_baseline": {
+      "prices": {
+        "home": 4.35,
+        "draw": 3.7,
+        "away": 1.59
+      },
+      "overround": 1.129086,
+      "payout_rate": 0.885672,
+      "fair_probabilities": {
+        "home": 0.203603,
+        "draw": 0.239371,
+        "away": 0.557026
+      },
+      "role": "official_market_baseline_only_not_model_probability"
+    }
+  }
+}
