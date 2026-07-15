@@ -19,7 +19,8 @@ def test_paper_ledger_settles_primary_but_keeps_score_without_price_as_observati
     ledger = build_paper_ledger([payload], {pair_key("甲", "乙"): (0, 2)})
     assert ledger["summary"]["settled"] == 1
     assert ledger["summary"]["observations"] == 1
-    assert ledger["summary"]["profit_units"] == 1.8
+    primary = next(row for row in ledger["tickets"] if row["ticket_type"] == "primary")
+    assert ledger["summary"]["profit_units"] == round(primary["stake_units"] * 0.9, 4)
     assert ledger["tickets"][0]["settlement"] == "赢"
 
 
@@ -44,12 +45,22 @@ def test_frozen_contract_is_not_repriced_by_a_later_report():
     assert primary["ticket_id"] == "SIM-0001"
 
 
-def test_existing_paper_stake_migrates_to_platform_minimum():
+def test_existing_pending_paper_stake_is_resized_from_ev_not_forced_to_minimum():
     first = build_paper_ledger([report()], {})
     first["tickets"][0]["stake_units"] = 0.1
     migrated = build_paper_ledger([], {}, frozen_tickets=first["tickets"])
-    assert migrated["tickets"][0]["stake_units"] == 2.0
+    assert migrated["tickets"][0]["stake_units"] > 2.0
+    assert migrated["tickets"][0]["stake_units"] <= 5.0
     assert migrated["policy"]["stake_step"] == 0.01
+
+
+def test_negative_ev_contract_has_price_but_is_rejected_without_stake():
+    ledger = build_paper_ledger([report(odds=1.5)], {})
+    primary = next(row for row in ledger["tickets"] if row["ticket_type"] == "primary")
+    assert primary["odds"] == 1.5
+    assert primary["sizing_ev"] < 0
+    assert primary["stake_units"] == 0
+    assert primary["status"] == "rejected_by_ev"
 
 
 def test_first_captured_price_repairs_frozen_observation_without_reselecting():
