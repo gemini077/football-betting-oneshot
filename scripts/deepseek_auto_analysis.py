@@ -26,7 +26,7 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 API_URL = "https://api.deepseek.com/chat/completions"
 DEFAULT_MODEL = "deepseek-v4-pro"
-MODEL_VERSION = "v0.13.2"
+MODEL_VERSION = "v0.13.3"
 AUTO_INPUT_ROOT = ROOT / "data" / "analysis_inputs" / "automated"
 
 
@@ -122,7 +122,8 @@ def call_deepseek(context: dict, api_key: str, model: str = DEFAULT_MODEL, opene
         ],
         "response_format": {"type": "json_object"},
         "thinking": {"type": "enabled"},
-        "reasoning_effort": "high",
+        "reasoning_effort": "medium",
+        "max_tokens": 5000,
         "stream": False,
     }
     request = urllib.request.Request(
@@ -132,9 +133,9 @@ def call_deepseek(context: dict, api_key: str, model: str = DEFAULT_MODEL, opene
         method="POST",
     )
     last_error = None
-    for attempt in range(3):
+    for attempt in range(2):
         try:
-            with opener(request, timeout=180) as response:
+            with opener(request, timeout=120) as response:
                 envelope = json.loads(response.read().decode("utf-8"))
             content = envelope["choices"][0]["message"]["content"]
             return json.loads(content)
@@ -238,8 +239,13 @@ def normalize_analysis(raw: dict, request: dict, model_name: str) -> dict:
     return raw
 
 
-def run_json_command(command: list[str], allow_failure: bool = False) -> dict:
-    completed = subprocess.run(command, cwd=ROOT, text=True, capture_output=True, encoding="utf-8")
+def run_json_command(command: list[str], allow_failure: bool = False, timeout: int = 180) -> dict:
+    try:
+        completed = subprocess.run(
+            command, cwd=ROOT, text=True, capture_output=True, encoding="utf-8", timeout=timeout,
+        )
+    except subprocess.TimeoutExpired as error:
+        raise RuntimeError(f"Command timed out after {timeout}s: {' '.join(command)}") from error
     if completed.returncode and not allow_failure:
         raise RuntimeError(completed.stderr or completed.stdout)
     try:
@@ -249,18 +255,21 @@ def run_json_command(command: list[str], allow_failure: bool = False) -> dict:
 
 
 def run_pipeline(request: dict, api_key: str, model_name: str) -> dict:
+    print("[phase 1/5] fetching match evidence", file=sys.stderr, flush=True)
     fetch = run_json_command([
         sys.executable, "scripts/fetch_football_data.py",
         "--date", request["business_date"], "--match", request["match"],
         "--deep", "--no-cache",
-    ], allow_failure=True)
+    ], allow_failure=True, timeout=240)
     manifest_path = Path(fetch["manifest"])
     if not manifest_path.is_absolute():
         manifest_path = ROOT / manifest_path
     if not manifest_path.exists():
         raise RuntimeError("Fetch completed without a manifest")
 
+    print("[phase 2/5] calling DeepSeek", file=sys.stderr, flush=True)
     raw = call_deepseek(analysis_context(manifest_path, request), api_key, model_name)
+    print("[phase 3/5] normalizing and validating response", file=sys.stderr, flush=True)
     analysis = normalize_analysis(raw, request, model_name)
     AUTO_INPUT_ROOT.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now().astimezone().strftime("%Y%m%d_%H%M%S")
@@ -271,10 +280,12 @@ def run_pipeline(request: dict, api_key: str, model_name: str) -> dict:
         temporary = Path(handle.name)
     temporary.replace(output)
 
+    print("[phase 4/5] generating report", file=sys.stderr, flush=True)
     report = run_json_command([
         sys.executable, "scripts/generate_analysis_report.py",
         "--fetch-manifest", str(manifest_path), "--analysis-json", str(output),
     ])
+    print("[phase 5/5] rebuilding homepage", file=sys.stderr, flush=True)
     run_json_command([sys.executable, "scripts/match_workspace.py", "--date", request["business_date"]])
     subprocess.run([sys.executable, "scripts/build_public_site.py"], cwd=ROOT, check=True)
     return {"request": request, "manifest": str(manifest_path), "analysis_input": str(output), **report}
