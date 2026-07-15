@@ -16,6 +16,11 @@ from pathlib import Path
 from typing import Any
 
 try:
+    from paper_ledger import build_paper_ledger, pair_key, parse_score
+except ImportError:  # package import used by tests
+    from scripts.paper_ledger import build_paper_ledger, pair_key, parse_score
+
+try:
     from openpyxl import load_workbook
 except ImportError:  # bundled desktop runtime may not be on a plain Python PATH
     load_workbook = None
@@ -95,6 +100,23 @@ def latest_reports() -> dict[str, dict]:
             "payload": payload,
         }
     return reports
+
+
+def verified_result_map() -> dict[str, tuple[int, int]]:
+    """Read verified 90-minute scores without manufacturing missing results."""
+    results: dict[str, tuple[int, int]] = {}
+    for path in sorted((DATA / "postmatch_reviews").glob("*.json")):
+        payload = load_json(path, {})
+        match = payload.get("match") or {}
+        score = parse_score((payload.get("result") or {}).get("score_90m"))
+        if match.get("home") and match.get("away") and score is not None:
+            results[pair_key(match.get("home"), match.get("away"))] = score
+    for path in sorted((DATA / "postmatch_automation" / "results").glob("*.json")):
+        payload = load_json(path, {})
+        score = parse_score(payload.get("result_90m"))
+        if payload.get("home") and payload.get("away") and score is not None:
+            results[pair_key(payload.get("home"), payload.get("away"))] = score
+    return results
 
 
 def _xlsx_sheet_values(path: Path, sheet_name: str) -> list[list[Any]]:
@@ -517,6 +539,20 @@ def build(target_date: str, output_root: Path = OUTPUT) -> tuple[Path, Path]:
         completed_ids.add(review_id)
     completed.sort(key=lambda item: int((re.search(r"\d+", str(item.get("id") or "")) or re.match(r"", "")).group(0) or 10**9))
     portfolio = build_daily_portfolio(matches, runtime)
+    paper_root = DATA / "paper_ledger"
+    paper_root.mkdir(parents=True, exist_ok=True)
+    frozen_path = paper_root / "frozen.json"
+    frozen_tickets = []
+    if frozen_path.exists():
+        try:
+            frozen_tickets = (json.loads(frozen_path.read_text(encoding="utf-8")) or {}).get("tickets") or []
+        except (OSError, json.JSONDecodeError, AttributeError):
+            frozen_tickets = []
+    paper_ledger = build_paper_ledger(
+        list(reports.values()),
+        verified_result_map(),
+        frozen_tickets=frozen_tickets,
+    )
     for item in matches:
         item.pop("portfolio_candidates", None)
     payload = {
@@ -528,7 +564,10 @@ def build(target_date: str, output_root: Path = OUTPUT) -> tuple[Path, Path]:
         "automatic_analysis": False, "automatic_betting": False,
         "requires_explicit_lock_confirmation": True, "lock_state_changed": False,
         "schedule_source": [str(path.relative_to(ROOT)).replace("\\", "/") for path in schedule_sources],
+        "available_cash": max(0.0, float((runtime.get("bankroll") or {}).get("current_balance") or 0) - portfolio["locked_exposure"]),
+        "real_exposure": portfolio["locked_exposure"],
         "matches": matches, "completed": completed, "portfolio": portfolio,
+        "paper_ledger": paper_ledger,
         "postmatch_dashboard_url": relative_uri(DATA / "postmatch_dashboard" / "latest.html", output_dir),
     }
     embedded = json.dumps(payload, ensure_ascii=False).replace("</", "<\\/")
@@ -536,6 +575,11 @@ def build(target_date: str, output_root: Path = OUTPUT) -> tuple[Path, Path]:
     index = output_dir / "index.html"
     index.write_text(html_text, encoding="utf-8")
     (output_dir / "workspace.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    (paper_root / "latest.json").write_text(json.dumps(paper_ledger, ensure_ascii=False, indent=2), encoding="utf-8")
+    frozen_path.write_text(
+        json.dumps({"schema_version": "1.0", "tickets": paper_ledger["tickets"]}, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
     latest = output_root / "latest.html"
     publish_latest = base_date >= date.today()
     if publish_latest:
@@ -561,7 +605,41 @@ function showEmpty(text){$('#dialogBody').innerHTML=`<div class="empty-row" styl
 $('#tabPrematch').onclick=()=>current?showPrematch():showEmpty('请先选择比赛');$('#tabReview').onclick=()=>current?showReview():showEmpty('请先选择比赛');$('#tabAllReviews').onclick=openAllReviews;$('#openAllReviews').onclick=openAllReviews;$('#closeDialog').onclick=()=>$('#reportDialog').close();$('#search').oninput=render;document.querySelectorAll('.filter').forEach(b=>b.onclick=()=>{mode=b.dataset.filter;document.querySelectorAll('.filter').forEach(x=>x.classList.toggle('active',x===b));render()});renderPortfolio();render();
 </script><style>
 :root{--bg:#0a0811;--panel:#13101f;--panel2:#181326;--line:rgba(255,255,255,.10);--text:#f7f2fa;--muted:#8c839f;--cyan:#ff7189;--blue:#9b7fd0;--gold:#ffbd5c;--good:#39d6a0;--red:#ff3657}body{background:radial-gradient(70% 42% at 50% -8%,rgba(255,54,87,.26),transparent 68%),linear-gradient(180deg,#171027 0,#0a0811 52%)}.sync,.rule{background:#13101f}.kpi{background:linear-gradient(145deg,#181326,#13101f)}.controls{background:#0a0811dd}.controls button,.controls input,.action{background:#181326}.card{background:linear-gradient(180deg,rgba(255,255,255,.035),rgba(255,255,255,.018))}td{border-bottom-color:rgba(255,255,255,.07)}tbody tr:hover{background:rgba(255,54,87,.045)}.action.primary{background:linear-gradient(105deg,#ff3657,#9b7fd0)}.badge.good{background:rgba(57,214,160,.14);color:#6ce7bb}.badge.blue{background:rgba(155,127,208,.15);color:#c8b8e7}.odd{background:#100b1b;border-color:rgba(255,255,255,.11)}dialog{background:#0a0811}.dialog-tabs button,.close{background:#181326}.review-grid div{background:#13101f}.risk-line{color:var(--gold);font-size:11px;line-height:1.45;margin:5px 0;max-width:420px}
-</style></body></html>'''
+</style><style>
+.hero{position:relative;min-height:310px;padding:42px;overflow:hidden;border:1px solid rgba(255,54,87,.22);border-radius:18px;align-items:flex-end;background:radial-gradient(55% 80% at 50% 0,rgba(255,54,87,.28),transparent 70%),linear-gradient(180deg,#21132f,#0d0915)}.hero:after{content:"";position:absolute;left:-3%;right:-3%;bottom:-1px;height:45%;background:linear-gradient(145deg,#2b1a3a,#120c1c);clip-path:polygon(0 72%,10% 36%,23% 69%,34% 28%,47% 73%,61% 31%,74% 70%,87% 25%,100% 61%,100% 100%,0 100%);opacity:.88}.hero>div{position:relative;z-index:1}.hero h1{font-size:40px;letter-spacing:.035em;text-shadow:0 0 28px rgba(255,54,87,.35)}.hero h1 span{color:var(--red);font-weight:500}.hero-chips{display:flex;flex-wrap:wrap;gap:9px;margin-top:18px}.hero-chips span{padding:6px 11px;border:1px solid rgba(255,255,255,.14);border-radius:6px;background:rgba(255,255,255,.055);font-size:12px;color:var(--muted)}.hero-chips b{color:var(--text)}.account-kpis{margin-top:20px}.paper-card{border-color:rgba(255,54,87,.3)}.paper-card .card-title{background:linear-gradient(90deg,rgba(255,54,87,.09),transparent)}.section-kicker{font-size:10px;letter-spacing:.24em;color:var(--cyan);font-weight:800}.paper-separation{color:var(--good)!important;border:1px solid rgba(57,214,160,.32);border-radius:999px;padding:5px 10px}.paper-intro{display:flex;justify-content:space-between;gap:16px;padding:14px 19px;border-bottom:1px solid var(--line);color:var(--muted)}.paper-intro b{color:var(--text)}.paper-kpis{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;padding:17px 19px 8px}.paper-kpi{border:1px solid var(--line);border-radius:12px;padding:14px;background:rgba(255,255,255,.025)}.paper-kpi b{display:block;font-size:23px;color:var(--text)}.paper-kpi b.positive{color:var(--good)}.paper-kpi b.negative{color:var(--red)}.paper-kpi span{font-size:11px;color:var(--muted)}.paper-grid{display:grid;grid-template-columns:.82fr 1.18fr;gap:14px;padding:4px 19px 14px}.paper-grid>div{min-width:0;border:1px solid var(--line);border-radius:13px;overflow:hidden;background:rgba(0,0,0,.08)}.paper-grid .portfolio-sub{padding:12px 14px;margin:0;border-bottom:1px solid var(--line)}.compact-table{min-width:620px}.compact-table th,.compact-table td{padding:10px 12px}.paper-note{margin:0;padding:0 19px 17px;color:var(--muted);font-size:11px}.result-win{color:var(--good);font-weight:800}.result-loss{color:var(--red);font-weight:800}.result-pending{color:var(--gold);font-weight:800}.result-observe{color:var(--blue);font-weight:800}
+@media(max-width:1000px){.paper-kpis{grid-template-columns:repeat(3,1fr)}.paper-grid{grid-template-columns:1fr}}@media(max-width:700px){.hero{min-height:270px;padding:28px 20px}.hero h1{font-size:29px}.paper-intro{display:block}.paper-intro span{display:block;margin-top:6px}.paper-kpis{grid-template-columns:repeat(2,1fr)}}
+</style><script>
+(function(){
+  const hero=document.querySelector('.hero');
+  hero.querySelector('.eyebrow').textContent='FOOTBALL BETTING ONESHOT · MODEL LEDGER';
+  hero.querySelector('h1').innerHTML='赛前分析 <span>//</span> 模拟验证 <span>//</span> 严格复盘';
+  hero.querySelector('.sync strong').textContent='● 赛程与赛果自动更新';
+  hero.querySelector('.sync span').textContent='选中后才分析 · 模拟账不影响余额 · 未明确锁单不写真实注单';
+  const heroChips=document.createElement('div');
+  heroChips.className='hero-chips';
+  const ps=(DATA.paper_ledger||{}).summary||{};
+  heroChips.innerHTML=`<span>模型 <b>${DATA.model_version||'—'}</b></span><span>业务日 <b>${DATA.target_date||'—'}</b></span><span>待验赛 <b>${ps.pending||0}</b></span>`;
+  hero.querySelector('h1').insertAdjacentElement('afterend',heroChips);
+  $('#subtitle').textContent=`模拟账与真实账分离 · 已结模拟 ${ps.settled||0} 注 · 更新 ${new Date(DATA.generated_at).toLocaleString()}`;
+  const account=document.querySelector('.kpis');
+  account.classList.add('account-kpis');
+  account.innerHTML=`<div class="kpi"><b id="balance">¥${Number(DATA.balance||0).toFixed(2)}</b><span>当前账户余额</span></div><div class="kpi"><b>¥${Number(DATA.available_cash||0).toFixed(2)}</b><span>可用现金</span></div><div class="kpi"><b>¥${Number(DATA.real_exposure||0).toFixed(2)}</b><span>真实锁单暴露</span></div><div class="kpi"><b id="openBetCount">${(DATA.open_bets||[]).length}</b><span>真实未结注单</span></div><div class="kpi"><b id="analyzedCount">${DATA.matches.filter(m=>m.report_state==='已分析').length}</b><span>已有赛前报告</span></div><div class="kpi"><b id="completedCount">${DATA.completed.length}</b><span>已完成复盘</span></div><span id="upcomingCount" hidden>${DATA.matches.length}</span><span id="selectedCount" hidden>${selected.length}</span>`;
+  const paper=document.createElement('section');
+  paper.className='card paper-card';
+  paper.innerHTML=`<div class="card-title"><div><div class="section-kicker">PAPER PERFORMANCE</div><h2>模型模拟战绩</h2></div><span class="paper-separation">与真实账户完全分离</span></div><div class="paper-intro"><b>报告冻结即登记，赛后不可改方向</b><span>主维度每注1单位；有赛前可成交价格的波胆每注0.1单位；无价格只记录观察，不计算盈亏。</span></div><div class="paper-kpis" id="paperKpis"></div><div class="paper-grid"><div><h3 class="portfolio-sub">分玩法表现</h3><div class="table-wrap"><table class="compact-table"><thead><tr><th>玩法</th><th>已结</th><th>胜-负</th><th>命中率</th><th>ROI</th><th>盈亏</th></tr></thead><tbody id="paperGroups"></tbody></table></div></div><div><h3 class="portfolio-sub">最近模拟注单</h3><div class="table-wrap"><table class="compact-table"><thead><tr><th>比赛</th><th>冻结合约</th><th>赔率</th><th>单位</th><th>结算</th><th>盈亏</th></tr></thead><tbody id="paperTickets"></tbody></table></div></div></div><p class="paper-note">模拟战绩用于检验模型与价格纪律，不代表真实投注收益；命中率不含走盘，最终价值以ROI、回撤和样本量共同判断。</p>`;
+  const portfolio=document.querySelector('.portfolio-card');
+  portfolio.parentNode.insertBefore(paper,portfolio);
+  const signed=v=>{const n=Number(v);return Number.isFinite(n)?`${n>0?'+':''}${n.toFixed(2)}`:'—'};
+  const rate=v=>Number.isFinite(Number(v))?`${(Number(v)*100).toFixed(1)}%`:'—';
+  const tone=v=>Number(v)>0?'positive':Number(v)<0?'negative':'';
+  $('#paperKpis').innerHTML=[['待结算',ps.pending||0,''],['已结算',ps.settled||0,''],['模拟盈亏',signed(ps.profit_units)+' U',tone(ps.profit_units)],['模拟ROI',rate(ps.roi),tone(ps.roi)],['命中率',rate(ps.hit_rate),''],['最大回撤',Number(ps.max_drawdown_units||0).toFixed(2)+' U','negative']].map(x=>`<div class="paper-kpi"><b class="${x[2]}">${x[1]}</b><span>${x[0]}</span></div>`).join('');
+  $('#paperGroups').innerHTML=((DATA.paper_ledger||{}).groups||[]).map(g=>`<tr><td><b>${g.market_group}</b></td><td>${g.settled}</td><td>${g.wins}-${g.losses}</td><td>${rate(g.hit_rate)}</td><td class="${tone(g.roi)}">${rate(g.roi)}</td><td class="${tone(g.profit_units)}">${signed(g.profit_units)} U</td></tr>`).join('')||'<tr><td colspan="6" class="empty-row">尚无可结算模拟样本</td></tr>';
+  const statusMeta=t=>t.status==='settled'?[t.settlement,(Number(t.profit_units)>0?'result-win':Number(t.profit_units)<0?'result-loss':'result-pending')]:t.status==='pending'?['待赛果','result-pending']:['观察无价','result-observe'];
+  $('#paperTickets').innerHTML=((DATA.paper_ledger||{}).tickets||[]).slice().reverse().slice(0,10).map(t=>{const sm=statusMeta(t);return `<tr><td><b>${t.match}</b><div class="muted">${t.model_version||'—'} · ${t.ticket_id}</div></td><td>${t.market}<div class="muted">${t.price_source||'无有效赛前价格'}</div></td><td>${t.odds==null?'—':Number(t.odds).toFixed(2)}</td><td>${Number(t.stake_units||0).toFixed(1)}</td><td class="${sm[1]}">${sm[0]}</td><td class="${tone(t.profit_units)}">${t.profit_units==null?'—':signed(t.profit_units)+' U'}</td></tr>`}).join('')||'<tr><td colspan="6" class="empty-row">生成赛前报告后，模拟注单会自动出现在这里</td></tr>';
+  portfolio.querySelector('.portfolio-intro b').textContent='保本／中轴／博上属于真实决策层';
+  portfolio.querySelector('.portfolio-intro span').textContent='模拟注单不会自动进入这里；只有明确“锁单/已下单”才计入真实暴露与余额。';
+})();
+</script></body></html>'''
 
 
 def main() -> int:
