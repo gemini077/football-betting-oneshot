@@ -48,3 +48,26 @@ def test_normalizer_cannot_create_execution_or_locked_bets():
     assert result["betting"]["execution_authorized"] is False
     assert result["betting"]["lock_state_changed"] is False
     assert result["decisions"]["final_state"].endswith("未锁单")
+
+
+def test_normalizer_accepts_string_sections_from_provider():
+    result = normalize_analysis(
+        {
+            "report": "辅助摘要",
+            "match": "主队 vs 客队",
+            "decisions": "方向不明",
+            "model": "数据不足",
+            "betting": "不投注",
+            "data_quality": "缺数据",
+            "fundamentals": [],
+            "evidence_chain": "无",
+        },
+        {"business_date": "2026-07-15", "match_id": "2040513", "match": "主队 vs 客队"},
+        "deepseek-v4-pro",
+    )
+    assert result["report"]["ai_summary"] == "辅助摘要"
+    assert result["match"]["home"] == "主队"
+    assert result["betting"]["candidates"] == []
+    assert result["betting"]["execution_authorized"] is False
+    assert isinstance(result["data_quality"], dict)
+    assert isinstance(result["evidence_chain"], list)

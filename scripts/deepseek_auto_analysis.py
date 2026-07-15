@@ -26,7 +26,7 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 API_URL = "https://api.deepseek.com/chat/completions"
 DEFAULT_MODEL = "deepseek-v4-pro"
-MODEL_VERSION = "v0.13.0"
+MODEL_VERSION = "v0.13.1"
 AUTO_INPUT_ROOT = ROOT / "data" / "analysis_inputs" / "automated"
 
 
@@ -151,7 +151,11 @@ def normalize_analysis(raw: dict, request: dict, model_name: str) -> dict:
     if not isinstance(raw, dict):
         raise ValueError("DeepSeek output must be a JSON object")
     now = datetime.now().astimezone().isoformat(timespec="seconds")
-    report = raw.setdefault("report", {})
+    report_value = raw.get("report")
+    report = report_value if isinstance(report_value, dict) else {}
+    if isinstance(report_value, str) and report_value.strip():
+        report["ai_summary"] = report_value.strip()
+    raw["report"] = report
     report.update({
         "model_name": "Football Betting OneShot",
         "model_version": MODEL_VERSION,
@@ -161,7 +165,8 @@ def normalize_analysis(raw: dict, request: dict, model_name: str) -> dict:
         "ai_provider": "DeepSeek",
         "ai_model": model_name,
     })
-    match = raw.setdefault("match", {})
+    match = raw.get("match") if isinstance(raw.get("match"), dict) else {}
+    raw["match"] = match
     match["business_date"] = request["business_date"]
     match.setdefault("match_id", request.get("match_id"))
     if " vs " in request["match"]:
@@ -169,7 +174,8 @@ def normalize_analysis(raw: dict, request: dict, model_name: str) -> dict:
         match.setdefault("home", home.strip())
         match.setdefault("away", away.strip())
 
-    decisions = raw.setdefault("decisions", {})
+    decisions = raw.get("decisions") if isinstance(raw.get("decisions"), dict) else {}
+    raw["decisions"] = decisions
     required_text = (
         "unique_primary_dimension", "unique_score", "mathematical_first",
         "market_first", "value_judgement",
@@ -180,7 +186,8 @@ def normalize_analysis(raw: dict, request: dict, model_name: str) -> dict:
     decisions["maximum_error_points"] = [str(item) for item in errors] if isinstance(errors, list) and errors else ["自动分析可能受缺失首发、伤停或盘口时间轴影响"]
     decisions["final_state"] = "空仓｜DeepSeek辅助分析已生成，等待模型与价格复核｜未锁单"
 
-    model = raw.setdefault("model", {})
+    model = raw.get("model") if isinstance(raw.get("model"), dict) else {}
+    raw["model"] = model
     probabilities = model.get("probabilities")
     valid_probabilities = isinstance(probabilities, dict) and all(
         isinstance(probabilities.get(key), (int, float)) and 0 <= probabilities[key] <= 1
@@ -194,15 +201,19 @@ def normalize_analysis(raw: dict, request: dict, model_name: str) -> dict:
         model["score_probabilities"] = []
     model["status"] = str(model.get("status") or "DeepSeek辅助综合；未替代本地概率校准")
 
-    raw.setdefault("data_quality", {
-        "status": "待复核",
-        "missing": [],
-        "notes": ["由 DeepSeek 基于抓取快照生成，缺口须在报告中显式披露"],
-    })
-    raw.setdefault("fundamentals", {"status": "待复核", "items": []})
-    raw.setdefault("evidence_chain", [])
+    if not isinstance(raw.get("data_quality"), dict):
+        raw["data_quality"] = {
+            "status": "待复核",
+            "missing": [],
+            "notes": ["由 DeepSeek 基于抓取快照生成，缺口须在报告中显式披露"],
+        }
+    if not isinstance(raw.get("fundamentals"), dict):
+        raw["fundamentals"] = {"status": "待复核", "items": []}
+    if not isinstance(raw.get("evidence_chain"), list):
+        raw["evidence_chain"] = []
 
-    betting = raw.setdefault("betting", {})
+    betting = raw.get("betting") if isinstance(raw.get("betting"), dict) else {}
+    raw["betting"] = betting
     betting["candidates"] = []
     betting["state"] = "空仓｜未锁单"
     betting["execution_authorized"] = False
