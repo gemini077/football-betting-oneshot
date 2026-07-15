@@ -141,3 +141,9 @@ def test_workspace_official_odds_create_market_baseline_without_model_probabilit
 
 def test_empty_context_is_not_publishable():
     assert not has_minimum_analysis_evidence({"official_market_baseline": None, "source_snapshots": {}})
+
+
+def test_analysis_workflow_does_not_try_to_push_workflow_files():
+    workflow = (ROOT / ".github" / "workflows" / "analyze-selected.yml").read_text(encoding="utf-8")
+    save_step = workflow.split("git add", 1)[1].split("\n", 1)[0]
+    assert ".github/workflows" not in save_step
