@@ -1,0 +1,184 @@
+{
+  "report": {
+    "ai_summary": "本报告为辅助分析草稿，非最终执行版。赛事为2026-07-16欧冠资格赛比森对阵克拉克斯。仅有的有效证据为官方市场赔率（胜2.62，平3.35，负2.23），经过去水处理得到市场基线公平概率：主胜33.82%，平26.45%，客胜39.73%。由于缺乏球队基本面数据（如近期战绩、攻防数据、伤停信息等），无法构建任何预测模型，无法进行价值判断。所有模型相关输出为null。最终决策状态：信息不足，无法生成有效决策。",
+    "model_name": "Football Betting OneShot",
+    "model_version": "v0.13.6",
+    "report_type": "DeepSeek辅助赛前分析（基础内核审计后发布）",
+    "analysis_timestamp": "2026-07-15T11:03:21+00:00",
+    "final_execution_version": false,
+    "ai_provider": "DeepSeek",
+    "ai_model": "deepseek-v4-pro"
+  },
+  "match": {
+    "id": "2040513",
+    "match_num": "周三201",
+    "home": "比森",
+    "away": "克拉克斯",
+    "league": "欧冠",
+    "kickoff": "2026-07-16 02:15",
+    "official": true,
+    "business_date": "2026-07-15",
+    "match_id": "2040513",
+    "competition": "欧冠",
+    "kickoff_local": "2026-07-16 02:15"
+  },
+  "data_quality": {
+    "sources": {
+      "sporttery": {
+        "status": "NO_MATCHES_AFTER_FILTER",
+        "success": false,
+        "match_count": 0
+      },
+      "500_trade": {
+        "status": "OK",
+        "success": true,
+        "match_count": 0
+      },
+      "polymarket": {
+        "status": "NO_MATCH_IDENTITY",
+        "success": false,
+        "match_count": 0
+      }
+    },
+    "warnings": [
+      "中国竞彩主源未返回目标日期的有效赔率，需要使用500.com可见官方行降级。",
+      "500竞彩列表中未找到匹配筛选条件的比赛。",
+      "Polymarket未可靠匹配目标赛事；该来源已降级，不影响其他赛前数据。",
+      "已请求深层抓取，但没有可用的shuju_id。"
+    ],
+    "overall": "数据严重不足，仅有官方赔率，无任何球队基本面或进阶数据。",
+    "missing": [],
+    "notes": [
+      "已从所选主页场次注入体彩胜平负赔率，并计算去水市场基线；该基线不是模型概率。"
+    ],
+    "status": "仅市场基线"
+  },
+  "fundamentals": {
+    "home": null,
+    "away": null,
+    "injuries": "缺失",
+    "suspensions": "缺失",
+    "starting_lineups": "缺失",
+    "head_to_head": "缺失",
+    "recent_form": "缺失",
+    "home_advantage": "缺失",
+    "other": "缺失",
+    "items": []
+  },
+  "model": {
+    "lambda_home": null,
+    "lambda_away": null,
+    "probabilities": null,
+    "expected_goals": null,
+    "btts": {
+      "judgement": "数据不足，暂不判断"
+    },
+    "score_probabilities": [],
+    "total_goals_buckets": [],
+    "status": "DeepSeek辅助综合；未替代本地概率校准"
+  },
+  "decisions": {
+    "unique_primary_dimension": "市场赔率为唯一可用维度，无基本面支持",
+    "unique_score": "0.1",
+    "mathematical_first": "数据不足，暂不形成结论",
+    "market_first": "客胜概率略高（39.73%），但无模型验证",
+    "maximum_error_points": [
+      "球队实力数据（进攻/防守）缺失",
+      "伤停及首发信息缺失",
+      "历史交锋数据缺失",
+      "无法进行预测模型计算"
+    ],
+    "value_judgement": "因基本面数据完全缺失，无法评估市场赔率是否存在价值，无法建议任何投注。",
+    "final_state": "空仓｜DeepSeek辅助分析已生成，等待模型与价格复核｜未锁单"
+  },
+  "betting": {
+    "candidates": [],
+    "state": "空仓｜未锁单",
+    "execution_authorized": false,
+    "lock_state_changed": false,
+    "bankroll_state_changed": false,
+    "price_audit": []
+  },
+  "evidence_chain": [
+    {
+      "source": "selected_workspace_match",
+      "description": "官方提供的让球胜平负及胜平负赔率，以及开赛时间、联赛信息",
+      "data": {
+        "spf": {
+          "home": 2.62,
+          "draw": 3.35,
+          "away": 2.23
+        },
+        "rqspf": {
+          "handicap": 1,
+          "home": 1.51,
+          "draw": 3.9,
+          "away": 4.75
+        }
+      }
+    },
+    {
+      "source": "official_market_baseline",
+      "description": "基于官方赔率计算的去水市场基线概率",
+      "data": {
+        "prices": {
+          "home": 2.62,
+          "draw": 3.35,
+          "away": 2.23
+        },
+        "overround": 1.128617,
+        "payout_rate": 0.88604,
+        "fair_probabilities": {
+          "home": 0.338183,
+          "draw": 0.26449,
+          "away": 0.397327
+        }
+      }
+    },
+    {
+      "source": "manifest",
+      "description": "分析运行元信息，显示所有数据源状态",
+      "data": {
+        "sources": {
+          "sporttery": "NO_MATCHES_AFTER_FILTER",
+          "500_trade": "OK but no matching match",
+          "polymarket": "NO_MATCH_IDENTITY"
+        }
+      }
+    }
+  ],
+  "automation": {
+    "provider": "DeepSeek",
+    "model": "deepseek-v4-pro",
+    "generated_at": "2026-07-15T11:03:21+00:00",
+    "owner_authorized_request": true
+  },
+  "market": {
+    "official_spf": {
+      "home": 2.62,
+      "draw": 3.35,
+      "away": 2.23
+    },
+    "official_rqspf": {
+      "handicap": 1,
+      "home": 1.51,
+      "draw": 3.9,
+      "away": 4.75
+    },
+    "official_market_baseline": {
+      "prices": {
+        "home": 2.62,
+        "draw": 3.35,
+        "away": 2.23
+      },
+      "overround": 1.128617,
+      "payout_rate": 0.88604,
+      "fair_probabilities": {
+        "home": 0.338183,
+        "draw": 0.26449,
+        "away": 0.397327
+      },
+      "role": "official_market_baseline_only_not_model_probability"
+    }
+  }
+}
