@@ -876,9 +876,15 @@ def render(payload: dict) -> str:
     fundamentals = payload.get("fundamentals", {})
     fundamental_items = fundamentals.get("items", [])
     if fundamental_items:
-        fundamental_html = "".join(f'<div class="fact"><b>{e(item.get("label"))}</b><span>{e(item.get("value"))}</span></div>' for item in fundamental_items)
+        fundamental_html = "".join(
+            '<div class="fact">'
+            f'<b>{e(item.get("label"))}</b><span>{e(item.get("value"))}'
+            + (f'<a href="{e(item.get("source_url"))}" target="_blank" rel="noopener">查看来源</a>' if item.get("source_url") else "")
+            + '</span></div>'
+            for item in fundamental_items
+        )
     else:
-        fundamental_html = '<div class="empty-panel">确认首发、伤停、天气、场地与高级统计尚未完成联网核验</div>'
+        fundamental_html = '<div class="empty-panel">本次未取得可唯一匹配的赛前信息；不据此猜测首发、伤停或天气。</div>'
 
     primary_error = (decisions.get("maximum_error_points") or ["临场信息可能使首推失效"])[0]
     rq_rows = [[
@@ -913,7 +919,10 @@ def render(payload: dict) -> str:
                 ["即时", totals_market.get("current_line"), totals_market.get("current_over_odds"), totals_market.get("current_under_odds"), totals_market.get("current_note")],
             ],
         )
-    totals_content += table(["总进球桶", "模型概率"], [[item.get("bucket"), pct(item.get("probability"))] for item in totals_rows])
+    totals_content += table(
+        ["总进球数", "模型概率"],
+        [[f'{item.get("bucket", item.get("goals", "—"))}球', pct(item.get("probability"))] for item in totals_rows],
+    )
     totals_content += f'<div class="callout"><b>BTTS</b><span>{e(model.get("btts", {}).get("judgement"))}</span></div>'
     sensitivity_rows = []
     for item in sensitivity_scenarios(model):
@@ -955,11 +964,13 @@ def render(payload: dict) -> str:
         [index + 1, item.get("score"), pct(item.get("probability")), num(item.get("fair_odds"), 2)]
         for index, item in enumerate(score_rows[:10])
     ])
+    primary_dimension = decisions.get("unique_primary_dimension")
+    unique_score = decisions.get("unique_score")
     score_content += (
         '<div class="decision-strip">'
-        f'<div><small>数学第一</small><b>{e(decisions.get("mathematical_first"))}</b></div>'
-        f'<div><small>市场第一</small><b>{e(decisions.get("market_first"))}</b></div>'
-        f'<div class="accent"><small>唯一首推比分</small><b>{e(decisions.get("unique_score"))}</b><em>首要错点：{e(primary_error)}</em></div>'
+        f'<div><small>胜平负主线</small><b>{e(primary_dimension)}</b><em>{e(decisions.get("mathematical_first"))}</em></div>'
+        f'<div><small>盘口对照</small><b>{e(decisions.get("market_first"))}</b><em>市场只用于校准和发现分歧，不替代模型主线。</em></div>'
+        f'<div class="accent"><small>单一比分落点</small><b>{e(unique_score)}</b><em>这是概率最高的一个比分格，不代表要买比分列表，也不等于胜平负总概率的第一方向。首要错点：{e(primary_error)}</em></div>'
         '</div>'
     )
 
@@ -1043,15 +1054,15 @@ def render(payload: dict) -> str:
         live_market_label = " ".join(filter(None, [live_contract.get("market_name"), str(live_contract.get("handicap_line") or ""), live_contract.get("selection_name") or live_contract.get("selection_code")]))
         live_reprice_content = (
             '<div class="live-reprice" id="liveRepricePanel">'
-            '<div class="live-head"><div><small>本地桥接自动匹配</small>'
-            f'<b>{e(live_market_label)}</b></div><span id="liveBridgeDot" class="live-dot waiting">连接中</span></div>'
+            '<div class="live-head"><div><small>实时EV联动</small>'
+            f'<b>{e(live_market_label)}</b></div><span class="live-dot connected">赔率页悬浮窗</span></div>'
             '<div class="live-values">'
-            '<div><small>实时渠道赔率</small><b id="liveOdds">—</b></div>'
-            '<div><small>保守EV</small><b id="liveEv">—</b></div>'
+            '<div><small>模型概率</small><b>' + (pct(point_probability) if point_probability else '—') + '</b></div>'
+            '<div><small>保守概率</small><b>' + (pct(conservative_probability) if conservative_probability else '—') + '</b></div>'
             f'<div><small>执行线</small><b>{num(execution_odds) if point_probability and conservative_probability else "—"}</b></div>'
-            '<div><small>当前结论</small><b id="liveDecision">等待报价</b></div>'
-            '</div><p id="liveReason" class="method-note">只匹配同一比赛、玩法、盘口线和选项；每3秒刷新。比赛开赛后不沿用赛前概率。</p>'
-            '<div class="live-time">最近读取：<span id="liveTime">—</span></div></div>'
+            '<div><small>实时结论</small><b>在渠道赔率页查看</b></div>'
+            '</div><p class="method-note">实时赔率、盘口变动和EV由浏览器扩展悬浮窗读取。本报告页不再显示“桥接未连接”的假状态；比赛开赛后不沿用赛前概率。</p>'
+            '<a class="live-action" href="https://user-pc-new.hl99yjjpf.com/#/home" target="_blank" rel="noopener">打开渠道赔率页</a></div>'
         )
         betting_content = live_reprice_content + betting_content
     else:
@@ -1128,67 +1139,6 @@ def render(payload: dict) -> str:
     )
 
     live_script = ""
-    if live_profile and live_match_id:
-        reprice_request = json.loads(json.dumps(live_profile, ensure_ascii=False))
-        reprice_request.setdefault("contract", {})["match_id"] = str(live_match_id)
-        reprice_request.setdefault("price", {})["source"] = "bridge"
-        reprice_request["price"]["bridge_url"] = "http://127.0.0.1:8765"
-        request_json = json.dumps(reprice_request, ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/")
-        live_script = f'''<script>
-(() => {{
-  const request = {request_json};
-  const dot = document.getElementById("liveBridgeDot");
-  const odds = document.getElementById("liveOdds");
-  const ev = document.getElementById("liveEv");
-  const decision = document.getElementById("liveDecision");
-  const reason = document.getElementById("liveReason");
-  const stamp = document.getElementById("liveTime");
-  if (!dot) return;
-  const labels = {{
-    candidate_price_pass: "价格通过，仍未锁单",
-    price_insufficient: "赔率不足，保持空仓",
-    contract_not_found: "等待同盘口报价",
-    contract_ambiguous: "报价匹配不唯一",
-    quote_stale: "报价已过期",
-    quote_inactive: "盘口已关闭",
-    odds_unverified: "赔率尺度未验证",
-    in_play_probability_not_supported: "已开赛，停止赛前EV",
-    probability_uncertainty_missing: "缺少保守边界",
-    probability_provenance_unconfirmed: "概率来源未确认",
-    exposure_limit: "价格通过但暴露受限"
-  }};
-  async function refresh() {{
-    try {{
-      const response = await fetch("http://127.0.0.1:8765/v1/reprice", {{
-        method: "POST",
-        headers: {{"Content-Type": "application/json"}},
-        body: JSON.stringify(request),
-        cache: "no-store"
-      }});
-      const data = await response.json();
-      if (!response.ok || !data.ok) throw new Error(data.error || "桥接返回异常");
-      const price = data.price && data.price.decimal_odds;
-      const conservativeEv = data.ev && data.ev.conservative_ev;
-      odds.textContent = Number.isFinite(Number(price)) ? Number(price).toFixed(3) : "—";
-      ev.textContent = Number.isFinite(Number(conservativeEv)) ? (Number(conservativeEv) * 100).toFixed(1) + "%" : "—";
-      decision.textContent = labels[data.decision_status] || data.decision_status || "等待判断";
-      reason.textContent = data.reason || "只展示实时复算，不改变锁单和账户状态。";
-      stamp.textContent = new Date().toLocaleTimeString("zh-CN", {{hour12:false}});
-      const pass = data.decision_status === "candidate_price_pass";
-      dot.className = "live-dot " + (pass ? "pass" : "connected");
-      dot.textContent = pass ? "价格通过" : "已连接";
-    }} catch (error) {{
-      dot.className = "live-dot waiting";
-      dot.textContent = "桥接未连接";
-      decision.textContent = "等待本地实时页";
-      reason.textContent = "请保持本地桥接和赔率网页开启；连接恢复后会自动刷新。";
-      stamp.textContent = new Date().toLocaleTimeString("zh-CN", {{hour12:false}});
-    }}
-  }}
-  refresh();
-  window.setInterval(refresh, 3000);
-}})();
-</script>'''
 
     execution_label = "最终执行窗口" if report.get("final_execution_version") else "赛前分析报告"
     return f'''<!doctype html>
@@ -1202,11 +1152,12 @@ def render(payload: dict) -> str:
 .heatmap .table-wrap{{border:0;overflow:auto}}.heatmap table{{min-width:680px;border-collapse:separate;border-spacing:6px}}.heatmap th,.heatmap td{{border:0;padding:0;background:transparent!important}}.heatmap td:first-child{{text-align:center}}.heat-axis{{display:grid;place-items:center;min-height:58px;color:var(--mut)}}.heat-cell{{display:grid;place-items:center;min-height:58px;border:1px solid rgba(255,255,255,.08);border-radius:8px;color:var(--ink)}}.heat-cell b{{font-size:13px}}.heat-cell small{{color:#f8eaf0;font-size:10px}}.heat-title{{color:var(--mut);font-size:11px;margin-bottom:8px}}
 .timeline{{margin-top:18px;border:1px solid var(--line);border-radius:12px;padding:14px;background:rgba(255,255,255,.02)}}.timeline-head{{display:flex;justify-content:space-between;gap:12px;align-items:center}}.timeline-head b{{color:var(--ink)}}.timeline-head span{{color:var(--mut);font-size:11px}}.timeline svg{{display:block;width:100%;margin-top:8px}}
 .live-reprice{{margin-bottom:18px;border:1px solid rgba(57,214,160,.34);border-radius:13px;padding:18px;background:linear-gradient(145deg,rgba(57,214,160,.055),rgba(155,127,208,.035))}}.live-head{{display:flex;align-items:center;justify-content:space-between;gap:15px}}.live-head b{{display:block;color:var(--ink);font-size:17px;margin-top:3px}}.live-dot{{display:inline-flex;padding:5px 10px;border-radius:999px;font-size:11px;font-weight:800;border:1px solid var(--line)}}.live-dot.waiting{{color:var(--amber);border-color:rgba(255,189,92,.38)}}.live-dot.connected{{color:var(--purple);border-color:rgba(155,127,208,.45)}}.live-dot.pass{{color:var(--green);border-color:rgba(57,214,160,.45)}}.live-values{{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:14px}}.live-values>div{{border:1px solid var(--line);border-radius:10px;padding:13px;background:rgba(0,0,0,.12)}}.live-values b{{display:block;color:var(--ink);font-size:17px;margin-top:4px}}.live-time{{color:var(--mut);font-size:10px;margin-top:8px}}
+.live-action,.back-link{{display:inline-flex;align-items:center;width:max-content;margin:12px 0;padding:8px 12px;border:1px solid rgba(155,127,208,.45);border-radius:9px;color:#d8caef;text-decoration:none;background:rgba(155,127,208,.08)}}.live-action:hover,.back-link:hover{{border-color:var(--accent2);color:var(--accent2)}}.fact span a{{display:block;margin-top:4px;color:var(--purple);font-size:11px;text-decoration:none}}
 @media(max-width:900px){{body{{padding:16px}}.hero{{min-height:280px;padding:28px 22px}}.card,.card.full{{grid-column:span 12}}.kpis,.verdict-grid,.money-grid{{grid-template-columns:repeat(2,1fr)}}.decision-strip,.evidence-grid,.primary-with-risk,.answer-banner{{grid-template-columns:1fr}}}}
 @media(max-width:900px){{.interval-panel,.live-values{{grid-template-columns:repeat(2,1fr)}}}}
 @media(max-width:520px){{body{{padding:10px}}.hero{{border-radius:15px}}h1{{font-size:34px;display:flex;flex-direction:column;gap:4px}}h1 span{{font-size:18px;margin:4px 0;letter-spacing:.2em}}.card{{padding:16px;border-radius:13px}}.kpis,.verdict-grid,.money-grid,.interval-panel,.live-values{{grid-template-columns:1fr}}.chips{{gap:6px}}.chip{{flex:1 1 140px;font-size:11px}}.plain-conclusion{{display:block}}.plain-conclusion>b{{display:block;margin-bottom:6px}}.timeline-head,.live-head{{align-items:flex-start;flex-direction:column}}}}
 @media print{{body{{background:#fff;color:#222;padding:0}}.hero,.card{{box-shadow:none;break-inside:avoid}}}}
-</style></head><body><main class="page">
+</style></head><body><main class="page"><a class="back-link" href="../../match_workspace/latest.html">← 返回赛事总览</a>
 <header class="hero"><div class="eyebrow">{e(str(report.get('model_name', 'Football Betting OneShot')).upper())} · {e(report.get('model_version'))} · MARKET INTELLIGENCE</div>
 <h1>{e(match.get('home'))}<span>VS</span>{e(match.get('away'))}</h1>
 <div class="hero-sub">{e(report.get('report_type'))} · {e(execution_label)} · 90分钟含伤停，不含加时与点球</div>

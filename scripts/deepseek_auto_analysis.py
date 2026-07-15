@@ -171,6 +171,12 @@ def analysis_context(manifest_path: Path, request: dict) -> dict:
             "bankroll_state_changed": False,
         },
     }
+    from prematch_fundamentals import collect_prematch_fundamentals
+    deep_source = (sources.get("500_deep") or {}).get("snapshots") or []
+    context["prematch_fundamentals"] = collect_prematch_fundamentals(
+        workspace_match,
+        deep_source[0] if deep_source and isinstance(deep_source[0], dict) else {},
+    )
     from automatic_model_core import build_automatic_model
     context["deterministic_core"] = build_automatic_model(context)
     return context
@@ -379,7 +385,12 @@ def apply_deterministic_core(analysis: dict, context: dict) -> dict:
     quality = analysis.setdefault("data_quality", {})
     quality.update(core.get("data_quality") or {})
     fundamentals = analysis.setdefault("fundamentals", {})
-    fundamentals["structured_form"] = core.get("fundamentals") or {}
+    core_fundamentals = core.get("fundamentals") or {}
+    fundamentals["structured_form"] = core_fundamentals
+    if core_fundamentals.get("items"):
+        fundamentals["items"] = core_fundamentals["items"]
+        fundamentals["status"] = core_fundamentals.get("status")
+        fundamentals["sources"] = core_fundamentals.get("sources") or []
     evidence = analysis.setdefault("evidence_chain", [])
     evidence.insert(0, {
         "source": "Football Betting OneShot deterministic core",
