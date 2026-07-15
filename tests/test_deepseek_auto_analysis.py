@@ -71,3 +71,25 @@ def test_normalizer_accepts_string_sections_from_provider():
     assert result["betting"]["execution_authorized"] is False
     assert isinstance(result["data_quality"], dict)
     assert isinstance(result["evidence_chain"], list)
+    assert result["model"]["btts"]["judgement"] == "数据不足，暂不判断"
+
+
+def test_normalizer_filters_nested_non_object_rows():
+    result = normalize_analysis(
+        {
+            "model": {
+                "probabilities": {"home": 0.4, "draw": 0.3, "away": 0.3},
+                "btts": None,
+                "score_probabilities": ["1-0", {"score": "1-0", "probability": 0.1}],
+                "total_goals_buckets": [None, {"bucket": "0-2", "probability": 0.5}],
+            },
+            "fundamentals": {"items": ["伤停未知", {"label": "伤停", "value": "未知"}]},
+            "evidence_chain": ["市场", {"title": "市场", "items": []}],
+        },
+        {"business_date": "2026-07-15", "match_id": "2040513", "match": "主队 vs 客队"},
+        "deepseek-v4-pro",
+    )
+    assert len(result["model"]["score_probabilities"]) == 1
+    assert len(result["model"]["total_goals_buckets"]) == 1
+    assert len(result["fundamentals"]["items"]) == 1
+    assert len(result["evidence_chain"]) == 1

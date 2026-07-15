@@ -26,7 +26,7 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 API_URL = "https://api.deepseek.com/chat/completions"
 DEFAULT_MODEL = "deepseek-v4-pro"
-MODEL_VERSION = "v0.13.1"
+MODEL_VERSION = "v0.13.2"
 AUTO_INPUT_ROOT = ROOT / "data" / "analysis_inputs" / "automated"
 
 
@@ -199,6 +199,12 @@ def normalize_analysis(raw: dict, request: dict, model_name: str) -> dict:
         model["lambda_away"] = None
         model["expected_goals"] = None
         model["score_probabilities"] = []
+    btts = model.get("btts") if isinstance(model.get("btts"), dict) else {}
+    btts["judgement"] = str(btts.get("judgement") or "数据不足，暂不判断")
+    model["btts"] = btts
+    for key in ("score_probabilities", "total_goals_buckets"):
+        value = model.get(key)
+        model[key] = [item for item in value if isinstance(item, dict)] if isinstance(value, list) else []
     model["status"] = str(model.get("status") or "DeepSeek辅助综合；未替代本地概率校准")
 
     if not isinstance(raw.get("data_quality"), dict):
@@ -207,10 +213,17 @@ def normalize_analysis(raw: dict, request: dict, model_name: str) -> dict:
             "missing": [],
             "notes": ["由 DeepSeek 基于抓取快照生成，缺口须在报告中显式披露"],
         }
+    quality = raw["data_quality"]
+    for key in ("missing", "notes"):
+        value = quality.get(key)
+        quality[key] = [str(item) for item in value] if isinstance(value, list) else []
     if not isinstance(raw.get("fundamentals"), dict):
         raw["fundamentals"] = {"status": "待复核", "items": []}
+    fundamental_items = raw["fundamentals"].get("items")
+    raw["fundamentals"]["items"] = [item for item in fundamental_items if isinstance(item, dict)] if isinstance(fundamental_items, list) else []
     if not isinstance(raw.get("evidence_chain"), list):
         raw["evidence_chain"] = []
+    raw["evidence_chain"] = [item for item in raw["evidence_chain"] if isinstance(item, dict)]
 
     betting = raw.get("betting") if isinstance(raw.get("betting"), dict) else {}
     raw["betting"] = betting
@@ -219,6 +232,7 @@ def normalize_analysis(raw: dict, request: dict, model_name: str) -> dict:
     betting["execution_authorized"] = False
     betting["lock_state_changed"] = False
     betting["bankroll_state_changed"] = False
+    betting["price_audit"] = []
     betting.pop("open_bets", None)
     raw["automation"] = {"provider": "DeepSeek", "model": model_name, "generated_at": now, "owner_authorized_request": True}
     return raw
