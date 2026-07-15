@@ -26,7 +26,7 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 API_URL = "https://api.deepseek.com/chat/completions"
 DEFAULT_MODEL = "deepseek-v4-pro"
-MODEL_VERSION = "v0.13.6"
+MODEL_VERSION = "v0.14.0"
 AUTO_INPUT_ROOT = ROOT / "data" / "analysis_inputs" / "automated"
 WORKSPACE_PATH = ROOT / "data" / "match_workspace" / "latest.json"
 
@@ -93,12 +93,7 @@ def selected_workspace_match(request: dict) -> dict:
 
 
 def fetch_date_for_request(request: dict) -> str:
-    """Use the actual kickoff date when a business-day match starts after midnight."""
-    workspace_match = selected_workspace_match(request)
-    kickoff = str(workspace_match.get("kickoff") or "")
-    kickoff_date = kickoff[:10]
-    if re.fullmatch(r"\d{4}-\d{2}-\d{2}", kickoff_date):
-        return kickoff_date
+    """Use the Sporttery business date, including after-midnight kickoffs."""
     return request["business_date"]
 
 
@@ -112,13 +107,16 @@ def devig_three_way(odds: dict) -> dict | None:
         return None
     raw = {key: 1 / price for key, price in prices.items()}
     overround = sum(raw.values())
-    return {
+    context = {
         "prices": prices,
         "overround": round(overround, 6),
         "payout_rate": round(1 / overround, 6),
         "fair_probabilities": {key: round(raw[key] / overround, 6) for key in keys},
         "role": "official_market_baseline_only_not_model_probability",
     }
+    from automatic_model_core import build_automatic_model
+    context["deterministic_core"] = build_automatic_model(context)
+    return context
 
 
 def analysis_context(manifest_path: Path, request: dict) -> dict:
@@ -156,7 +154,7 @@ def analysis_context(manifest_path: Path, request: dict) -> dict:
     }
 
 
-SYSTEM_PROMPT = """你是 Football Betting OneShot 的辅助分析层。只使用给定 JSON 证据，禁止联网假装、禁止补造伤停、首发、xG、赔率或概率。缺失就明确写缺失。输出必须是单个 JSON 对象，不要 Markdown。
+SYSTEM_PROMPT = """你是 Football Betting OneShot 的辅助分析层。deterministic_core 已由固定公式完成概率、lambda、总进球、BTTS和比分计算；你只能解释它，绝对不得改写、替换或自行生成这些数值。只使用给定 JSON 证据，禁止联网假装、禁止补造伤停、首发、xG、赔率或概率。缺失就明确写缺失。输出必须是单个 JSON 对象，不要 Markdown。
 
 selected_workspace_match 是用户在主页明确选择的体彩在售场次，里面的 spf/rqspf、开赛时间和赛事名称属于有效证据；即使其他抓取源失败，也必须使用这些官方赔率做去水市场基线分析，不得声称“无任何赔率”。official_market_baseline 只能叫市场基线，不能冒充模型概率。
 
@@ -347,6 +345,28 @@ def attach_workspace_evidence(analysis: dict, context: dict) -> dict:
     return analysis
 
 
+def apply_deterministic_core(analysis: dict, context: dict) -> dict:
+    """Keep calculations deterministic; the LLM may only narrate them."""
+    core = context.get("deterministic_core") or {}
+    if not core.get("model"):
+        return analysis
+    analysis["model"] = core["model"]
+    analysis["decisions"] = core["decisions"]
+    if core.get("live_ev_profiles"):
+        analysis["live_ev_profiles"] = core["live_ev_profiles"]
+    quality = analysis.setdefault("data_quality", {})
+    quality.update(core.get("data_quality") or {})
+    fundamentals = analysis.setdefault("fundamentals", {})
+    fundamentals["structured_form"] = core.get("fundamentals") or {}
+    evidence = analysis.setdefault("evidence_chain", [])
+    evidence.insert(0, {
+        "source": "Football Betting OneShot deterministic core",
+        "role": "probability_calculation",
+        "note": "概率、λ、总进球、BTTS与比分矩阵由固定公式生成；DeepSeek仅负责解释。",
+    })
+    return analysis
+
+
 def has_minimum_analysis_evidence(context: dict) -> bool:
     if context.get("official_market_baseline"):
         return True
@@ -391,7 +411,9 @@ def run_pipeline(request: dict, api_key: str, model_name: str) -> dict:
     print("[phase 2/5] calling DeepSeek", file=sys.stderr, flush=True)
     raw = call_deepseek(context, api_key, model_name)
     print("[phase 3/5] normalizing and validating response", file=sys.stderr, flush=True)
-    analysis = attach_workspace_evidence(normalize_analysis(raw, request, model_name), context)
+    analysis = normalize_analysis(raw, request, model_name)
+    analysis = apply_deterministic_core(analysis, context)
+    analysis = attach_workspace_evidence(analysis, context)
     AUTO_INPUT_ROOT.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now().astimezone().strftime("%Y%m%d_%H%M%S")
     safe_id = re.sub(r"[^A-Za-z0-9_-]", "_", request.get("match_id") or "match")

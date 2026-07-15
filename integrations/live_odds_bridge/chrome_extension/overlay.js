@@ -532,7 +532,9 @@
       if (state.bankroll?.current_balance != null) ui.bankroll.value = state.bankroll.current_balance;
       if (state.exposure?.current_open_exposure != null) ui.dailyExposure.value = state.exposure.current_open_exposure;
     } catch (error) {
-      ui.modelLine.textContent = "本地模型状态未连接";
+      ui.modelLine.textContent = currentRemoteProfile?.active
+        ? `${currentRemoteProfile.model_version || "云端模型"} · GitHub报告已同步 · 本地实时桥接待连接`
+        : "本地实时桥接未连接 · 等待GitHub分析配置";
     }
   }
 
