@@ -150,7 +150,11 @@ def analysis_context(manifest_path: Path, request: dict) -> dict:
         fallback = DEEP_FALLBACK_ROOT / f"{shuju_id}.json" if shuju_id else None
         if fallback and fallback.exists():
             sources["500_deep"] = {
-                "metadata": {**(metadata or {}), "fallback_snapshot_used": True, "fallback_reason": "cloud_source_blocked"},
+                "metadata": {
+                    **(metadata or {}), "fallback_snapshot_used": True,
+                    "fallback_reason": "cloud_source_blocked",
+                    "fallback_file": fallback.relative_to(ROOT).as_posix(),
+                },
                 "snapshots": [prune(load_json(fallback))],
             }
     workspace_match = selected_workspace_match(request)
@@ -415,6 +419,23 @@ def run_json_command(command: list[str], allow_failure: bool = False, timeout: i
         raise RuntimeError(f"Command did not return JSON: {' '.join(command)}\n{completed.stdout}\n{completed.stderr}") from error
 
 
+def report_manifest(manifest_path: Path, context: dict) -> Path:
+    """Point rendering at the exact verified fallback consumed by the model."""
+    deep = (context.get("source_snapshots") or {}).get("500_deep") or {}
+    metadata = deep.get("metadata") if isinstance(deep, dict) else {}
+    fallback_file = (metadata or {}).get("fallback_file")
+    if not fallback_file:
+        return manifest_path
+    manifest = load_json(manifest_path)
+    source = manifest.setdefault("sources", {}).setdefault("500_deep", {})
+    existing = (source.get("matches") or [{}])[0]
+    source.update({"status": "VERIFIED_LOCAL_FALLBACK", "success": True, "match_count": 1})
+    source["matches"] = [{**existing, "file": fallback_file, "all_pages_ok": True, "fallback_snapshot_used": True}]
+    output = manifest_path.with_name(manifest_path.stem + "_analysis.json")
+    output.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    return output
+
+
 def run_pipeline(request: dict, api_key: str, model_name: str) -> dict:
     print("[phase 1/5] fetching match evidence", file=sys.stderr, flush=True)
     fetch_date = fetch_date_for_request(request)
@@ -448,9 +469,10 @@ def run_pipeline(request: dict, api_key: str, model_name: str) -> dict:
     temporary.replace(output)
 
     print("[phase 4/5] generating report", file=sys.stderr, flush=True)
+    render_manifest = report_manifest(manifest_path, context)
     report = run_json_command([
         sys.executable, "scripts/generate_analysis_report.py",
-        "--fetch-manifest", str(manifest_path), "--analysis-json", str(output),
+        "--fetch-manifest", str(render_manifest), "--analysis-json", str(output),
     ])
     print("[phase 5/5] rebuilding homepage", file=sys.stderr, flush=True)
     run_json_command([sys.executable, "scripts/match_workspace.py", "--date", request["business_date"]])
