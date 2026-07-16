@@ -1,0 +1,707 @@
+{
+  "report": {
+    "model_name": "Football Betting OneShot",
+    "model_version": "v0.16.0",
+    "report_type": "确定性赛前分析",
+    "analysis_timestamp": "2026-07-16T12:43:16+00:00",
+    "final_execution_version": false,
+    "ai_provider": null,
+    "ai_model": null
+  },
+  "match": {
+    "business_date": "2026-07-16",
+    "match_id": "2040518",
+    "home": "日利纳",
+    "away": "斯海杜克",
+    "match_num": "周四204",
+    "competition": "欧罗巴",
+    "league": "欧罗巴",
+    "kickoff_local": "2026-07-17 02:30"
+  },
+  "decisions": {
+    "unique_primary_dimension": "胜平负：客胜（模型45.6%）",
+    "unique_score": "1-1",
+    "mathematical_first": "90分钟主胜28.9%、平局25.5%、客胜45.6%；λ=1.15-1.51。",
+    "market_first": "多公司去水共识主胜30.5%、平局27.4%、客胜42.1%；大小球中轴2.50。",
+    "match_story": "斯海杜克的进攻期望更高，日利纳需要依靠主场开局和转换效率保持平衡；总进球中枢处于常规区间，2至3球是主要密集带。",
+    "market_conflict": "模型对客胜的判断比多公司市场高3.4%，需要用阵容与临盘验证这部分分歧",
+    "score_vs_outcome_explanation": "唯一比分1-1只是单个比分格的最高点；胜平负主线客胜是多个比分格合计，二者不要求同方向。",
+    "maximum_error_points": [
+      "若早段进球、红牌或比赛节奏偏离基准，总进球与比分尾部会同步变化",
+      "首发或关键伤停与当前假设不一致，会直接改变双方λ",
+      "临盘若出现跨公司同步升降盘，本次赛前快照的价格结构会失效"
+    ],
+    "value_judgement": "仅完成模型概率与市场基线；须取得用户渠道即时赔率后才计算EV。",
+    "final_state": "空仓｜未锁单"
+  },
+  "model": {
+    "status": "确定性融合模型（可核验近期攻防 + 市场校准）",
+    "method": "recent_form_market_calibrated_poisson_v2",
+    "lambda_home": 1.148977,
+    "lambda_away": 1.511023,
+    "rho": 0.0,
+    "expected_goals": 2.66,
+    "probabilities": {
+      "home": 0.288759,
+      "draw": 0.255447,
+      "away": 0.455794
+    },
+    "total_goals_buckets": [
+      {
+        "goals": "0",
+        "probability": 0.069948
+      },
+      {
+        "goals": "1",
+        "probability": 0.186062
+      },
+      {
+        "goals": "2",
+        "probability": 0.247463
+      },
+      {
+        "goals": "3",
+        "probability": 0.219417
+      },
+      {
+        "goals": "4",
+        "probability": 0.145912
+      },
+      {
+        "goals": "5",
+        "probability": 0.077625
+      },
+      {
+        "goals": "6+",
+        "probability": 0.053572
+      }
+    ],
+    "btts": {
+      "yes": 0.532303,
+      "no": 0.467697,
+      "judgement": "双方进球偏否"
+    },
+    "score_probabilities": [
+      {
+        "score": "1-1",
+        "probability": 0.121439,
+        "fair_odds": 8.2346,
+        "rank": 1
+      },
+      {
+        "score": "0-1",
+        "probability": 0.105693,
+        "fair_odds": 9.4613,
+        "rank": 2
+      },
+      {
+        "score": "1-2",
+        "probability": 0.091749,
+        "fair_odds": 10.8993,
+        "rank": 3
+      },
+      {
+        "score": "1-0",
+        "probability": 0.080369,
+        "fair_odds": 12.4426,
+        "rank": 4
+      },
+      {
+        "score": "0-2",
+        "probability": 0.079853,
+        "fair_odds": 12.5231,
+        "rank": 5
+      },
+      {
+        "score": "0-0",
+        "probability": 0.069948,
+        "fair_odds": 14.2963,
+        "rank": 6
+      },
+      {
+        "score": "2-1",
+        "probability": 0.069765,
+        "fair_odds": 14.3337,
+        "rank": 7
+      },
+      {
+        "score": "2-2",
+        "probability": 0.052709,
+        "fair_odds": 18.9722,
+        "rank": 8
+      },
+      {
+        "score": "1-3",
+        "probability": 0.046211,
+        "fair_odds": 21.6396,
+        "rank": 9
+      },
+      {
+        "score": "2-0",
+        "probability": 0.046171,
+        "fair_odds": 21.6586,
+        "rank": 10
+      }
+    ],
+    "calibration": {
+      "form_lambda_home": 1.166667,
+      "form_lambda_away": 1.6,
+      "market_total_line_median": 2.5,
+      "market_probabilities": {
+        "home": 0.3051076023767688,
+        "draw": 0.27358634537636756,
+        "away": 0.4213060522468637
+      },
+      "form_weight": 0.6,
+      "market_weight": 0.4,
+      "form_source": "500.com赛前数据快照",
+      "venue_proxy_used": false
+    },
+    "limitations": [
+      "近期样本含不同赛事与对手强度，尚未完成逐队Elo/xG对手校正",
+      "确认首发、即时伤停、天气与临场战术需在开赛前另行修正",
+      "市场信息用于校准，因此该概率不是完全独立于赔率的纯基本面概率"
+    ]
+  },
+  "data_quality": {
+    "status": "模型已计算，临场信息待补",
+    "missing": [
+      "确认首发",
+      "即时伤停",
+      "用户渠道即时赔率"
+    ],
+    "notes": [
+      "近期攻防来源：500.com赛前数据快照。",
+      "模型数值由固定公式生成，DeepSeek不参与概率计算。",
+      "已从所选主页场次注入体彩胜平负赔率，并计算去水市场基线；该基线不是模型概率。"
+    ],
+    "overall": "FORM_AND_MARKET_MODEL"
+  },
+  "fundamentals": {
+    "status": "赛程、交锋、场地、首发发布状态、伤停发布状态与天气发布状态已联网核验",
+    "items": [
+      {
+        "label": "赛程交叉核验",
+        "value": "Hajduk Split at MSK Zilina",
+        "source_url": "https://www.espn.com/soccer/match/_/gameId/401878076"
+      },
+      {
+        "label": "主队 ESPN 近5场",
+        "value": "0胜0平5负，进4球/失18球；样本期2023-07-27至2026-07-09",
+        "source": "ESPN lastFiveGames",
+        "source_url": "https://www.espn.com/soccer/match/_/gameId/401878076"
+      },
+      {
+        "label": "客队 ESPN 近5场",
+        "value": "3胜1平1负，进8球/失6球；样本期2025-07-23至2026-07-09",
+        "source": "ESPN lastFiveGames",
+        "source_url": "https://www.espn.com/soccer/match/_/gameId/401878076"
+      },
+      {
+        "label": "最近直接交锋",
+        "value": "2-0（2026-27 UEFA Europa League Qualifying，2026-07-09）",
+        "source_url": "https://www.espn.com/soccer/match/_/gameId/401878080/msk-zilina-hajduk-split"
+      },
+      {
+        "label": "比赛场地",
+        "value": "Stadion Pod Dubnom · Zilina · Slovakia",
+        "source_url": "https://www.espn.com/soccer/match/_/gameId/401878076"
+      },
+      {
+        "label": "确认首发",
+        "value": "尚未发布（已联网检查，临近开赛自动任务会重查）",
+        "source_url": "https://www.espn.com/soccer/match/_/gameId/401878076"
+      },
+      {
+        "label": "伤停核验",
+        "value": "赛前页未返回结构化伤停名单；不等同于无人伤停",
+        "source_url": "https://www.espn.com/soccer/match/_/gameId/401878076"
+      },
+      {
+        "label": "天气",
+        "value": "上游赛前页尚未发布（已联网检查）",
+        "source_url": "https://www.espn.com/soccer/match/_/gameId/401878076"
+      }
+    ],
+    "structured_form": {
+      "recent_form": {
+        "home_overall": {
+          "matches": 5,
+          "wins": 0,
+          "draws": 0,
+          "losses": 5,
+          "goals_for": 4,
+          "goals_against": 18,
+          "sample_start": "2023-07-27",
+          "sample_end": "2026-07-09",
+          "source": "ESPN lastFiveGames"
+        },
+        "home_home": {
+          "matches": 2,
+          "wins": 0,
+          "draws": 0,
+          "losses": 2,
+          "goals_for": 3,
+          "goals_against": 8,
+          "sample_start": "2023-08-03",
+          "sample_end": "2025-07-31",
+          "source": "ESPN lastFiveGames"
+        },
+        "away_overall": {
+          "matches": 5,
+          "wins": 3,
+          "draws": 1,
+          "losses": 1,
+          "goals_for": 8,
+          "goals_against": 6,
+          "sample_start": "2025-07-23",
+          "sample_end": "2026-07-09",
+          "source": "ESPN lastFiveGames"
+        },
+        "away_away": {
+          "matches": 2,
+          "wins": 0,
+          "draws": 1,
+          "losses": 1,
+          "goals_for": 2,
+          "goals_against": 4,
+          "sample_start": "2025-07-23",
+          "sample_end": "2025-08-14",
+          "source": "ESPN lastFiveGames"
+        }
+      },
+      "metric": "recent actual goals, not xG",
+      "status": "赛程、交锋、场地、首发发布状态、伤停发布状态与天气发布状态已联网核验",
+      "checked_at": "2026-07-16T12:43:15+00:00",
+      "items": [
+        {
+          "label": "赛程交叉核验",
+          "value": "Hajduk Split at MSK Zilina",
+          "source_url": "https://www.espn.com/soccer/match/_/gameId/401878076"
+        },
+        {
+          "label": "主队 ESPN 近5场",
+          "value": "0胜0平5负，进4球/失18球；样本期2023-07-27至2026-07-09",
+          "source": "ESPN lastFiveGames",
+          "source_url": "https://www.espn.com/soccer/match/_/gameId/401878076"
+        },
+        {
+          "label": "客队 ESPN 近5场",
+          "value": "3胜1平1负，进8球/失6球；样本期2025-07-23至2026-07-09",
+          "source": "ESPN lastFiveGames",
+          "source_url": "https://www.espn.com/soccer/match/_/gameId/401878076"
+        },
+        {
+          "label": "最近直接交锋",
+          "value": "2-0（2026-27 UEFA Europa League Qualifying，2026-07-09）",
+          "source_url": "https://www.espn.com/soccer/match/_/gameId/401878080/msk-zilina-hajduk-split"
+        },
+        {
+          "label": "比赛场地",
+          "value": "Stadion Pod Dubnom · Zilina · Slovakia",
+          "source_url": "https://www.espn.com/soccer/match/_/gameId/401878076"
+        },
+        {
+          "label": "确认首发",
+          "value": "尚未发布（已联网检查，临近开赛自动任务会重查）",
+          "source_url": "https://www.espn.com/soccer/match/_/gameId/401878076"
+        },
+        {
+          "label": "伤停核验",
+          "value": "赛前页未返回结构化伤停名单；不等同于无人伤停",
+          "source_url": "https://www.espn.com/soccer/match/_/gameId/401878076"
+        },
+        {
+          "label": "天气",
+          "value": "上游赛前页尚未发布（已联网检查）",
+          "source_url": "https://www.espn.com/soccer/match/_/gameId/401878076"
+        }
+      ],
+      "sources": [
+        "https://www.espn.com/soccer/match/_/gameId/401878076"
+      ],
+      "form_source": "ESPN近5场赛事样本（含可获得的同赛事历史，非完整联赛近况）"
+    },
+    "sources": [
+      "https://www.espn.com/soccer/match/_/gameId/401878076"
+    ],
+    "recent_form": {
+      "home_overall": {
+        "matches": 5,
+        "wins": 0,
+        "draws": 0,
+        "losses": 5,
+        "goals_for": 4,
+        "goals_against": 18,
+        "sample_start": "2023-07-27",
+        "sample_end": "2026-07-09",
+        "source": "ESPN lastFiveGames"
+      },
+      "home_home": {
+        "matches": 2,
+        "wins": 0,
+        "draws": 0,
+        "losses": 2,
+        "goals_for": 3,
+        "goals_against": 8,
+        "sample_start": "2023-08-03",
+        "sample_end": "2025-07-31",
+        "source": "ESPN lastFiveGames"
+      },
+      "away_overall": {
+        "matches": 5,
+        "wins": 3,
+        "draws": 1,
+        "losses": 1,
+        "goals_for": 8,
+        "goals_against": 6,
+        "sample_start": "2025-07-23",
+        "sample_end": "2026-07-09",
+        "source": "ESPN lastFiveGames"
+      },
+      "away_away": {
+        "matches": 2,
+        "wins": 0,
+        "draws": 1,
+        "losses": 1,
+        "goals_for": 2,
+        "goals_against": 4,
+        "sample_start": "2025-07-23",
+        "sample_end": "2025-08-14",
+        "source": "ESPN lastFiveGames"
+      }
+    },
+    "form_source": "ESPN近5场赛事样本（含可获得的同赛事历史，非完整联赛近况）",
+    "checked_at": "2026-07-16T12:43:15+00:00"
+  },
+  "evidence_chain": [
+    {
+      "title": "足球维度",
+      "items": [
+        "日利纳近10个主场0胜0平2负，斯海杜克近10个客场0胜1平1负",
+        "近期主客场攻防推导λ：日利纳1.17，斯海杜克1.60",
+        "斯海杜克的进攻期望更高，日利纳需要依靠主场开局和转换效率保持平衡；总进球中枢处于常规区间，2至3球是主要密集带。"
+      ]
+    },
+    {
+      "title": "市场维度",
+      "items": [
+        "去水共识：主胜30.5%、平局27.4%、客胜42.1%",
+        "大小球中轴：2.5；市场占40%校准权重，不替代模型。",
+        "模型对客胜的判断比多公司市场高3.4%，需要用阵容与临盘验证这部分分歧"
+      ]
+    },
+    {
+      "title": "执行维度",
+      "items": [
+        "每个玩法分别展示当前价、模型概率、EV与最低可接受赔率；低于门槛一律不过线。",
+        "执行价额外要求8%安全边际；模型包含市场校准，因此正EV只是价格复核信号。",
+        "唯一比分1-1只是单个比分格的最高点；胜平负主线客胜是多个比分格合计，二者不要求同方向。"
+      ]
+    },
+    {
+      "title": "模型与临场核验",
+      "items": [
+        "公开事实核验状态：赛程、交锋、场地、首发发布状态、伤停发布状态与天气发布状态已联网核验。",
+        "确认首发、关键伤停、天气或盘口换线与假设冲突时，必须重算而非沿用旧报告。"
+      ]
+    }
+  ],
+  "betting": {
+    "candidates": [],
+    "state": "空仓｜未锁单",
+    "execution_authorized": false,
+    "lock_state_changed": false,
+    "bankroll_state_changed": false,
+    "price_audit": [
+      {
+        "market": "SPF主胜",
+        "model_probability": 0.288759,
+        "conservative_probability": 0.213759,
+        "minimum_acceptable_decimal_odds": 5.052,
+        "odds": 3.12,
+        "ev": -0.099072,
+        "audit_role": "模型价格门槛，不是投注指令",
+        "price_source": "竞彩赛前SPF"
+      },
+      {
+        "market": "SPF平局",
+        "model_probability": 0.255447,
+        "conservative_probability": 0.180447,
+        "minimum_acceptable_decimal_odds": 5.985,
+        "odds": 3.35,
+        "ev": -0.144253,
+        "audit_role": "模型价格门槛，不是投注指令",
+        "price_source": "竞彩赛前SPF"
+      },
+      {
+        "market": "SPF客胜",
+        "model_probability": 0.455794,
+        "conservative_probability": 0.380794,
+        "minimum_acceptable_decimal_odds": 2.836,
+        "odds": 1.96,
+        "ev": -0.106644,
+        "audit_role": "模型价格门槛，不是投注指令",
+        "price_source": "竞彩赛前SPF"
+      },
+      {
+        "market": "澳门 大2.5",
+        "model_probability": 0.496527,
+        "push_probability": 0.0,
+        "odds": 1.72,
+        "ev": -0.145974,
+        "minimum_acceptable_decimal_odds": 2.175,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "澳门 小2.5",
+        "model_probability": 0.503473,
+        "push_probability": 0.0,
+        "odds": 1.9,
+        "ev": -0.043401,
+        "minimum_acceptable_decimal_odds": 2.145,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "立博 大2.5",
+        "model_probability": 0.496527,
+        "push_probability": 0.0,
+        "odds": 1.85,
+        "ev": -0.081426,
+        "minimum_acceptable_decimal_odds": 2.175,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "立博 小2.5",
+        "model_probability": 0.503473,
+        "push_probability": 0.0,
+        "odds": 1.85,
+        "ev": -0.068574,
+        "minimum_acceptable_decimal_odds": 2.145,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "bet365 大2.5",
+        "model_probability": 0.496527,
+        "push_probability": 0.0,
+        "odds": 1.9,
+        "ev": -0.056599,
+        "minimum_acceptable_decimal_odds": 2.175,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "bet365 小2.5",
+        "model_probability": 0.503473,
+        "push_probability": 0.0,
+        "odds": 1.9,
+        "ev": -0.043401,
+        "minimum_acceptable_decimal_odds": 2.145,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "威廉希尔 大2.5",
+        "model_probability": 0.496527,
+        "push_probability": 0.0,
+        "odds": 1.85,
+        "ev": -0.081426,
+        "minimum_acceptable_decimal_odds": 2.175,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "威廉希尔 小2.5",
+        "model_probability": 0.503473,
+        "push_probability": 0.0,
+        "odds": 1.85,
+        "ev": -0.068574,
+        "minimum_acceptable_decimal_odds": 2.145,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "易胜博 大2.5",
+        "model_probability": 0.496527,
+        "push_probability": 0.0,
+        "odds": 1.89,
+        "ev": -0.061565,
+        "minimum_acceptable_decimal_odds": 2.175,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "易胜博 小2.5",
+        "model_probability": 0.503473,
+        "push_probability": 0.0,
+        "odds": 1.9,
+        "ev": -0.043401,
+        "minimum_acceptable_decimal_odds": 2.145,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "澳门 主+0.25",
+        "model_probability": 0.416482,
+        "push_probability": 0.127724,
+        "odds": 1.8,
+        "ev": -0.122608,
+        "minimum_acceptable_decimal_odds": 2.262,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "澳门 客-0.25",
+        "model_probability": 0.455794,
+        "push_probability": 0.127724,
+        "odds": 1.9,
+        "ev": -0.006268,
+        "minimum_acceptable_decimal_odds": 2.067,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "皇冠 主+0.25",
+        "model_probability": 0.416482,
+        "push_probability": 0.127724,
+        "odds": 1.8,
+        "ev": -0.122608,
+        "minimum_acceptable_decimal_odds": 2.262,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "皇冠 客-0.25",
+        "model_probability": 0.455794,
+        "push_probability": 0.127724,
+        "odds": 2.02,
+        "ev": 0.048427,
+        "minimum_acceptable_decimal_odds": 2.067,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "bet365 主+0.25",
+        "model_probability": 0.416482,
+        "push_probability": 0.127724,
+        "odds": 1.78,
+        "ev": -0.130938,
+        "minimum_acceptable_decimal_odds": 2.262,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "bet365 客-0.25",
+        "model_probability": 0.455794,
+        "push_probability": 0.127724,
+        "odds": 2.03,
+        "ev": 0.052985,
+        "minimum_acceptable_decimal_odds": 2.067,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "威廉希尔 主+0.25",
+        "model_probability": 0.416482,
+        "push_probability": 0.127724,
+        "odds": 1.8,
+        "ev": -0.122608,
+        "minimum_acceptable_decimal_odds": 2.262,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "威廉希尔 客-0.25",
+        "model_probability": 0.455794,
+        "push_probability": 0.127724,
+        "odds": 1.85,
+        "ev": -0.029057,
+        "minimum_acceptable_decimal_odds": 2.067,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "易胜博 主+0.25",
+        "model_probability": 0.416482,
+        "push_probability": 0.127724,
+        "odds": 1.9,
+        "ev": -0.08096,
+        "minimum_acceptable_decimal_odds": 2.262,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "易胜博 客-0.25",
+        "model_probability": 0.455794,
+        "push_probability": 0.127724,
+        "odds": 1.91,
+        "ev": -0.00171,
+        "minimum_acceptable_decimal_odds": 2.067,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "伟德 主+0.25",
+        "model_probability": 0.416482,
+        "push_probability": 0.127724,
+        "odds": 1.91,
+        "ev": -0.076795,
+        "minimum_acceptable_decimal_odds": 2.262,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "伟德 客-0.25",
+        "model_probability": 0.455794,
+        "push_probability": 0.127724,
+        "odds": 1.96,
+        "ev": 0.02108,
+        "minimum_acceptable_decimal_odds": 2.067,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      }
+    ]
+  },
+  "automation": {
+    "provider": "fixed-python-core",
+    "generated_at": "2026-07-16T12:43:16+00:00",
+    "owner_authorized_request": true,
+    "llm_used": false
+  },
+  "live_ev_profiles": {
+    "active": true,
+    "overlay_primary": true,
+    "contract": {
+      "match_id": "2040518",
+      "market_code": "1",
+      "market_name": "全场独赢",
+      "handicap_line": "",
+      "selection_code": "2",
+      "selection_name": "斯海杜克",
+      "contract_type": "three_way_selection"
+    },
+    "probability": {
+      "point": 0.455794,
+      "conservative": 0.380794,
+      "confirmed_model_output": true,
+      "source": "recent_form_market_calibrated_poisson_v2",
+      "calibration_status": "market_calibrated_with_uncertainty_haircut_not_holdout_calibrated"
+    },
+    "price": {
+      "max_quote_age_ms": 15000
+    },
+    "execution": {
+      "minimum_conservative_ev": 0.08
+    }
+  },
+  "market": {
+    "official_spf": {
+      "home": 3.12,
+      "draw": 3.35,
+      "away": 1.96
+    },
+    "official_rqspf": {
+      "handicap": 1,
+      "home": 1.66,
+      "draw": 3.65,
+      "away": 3.95
+    },
+    "official_market_baseline": {
+      "prices": {
+        "home": 3.12,
+        "draw": 3.35,
+        "away": 1.96
+      },
+      "overround": 1.129224,
+      "payout_rate": 0.885564,
+      "fair_probabilities": {
+        "home": 0.283834,
+        "draw": 0.264347,
+        "away": 0.451818
+      },
+      "role": "official_market_baseline_only_not_model_probability"
+    }
+  }
+}
