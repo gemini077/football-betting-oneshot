@@ -408,30 +408,39 @@ def apply_deterministic_core(analysis: dict, context: dict) -> dict:
     calibration = (core.get("model") or {}).get("calibration") or {}
     market = calibration.get("market_probabilities") or {}
     fundamentals = core.get("fundamentals") or {}
+    decisions = analysis.get("decisions") or {}
+    form = fundamentals.get("recent_form") or {}
+    home_home = form.get("home_home") or {}
+    away_away = form.get("away_away") or {}
+    home_name = (context.get("selected_workspace_match") or {}).get("home") or "主队"
+    away_name = (context.get("selected_workspace_match") or {}).get("away") or "客队"
     analysis["evidence_chain"] = [
         {
-            "title": "模型底盘｜60%近期主客场攻防",
+            "title": "足球维度",
             "items": [
-                f"近期攻防推导λ：主队{calibration.get('form_lambda_home', 0):.2f}，客队{calibration.get('form_lambda_away', 0):.2f}",
-                "这一层决定基础进球强度；实际进球数据不是xG，报告不冒充高级统计。",
+                f"{home_name}近10个主场{home_home.get('wins', '—')}胜{home_home.get('draws', '—')}平{home_home.get('losses', '—')}负，{away_name}近10个客场{away_away.get('wins', '—')}胜{away_away.get('draws', '—')}平{away_away.get('losses', '—')}负",
+                f"近期主客场攻防推导λ：{home_name}{calibration.get('form_lambda_home', 0):.2f}，{away_name}{calibration.get('form_lambda_away', 0):.2f}",
+                decisions.get("match_story") or "比赛剧本等待完整数据。",
             ],
         },
         {
-            "title": "市场校准｜40%多公司共识",
+            "title": "市场维度",
             "items": [
                 f"去水共识：主胜{market.get('home', 0):.1%}、平局{market.get('draw', 0):.1%}、客胜{market.get('away', 0):.1%}",
-                f"大小球中轴：{calibration.get('market_total_line_median') if calibration.get('market_total_line_median') is not None else '未取得'}；只校准，不替代模型。",
+                f"大小球中轴：{calibration.get('market_total_line_median') if calibration.get('market_total_line_median') is not None else '未取得'}；市场占40%校准权重，不替代模型。",
+                decisions.get("market_conflict") or "模型与市场暂未形成可解释分歧。",
             ],
         },
         {
-            "title": "价格审核｜8%安全边际",
+            "title": "执行维度",
             "items": [
                 "每个玩法分别展示当前价、模型概率、EV与最低可接受赔率；低于门槛一律不过线。",
-                "模型包含市场校准，因此正EV仅是价格复核信号，不宣称独立套利优势。",
+                "执行价额外要求8%安全边际；模型包含市场校准，因此正EV只是价格复核信号。",
+                decisions.get("score_vs_outcome_explanation") or "唯一比分只按单格概率解释。",
             ],
         },
         {
-            "title": "临场事实｜单独核验，不重复加权",
+            "title": "模型与临场核验",
             "items": [
                 f"公开事实核验状态：{fundamentals.get('status') or '待核验'}。",
                 "确认首发、关键伤停、天气或盘口换线与假设冲突时，必须重算而非沿用旧报告。",

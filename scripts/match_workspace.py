@@ -264,10 +264,15 @@ def review_rows(runtime: dict) -> list[dict]:
         row["_timeline"] = timeline_by_id.get(match_id)
         row["_root_cause"] = root_by_id.get(match_id)
     # GitHub 自动复盘先生成独立 JSON；工作簿是审计归档，不应成为主页显示
-    # 已完赛结果的前置条件。JSON 放在末尾，find_review 反向查找时优先采用它。
+    # 已完赛结果的前置条件。人工/工作簿完整复盘优先，自动 JSON 只补空缺。
     for review_path in sorted((DATA / "postmatch_reviews").glob("*.json")):
         payload = load_json(review_path, {})
-        if payload.get("赛事与对阵") and payload.get("实际90分钟比分"):
+        match = payload.get("match") or {}
+        if (
+            payload.get("赛事与对阵")
+            and payload.get("实际90分钟比分")
+            and not find_review(match.get("home"), match.get("away"), signals)
+        ):
             signals.append(payload)
     return signals
 

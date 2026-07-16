@@ -27,6 +27,9 @@ def test_deterministic_model_generates_complete_probability_matrix():
     assert result["decisions"]["unique_score"] == model["score_probabilities"][0]["score"]
     assert result["live_ev_profiles"]["active"] is True
     assert result["live_ev_profiles"]["contract"]["market_name"] == "全场独赢"
+    assert result["decisions"]["match_story"]
+    assert "单个比分格" in result["decisions"]["score_vs_outcome_explanation"]
+    assert result["decisions"]["market_conflict"]
 
 
 def test_deterministic_model_refuses_to_invent_missing_form():

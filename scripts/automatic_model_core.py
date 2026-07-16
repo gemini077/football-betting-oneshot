@@ -247,20 +247,60 @@ def build_automatic_model(context: dict) -> dict:
             "市场信息用于校准，因此该概率不是完全独立于赔率的纯基本面概率",
         ],
     }
+    workspace_match = context.get("selected_workspace_match") or {}
+    home_name = workspace_match.get("home") or "主队"
+    away_name = workspace_match.get("away") or "客队"
+    gap = lambda_home - lambda_away
+    if gap >= 0.25:
+        control_story = f"{home_name}更可能掌握主动，但{away_name}仍有足够进球期望制造反击或定位球威胁"
+    elif gap <= -0.25:
+        control_story = f"{away_name}的进攻期望更高，{home_name}需要依靠主场开局和转换效率保持平衡"
+    else:
+        control_story = "双方预期进球接近，比赛更可能由先入球、定位球或临场换人打破均衡"
+    if total >= 3.0:
+        tempo_story = "总进球中枢偏高；早段进球会显著放大开放对攻和右尾比分风险"
+    elif total <= 2.25:
+        tempo_story = "总进球中枢偏低；上半场试探和低比分停留时间可能较长"
+    else:
+        tempo_story = "总进球中枢处于常规区间，2至3球是主要密集带"
+    top_score = score_rows[0]["score"]
+    model_market_gap = probabilities[top_result] - market_probabilities[top_result]
+    market_conflict = (
+        f"模型对{labels[top_result]}的判断比多公司市场高{abs(model_market_gap):.1%}，需要用阵容与临盘验证这部分分歧"
+        if model_market_gap >= 0
+        else f"多公司市场对{labels[top_result]}的定价比模型更强{abs(model_market_gap):.1%}，不能把市场热度直接当成模型优势"
+    )
+    score_explanation = f"唯一比分{top_score}只是单个比分格的最高点；胜平负主线{labels[top_result]}是多个比分格合计，二者不要求同方向。"
+    dynamic_errors = []
+    away_away_games = float(away_away.get("matches") or 0)
+    home_home_games = float(home_home.get("matches") or 0)
+    if top_result == "home" and away_away_games:
+        away_loss_rate = float(away_away.get("losses") or 0) / away_away_games
+        if away_loss_rate <= 0.2:
+            dynamic_errors.append(f"{away_name}近{int(away_away_games)}个客场输球率仅{away_loss_rate:.0%}，主胜主线可能高估主场压制")
+    if top_result == "away" and home_home_games:
+        home_win_rate = float(home_home.get("wins") or 0) / home_home_games
+        if home_win_rate >= 0.6:
+            dynamic_errors.append(f"{home_name}近{int(home_home_games)}个主场胜率{home_win_rate:.0%}，客胜主线可能低估主场韧性")
+    dynamic_errors.append("若早段进球、红牌或比赛节奏偏离基准，总进球与比分尾部会同步变化")
+    if abs(model_market_gap) >= 0.05:
+        dynamic_errors.append(market_conflict)
+    dynamic_errors.extend([
+        "首发或关键伤停与当前假设不一致，会直接改变双方λ",
+        "临盘若出现跨公司同步升降盘，本次赛前快照的价格结构会失效",
+    ])
     decisions = {
         "unique_primary_dimension": f"胜平负：{labels[top_result]}（模型{probabilities[top_result]:.1%}）",
         "unique_score": score_rows[0]["score"],
         "mathematical_first": f"90分钟主胜{probabilities['home']:.1%}、平局{probabilities['draw']:.1%}、客胜{probabilities['away']:.1%}；λ={lambda_home:.2f}-{lambda_away:.2f}。",
         "market_first": f"多公司去水共识主胜{market_probabilities['home']:.1%}、平局{market_probabilities['draw']:.1%}、客胜{market_probabilities['away']:.1%}；大小球中轴{target_total:.2f}。",
-        "maximum_error_points": [
-            "首发或关键伤停与当前假设不一致，会直接改变双方λ",
-            "近期样本跨联赛/友谊赛且对手强度未完全校正，强弱差可能被放大",
-            "临盘若出现跨公司同步升降盘，本次赛前快照的价格结构会失效",
-        ],
+        "match_story": f"{control_story}；{tempo_story}。",
+        "market_conflict": market_conflict,
+        "score_vs_outcome_explanation": score_explanation,
+        "maximum_error_points": dynamic_errors[:4],
         "value_judgement": "仅完成模型概率与市场基线；须取得用户渠道即时赔率后才计算EV。",
         "final_state": "空仓｜未锁单",
     }
-    workspace_match = context.get("selected_workspace_match") or {}
     request = context.get("request") or {}
     match_id = str(workspace_match.get("id") or request.get("match_id") or "")
     selection_code = {"home": "1", "draw": "X", "away": "2"}[top_result]

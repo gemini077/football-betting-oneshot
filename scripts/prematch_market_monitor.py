@@ -23,7 +23,10 @@ def due_stage(match, now, hours_before=6.0):
     if kickoff.tzinfo is None and now.tzinfo is not None: kickoff=kickoff.replace(tzinfo=now.tzinfo)
     minutes=(kickoff-now).total_seconds()/60
     if 90 < minutes <= hours_before*60: return "T-6H"
-    if 5 <= minutes <= 90: return "T-90M"
+    if 35 < minutes <= 90: return "T-90M"
+    # The runner wakes every 30 minutes.  A 35-minute window guarantees one
+    # genuine late snapshot without pretending it was captured at T-15 exact.
+    if 0 <= minutes <= 35: return "T-30M"
     return None
 
 def due_matches(workspace, now, hours_before=6.0, state=None):

@@ -12,6 +12,7 @@ from generate_analysis_report import (  # noqa: E402
     sensitivity_scenarios,
     timeline_svg,
     pct,
+    render,
 )
 
 
@@ -73,6 +74,25 @@ class AnalysisReportVisualTests(unittest.TestCase):
         self.assertEqual("P001", betting["parlays"][0]["ticket_id"])
         self.assertEqual("中轴层", betting["parlays"][0]["tier"])
         self.assertEqual("待逐腿价格审核", betting["parlays"][0]["status"])
+
+    def test_report_restores_narrative_bridge_without_removing_new_modules(self):
+        payload = {
+            "report": {"model_name": "Football Betting OneShot", "model_version": "v0.14.1"},
+            "match": {"home": "主队", "away": "客队"},
+            "market": {}, "data_quality": {"missing": []},
+            "model": {}, "betting": {"candidates": [], "open_bets": []},
+            "decisions": {
+                "match_story": "主队控球，客队反击",
+                "market_conflict": "市场与模型存在分歧",
+                "score_vs_outcome_explanation": "比分单格与方向合计不同",
+                "maximum_error_points": ["首发变化"],
+            },
+        }
+        page = render(payload)
+        self.assertIn("比赛怎么发展", page)
+        self.assertIn("市场在防什么", page)
+        self.assertIn("比分与方向为何可能不同", page)
+        self.assertIn("EV与实时渠道复算", page)
 
 
 if __name__ == "__main__":
