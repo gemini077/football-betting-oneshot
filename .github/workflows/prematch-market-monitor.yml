@@ -2,7 +2,9 @@ name: Refresh analyzed pre-match markets
 on:
   workflow_dispatch:
   schedule:
-    - cron: "*/5 * * * *"
+    # Offset from the crowded top-of-hour boundary; GitHub may still queue
+    # scheduled jobs, so the monitor records actual capture time and lateness.
+    - cron: "2-59/5 * * * *"
 permissions:
   contents: write
   pages: write
