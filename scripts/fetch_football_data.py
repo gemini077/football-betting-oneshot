@@ -18,6 +18,7 @@ from fetch_trade_matches import fetch_trade_matches
 from liansai_api import fetch as fetch_liansai_round
 from liansai_api import fetch_all as fetch_liansai_all
 from market_history import rebuild_history
+from nowscore_markets import fetch_match_markets as fetch_nowscore_markets
 from polymarket_public import fetch_snapshot as fetch_polymarket_snapshot
 
 
@@ -104,6 +105,54 @@ def _deep_summary(result: dict) -> dict:
     }
 
 
+def _identity_fields(match: dict) -> tuple[str, str, str | None]:
+    home = str(match.get("home_team") or match.get("homeTeam") or match.get("home") or "").strip()
+    away = str(match.get("away_team") or match.get("awayTeam") or match.get("away") or "").strip()
+    kickoff = (
+        match.get("kickoff_local") or match.get("kickoff")
+        or " ".join(filter(None, [match.get("matchDate"), match.get("matchTime")]))
+        or None
+    )
+    return home, away, kickoff
+
+
+def _merge_market_page(primary: dict, secondary: dict, rows_key: str) -> dict:
+    """Keep valid 500 rows and add Nowscore companies not already present."""
+    primary = primary if isinstance(primary, dict) and not primary.get("error") else {}
+    secondary = secondary if isinstance(secondary, dict) else {}
+    merged = {**secondary, **primary}
+    primary_rows = [row for row in primary.get(rows_key) or [] if isinstance(row, dict)]
+    secondary_rows = [row for row in secondary.get(rows_key) or [] if isinstance(row, dict)]
+    seen = {int(row.get("cid") or 0) for row in primary_rows}
+    merged_rows = primary_rows + [row for row in secondary_rows if int(row.get("cid") or 0) not in seen]
+    merged[rows_key] = merged_rows
+    merged["total"] = len(merged_rows)
+    merged["sources"] = list(dict.fromkeys(
+        [str(primary.get("source") or "500_deep")] * bool(primary_rows)
+        + [str(secondary.get("source") or "nowscore_3in1")] * bool(secondary_rows)
+    ))
+    if not merged.get("pinnacle"):
+        merged["pinnacle"] = next((row for row in merged_rows if int(row.get("cid") or 0) == 1055), None)
+    return merged
+
+
+def _attach_nowscore(result: dict, nowscore: dict) -> dict:
+    result["nowscore"] = nowscore
+    if nowscore.get("status") != "OK":
+        return result
+    result["nowscore_id"] = nowscore.get("nowscore_id")
+    result["ouzhi"] = _merge_market_page(result.get("ouzhi") or {}, nowscore.get("ouzhi") or {}, "bookmakers")
+    result["yazhi"] = _merge_market_page(result.get("yazhi") or {}, nowscore.get("yazhi") or {}, "companies")
+    result["daxiao"] = _merge_market_page(result.get("daxiao") or {}, nowscore.get("daxiao") or {}, "companies")
+    result.setdefault("source_provenance", {})["nowscore_3in1"] = {
+        "source_url": nowscore.get("source_url"),
+        "fetched_at": nowscore.get("fetched_at"),
+        "identity": nowscore.get("identity"),
+        "quality": nowscore.get("quality"),
+    }
+    return result
+
+
 def main() -> int:
     state = json.loads(STATE_PATH.read_text(encoding="utf-8"))
     model_name = state.get("model_name", "Football Betting OneShot")
@@ -118,6 +167,8 @@ def main() -> int:
     parser.add_argument("--skip-sporttery", action="store_true", help="不抓中国竞彩主源")
     parser.add_argument("--skip-trade", action="store_true", help="不抓500竞彩比赛列表")
     parser.add_argument("--skip-polymarket", action="store_true", help="不抓Polymarket公开只读市场证据")
+    parser.add_argument("--skip-nowscore", action="store_true", help="深层抓取时不补充Nowscore三合一盘口")
+    parser.add_argument("--nowscore-id", type=int, help="显式指定Nowscore比赛ID；仍会核验主客队与开赛时间")
     parser.add_argument("--polymarket-home", help="Polymarket赛事匹配用英文主队名；中文队名无法可靠匹配时使用")
     parser.add_argument("--polymarket-away", help="Polymarket赛事匹配用英文客队名；须与--polymarket-home同时使用")
     parser.add_argument("--polymarket-kickoff", help="可选：ISO开球时间；用于防止同队名错配")
@@ -271,8 +322,20 @@ def main() -> int:
         deep_ids = list(dict.fromkeys(deep_ids))
 
     deep_summaries = []
+    nowscore_summaries = []
     for shuju_id in deep_ids:
         result = fetch_and_parse(shuju_id, args.date, DEEP_CACHE_DIR, args.no_cache)
+        identity_match = discovered_by_id.get(shuju_id) or ((selected_matches or official_matches or [{}])[0] if len(deep_ids) == 1 else {})
+        if not args.skip_nowscore and identity_match:
+            home, away, kickoff = _identity_fields(identity_match)
+            if home and away:
+                nowscore = fetch_nowscore_markets(home, away, kickoff, args.nowscore_id, args.no_cache)
+                result = _attach_nowscore(result, nowscore)
+                nowscore_summaries.append({
+                    "status": nowscore.get("status"), "nowscore_id": nowscore.get("nowscore_id"),
+                    "match": f"{home} vs {away}", "quality": nowscore.get("quality"),
+                    "identity_errors": nowscore.get("identity_errors"),
+                })
         deep_path = run_dir / f"{stamp}_500_deep_{args.date}_{shuju_id}.json"
         _write_json(deep_path, result)
         summary = _deep_summary(result)
@@ -291,6 +354,33 @@ def main() -> int:
         }
     elif args.deep:
         manifest["warnings"].append("已请求深层抓取，但没有可用的shuju_id。")
+
+    # Nowscore can still supply the three market families when no 500 match ID
+    # was discovered.  It is saved as a separate immutable analysis snapshot.
+    if args.deep and not deep_ids and not args.skip_nowscore:
+        identity_match = (selected_matches or official_matches or [{}])[0]
+        home, away, kickoff = _identity_fields(identity_match)
+        if home and away:
+            nowscore = fetch_nowscore_markets(home, away, kickoff, args.nowscore_id, args.no_cache)
+            nowscore_path = run_dir / f"{stamp}_nowscore_{args.date}_{nowscore.get('nowscore_id') or 'unmatched'}.json"
+            _write_json(nowscore_path, nowscore)
+            nowscore_summaries.append({
+                "status": nowscore.get("status"), "nowscore_id": nowscore.get("nowscore_id"),
+                "match": f"{home} vs {away}", "quality": nowscore.get("quality"),
+                "file": str(nowscore_path.relative_to(PROJECT_ROOT)).replace("\\", "/"),
+            })
+
+    if nowscore_summaries:
+        ok_count = sum(row.get("status") == "OK" for row in nowscore_summaries)
+        manifest["sources"]["nowscore"] = {
+            "status": "OK" if ok_count == len(nowscore_summaries) else "PARTIAL",
+            "success": ok_count > 0,
+            "match_count": ok_count,
+            "matches": nowscore_summaries,
+            "analysis_input_only": True,
+        }
+        if ok_count < len(nowscore_summaries):
+            manifest["warnings"].append("部分目标比赛未通过Nowscore主客队与开赛时间校验，未写入盘口。")
 
     manifest_path = run_dir / f"{stamp}_fetch_manifest.json"
     _write_json(manifest_path, manifest)

@@ -26,7 +26,7 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 API_URL = "https://api.deepseek.com/chat/completions"
 DEFAULT_MODEL = "deepseek-v4-pro"
-MODEL_VERSION = "v0.14.1"
+MODEL_VERSION = "v0.15.0"
 AUTO_INPUT_ROOT = ROOT / "data" / "analysis_inputs" / "automated"
 WORKSPACE_PATH = ROOT / "data" / "match_workspace" / "latest.json"
 DEEP_FALLBACK_ROOT = ROOT / "data" / "source_cache" / "deep_fallback"

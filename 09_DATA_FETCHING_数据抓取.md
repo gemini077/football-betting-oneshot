@@ -3,18 +3,20 @@
 ## 统一入口
 
 ```powershell
-python scripts\fetch_football_data.py --date YYYY-MM-DD [--match 球队或赛事] [--deep] [--no-cache] [--polymarket-home 英文主队 --polymarket-away 英文客队]
+python scripts\fetch_football_data.py --date YYYY-MM-DD [--match 球队或赛事] [--deep] [--no-cache] [--nowscore-id 比赛ID] [--polymarket-home 英文主队 --polymarket-away 英文客队]
 ```
 
 `--date` 按竞彩业务日期解释，不等同于自然日开球日期。晚间销售周期内跨午夜开球的比赛仍归入前一业务日；输出同时保留 `business_date` 和 `kickoff_local`。
 
 - 不加 `--deep`：抓取中国竞彩主源和500比赛列表、可见官方赔率、`shuju_id`。
-- 加 `--deep`：对筛选后的比赛继续抓取欧赔、亚盘、让球、大小球、基本面和交易六页。
+- 加 `--deep`：对筛选后的比赛继续抓取500六个深层页，并从 Nowscore 三合一页面补充标准盘、让球盘和大小球的初盘/即时盘。
 - `--shuju-id 1234567`：显式指定比赛ID；支持逗号分隔多个ID。
 - `--sid 19476 --round A`：可选调用500联赛API核验赛程和比赛ID。
 - `--no-cache`：强制刷新；默认缓存有效期为1小时。
 - Polymarket默认只尝试公开赛事匹配；中文队名无法可靠匹配时，用 `--polymarket-home`、`--polymarket-away` 提供英文别名，并可用 `--polymarket-kickoff` 限定ISO开球时间。
 - `--skip-polymarket`：不抓Polymarket公开只读市场证据。
+- `--nowscore-id 2912840`：必要时显式指定 Nowscore 比赛ID；仍会核验主队、客队和开赛时间，不一致时拒绝赋值。
+- `--skip-nowscore`：不抓 Nowscore 三合一盘口。
 
 示例：
 
@@ -28,8 +30,9 @@ python scripts\fetch_football_data.py --date 2026-07-15 --match 法国 --deep --
 2. `sporttery.cn`：竞彩SPF/RQSPF主源。
 3. `trade.500.com` 和500深层页中的竞彩官方行：竞彩后备源及比赛ID发现。
 4. 500欧赔、亚盘、大小球和交易页：分析层市场数据。
-5. 球队、赛事官方消息与可靠统计源：确认首发、伤停、天气、场地和高级数据的核验源。
-6. Polymarket公开市场：只作为市场共识、分歧、流动性和价格轨迹证据；不是用户执行赔率，不连接账户，不直接进入概率、EV或仓位。
+5. Nowscore 三合一页面：补充多公司标准盘、让球盘和大小球；必须通过主客队同向与开赛时间校验，保留来源公司ID并映射项目统一公司ID。
+6. 球队、赛事官方消息与可靠统计源：确认首发、伤停、天气、场地和高级数据的核验源。
+7. Polymarket公开市场：只作为市场共识、分歧、流动性和价格轨迹证据；不是用户执行赔率，不连接账户，不直接进入概率、EV或仓位。
 
 抓取脚本无法替代用户实际成交价格，也不能把预计阵容当成确认首发。无法核到的字段必须标记“未核到”。
 

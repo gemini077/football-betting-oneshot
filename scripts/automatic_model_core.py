@@ -10,9 +10,13 @@ from risk_engine import dixon_coles_score_matrix
 
 
 def _deep_snapshot(context: dict) -> dict:
-    source = (context.get("source_snapshots") or {}).get("500_deep") or {}
-    snapshots = source.get("snapshots") if isinstance(source, dict) else []
-    return snapshots[0] if snapshots and isinstance(snapshots[0], dict) else {}
+    sources = context.get("source_snapshots") or {}
+    for source_name in ("500_deep", "nowscore"):
+        source = sources.get(source_name) or {}
+        snapshots = source.get("snapshots") if isinstance(source, dict) else []
+        if snapshots and isinstance(snapshots[0], dict):
+            return snapshots[0]
+    return {}
 
 
 def _rate(row: dict, key: str) -> float | None:
