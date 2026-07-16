@@ -17,19 +17,27 @@ def parse_time(value):
     try: return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
     except (TypeError, ValueError): return None
 
-def due_stage(match, now, hours_before=6.0):
+def due_stage(match, now, hours_before=8.0):
     kickoff=parse_time(match.get("kickoff"))
     if kickoff is None: return None
     if kickoff.tzinfo is None and now.tzinfo is not None: kickoff=kickoff.replace(tzinfo=now.tzinfo)
     minutes=(kickoff-now).total_seconds()/60
-    if 90 < minutes <= hours_before*60: return "T-6H"
-    if 35 < minutes <= 90: return "T-90M"
-    # The runner wakes every 30 minutes.  A 35-minute window guarantees one
-    # genuine late snapshot without pretending it was captured at T-15 exact.
-    if 0 <= minutes <= 35: return "T-30M"
+    windows = (
+        (420, hours_before * 60, "T-8H"),
+        (300, 420, "T-6H"),
+        (180, 300, "T-4H"),
+        (90, 180, "T-2H"),
+        (60, 90, "T-90M"),
+        (30, 60, "T-60M"),
+        (10, 30, "T-30M"),
+        (0, 10, "T-10M"),
+    )
+    for lower, upper, stage in windows:
+        if lower < minutes <= upper or (lower == 0 and 0 <= minutes <= upper):
+            return stage
     return None
 
-def due_matches(workspace, now, hours_before=6.0, state=None):
+def due_matches(workspace, now, hours_before=8.0, state=None):
     state=state or {}
     rows=[]
     for match in workspace.get("matches") or []:
@@ -78,7 +86,7 @@ def refresh_match(match):
     return {"match":label,"status":"refreshed","report":report.get("html"),"fundamentals":fundamentals_status}
 
 def main():
-    parser=argparse.ArgumentParser(description=__doc__); parser.add_argument("--now"); parser.add_argument("--hours-before",type=float,default=6.0); parser.add_argument("--count-due",action="store_true"); args=parser.parse_args()
+    parser=argparse.ArgumentParser(description=__doc__); parser.add_argument("--now"); parser.add_argument("--hours-before",type=float,default=8.0); parser.add_argument("--count-due",action="store_true"); args=parser.parse_args()
     now=parse_time(args.now) if args.now else datetime.now().astimezone()
     if now is None: raise SystemExit("--now must be an ISO timestamp")
     workspace=load_json(WORKSPACE) if WORKSPACE.exists() else {"matches":[]}

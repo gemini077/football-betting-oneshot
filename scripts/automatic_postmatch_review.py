@@ -17,6 +17,7 @@ from postmatch_queue import BASE_DIR, SHANGHAI, load_json
 
 SCHEDULE_ROOT = BASE_DIR / "data" / "postmatch_automation" / "schedules"
 REVIEW_ROOT = BASE_DIR / "data" / "postmatch_reviews"
+REAL_BET_ROOT = BASE_DIR / "data" / "real_bets"
 
 
 def _score(value: Any) -> tuple[int, int] | None:
@@ -134,21 +135,73 @@ def _btts_pick(report: dict) -> str | None:
 
 
 def _movement(report: dict) -> str:
-    intelligence = report.get("market_intelligence") or {}
-    risk = report.get("risk_engine") or {}
-    decisions = report.get("decisions") or {}
-    pieces = []
-    if decisions.get("market_movement"):
-        pieces.append(str(decisions["market_movement"]))
-    modules = intelligence.get("modules") or {}
-    for key, label in (("lead_lag", "升降盘"), ("water_flow", "水位"), ("exchange", "交易所")):
-        module = modules.get(key) or {}
-        if module.get("summary") or module.get("reason"):
-            pieces.append(f"{label}：{module.get('summary') or module.get('reason')}")
-    traps = (risk.get("traps") or {}).get("triggered") or []
-    if traps:
-        pieces.append("陷阱：" + "；".join(str(item.get("name") or item) for item in traps[:3]))
-    return "；".join(pieces) or "赛前报告未形成可结算的多帧临盘信号"
+    consensus = (report.get("market") or {}).get("consensus") or {}
+    opening, current = consensus.get("open") or {}, consensus.get("current") or {}
+    labels = (("home", "主胜"), ("draw", "平局"), ("away", "客胜"))
+    pieces, strongest_cut = [], None
+    for key, label in labels:
+        try: old, new = float(opening[key]), float(current[key])
+        except (KeyError, TypeError, ValueError): continue
+        change = new - old
+        pieces.append(f"{label}{old:.2f}→{new:.2f}（{'降' if change < 0 else '升' if change > 0 else '平'}{abs(change):.2f}）")
+        if change < 0 and (strongest_cut is None or change < strongest_cut[0]): strongest_cut = (change, label)
+    if not pieces:
+        return "本次冻结快照未形成可量化的价格变化，结论仅按模型概率执行"
+    support = strongest_cut[1] if strongest_cut else "不支持单边追价"
+    return "；".join(pieces) + f"。最大变化支持：{support}；若临场方向反转并跨回初盘价，则取消该价格信号。"
+
+
+def _root_cause(report: dict, actual_outcome: str, actual_score: str, misses: list[str], classification: str) -> dict:
+    probs = (report.get("model") or {}).get("probabilities") or {}
+    labels = {"home": "主胜", "draw": "平局", "away": "客胜"}
+    numeric = {labels[key]: float(value) for key, value in probs.items() if key in labels and isinstance(value, (int, float))}
+    top = max(numeric, key=numeric.get) if numeric else "无有效方向"
+    actual_prob = numeric.get(actual_outcome)
+    top_prob = numeric.get(top)
+    gap = max(0.0, (top_prob or 0) - (actual_prob or 0))
+    score_rows = (report.get("model") or {}).get("score_probabilities") or []
+    rank = next((index + 1 for index, row in enumerate(score_rows) if str(row.get("score")) == actual_score), None)
+    score_note = f"实际比分在赛前矩阵第{rank}位" if rank else "实际比分未进入赛前主要比分区间"
+    audit = "；".join(misses) if misses else "主维度及辅助维度均按冻结判断通过"
+    counter = (f"模型当时首位为{top}，实际{actual_outcome}概率低{gap:.1%}；"
+               f"若赛前将{actual_outcome}上调超过{gap:.1%}，主方向会翻转。{score_note}。")
+    identifiable = "赛前可通过概率差、实际比分尾部排名和价格反向条件识别；不能用赛后比分倒推改写首推"
+    change = ("主维度错误进入同类样本校准池；累计同型错误达到3场后再调整胜平负/低比分权重"
+              if "错误" in classification else "本场不改主模型参数，只记录比分分布残差")
+    return {"决策节点审计": audit, "反事实推演": counter, "赛前可识别性": identifiable,
+            "是否修改模型": "观察累计，禁止单场追参", "具体修改建议": change,
+            "收敛结论": classification, "生效状态": "观察池", "优先级": "P1" if "错误" in classification else "P2",
+            "最大错点触发透视": f"赛前概率首位{top}；实际结果{actual_outcome}；{score_note}"}
+
+
+def settle_real_bets(home: str, away: str, home_goals: int, away_goals: int) -> list[dict]:
+    """Settle only user-confirmed records with their actual entered price/stake."""
+    if not REAL_BET_ROOT.exists(): return []
+    expected = f"{home} vs {away}"
+    settled = []
+    for path in sorted(REAL_BET_ROOT.glob("REAL-*.json")):
+        payload = load_json(path)
+        if str(payload.get("match") or "") != expected or payload.get("status") not in {"locked", "settled"}:
+            continue
+        selection = str(payload.get("selection") or "")
+        score_pick = _score(selection)
+        if score_pick is not None:
+            hit = score_pick == (home_goals, away_goals)
+        else:
+            _, _, hit, _ = _primary_settlement(selection, home_goals, away_goals)
+        stake, odds = float(payload.get("stake") or 0), float(payload.get("odds") or 0)
+        profit = round(stake * (odds - 1), 2) if hit is True else -stake if hit is False else 0.0
+        payload.update({"status": "settled", "settlement": "赢" if hit is True else "输" if hit is False else "走/不可结算", "profit": profit,
+                        "result_90m": f"{home_goals}-{away_goals}", "settled_at": datetime.now(SHANGHAI).isoformat()})
+        path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        settled.append(payload)
+    if settled:
+        rows = []
+        for path in sorted(REAL_BET_ROOT.glob("REAL-*.json")):
+            try: rows.append(load_json(path))
+            except (OSError, json.JSONDecodeError): pass
+        (REAL_BET_ROOT / "latest.json").write_text(json.dumps({"bets": rows}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    return settled
 
 
 def build_review(schedule: dict, report: dict, now: datetime) -> dict:
@@ -232,7 +285,7 @@ def build_review(schedule: dict, report: dict, now: datetime) -> dict:
         "最大错点类型": "模型方向错误" if primary_hit is False else "比分分布误差" if score_hit is False else "无核心错点",
         "复盘摘要": summary,
         "_timeline": {**_market_timeline(report), "盘口变化与赛果方向": _movement(report), "最终赛果验证": actual_score, "来源/备注": "自动复盘读取冻结赛前报告；没有的时间节点明确保留为空，不用赛后价格回填"},
-        "_root_cause": {"决策节点审计": "；".join(misses) or "主维度及辅助维度结算通过", "反事实推演": "若赛前最大错点发生，应降低概率置信度而不是改写唯一首推", "赛前可识别性": "以冻结报告中已记录错点为准", "是否修改模型": "进入累计样本，达到阈值后再修正", "具体修改建议": "按玩法分别累计校准，不以单场结果追改参数", "收敛结论": classification, "生效状态": "观察池", "优先级": "P1" if primary_hit is False else "P2"},
+        "_root_cause": _root_cause(report, actual_outcome, actual_score, misses, classification),
     }
 
 
@@ -249,6 +302,9 @@ def generate(schedule_root: Path = SCHEDULE_ROOT, review_root: Path = REVIEW_ROO
             outcomes.append({"match_key": schedule.get("match_key"), "status": "missing_source_report"})
             continue
         review = build_review(schedule, load_json(source), now)
+        actual = _score(schedule.get("result_90m"))
+        if actual:
+            review["real_bet_settlements"] = settle_real_bets(str(schedule.get("home") or ""), str(schedule.get("away") or ""), *actual)
         target = review_root / (re.sub(r"[^0-9A-Za-z._-]+", "_", str(schedule.get("match_key") or "match")).strip("_") + ".json")
         target.write_text(json.dumps(review, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         try:

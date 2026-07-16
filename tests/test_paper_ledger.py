@@ -4,7 +4,7 @@ from scripts.paper_ledger import build_paper_ledger, pair_key, settle_ticket
 def report(primary="小2.5", odds=1.9, score="1-1"):
     return {
         "match": {"home": "甲", "away": "乙", "kickoff_local": "2026-07-15 03:00"},
-        "report": {"model_version": "v0.12.0", "analysis_timestamp": "2026-07-14T20:00:00+08:00"},
+        "report": {"model_version": "v0.12.0", "analysis_timestamp": "2026-07-15T01:30:00+08:00"},
         "model": {
             "probabilities": {"home": 0.4, "draw": 0.3, "away": 0.3},
             "score_probabilities": [{"score": score, "probability": 0.14}],

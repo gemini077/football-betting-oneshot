@@ -13,6 +13,10 @@ from pathlib import Path
 from typing import Any
 
 from openpyxl import load_workbook
+try:
+    from paper_ledger import pair_key
+except ImportError:
+    from scripts.paper_ledger import pair_key
 
 
 BASE_DIR = Path(__file__).resolve().parents[1]
@@ -138,13 +142,26 @@ def review_data(workbook_path: Path) -> tuple[list[dict[str, Any]], list[dict[st
         if not payload.get("赛事与对阵") or match_id in known:
             continue
         payload["MatchID"] = match_id
+        payload["kickoff_local"] = (payload.get("match") or {}).get("kickoff_local")
         signals.append(payload)
         if isinstance(payload.get("_timeline"), dict):
             timeline.append({"记录ID": match_id, "比赛ID与对阵": f"{match_id}｜{payload.get('赛事与对阵')}", **payload["_timeline"]})
         if isinstance(payload.get("_root_cause"), dict):
             roots.append({"比赛场次": f"{match_id}｜{payload.get('赛事与对阵')}", **payload["_root_cause"]})
         known.add(match_id)
-    return locks, signals, timeline, roots
+    runtime = load_json(RUNTIME_PATH, {}) or {}
+    reviewed = runtime.get("latest_reviewed_matches") or []
+    for row in signals:
+        if row.get("kickoff_local"): continue
+        name = text(row.get("赛事与对阵"))
+        match = next((item for item in reviewed if text(item.get("match")) == name), None)
+        if match: row["kickoff_local"] = match.get("kickoff")
+    ordered = sorted(signals, key=lambda row: text(row.get("kickoff_local")) if row.get("kickoff_local") else "", reverse=True)
+    for index, row in enumerate(ordered, 1):
+        kickoff = text(row.get("kickoff_local"))
+        stamp = re.sub(r"\D", "", kickoff)[:8] if kickoff != "—" else "HISTORY"
+        row["display_id"] = f"{stamp}-{index:03d}"
+    return locks, ordered, timeline, roots
 
 
 def _field(label: str, value: Any, *, accent: bool = False) -> str:
@@ -161,8 +178,8 @@ def settlement_label(value: Any) -> str:
     return text(value)
 
 
-def render_review_page(signal: dict[str, Any], timeline: dict[str, Any], root: dict[str, Any], locks: list[dict[str, Any]], generated_at: datetime) -> str:
-    match_id = str(signal.get("MatchID") or "—")
+def render_review_page(signal: dict[str, Any], timeline: dict[str, Any], root: dict[str, Any], locks: list[dict[str, Any]], generated_at: datetime, paper_tickets: list[dict] | None = None, real_bets: list[dict] | None = None) -> str:
+    match_id = str(signal.get("display_id") or "—")
     match_name = signal.get("赛事与对阵") or "未命名比赛"
     score = signal.get("实际90分钟比分")
     classification = signal.get("红黑与模型逻辑分类")
@@ -202,6 +219,14 @@ def render_review_page(signal: dict[str, Any], timeline: dict[str, Any], root: d
         f'<tr><td>{esc(row.get("注单ID"))}</td><td>{esc(row.get("投注层标签"))}</td><td>{esc(row.get("投注方向"))}</td><td>{esc(row.get("下注赔率"))}</td><td>{esc(row.get("下注金额"))}</td><td>{esc(row.get("注单状态"))}</td><td>{esc(row.get("盈亏"))}</td></tr>'
         for row in locks
     ) or '<tr><td colspan="7" class="empty-cell">本场未锁单；只复盘模型，不制造真实盈亏。</td></tr>'
+    paper_rows = "".join(
+        f'<tr><td>{esc(row.get("ticket_id"))}</td><td>{esc(row.get("market"))}</td><td>{esc(row.get("selection"))}</td><td>{esc(row.get("odds"))}</td><td>{esc(row.get("stake_units"))}</td><td>{esc(row.get("status"))}</td><td>{esc(row.get("profit_units"))}</td></tr>'
+        for row in (paper_tickets or [])
+    ) or '<tr><td colspan="7" class="empty-cell">本场没有通过正EV与最低金额审核的T-90模拟注单。</td></tr>'
+    real_rows = "".join(
+        f'<tr><td>{esc(row.get("bet_id"))}</td><td>{esc(row.get("market"))}</td><td>{esc(row.get("selection"))}</td><td>{esc(row.get("odds"))}</td><td>{esc(row.get("stake"))}</td><td>{esc(row.get("status"))}</td><td>{esc(row.get("profit"))}</td></tr>'
+        for row in (real_bets or [])
+    ) or lock_rows
     return f'''<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{esc(match_name)}｜完整赛后复盘</title><style>
 :root{{--bg:#0a0811;--panel:#151020;--panel2:#1d142b;--ink:#f8f3fb;--body:#cdc4d7;--mut:#948aa2;--line:rgba(255,255,255,.1);--red:#ff3657;--pink:#ff7189;--purple:#9b7fd0;--green:#39d6a0;--amber:#ffbd5c}}
@@ -214,7 +239,8 @@ def render_review_page(signal: dict[str, Any], timeline: dict[str, Any], root: d
 <section class="card"><h2>03｜赛前推理回放</h2><div class="facts">{_field('三维交叉验证',signal.get('赛前三维交叉验证结论'))}{_field('盘路性质',signal.get('盘路性质判定'))}{_field('赛前最大错点',signal.get('赛前最大错点'))}{_field('赛后错点归因',signal.get('错点归因（单选）'))}{_field('相邻比分污染',signal.get('相邻比分污染'))}{_field('冷门/右尾污染',signal.get('冷门/右尾污染'))}</div></section>
 <section class="card"><h2>04｜盘口时间线与数据有效性</h2><div class="facts">{timeline_html}</div></section>
 <section class="card full"><h2>05｜根因、反事实与模型修正</h2><div class="facts">{root_html}</div></section>
-<section class="card full"><h2>06｜真实注单与结算</h2><div class="table-wrap"><table><thead><tr><th>注单ID</th><th>层级</th><th>方向</th><th>赔率</th><th>金额</th><th>状态</th><th>盈亏</th></tr></thead><tbody>{lock_rows}</tbody></table></div></section></div>
+<section class="card full"><h2>06｜模拟注单结算</h2><div class="table-wrap"><table><thead><tr><th>模拟ID</th><th>玩法</th><th>方向</th><th>冻结赔率</th><th>金额</th><th>状态</th><th>盈亏</th></tr></thead><tbody>{paper_rows}</tbody></table></div></section>
+<section class="card full"><h2>07｜真实注单结算</h2><div class="table-wrap"><table><thead><tr><th>注单ID</th><th>玩法</th><th>方向</th><th>实际赔率</th><th>实际金额</th><th>状态</th><th>盈亏</th></tr></thead><tbody>{real_rows}</tbody></table></div></section></div>
 <footer>冻结赛前判断后再核验赛果；没有的价格和时间节点保持为空，不用赛后信息回填。未明确“锁单/已下单”时，不生成真实注单或账户盈亏。</footer></main></body></html>'''
 
 
@@ -223,11 +249,18 @@ def write_review_pages(signals: list[dict[str, Any]], timelines: list[dict[str, 
     timeline_map = {row_match_id(row, "比赛ID与对阵", "记录ID"): row for row in timelines}
     root_map = {row_match_id(row, "比赛场次"): row for row in roots}
     links: dict[str, str] = {}
+    paper = (load_json(BASE_DIR / "data" / "paper_ledger" / "latest.json", {}) or {}).get("tickets") or []
+    real = (load_json(BASE_DIR / "data" / "real_bets" / "latest.json", {}) or {}).get("bets") or []
     for signal in signals:
         match_id = str(signal.get("MatchID") or safe_slug(signal.get("赛事与对阵")))
         related_locks = [row for row in locks if match_id and match_id in text(row.get("比赛ID与对阵"))]
+        name = text(signal.get("赛事与对阵"))
+        teams = re.split(r"\s+vs\s+", name, maxsplit=1, flags=re.IGNORECASE)
+        key = pair_key(*teams) if len(teams) == 2 else ""
+        related_paper = [row for row in paper if row.get("match_key") == key]
+        related_real = [row for row in real if text(row.get("match")) == name]
         target = output_root / f"{safe_slug(match_id)}.html"
-        target.write_text(render_review_page(signal, timeline_map.get(match_id, {}), root_map.get(match_id, {}), related_locks, generated_at), encoding="utf-8")
+        target.write_text(render_review_page(signal, timeline_map.get(match_id, {}), root_map.get(match_id, {}), related_locks, generated_at, related_paper, related_real), encoding="utf-8")
         links[match_id] = f"../postmatch_reports/{target.name}"
     return links
 
@@ -235,12 +268,13 @@ def write_review_pages(signals: list[dict[str, Any]], timelines: list[dict[str, 
 def signal_cards(signals: list[dict[str, Any]], report_links: dict[str, str] | None = None) -> str:
     report_links = report_links or {}
     cards = []
-    for row in reversed(signals):
+    for row in signals:
         search = " ".join(text(v) for v in row.values()).casefold()
         report_url = report_links.get(str(row.get("MatchID") or ""), "")
         cards.append(
             f'''<article class="match-card" data-search="{html.escape(search, quote=True)}" data-hit="{esc(row.get('主维度是否命中'))}">
-              <div class="card-head"><span class="match-id">{esc(row.get('MatchID'))}</span><h3>{esc(row.get('赛事与对阵'))}</h3><span class="badge {badge_class(row.get('主维度是否命中'))}">主维度严格结算 {esc(row.get('主维度是否命中'))}</span></div>
+              <div class="card-head"><span class="match-id">{esc(row.get('display_id'))}</span><h3>{esc(row.get('赛事与对阵'))}</h3><span class="badge {badge_class(row.get('主维度是否命中'))}">主维度严格结算 {esc(row.get('主维度是否命中'))}</span></div>
+              <div class="meta">开赛：{esc(row.get('kickoff_local'))}</div>
               <div class="score-strip"><span>赛前唯一比分 <b>{esc(row.get('赛前唯一首推比分'))}</b></span><span>实际90分钟 <b>{esc(row.get('实际90分钟比分'))}</b></span><span class="badge {badge_class(row.get('比分是否命中'))}">唯一比分精确命中 {esc(row.get('比分是否命中'))}</span></div>
               <div class="detail-grid">
                 <div><label>赛前主维度</label><p>{esc(row.get('赛前首推主维度'))}</p></div>
@@ -270,13 +304,22 @@ def render_html(workbook_path: Path, runtime: dict[str, Any], queue: dict[str, A
                 report_links: dict[str, str] | None = None) -> str:
     locks, signals, timeline, roots = review_rows or review_data(workbook_path)
     kpis = calculate_kpis(locks, signals, runtime)
+    display_map = {str(row.get("MatchID") or ""): str(row.get("display_id") or "") for row in signals}
+    def public_value(value: Any) -> Any:
+        rendered = text(value)
+        for internal, public in display_map.items():
+            if internal and public:
+                rendered = rendered.replace(internal, public)
+        return rendered
+    timeline_display = [{key: public_value(value) for key, value in row.items()} for row in timeline]
+    roots_display = [{key: public_value(value) for key, value in row.items()} for row in roots]
     pending = len(queue.get("pending", []))
     waiting = queue.get("counts", {}).get("waiting_for_finish", 0)
     hit_rate = "—" if kpis["hit_rate"] is None else f'{kpis["hit_rate"]:.1f}%'
     roi = "—" if kpis["roi"] is None else f'{kpis["roi"]:.1f}%'
     lock_table = data_table(locks, ["注单ID", "比赛ID与对阵", "主维度玩法", "投注方向", "下注赔率", "下注金额", "赛果", "注单状态", "实际回收金额", "模型逻辑分类", "备注"], "locks-table")
-    timeline_table = data_table(timeline, ["记录ID", "比赛ID与对阵", "开赛倒计时", "锁单窗口合规性", "初盘定位", "终盘定位（临场15min）", "终盘对比初盘变化", "最终赛果验证", "数据完整度"], "timeline-table")
-    root_table = data_table(roots, ["比赛场次", "决策节点审计", "反事实推演", "赛前可识别性", "是否修改模型", "具体修改建议", "收敛结论", "最大错点类型", "生效状态", "优先级"], "root-table")
+    timeline_table = data_table(timeline_display, ["记录ID", "比赛ID与对阵", "开赛倒计时", "锁单窗口合规性", "初盘定位", "终盘定位（临场15min）", "终盘对比初盘变化", "最终赛果验证", "数据完整度"], "timeline-table")
+    root_table = data_table(roots_display, ["比赛场次", "决策节点审计", "反事实推演", "赛前可识别性", "是否修改模型", "具体修改建议", "收敛结论", "最大错点类型", "生效状态", "优先级"], "root-table")
     source_name = esc(workbook_path.name)
     updated = generated_at.strftime("%Y-%m-%d %H:%M:%S")
     model_version = esc(runtime.get("model_version"))
@@ -289,7 +332,7 @@ def render_html(workbook_path: Path, runtime: dict[str, Any], queue: dict[str, A
     .shell{{max-width:1500px;margin:auto;padding:28px}} .hero{{display:flex;justify-content:space-between;gap:24px;align-items:flex-end;margin-bottom:22px}} .eyebrow{{color:#c4b5fd;font-weight:700;letter-spacing:.12em}} h1{{font-size:34px;margin:6px 0}} .hero p{{margin:0;color:var(--muted)}} .sync{{min-width:280px;background:#0e1526;border:1px solid var(--line);border-radius:16px;padding:15px 18px}} .sync strong{{display:block;color:var(--good);font-size:16px}} .kpis{{display:grid;grid-template-columns:repeat(7,minmax(120px,1fr));gap:12px;margin-bottom:20px}} .kpi{{background:linear-gradient(145deg,var(--panel2),var(--panel));border:1px solid var(--line);border-radius:16px;padding:16px}} .kpi span{{color:var(--muted);font-size:12px}} .kpi b{{display:block;font-size:23px;margin-top:5px}} .toolbar{{position:sticky;top:0;z-index:9;background:rgba(9,13,24,.88);backdrop-filter:blur(12px);display:flex;gap:10px;padding:12px 0}} button,.filter,input{{border:1px solid var(--line);background:#11192b;color:var(--text);border-radius:10px;padding:10px 13px}} button{{cursor:pointer}} button.active{{background:linear-gradient(90deg,var(--accent),var(--accent2));border-color:transparent}} input{{flex:1;min-width:220px}} .view{{display:none}} .view.active{{display:block}} .match-grid{{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}} .match-card{{background:linear-gradient(150deg,#151e34,#0f1626);border:1px solid var(--line);border-radius:18px;padding:18px;box-shadow:0 14px 40px rgba(0,0,0,.16)}} .card-head{{display:flex;align-items:center;gap:10px}} .card-head h3{{font-size:17px;margin:0;flex:1}} .match-id{{font-weight:800;color:#c4b5fd}} .score-strip{{display:flex;gap:18px;background:#0b1120;border-radius:12px;padding:12px;margin:14px 0}} .score-strip b{{font-size:17px}} .detail-grid{{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}} .detail-grid div{{border-left:2px solid #3b4b6c;padding-left:9px}} label{{color:var(--muted);font-size:11px}} p{{margin:3px 0}} .summary{{color:#c8d1e5;margin:15px 0}} .card-foot{{display:flex;align-items:center;justify-content:space-between;gap:10px;color:var(--muted);flex-wrap:wrap}} .report-link{{margin-left:auto;color:#fff;text-decoration:none;border:1px solid #7c3aed;background:linear-gradient(90deg,#7c3aed,#ec4899);border-radius:10px;padding:8px 12px;font-weight:700}} .report-link:hover{{filter:brightness(1.12)}} .badge{{display:inline-flex;align-items:center;padding:3px 9px;border-radius:999px;font-size:12px;white-space:nowrap}} .badge.good{{background:#123b2c;color:#62e4a6}} .badge.bad{{background:#451d27;color:#ff8c98}} .badge.warn{{background:#453717;color:#ffd36e}} .badge.neutral{{background:#25324a;color:#c1cbe0}} .table-wrap{{overflow:auto;background:#0f1626;border:1px solid var(--line);border-radius:16px}} table{{border-collapse:collapse;width:100%;min-width:1100px}} th{{position:sticky;top:0;background:#1b2540;color:#cbd5e9;text-align:left;padding:12px;border-bottom:1px solid var(--line);font-size:12px}} td{{padding:11px 12px;border-bottom:1px solid #222e48;vertical-align:top;max-width:320px}} tr:hover td{{background:#141e33}} .section-head{{display:flex;justify-content:space-between;align-items:center;margin:10px 0 14px}} .section-head h2{{margin:0}} .empty{{display:none;padding:35px;text-align:center;color:var(--muted)}} footer{{color:var(--muted);margin-top:22px;padding:15px 0;border-top:1px solid var(--line)}}
 @media(max-width:1050px){{.kpis{{grid-template-columns:repeat(3,1fr)}}.match-grid{{grid-template-columns:1fr}}.detail-grid{{grid-template-columns:repeat(2,1fr)}}}} @media(max-width:650px){{.shell{{padding:16px}}.hero{{display:block}}.sync{{margin-top:14px}}.kpis{{grid-template-columns:repeat(2,1fr)}}.toolbar{{flex-wrap:wrap}}.score-strip{{flex-wrap:wrap}}}}
 </style></head><body><main class="shell">
-<header class="hero"><div><div class="eyebrow">FOOTBALL BETTING ONESHOT · {model_version}</div><h1>赛后复盘工作台</h1><p>90分钟赛果口径｜记录ID递增｜赛前冻结、赛后归因</p></div><div class="sync"><strong>● 自动复盘已接入</strong><span>待核验 {pending} 场 · 等待结束 {waiting} 场</span><br><small>页面生成：{updated}</small></div></header>
+<header class="hero"><div><div class="eyebrow">FOOTBALL BETTING ONESHOT · {model_version}</div><h1>赛后复盘工作台</h1><p>按开赛时间由近到远｜90分钟赛果口径｜赛前冻结、赛后归因</p></div><div class="sync"><strong>● 自动复盘已接入</strong><span>待核验 {pending} 场 · 等待结束 {waiting} 场</span><br><small>页面生成：{updated}</small></div></header>
 <section class="kpis"><div class="kpi"><span>有效复盘</span><b>{kpis['reviews']}</b></div><div class="kpi"><span>已结注单</span><b>{kpis['locked']}</b></div><div class="kpi"><span>注单命中率</span><b>{hit_rate}</b></div><div class="kpi"><span>累计投注</span><b>¥{kpis['stake']:.2f}</b></div><div class="kpi"><span>净盈亏</span><b>¥{kpis['profit']:.2f}</b></div><div class="kpi"><span>ROI</span><b>{roi}</b></div><div class="kpi"><span>当前余额</span><b>¥{kpis['balance']:.2f}</b></div></section>
 <nav class="toolbar"><button class="tab active" data-view="signals">比赛复盘</button><button class="tab" data-view="locks">注单结算</button><button class="tab" data-view="timeline">盘口时间轴</button><button class="tab" data-view="roots">根因与修正</button><input id="search" placeholder="搜索球队、记录ID、玩法或错点…"><select id="hit-filter" class="filter"><option value="">全部命中状态</option><option>是</option><option>否</option></select></nav>
 <section id="signals" class="view active"><div class="section-head"><h2>赛前信号与赛果归因</h2><span>{len(signals)} 场</span></div><div class="match-grid">{signal_cards(signals, report_links)}</div></section>

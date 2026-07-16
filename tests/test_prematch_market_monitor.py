@@ -12,12 +12,12 @@ def test_due_matches_only_returns_analyzed_near_kickoff():
 def test_due_matches_runs_each_checkpoint_once():
     workspace={"matches":[{"id":"1","report_state":"已分析","kickoff":"2026-07-16 03:00"}]}
     now=datetime.fromisoformat("2026-07-15 23:00")
-    assert due_matches(workspace,now,state={})[0]["_monitor_stage"] == "T-6H"
-    assert due_matches(workspace,now,state={"1":{"T-6H":"done"}}) == []
-    final=datetime.fromisoformat("2026-07-16 02:00")
-    assert due_matches(workspace,final,state={"1":{"T-6H":"done"}})[0]["_monitor_stage"] == "T-90M"
+    assert due_matches(workspace,now,state={})[0]["_monitor_stage"] == "T-4H"
+    assert due_matches(workspace,now,state={"1":{"T-4H":"done"}}) == []
+    final=datetime.fromisoformat("2026-07-16 01:45")
+    assert due_matches(workspace,final,state={"1":{"T-4H":"done"}})[0]["_monitor_stage"] == "T-90M"
     late=datetime.fromisoformat("2026-07-16 02:35")
-    state={"1":{"T-6H":"done","T-90M":"done"}}
+    state={"1":{"T-4H":"done","T-90M":"done"}}
     assert due_matches(workspace,late,state=state)[0]["_monitor_stage"] == "T-30M"
     assert due_matches(workspace,late,state={"1":{**state["1"],"T-30M":"done"}}) == []
 
