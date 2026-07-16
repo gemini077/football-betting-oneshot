@@ -1,5 +1,6 @@
 import json
 import sys
+from datetime import datetime
 from types import SimpleNamespace
 from pathlib import Path
 
@@ -197,8 +198,16 @@ def test_initial_analysis_marks_current_monitor_checkpoint(tmp_path, monkeypatch
     state = tmp_path / "monitor_state.json"
     monkeypatch.setattr("prematch_market_monitor.STATE_PATH", state)
     monkeypatch.setattr("prematch_market_monitor.due_stage", lambda match, now: "T-6H")
-    mark_initial_market_checkpoint({"selected_workspace_match": {"id": "123", "kickoff": "2026-07-16 03:00"}})
-    assert json.loads(state.read_text(encoding="utf-8"))["123"]["T-6H"]
+    metadata = mark_initial_market_checkpoint(
+        {"selected_workspace_match": {"id": "123", "kickoff": "2026-07-16 03:00"}},
+        datetime.fromisoformat("2026-07-15T21:05:00+08:00"),
+    )
+    stored = json.loads(state.read_text(encoding="utf-8"))["123"]["T-6H"]
+    assert stored == metadata
+    assert stored["target_minutes_before"] == 360
+    assert stored["actual_minutes_before"] == 355
+    assert stored["lateness_minutes"] == 5
+    assert stored["exact"] is False
 
 
 def test_fetch_uses_kickoff_date_for_after_midnight_match(monkeypatch):

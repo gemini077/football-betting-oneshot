@@ -538,23 +538,26 @@ def report_manifest(manifest_path: Path, context: dict) -> Path:
     return output
 
 
-def mark_initial_market_checkpoint(context: dict) -> None:
+def mark_initial_market_checkpoint(context: dict, now: datetime | None = None) -> dict | None:
     """Prevent the monitor from immediately repeating the just-fetched snapshot."""
-    from prematch_market_monitor import STATE_PATH, due_stage
+    from prematch_market_monitor import STATE_PATH, checkpoint_meta, due_stage
     match = context.get("selected_workspace_match") or {}
     match_id = str(match.get("id") or "")
-    stage = due_stage(match, datetime.now().astimezone()) if match_id else None
+    now = now or datetime.now().astimezone()
+    stage = due_stage(match, now) if match_id else None
     if not stage:
-        return
+        return None
+    metadata = checkpoint_meta(match, now, stage)
     try:
         state = load_json(STATE_PATH) if STATE_PATH.exists() else {}
     except (OSError, json.JSONDecodeError):
         state = {}
-    state.setdefault(match_id, {})[stage] = datetime.now().astimezone().isoformat(timespec="seconds")
+    state.setdefault(match_id, {})[stage] = metadata
     STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
     temporary = STATE_PATH.with_suffix(".tmp")
     temporary.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
     temporary.replace(STATE_PATH)
+    return metadata
 
 
 def run_pipeline(request: dict, api_key: str = "", model_name: str = DEFAULT_MODEL, *, use_llm: bool = False) -> dict:
@@ -583,6 +586,17 @@ def run_pipeline(request: dict, api_key: str = "", model_name: str = DEFAULT_MOD
     else:
         print("[phase 2/5] deterministic core (no LLM tokens)", file=sys.stderr, flush=True)
         analysis = deterministic_analysis(context, request)
+    initial_checkpoint = mark_initial_market_checkpoint(context)
+    if initial_checkpoint:
+        analysis.setdefault("report", {})["market_checkpoint"] = initial_checkpoint
+        analysis.setdefault("automation", {})["market_refresh"] = {
+            **initial_checkpoint,
+            "initial_capture": True,
+            "model_recalculated": True,
+            "execution_authorized": False,
+            "lock_state_changed": False,
+            "bankroll_state_changed": False,
+        }
     AUTO_INPUT_ROOT.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now().astimezone().strftime("%Y%m%d_%H%M%S")
     safe_id = re.sub(r"[^A-Za-z0-9_-]", "_", request.get("match_id") or "match")
@@ -598,7 +612,6 @@ def run_pipeline(request: dict, api_key: str = "", model_name: str = DEFAULT_MOD
         sys.executable, "scripts/generate_analysis_report.py",
         "--fetch-manifest", str(render_manifest), "--analysis-json", str(output),
     ])
-    mark_initial_market_checkpoint(context)
     print("[phase 5/5] rebuilding homepage", file=sys.stderr, flush=True)
     run_json_command([sys.executable, "scripts/match_workspace.py", "--date", request["business_date"]])
     subprocess.run([sys.executable, "scripts/build_public_site.py"], cwd=ROOT, check=True)
