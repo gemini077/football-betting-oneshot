@@ -146,11 +146,16 @@ def _attach_nowscore(result: dict, nowscore: dict) -> dict:
     result["ouzhi"] = _merge_market_page(nowscore.get("ouzhi") or {}, result.get("ouzhi") or {}, "bookmakers")
     result["yazhi"] = _merge_market_page(nowscore.get("yazhi") or {}, result.get("yazhi") or {}, "companies")
     result["daxiao"] = _merge_market_page(nowscore.get("daxiao") or {}, result.get("daxiao") or {}, "companies")
+    nowscore_shuju = nowscore.get("shuju") or {}
+    if nowscore_shuju.get("recent_form"):
+        existing_shuju = result.get("shuju") if isinstance(result.get("shuju"), dict) else {}
+        result["shuju"] = {**existing_shuju, **nowscore_shuju}
     result.setdefault("source_provenance", {})["nowscore_3in1"] = {
         "source_url": nowscore.get("source_url"),
         "fetched_at": nowscore.get("fetched_at"),
         "identity": nowscore.get("identity"),
         "quality": nowscore.get("quality"),
+        "analysis_source_url": nowscore.get("analysis_source_url"),
     }
     return result
 

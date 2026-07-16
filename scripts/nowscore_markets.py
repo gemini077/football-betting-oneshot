@@ -9,12 +9,14 @@ home team, away team and kickoff have been checked in the same orientation.
 from __future__ import annotations
 
 import argparse
+import ast
 import html as html_lib
 import json
 import re
 import time
 import urllib.error
 import urllib.request
+from collections import Counter
 from datetime import datetime
 from html.parser import HTMLParser
 from pathlib import Path
@@ -26,6 +28,7 @@ ALIASES_PATH = ROOT / "data" / "team_aliases.json"
 CACHE_ROOT = ROOT / "data" / "source_cache" / "nowscore"
 SCHEDULE_URL = "https://live.nowscore.com/data/bf1.js"
 MARKET_URL = "https://live.nowscore.com/odds/match/{match_id}.htm"
+ANALYSIS_DATA_URL = "https://live.nowscore.com/analysisJs/data{match_id}.js"
 USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
@@ -359,6 +362,78 @@ def parse_three_in_one(html: str) -> dict:
     }
 
 
+def _analysis_array(text: str, name: str) -> list[list[object]]:
+    """Read one literal match-history array from Nowscore analysis JS."""
+    found = re.search(rf"var\s+{re.escape(name)}\s*=\s*(\[.*?\]);\s*var\s+", text, re.S)
+    if not found:
+        return []
+    try:
+        value = ast.literal_eval(found.group(1))
+    except (SyntaxError, ValueError):
+        return []
+    return [row for row in value if isinstance(row, list) and len(row) >= 10]
+
+
+def _target_team_id(rows: list[list[object]]) -> int | None:
+    ids: Counter[int] = Counter()
+    for row in rows:
+        for index in (4, 6):
+            try:
+                ids[int(row[index])] += 1
+            except (TypeError, ValueError, IndexError):
+                continue
+    return ids.most_common(1)[0][0] if ids else None
+
+
+def _form_summary(rows: list[list[object]], team_id: int, venue: str | None = None, limit: int = 10) -> dict:
+    selected = []
+    for row in rows:
+        try:
+            home_id, away_id = int(row[4]), int(row[6])
+            home_goals, away_goals = int(row[8]), int(row[9])
+        except (TypeError, ValueError, IndexError):
+            continue
+        is_home, is_away = home_id == team_id, away_id == team_id
+        if not (is_home or is_away):
+            continue
+        if venue == "home" and not is_home:
+            continue
+        if venue == "away" and not is_away:
+            continue
+        selected.append((home_goals, away_goals) if is_home else (away_goals, home_goals))
+        if len(selected) >= limit:
+            break
+    wins = sum(gf > ga for gf, ga in selected)
+    draws = sum(gf == ga for gf, ga in selected)
+    return {
+        "matches": len(selected), "wins": wins, "draws": draws,
+        "losses": len(selected) - wins - draws,
+        "goals_for": sum(gf for gf, _ in selected),
+        "goals_against": sum(ga for _, ga in selected),
+    }
+
+
+def parse_analysis_data(text: str) -> dict:
+    """Build the recent-form contract consumed by the deterministic model."""
+    home_rows, away_rows = _analysis_array(text, "h_data"), _analysis_array(text, "a_data")
+    home_id, away_id = _target_team_id(home_rows), _target_team_id(away_rows)
+    if home_id is None or away_id is None:
+        return {}
+    recent_form = {
+        "home_overall": _form_summary(home_rows, home_id),
+        "home_home": _form_summary(home_rows, home_id, "home"),
+        "away_overall": _form_summary(away_rows, away_id),
+        "away_away": _form_summary(away_rows, away_id, "away"),
+    }
+    if not all(item.get("matches") for item in recent_form.values()):
+        return {}
+    return {
+        "recent_form": recent_form,
+        "source_note": "Nowscore analysis recent results; actual goals, not xG",
+        "team_ids": {"home": home_id, "away": away_id},
+    }
+
+
 def _verified(target: dict, page_identity: dict, maximum_minutes: int = 180) -> tuple[bool, list[str]]:
     groups = _alias_groups()
     reasons = []
@@ -421,16 +496,37 @@ def fetch_match_markets(home: str, away: str, kickoff: object, explicit_id: int 
             "nowscore_id": match_id, "target": target, "page_identity": parsed["identity"],
             "identity_errors": reasons, "resolution": resolved,
         }
+    analysis_error = None
+    shuju = {}
+    analysis_cache = CACHE_ROOT / "raw" / f"{match_id}_analysis.js"
+    analysis_raw = None
+    if not no_cache and analysis_cache.exists() and time.time() - analysis_cache.stat().st_mtime < 3600:
+        analysis_raw = analysis_cache.read_bytes()
+    if analysis_raw is None:
+        try:
+            analysis_raw = _fetch_bytes(ANALYSIS_DATA_URL.format(match_id=match_id))
+            analysis_cache.parent.mkdir(parents=True, exist_ok=True)
+            analysis_cache.write_bytes(analysis_raw)
+        except (urllib.error.URLError, TimeoutError, OSError) as error:
+            analysis_error = f"{type(error).__name__}: {error}"
+    if analysis_raw is not None:
+        shuju = parse_analysis_data(_decode(analysis_raw))
+        if not shuju:
+            analysis_error = "RECENT_FORM_PARSE_EMPTY"
     return {
         "source": "nowscore_public_3in1", "status": "OK", "fetched_at": fetched_at,
         "nowscore_id": match_id, "target": target, "resolution": resolved,
         "identity": parsed["identity"], "source_url": MARKET_URL.format(match_id=match_id),
         "ouzhi": parsed["ouzhi"], "yazhi": parsed["yazhi"], "daxiao": parsed["daxiao"],
+        "shuju": shuju,
+        "analysis_source_url": ANALYSIS_DATA_URL.format(match_id=match_id),
+        "analysis_error": analysis_error,
         "quality": {
             "home_away_kickoff_verified": True,
             "bookmaker_count": parsed["ouzhi"]["total"],
             "asian_count": parsed["yazhi"]["total"],
             "total_count": parsed["daxiao"]["total"],
+            "recent_form_complete": bool((shuju.get("recent_form") or {})),
         },
     }
 

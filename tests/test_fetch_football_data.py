@@ -49,11 +49,13 @@ class MatchFilterTests(unittest.TestCase):
             ]},
             "yazhi": {"source": "nowscore_3in1", "companies": []},
             "daxiao": {"source": "nowscore_3in1", "companies": []},
+            "shuju": {"recent_form": {"home_overall": {"matches": 10}}},
         }
         merged = _attach_nowscore(five_hundred, nowscore)
         rows = merged["ouzhi"]["bookmakers"]
         self.assertEqual(1.70, next(row for row in rows if row["cid"] == 3)["spf_current"]["home"])
         self.assertEqual("500_deep", next(row for row in rows if row["cid"] == 293)["source"])
+        self.assertEqual(10, merged["shuju"]["recent_form"]["home_overall"]["matches"])
 
 
 if __name__ == "__main__":
