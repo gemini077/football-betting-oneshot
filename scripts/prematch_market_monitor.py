@@ -199,6 +199,7 @@ def refresh_match(match, stage=None, now=None):
         sys.executable, "scripts/generate_analysis_report.py",
         "--fetch-manifest", str(render_manifest), "--analysis-json", str(analysis_path),
     ])
+    report_path = report.get("report") or report.get("html")
     checkpoint_record = {
         **checkpoint,
         "match_id": match_id,
@@ -207,7 +208,7 @@ def refresh_match(match, stage=None, now=None):
         "kickoff": match.get("kickoff"),
         "fetch_manifest": str(manifest_path.relative_to(ROOT)).replace("\\", "/"),
         "analysis_input": str(analysis_path.relative_to(ROOT)).replace("\\", "/"),
-        "report_html": report.get("html"),
+        "report_html": report_path,
         "model_recalculated": True,
         "real_bet_created": False,
     }
@@ -216,7 +217,7 @@ def refresh_match(match, stage=None, now=None):
     checkpoint_path.write_text(json.dumps(checkpoint_record, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     return {
         "match": label, "status": "refreshed", "stage": stage,
-        "checkpoint": checkpoint, "report": report.get("html"),
+        "checkpoint": checkpoint, "report": report_path,
         "model_recalculated": True,
     }
 

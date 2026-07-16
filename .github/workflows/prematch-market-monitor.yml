@@ -39,7 +39,9 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/fetch_runs data/market_history data/analysis_inputs data/analysis_reports data/live_ev_profiles data/postmatch_automation data/match_workspace site
+          # site/ is an ignored build artifact and is uploaded below; only
+          # durable source/report data belongs in the repository commit.
+          git add data/fetch_runs data/market_history data/analysis_inputs data/analysis_reports data/live_ev_profiles data/postmatch_automation data/match_workspace
           if ! git diff --cached --quiet; then
             git commit -m "refresh due pre-match markets [skip ci]"
             git push
