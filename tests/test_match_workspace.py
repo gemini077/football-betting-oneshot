@@ -114,18 +114,26 @@ class MatchWorkspacePortfolioTests(unittest.TestCase):
         self.assertIn("document.querySelector('#reportDialog')?.remove()", page)
         self.assertIn("openAllReviews=()=>openReport(DATA.postmatch_dashboard_url)", page)
 
-    def test_unanalyzed_match_opens_owner_authorized_github_request(self):
+    def test_unanalyzed_match_queues_through_local_bridge_without_github_jump(self):
         page = render("{}")
 
-        self.assertIn("function analysisRequestUrl", page)
-        self.assertIn("gemini077/football-betting-oneshot/issues/new", page)
-        self.assertIn("[自动分析]", page)
-        self.assertIn("business_date:", page)
+        self.assertNotIn("function analysisRequestUrl", page)
+        self.assertIn("127.0.0.1:8765/v1/analysis-selections", page)
+        self.assertIn("页面不会跳转 GitHub", page)
         self.assertIn("if(m.report_state==='已分析')", page)
         self.assertIn("hasReport?`<button", page)
         self.assertIn("打开报告", page)
         self.assertIn("重新分析", page)
         self.assertNotIn("查看数据状态", page)
+
+    def test_real_bet_button_and_confirmation_have_unambiguous_stages(self):
+        page = render("{}")
+
+        self.assertIn("登记实际下注", page)
+        self.assertIn("下一步：核对注单", page)
+        self.assertIn("返回修改", page)
+        self.assertIn("最终确认：已真实下注", page)
+        self.assertIn("已确认真实下注", page)
 
     def test_market_only_report_is_not_marked_as_analyzed(self):
         report = {

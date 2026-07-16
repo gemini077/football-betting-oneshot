@@ -117,7 +117,7 @@ def _identity_fields(match: dict) -> tuple[str, str, str | None]:
 
 
 def _merge_market_page(primary: dict, secondary: dict, rows_key: str) -> dict:
-    """Keep valid 500 rows and add Nowscore companies not already present."""
+    """Keep primary rows and use the secondary source only to fill gaps."""
     primary = primary if isinstance(primary, dict) and not primary.get("error") else {}
     secondary = secondary if isinstance(secondary, dict) else {}
     merged = {**secondary, **primary}
@@ -129,7 +129,7 @@ def _merge_market_page(primary: dict, secondary: dict, rows_key: str) -> dict:
     merged["total"] = len(merged_rows)
     merged["sources"] = list(dict.fromkeys(
         [str(primary.get("source") or "500_deep")] * bool(primary_rows)
-        + [str(secondary.get("source") or "nowscore_3in1")] * bool(secondary_rows)
+        + [str(secondary.get("source") or "500_deep")] * bool(secondary_rows)
     ))
     if not merged.get("pinnacle"):
         merged["pinnacle"] = next((row for row in merged_rows if int(row.get("cid") or 0) == 1055), None)
@@ -141,9 +141,11 @@ def _attach_nowscore(result: dict, nowscore: dict) -> dict:
     if nowscore.get("status") != "OK":
         return result
     result["nowscore_id"] = nowscore.get("nowscore_id")
-    result["ouzhi"] = _merge_market_page(result.get("ouzhi") or {}, nowscore.get("ouzhi") or {}, "bookmakers")
-    result["yazhi"] = _merge_market_page(result.get("yazhi") or {}, nowscore.get("yazhi") or {}, "companies")
-    result["daxiao"] = _merge_market_page(result.get("daxiao") or {}, nowscore.get("daxiao") or {}, "companies")
+    # Nowscore is the market primary.  500 is retained only for companies or
+    # market rows missing from the verified Nowscore snapshot.
+    result["ouzhi"] = _merge_market_page(nowscore.get("ouzhi") or {}, result.get("ouzhi") or {}, "bookmakers")
+    result["yazhi"] = _merge_market_page(nowscore.get("yazhi") or {}, result.get("yazhi") or {}, "companies")
+    result["daxiao"] = _merge_market_page(nowscore.get("daxiao") or {}, result.get("daxiao") or {}, "companies")
     result.setdefault("source_provenance", {})["nowscore_3in1"] = {
         "source_url": nowscore.get("source_url"),
         "fetched_at": nowscore.get("fetched_at"),

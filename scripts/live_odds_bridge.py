@@ -15,7 +15,11 @@ import gzip
 import hashlib
 import io
 import json
+import os
 import re
+import shutil
+import subprocess
+import sys
 import threading
 import time
 from collections import deque
@@ -32,7 +36,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_OUTPUT_ROOT = PROJECT_ROOT / "data" / "live_odds_bridge" / "captures"
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8765
-MODEL_VERSION = "v0.15.0"
+MODEL_VERSION = "v0.15.1"
 MODULE_VERSION = "v0.8.1"
 
 CORRECT_SCORE_MARKET_CODES = {
@@ -45,6 +49,8 @@ DEFAULT_ALLOWED_PAGE_HOSTS = {"user-pc-new.hl99yjjpf.com"}
 RUNTIME_STATE_PATH = PROJECT_ROOT / "05_RUNTIME_STATE.json"
 DEFAULT_EV_PROFILE_ROOT = PROJECT_ROOT / "data" / "live_ev_profiles"
 WORKSPACE_SELECTION_PATH = PROJECT_ROOT / "data" / "match_workspace" / "selected_matches.json"
+ANALYSIS_JOB_LOG_ROOT = PROJECT_ROOT / "data" / "analysis_jobs"
+GITHUB_REPOSITORY = "gemini077/football-betting-oneshot"
 SAFE_MATCH_ID = re.compile(r"^[0-9]{1,30}$")
 ALLOWED_MATCH_API_PATHS = {
     "/v1/w/matchDetail/getMatchDetailPB",
@@ -78,6 +84,53 @@ class BridgeValidationError(ValueError):
 
 def _now() -> datetime:
     return datetime.now().astimezone()
+
+
+def launch_selected_analysis(match: dict) -> dict:
+    """Queue one owner-selected analysis without navigating the browser."""
+    match_id = str(match.get("id") or "").strip()
+    business_date = str(match.get("business_date") or "").strip()
+    if not match_id or not business_date:
+        raise BridgeValidationError("match id and business_date are required")
+    label = f"{match.get('home')} vs {match.get('away')}"
+    gh_candidates = [
+        os.environ.get("FBOS_GH_PATH"), shutil.which("gh"),
+        r"D:\Software\GitHub CLI\gh.exe",
+    ]
+    gh = next((path for path in gh_candidates if path and Path(path).exists()), None)
+    if gh:
+        completed = subprocess.run(
+            [
+                gh, "workflow", "run", "analyze-selected.yml",
+                "--repo", GITHUB_REPOSITORY,
+                "-f", f"business_date={business_date}",
+                "-f", f"match_id={match_id}",
+                "-f", f"match={label}",
+            ],
+            cwd=PROJECT_ROOT, text=True, capture_output=True, timeout=30,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0,
+        )
+        if completed.returncode == 0:
+            return {"status": "queued", "mode": "github_workflow_dispatch"}
+        raise BridgeValidationError((completed.stderr or completed.stdout or "workflow dispatch failed").strip())
+
+    stamp = _now().strftime("%Y%m%d_%H%M%S")
+    ANALYSIS_JOB_LOG_ROOT.mkdir(parents=True, exist_ok=True)
+    log_path = ANALYSIS_JOB_LOG_ROOT / f"{stamp}_{re.sub(r'[^0-9A-Za-z_-]+', '_', match_id)}.log"
+    command = [
+        sys.executable, str(PROJECT_ROOT / "scripts" / "deepseek_auto_analysis.py"),
+        "--date", business_date, "--match-id", match_id,
+    ]
+    creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0
+    with log_path.open("ab") as log:
+        process = subprocess.Popen(
+            command, cwd=PROJECT_ROOT, stdout=log, stderr=subprocess.STDOUT,
+            creationflags=creationflags,
+        )
+    return {
+        "status": "queued", "mode": "local_fallback", "pid": process.pid,
+        "log": log_path.relative_to(PROJECT_ROOT).as_posix(),
+    }
 
 
 def _json_size(value: Any) -> int:
@@ -903,6 +956,7 @@ def make_handler(
     allowed_page_hosts: set[str] | None = None,
     max_body_bytes: int = 2_000_000,
     ev_profile_root: Path | None = None,
+    analysis_launcher=launch_selected_analysis,
 ):
     allowed_page_hosts = allowed_page_hosts or DEFAULT_ALLOWED_PAGE_HOSTS
     ev_profile_root = ev_profile_root or DEFAULT_EV_PROFILE_ROOT
@@ -987,7 +1041,7 @@ def make_handler(
                 except (OSError, json.JSONDecodeError):
                     pass
                 self._send_workspace_json(200, {
-                    "ok": True, "selected": selections, "automatic_analysis": False,
+                    "ok": True, "selected": selections, "automatic_analysis": True,
                     "execution_authorized": False, "lock_state_changed": False,
                 })
                 return
@@ -1008,7 +1062,7 @@ def make_handler(
                     if not str(allowed.get("id") or "").strip() or not str(allowed.get("home") or "").strip() or not str(allowed.get("away") or "").strip():
                         raise BridgeValidationError("match id, home and away are required")
                     allowed["selected_at"] = _now().isoformat()
-                    allowed["analysis_requested"] = False
+                    allowed["analysis_requested"] = True
                     rows = []
                     try:
                         rows = json.loads(WORKSPACE_SELECTION_PATH.read_text(encoding="utf-8"))
@@ -1020,8 +1074,10 @@ def make_handler(
                     temporary = WORKSPACE_SELECTION_PATH.with_suffix(".tmp")
                     temporary.write_text(json.dumps(rows, ensure_ascii=False, indent=2), encoding="utf-8")
                     temporary.replace(WORKSPACE_SELECTION_PATH)
-                    self._send_workspace_json(200, {
-                        "ok": True, "selected": allowed, "automatic_analysis": False,
+                    job = analysis_launcher(allowed)
+                    self._send_workspace_json(202, {
+                        "ok": True, "selected": allowed, "automatic_analysis": True,
+                        "analysis_job": job,
                         "execution_authorized": False, "lock_state_changed": False,
                     })
                 except (UnicodeDecodeError, json.JSONDecodeError, BridgeValidationError, ValueError) as exc:

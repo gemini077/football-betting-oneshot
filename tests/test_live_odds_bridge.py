@@ -5,6 +5,7 @@ import sys
 import tempfile
 import threading
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 from http.server import ThreadingHTTPServer
 from urllib.request import Request, urlopen
@@ -24,6 +25,7 @@ from live_odds_bridge import (  # noqa: E402
     sanitize,
     validate_event,
 )
+import live_odds_bridge as bridge_module  # noqa: E402
 
 
 def sample_event():
@@ -499,6 +501,40 @@ class LiveOddsBridgeTests(unittest.TestCase):
                 server.shutdown()
                 server.server_close()
                 thread.join(timeout=3)
+
+    def test_workspace_selection_queues_local_analysis_without_github(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = BridgeStore(Path(tmp), stamp="20260716_190000")
+            selection_path = Path(tmp) / "selected_matches.json"
+            launched = []
+            launcher = lambda match: launched.append(match) or {"status": "queued", "pid": 123}
+            with patch.object(bridge_module, "WORKSPACE_SELECTION_PATH", selection_path):
+                server = ThreadingHTTPServer(
+                    ("127.0.0.1", 0), make_handler(store, analysis_launcher=launcher)
+                )
+                thread = threading.Thread(target=server.serve_forever, daemon=True)
+                thread.start()
+                try:
+                    endpoint = f"http://127.0.0.1:{server.server_address[1]}/v1/analysis-selections"
+                    payload = {"match": {
+                        "id": "2040514", "home": "主队", "away": "客队",
+                        "business_date": "2026-07-16", "kickoff": "2026-07-17 03:00",
+                    }}
+                    request = Request(
+                        endpoint, data=json.dumps(payload).encode("utf-8"), method="POST",
+                        headers={"Content-Type": "application/json", "Origin": "https://gemini077.github.io"},
+                    )
+                    with urlopen(request, timeout=3) as response:
+                        result = json.loads(response.read().decode("utf-8"))
+                        self.assertEqual(202, response.status)
+                    self.assertTrue(result["ok"])
+                    self.assertTrue(result["automatic_analysis"])
+                    self.assertEqual("queued", result["analysis_job"]["status"])
+                    self.assertEqual("2040514", launched[0]["id"])
+                finally:
+                    server.shutdown()
+                    server.server_close()
+                    thread.join(timeout=3)
 
     def test_http_reprice_endpoint_returns_candidate_without_execution_authority(self):
         with tempfile.TemporaryDirectory() as tmp:

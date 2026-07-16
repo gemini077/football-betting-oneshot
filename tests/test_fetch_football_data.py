@@ -1,6 +1,6 @@
 import unittest
 
-from scripts.fetch_football_data import _match_filter
+from scripts.fetch_football_data import _attach_nowscore, _match_filter
 
 
 class MatchFilterTests(unittest.TestCase):
@@ -33,6 +33,27 @@ class MatchFilterTests(unittest.TestCase):
     def test_preserves_single_team_and_match_id_search(self):
         self.assertEqual("2040514", _match_filter(self.matches, "苏捷斯卡")[0]["matchId"])
         self.assertEqual("2040513", _match_filter(self.matches, "2040513")[0]["matchId"])
+
+    def test_verified_nowscore_is_primary_and_500_only_fills_missing_companies(self):
+        five_hundred = {
+            "ouzhi": {"bookmakers": [
+                {"cid": 3, "source": "500_deep", "spf_current": {"home": 1.80}},
+                {"cid": 293, "source": "500_deep", "spf_current": {"home": 1.90}},
+            ]},
+            "yazhi": {"companies": []}, "daxiao": {"companies": []},
+        }
+        nowscore = {
+            "status": "OK", "nowscore_id": 99,
+            "ouzhi": {"source": "nowscore_3in1", "bookmakers": [
+                {"cid": 3, "source": "nowscore_3in1", "spf_current": {"home": 1.70}},
+            ]},
+            "yazhi": {"source": "nowscore_3in1", "companies": []},
+            "daxiao": {"source": "nowscore_3in1", "companies": []},
+        }
+        merged = _attach_nowscore(five_hundred, nowscore)
+        rows = merged["ouzhi"]["bookmakers"]
+        self.assertEqual(1.70, next(row for row in rows if row["cid"] == 3)["spf_current"]["home"])
+        self.assertEqual("500_deep", next(row for row in rows if row["cid"] == 293)["source"])
 
 
 if __name__ == "__main__":
