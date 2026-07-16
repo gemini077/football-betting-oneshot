@@ -1,7 +1,7 @@
 {
   "model_name": "Football Betting OneShot",
   "model_id": "football-betting-oneshot",
-  "model_version": "v0.15.4",
+  "model_version": "v0.16.0",
   "versioning_policy": {
     "scheme": "SemVer",
     "patch": "实现修复、文案或兼容性调整，不改变模型行为",
@@ -9,7 +9,7 @@
     "major": "架构、概率体系、结算口径或执行逻辑发生不兼容的大变动",
     "datetime_usage": "仅用于数据批次、报告和文件名，不作为模型版本"
   },
-  "updated_at": "2026-07-15T22:05:00+08:00",
+  "updated_at": "2026-07-16T20:30:00+08:00",
   "settlement_scope": "90分钟含伤停，不含加时和点球",
   "bankroll": {
     "initial_principal": 100,
@@ -225,7 +225,7 @@
     "formal_in_play_probability_requires_major_version": "v1.0.0"
   },
   "match_workspace": {
-    "module_version": "v0.15.4",
+    "module_version": "v0.16.0",
     "status": "owner_authorized_analysis_with_workspace_odds_evidence_gate",
     "generator": "scripts/match_workspace.py",
     "daily_schedule_updater": "scripts/daily_schedule_workspace.py",
@@ -243,7 +243,7 @@
     "bankroll_state_changed": false
   },
   "deepseek_automation": {
-    "module_version": "v0.15.4",
+    "module_version": "v0.16.0",
     "workflow": ".github/workflows/analyze-selected.yml",
     "entrypoint": "scripts/deepseek_auto_analysis.py",
     "default_execution": "deterministic_no_llm",
@@ -257,6 +257,20 @@
     "workspace_odds_injected": true,
     "minimum_evidence_gate": "official_market_baseline_or_matched_source_snapshot",
     "provider_sentinel_values_rejected": true,
+    "creates_real_bets": false,
+    "changes_bankroll": false,
+    "requires_explicit_lock_confirmation": true
+  },
+  "prematch_market_monitor": {
+    "module_version": "v0.16.0",
+    "workflow": ".github/workflows/prematch-market-monitor.yml",
+    "poll_interval_minutes": 5,
+    "checkpoints": ["T-8H", "T-6H", "T-4H", "T-2H", "T-90M", "T-60M", "T-30M", "T-10M"],
+    "maximum_accepted_lateness_minutes": 25,
+    "fetch_match_key": "provider_match_id",
+    "recalculates_complete_deterministic_model": true,
+    "records_actual_capture_time_and_lateness": true,
+    "backfills_missed_checkpoint_as_exact": false,
     "creates_real_bets": false,
     "changes_bankroll": false,
     "requires_explicit_lock_confirmation": true

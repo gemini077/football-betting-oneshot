@@ -2,7 +2,7 @@ name: Refresh analyzed pre-match markets
 on:
   workflow_dispatch:
   schedule:
-    - cron: "*/30 * * * *"
+    - cron: "*/5 * * * *"
 permissions:
   contents: write
   pages: write
@@ -29,7 +29,7 @@ jobs:
           cache: pip
       - if: steps.due.outputs.count != '0'
         run: pip install -r requirements.txt
-      - name: Refresh only analyzed matches within six hours of kickoff
+      - name: Refresh analyzed matches at the eight pre-match checkpoints
         if: steps.due.outputs.count != '0'
         run: python scripts/prematch_market_monitor.py
       - name: Save market snapshots and refreshed reports
@@ -37,7 +37,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/fetch_runs data/market_history data/analysis_reports data/live_ev_profiles data/postmatch_automation data/match_workspace site
+          git add data/fetch_runs data/market_history data/analysis_inputs data/analysis_reports data/live_ev_profiles data/postmatch_automation data/match_workspace site
           if ! git diff --cached --quiet; then
             git commit -m "refresh due pre-match markets [skip ci]"
             git push

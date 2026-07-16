@@ -21,7 +21,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_OUTPUT_ROOT = PROJECT_ROOT / "data" / "live_ev_profiles"
 DEFAULT_ALIAS_REGISTRY = PROJECT_ROOT / "data" / "team_aliases.json"
 MODEL_NAME = "Football Betting OneShot"
-MODEL_VERSION = "v0.15.4"
+MODEL_VERSION = "v0.16.0"
 MATCH_ID = re.compile(r"^[0-9]{1,30}$")
 SUPPORTED_CONTRACT_TYPES = {"binary_no_push", "three_way_selection"}
 

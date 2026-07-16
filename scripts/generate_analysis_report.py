@@ -343,11 +343,16 @@ def source_file(manifest: dict, source: str, project_root: Path) -> Path | None:
 
 
 def deep_file(manifest: dict, project_root: Path) -> Path | None:
-    matches = manifest.get("sources", {}).get("500_deep", {}).get("matches", [])
-    if not matches:
-        return None
-    relative = matches[0].get("file")
-    return project_root / relative if relative else None
+    sources = manifest.get("sources", {})
+    # Nowscore is the verified primary market source.  A 500 deep snapshot is
+    # still accepted when present, but a missing 500 ID must not erase valid
+    # Nowscore 1X2/AH/total rows from the rendered report.
+    for source_name in ("500_deep", "nowscore"):
+        matches = (sources.get(source_name) or {}).get("matches") or []
+        relative = matches[0].get("file") if matches else None
+        if relative:
+            return project_root / relative
+    return None
 
 
 def safe_name(value: str) -> str:
