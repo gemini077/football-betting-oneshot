@@ -1,0 +1,1442 @@
+{
+  "report": {
+    "model_name": "Football Betting OneShot",
+    "model_version": "v0.16.3",
+    "report_type": "确定性赛前分析",
+    "analysis_timestamp": "2026-07-16T17:37:09+00:00",
+    "snapshot_timestamp": "2026-07-16T17:35:29.722316+00:00",
+    "final_execution_version": false,
+    "data_run_id": "20260716_173529",
+    "ai_provider": null,
+    "ai_model": null,
+    "market_checkpoint": {
+      "stage": "T-60M",
+      "captured_at": "2026-07-16T17:35:29.612746+00:00",
+      "target_minutes_before": 60,
+      "actual_minutes_before": 39.51,
+      "lateness_minutes": 20.49,
+      "exact": false
+    },
+    "live_ev_profile_publication": {
+      "status": "published",
+      "published": [
+        {
+          "match_id": "2040517",
+          "active": true,
+          "profile_id": "20260716_173709-2040517-1",
+          "current_path": "/home/runner/work/football-betting-oneshot/football-betting-oneshot/data/live_ev_profiles/current/2040517.json",
+          "history_path": "/home/runner/work/football-betting-oneshot/football-betting-oneshot/data/live_ev_profiles/history/20260716_173709/20260716_173709_2040517_live_ev_profile.json"
+        }
+      ],
+      "skipped": [],
+      "analysis_input_only": true,
+      "execution_authorized": false,
+      "lock_state_changed": false,
+      "bankroll_state_changed": false
+    }
+  },
+  "match": {
+    "competition": "欧罗巴",
+    "stage": "未核到",
+    "home": "费伦茨",
+    "away": "伏伊伏丁",
+    "business_date": "2026-07-16",
+    "kickoff_local": "2026-07-17 02:15",
+    "match_num": "周四203",
+    "shuju_id": null,
+    "single_match_available": null,
+    "match_id": "2040517",
+    "league": "欧罗巴"
+  },
+  "market": {
+    "official_spf": {
+      "home": 1.37,
+      "draw": 4.45,
+      "away": 5.72
+    },
+    "official_rqspf": {
+      "handicap": -1,
+      "home": 2.14,
+      "draw": 3.6,
+      "away": 2.6
+    },
+    "pinnacle": {},
+    "consensus": {
+      "open": null,
+      "current": null
+    },
+    "betfair": {},
+    "polymarket": {
+      "schema_version": "1.0",
+      "source": "polymarket_public_gamma",
+      "analysis_input_only": true,
+      "authentication_used": false,
+      "account_connected": false,
+      "trading_enabled": false,
+      "match": {
+        "status": "NO_MATCH_IDENTITY"
+      },
+      "quality_flags": [
+        "NO_MATCH_IDENTITY"
+      ]
+    },
+    "euro_bookmaker_count": 0,
+    "asian_company_count": 0,
+    "rq_company_count": 0,
+    "totals_company_count": 0,
+    "official_market_baseline": {
+      "prices": {
+        "home": 1.37,
+        "draw": 4.45,
+        "away": 5.72
+      },
+      "overround": 1.129471,
+      "payout_rate": 0.88537,
+      "fair_probabilities": {
+        "home": 0.646255,
+        "draw": 0.19896,
+        "away": 0.154785
+      },
+      "role": "official_market_baseline_only_not_model_probability"
+    }
+  },
+  "data_quality": {
+    "status": "模型已计算，临场信息待补",
+    "missing": [
+      "确认首发",
+      "即时伤停",
+      "用户渠道即时赔率"
+    ],
+    "notes": [
+      "近期攻防来源：ESPN近5场赛事样本（含可获得的同赛事历史，非完整联赛近况）。",
+      "模型数值由固定公式生成，DeepSeek不参与概率计算。",
+      "已从所选主页场次注入体彩胜平负赔率，并计算去水市场基线；该基线不是模型概率。"
+    ],
+    "overall": "FORM_AND_MARKET_MODEL"
+  },
+  "fundamentals": {
+    "status": "赛程、交锋、场地、首发发布状态、伤停发布状态与天气发布状态已联网核验",
+    "items": [
+      {
+        "label": "赛程交叉核验",
+        "value": "Vojvodina at Ferencvaros",
+        "source_url": "https://www.espn.com/soccer/match/_/gameId/401878074"
+      },
+      {
+        "label": "主队 ESPN 近5场",
+        "value": "3胜0平2负，进7球/失7球；样本期2026-02-19至2026-07-09",
+        "source": "ESPN lastFiveGames",
+        "source_url": "https://www.espn.com/soccer/match/_/gameId/401878074"
+      },
+      {
+        "label": "客队 ESPN 近5场",
+        "value": "1胜0平4负，进4球/失8球；样本期2024-07-25至2026-07-09",
+        "source": "ESPN lastFiveGames",
+        "source_url": "https://www.espn.com/soccer/match/_/gameId/401878074"
+      },
+      {
+        "label": "最近直接交锋",
+        "value": "2-1（2026-27 UEFA Europa League Qualifying，2026-07-09）",
+        "source_url": "https://www.espn.com/soccer/match/_/gameId/401878078/ferencvaros-vojvodina"
+      },
+      {
+        "label": "比赛场地",
+        "value": "Groupama Arena · Budapest · Hungary",
+        "source_url": "https://www.espn.com/soccer/match/_/gameId/401878074"
+      },
+      {
+        "label": "确认首发",
+        "value": "已发布，共46名球员",
+        "source_url": "https://www.espn.com/soccer/match/_/gameId/401878074"
+      },
+      {
+        "label": "伤停核验",
+        "value": "赛前页未返回结构化伤停名单；不等同于无人伤停",
+        "source_url": "https://www.espn.com/soccer/match/_/gameId/401878074"
+      },
+      {
+        "label": "天气",
+        "value": "上游赛前页尚未发布（已联网检查）",
+        "source_url": "https://www.espn.com/soccer/match/_/gameId/401878074"
+      }
+    ],
+    "structured_form": {
+      "recent_form": {
+        "home_overall": {
+          "matches": 5,
+          "wins": 3,
+          "draws": 0,
+          "losses": 2,
+          "goals_for": 7,
+          "goals_against": 7,
+          "sample_start": "2026-02-19",
+          "sample_end": "2026-07-09",
+          "source": "ESPN lastFiveGames"
+        },
+        "home_home": {
+          "matches": 2,
+          "wins": 2,
+          "draws": 0,
+          "losses": 0,
+          "goals_for": 4,
+          "goals_against": 0,
+          "sample_start": "2026-02-26",
+          "sample_end": "2026-03-12",
+          "source": "ESPN lastFiveGames"
+        },
+        "away_overall": {
+          "matches": 5,
+          "wins": 1,
+          "draws": 0,
+          "losses": 4,
+          "goals_for": 4,
+          "goals_against": 8,
+          "sample_start": "2024-07-25",
+          "sample_end": "2026-07-09",
+          "source": "ESPN lastFiveGames"
+        },
+        "away_away": {
+          "matches": 2,
+          "wins": 0,
+          "draws": 0,
+          "losses": 2,
+          "goals_for": 1,
+          "goals_against": 3,
+          "sample_start": "2024-07-25",
+          "sample_end": "2024-08-08",
+          "source": "ESPN lastFiveGames"
+        }
+      },
+      "metric": "recent actual goals, not xG",
+      "status": "赛程、交锋、场地、首发发布状态、伤停发布状态与天气发布状态已联网核验",
+      "checked_at": "2026-07-16T17:37:09+00:00",
+      "items": [
+        {
+          "label": "赛程交叉核验",
+          "value": "Vojvodina at Ferencvaros",
+          "source_url": "https://www.espn.com/soccer/match/_/gameId/401878074"
+        },
+        {
+          "label": "主队 ESPN 近5场",
+          "value": "3胜0平2负，进7球/失7球；样本期2026-02-19至2026-07-09",
+          "source": "ESPN lastFiveGames",
+          "source_url": "https://www.espn.com/soccer/match/_/gameId/401878074"
+        },
+        {
+          "label": "客队 ESPN 近5场",
+          "value": "1胜0平4负，进4球/失8球；样本期2024-07-25至2026-07-09",
+          "source": "ESPN lastFiveGames",
+          "source_url": "https://www.espn.com/soccer/match/_/gameId/401878074"
+        },
+        {
+          "label": "最近直接交锋",
+          "value": "2-1（2026-27 UEFA Europa League Qualifying，2026-07-09）",
+          "source_url": "https://www.espn.com/soccer/match/_/gameId/401878078/ferencvaros-vojvodina"
+        },
+        {
+          "label": "比赛场地",
+          "value": "Groupama Arena · Budapest · Hungary",
+          "source_url": "https://www.espn.com/soccer/match/_/gameId/401878074"
+        },
+        {
+          "label": "确认首发",
+          "value": "已发布，共46名球员",
+          "source_url": "https://www.espn.com/soccer/match/_/gameId/401878074"
+        },
+        {
+          "label": "伤停核验",
+          "value": "赛前页未返回结构化伤停名单；不等同于无人伤停",
+          "source_url": "https://www.espn.com/soccer/match/_/gameId/401878074"
+        },
+        {
+          "label": "天气",
+          "value": "上游赛前页尚未发布（已联网检查）",
+          "source_url": "https://www.espn.com/soccer/match/_/gameId/401878074"
+        }
+      ],
+      "sources": [
+        "https://www.espn.com/soccer/match/_/gameId/401878074"
+      ],
+      "form_source": "ESPN近5场赛事样本（含可获得的同赛事历史，非完整联赛近况）"
+    },
+    "sources": [
+      "https://www.espn.com/soccer/match/_/gameId/401878074"
+    ],
+    "recent_form": {
+      "home_overall": {
+        "matches": 5,
+        "wins": 3,
+        "draws": 0,
+        "losses": 2,
+        "goals_for": 7,
+        "goals_against": 7,
+        "sample_start": "2026-02-19",
+        "sample_end": "2026-07-09",
+        "source": "ESPN lastFiveGames"
+      },
+      "home_home": {
+        "matches": 2,
+        "wins": 2,
+        "draws": 0,
+        "losses": 0,
+        "goals_for": 4,
+        "goals_against": 0,
+        "sample_start": "2026-02-26",
+        "sample_end": "2026-03-12",
+        "source": "ESPN lastFiveGames"
+      },
+      "away_overall": {
+        "matches": 5,
+        "wins": 1,
+        "draws": 0,
+        "losses": 4,
+        "goals_for": 4,
+        "goals_against": 8,
+        "sample_start": "2024-07-25",
+        "sample_end": "2026-07-09",
+        "source": "ESPN lastFiveGames"
+      },
+      "away_away": {
+        "matches": 2,
+        "wins": 0,
+        "draws": 0,
+        "losses": 2,
+        "goals_for": 1,
+        "goals_against": 3,
+        "sample_start": "2024-07-25",
+        "sample_end": "2024-08-08",
+        "source": "ESPN lastFiveGames"
+      }
+    },
+    "form_source": "ESPN近5场赛事样本（含可获得的同赛事历史，非完整联赛近况）",
+    "checked_at": "2026-07-16T17:37:09+00:00"
+  },
+  "model": {
+    "status": "确定性融合模型（可核验近期攻防 + 市场校准）",
+    "lambda_home": 1.657753,
+    "lambda_away": 0.542247,
+    "rho": 0.0,
+    "expected_goals": 2.2,
+    "probabilities": {
+      "home": 0.647442,
+      "draw": 0.235155,
+      "away": 0.117404
+    },
+    "total_goals_buckets": [
+      {
+        "goals": "0",
+        "probability": 0.110803
+      },
+      {
+        "goals": "1",
+        "probability": 0.243767
+      },
+      {
+        "goals": "2",
+        "probability": 0.268144
+      },
+      {
+        "goals": "3",
+        "probability": 0.196639
+      },
+      {
+        "goals": "4",
+        "probability": 0.108151
+      },
+      {
+        "goals": "5",
+        "probability": 0.047587
+      },
+      {
+        "goals": "6+",
+        "probability": 0.02491
+      }
+    ],
+    "btts": {
+      "yes": 0.338796,
+      "no": 0.661204,
+      "judgement": "双方进球偏否"
+    },
+    "score_probabilities": [
+      {
+        "score": "1-0",
+        "probability": 0.183684,
+        "fair_odds": 5.4441,
+        "rank": 1
+      },
+      {
+        "score": "2-0",
+        "probability": 0.152252,
+        "fair_odds": 6.5681,
+        "rank": 2
+      },
+      {
+        "score": "0-0",
+        "probability": 0.110803,
+        "fair_odds": 9.025,
+        "rank": 3
+      },
+      {
+        "score": "1-1",
+        "probability": 0.099602,
+        "fair_odds": 10.0399,
+        "rank": 4
+      },
+      {
+        "score": "3-0",
+        "probability": 0.084132,
+        "fair_odds": 11.8861,
+        "rank": 5
+      },
+      {
+        "score": "2-1",
+        "probability": 0.082558,
+        "fair_odds": 12.1127,
+        "rank": 6
+      },
+      {
+        "score": "0-1",
+        "probability": 0.060083,
+        "fair_odds": 16.6437,
+        "rank": 7
+      },
+      {
+        "score": "3-1",
+        "probability": 0.04562,
+        "fair_odds": 21.9201,
+        "rank": 8
+      },
+      {
+        "score": "4-0",
+        "probability": 0.034867,
+        "fair_odds": 28.68,
+        "rank": 9
+      },
+      {
+        "score": "1-2",
+        "probability": 0.027004,
+        "fair_odds": 37.0309,
+        "rank": 10
+      }
+    ],
+    "method": "recent_form_market_calibrated_poisson_v2",
+    "calibration": {
+      "form_lambda_home": 1.666667,
+      "form_lambda_away": 0.533333,
+      "market_total_line_median": null,
+      "market_probabilities": {
+        "home": 0.646255,
+        "draw": 0.19896,
+        "away": 0.154785
+      },
+      "form_weight": 0.6,
+      "market_weight": 0.4,
+      "form_source": "ESPN近5场赛事样本（含可获得的同赛事历史，非完整联赛近况）",
+      "venue_proxy_used": false
+    },
+    "limitations": [
+      "500深层页缺失，本次改用ESPN可核验近5场样本；样本范围较窄，已按不确定性处理，不能等同完整联赛近况",
+      "近期样本含不同赛事与对手强度，尚未完成逐队Elo/xG对手校正",
+      "确认首发、即时伤停、天气与临场战术需在开赛前另行修正",
+      "市场信息用于校准，因此该概率不是完全独立于赔率的纯基本面概率"
+    ]
+  },
+  "decisions": {
+    "unique_primary_dimension": "胜平负：主胜（模型64.7%）",
+    "unique_score": "1-0",
+    "mathematical_first": "90分钟主胜64.7%、平局23.5%、客胜11.7%；λ=1.66-0.54。",
+    "market_first": "多公司去水共识主胜64.6%、平局19.9%、客胜15.5%；大小球中轴2.20。",
+    "maximum_error_points": [
+      "若早段进球、红牌或比赛节奏偏离基准，总进球与比分尾部会同步变化",
+      "首发或关键伤停与当前假设不一致，会直接改变双方λ",
+      "临盘若出现跨公司同步升降盘，本次赛前快照的价格结构会失效"
+    ],
+    "value_judgement": "仅完成模型概率与市场基线；须取得用户渠道即时赔率后才计算EV。",
+    "final_state": "空仓｜未锁单",
+    "match_story": "费伦茨更可能掌握主动，但伏伊伏丁仍有足够进球期望制造反击或定位球威胁；总进球中枢偏低；上半场试探和低比分停留时间可能较长。",
+    "market_conflict": "模型对主胜的判断比多公司市场高0.1%，需要用阵容与临盘验证这部分分歧",
+    "score_vs_outcome_explanation": "唯一比分1-0只是单个比分格的最高点；胜平负主线主胜是多个比分格合计，二者不要求同方向。"
+  },
+  "betting": {
+    "balance": 51.43,
+    "open_bets": [],
+    "candidates": [],
+    "current_exposure": 0,
+    "remaining_cash": 51.43,
+    "state": "空仓｜未锁单",
+    "execution_authorized": false,
+    "lock_state_changed": false,
+    "bankroll_state_changed": false,
+    "price_audit": [
+      {
+        "market": "SPF主胜",
+        "model_probability": 0.647442,
+        "conservative_probability": 0.572442,
+        "minimum_acceptable_decimal_odds": 1.887,
+        "odds": 1.37,
+        "ev": -0.113004,
+        "audit_role": "模型价格门槛，不是投注指令",
+        "price_source": "竞彩赛前SPF"
+      },
+      {
+        "market": "SPF平局",
+        "model_probability": 0.235155,
+        "conservative_probability": 0.160155,
+        "minimum_acceptable_decimal_odds": 6.743,
+        "odds": 4.45,
+        "ev": 0.04644,
+        "audit_role": "模型价格门槛，不是投注指令",
+        "price_source": "竞彩赛前SPF"
+      },
+      {
+        "market": "SPF客胜",
+        "model_probability": 0.117404,
+        "conservative_probability": 0.042404,
+        "minimum_acceptable_decimal_odds": 25.47,
+        "odds": 5.72,
+        "ev": -0.328449,
+        "audit_role": "模型价格门槛，不是投注指令",
+        "price_source": "竞彩赛前SPF"
+      }
+    ],
+    "layers": [
+      {
+        "label": "保本层",
+        "display": "保本层｜低波动",
+        "purpose": "承担组合稳定器角色，但不承诺保本；只收价格合格、误差较小的合约。",
+        "guardrail": "不得用多场热门串关伪装低风险。",
+        "candidate_count": 0,
+        "locked_count": 0,
+        "proposed_exposure": 0,
+        "committed_exposure": 0,
+        "status": "暂无合格候选"
+      },
+      {
+        "label": "中轴层",
+        "display": "中轴层｜主收益",
+        "purpose": "承载当日主要正EV暴露，可为单关或经审核的跨场组合。",
+        "guardrail": "每一腿必须独立通过价格审核。",
+        "candidate_count": 0,
+        "locked_count": 0,
+        "proposed_exposure": 0,
+        "committed_exposure": 0,
+        "status": "暂无合格候选"
+      },
+      {
+        "label": "博上层",
+        "display": "博上层｜高方差",
+        "purpose": "小额使用高赔率正EV；正确比分只能进入本层。",
+        "guardrail": "不得承担回本任务，不得覆盖一串相邻比分。",
+        "candidate_count": 0,
+        "locked_count": 0,
+        "proposed_exposure": 0,
+        "committed_exposure": 0,
+        "status": "暂无合格候选"
+      }
+    ],
+    "parlays": [],
+    "overlap_audit": [],
+    "candidate_exposure": 0,
+    "portfolio_state": "三层均为空仓",
+    "parlay_policy": "串关只在每腿独立正EV、价格同时可得且相关性通过审核时成立"
+  },
+  "evidence_chain": [
+    {
+      "title": "足球维度",
+      "items": [
+        "费伦茨近10个主场2胜0平0负，伏伊伏丁近10个客场0胜0平2负",
+        "近期主客场攻防推导λ：费伦茨1.67，伏伊伏丁0.53",
+        "费伦茨更可能掌握主动，但伏伊伏丁仍有足够进球期望制造反击或定位球威胁；总进球中枢偏低；上半场试探和低比分停留时间可能较长。"
+      ]
+    },
+    {
+      "title": "市场维度",
+      "items": [
+        "去水共识：主胜64.6%、平局19.9%、客胜15.5%",
+        "大小球中轴：未取得；市场占40%校准权重，不替代模型。",
+        "模型对主胜的判断比多公司市场高0.1%，需要用阵容与临盘验证这部分分歧"
+      ]
+    },
+    {
+      "title": "执行维度",
+      "items": [
+        "每个玩法分别展示当前价、模型概率、EV与最低可接受赔率；低于门槛一律不过线。",
+        "执行价额外要求8%安全边际；模型包含市场校准，因此正EV只是价格复核信号。",
+        "唯一比分1-0只是单个比分格的最高点；胜平负主线主胜是多个比分格合计，二者不要求同方向。"
+      ]
+    },
+    {
+      "title": "模型与临场核验",
+      "items": [
+        "公开事实核验状态：赛程、交锋、场地、首发发布状态、伤停发布状态与天气发布状态已联网核验。",
+        "确认首发、关键伤停、天气或盘口换线与假设冲突时，必须重算而非沿用旧报告。"
+      ]
+    }
+  ],
+  "market_intelligence": {
+    "generated_at": "2026-07-16T17:37:09.576412+00:00",
+    "source_match_id": null,
+    "source_fetched_at": "2026-07-17T01:37:07+08:00",
+    "history_snapshot_count": 0,
+    "tier_config_version": "20260713_230741",
+    "consensus": {
+      "open": null,
+      "current": null,
+      "proportional_no_vig": null,
+      "shin": null,
+      "lowest_odds_direction": null,
+      "parsed_company_count": 0,
+      "page_footer_average": null
+    },
+    "tiers": {
+      "tiers": {
+        "sharp": {
+          "weight": 0.55,
+          "company_count": 0,
+          "cids": [],
+          "open_mean": null,
+          "current_mean": null
+        },
+        "asian": {
+          "weight": 0.25,
+          "company_count": 0,
+          "cids": [],
+          "open_mean": null,
+          "current_mean": null
+        },
+        "retail": {
+          "weight": 0.2,
+          "company_count": 0,
+          "cids": [],
+          "open_mean": null,
+          "current_mean": null
+        }
+      },
+      "mapped_count": 0,
+      "unmapped": []
+    },
+    "modules": {
+      "scs": {
+        "calculation_status": "degraded",
+        "reason": "已使用可用历史快照估算σ和时间衰减；历史不足24小时且公司分层未全映射",
+        "mapped_company_count": 0,
+        "history_snapshot_count": 0,
+        "per_outcome": {
+          "home": {
+            "signed_score": null,
+            "tier_scores": {
+              "sharp": null,
+              "asian": null,
+              "retail": null
+            }
+          },
+          "draw": {
+            "signed_score": null,
+            "tier_scores": {
+              "sharp": null,
+              "asian": null,
+              "retail": null
+            }
+          },
+          "away": {
+            "signed_score": null,
+            "tier_scores": {
+              "sharp": null,
+              "asian": null,
+              "retail": null
+            }
+          }
+        }
+      },
+      "dri": {
+        "calculation_status": "not_run",
+        "reason": "页面离散值缺失"
+      },
+      "lead_lag": {
+        "calculation_status": "not_run",
+        "priority": [
+          1055,
+          3,
+          5
+        ],
+        "observed": [],
+        "chain": null,
+        "reason": "页面只提供各公司最近一次变动时间，无法证明完整的首次领涨—2小时/4小时跟随链"
+      },
+      "water_flow": {
+        "calculation_status": "not_run",
+        "same_line_sources": 0,
+        "home_in": 0,
+        "home_out": 0,
+        "neutral": 0,
+        "flow_ratio": null,
+        "direction": "neutral",
+        "sources": [],
+        "reason": "缺多帧相关系数，尚未执行同源白标聚类去重"
+      },
+      "exchange": {
+        "calculation_status": "not_run",
+        "reason": "必发或市场概率缺失"
+      },
+      "kelly": {
+        "calculation_status": "degraded",
+        "tiers": {
+          "sharp": {
+            "company_count": 0,
+            "current_mean": null
+          },
+          "asian": {
+            "company_count": 0,
+            "current_mean": null
+          },
+          "retail": {
+            "company_count": 0,
+            "current_mean": null
+          }
+        },
+        "semantic_scope": "bookmaker_page_kelly_index_not_bankroll_kelly_fraction",
+        "staking_usage": "forbidden",
+        "reason": "三层页面凯利指数均值已算，但必须与Lead-Lag、水位流和必发共同验证；不得用于计算仓位"
+      }
+    },
+    "formal_mbi_status": "degraded",
+    "formal_mbi_verdict": null,
+    "blockers": [
+      "部分博彩公司cid尚未完成三层归类",
+      "SCS缺历史噪声和欧赔多帧时间衰减",
+      "DRI缺联赛历史中位数校准",
+      "Lead-Lag缺完整首次变动链",
+      "水位流缺白标同源聚类",
+      "必发缺4小时成交基线"
+    ]
+  },
+  "risk_engine": {
+    "traps": {
+      "registry_version": "20260714_015300",
+      "upstream_claimed_total": 49,
+      "defined_total": 47,
+      "unresolved_upstream_rules": [
+        "主流程声称15+6条欧亚专项，但KB-2仅定义15条、KB-10仅新增4条MBI规则",
+        "主流程声称49条全扫描，但KB-2 15条 + KB-3 28条 + KB-10 4条 = 47条"
+      ],
+      "calculation_status": "degraded",
+      "evaluated_count": 1,
+      "not_evaluable_count": 46,
+      "triggered_count": 0,
+      "triggered_by_category": {
+        "A": 0,
+        "B": 0,
+        "C": 0
+      },
+      "triggered": [],
+      "results": [
+        {
+          "id": "EA01",
+          "group": "euro_asian",
+          "category": "C",
+          "name": "深欧浅盘",
+          "trigger": "理论盘比实际盘深至少0.25球",
+          "status": "not_evaluable",
+          "reason": "所需字段不足"
+        },
+        {
+          "id": "EA02",
+          "group": "euro_asian",
+          "category": "C",
+          "name": "浅欧深盘",
+          "trigger": "实际盘深至少0.25球且SBO主队水位>1.00",
+          "status": "not_evaluable",
+          "reason": "SBO/IBC cid尚未确认"
+        },
+        {
+          "id": "EA03",
+          "group": "euro_asian",
+          "category": "C",
+          "name": "平赔下降加深盘",
+          "trigger": "平赔下降至少8%且实际盘深于理论盘",
+          "status": "not_evaluable",
+          "reason": "所需字段不足"
+        },
+        {
+          "id": "EA04",
+          "group": "euro_asian",
+          "category": "B",
+          "name": "降赔退盘",
+          "trigger": "主胜降至少5%且亚洲盘退至少0.25",
+          "status": "not_evaluable",
+          "reason": "所需字段不足"
+        },
+        {
+          "id": "EA05",
+          "group": "euro_asian",
+          "category": "A",
+          "name": "热门深盘高水",
+          "trigger": "亚洲盘至少0.75且SBO主水至少1.05",
+          "status": "not_evaluable",
+          "reason": "SBO/IBC cid尚未确认"
+        },
+        {
+          "id": "EA06",
+          "group": "euro_asian",
+          "category": "C",
+          "name": "弱方无因降赔",
+          "trigger": "弱方赔率下降至少10%且无基本面支持",
+          "status": "not_evaluable",
+          "reason": "缺结构化基本面反证"
+        },
+        {
+          "id": "EA07",
+          "group": "euro_asian",
+          "category": "B",
+          "name": "叙事中度压缩",
+          "trigger": "压缩5%-15%、平局真概率>25%、驱动为已知新闻",
+          "status": "not_evaluable",
+          "reason": "缺结构化新闻叙事标签"
+        },
+        {
+          "id": "EA08",
+          "group": "euro_asian",
+          "category": "A",
+          "name": "同向降赔盘口不动",
+          "trigger": "主胜下降至少5%且亚洲盘不动",
+          "status": "not_evaluable",
+          "reason": "所需字段不足"
+        },
+        {
+          "id": "EA09",
+          "group": "euro_asian",
+          "category": "C",
+          "name": "欧亚反向",
+          "trigger": "1X2与亚洲盘移动方向相反",
+          "status": "not_evaluable",
+          "reason": "所需字段不足"
+        },
+        {
+          "id": "EA10",
+          "group": "euro_asian",
+          "category": "C",
+          "name": "SBO与Pinnacle分歧",
+          "trigger": "两者亚洲盘相差至少0.25",
+          "status": "not_evaluable",
+          "reason": "SBO/IBC cid尚未确认"
+        },
+        {
+          "id": "EA11",
+          "group": "euro_asian",
+          "category": "A",
+          "name": "bet365限额骤降",
+          "trigger": "2小时限额下降超过30%且赔率不动",
+          "status": "not_evaluable",
+          "reason": "页面无bet365限额"
+        },
+        {
+          "id": "EA12",
+          "group": "euro_asian",
+          "category": "B",
+          "name": "开盘极深",
+          "trigger": "开盘亚洲盘至少1.5球",
+          "status": "not_evaluable",
+          "reason": "所需字段不足"
+        },
+        {
+          "id": "EA13",
+          "group": "euro_asian",
+          "category": "C",
+          "name": "非法公司操纵",
+          "trigger": "非监管公司偏离、限额下降、停盘至少两项",
+          "status": "not_evaluable",
+          "reason": "缺监管与停盘字段"
+        },
+        {
+          "id": "EA14",
+          "group": "euro_asian",
+          "category": "C",
+          "name": "三公司共识破裂",
+          "trigger": "三家核心公司同市场均相差至少0.25",
+          "status": "not_evaluable",
+          "reason": "所需字段不足"
+        },
+        {
+          "id": "EA15",
+          "group": "euro_asian",
+          "category": "C",
+          "name": "裁判驱动",
+          "trigger": "高点球或高牌裁判叠加身体型球队",
+          "status": "not_evaluable",
+          "reason": "缺裁判结构化数据"
+        },
+        {
+          "id": "U01",
+          "group": "universal",
+          "category": "C",
+          "name": "无基本面降赔",
+          "trigger": "赔率下降至少8%且无基本面支持",
+          "status": "not_evaluable",
+          "reason": "缺结构化基本面反证"
+        },
+        {
+          "id": "U02",
+          "group": "universal",
+          "category": "A",
+          "name": "深开24小时不退",
+          "trigger": "开盘至少1球且24小时从未退盘",
+          "status": "not_evaluable",
+          "reason": "历史不足24小时或中间帧不足"
+        },
+        {
+          "id": "U03",
+          "group": "universal",
+          "category": "C",
+          "name": "纸面强但浅开",
+          "trigger": "开盘比理论浅至少0.25且纸面实力明显",
+          "status": "not_evaluable",
+          "reason": "缺纸面实力量化"
+        },
+        {
+          "id": "U04",
+          "group": "universal",
+          "category": "A",
+          "name": "多公司同向",
+          "trigger": "多公司同向移动",
+          "status": "not_evaluable",
+          "reason": "所需字段不足"
+        },
+        {
+          "id": "U05",
+          "group": "universal",
+          "category": "A",
+          "name": "Pinnacle领涨",
+          "trigger": "Pinnacle领先其他公司超过5分钟",
+          "status": "not_evaluable",
+          "reason": "缺完整首次变动链"
+        },
+        {
+          "id": "U06",
+          "group": "universal",
+          "category": "A",
+          "name": "随机单公司偏离",
+          "trigger": "仅一家偏离市场至少0.10",
+          "status": "not_evaluable",
+          "reason": "所需字段不足"
+        },
+        {
+          "id": "U07",
+          "group": "universal",
+          "category": "B",
+          "name": "末段欧亚同步反转",
+          "trigger": "最后2小时欧赔与亚洲盘同时反转",
+          "status": "not_evaluable",
+          "reason": "缺最后2小时连续反转序列"
+        },
+        {
+          "id": "U08",
+          "group": "universal",
+          "category": "B",
+          "name": "降赔退盘",
+          "trigger": "赔率下降至少5%且亚洲盘退至少0.25",
+          "status": "not_evaluable",
+          "reason": "所需字段不足"
+        },
+        {
+          "id": "U09",
+          "group": "universal",
+          "category": "C",
+          "name": "bet365与Pinnacle反向",
+          "trigger": "两者赔率移动方向相反",
+          "status": "not_evaluable",
+          "reason": "所需字段不足"
+        },
+        {
+          "id": "U10",
+          "group": "universal",
+          "category": "A",
+          "name": "赔率静水位乱",
+          "trigger": "赔率波动小于0.03且水位波动大于0.08",
+          "status": "not_evaluable",
+          "reason": "历史水位帧不足"
+        },
+        {
+          "id": "U11",
+          "group": "universal",
+          "category": "B",
+          "name": "叙事压缩",
+          "trigger": "已知叙事导致5%-15%压缩",
+          "status": "not_evaluable",
+          "reason": "缺叙事标签"
+        },
+        {
+          "id": "U12",
+          "group": "universal",
+          "category": "C",
+          "name": "停赛悖论",
+          "trigger": "停赛球队可能转为更保守",
+          "status": "not_evaluable",
+          "reason": "缺停赛战术响应标签"
+        },
+        {
+          "id": "U13",
+          "group": "universal",
+          "category": "C",
+          "name": "非法公司红旗",
+          "trigger": "非法公司至少两个红旗",
+          "status": "not_evaluable",
+          "reason": "缺非法公司监管字段"
+        },
+        {
+          "id": "U14",
+          "group": "universal",
+          "category": "C",
+          "name": "裁判影响",
+          "trigger": "高点球或高牌裁判",
+          "status": "not_evaluable",
+          "reason": "缺裁判数据"
+        },
+        {
+          "id": "U15",
+          "group": "universal",
+          "category": "A",
+          "name": "无事件移动",
+          "trigger": "无基本面事件则移动视为噪声",
+          "status": "not_evaluable",
+          "reason": "缺新闻事件审计"
+        },
+        {
+          "id": "U16",
+          "group": "universal",
+          "category": "C",
+          "name": "降赔需亚盘确认",
+          "trigger": "1X2降赔但亚洲盘未同向",
+          "status": "not_evaluable",
+          "reason": "所需字段不足"
+        },
+        {
+          "id": "U17",
+          "group": "universal",
+          "category": "C",
+          "name": "三公司强共识",
+          "trigger": "三家亚洲盘差不超过0.15球",
+          "status": "not_evaluable",
+          "reason": "所需字段不足"
+        },
+        {
+          "id": "U18",
+          "group": "universal",
+          "category": "C",
+          "name": "主胜概率异常高",
+          "trigger": "主胜去水概率超过75%",
+          "status": "not_evaluable",
+          "reason": "所需字段不足"
+        },
+        {
+          "id": "U19",
+          "group": "universal",
+          "category": "C",
+          "name": "平局概率高",
+          "trigger": "平局去水概率超过30%",
+          "status": "not_evaluable",
+          "reason": "所需字段不足"
+        },
+        {
+          "id": "U20",
+          "group": "universal",
+          "category": "C",
+          "name": "客胜概率高",
+          "trigger": "客胜去水概率超过40%",
+          "status": "not_evaluable",
+          "reason": "所需字段不足"
+        },
+        {
+          "id": "U21",
+          "group": "universal",
+          "category": "B",
+          "name": "极端压缩",
+          "trigger": "赔率压缩超过15%",
+          "status": "not_evaluable",
+          "reason": "所需字段不足"
+        },
+        {
+          "id": "U22",
+          "group": "universal",
+          "category": "C",
+          "name": "三公司欧赔分歧",
+          "trigger": "三家1X2赔率跨度超过0.30",
+          "status": "not_evaluable",
+          "reason": "所需字段不足"
+        },
+        {
+          "id": "U23",
+          "group": "universal",
+          "category": "C",
+          "name": "三公司亚盘分歧",
+          "trigger": "三家亚洲盘跨度超过0.50",
+          "status": "not_evaluable",
+          "reason": "所需字段不足"
+        },
+        {
+          "id": "U24",
+          "group": "universal",
+          "category": "C",
+          "name": "双方世界杯首秀",
+          "trigger": "双方均为世界杯首秀，平局概率下限28%",
+          "status": "not_evaluable",
+          "reason": "非世界杯首秀字段缺失"
+        },
+        {
+          "id": "U25",
+          "group": "universal",
+          "category": "A",
+          "name": "三公司同向水涨",
+          "trigger": "三家公司同向水位变化均超过0.15",
+          "status": "not_evaluable",
+          "reason": "所需字段不足"
+        },
+        {
+          "id": "U26",
+          "group": "universal",
+          "category": "C",
+          "name": "超低热门赔率",
+          "trigger": "热门赔率低于1.25",
+          "status": "not_triggered",
+          "reason": "30家公司主胜均值已检查"
+        },
+        {
+          "id": "U27",
+          "group": "universal",
+          "category": "C",
+          "name": "防守堡垒",
+          "trigger": "预选赛场均失球<0.5或至少5场零封",
+          "status": "not_evaluable",
+          "reason": "缺零封和失球结构化数据"
+        },
+        {
+          "id": "U28",
+          "group": "universal",
+          "category": "C",
+          "name": "高温折扣",
+          "trigger": "温度>35°C或湿度>80%",
+          "status": "not_evaluable",
+          "reason": "缺天气结构化输入"
+        },
+        {
+          "id": "MBI16",
+          "group": "mbi",
+          "category": "C",
+          "name": "层级分歧",
+          "trigger": "Sharp与Asian亚洲盘相差至少0.25",
+          "status": "not_evaluable",
+          "reason": "所需字段不足"
+        },
+        {
+          "id": "MBI17",
+          "group": "mbi",
+          "category": "C",
+          "name": "交易量尖峰",
+          "trigger": "必发成交量超过此前2倍且赔率静止",
+          "status": "not_evaluable",
+          "reason": "所需字段不足"
+        },
+        {
+          "id": "MBI18",
+          "group": "mbi",
+          "category": "C",
+          "name": "页面凯利指数情境缺口",
+          "trigger": "焦点赛热门重流入、页面凯利指数上升、至少3家Sharp同步",
+          "status": "not_evaluable",
+          "reason": "缺焦点赛阶段和第三家Sharp确认"
+        },
+        {
+          "id": "MBI19",
+          "group": "mbi",
+          "category": "C",
+          "name": "Sharp反向下注",
+          "trigger": "水位流比率至少0.70且Pinnacle反向或静止4小时",
+          "status": "not_evaluable",
+          "reason": "缺Pinnacle连续静止4小时验证"
+        }
+      ],
+      "metrics": {
+        "shin_probabilities": {},
+        "theoretical_ah": 1.0,
+        "theoretical_ah_signed": -1.0,
+        "theoretical_ah_detail": {
+          "method": "poisson_dixon_coles_asian_settlement",
+          "line": -1.0,
+          "depth": 1.0,
+          "fair_decimal_odds": 1.9584002186735656,
+          "settlement": {
+            "handicap": -1.0,
+            "parts": [
+              -1.0
+            ],
+            "full_win": 0.3678612732097972,
+            "half_win": 0.0,
+            "push": 0.27958040210439694,
+            "half_loss": 0.0,
+            "full_loss": 0.35255832468580595,
+            "win_units": 0.3678612732097972,
+            "loss_units": 0.35255832468580595,
+            "fair_decimal_odds": 1.9584002186735656,
+            "expected_net_at_2_00": 0.015302948523991278
+          },
+          "candidate_range": [
+            -5.0,
+            5.0
+          ]
+        },
+        "theoretical_total_line": 2.0,
+        "theoretical_total_fair_over_odds": 1.9397907557601914,
+        "theoretical_total_detail": {
+          "method": "poisson_dixon_coles_asian_total_settlement",
+          "line": 2.0,
+          "fair_over_decimal_odds": 1.9397907557601914,
+          "expected_total_goals": 2.2,
+          "settlement": {
+            "total_line": 2.0,
+            "side": "over",
+            "parts": [
+              2.0
+            ],
+            "full_win": 0.3772862345851564,
+            "half_win": 0.0,
+            "push": 0.2681436498761427,
+            "half_loss": 0.0,
+            "full_loss": 0.35457011553870105,
+            "win_units": 0.3772862345851564,
+            "loss_units": 0.35457011553870105,
+            "fair_decimal_odds": 1.9397907557601914,
+            "expected_net_at_2_00": 0.022716119046455374
+          },
+          "candidate_range": [
+            0.5,
+            7.0
+          ]
+        },
+        "exact_total_goal_combinations": {
+          "1_or_3": {
+            "totals": [
+              1,
+              3
+            ],
+            "per_total_probability": {
+              "1": 0.24376695443285695,
+              "3": 0.19663867657583797
+            },
+            "probability": 0.4404056310086949,
+            "fair_decimal_odds": 2.2706340009995403,
+            "break_even_probability_at_2_00": 0.5,
+            "edge_at_2_00": -0.1191887379826102
+          },
+          "3_or_4": {
+            "totals": [
+              3,
+              4
+            ],
+            "per_total_probability": {
+              "3": 0.19663867657583797,
+              "4": 0.1081512721167109
+            },
+            "probability": 0.3047899486925489,
+            "fair_decimal_odds": 3.2809480899540135,
+            "break_even_probability_at_2_00": 0.5,
+            "edge_at_2_00": -0.39042010261490223
+          }
+        },
+        "score_matrix_truncation_audit": {
+          "method": "independent_poisson_finite_grid_audit",
+          "lambda_home": 1.657753,
+          "lambda_away": 0.542247,
+          "max_goals_per_team": 12,
+          "retained_probability_mass": 0.9999999752397837,
+          "omitted_probability_mass": 2.476021632169534e-08,
+          "raw_truncated_outcome_probabilities": {
+            "home": 0.6474416592833983,
+            "draw": 0.23515467122797862,
+            "away": 0.11740364472840686
+          },
+          "normalized_within_grid_outcome_probabilities": {
+            "home": 0.6474416753141942,
+            "draw": 0.23515467705045928,
+            "away": 0.11740364763534658
+          },
+          "pricing_allowed_without_overflow": true,
+          "warning": "raw truncated probabilities must not be converted directly to fair odds"
+        },
+        "actual_ah": null,
+        "opening_ah": null,
+        "ah_gap": null,
+        "ah_change": null,
+        "pin_home_change": null,
+        "pin_draw_change": null,
+        "pin_away_change": null,
+        "pin_open_home": null,
+        "pin_current_home": null,
+        "core_lines": [],
+        "core_line_spread": null,
+        "core_home_odds": [],
+        "core_home_odds_spread": null,
+        "water_sigma": null,
+        "sharp_asian_line_gap": null
+      }
+    },
+    "six_d": {
+      "calculation_status": "degraded",
+      "dimensions": {
+        "D1": {
+          "score": 0.5,
+          "weight": 0.25,
+          "reason": "shuju/基本面结构化不足，按KB-4取中性0.5"
+        },
+        "D2": {
+          "score": 0.5,
+          "weight": 0.25,
+          "reason": "盘差、DRI与三公司盘口跨度连续映射"
+        },
+        "D3": {
+          "score": 0.0,
+          "weight": 0.15,
+          "reason": "开盘/实际盘口相对理论盘偏差"
+        },
+        "D4": {
+          "score": 1.0,
+          "weight": 0.15,
+          "reason": "按当前可评估陷阱触发数映射；覆盖不足"
+        },
+        "D5": {
+          "score": 0.0,
+          "weight": 0.2,
+          "reason": "水位离散与Shin平局概率"
+        }
+      },
+      "weighted_0_to_1": 0.4,
+      "legacy_0_to_6": 2.4000000000000004,
+      "action": "confidence_minus_3pp",
+      "limitations": [
+        "D1使用中性值",
+        "D2使用未校准DRI",
+        "D4陷阱覆盖不完整"
+      ]
+    }
+  },
+  "base_engine_audit": {
+    "policy": "未明确废弃即继续生效",
+    "source_version": "football-odds-analyst v3.10.8 + Football Betting OneShot v0.16.3",
+    "completion_status": "incomplete",
+    "modules": {
+      "global_consensus": {
+        "label": "30家公司分层共识",
+        "data_status": "degraded",
+        "calculation_status": "completed",
+        "detail": "30家公司均值已计算；三层已确认映射0家，未映射0家"
+      },
+      "scs": {
+        "label": "SCS共识度",
+        "data_status": "missing",
+        "calculation_status": "degraded",
+        "detail": "已使用可用历史快照估算σ和时间衰减；历史不足24小时且公司分层未全映射"
+      },
+      "dri": {
+        "label": "DRI离散风险",
+        "data_status": "degraded",
+        "calculation_status": "not_run",
+        "detail": "页面离散值缺失"
+      },
+      "lead_lag": {
+        "label": "Lead-Lag领涨跟随",
+        "data_status": "missing",
+        "calculation_status": "not_run",
+        "detail": "页面只提供各公司最近一次变动时间，无法证明完整的首次领涨—2小时/4小时跟随链"
+      },
+      "water_flow": {
+        "label": "水位流向",
+        "data_status": "degraded",
+        "calculation_status": "not_run",
+        "detail": "缺多帧相关系数，尚未执行同源白标聚类去重"
+      },
+      "exchange": {
+        "label": "交易所背离与量价验证",
+        "data_status": "missing",
+        "calculation_status": "not_run",
+        "detail": "必发或市场概率缺失"
+      },
+      "kelly": {
+        "label": "页面凯利指数共识",
+        "data_status": "degraded",
+        "calculation_status": "degraded",
+        "detail": "三层页面凯利指数均值已算，但必须与Lead-Lag、水位流和必发共同验证；不得用于计算仓位"
+      },
+      "shin": {
+        "label": "Shin去水",
+        "data_status": "missing",
+        "calculation_status": "not_run",
+        "detail": "赔率输入可用；必须由分析层输出正式Shin结果"
+      },
+      "six_d": {
+        "label": "正式6D",
+        "data_status": "missing",
+        "calculation_status": "degraded",
+        "detail": "KB-4连续评分=2.400/6；限制：D1使用中性值、D2使用未校准DRI、D4陷阱覆盖不完整"
+      },
+      "traps": {
+        "label": "陷阱扫描",
+        "data_status": "degraded",
+        "calculation_status": "degraded",
+        "detail": "上游声称49条，当前明确定义47条；已评估1条，触发0条"
+      }
+    },
+    "incomplete_modules": [
+      "scs",
+      "dri",
+      "lead_lag",
+      "water_flow",
+      "exchange",
+      "kelly",
+      "shin",
+      "six_d",
+      "traps"
+    ]
+  },
+  "automation": {
+    "provider": "fixed-python-core",
+    "generated_at": "2026-07-16T17:37:09+00:00",
+    "owner_authorized_request": true,
+    "llm_used": false,
+    "market_refresh": {
+      "stage": "T-60M",
+      "captured_at": "2026-07-16T17:35:29.612746+00:00",
+      "target_minutes_before": 60,
+      "actual_minutes_before": 39.51,
+      "lateness_minutes": 20.49,
+      "exact": false,
+      "model_recalculated": true,
+      "execution_authorized": false,
+      "lock_state_changed": false,
+      "bankroll_state_changed": false
+    }
+  },
+  "live_ev_profiles": {
+    "active": true,
+    "overlay_primary": true,
+    "contract": {
+      "match_id": "2040517",
+      "market_code": "1",
+      "market_name": "全场独赢",
+      "handicap_line": "",
+      "selection_code": "1",
+      "selection_name": "费伦茨",
+      "contract_type": "three_way_selection"
+    },
+    "probability": {
+      "point": 0.647442,
+      "conservative": 0.547442,
+      "confirmed_model_output": true,
+      "source": "recent_form_market_calibrated_poisson_v2",
+      "calibration_status": "market_calibrated_with_uncertainty_haircut_not_holdout_calibrated"
+    },
+    "price": {
+      "max_quote_age_ms": 15000
+    },
+    "execution": {
+      "minimum_conservative_ev": 0.08
+    }
+  }
+}
