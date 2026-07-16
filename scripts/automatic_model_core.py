@@ -199,13 +199,18 @@ def _price_audit(deep: dict, matrix: dict[tuple[int, int], float], probabilities
 
 def build_automatic_model(context: dict) -> dict:
     deep = _deep_snapshot(context)
-    form = (deep.get("shuju") or {}).get("recent_form") or {}
+    deep_form = (deep.get("shuju") or {}).get("recent_form") or {}
+    prematch_facts = context.get("prematch_fundamentals") or {}
+    form = deep_form or prematch_facts.get("recent_form") or {}
+    form_source = "500.com赛前数据快照" if deep_form else prematch_facts.get("form_source")
     home_home = form.get("home_home") or {}
     away_away = form.get("away_away") or {}
     home_overall = form.get("home_overall") or {}
     away_overall = form.get("away_overall") or {}
-    home_venue = _mean([_rate(home_home, "goals_for"), _rate(away_away, "goals_against")])
-    away_venue = _mean([_rate(away_away, "goals_for"), _rate(home_home, "goals_against")])
+    effective_home_home = home_home if home_home.get("matches") else home_overall
+    effective_away_away = away_away if away_away.get("matches") else away_overall
+    home_venue = _mean([_rate(effective_home_home, "goals_for"), _rate(effective_away_away, "goals_against")])
+    away_venue = _mean([_rate(effective_away_away, "goals_for"), _rate(effective_home_home, "goals_against")])
     home_general = _mean([_rate(home_overall, "goals_for"), _rate(away_overall, "goals_against")])
     away_general = _mean([_rate(away_overall, "goals_for"), _rate(home_overall, "goals_against")])
     home_form = _mean([home_venue, home_venue, home_general])
@@ -230,8 +235,8 @@ def build_automatic_model(context: dict) -> dict:
     top_result = max(probabilities, key=probabilities.get)
     labels = {"home": "主胜", "draw": "平局", "away": "客胜"}
     model = {
-        "status": "确定性融合模型（近期主客场攻防 + 多公司市场校准）",
-        "method": "recent_venue_form_market_calibrated_poisson_v1",
+        "status": "确定性融合模型（可核验近期攻防 + 市场校准）",
+        "method": "recent_form_market_calibrated_poisson_v2",
         "lambda_home": round(lambda_home, 6), "lambda_away": round(lambda_away, 6), "rho": 0.0,
         "expected_goals": round(total, 6),
         "probabilities": {key: round(value, 6) for key, value in probabilities.items()},
@@ -240,6 +245,8 @@ def build_automatic_model(context: dict) -> dict:
             "form_lambda_home": round(home_form, 6), "form_lambda_away": round(away_form, 6),
             "market_total_line_median": market_total, "market_probabilities": market_probabilities,
             "form_weight": 0.60, "market_weight": 0.40,
+            "form_source": form_source,
+            "venue_proxy_used": not (home_home.get("matches") and away_away.get("matches")),
         },
         "limitations": [
             "近期样本含不同赛事与对手强度，尚未完成逐队Elo/xG对手校正",
@@ -247,6 +254,10 @@ def build_automatic_model(context: dict) -> dict:
             "市场信息用于校准，因此该概率不是完全独立于赔率的纯基本面概率",
         ],
     }
+    if not deep_form:
+        model["limitations"].insert(0, "500深层页缺失，本次改用ESPN可核验近5场样本；样本范围较窄，已按不确定性处理，不能等同完整联赛近况")
+    if not (home_home.get("matches") and away_away.get("matches")):
+        model["limitations"].insert(1, "主客场拆分样本不足，主客场攻防项使用整体样本代理")
     workspace_match = context.get("selected_workspace_match") or {}
     home_name = workspace_match.get("home") or "主队"
     away_name = workspace_match.get("away") or "客队"
@@ -310,13 +321,13 @@ def build_automatic_model(context: dict) -> dict:
         live_profile = {
             "active": True, "overlay_primary": True,
             "contract": {"match_id": match_id, "market_code": "1", "market_name": "全场独赢", "handicap_line": "", "selection_code": selection_code, "selection_name": selection_name, "contract_type": "three_way_selection"},
-            "probability": {"point": round(probabilities[top_result], 6), "conservative": round(max(0.01, probabilities[top_result] - 0.075), 6), "confirmed_model_output": True, "source": "recent_venue_form_market_calibrated_poisson_v1", "calibration_status": "market_calibrated_with_uncertainty_haircut_not_holdout_calibrated"},
+            "probability": {"point": round(probabilities[top_result], 6), "conservative": round(max(0.01, probabilities[top_result] - (0.10 if not deep_form else 0.075)), 6), "confirmed_model_output": True, "source": "recent_form_market_calibrated_poisson_v2", "calibration_status": "market_calibrated_with_uncertainty_haircut_not_holdout_calibrated"},
             "price": {"max_quote_age_ms": 15000}, "execution": {"minimum_conservative_ev": 0.08},
         }
     return {
         "model": model, "decisions": decisions,
         "price_audit": _price_audit(deep, matrix, probabilities),
-        "data_quality": {"status": "模型已计算，临场信息待补", "overall": "FORM_AND_MULTI_MARKET_MODEL", "missing": ["确认首发", "即时伤停", "天气场地", "用户渠道即时赔率"], "notes": ["模型数值由固定公式生成，DeepSeek不参与概率计算。"]},
+        "data_quality": {"status": "模型已计算，临场信息待补", "overall": "FORM_AND_MARKET_MODEL", "missing": ["确认首发", "即时伤停", "用户渠道即时赔率"], "notes": [f"近期攻防来源：{form_source or '未标明'}。", "模型数值由固定公式生成，DeepSeek不参与概率计算。"]},
         "fundamentals": {
             "recent_form": form,
             "metric": "recent actual goals, not xG",

@@ -35,3 +35,26 @@ def test_deterministic_model_generates_complete_probability_matrix():
 def test_deterministic_model_refuses_to_invent_missing_form():
     context = {"source_snapshots": {"500_deep": {"snapshots": [{"shuju": {}, "ouzhi": {}}]}}}
     assert build_automatic_model(context)["model"] is None
+
+
+def test_deterministic_model_uses_checked_espn_form_when_deep_page_is_missing():
+    form = {
+        "home_overall": {"matches": 5, "wins": 2, "draws": 1, "losses": 2, "goals_for": 7, "goals_against": 6},
+        "home_home": {"matches": 2, "wins": 1, "draws": 1, "losses": 0, "goals_for": 4, "goals_against": 2},
+        "away_overall": {"matches": 5, "wins": 3, "draws": 1, "losses": 1, "goals_for": 9, "goals_against": 4},
+        "away_away": {"matches": 2, "wins": 1, "draws": 0, "losses": 1, "goals_for": 3, "goals_against": 2},
+    }
+    context = {
+        "request": {"match_id": "2040518"},
+        "selected_workspace_match": {"id": "2040518", "home": "日利纳", "away": "斯海杜克"},
+        "source_snapshots": {"500_deep": {"snapshots": []}},
+        "prematch_fundamentals": {"recent_form": form, "form_source": "ESPN近5场赛事样本"},
+        "official_market_baseline": {"fair_probabilities": {"home": 0.30, "draw": 0.27, "away": 0.43}},
+    }
+
+    result = build_automatic_model(context)
+
+    assert result["model"] is not None
+    assert result["model"]["method"] == "recent_form_market_calibrated_poisson_v2"
+    assert result["model"]["calibration"]["form_source"] == "ESPN近5场赛事样本"
+    assert any("ESPN" in item for item in result["model"]["limitations"])

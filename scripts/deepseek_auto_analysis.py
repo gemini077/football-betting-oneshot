@@ -351,6 +351,15 @@ def attach_workspace_evidence(analysis: dict, context: dict) -> dict:
     market["official_spf"] = workspace.get("spf") or None
     market["official_rqspf"] = workspace.get("rqspf") or None
     market["official_market_baseline"] = baseline
+    checked_facts = context.get("prematch_fundamentals") or {}
+    fundamentals = analysis.setdefault("fundamentals", {})
+    if checked_facts:
+        fundamentals["status"] = checked_facts.get("status")
+        fundamentals["items"] = checked_facts.get("items") or []
+        fundamentals["sources"] = checked_facts.get("sources") or []
+        fundamentals["recent_form"] = checked_facts.get("recent_form") or {}
+        fundamentals["form_source"] = checked_facts.get("form_source")
+        fundamentals["checked_at"] = checked_facts.get("checked_at")
     official_spf = workspace.get("spf") or {}
     for row in (analysis.get("betting") or {}).get("price_audit") or []:
         outcome = "home" if row.get("market") == "SPF主胜" else "draw" if row.get("market") == "SPF平局" else "away" if row.get("market") == "SPF客胜" else None

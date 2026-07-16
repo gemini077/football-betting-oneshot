@@ -77,14 +77,71 @@ def _previous_meeting(summary: dict, home_team_id: str, away_team_id: str) -> di
     return max(candidates, key=lambda item: str(item.get("gameDate") or ""))
 
 
+def _espn_form_row(summary: dict, team_id: str, venue: str | None = None) -> dict:
+    """Convert ESPN's last-five block into team-perspective aggregate form."""
+    block = next(
+        (
+            item for item in summary.get("lastFiveGames") or []
+            if str((item.get("team") or {}).get("id") or "") == str(team_id)
+        ),
+        {},
+    )
+    events = []
+    for event in block.get("events") or []:
+        is_home = str(event.get("homeTeamId") or "") == str(team_id)
+        is_away = str(event.get("awayTeamId") or "") == str(team_id)
+        if not (is_home or is_away):
+            continue
+        if venue == "home" and not is_home:
+            continue
+        if venue == "away" and not is_away:
+            continue
+        try:
+            home_score = int(event.get("homeTeamScore"))
+            away_score = int(event.get("awayTeamScore"))
+        except (TypeError, ValueError):
+            continue
+        goals_for, goals_against = (home_score, away_score) if is_home else (away_score, home_score)
+        events.append((event, goals_for, goals_against))
+    if not events:
+        return {}
+    wins = sum(goals_for > goals_against for _, goals_for, goals_against in events)
+    draws = sum(goals_for == goals_against for _, goals_for, goals_against in events)
+    losses = len(events) - wins - draws
+    dates = sorted(str(event.get("gameDate") or "")[:10] for event, _, _ in events if event.get("gameDate"))
+    return {
+        "matches": len(events),
+        "wins": wins,
+        "draws": draws,
+        "losses": losses,
+        "goals_for": sum(goals_for for _, goals_for, _ in events),
+        "goals_against": sum(goals_against for _, _, goals_against in events),
+        "sample_start": dates[0] if dates else None,
+        "sample_end": dates[-1] if dates else None,
+        "source": "ESPN lastFiveGames",
+    }
+
+
+def _espn_recent_form(summary: dict, home_team_id: str, away_team_id: str) -> dict:
+    return {
+        "home_overall": _espn_form_row(summary, home_team_id),
+        "home_home": _espn_form_row(summary, home_team_id, "home"),
+        "away_overall": _espn_form_row(summary, away_team_id),
+        "away_away": _espn_form_row(summary, away_team_id, "away"),
+    }
+
+
 def collect_prematch_fundamentals(workspace: dict, deep: dict, opener=urllib.request.urlopen) -> dict:
     """Return checked facts. Missing upstream fields are described as checked, not silently guessed."""
+    deep_form = ((deep.get("shuju") or {}).get("recent_form") or {}) if isinstance(deep, dict) else {}
     items = _recent_form_items(deep)
     result = {
         "status": "已核验近期攻防；等待联网赛前源",
         "checked_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "items": items,
         "sources": [],
+        "recent_form": deep_form,
+        "form_source": "500.com赛前数据快照" if deep_form else None,
     }
     kickoff = _kickoff_utc(workspace)
     if kickoff is None:
@@ -126,6 +183,24 @@ def collect_prematch_fundamentals(workspace: dict, deep: dict, opener=urllib.req
     home_id = str((home.get("team") or {}).get("id") or "")
     away_id = str((away.get("team") or {}).get("id") or "")
     result["items"].append({"label": "赛程交叉核验", "value": str(event.get("name") or "已匹配"), "source_url": source_url})
+
+    if not deep_form and home_id and away_id:
+        espn_form = _espn_recent_form(summary, home_id, away_id)
+        if (espn_form.get("home_overall") or {}).get("matches") and (espn_form.get("away_overall") or {}).get("matches"):
+            result["recent_form"] = espn_form
+            result["form_source"] = "ESPN近5场赛事样本（含可获得的同赛事历史，非完整联赛近况）"
+            for key, label in (("home_overall", "主队 ESPN 近5场"), ("away_overall", "客队 ESPN 近5场")):
+                row = espn_form.get(key) or {}
+                result["items"].append({
+                    "label": label,
+                    "value": (
+                        f"{row.get('wins', 0)}胜{row.get('draws', 0)}平{row.get('losses', 0)}负，"
+                        f"进{row.get('goals_for', 0)}球/失{row.get('goals_against', 0)}球；"
+                        f"样本期{row.get('sample_start') or '—'}至{row.get('sample_end') or '—'}"
+                    ),
+                    "source": "ESPN lastFiveGames",
+                    "source_url": source_url,
+                })
 
     previous = _previous_meeting(summary, home_id, away_id)
     if previous:

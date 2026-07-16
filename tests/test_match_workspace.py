@@ -122,6 +122,10 @@ class MatchWorkspacePortfolioTests(unittest.TestCase):
         self.assertIn("[自动分析]", page)
         self.assertIn("business_date:", page)
         self.assertIn("if(m.report_state==='已分析')", page)
+        self.assertIn("hasReport?`<button", page)
+        self.assertIn("打开报告", page)
+        self.assertIn("重新分析", page)
+        self.assertNotIn("查看数据状态", page)
 
     def test_market_only_report_is_not_marked_as_analyzed(self):
         report = {
