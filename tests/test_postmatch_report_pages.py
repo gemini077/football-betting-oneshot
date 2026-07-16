@@ -38,7 +38,8 @@ def test_individual_postmatch_report_is_complete_standalone_page():
         "03｜赛前推理回放",
         "04｜盘口时间线与数据有效性",
         "05｜根因、反事实与模型修正",
-        "06｜真实注单与结算",
+        "06｜模拟注单结算",
+        "07｜真实注单结算",
     ):
         assert section in page
     assert "命中" in page

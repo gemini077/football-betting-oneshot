@@ -308,9 +308,36 @@ def report_is_prematch(payload: dict) -> bool:
     try:
         analysis_dt = datetime.fromisoformat(analysis.replace("Z", "+00:00"))
         kickoff_dt = datetime.fromisoformat(kickoff.replace("Z", "+00:00"))
+        if kickoff_dt.tzinfo is None and analysis_dt.tzinfo is not None:
+            kickoff_dt = kickoff_dt.replace(tzinfo=analysis_dt.tzinfo)
+        elif analysis_dt.tzinfo is None and kickoff_dt.tzinfo is not None:
+            analysis_dt = analysis_dt.replace(tzinfo=kickoff_dt.tzinfo)
         return analysis_dt <= kickoff_dt
     except (TypeError, ValueError):
         return True
+
+
+def report_is_t90_freeze(payload: dict) -> bool:
+    """Only a genuine T-90 snapshot may create a new simulated order.
+
+    Legacy fixtures without timestamps remain accepted for migration/tests, but
+    every generated report has both fields and is therefore strictly gated.
+    """
+    analysis = str((payload.get("report") or {}).get("analysis_timestamp") or "").strip()
+    kickoff = str((payload.get("match") or {}).get("kickoff_local") or "").strip()
+    if not analysis or not kickoff:
+        return True
+    try:
+        analysis_dt = datetime.fromisoformat(analysis.replace("Z", "+00:00"))
+        kickoff_dt = datetime.fromisoformat(kickoff.replace("Z", "+00:00"))
+        if kickoff_dt.tzinfo is None and analysis_dt.tzinfo is not None:
+            kickoff_dt = kickoff_dt.replace(tzinfo=analysis_dt.tzinfo)
+        elif analysis_dt.tzinfo is None and kickoff_dt.tzinfo is not None:
+            analysis_dt = analysis_dt.replace(tzinfo=kickoff_dt.tzinfo)
+        minutes = (kickoff_dt - analysis_dt).total_seconds() / 60
+        return 60 < minutes <= 90
+    except (TypeError, ValueError):
+        return False
 
 
 def build_paper_ledger(
@@ -350,7 +377,7 @@ def build_paper_ledger(
     next_id = max(used_ids, default=0) + 1
     for report in reports:
         payload = report.get("payload") or report
-        if not report_is_prematch(payload):
+        if not report_is_prematch(payload) or not report_is_t90_freeze(payload):
             continue
         match = payload.get("match") or {}
         probabilities = (payload.get("model") or {}).get("probabilities") or {}
@@ -365,6 +392,8 @@ def build_paper_ledger(
             "kickoff_local": match.get("kickoff_local"),
             "model_version": (payload.get("report") or {}).get("model_version"),
             "frozen_at": (payload.get("report") or {}).get("analysis_timestamp"),
+            "price_captured_at": (payload.get("report") or {}).get("analysis_timestamp"),
+            "freeze_stage": "T-90M",
             "real_execution": False,
             "ledger": "模型模拟账",
         }
@@ -416,6 +445,7 @@ def build_paper_ledger(
             "real_balance_affected": False,
             "frozen_snapshot_only": True,
             "missing_price_policy": "observation_only_no_profit",
+            "freeze_stage": "T-90M",
         },
         "summary": summary,
         "groups": groups,

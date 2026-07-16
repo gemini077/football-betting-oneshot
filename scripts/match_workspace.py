@@ -82,6 +82,12 @@ def load_json(path: Path, default: Any = None) -> Any:
         return default
 
 
+def load_real_bets() -> list[dict[str, Any]]:
+    payload = load_json(DATA / "real_bets" / "latest.json", {}) or {}
+    rows = payload.get("bets") if isinstance(payload, dict) else []
+    return [row for row in (rows or []) if isinstance(row, dict)]
+
+
 def norm(value: Any) -> str:
     return re.sub(r"[^0-9a-z\u4e00-\u9fff]", "", str(value or "").casefold())
 
@@ -684,18 +690,21 @@ def build(target_date: str, output_root: Path = OUTPUT) -> tuple[Path, Path]:
     frozen_records = paper_ledger.pop("_frozen_records", paper_ledger["tickets"])
     for item in matches:
         item.pop("portfolio_candidates", None)
+    real_bets = load_real_bets()
+    real_open = [row for row in real_bets if row.get("status") == "locked"]
     payload = {
         "model_name": runtime.get("model_name"), "model_version": runtime.get("model_version"),
         "balance": (runtime.get("bankroll") or {}).get("current_balance"),
-        "open_bets": (runtime.get("exposure") or {}).get("open_bets") or [],
+        "open_bets": real_open or (runtime.get("exposure") or {}).get("open_bets") or [],
+        "real_bets": real_bets,
         "target_date": target_date, "generated_at": generated.isoformat(),
         "schedule_refreshed_at": max(schedule_refresh_times) if schedule_refresh_times else None,
         "published_as_latest": base_date >= date.today(),
         "automatic_analysis": False, "automatic_betting": False,
         "requires_explicit_lock_confirmation": True, "lock_state_changed": False,
         "schedule_source": [str(path.relative_to(ROOT)).replace("\\", "/") for path in schedule_sources],
-        "available_cash": max(0.0, float((runtime.get("bankroll") or {}).get("current_balance") or 0) - portfolio["locked_exposure"]),
-        "real_exposure": portfolio["locked_exposure"],
+        "available_cash": max(0.0, float((runtime.get("bankroll") or {}).get("current_balance") or 0) - (sum(float(row.get("stake") or 0) for row in real_open) or portfolio["locked_exposure"])),
+        "real_exposure": sum(float(row.get("stake") or 0) for row in real_open) or portfolio["locked_exposure"],
         "matches": matches, "completed": completed, "portfolio": portfolio,
         "paper_ledger": paper_ledger,
         "postmatch_dashboard_url": relative_uri(DATA / "postmatch_dashboard" / "latest.html", output_dir),
@@ -786,14 +795,17 @@ $('#tabPrematch').onclick=()=>current?showPrematch():showEmpty('请先选择比�
   completedSection.querySelector('.card-title h2').textContent='\u2713 \u5df2\u5b8c\u8d5b';
   completedSection.querySelector('thead tr').innerHTML='<th>\u5f00\u8d5b\uff08\u5317\u4eac\uff09</th><th>\u6bd4\u8d5b</th><th>90\u5206\u949f\u6bd4\u5206</th><th>\u52a0\u65f6\u540e</th><th>\u9501\u5355\u72b6\u6001</th><th>\u590d\u76d8\u7ed3\u8bba</th><th>\u64cd\u4f5c</th>';
   document.querySelector('.rules')?.remove();
-  upcomingRow=m=>{const spf=m.spf||{},analyzed=m.report_state==='已分析',hasReport=Boolean(m.report_url);const actions=analyzed?`<button class="action primary" data-open="${key(m)}">\u6253\u5f00\u62a5\u544a</button>`:`<button class="action ${isSelected(m)?'selected':'primary'}" data-select="${key(m)}">${isSelected(m)?'\u91cd\u65b0\u63d0\u4ea4\u5206\u6790':'\u52a0\u5165\u5f85\u5206\u6790'}</button>${hasReport?`<button class="action" data-open="${key(m)}">\u67e5\u770b\u6570\u636e\u72b6\u6001</button>`:''}`;return `<tr data-row="${key(m)}"><td><b>${m.kickoff||'\u2014'}</b><div class="muted">${m.match_num||'\u2014'} \u00b7 ${m.league||'\u2014'}</div></td><td><div class="match-name">${m.home} <span class="muted">vs</span> ${m.away}</div><div class="muted">${m.official?'\u4f53\u5f69\u5728\u552e':'\u989d\u5916\u5173\u6ce8'}</div></td><td><div class="odds-inline"><span class="odd">\u80dc ${spf.home??'\u2014'}</span><span class="odd">\u5e73 ${spf.draw??'\u2014'}</span><span class="odd">\u8d1f ${spf.away??'\u2014'}</span></div></td><td><span class="badge ${analyzed?'good':'blue'}">${m.report_state}</span> ${isSelected(m)?'<span class="badge gold">\u5df2\u9009\u62e9</span>':''}</td><td><b>${m.primary||'\u2014'}</b><div class="risk-line">\u9519\u70b9\uff1a${m.primary_error||'\u2014'}</div><div class="muted">${m.betting_state||'\u672a\u9501\u5355'}</div></td><td><div class="actions">${actions}</div></td></tr>`};
+  upcomingRow=m=>{const spf=m.spf||{},analyzed=m.report_state==='已分析',hasReport=Boolean(m.report_url);const actions=analyzed?`<button class="action primary" data-open="${key(m)}">\u6253\u5f00\u62a5\u544a</button><button class="action" data-bet="${key(m)}">\u5df2\u4e0b\u5355</button>`:`<button class="action ${isSelected(m)?'selected':'primary'}" data-select="${key(m)}">${isSelected(m)?'\u91cd\u65b0\u63d0\u4ea4\u5206\u6790':'\u52a0\u5165\u5f85\u5206\u6790'}</button>${hasReport?`<button class="action" data-open="${key(m)}">\u67e5\u770b\u6570\u636e\u72b6\u6001</button>`:''}`;return `<tr data-row="${key(m)}"><td><b>${m.kickoff||'\u2014'}</b><div class="muted">${m.match_num||'\u2014'} \u00b7 ${m.league||'\u2014'}</div></td><td><div class="match-name">${m.home} <span class="muted">vs</span> ${m.away}</div><div class="muted">${m.official?'\u4f53\u5f69\u5728\u552e':'\u989d\u5916\u5173\u6ce8'}</div></td><td><div class="odds-inline"><span class="odd">\u80dc ${spf.home??'\u2014'}</span><span class="odd">\u5e73 ${spf.draw??'\u2014'}</span><span class="odd">\u8d1f ${spf.away??'\u2014'}</span></div></td><td><span class="badge ${analyzed?'good':'blue'}">${m.report_state}</span> ${isSelected(m)?'<span class="badge gold">\u5df2\u9009\u62e9</span>':''}</td><td><b>${m.primary||'\u2014'}</b><div class="risk-line">\u9519\u70b9\uff1a${m.primary_error||'\u2014'}</div><div class="muted">${m.betting_state||'\u672a\u9501\u5355'}</div></td><td><div class="actions">${actions}</div></td></tr>`};
   completedRow=m=>{const url=m.postmatch_report_url||m.prematch_report_url;const action=url?`<a class="action ${m.postmatch_report_url?'primary':''}" href="${url}">\u6253\u5f00\u62a5\u544a</a>`:'<span class="muted">\u5f85\u590d\u76d8</span>';return `<tr><td><b>${m.kickoff||'\u2014'}</b></td><td><div class="match-name">${m.home} <span class="muted">vs</span> ${m.away}</div></td><td><b>${m.result_90m||'\u5f85\u6838\u9a8c'}</b></td><td>${m.after_extra_time||'\u2014'}</td><td><span class="badge ${m.bet_locked?'gold':'blue'}">${m.bet_locked?'\u5df2\u9501\u5355':'\u672a\u9501\u5355'}</span></td><td>${m.classification||'\u2014'}</td><td>${action}</td></tr>`};
   openMatch=m=>openReport(m.report_url||m.prematch_report_url);
   openCompleted=m=>openReport(m.postmatch_report_url||m.prematch_report_url);
   openAllReviews=()=>openReport(DATA.postmatch_dashboard_url);
   document.querySelector('#reportDialog')?.remove();
+  const betDialog=document.createElement('dialog');betDialog.id='betDialog';betDialog.innerHTML=`<form method="dialog" id="betForm" style="min-width:min(560px,88vw);padding:22px"><h2 style="margin-top:0">登记真实注单</h2><p class="muted">只有确认提交后才视为“已下单”。未提交时仍按未下单处理。</p><div class="review-grid"><div><label>比赛</label><p id="betMatch"></p></div><div><label>玩法/合约</label><input id="betMarket" required></div><div><label>方向</label><input id="betSelection" required></div><div><label>实际赔率</label><input id="betOdds" type="number" min="1.01" step="0.01" required></div><div><label>实际投注额（最低2元）</label><input id="betStake" type="number" min="2" step="0.01" required></div><div><label>渠道（可选）</label><input id="betChannel"></div></div><div class="actions" style="justify-content:flex-end;margin-top:18px"><button value="cancel" class="action">取消</button><button value="default" id="confirmBet" class="action primary">确认并登记</button></div></form>`;document.body.appendChild(betDialog);let betMatch=null;
+  function openBetForm(m){betMatch=m;$('#betMatch').textContent=`${m.home} vs ${m.away}`;$('#betMarket').value=m.primary||'';$('#betSelection').value=m.primary||'';$('#betOdds').value='';$('#betStake').value='2.00';betDialog.showModal()}
+  $('#confirmBet').onclick=e=>{e.preventDefault();if(!$('#betForm').reportValidity())return;const title=`[\u5df2\u4e0b\u5355] ${betMatch.home} vs ${betMatch.away}`;const body=[`match_id: ${betMatch.id||''}`,`match: ${betMatch.home} vs ${betMatch.away}`,`market: ${$('#betMarket').value}`,`selection: ${$('#betSelection').value}`,`odds: ${$('#betOdds').value}`,`stake: ${$('#betStake').value}`,`channel: ${$('#betChannel').value}`,`form: \u5355\u5173`,`confirmed_at: ${new Date().toISOString()}`].join('\\n');window.open(`https://github.com/gemini077/football-betting-oneshot/issues/new?title=${encodeURIComponent(title)}&body=${encodeURIComponent(body)}`,'_blank','noopener');betDialog.close()};
   const reviewButton=document.querySelector('#openAllReviews');if(reviewButton)reviewButton.onclick=openAllReviews;
-  render();
+  const oldRender=render;render=()=>{oldRender();document.querySelectorAll('[data-bet]').forEach(b=>b.onclick=()=>openBetForm(DATA.matches.find(m=>key(m)===b.dataset.bet)))};render();
 })();
 </script></body></html>'''
 
