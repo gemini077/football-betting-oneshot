@@ -42,7 +42,13 @@ jobs:
 
       - name: Refresh Sporttery schedule
         continue-on-error: true
-        run: python scripts/daily_schedule_workspace.py --date "$FBOS_DATE" --no-cache
+        run: python scripts/daily_schedule_workspace.py --date "$FBOS_DATE" --no-cache --fetch-only
+
+      - name: Verify due results and generate reviews
+        run: |
+          python scripts/postmatch_result.py
+          python scripts/automatic_postmatch_review.py
+          python scripts/postmatch_dashboard.py
 
       - name: Rebuild schedule workspace
         run: python scripts/match_workspace.py --date "$FBOS_DATE"
@@ -55,7 +61,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/schedule_updates data/match_workspace data/paper_ledger
+          git add data/schedule_updates data/postmatch_automation data/postmatch_reviews data/postmatch_dashboard data/match_workspace data/paper_ledger
           if ! git diff --cached --quiet; then
             git commit -m "refresh public football data [skip ci]"
             git push

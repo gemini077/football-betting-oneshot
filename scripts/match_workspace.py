@@ -14,6 +14,7 @@ from datetime import date, datetime, timedelta
 from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
 try:
     from paper_ledger import build_paper_ledger, pair_key, parse_score
@@ -32,6 +33,22 @@ ROOT = Path(__file__).resolve().parents[1]
 DATA = ROOT / "data"
 OUTPUT = DATA / "match_workspace"
 RUNTIME = ROOT / "05_RUNTIME_STATE.json"
+SHANGHAI = ZoneInfo("Asia/Shanghai")
+
+
+def parse_kickoff_local(value: Any) -> datetime | None:
+    text = str(value or "").strip().replace("T", " ")
+    for fmt in ("%Y-%m-%d %H:%M", "%Y-%m-%d %H:%M:%S"):
+        try:
+            return datetime.strptime(text[:19], fmt).replace(tzinfo=SHANGHAI)
+        except ValueError:
+            continue
+    return None
+
+
+def match_should_be_finished(kickoff: Any, now: datetime) -> bool:
+    parsed = parse_kickoff_local(kickoff)
+    return parsed is not None and now >= parsed + timedelta(hours=2, minutes=15)
 
 PORTFOLIO_LAYERS = {
     "保本层": {
@@ -233,17 +250,25 @@ def workbook_table_rows(path: Path, sheet_name: str, header_row: int = 3) -> lis
 def review_rows(runtime: dict) -> list[dict]:
     configured = runtime.get("latest_review_workbook")
     path = ROOT / configured if configured else None
-    if not path or not path.exists():
-        return []
-    signals = workbook_table_rows(path, "02_赛前信号与赛果归因")
-    timelines = workbook_table_rows(path, "03_时间轴与盘口验证")
-    roots = workbook_table_rows(path, "05_根因决策树与修正池")
+    signals: list[dict] = []
+    timelines: list[dict] = []
+    roots: list[dict] = []
+    if path and path.exists():
+        signals = workbook_table_rows(path, "02_赛前信号与赛果归因")
+        timelines = workbook_table_rows(path, "03_时间轴与盘口验证")
+        roots = workbook_table_rows(path, "05_根因决策树与修正池")
     timeline_by_id = {str(row.get("记录ID") or "").replace("T", "M", 1): row for row in timelines}
     root_by_id = {str(row.get("比赛场次") or "").split("｜", 1)[0]: row for row in roots}
     for row in signals:
         match_id = str(row.get("MatchID") or "")
         row["_timeline"] = timeline_by_id.get(match_id)
         row["_root_cause"] = root_by_id.get(match_id)
+    # GitHub 自动复盘先生成独立 JSON；工作簿是审计归档，不应成为主页显示
+    # 已完赛结果的前置条件。JSON 放在末尾，find_review 反向查找时优先采用它。
+    for review_path in sorted((DATA / "postmatch_reviews").glob("*.json")):
+        payload = load_json(review_path, {})
+        if payload.get("赛事与对阵") and payload.get("实际90分钟比分"):
+            signals.append(payload)
     return signals
 
 
@@ -461,16 +486,37 @@ def relative_uri(path: Path | None, output_dir: Path) -> str:
     return Path("..").joinpath(path.relative_to(DATA)).as_posix()
 
 
+def pending_completed_row(home: str, away: str, kickoff: Any, report: dict | None,
+                          output_dir: Path, row_id: str,
+                          verified_results: dict[str, tuple[int, int]]) -> dict:
+    score = verified_results.get(pair_key(home, away))
+    return {
+        "id": row_id,
+        "home": home,
+        "away": away,
+        "result_90m": f"{score[0]}-{score[1]}" if score else None,
+        "after_extra_time": None,
+        "kickoff": kickoff,
+        "bet_locked": False,
+        "classification": "赛果已核验，复盘生成中" if score else "赛果待核验",
+        "prematch_report_url": relative_uri(report.get("html") if report else None, output_dir),
+        "review": None,
+    }
+
+
 def build(target_date: str, output_root: Path = OUTPUT) -> tuple[Path, Path]:
     runtime = load_json(RUNTIME, {})
     base_date = date.fromisoformat(target_date)
     schedule_sources = []
+    schedule_refresh_times = []
     schedule_matches = []
     for offset in (0, 1):
         business_date = (base_date + timedelta(days=offset)).isoformat()
         source_path, source_payload = latest_schedule(business_date)
         if source_path:
             schedule_sources.append(source_path)
+            if source_payload.get("fetch_time"):
+                schedule_refresh_times.append(str(source_payload.get("fetch_time")))
             schedule_matches.extend(source_payload.get("matches") or [])
     unique_schedule_matches = {}
     for row in schedule_matches:
@@ -490,12 +536,13 @@ def build(target_date: str, output_root: Path = OUTPUT) -> tuple[Path, Path]:
     }
     reports = latest_reports()
     reviews = review_rows(runtime)
-    generated = datetime.now().astimezone()
+    generated = datetime.now(SHANGHAI)
     stamp = generated.strftime("%Y%m%d_%H%M%S")
     output_dir = create_unique_output_dir(output_root, stamp)
     matches = []
     completed = []
     completed_ids: set[str] = set()
+    verified_results = verified_result_map()
     schedule_keys = set()
     for row in schedule.get("matches") or []:
         home, away = row.get("homeTeam"), row.get("awayTeam")
@@ -508,12 +555,18 @@ def build(target_date: str, output_root: Path = OUTPUT) -> tuple[Path, Path]:
             completed.append(item)
             completed_ids.add(str(item["id"]))
             continue
+        kickoff = f"{row.get('matchDate')} {str(row.get('matchTime') or '')[:5]}"
+        if match_should_be_finished(kickoff, generated):
+            item = pending_completed_row(home, away, kickoff, report, output_dir, f"schedule-{key}", verified_results)
+            completed.append(item)
+            completed_ids.add(str(item["id"]))
+            continue
         summary = report_summary(report)
         matches.append({
             "id": str(row.get("matchId") or key), "match_num": row.get("matchNum"),
             "home": home, "away": away, "league": row.get("league"),
             "business_date": row.get("businessDate"),
-            "kickoff": f"{row.get('matchDate')} {str(row.get('matchTime') or '')[:5]}",
+            "kickoff": kickoff,
             "spf": row.get("spf") or {}, "rqspf": row.get("rqspf") or {},
             "official": True, "report_state": summary["state"], "primary": summary["primary"],
             "primary_error": summary["error"], "betting_state": summary["betting"],
@@ -524,7 +577,11 @@ def build(target_date: str, output_root: Path = OUTPUT) -> tuple[Path, Path]:
     # 已有分析但不在当天体彩列表中的关注场次仍可在同一工作台查看。
     for key, report in reports.items():
         match = report["payload"].get("match") or {}
-        if match.get("business_date") not in {target_date, (base_date + timedelta(days=1)).isoformat()} or key in schedule_keys:
+        if match.get("business_date") not in {
+            (base_date - timedelta(days=1)).isoformat(),
+            target_date,
+            (base_date + timedelta(days=1)).isoformat(),
+        } or key in schedule_keys:
             continue
         if any(
             str(match.get("match_num") or "") == str(item.get("match_num") or "")
@@ -535,6 +592,16 @@ def build(target_date: str, output_root: Path = OUTPUT) -> tuple[Path, Path]:
         review = find_review(match.get("home"), match.get("away"), reviews)
         if review and review.get("实际90分钟比分"):
             item = completed_row(review, report, output_dir, f"report-{key}")
+            if str(item["id"]) not in completed_ids:
+                completed.append(item)
+                completed_ids.add(str(item["id"]))
+            continue
+        kickoff = match.get("kickoff_local")
+        if match_should_be_finished(kickoff, generated):
+            item = pending_completed_row(
+                match.get("home"), match.get("away"), kickoff, report, output_dir,
+                f"report-{key}", verified_results,
+            )
             if str(item["id"]) not in completed_ids:
                 completed.append(item)
                 completed_ids.add(str(item["id"]))
@@ -609,6 +676,7 @@ def build(target_date: str, output_root: Path = OUTPUT) -> tuple[Path, Path]:
         "balance": (runtime.get("bankroll") or {}).get("current_balance"),
         "open_bets": (runtime.get("exposure") or {}).get("open_bets") or [],
         "target_date": target_date, "generated_at": generated.isoformat(),
+        "schedule_refreshed_at": max(schedule_refresh_times) if schedule_refresh_times else None,
         "published_as_latest": base_date >= date.today(),
         "automatic_analysis": False, "automatic_betting": False,
         "requires_explicit_lock_confirmation": True, "lock_state_changed": False,
@@ -670,7 +738,8 @@ $('#tabPrematch').onclick=()=>current?showPrematch():showEmpty('请先选择比�
   const ps=(DATA.paper_ledger||{}).summary||{};
   heroChips.innerHTML=`<span>模型 <b>${DATA.model_version||'—'}</b></span><span>业务日 <b>${DATA.target_date||'—'}</b></span><span>待验赛 <b>${ps.pending||0}</b></span>`;
   hero.querySelector('h1').insertAdjacentElement('afterend',heroChips);
-  $('#subtitle').textContent=`模拟账与真实账分离 · 已结模拟 ${ps.settled||0} 注 · 更新 ${new Date(DATA.generated_at).toLocaleString()}`;
+  const scheduleTime=DATA.schedule_refreshed_at?new Date(DATA.schedule_refreshed_at).toLocaleString():'沿用最近成功赛程';
+  $('#subtitle').textContent=`模拟账与真实账分离 · 已结模拟 ${ps.settled||0} 注 · 赛程数据 ${scheduleTime} · 页面生成 ${new Date(DATA.generated_at).toLocaleString()}`;
   const account=document.querySelector('.kpis');
   account.classList.add('account-kpis');
   account.innerHTML=`<div class="kpi"><b id="balance">¥${Number(DATA.balance||0).toFixed(2)}</b><span>当前账户余额</span></div><div class="kpi"><b>¥${Number(DATA.available_cash||0).toFixed(2)}</b><span>可用现金</span></div><div class="kpi"><b>¥${Number(DATA.real_exposure||0).toFixed(2)}</b><span>真实锁单暴露</span></div><div class="kpi"><b id="openBetCount">${(DATA.open_bets||[]).length}</b><span>真实未结注单</span></div><div class="kpi"><b id="analyzedCount">${DATA.matches.filter(m=>m.report_state==='已分析').length}</b><span>已有赛前报告</span></div><div class="kpi"><b id="completedCount">${DATA.completed.length}</b><span>已完成复盘</span></div><span id="upcomingCount" hidden>${DATA.matches.length}</span><span id="selectedCount" hidden>${selected.length}</span>`;
@@ -705,7 +774,7 @@ $('#tabPrematch').onclick=()=>current?showPrematch():showEmpty('请先选择比�
   completedSection.querySelector('thead tr').innerHTML='<th>\u5f00\u8d5b\uff08\u5317\u4eac\uff09</th><th>\u6bd4\u8d5b</th><th>90\u5206\u949f\u6bd4\u5206</th><th>\u52a0\u65f6\u540e</th><th>\u9501\u5355\u72b6\u6001</th><th>\u590d\u76d8\u7ed3\u8bba</th><th>\u64cd\u4f5c</th>';
   document.querySelector('.rules')?.remove();
   upcomingRow=m=>{const spf=m.spf||{},analyzed=m.report_state==='已分析',hasReport=Boolean(m.report_url);const actions=analyzed?`<button class="action primary" data-open="${key(m)}">\u6253\u5f00\u62a5\u544a</button>`:`<button class="action ${isSelected(m)?'selected':'primary'}" data-select="${key(m)}">${isSelected(m)?'\u91cd\u65b0\u63d0\u4ea4\u5206\u6790':'\u52a0\u5165\u5f85\u5206\u6790'}</button>${hasReport?`<button class="action" data-open="${key(m)}">\u67e5\u770b\u6570\u636e\u72b6\u6001</button>`:''}`;return `<tr data-row="${key(m)}"><td><b>${m.kickoff||'\u2014'}</b><div class="muted">${m.match_num||'\u2014'} \u00b7 ${m.league||'\u2014'}</div></td><td><div class="match-name">${m.home} <span class="muted">vs</span> ${m.away}</div><div class="muted">${m.official?'\u4f53\u5f69\u5728\u552e':'\u989d\u5916\u5173\u6ce8'}</div></td><td><div class="odds-inline"><span class="odd">\u80dc ${spf.home??'\u2014'}</span><span class="odd">\u5e73 ${spf.draw??'\u2014'}</span><span class="odd">\u8d1f ${spf.away??'\u2014'}</span></div></td><td><span class="badge ${analyzed?'good':'blue'}">${m.report_state}</span> ${isSelected(m)?'<span class="badge gold">\u5df2\u9009\u62e9</span>':''}</td><td><b>${m.primary||'\u2014'}</b><div class="risk-line">\u9519\u70b9\uff1a${m.primary_error||'\u2014'}</div><div class="muted">${m.betting_state||'\u672a\u9501\u5355'}</div></td><td><div class="actions">${actions}</div></td></tr>`};
-  completedRow=m=>`<tr><td><b>${m.kickoff||'\u2014'}</b></td><td><div class="match-name">${m.home} <span class="muted">vs</span> ${m.away}</div></td><td><b>${m.result_90m||'\u2014'}</b></td><td>${m.after_extra_time||'\u2014'}</td><td><span class="badge ${m.bet_locked?'gold':'blue'}">${m.bet_locked?'\u5df2\u9501\u5355':'\u672a\u9501\u5355'}</span></td><td>${m.classification||'\u2014'}</td><td><button class="action primary" data-review="${m.id}">\u6253\u5f00\u62a5\u544a</button></td></tr>`;
+  completedRow=m=>{const action=m.review?`<button class="action primary" data-review="${m.id}">\u6253\u5f00\u62a5\u544a</button>`:(m.prematch_report_url?`<button class="action" data-prematch="${m.id}">\u6253\u5f00\u62a5\u544a</button>`:'<span class="muted">\u5f85\u590d\u76d8</span>');return `<tr><td><b>${m.kickoff||'\u2014'}</b></td><td><div class="match-name">${m.home} <span class="muted">vs</span> ${m.away}</div></td><td><b>${m.result_90m||'\u5f85\u6838\u9a8c'}</b></td><td>${m.after_extra_time||'\u2014'}</td><td><span class="badge ${m.bet_locked?'gold':'blue'}">${m.bet_locked?'\u5df2\u9501\u5355':'\u672a\u9501\u5355'}</span></td><td>${m.classification||'\u2014'}</td><td>${action}</td></tr>`};
   render();
 })();
 </script></body></html>'''
