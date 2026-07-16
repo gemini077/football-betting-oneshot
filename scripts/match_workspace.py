@@ -470,8 +470,10 @@ def completed_row(review: dict, report: dict | None, output_dir: Path, fallback_
     label = str(review.get("赛事与对阵") or "")
     pair = re.split(r"\s+vs\s+", label.split("｜")[-1], maxsplit=1, flags=re.IGNORECASE)
     home, away = (pair + [""])[:2]
+    match_id = str(review.get("MatchID") or fallback_id)
+    postmatch_path = DATA / "postmatch_reports" / f"{re.sub(r'[^0-9A-Za-z._-]+', '_', match_id).strip('_') or 'review'}.html"
     return {
-        "id": str(review.get("MatchID") or fallback_id),
+        "id": match_id,
         "home": home,
         "away": away,
         "result_90m": review.get("实际90分钟比分"),
@@ -480,6 +482,7 @@ def completed_row(review: dict, report: dict | None, output_dir: Path, fallback_
         "bet_locked": False,
         "classification": review.get("红黑与模型逻辑分类") or "模型复盘已记录",
         "prematch_report_url": relative_uri(report.get("html") if report else None, output_dir),
+        "postmatch_report_url": relative_uri(postmatch_path if postmatch_path.exists() else None, output_dir),
         "review": review,
     }
 
@@ -505,6 +508,7 @@ def pending_completed_row(home: str, away: str, kickoff: Any, report: dict | Non
         "bet_locked": False,
         "classification": "赛果已核验，复盘生成中" if score else "赛果待核验",
         "prematch_report_url": relative_uri(report.get("html") if report else None, output_dir),
+        "postmatch_report_url": "",
         "review": None,
     }
 
@@ -650,6 +654,10 @@ def build(target_date: str, output_root: Path = OUTPUT) -> tuple[Path, Path]:
                 or "模型复盘已记录"
             ),
             "prematch_report_url": relative_uri(report.get("html") if report else None, output_dir),
+            "postmatch_report_url": relative_uri(
+                DATA / "postmatch_reports" / f"{re.sub(r'[^0-9A-Za-z._-]+', '_', review_id).strip('_') or 'review'}.html",
+                output_dir,
+            ) if (DATA / "postmatch_reports" / f"{re.sub(r'[^0-9A-Za-z._-]+', '_', review_id).strip('_') or 'review'}.html").exists() else "",
             "review": review,
         })
         completed_ids.add(review_id)
@@ -779,7 +787,12 @@ $('#tabPrematch').onclick=()=>current?showPrematch():showEmpty('请先选择比�
   completedSection.querySelector('thead tr').innerHTML='<th>\u5f00\u8d5b\uff08\u5317\u4eac\uff09</th><th>\u6bd4\u8d5b</th><th>90\u5206\u949f\u6bd4\u5206</th><th>\u52a0\u65f6\u540e</th><th>\u9501\u5355\u72b6\u6001</th><th>\u590d\u76d8\u7ed3\u8bba</th><th>\u64cd\u4f5c</th>';
   document.querySelector('.rules')?.remove();
   upcomingRow=m=>{const spf=m.spf||{},analyzed=m.report_state==='已分析',hasReport=Boolean(m.report_url);const actions=analyzed?`<button class="action primary" data-open="${key(m)}">\u6253\u5f00\u62a5\u544a</button>`:`<button class="action ${isSelected(m)?'selected':'primary'}" data-select="${key(m)}">${isSelected(m)?'\u91cd\u65b0\u63d0\u4ea4\u5206\u6790':'\u52a0\u5165\u5f85\u5206\u6790'}</button>${hasReport?`<button class="action" data-open="${key(m)}">\u67e5\u770b\u6570\u636e\u72b6\u6001</button>`:''}`;return `<tr data-row="${key(m)}"><td><b>${m.kickoff||'\u2014'}</b><div class="muted">${m.match_num||'\u2014'} \u00b7 ${m.league||'\u2014'}</div></td><td><div class="match-name">${m.home} <span class="muted">vs</span> ${m.away}</div><div class="muted">${m.official?'\u4f53\u5f69\u5728\u552e':'\u989d\u5916\u5173\u6ce8'}</div></td><td><div class="odds-inline"><span class="odd">\u80dc ${spf.home??'\u2014'}</span><span class="odd">\u5e73 ${spf.draw??'\u2014'}</span><span class="odd">\u8d1f ${spf.away??'\u2014'}</span></div></td><td><span class="badge ${analyzed?'good':'blue'}">${m.report_state}</span> ${isSelected(m)?'<span class="badge gold">\u5df2\u9009\u62e9</span>':''}</td><td><b>${m.primary||'\u2014'}</b><div class="risk-line">\u9519\u70b9\uff1a${m.primary_error||'\u2014'}</div><div class="muted">${m.betting_state||'\u672a\u9501\u5355'}</div></td><td><div class="actions">${actions}</div></td></tr>`};
-  completedRow=m=>{const action=m.review?`<button class="action primary" data-review="${m.id}">\u6253\u5f00\u62a5\u544a</button>`:(m.prematch_report_url?`<button class="action" data-prematch="${m.id}">\u6253\u5f00\u62a5\u544a</button>`:'<span class="muted">\u5f85\u590d\u76d8</span>');return `<tr><td><b>${m.kickoff||'\u2014'}</b></td><td><div class="match-name">${m.home} <span class="muted">vs</span> ${m.away}</div></td><td><b>${m.result_90m||'\u5f85\u6838\u9a8c'}</b></td><td>${m.after_extra_time||'\u2014'}</td><td><span class="badge ${m.bet_locked?'gold':'blue'}">${m.bet_locked?'\u5df2\u9501\u5355':'\u672a\u9501\u5355'}</span></td><td>${m.classification||'\u2014'}</td><td>${action}</td></tr>`};
+  completedRow=m=>{const url=m.postmatch_report_url||m.prematch_report_url;const action=url?`<a class="action ${m.postmatch_report_url?'primary':''}" href="${url}">\u6253\u5f00\u62a5\u544a</a>`:'<span class="muted">\u5f85\u590d\u76d8</span>';return `<tr><td><b>${m.kickoff||'\u2014'}</b></td><td><div class="match-name">${m.home} <span class="muted">vs</span> ${m.away}</div></td><td><b>${m.result_90m||'\u5f85\u6838\u9a8c'}</b></td><td>${m.after_extra_time||'\u2014'}</td><td><span class="badge ${m.bet_locked?'gold':'blue'}">${m.bet_locked?'\u5df2\u9501\u5355':'\u672a\u9501\u5355'}</span></td><td>${m.classification||'\u2014'}</td><td>${action}</td></tr>`};
+  openMatch=m=>openReport(m.report_url||m.prematch_report_url);
+  openCompleted=m=>openReport(m.postmatch_report_url||m.prematch_report_url);
+  openAllReviews=()=>openReport(DATA.postmatch_dashboard_url);
+  document.querySelector('#reportDialog')?.remove();
+  const reviewButton=document.querySelector('#openAllReviews');if(reviewButton)reviewButton.onclick=openAllReviews;
   render();
 })();
 </script></body></html>'''

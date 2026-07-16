@@ -107,12 +107,12 @@ class MatchWorkspacePortfolioTests(unittest.TestCase):
     def test_homepage_uses_unified_report_actions_and_compact_sections(self):
         page = render("{}")
 
-        self.assertIn("data-review", page)
         self.assertIn("completedRow=m=>", page)
         self.assertIn("document.querySelector('.rules')?.remove()", page)
         self.assertIn("m.kickoff", page)
-        self.assertIn("赛前各维度逐项复核", page)
-        self.assertIn("根因、反事实与模型修正", page)
+        self.assertIn("m.postmatch_report_url||m.prematch_report_url", page)
+        self.assertIn("document.querySelector('#reportDialog')?.remove()", page)
+        self.assertIn("openAllReviews=()=>openReport(DATA.postmatch_dashboard_url)", page)
 
     def test_unanalyzed_match_opens_owner_authorized_github_request(self):
         page = render("{}")
@@ -137,13 +137,6 @@ class MatchWorkspacePortfolioTests(unittest.TestCase):
         self.assertEqual("仅市场基线", summary["state"])
         self.assertNotEqual("已分析", summary["state"])
         self.assertIn("尚未形成模型结论", summary["primary"])
-
-    def test_prematch_report_uses_direct_navigation_not_iframe(self):
-        page = render("{}")
-
-        self.assertIn("function openReport", page)
-        self.assertIn("window.location.assign(url)", page)
-        self.assertNotIn('iframe title="赛前分析"', page)
 
 
 if __name__ == "__main__":
