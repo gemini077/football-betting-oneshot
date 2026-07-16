@@ -25,6 +25,7 @@ from polymarket_public import fetch_snapshot as fetch_polymarket_snapshot
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 RUNS_ROOT = PROJECT_ROOT / "data" / "fetch_runs"
 STATE_PATH = PROJECT_ROOT / "05_RUNTIME_STATE.json"
+WORKSPACE_PATH = PROJECT_ROOT / "data" / "match_workspace" / "latest.json"
 
 
 def _write_json(path: Path, payload) -> None:
@@ -83,8 +84,19 @@ def _match_filter(matches: list[dict], query: str | None) -> list[dict]:
         or query_folded in folded(match.get("away_team") or match.get("awayTeam"))
         or query_folded in folded(match.get("competition") or match.get("league"))
         or query_folded in folded(match.get("match_num") or match.get("matchNum"))
-        or query_folded == folded(match.get("match_id") or match.get("matchId"))
+        or query_folded == folded(match.get("match_id") or match.get("matchId") or match.get("id"))
     ]
+
+
+def _workspace_fallback(query: str | None) -> list[dict]:
+    """Recover selected match identity when live schedule endpoints are transiently down."""
+    if not query or not WORKSPACE_PATH.exists():
+        return []
+    try:
+        payload = json.loads(WORKSPACE_PATH.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return []
+    return _match_filter([row for row in payload.get("matches") or [] if isinstance(row, dict)], query)
 
 
 def _deep_summary(result: dict) -> dict:
@@ -237,6 +249,17 @@ def main() -> int:
             manifest["warnings"].append("500竞彩列表中未找到匹配筛选条件的比赛。")
     else:
         selected_matches = []
+
+    if not selected_matches and not official_matches:
+        workspace_matches = _workspace_fallback(args.match)
+        if workspace_matches:
+            official_matches = workspace_matches
+            manifest["sources"]["workspace_identity_fallback"] = {
+                "status": "OK",
+                "success": True,
+                "match_count": len(workspace_matches),
+                "role": "identity_and_cached_official_odds_only",
+            }
 
     if not args.skip_polymarket:
         if bool(args.polymarket_home) != bool(args.polymarket_away):

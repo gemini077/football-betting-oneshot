@@ -36,7 +36,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_OUTPUT_ROOT = PROJECT_ROOT / "data" / "live_odds_bridge" / "captures"
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8765
-MODEL_VERSION = "v0.15.3"
+MODEL_VERSION = "v0.15.4"
 MODULE_VERSION = "v0.8.1"
 
 CORRECT_SCORE_MARKET_CODES = {

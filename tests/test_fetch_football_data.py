@@ -34,6 +34,10 @@ class MatchFilterTests(unittest.TestCase):
         self.assertEqual("2040514", _match_filter(self.matches, "苏捷斯卡")[0]["matchId"])
         self.assertEqual("2040513", _match_filter(self.matches, "2040513")[0]["matchId"])
 
+    def test_workspace_style_id_is_supported(self):
+        rows = _match_filter([{"id": "2040516", "home": "德里城", "away": "索陆军"}], "2040516")
+        self.assertEqual("2040516", rows[0]["id"])
+
     def test_verified_nowscore_is_primary_and_500_only_fills_missing_companies(self):
         five_hundred = {
             "ouzhi": {"bookmakers": [
