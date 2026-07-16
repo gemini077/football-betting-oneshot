@@ -599,13 +599,16 @@ def theoretical_asian_total(model: dict | None) -> dict | None:
 
 
 def market_metrics(deep: dict, mbi: dict, model: dict | None = None) -> dict:
+    mbi = mbi or {}
     books = _bookmaker_map(deep)
     asian = _asian_map(deep)
     pin = books.get(1055, {})
     pin_open = pin.get("spf_open") or {}
     pin_current = pin.get("spf_current") or {}
     pin_ah = asian.get(1055, {})
-    shin = mbi.get("consensus", {}).get("shin", {}).get("probabilities") or mbi.get("consensus", {}).get("proportional_no_vig") or {}
+    consensus = mbi.get("consensus") or {}
+    shin_panel = consensus.get("shin") or {}
+    shin = shin_panel.get("probabilities") or consensus.get("proportional_no_vig") or {}
     theory_panel = theoretical_asian_handicap(model)
     total_theory_panel = theoretical_asian_total(model)
     score_matrix = dixon_coles_score_matrix(model)
@@ -672,6 +675,8 @@ def market_metrics(deep: dict, mbi: dict, model: dict | None = None) -> dict:
 
 
 def evaluate_traps(deep: dict, mbi: dict, registry: dict, model: dict | None = None) -> dict:
+    mbi = mbi or {}
+    consensus = mbi.get("consensus") or {}
     metrics = market_metrics(deep, mbi, model)
     books = metrics["bookmakers"]
     asian = metrics["asian"]
@@ -735,7 +740,7 @@ def evaluate_traps(deep: dict, mbi: dict, registry: dict, model: dict | None = N
         "U22": (metrics["core_home_odds_spread"] > 0.30 if metrics["core_home_odds_spread"] is not None else None, "三家公司主胜赔率跨度已检查"),
         "U23": (metrics["core_line_spread"] > 0.50 if metrics["core_line_spread"] is not None else None, "三家公司亚洲盘跨度已检查"),
         "U25": (same_water_trigger if all(value is not None for value in same_water) else None, "三家公司主水变化已检查"),
-        "U26": (float(mbi.get("consensus", {}).get("current", {}).get("home") or 99) < 1.25, "30家公司主胜均值已检查"),
+        "U26": (float((consensus.get("current") or {}).get("home") or 99) < 1.25, "30家公司主胜均值已检查"),
         "MBI16": (metrics["sharp_asian_line_gap"] >= 0.25 if metrics["sharp_asian_line_gap"] is not None else None, "Sharp与Asian层盘口中位数已比较"),
         "MBI17": (exchange_spike if exchange_growth else None, "使用历史快照成交量增长比"),
     }

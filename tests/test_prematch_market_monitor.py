@@ -61,6 +61,30 @@ def test_github_utc_clock_is_compared_against_beijing_kickoff():
     assert due[0]["_monitor_stage"] == "T-2H"
 
 
+def test_partial_refresh_errors_do_not_block_successful_publication(tmp_path, monkeypatch):
+    workspace = tmp_path / "latest.json"
+    workspace.write_text('{"target_date":"2026-07-16","matches":[]}', encoding="utf-8")
+    state = tmp_path / "state.json"
+    monkeypatch.setattr(monitor, "WORKSPACE", workspace)
+    monkeypatch.setattr(monitor, "STATE_PATH", state)
+    monkeypatch.setattr(monitor, "ROOT", tmp_path)
+    monkeypatch.setattr(monitor, "due_matches", lambda *_args: [
+        {"id": "ok", "home": "A", "away": "B", "_monitor_stage": "T-2H"},
+        {"id": "bad", "home": "C", "away": "D", "_monitor_stage": "T-2H"},
+    ])
+    def refresh(match, stage, _now):
+        if match["id"] == "bad":
+            raise RuntimeError("broken feed")
+        return {"status": "refreshed", "stage": stage, "checkpoint": {"captured_at": "now"}}
+    monkeypatch.setattr(monitor, "refresh_match", refresh)
+    monkeypatch.setattr(monitor, "run_json", lambda *_args: {})
+    monkeypatch.setattr(monitor.subprocess, "run", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(sys, "argv", ["prematch_market_monitor.py", "--now", "2026-07-16T00:00:00+08:00"])
+    assert monitor.main() == 0
+    assert state.exists()
+    assert list((tmp_path / "data" / "market_history" / "errors").glob("*_monitor_errors.json"))
+
+
 def test_refresh_fundamentals_preserves_form_and_updates_time_sensitive_facts(tmp_path, monkeypatch):
     analysis = tmp_path / "analysis.json"
     analysis.write_text('{"fundamentals":{"items":[{"label":"近期状态","value":"保留"}]}}', encoding="utf-8")

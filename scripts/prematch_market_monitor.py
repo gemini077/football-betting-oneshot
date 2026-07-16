@@ -252,16 +252,27 @@ def main():
                 "stage": match.get("_monitor_stage"),
                 "status": "error", "error": str(error)[:1000],
             })
+    error_rows = [row for row in results if row.get("status") == "error"]
+    if error_rows:
+        stamp = now.strftime("%Y%m%d_%H%M%S")
+        error_path = ROOT / "data" / "market_history" / "errors" / f"{stamp}_monitor_errors.json"
+        error_path.parent.mkdir(parents=True, exist_ok=True)
+        error_path.write_text(json.dumps({
+            "checked_at": now.isoformat(),
+            "errors": error_rows,
+        }, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     if any(row.get("status") == "refreshed" for row in results):
         STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
         STATE_PATH.write_text(json.dumps(state, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         run_json([
             sys.executable, "scripts/match_workspace.py", "--date",
             str(workspace.get("target_date") or now.date().isoformat()),
+            "--publish-latest",
         ])
         subprocess.run([sys.executable, "scripts/build_public_site.py"], cwd=ROOT, check=True)
-    print(json.dumps({"checked_at": now.isoformat(), "due": len(results), "results": results}, ensure_ascii=False, indent=2))
-    return 1 if any(row.get("status") == "error" for row in results) else 0
+    print(json.dumps({"checked_at": now.isoformat(), "due": len(results), "results": results}, ensure_ascii=True, indent=2))
+    refreshed = any(row.get("status") == "refreshed" for row in results)
+    return 1 if error_rows and not refreshed else 0
 
 
 if __name__ == "__main__":

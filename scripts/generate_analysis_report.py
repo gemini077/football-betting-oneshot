@@ -562,6 +562,8 @@ def build_payload(
     history_path = PROJECT_ROOT / "data" / "market_history" / str(deep.get("shuju_id")) / "market_history.jsonl"
     market_history = load_history(history_path)
     market_intelligence = analyze_market_intelligence(deep, tier_config, history=market_history) if deep else {}
+    market_intelligence = dict(market_intelligence or {})
+    market_intelligence["consensus"] = market_intelligence.get("consensus") or {}
     trap_registry = load_json(PROJECT_ROOT / "config" / "trap_rules.json")
     analysis_model = (analysis or {}).get("model")
     risk_engine = analyze_risk_engine(deep, market_intelligence, trap_registry, model=analysis_model) if deep else {}
@@ -716,8 +718,9 @@ def render(payload: dict) -> str:
     consensus = market.get("consensus") or {}
     consensus_open = consensus.get("open") or {}
     consensus_current = consensus.get("current") or {}
+    intelligence_consensus = (payload.get("market_intelligence") or {}).get("consensus") or {}
     consensus_prob = (
-        payload.get("market_intelligence", {}).get("consensus", {}).get("shin", {}).get("probabilities")
+        (intelligence_consensus.get("shin") or {}).get("probabilities")
         or no_vig(consensus_current)
     )
     official_spf = market.get("official_spf") or {}
@@ -1291,7 +1294,7 @@ def main() -> int:
         "postmatch_schedule": str(schedule_path) if schedule_path else None,
         "postmatch_workflow": str(workflow_path) if workflow_path else None,
         "postmatch_schedule_error": schedule_error,
-    }, ensure_ascii=False, indent=2))
+    }, ensure_ascii=True, indent=2))
     return 0
 
 
