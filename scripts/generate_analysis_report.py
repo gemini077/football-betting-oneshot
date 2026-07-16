@@ -34,6 +34,19 @@ def e(value) -> str:
     return html.escape("—" if value is None or value == "" else str(value))
 
 
+def display_beijing_time(value) -> str:
+    """Render source timestamps in the same timezone as kickoff and the user."""
+    if not value:
+        return "—"
+    try:
+        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return str(value)
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=SHANGHAI)
+    return parsed.astimezone(SHANGHAI).strftime("%Y-%m-%d %H:%M:%S 北京时间")
+
+
 def num(value, digits=2) -> str:
     if value is None:
         return "—"
@@ -1211,7 +1224,7 @@ def render(payload: dict) -> str:
 <header class="hero"><div class="eyebrow">{e(str(report.get('model_name', 'Football Betting OneShot')).upper())} · {e(report.get('model_version'))} · MARKET INTELLIGENCE</div>
 <h1>{e(match.get('home'))}<span>VS</span>{e(match.get('away'))}</h1>
 <div class="hero-sub">{e(report.get('report_type'))} · {e(execution_label)} · 90分钟含伤停，不含加时与点球</div>
-<div class="chips"><span class="chip">赛事 <b>{e(match.get('competition'))}</b></span><span class="chip">竞彩日 <b>{e(match.get('business_date'))}</b></span><span class="chip">开球 <b>{e(match.get('kickoff_local'))}</b></span><span class="chip">编号 <b>{e(match.get('match_num'))}</b></span><span class="chip">快照 <b>{e(report.get('snapshot_timestamp'))}</b></span></div></header>
+<div class="chips"><span class="chip">赛事 <b>{e(match.get('competition'))}</b></span><span class="chip">竞彩日 <b>{e(match.get('business_date'))}</b></span><span class="chip">开球 <b>{e(match.get('kickoff_local'))}</b></span><span class="chip">编号 <b>{e(match.get('match_num'))}</b></span><span class="chip">快照 <b>{e(display_beijing_time(report.get('snapshot_timestamp')))}</b></span></div></header>
 <div class="grid">{"".join(cards)}</div>
 {internal_audit}
 <footer class="footer"><b>{e(report.get('model_name'))} {e(report.get('model_version'))}</b> · 数据批次 {e(report.get('data_run_id'))}</footer>
