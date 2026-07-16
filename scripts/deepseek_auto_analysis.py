@@ -26,7 +26,7 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 API_URL = "https://api.deepseek.com/chat/completions"
 DEFAULT_MODEL = "deepseek-v4-pro"
-MODEL_VERSION = "v0.15.2"
+MODEL_VERSION = "v0.15.3"
 AUTO_INPUT_ROOT = ROOT / "data" / "analysis_inputs" / "automated"
 WORKSPACE_PATH = ROOT / "data" / "match_workspace" / "latest.json"
 DEEP_FALLBACK_ROOT = ROOT / "data" / "source_cache" / "deep_fallback"
@@ -96,6 +96,11 @@ def selected_workspace_match(request: dict) -> dict:
 def fetch_date_for_request(request: dict) -> str:
     """Use the Sporttery business date, including after-midnight kickoffs."""
     return request["business_date"]
+
+
+def fetch_match_selector(request: dict) -> str:
+    """Prefer the immutable Sporttery match ID over display-name aliases."""
+    return str(request.get("match_id") or request.get("match") or "").strip()
 
 
 def devig_three_way(odds: dict) -> dict | None:
@@ -557,7 +562,7 @@ def run_pipeline(request: dict, api_key: str = "", model_name: str = DEFAULT_MOD
     fetch_date = fetch_date_for_request(request)
     fetch = run_json_command([
         sys.executable, "scripts/fetch_football_data.py",
-        "--date", fetch_date, "--match", request["match"],
+        "--date", fetch_date, "--match", fetch_match_selector(request),
         "--deep", "--no-cache",
     ], allow_failure=True, timeout=240)
     manifest_path = Path(fetch["manifest"])

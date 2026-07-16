@@ -13,6 +13,7 @@ from deepseek_auto_analysis import (  # noqa: E402
     devig_three_way,
     deterministic_analysis,
     fetch_date_for_request,
+    fetch_match_selector,
     has_minimum_analysis_evidence,
     normalize_analysis,
     mark_initial_market_checkpoint,
@@ -43,6 +44,11 @@ def test_invalid_request_is_rejected():
         assert "YYYY-MM-DD" in str(error)
     else:
         raise AssertionError("invalid date was accepted")
+
+
+def test_fetch_uses_stable_match_id_before_display_aliases():
+    assert fetch_match_selector({"match_id": "2040516", "match": "德里城 vs 索陆军"}) == "2040516"
+    assert fetch_match_selector({"match_id": "", "match": "德里城 vs 索陆军"}) == "德里城 vs 索陆军"
 
 
 def test_normalizer_cannot_create_execution_or_locked_bets():
@@ -178,7 +184,7 @@ def test_analysis_context_places_deterministic_core_at_top_level(tmp_path, monke
     assert context["deterministic_core"]["model"]["probabilities"]["home"] > 0
     output = deterministic_analysis(context, {"match_id": "123", "match": "甲 vs 乙", "business_date": "2026-07-15"})
     assert output["automation"]["llm_used"] is False
-    assert output["report"]["model_version"] == "v0.15.2"
+    assert output["report"]["model_version"] == "v0.15.3"
     assert output["betting"]["state"] == "空仓｜未锁单"
     assert len(output["evidence_chain"]) == 4
 
