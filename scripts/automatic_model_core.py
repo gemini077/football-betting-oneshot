@@ -258,7 +258,13 @@ def build_automatic_model(context: dict) -> dict:
     deep_form = (deep.get("shuju") or {}).get("recent_form") or {}
     prematch_facts = context.get("prematch_fundamentals") or {}
     form = deep_form or prematch_facts.get("recent_form") or {}
-    form_source = "500.com赛前数据快照" if deep_form else prematch_facts.get("form_source")
+    provenance = deep.get("source_provenance") or {}
+    if deep_form and provenance.get("form_primary") == "nowscore_analysis":
+        form_source = "Nowscore近期赛事数据"
+    elif deep_form:
+        form_source = "500.com赛前数据快照"
+    else:
+        form_source = prematch_facts.get("form_source")
     home_home = form.get("home_home") or {}
     away_away = form.get("away_away") or {}
     home_overall = form.get("home_overall") or {}

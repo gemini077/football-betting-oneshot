@@ -60,6 +60,8 @@ class MatchFilterTests(unittest.TestCase):
         self.assertEqual(1.70, next(row for row in rows if row["cid"] == 3)["spf_current"]["home"])
         self.assertEqual("500_deep", next(row for row in rows if row["cid"] == 293)["source"])
         self.assertEqual(10, merged["shuju"]["recent_form"]["home_overall"]["matches"])
+        self.assertEqual("nowscore", merged["source_provenance"]["market_primary"])
+        self.assertEqual("nowscore_analysis", merged["source_provenance"]["form_primary"])
 
 
 if __name__ == "__main__":

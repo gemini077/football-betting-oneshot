@@ -37,6 +37,22 @@ def test_deterministic_model_refuses_to_invent_missing_form():
     assert build_automatic_model(context)["model"] is None
 
 
+def test_deterministic_model_labels_nowscore_form_as_primary():
+    deep = {
+        "source_provenance": {"form_primary": "nowscore_analysis"},
+        "shuju": {"recent_form": {
+            "home_overall": {"matches": 10, "goals_for": 15, "goals_against": 10},
+            "away_overall": {"matches": 10, "goals_for": 10, "goals_against": 15},
+            "home_home": {"matches": 10, "goals_for": 17, "goals_against": 8},
+            "away_away": {"matches": 10, "goals_for": 8, "goals_against": 17},
+        }},
+        "ouzhi": {"bookmakers": [{"spf_current": {"home": 1.8, "draw": 3.5, "away": 4.2}}]},
+        "daxiao": {"companies": [{"current_line": 2.5}]},
+    }
+    result = build_automatic_model({"source_snapshots": {"500_deep": {"snapshots": [deep]}}})
+    assert result["model"]["calibration"]["form_source"] == "Nowscore近期赛事数据"
+
+
 def test_deterministic_model_uses_checked_espn_form_when_deep_page_is_missing():
     form = {
         "home_overall": {"matches": 5, "wins": 2, "draws": 1, "losses": 2, "goals_for": 7, "goals_against": 6},

@@ -162,7 +162,12 @@ def _attach_nowscore(result: dict, nowscore: dict) -> dict:
     if nowscore_shuju.get("recent_form"):
         existing_shuju = result.get("shuju") if isinstance(result.get("shuju"), dict) else {}
         result["shuju"] = {**existing_shuju, **nowscore_shuju}
-    result.setdefault("source_provenance", {})["nowscore_3in1"] = {
+    provenance = result.setdefault("source_provenance", {})
+    provenance["market_primary"] = "nowscore"
+    provenance["market_fallback"] = "500.com"
+    if nowscore_shuju.get("recent_form"):
+        provenance["form_primary"] = "nowscore_analysis"
+    provenance["nowscore_3in1"] = {
         "source_url": nowscore.get("source_url"),
         "fetched_at": nowscore.get("fetched_at"),
         "identity": nowscore.get("identity"),
