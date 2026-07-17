@@ -144,7 +144,8 @@ def verify_schedule(path: Path, now: datetime, result_root: Path = RESULT_ROOT) 
         return {"path": str(path), "status": "skipped_final"}
 
     due = parse_datetime(schedule.get("review_due_at"))
-    if due is None or now < due:
+    strategy_upgrade = schedule.get("result_strategy_version") != RESULT_STRATEGY_VERSION
+    if due is None or (now < due and not strategy_upgrade):
         return {"path": str(path), "status": "skipped_not_due"}
 
     attempts = int(schedule.get("verification_attempts") or 0) + 1

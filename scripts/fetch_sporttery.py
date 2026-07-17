@@ -63,6 +63,10 @@ def fetch_json(url: str, retries: int = 3) -> dict | None:
                 return json.loads(raw)
         except urllib.error.HTTPError as e:
             log(f"HTTP {e.code} attempt {attempt+1}/{retries}", "WARN")
+            # GitHub runners currently receive a stable gateway 567 here.
+            # Retrying only delays the deterministic 500.com fallback.
+            if e.code == 567:
+                return None
         except Exception as e:
             log(f"Fetch error attempt {attempt+1}/{retries}: {e}", "WARN")
         if attempt < retries - 1:
