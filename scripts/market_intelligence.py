@@ -21,10 +21,19 @@ from market_history import load_history
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_TIER_CONFIG = PROJECT_ROOT / "config" / "bookmaker_tiers.json"
 OUTCOMES = ("home", "draw", "away")
+OUTCOME_LABELS = {"home": "主胜", "draw": "平局", "away": "客胜"}
 
 
 def load_json(path: Path):
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _number(value):
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    return number if math.isfinite(number) else None
 
 
 def no_vig(odds: dict | None) -> dict | None:
@@ -408,6 +417,152 @@ def exchange_panel(touzhu: dict, consensus_probability: dict | None, history: li
         "volume_scope": metadata.get("volume_scope", "unverified_visible_page_scope"),
         "page_simulated_pl_signal_usage": "display_only_not_direction_or_ev",
         "reason": None if enough_baseline else "历史已接入，但前4小时内不足3个独立快照，量价四象限仍降级",
+    }
+
+
+def _direction_ratio(positive: int, negative: int) -> float | None:
+    total = positive + negative
+    return (positive - negative) / total if total else None
+
+
+def _model_leader(probabilities: dict | None) -> str | None:
+    valid = {key: float(value) for key, value in (probabilities or {}).items() if key in OUTCOMES and value is not None}
+    return max(valid, key=valid.get) if valid else None
+
+
+def interpret_market_intent(
+    deep: dict,
+    intelligence: dict,
+    model_probabilities: dict | None = None,
+    checkpoint_stage: str | None = None,
+) -> dict:
+    """Explain price pressure, likely operator purpose and model impact.
+
+    Bookmaker quotes are price-pressure evidence, never transaction flow.
+    Purpose labels are deterministic inferences with explicit confidence and
+    are not claims about a bookmaker's private intention.
+    """
+    modules = intelligence.get("modules") or {}
+    trends = modules.get("nowscore_trends") or {}
+    counts = trends.get("direction_counts") or {}
+    euro = counts.get("one_x_two_home") or {}
+    asian = counts.get("asian_home") or {}
+    totals = counts.get("total") or {}
+    euro_ratio = _direction_ratio(int(euro.get("shortened") or 0), int(euro.get("lengthened") or 0))
+    asian_ratio = _direction_ratio(int(asian.get("strengthened") or 0), int(asian.get("weakened") or 0))
+
+    water = modules.get("water_flow") or {}
+    water_ratio = float(water.get("flow_ratio") or 0)
+    water_signed = water_ratio if water.get("direction") == "home" else -water_ratio if water.get("direction") == "away" else 0.0
+    scs_home = (((modules.get("scs") or {}).get("per_outcome") or {}).get("home") or {})
+    sharp_signal = _number(((scs_home.get("tier_scores") or {}).get("sharp")))
+
+    components: list[tuple[str, float]] = []
+    if euro_ratio is not None:
+        components.append(("多公司欧赔", euro_ratio))
+    if asian_ratio is not None:
+        components.append(("亚洲让球", asian_ratio))
+    if water.get("same_line_sources"):
+        components.append(("同盘水位", water_signed))
+    if sharp_signal is not None:
+        components.append(("Sharp层", sharp_signal))
+    weighted_score = (
+        (0.35 * (euro_ratio or 0.0))
+        + (0.30 * (asian_ratio or 0.0))
+        + (0.15 * water_signed)
+        + (0.20 * (sharp_signal or 0.0))
+    )
+    direction = "home" if weighted_score >= 0.18 else "away" if weighted_score <= -0.18 else "neutral"
+    direction_label = {"home": "主队", "away": "客队", "neutral": "两侧未拉开"}[direction]
+    directional_components = [value for _, value in components if abs(value) >= 0.18]
+    aligned_components = sum(1 for value in directional_components if (value > 0) == (weighted_score > 0))
+    disagreement = any(value > 0.18 for _, value in components) and any(value < -0.18 for _, value in components)
+
+    exchange = modules.get("exchange") or {}
+    exchange_gaps = {
+        key: _number(value)
+        for key, value in (exchange.get("volume_minus_market_probability_pp") or {}).items()
+        if key in OUTCOMES and _number(value) is not None
+    }
+    exchange_direction = max(exchange_gaps, key=exchange_gaps.get) if exchange_gaps else None
+    exchange_gap = exchange_gaps.get(exchange_direction) if exchange_direction else None
+    exchange_confirmed = (
+        exchange_direction in ("home", "away")
+        and direction == exchange_direction
+        and exchange_gap is not None and exchange_gap >= 3.0
+    )
+    exchange_conflict = (
+        exchange_direction in ("home", "away")
+        and direction in ("home", "away")
+        and direction != exchange_direction
+        and exchange_gap is not None and exchange_gap >= 3.0
+    )
+
+    if direction == "neutral":
+        purpose = "当前更像分散调价和平衡风险，尚没有足够证据说明机构在主动表达单边方向。"
+    elif exchange_confirmed and aligned_components >= 2:
+        purpose = f"多层价格与交易所成交共同指向{direction_label}，更像主动价格发现并降低该方向潜在赔付风险。"
+    elif disagreement or exchange_conflict:
+        purpose = "Sharp层、广泛市场或交易所没有同向，较可能是机构在不同客群间平衡受注，也存在用价格吸引对手盘的可能。"
+    elif aligned_components >= 2:
+        purpose = f"欧赔、让球或水位有至少两层同向，较像机构持续修正{direction_label}价格并控制同侧风险。"
+    else:
+        purpose = "目前只有单层报价偏移，更像常规风险平衡，不能据此认定专业资金已经完成方向选择。"
+
+    late_stages = {"T-90M", "T-60M", "T-30M", "T-10M"}
+    is_late = checkpoint_stage in late_stages
+    confidence = "高" if exchange_confirmed and aligned_components >= 2 else "中" if aligned_components >= 2 and not disagreement else "低"
+    leader = _model_leader(model_probabilities)
+    if direction == "neutral" or leader is None:
+        impact_code = "observe"
+        model_impact = "市场方向尚未拉开，不改变模型主线，只保留观察。"
+    elif direction == leader:
+        impact_code = "confirm"
+        model_impact = f"市场压力与模型{OUTCOME_LABELS[leader]}同向，{'临盘确认价值较高' if is_late else '可提高方向置信度，但距离临盘仍需复核'}；避免把同一市场信息重复计入概率。"
+    elif leader == "draw":
+        impact_code = "weaken"
+        model_impact = f"市场正在偏向{direction_label}，削弱模型平局主线；{'临盘需暂停直接沿用原判断' if is_late and confidence == '高' else '暂记为反证，不自动改方向'}。"
+    else:
+        impact_code = "weaken"
+        model_impact = f"市场压力与模型{OUTCOME_LABELS[leader]}相反，削弱原首推；{'临盘多源确认时应暂停沿用并重算' if is_late and confidence in ('高', '中') else '当前只降置信度，不凭一次调价反转'}。"
+
+    if exchange.get("total_volume"):
+        strongest = OUTCOME_LABELS.get(exchange_direction, "未知方向")
+        money_flow = (
+            f"交易所可见成交量约{float(exchange.get('total_volume')):,.0f}，成交占比相对市场概率最偏向{strongest}"
+            f"（{exchange_gap:+.1f}个百分点）；{'与盘口压力互相确认' if exchange_confirmed else '与盘口压力存在分歧' if exchange_conflict else '尚未达到同向确认门槛'}。"
+        )
+    else:
+        money_flow = f"没有可核验的交易所成交量；当前只能确认报价形成的{direction_label}价格压力，不能称为真实资金流。"
+
+    market_pressure = (
+        f"{trends.get('company_count', 0)}家公司、{trends.get('snapshot_count', 0)}条轨迹："
+        f"主胜降赔{euro.get('shortened', 0)}家/升赔{euro.get('lengthened', 0)}家，"
+        f"亚洲盘主队加强{asian.get('strengthened', 0)}家/减弱{asian.get('weakened', 0)}家，"
+        f"大小球升盘{totals.get('up', 0)}家/降盘{totals.get('down', 0)}家。综合价格压力偏向{direction_label}。"
+    )
+    sharp_text = "Sharp层方向不足"
+    if sharp_signal is not None:
+        if sharp_signal >= 0.12:
+            sharp_text = f"Pinnacle/bet365代表的Sharp层正在支持主队（强度{abs(sharp_signal):.2f}）"
+        elif sharp_signal <= -0.12:
+            sharp_text = f"Pinnacle/bet365代表的Sharp层正在削弱主队（强度{abs(sharp_signal):.2f}）"
+        else:
+            sharp_text = f"Pinnacle/bet365代表的Sharp层基本中性（强度{abs(sharp_signal):.2f}）"
+    bookmaker_behaviour = f"{sharp_text}；目的推断：{purpose}可信度：{confidence}。"
+    return {
+        "market_pressure": market_pressure,
+        "money_flow": money_flow,
+        "bookmaker_behaviour": bookmaker_behaviour,
+        "model_impact": model_impact,
+        "direction": direction,
+        "purpose": purpose,
+        "confidence": confidence,
+        "impact_code": impact_code,
+        "late_market_weight": "high" if is_late else "normal",
+        "actual_volume_available": bool(exchange.get("total_volume")),
+        "semantic_scope": "purpose_is_model_inference_not_bookmaker_disclosure",
+        "evidence": [{"name": name, "signed_home_support": round(value, 4)} for name, value in components],
     }
 
 

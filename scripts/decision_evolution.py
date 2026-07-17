@@ -13,6 +13,8 @@ import math
 from pathlib import Path
 from typing import Any
 
+from market_intelligence import interpret_market_intent
+
 
 ROOT = Path(__file__).resolve().parents[1]
 TIMELINE_ROOT = ROOT / "data" / "match_archive"
@@ -38,51 +40,29 @@ def _clean_probabilities(value: Any) -> dict[str, float]:
     }
 
 
-def _market_intelligence(analysis: dict) -> dict:
+def _market_intelligence(analysis: dict, checkpoint: dict | None = None) -> dict:
     market = analysis.get("market") or {}
     intelligence = market.get("intelligence") or analysis.get("market_intelligence") or {}
-    modules = intelligence.get("modules") or {}
-    water = modules.get("water_flow") or {}
-    exchange = modules.get("exchange") or {}
-    lead_lag = modules.get("lead_lag") or {}
-
-    water_direction = water.get("direction")
-    pressure = {
-        "home": "主队方向报价压力",
-        "away": "客队方向报价压力",
-        "neutral": "两侧报价压力接近",
-    }.get(water_direction, "盘口水位暂未形成一致方向")
-
-    exchange_text = "没有可核验的交易所成交量，不把赔率变化称为真实资金流"
-    if _number(exchange.get("total_volume")):
-        gaps = exchange.get("volume_minus_market_probability_pp") or {}
-        valid = {key: _number(gaps.get(key)) for key in OUTCOMES}
-        valid = {key: value for key, value in valid.items() if value is not None}
-        if valid:
-            strongest = max(valid, key=valid.get)
-            exchange_text = f"交易所成交占比相对价格最偏向{OUTCOME_LABELS[strongest]}"
-
-    observed = lead_lag.get("observed") or []
-    behaviour = "机构调整暂未形成可核验的先后链"
-    if observed:
-        first = observed[0]
-        behaviour = f"{first.get('name') or '主流机构'}出现可见盘口调整，其余公司是否跟随继续由后续快照验证"
+    inferred = interpret_market_intent(
+        {},
+        intelligence,
+        (analysis.get("model") or {}).get("probabilities"),
+        (checkpoint or {}).get("stage"),
+    )
     return {
-        "market_pressure": pressure,
-        "money_flow": exchange_text,
-        "bookmaker_behaviour": behaviour,
-        "exchange_volume": _number(exchange.get("total_volume")),
+        **inferred,
+        "exchange_volume": _number(((intelligence.get("modules") or {}).get("exchange") or {}).get("total_volume")),
     }
 
 
-def decision_snapshot(analysis: dict) -> dict:
+def decision_snapshot(analysis: dict, checkpoint: dict | None = None) -> dict:
     model = analysis.get("model") or {}
     decisions = analysis.get("decisions") or {}
     market = analysis.get("market") or {}
     consensus = market.get("consensus") or {}
     probabilities = _clean_probabilities(model.get("probabilities"))
     leader = max(probabilities, key=probabilities.get) if probabilities else None
-    intelligence = _market_intelligence(analysis)
+    intelligence = _market_intelligence(analysis, checkpoint)
     return {
         "probabilities": probabilities,
         "outcome_leader": leader,
@@ -107,7 +87,7 @@ def describe_change(previous: dict | None, current: dict) -> dict:
         return {
             "kind": "initial",
             "headline": f"初始判断：{leader}；首推比分{score}",
-            "summary": f"模型建立初始比赛剧本，主维度为{primary}。{current.get('market_pressure')}；{current.get('money_flow')}。",
+            "summary": f"模型建立初始比赛剧本，主维度为{primary}。{current.get('market_pressure')}；{current.get('money_flow')}；{current.get('bookmaker_behaviour')}；{current.get('model_impact')}",
             "changed": True,
         }
 
@@ -133,6 +113,10 @@ def describe_change(previous: dict | None, current: dict) -> dict:
         changes.append(str(current.get("market_pressure")))
     if previous.get("money_flow") != current.get("money_flow"):
         changes.append(str(current.get("money_flow")))
+    if previous.get("model_impact") != current.get("model_impact"):
+        changes.append(str(current.get("model_impact")))
+    if previous.get("bookmaker_behaviour") != current.get("bookmaker_behaviour"):
+        changes.append(str(current.get("bookmaker_behaviour")))
 
     if changes:
         return {
@@ -144,7 +128,7 @@ def describe_change(previous: dict | None, current: dict) -> dict:
     return {
         "kind": "stable",
         "headline": "核心判断维持不变",
-        "summary": f"新盘口和球队信息尚不足以越过决策边界；继续维持{current.get('primary_dimension') or '原主维度'}与比分{current.get('unique_score') or '原判断'}。",
+        "summary": f"新盘口和球队信息尚不足以越过决策边界；继续维持{current.get('primary_dimension') or '原主维度'}与比分{current.get('unique_score') or '原判断'}。{current.get('model_impact')}",
         "changed": False,
     }
 
@@ -176,7 +160,7 @@ def attach_evolution(
     root: Path = TIMELINE_ROOT,
 ) -> tuple[dict, dict]:
     timeline = load_timeline(match_id, root)
-    current = decision_snapshot(analysis)
+    current = decision_snapshot(analysis, checkpoint)
     previous = timeline[-1].get("decision") if timeline else None
     change = describe_change(previous, current)
     record = {
@@ -211,6 +195,10 @@ def attach_evolution(
         "money_flow": current.get("money_flow"),
         "bookmaker_behaviour": current.get("bookmaker_behaviour"),
         "market_pressure": current.get("market_pressure"),
+        "model_impact": current.get("model_impact"),
+        "purpose": current.get("purpose"),
+        "confidence": current.get("confidence"),
+        "late_market_weight": current.get("late_market_weight"),
         "actual_volume_available": current.get("exchange_volume") is not None,
     }
     return analysis, record
