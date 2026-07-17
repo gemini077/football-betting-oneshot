@@ -47,7 +47,20 @@ jobs:
       - run: pip install -r requirements.txt
 
       - name: Fetch, analyze and rebuild
-        run: python scripts/deepseek_auto_analysis.py --event "$GITHUB_EVENT_PATH"
+        shell: bash
+        run: |
+          for attempt in 1 2 3; do
+            echo "analysis attempt ${attempt}/3"
+            if python scripts/deepseek_auto_analysis.py --event "$GITHUB_EVENT_PATH"; then
+              exit 0
+            fi
+            if [[ "$attempt" -lt 3 ]]; then
+              echo "evidence was incomplete; retrying after 45 seconds"
+              sleep 45
+            fi
+          done
+          echo "analysis failed after 3 evidence refresh attempts" >&2
+          exit 1
 
       - name: Save generated analysis
         run: |

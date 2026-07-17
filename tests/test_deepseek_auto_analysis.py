@@ -250,6 +250,13 @@ def test_analysis_workflow_does_not_try_to_push_workflow_files():
     assert ".github/workflows" not in save_step
 
 
+def test_analysis_workflow_retries_transient_evidence_failures():
+    workflow = (ROOT / ".github" / "workflows" / "analyze-selected.yml").read_text(encoding="utf-8")
+    assert "for attempt in 1 2 3" in workflow
+    assert "retrying after 45 seconds" in workflow
+    assert "analysis failed after 3 evidence refresh attempts" in workflow
+
+
 def test_json_command_accepts_progress_before_final_envelope(monkeypatch):
     monkeypatch.setattr(
         "deepseek_auto_analysis.subprocess.run",
