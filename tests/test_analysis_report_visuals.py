@@ -94,6 +94,25 @@ class AnalysisReportVisualTests(unittest.TestCase):
         self.assertIn("比分与方向为何可能不同", page)
         self.assertIn("EV与实时渠道复算", page)
 
+    def test_decision_evolution_is_last_and_full_history_is_collapsed(self):
+        payload = {
+            "report": {"model_name": "Football Betting OneShot", "model_version": "v0.14.1"},
+            "match": {"home": "主队", "away": "客队"},
+            "market": {}, "data_quality": {"missing": []},
+            "model": {}, "betting": {"candidates": [], "open_bets": []},
+            "decisions": {"maximum_error_points": ["临盘反向"]},
+            "decision_evolution": {"history": [
+                {"captured_at": "2026-07-17T18:00:00+08:00", "changed": True, "headline": "主胜降温", "summary": "市场反证增强"},
+                {"captured_at": "2026-07-17T19:00:00+08:00", "changed": False, "headline": "判断维持", "summary": "尚未越过边界"},
+            ]},
+        }
+        page = render(payload)
+        self.assertGreater(page.rfind("判断是怎样变化的"), page.rfind("可能判断错在哪里"))
+        self.assertIn('<details class="evolution-details">', page)
+        self.assertIn("查看全部判断变化", page)
+        self.assertIn("尚未越过边界", page)
+        self.assertIn('href="#evolution"', page)
+
 
 if __name__ == "__main__":
     unittest.main()
