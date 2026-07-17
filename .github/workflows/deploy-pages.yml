@@ -48,7 +48,14 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/schedule_updates data/match_workspace data/fetch_runs data/market_history data/match_archive data/analysis_inputs data/analysis_reports data/live_ev_profiles data/postmatch_automation data/postmatch_reviews data/postmatch_dashboard data/paper_ledger
+          paths=(data/schedule_updates data/match_workspace data/fetch_runs data/market_history data/match_archive data/analysis_inputs data/analysis_reports data/live_ev_profiles data/postmatch_automation data/postmatch_reviews data/postmatch_dashboard data/paper_ledger)
+          existing=()
+          for path in "${paths[@]}"; do
+            [[ -e "$path" ]] && existing+=("$path")
+          done
+          if ((${#existing[@]})); then
+            git add -A -- "${existing[@]}"
+          fi
           if ! git diff --cached --quiet; then
             git commit -m "refresh public football data [skip ci]"
             git push
