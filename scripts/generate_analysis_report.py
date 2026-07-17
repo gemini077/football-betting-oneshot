@@ -748,10 +748,9 @@ def render(payload: dict) -> str:
     consensus = market.get("consensus") or {}
     consensus_open = consensus.get("open") or {}
     consensus_current = consensus.get("current") or {}
-    consensus_prob = (
-        payload.get("market_intelligence", {}).get("consensus", {}).get("shin", {}).get("probabilities")
-        or no_vig(consensus_current)
-    )
+    intelligence_consensus = ((payload.get("market_intelligence") or {}).get("consensus") or {})
+    shin = intelligence_consensus.get("shin") or {}
+    consensus_prob = shin.get("probabilities") or no_vig(consensus_current)
     official_spf = market.get("official_spf") or {}
     rq = market.get("official_rqspf") or {}
     betfair = market.get("betfair") or {}
