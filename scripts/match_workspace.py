@@ -102,7 +102,7 @@ def latest_schedule(target_date: str) -> tuple[Path | None, dict]:
     rows: list[tuple[int, float, Path, dict]] = []
     for path in candidates:
         payload = load_json(path, {})
-        if payload.get("source") != "sporttery.cn" or not payload.get("success"):
+        if payload.get("source") not in {"sporttery.cn", "trade.500.com"} or not payload.get("success"):
             continue
         rows.append((len(payload.get("matches") or []), path.stat().st_mtime, path, payload))
     if not rows:

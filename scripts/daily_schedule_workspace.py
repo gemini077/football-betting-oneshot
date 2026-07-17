@@ -9,7 +9,41 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 
 from fetch_sporttery import DEFAULT_CACHE_DIR, fetch_jingcai_odds
+from fetch_trade_matches import fetch_trade_matches
 from match_workspace import ROOT, build
+
+
+def fallback_trade_schedule(business_date: str, no_cache: bool) -> dict:
+    """Map the visible 500.com sales list to the canonical schedule contract."""
+    trade = fetch_trade_matches(business_date, no_cache=no_cache)
+    matches = []
+    for row in trade.get("matches") or []:
+        kickoff = str(row.get("kickoff_local") or "")
+        matches.append({
+            "matchId": f"500-{row.get('shuju_id')}",
+            "matchNum": row.get("match_num"),
+            "homeTeam": row.get("home_team"),
+            "awayTeam": row.get("away_team"),
+            "league": row.get("competition"),
+            "businessDate": business_date,
+            "matchDate": kickoff[:10],
+            "matchTime": kickoff[11:16],
+            "spf": row.get("official_spf_visible"),
+            "rqspf": row.get("official_rqspf_visible"),
+            "shujuId": row.get("shuju_id"),
+            "singleMatchAvailable": bool(row.get("single_match_available")),
+        })
+    return {
+        "source": "trade.500.com",
+        "primary_source": "sporttery.cn",
+        "fallback_reason": "official_schedule_unavailable",
+        "url": trade.get("url"),
+        "fetch_time": trade.get("fetch_time") or datetime.now().astimezone().isoformat(),
+        "date": business_date,
+        "success": bool(matches),
+        "matches": matches,
+        "status": "OK_FALLBACK_500" if matches else str(trade.get("status") or "FALLBACK_FAILED"),
+    }
 
 
 def main() -> int:
@@ -28,6 +62,10 @@ def main() -> int:
     for offset in (0, 1):
         business_date = (base_date + timedelta(days=offset)).isoformat()
         payload = fetch_jingcai_odds(business_date, args.no_cache, DEFAULT_CACHE_DIR)
+        if not payload.get("success"):
+            fallback = fallback_trade_schedule(business_date, args.no_cache)
+            if fallback.get("success"):
+                payload = fallback
         schedule_path = output_dir / f"{stamp}_sporttery_{business_date}.json"
         schedule_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
         payloads.append(payload)

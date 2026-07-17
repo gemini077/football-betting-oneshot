@@ -4,8 +4,10 @@
 from __future__ import annotations
 
 import argparse
+import html as html_lib
 import json
 import re
+import urllib.request
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
@@ -17,7 +19,8 @@ from postmatch_queue import BASE_DIR, SHANGHAI, load_json, normalize, parse_date
 
 SCHEDULE_ROOT = BASE_DIR / "data" / "postmatch_automation" / "schedules"
 RESULT_ROOT = BASE_DIR / "data" / "postmatch_automation" / "results"
-FINAL_STATUSES = {"result_verified", "reviewed", "blocked_result_not_final"}
+FINAL_STATUSES = {"result_verified", "reviewed"}
+RESULT_STRATEGY_VERSION = "nowscore_detail_v1"
 SCORE_PATTERN = re.compile(
     r'<p\s+class=["\']odds_hd_bf["\'][^>]*>\s*<strong>\s*(\d+)\s*[:：]\s*(\d+)\s*</strong>',
     re.IGNORECASE,
@@ -33,6 +36,78 @@ def parse_header_score(page: str) -> tuple[int, int] | None:
     if not match:
         return None
     return int(match.group(1)), int(match.group(2))
+
+
+def resolve_nowscore_id(schedule: dict[str, Any]) -> int | None:
+    """Recover the verified Nowscore id already captured during pre-match work."""
+    if schedule.get("nowscore_id"):
+        return int(schedule["nowscore_id"])
+    match_filter = None
+    source_report = BASE_DIR / str(schedule.get("source_report") or "")
+    if source_report.exists():
+        try:
+            report = load_json(source_report)
+            match_filter = str((report.get("match") or {}).get("match_id") or "")
+        except (OSError, json.JSONDecodeError, ValueError):
+            pass
+    if not match_filter:
+        return None
+    manifests = sorted((BASE_DIR / "data" / "fetch_runs").glob("**/*_fetch_manifest.json"), reverse=True)
+    for manifest_path in manifests:
+        try:
+            manifest = load_json(manifest_path)
+        except (OSError, json.JSONDecodeError):
+            continue
+        if str(manifest.get("match_filter") or "") != match_filter:
+            continue
+        for row in (((manifest.get("sources") or {}).get("nowscore") or {}).get("matches") or []):
+            if row.get("status") == "OK" and row.get("nowscore_id"):
+                schedule["nowscore_id"] = int(row["nowscore_id"])
+                return schedule["nowscore_id"]
+    return None
+
+
+def parse_nowscore_detail(page: str) -> tuple[int, int] | None:
+    """Read a final 90-minute score from Nowscore's archived event page."""
+    state = re.search(r"var\s+state\s*=\s*(-?\d+)", page or "")
+    if not state or int(state.group(1)) != -1:
+        return None
+    home = away = 0
+    for event in re.finditer(r'<tr[^>]*data-kind=["\'](1|7|8)["\'][^>]*>(.*?)</tr>', page, re.I | re.S):
+        cells = re.findall(r"<td[^>]*>(.*?)</td>", event.group(2), re.I | re.S)
+        if len(cells) < 5:
+            continue
+        left = html_lib.unescape(re.sub(r"<[^>]+>", "", cells[0])).strip()
+        right = html_lib.unescape(re.sub(r"<[^>]+>", "", cells[-1])).strip()
+        if not left and not right:
+            continue
+        scoring_home = bool(left)
+        if event.group(1) == "8":  # own goal is credited to the other side
+            scoring_home = not scoring_home
+        if scoring_home:
+            home += 1
+        else:
+            away += 1
+    return home, away
+
+
+def fetch_nowscore_result(match_id: int) -> tuple[tuple[int, int] | None, str, str | None]:
+    url = f"https://live.nowscore.com/detail/{match_id}.html"
+    try:
+        request = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(request, timeout=30) as response:
+            raw = response.read()
+        for encoding in ("utf-8-sig", "gb18030", "utf-8"):
+            try:
+                page = raw.decode(encoding)
+                break
+            except UnicodeDecodeError:
+                continue
+        else:
+            page = raw.decode("utf-8", errors="replace")
+        return parse_nowscore_detail(page), url, None
+    except Exception as exc:
+        return None, url, str(exc)
 
 
 def resolve_shuju_id(schedule: dict[str, Any]) -> int | str | None:
@@ -65,6 +140,8 @@ def verify_schedule(path: Path, now: datetime, result_root: Path = RESULT_ROOT) 
     status = str(schedule.get("status") or "scheduled")
     if status in FINAL_STATUSES:
         return {"path": str(path), "status": "skipped_final"}
+    if status == "blocked_result_not_final" and schedule.get("result_strategy_version") == RESULT_STRATEGY_VERSION:
+        return {"path": str(path), "status": "skipped_final"}
 
     due = parse_datetime(schedule.get("review_due_at"))
     if due is None or now < due:
@@ -75,9 +152,22 @@ def verify_schedule(path: Path, now: datetime, result_root: Path = RESULT_ROOT) 
     schedule["last_checked_at"] = now.isoformat()
     score = None
     source_url = None
+    result_source = None
     error = None
+    schedule["result_strategy_version"] = RESULT_STRATEGY_VERSION
     try:
-        shuju_id = resolve_shuju_id(schedule)
+        nowscore_id = resolve_nowscore_id(schedule)
+    except Exception as exc:
+        nowscore_id = None
+        error = f"nowscore_id_resolution_failed: {exc}"
+    if nowscore_id:
+        score, source_url, nowscore_error = fetch_nowscore_result(nowscore_id)
+        if score is not None:
+            result_source = "nowscore_match_detail"
+        elif nowscore_error:
+            error = nowscore_error
+    try:
+        shuju_id = None if score is not None else resolve_shuju_id(schedule)
     except Exception as exc:
         shuju_id = None
         error = f"match_id_resolution_failed: {exc}"
@@ -90,6 +180,8 @@ def verify_schedule(path: Path, now: datetime, result_root: Path = RESULT_ROOT) 
                 error = page
             else:
                 score = parse_header_score(page)
+                if score is not None:
+                    result_source = "500.com_match_header"
         except Exception as exc:
             error = str(exc)
     elif error is None:
@@ -108,7 +200,7 @@ def verify_schedule(path: Path, now: datetime, result_root: Path = RESULT_ROOT) 
             "home_score": home_score,
             "away_score": away_score,
             "scope": "regulation_90m_plus_stoppage",
-            "source": "500.com_match_header",
+            "source": result_source or "verified_match_result",
             "source_url": source_url,
             "verification_attempt": attempts,
         }
