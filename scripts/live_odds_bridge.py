@@ -37,7 +37,7 @@ DEFAULT_OUTPUT_ROOT = PROJECT_ROOT / "data" / "live_odds_bridge" / "captures"
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8765
 MODEL_VERSION = "v0.17.1"
-MODULE_VERSION = "v0.8.1"
+MODULE_VERSION = "v0.9.0"
 
 CORRECT_SCORE_MARKET_CODES = {
     "7",       # 全场波胆
@@ -51,6 +51,7 @@ RUNTIME_STATE_PATH = PROJECT_ROOT / "05_RUNTIME_STATE.json"
 DEFAULT_EV_PROFILE_ROOT = PROJECT_ROOT / "data" / "live_ev_profiles"
 WORKSPACE_SELECTION_PATH = PROJECT_ROOT / "data" / "match_workspace" / "selected_matches.json"
 ANALYSIS_JOB_LOG_ROOT = PROJECT_ROOT / "data" / "analysis_jobs"
+ANALYSIS_QUEUE_PATH = ANALYSIS_JOB_LOG_ROOT / "queue.json"
 GITHUB_REPOSITORY = "gemini077/football-betting-oneshot"
 SAFE_MATCH_ID = re.compile(r"^[0-9]{1,30}$")
 ALLOWED_MATCH_API_PATHS = {
@@ -120,7 +121,7 @@ def launch_selected_analysis(match: dict) -> dict:
     log_path = ANALYSIS_JOB_LOG_ROOT / f"{stamp}_{re.sub(r'[^0-9A-Za-z_-]+', '_', match_id)}.log"
     command = [
         sys.executable, str(PROJECT_ROOT / "scripts" / "deepseek_auto_analysis.py"),
-        "--date", business_date, "--match-id", match_id,
+        "--date", business_date, "--match-id", match_id, "--match", label,
     ]
     creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0
     with log_path.open("ab") as log:
@@ -132,6 +133,180 @@ def launch_selected_analysis(match: dict) -> dict:
         "status": "queued", "mode": "local_fallback", "pid": process.pid,
         "log": log_path.relative_to(PROJECT_ROOT).as_posix(),
     }
+
+
+class PersistentAnalysisQueue:
+    """Durable FIFO dispatcher for owner-selected analysis jobs."""
+
+    ACTIVE_STATUSES = {"queued", "dispatching", "retry_wait"}
+
+    def __init__(
+        self,
+        path: Path,
+        launcher=launch_selected_analysis,
+        *,
+        max_attempts: int = 8,
+        retry_delays: tuple[float, ...] = (15.0, 60.0, 180.0, 300.0),
+    ):
+        self.path = Path(path)
+        self.launcher = launcher
+        self.max_attempts = max(1, int(max_attempts))
+        self.retry_delays = retry_delays or (60.0,)
+        self._condition = threading.Condition(threading.RLock())
+        self._stop_event = threading.Event()
+        self._worker: threading.Thread | None = None
+        self._state = self._load()
+
+    @staticmethod
+    def _match_key(match: dict) -> str:
+        return f"{match.get('business_date') or ''}:{match.get('id') or ''}"
+
+    def _load(self) -> dict:
+        state = {"schema_version": "1.0", "updated_at": _now().isoformat(), "jobs": []}
+        try:
+            loaded = json.loads(self.path.read_text(encoding="utf-8"))
+            if isinstance(loaded, dict) and isinstance(loaded.get("jobs"), list):
+                state = loaded
+        except (OSError, json.JSONDecodeError):
+            pass
+        changed = False
+        for job in state.get("jobs", []):
+            if job.get("status") == "dispatching":
+                job["status"] = "queued"
+                job["last_error"] = "bridge_restarted_during_dispatch"
+                job["next_attempt_at"] = 0.0
+                changed = True
+        if changed:
+            self._write_state(state)
+        return state
+
+    def _write_state(self, state: dict | None = None) -> None:
+        target = state if state is not None else self._state
+        target["updated_at"] = _now().isoformat()
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        temporary = self.path.with_suffix(self.path.suffix + ".tmp")
+        temporary.write_text(json.dumps(target, ensure_ascii=False, indent=2), encoding="utf-8")
+        temporary.replace(self.path)
+
+    @staticmethod
+    def _public_job(job: dict) -> dict:
+        return {key: job.get(key) for key in (
+            "job_id", "match_key", "match", "status", "attempts", "created_at",
+            "updated_at", "next_attempt_at", "last_error", "dispatch",
+        )}
+
+    def enqueue(self, match: dict, *, force: bool = False) -> dict:
+        match_key = self._match_key(match)
+        if not str(match.get("id") or "").strip() or not str(match.get("business_date") or "").strip():
+            raise BridgeValidationError("match id and business_date are required")
+        with self._condition:
+            if not force:
+                for existing in reversed(self._state["jobs"]):
+                    if existing.get("match_key") == match_key and existing.get("status") in self.ACTIVE_STATUSES:
+                        result = self._public_job(existing)
+                        result["deduplicated"] = True
+                        return result
+            now = _now()
+            digest = hashlib.sha256(
+                f"{match_key}:{now.isoformat()}".encode("utf-8")
+            ).hexdigest()[:10]
+            job = {
+                "job_id": f"{now.strftime('%Y%m%d%H%M%S')}-{digest}",
+                "match_key": match_key,
+                "match": dict(match),
+                "status": "queued",
+                "attempts": 0,
+                "created_at": now.isoformat(),
+                "updated_at": now.isoformat(),
+                "next_attempt_at": 0.0,
+                "last_error": None,
+                "dispatch": None,
+            }
+            self._state["jobs"].append(job)
+            self._state["jobs"] = self._state["jobs"][-200:]
+            self._write_state()
+            self._condition.notify_all()
+            result = self._public_job(job)
+            result["deduplicated"] = False
+            return result
+
+    def snapshot(self) -> dict:
+        with self._condition:
+            jobs = [self._public_job(job) for job in self._state["jobs"]]
+        return {
+            "ok": True,
+            "persistent": True,
+            "queue_path": self.path.relative_to(PROJECT_ROOT).as_posix()
+            if self.path.is_relative_to(PROJECT_ROOT) else str(self.path),
+            "jobs": jobs,
+            "active": sum(job.get("status") in self.ACTIVE_STATUSES for job in jobs),
+        }
+
+    def process_once(self) -> dict | None:
+        now_epoch = time.time()
+        with self._condition:
+            job = next((item for item in self._state["jobs"] if (
+                item.get("status") in {"queued", "retry_wait"}
+                and float(item.get("next_attempt_at") or 0) <= now_epoch
+            )), None)
+            if job is None:
+                return None
+            job["status"] = "dispatching"
+            job["attempts"] = int(job.get("attempts") or 0) + 1
+            job["updated_at"] = _now().isoformat()
+            self._write_state()
+            job_id = job["job_id"]
+            match = dict(job["match"])
+        try:
+            dispatch = self.launcher(match)
+        except Exception as exc:  # dispatcher must survive transient CLI/network failures
+            with self._condition:
+                current = next(item for item in self._state["jobs"] if item.get("job_id") == job_id)
+                current["last_error"] = str(exc)[:1000]
+                if current["attempts"] >= self.max_attempts:
+                    current["status"] = "failed"
+                    current["next_attempt_at"] = 0.0
+                else:
+                    delay_index = min(current["attempts"] - 1, len(self.retry_delays) - 1)
+                    current["status"] = "retry_wait"
+                    current["next_attempt_at"] = time.time() + float(self.retry_delays[delay_index])
+                current["updated_at"] = _now().isoformat()
+                self._write_state()
+                return self._public_job(current)
+        with self._condition:
+            current = next(item for item in self._state["jobs"] if item.get("job_id") == job_id)
+            current["status"] = "dispatched"
+            current["dispatch"] = dispatch
+            current["last_error"] = None
+            current["next_attempt_at"] = 0.0
+            current["updated_at"] = _now().isoformat()
+            self._write_state()
+            return self._public_job(current)
+
+    def _run(self) -> None:
+        while not self._stop_event.is_set():
+            processed = self.process_once()
+            with self._condition:
+                if processed is None:
+                    self._condition.wait(timeout=2.0)
+
+    def start(self) -> None:
+        with self._condition:
+            if self._worker and self._worker.is_alive():
+                return
+            self._stop_event.clear()
+            self._worker = threading.Thread(target=self._run, name="fbos-analysis-queue", daemon=True)
+            self._worker.start()
+
+    def wake(self) -> None:
+        with self._condition:
+            self._condition.notify_all()
+
+    def stop(self, timeout: float = 3.0) -> None:
+        self._stop_event.set()
+        self.wake()
+        if self._worker:
+            self._worker.join(timeout=timeout)
 
 
 def _json_size(value: Any) -> int:
@@ -963,12 +1138,13 @@ def make_handler(
     max_body_bytes: int = 2_000_000,
     ev_profile_root: Path | None = None,
     analysis_launcher=launch_selected_analysis,
+    analysis_queue: PersistentAnalysisQueue | None = None,
 ):
     allowed_page_hosts = allowed_page_hosts or DEFAULT_ALLOWED_PAGE_HOSTS
     ev_profile_root = ev_profile_root or DEFAULT_EV_PROFILE_ROOT
 
     class Handler(BaseHTTPRequestHandler):
-        server_version = "FBOSLiveOddsBridge/0.8.1"
+        server_version = "FBOSLiveOddsBridge/0.9.0"
 
         def log_message(self, fmt: str, *args) -> None:
             return
@@ -1001,7 +1177,7 @@ def make_handler(
             self.wfile.write(body)
 
         def do_OPTIONS(self) -> None:  # noqa: N802
-            if urlparse(self.path).path.rstrip("/") == "/v1/analysis-selections":
+            if urlparse(self.path).path.rstrip("/") in {"/v1/analysis-selections", "/v1/analysis-queue"}:
                 origin = self.headers.get("Origin")
                 if not _allowed_workspace_origin(origin):
                     self._send_workspace_json(403, {"ok": False, "error": "origin_not_allowed"})
@@ -1060,7 +1236,16 @@ def make_handler(
                     pass
                 self._send_workspace_json(200, {
                     "ok": True, "selected": selections, "automatic_analysis": True,
+                    "analysis_queue": analysis_queue.snapshot() if analysis_queue else None,
                     "execution_authorized": False, "lock_state_changed": False,
+                })
+                return
+            if request_url.path.rstrip("/") == "/v1/analysis-queue":
+                if not _allowed_workspace_origin(self.headers.get("Origin")):
+                    self._send_workspace_json(403, {"ok": False, "error": "origin_not_allowed"})
+                    return
+                self._send_workspace_json(200, analysis_queue.snapshot() if analysis_queue else {
+                    "ok": True, "persistent": False, "jobs": [], "active": 0,
                 })
                 return
             self._send_json(404, {"ok": False, "error": "not_found"})
@@ -1094,7 +1279,11 @@ def make_handler(
                     temporary = WORKSPACE_SELECTION_PATH.with_suffix(".tmp")
                     temporary.write_text(json.dumps(rows, ensure_ascii=False, indent=2), encoding="utf-8")
                     temporary.replace(WORKSPACE_SELECTION_PATH)
-                    job = analysis_launcher(allowed)
+                    if analysis_queue:
+                        job = analysis_queue.enqueue(allowed, force=bool(payload.get("force")))
+                        analysis_queue.wake()
+                    else:
+                        job = analysis_launcher(allowed)
                     self._send_workspace_json(202, {
                         "ok": True, "selected": allowed, "automatic_analysis": True,
                         "analysis_job": job,
@@ -1180,7 +1369,11 @@ def main() -> int:
         raise SystemExit("安全限制：桥接器只能绑定本机回环地址")
     allowed_hosts = set(args.allowed_page_host) or set(DEFAULT_ALLOWED_PAGE_HOSTS)
     store = BridgeStore(Path(args.output_root), store_raw_events=args.store_raw_events)
-    server = ThreadingHTTPServer((args.host, args.port), make_handler(store, allowed_page_hosts=allowed_hosts))
+    analysis_queue = PersistentAnalysisQueue(ANALYSIS_QUEUE_PATH, launch_selected_analysis)
+    server = ThreadingHTTPServer((args.host, args.port), make_handler(
+        store, allowed_page_hosts=allowed_hosts, analysis_queue=analysis_queue,
+    ))
+    analysis_queue.start()
     print(json.dumps({
         "service": "Football Betting OneShot live odds bridge",
         "mode": "read_only_shadow",
@@ -1188,6 +1381,7 @@ def main() -> int:
         "health": f"http://{args.host}:{args.port}/v1/health",
         "allowed_page_hosts": sorted(allowed_hosts),
         "run_dir": str(store.run_dir),
+        "analysis_queue": str(ANALYSIS_QUEUE_PATH),
         "in_play_betting_enabled": False,
         "lock_state_changed": False,
     }, ensure_ascii=False, indent=2))
@@ -1196,6 +1390,7 @@ def main() -> int:
     except KeyboardInterrupt:
         pass
     finally:
+        analysis_queue.stop()
         server.server_close()
     return 0
 

@@ -119,7 +119,11 @@ class MatchWorkspacePortfolioTests(unittest.TestCase):
 
         self.assertNotIn("function analysisRequestUrl", page)
         self.assertIn("127.0.0.1:8765/v1/analysis-selections", page)
-        self.assertIn("页面不会跳转 GitHub", page)
+        self.assertIn("pending_local", page)
+        self.assertIn("waiting_bridge", page)
+        self.assertIn("setInterval(flushAnalysisQueue,15000)", page)
+        self.assertIn("持久队列", page)
+        self.assertNotIn("未能提交分析", page)
         self.assertIn("if(m.report_state==='已分析')", page)
         self.assertIn("hasReport?`<button", page)
         self.assertIn("打开报告", page)

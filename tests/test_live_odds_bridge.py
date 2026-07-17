@@ -18,6 +18,7 @@ from live_odds_bridge import (  # noqa: E402
     _allowed_origin,
     BridgeStore,
     BridgeValidationError,
+    PersistentAnalysisQueue,
     make_handler,
     normalize_event,
     public_ev_profile,
@@ -531,6 +532,86 @@ class LiveOddsBridgeTests(unittest.TestCase):
                     self.assertTrue(result["automatic_analysis"])
                     self.assertEqual("queued", result["analysis_job"]["status"])
                     self.assertEqual("2040514", launched[0]["id"])
+                finally:
+                    server.shutdown()
+                    server.server_close()
+                    thread.join(timeout=3)
+
+    def test_persistent_analysis_queue_keeps_fifo_jobs_and_deduplicates_active_match(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            launched = []
+            queue = PersistentAnalysisQueue(
+                Path(tmp) / "queue.json",
+                launcher=lambda match: launched.append(match["id"]) or {"status": "queued"},
+                retry_delays=(0.0,),
+            )
+            first = queue.enqueue({"id": "101", "business_date": "2026-07-17", "home": "A", "away": "B"})
+            duplicate = queue.enqueue({"id": "101", "business_date": "2026-07-17", "home": "A", "away": "B"})
+            second = queue.enqueue({"id": "102", "business_date": "2026-07-17", "home": "C", "away": "D"})
+            self.assertFalse(first["deduplicated"])
+            self.assertTrue(duplicate["deduplicated"])
+            self.assertNotEqual(first["job_id"], second["job_id"])
+            self.assertEqual("dispatched", queue.process_once()["status"])
+            self.assertEqual("dispatched", queue.process_once()["status"])
+            self.assertEqual(["101", "102"], launched)
+            self.assertEqual(0, queue.snapshot()["active"])
+            restored = PersistentAnalysisQueue(Path(tmp) / "queue.json", launcher=lambda match: None)
+            self.assertEqual(2, len(restored.snapshot()["jobs"]))
+            self.assertEqual("dispatched", restored.snapshot()["jobs"][0]["status"])
+
+    def test_persistent_analysis_queue_retries_after_transient_dispatch_failure(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            attempts = []
+
+            def flaky(match):
+                attempts.append(match["id"])
+                if len(attempts) == 1:
+                    raise BridgeValidationError("temporary network failure")
+                return {"status": "queued", "mode": "test"}
+
+            queue = PersistentAnalysisQueue(
+                Path(tmp) / "queue.json", launcher=flaky, retry_delays=(0.0,), max_attempts=3,
+            )
+            queue.enqueue({"id": "201", "business_date": "2026-07-17", "home": "A", "away": "B"})
+            self.assertEqual("retry_wait", queue.process_once()["status"])
+            result = queue.process_once()
+            self.assertEqual("dispatched", result["status"])
+            self.assertEqual(2, result["attempts"])
+            self.assertIsNone(result["last_error"])
+
+    def test_workspace_selection_persists_before_background_dispatch(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = BridgeStore(Path(tmp) / "captures", stamp="20260717_090000")
+            selection_path = Path(tmp) / "selected_matches.json"
+            launched = []
+            queue = PersistentAnalysisQueue(
+                Path(tmp) / "queue.json",
+                launcher=lambda match: launched.append(match["id"]) or {"status": "queued"},
+            )
+            with patch.object(bridge_module, "WORKSPACE_SELECTION_PATH", selection_path):
+                server = ThreadingHTTPServer(
+                    ("127.0.0.1", 0), make_handler(store, analysis_queue=queue)
+                )
+                thread = threading.Thread(target=server.serve_forever, daemon=True)
+                thread.start()
+                try:
+                    endpoint = f"http://127.0.0.1:{server.server_address[1]}/v1/analysis-selections"
+                    payload = {"match": {
+                        "id": "301", "home": "A", "away": "B",
+                        "business_date": "2026-07-17", "kickoff": "2026-07-17 20:00",
+                    }}
+                    request = Request(
+                        endpoint, data=json.dumps(payload).encode("utf-8"), method="POST",
+                        headers={"Content-Type": "application/json", "Origin": "https://gemini077.github.io"},
+                    )
+                    with urlopen(request, timeout=3) as response:
+                        result = json.loads(response.read().decode("utf-8"))
+                    self.assertEqual("queued", result["analysis_job"]["status"])
+                    self.assertEqual([], launched)
+                    self.assertTrue(selection_path.exists())
+                    self.assertTrue((Path(tmp) / "queue.json").exists())
+                    queue.process_once()
+                    self.assertEqual(["301"], launched)
                 finally:
                     server.shutdown()
                     server.server_close()
