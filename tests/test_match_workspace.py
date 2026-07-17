@@ -124,6 +124,7 @@ class MatchWorkspacePortfolioTests(unittest.TestCase):
         self.assertIn("setInterval(flushAnalysisQueue,15000)", page)
         self.assertIn("持久队列", page)
         self.assertNotIn("未能提交分析", page)
+        self.assertNotIn("requestingAnalysis.has", page)
         self.assertIn("if(m.report_state==='已分析')", page)
         self.assertIn("hasReport?`<button", page)
         self.assertIn("打开报告", page)
