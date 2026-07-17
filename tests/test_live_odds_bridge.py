@@ -51,6 +51,39 @@ def sample_event():
 
 
 class LiveOddsBridgeTests(unittest.TestCase):
+    def test_verified_deep_snapshot_requires_all_model_evidence(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            run = root / "data" / "fetch_runs" / "20260717_170000"
+            run.mkdir(parents=True)
+            snapshot = run / "20260717_170000_500_deep_2026-07-17_1362710.json"
+            complete = {
+                "shuju_id": 1362710,
+                "ouzhi": {"bookmakers": [{}]},
+                "yazhi": {"companies": [{}]},
+                "rangqiu": {"companies": [{}]},
+                "daxiao": {"companies": [{}]},
+                "shuju": {"recent_form": {}},
+                "touzhu": {"betfair": {}},
+            }
+            snapshot.write_text(json.dumps(complete), encoding="utf-8")
+            with patch.object(bridge_module, "PROJECT_ROOT", root):
+                self.assertEqual(
+                    snapshot,
+                    bridge_module._verified_deep_snapshot("1362710", "2026-07-17"),
+                )
+                complete["daxiao"]["companies"] = []
+                snapshot.write_text(json.dumps(complete), encoding="utf-8")
+                self.assertIsNone(
+                    bridge_module._verified_deep_snapshot("1362710", "2026-07-17")
+                )
+
+    def test_non_500_match_does_not_publish_cloud_fallback(self):
+        self.assertEqual(
+            {"status": "not_applicable"},
+            bridge_module._publish_deep_fallback({"id": "nowscore-123"}, "gh"),
+        )
+
     def test_local_file_report_origin_can_read_loopback_reprice(self):
         self.assertTrue(_allowed_origin("null"))
         self.assertTrue(_allowed_origin("chrome-extension://test-extension"))

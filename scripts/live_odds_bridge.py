@@ -88,6 +88,103 @@ def _now() -> datetime:
     return datetime.now().astimezone()
 
 
+def _verified_deep_snapshot(match_id: str, business_date: str) -> Path | None:
+    """Return the newest complete local 500 deep snapshot for one fixture."""
+    candidates = sorted(
+        (PROJECT_ROOT / "data" / "fetch_runs").glob(
+            f"*/*_500_deep_{business_date}_{match_id}.json"
+        ),
+        key=lambda path: path.stat().st_mtime,
+        reverse=True,
+    )
+    required_collections = {
+        "ouzhi": "bookmakers",
+        "yazhi": "companies",
+        "rangqiu": "companies",
+        "daxiao": "companies",
+    }
+    for path in candidates:
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            if str(payload.get("shuju_id")) != str(match_id):
+                continue
+            if not all(
+                isinstance(payload.get(section, {}).get(collection), list)
+                and payload[section][collection]
+                for section, collection in required_collections.items()
+            ):
+                continue
+            if not isinstance(payload.get("shuju"), dict) or not payload["shuju"]:
+                continue
+            if not isinstance(payload.get("touzhu"), dict) or not payload["touzhu"]:
+                continue
+            return path
+        except (OSError, json.JSONDecodeError, TypeError):
+            continue
+    return None
+
+
+def _publish_deep_fallback(match: dict, gh: str) -> dict:
+    """Fetch locally and publish a verified public snapshot for cloud analysis."""
+    matched = re.fullmatch(r"500-(\d+)", str(match.get("id") or "").strip())
+    if not matched:
+        return {"status": "not_applicable"}
+    shuju_id = matched.group(1)
+    business_date = str(match.get("business_date") or "").strip()
+    label = f"{match.get('home')} vs {match.get('away')}"
+    command = [
+        sys.executable,
+        str(PROJECT_ROOT / "scripts" / "fetch_football_data.py"),
+        "--date", business_date,
+        "--match", label,
+        "--deep",
+        "--no-cache",
+        "--shuju-id", shuju_id,
+    ]
+    completed = subprocess.run(
+        command, cwd=PROJECT_ROOT, text=True, capture_output=True, timeout=180,
+        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0,
+    )
+    snapshot = _verified_deep_snapshot(shuju_id, business_date)
+    if completed.returncode != 0 or snapshot is None:
+        message = (completed.stderr or completed.stdout or "local deep snapshot unavailable").strip()
+        return {"status": "unavailable", "error": message[-1000:]}
+
+    content = snapshot.read_bytes()
+    blob_sha = hashlib.sha1(f"blob {len(content)}\0".encode("ascii") + content).hexdigest()
+    remote_path = f"data/source_cache/deep_fallback/{shuju_id}.json"
+    endpoint = f"repos/{GITHUB_REPOSITORY}/contents/{remote_path}"
+    lookup = subprocess.run(
+        [gh, "api", f"{endpoint}?ref=main", "--jq", ".sha"],
+        cwd=PROJECT_ROOT, text=True, capture_output=True, timeout=30,
+        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0,
+    )
+    remote_sha = lookup.stdout.strip() if lookup.returncode == 0 else ""
+    if remote_sha == blob_sha:
+        return {"status": "already_current", "path": remote_path, "sha": blob_sha}
+
+    payload = {
+        "message": f"data: refresh verified fallback for 500-{shuju_id}",
+        "content": base64.b64encode(content).decode("ascii"),
+        "branch": "main",
+    }
+    if remote_sha:
+        payload["sha"] = remote_sha
+    upload = subprocess.run(
+        [gh, "api", "--method", "PUT", endpoint, "--input", "-"],
+        cwd=PROJECT_ROOT, input=json.dumps(payload, ensure_ascii=False),
+        text=True, capture_output=True, timeout=60,
+        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0,
+    )
+    if upload.returncode != 0:
+        return {
+            "status": "upload_failed",
+            "path": remote_path,
+            "error": (upload.stderr or upload.stdout or "fallback upload failed").strip()[-1000:],
+        }
+    return {"status": "published", "path": remote_path, "sha": blob_sha}
+
+
 def launch_selected_analysis(match: dict) -> dict:
     """Queue one owner-selected analysis without navigating the browser."""
     match_id = str(match.get("id") or "").strip()
@@ -101,6 +198,7 @@ def launch_selected_analysis(match: dict) -> dict:
     ]
     gh = next((path for path in gh_candidates if path and Path(path).exists()), None)
     if gh:
+        fallback = _publish_deep_fallback(match, gh)
         completed = subprocess.run(
             [
                 gh, "workflow", "run", "analyze-selected.yml",
@@ -113,7 +211,10 @@ def launch_selected_analysis(match: dict) -> dict:
             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0,
         )
         if completed.returncode == 0:
-            return {"status": "queued", "mode": "github_workflow_dispatch"}
+            return {
+                "status": "queued", "mode": "github_workflow_dispatch",
+                "cloud_evidence": fallback,
+            }
         raise BridgeValidationError((completed.stderr or completed.stdout or "workflow dispatch failed").strip())
 
     stamp = _now().strftime("%Y%m%d_%H%M%S")
