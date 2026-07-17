@@ -26,7 +26,7 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 API_URL = "https://api.deepseek.com/chat/completions"
 DEFAULT_MODEL = "deepseek-v4-pro"
-MODEL_VERSION = "v0.17.0"
+MODEL_VERSION = "v0.17.1"
 AUTO_INPUT_ROOT = ROOT / "data" / "analysis_inputs" / "automated"
 WORKSPACE_PATH = ROOT / "data" / "match_workspace" / "latest.json"
 DEEP_FALLBACK_ROOT = ROOT / "data" / "source_cache" / "deep_fallback"
@@ -99,8 +99,17 @@ def fetch_date_for_request(request: dict) -> str:
 
 
 def fetch_match_selector(request: dict) -> str:
-    """Prefer the immutable Sporttery match ID over display-name aliases."""
-    return str(request.get("match_id") or request.get("match") or "").strip()
+    """Use real Sporttery IDs, but never send synthetic 500 IDs as selectors."""
+    match_id = str(request.get("match_id") or "").strip()
+    if match_id and not re.fullmatch(r"500-\d+", match_id, flags=re.IGNORECASE):
+        return match_id
+    return str(request.get("match") or "").strip()
+
+
+def fetch_shuju_id(request: dict) -> str:
+    """Extract the 500.com deep-data identity embedded by the schedule workspace."""
+    match = re.fullmatch(r"500-(\d+)", str(request.get("match_id") or "").strip(), flags=re.IGNORECASE)
+    return match.group(1) if match else ""
 
 
 def devig_three_way(odds: dict) -> dict | None:
@@ -306,7 +315,8 @@ def normalize_analysis(raw: dict, request: dict, model_name: str) -> dict:
     for key in ("score_probabilities", "total_goals_buckets"):
         value = model.get(key)
         model[key] = [item for item in value if isinstance(item, dict)] if isinstance(value, list) else []
-    model["status"] = str(model.get("status") or "DeepSeek辅助综合；未替代本地概率校准")
+    default_status = "固定公式模型待计算" if model_name == "fixed-python-core" else "DeepSeek辅助综合；未替代本地概率校准"
+    model["status"] = str(model.get("status") or default_status)
 
     if not isinstance(raw.get("data_quality"), dict):
         raw["data_quality"] = {
@@ -499,6 +509,22 @@ def has_minimum_analysis_evidence(context: dict) -> bool:
     return False
 
 
+def has_publishable_model(context: dict) -> bool:
+    """A professional report needs a complete model, not only a market baseline."""
+    model = (context.get("deterministic_core") or {}).get("model")
+    if not isinstance(model, dict):
+        return False
+    if not all(isinstance(model.get(key), (int, float)) and model[key] > 0 for key in ("lambda_home", "lambda_away", "expected_goals")):
+        return False
+    probabilities = model.get("probabilities")
+    if not isinstance(probabilities, dict) or not all(isinstance(probabilities.get(key), (int, float)) for key in ("home", "draw", "away")):
+        return False
+    if abs(sum(float(probabilities[key]) for key in ("home", "draw", "away")) - 1.0) > 0.02:
+        return False
+    scores = model.get("score_probabilities")
+    return isinstance(scores, list) and any(isinstance(item, dict) and item.get("score") for item in scores)
+
+
 def run_json_command(command: list[str], allow_failure: bool = False, timeout: int = 180) -> dict:
     try:
         completed = subprocess.run(
@@ -564,11 +590,15 @@ def run_pipeline(request: dict, api_key: str = "", model_name: str = DEFAULT_MOD
     from decision_evolution import append_record, attach_evolution
     print("[phase 1/5] fetching match evidence", file=sys.stderr, flush=True)
     fetch_date = fetch_date_for_request(request)
-    fetch = run_json_command([
+    fetch_command = [
         sys.executable, "scripts/fetch_football_data.py",
         "--date", fetch_date, "--match", fetch_match_selector(request),
         "--deep", "--no-cache",
-    ], allow_failure=True, timeout=240)
+    ]
+    shuju_id = fetch_shuju_id(request)
+    if shuju_id:
+        fetch_command.extend(["--shuju-id", shuju_id])
+    fetch = run_json_command(fetch_command, allow_failure=True, timeout=240)
     manifest_path = Path(fetch["manifest"])
     if not manifest_path.is_absolute():
         manifest_path = ROOT / manifest_path
@@ -578,6 +608,11 @@ def run_pipeline(request: dict, api_key: str = "", model_name: str = DEFAULT_MOD
     context = analysis_context(manifest_path, request)
     if not has_minimum_analysis_evidence(context):
         raise RuntimeError("Analysis aborted: no official odds or matched source evidence; no report was published")
+    if not has_publishable_model(context):
+        raise RuntimeError(
+            "Analysis aborted: deep form/market evidence did not produce lambda, probabilities and a score matrix; "
+            "no incomplete report was published"
+        )
     if use_llm and api_key:
         print("[phase 2/5] optional compact DeepSeek narration", file=sys.stderr, flush=True)
         raw = call_deepseek(context, api_key, model_name)
@@ -629,6 +664,8 @@ def run_pipeline(request: dict, api_key: str = "", model_name: str = DEFAULT_MOD
 
 
 def main() -> int:
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser(description="Run one DeepSeek-assisted Football Betting OneShot analysis")
     parser.add_argument("--event", type=Path, help="GitHub event JSON")
     parser.add_argument("--date")

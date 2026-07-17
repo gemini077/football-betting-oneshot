@@ -15,7 +15,9 @@ from deepseek_auto_analysis import (  # noqa: E402
     deterministic_analysis,
     fetch_date_for_request,
     fetch_match_selector,
+    fetch_shuju_id,
     has_minimum_analysis_evidence,
+    has_publishable_model,
     normalize_analysis,
     mark_initial_market_checkpoint,
     report_manifest,
@@ -50,6 +52,13 @@ def test_invalid_request_is_rejected():
 def test_fetch_uses_stable_match_id_before_display_aliases():
     assert fetch_match_selector({"match_id": "2040516", "match": "德里城 vs 索陆军"}) == "2040516"
     assert fetch_match_selector({"match_id": "", "match": "德里城 vs 索陆军"}) == "德里城 vs 索陆军"
+
+
+def test_fetch_uses_team_name_and_deep_id_for_synthetic_500_identity():
+    request = {"match_id": "500-1362704", "match": "IFK哥德堡 vs 布鲁马波卡纳"}
+    assert fetch_match_selector(request) == "IFK哥德堡 vs 布鲁马波卡纳"
+    assert fetch_shuju_id(request) == "1362704"
+    assert fetch_shuju_id({"match_id": "2040516"}) == ""
 
 
 def test_normalizer_cannot_create_execution_or_locked_bets():
@@ -185,13 +194,30 @@ def test_analysis_context_places_deterministic_core_at_top_level(tmp_path, monke
     assert context["deterministic_core"]["model"]["probabilities"]["home"] > 0
     output = deterministic_analysis(context, {"match_id": "123", "match": "甲 vs 乙", "business_date": "2026-07-15"})
     assert output["automation"]["llm_used"] is False
-    assert output["report"]["model_version"] == "v0.17.0"
+    assert output["report"]["model_version"] == "v0.17.1"
     assert output["betting"]["state"] == "空仓｜未锁单"
     assert len(output["evidence_chain"]) == 4
 
 
 def test_empty_context_is_not_publishable():
     assert not has_minimum_analysis_evidence({"official_market_baseline": None, "source_snapshots": {}})
+
+
+def test_market_baseline_alone_cannot_publish_professional_report():
+    assert not has_publishable_model({
+        "official_market_baseline": {"fair_probabilities": {"home": 0.4, "draw": 0.3, "away": 0.3}},
+        "deterministic_core": {"model": None},
+    })
+
+
+def test_complete_model_can_publish_professional_report():
+    assert has_publishable_model({"deterministic_core": {"model": {
+        "lambda_home": 1.5,
+        "lambda_away": 1.1,
+        "expected_goals": 2.6,
+        "probabilities": {"home": 0.47, "draw": 0.27, "away": 0.26},
+        "score_probabilities": [{"score": "1-1", "probability": 0.12}],
+    }}})
 
 
 def test_initial_analysis_marks_current_monitor_checkpoint(tmp_path, monkeypatch):
