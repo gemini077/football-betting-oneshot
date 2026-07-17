@@ -677,6 +677,10 @@ def build_payload(
         ),
     }
     payload = normalize_page_pl_labels(enforce_complete_report_gate(merge_dict(base, analysis or {})))
+    if trend_panel.get("snapshot_count"):
+        # Deterministic multi-company history must win over a generic narrative
+        # placeholder supplied by the optional analysis layer.
+        payload.setdefault("market", {})["interpretation"] = market_interpretation
     nowscore_context = deep.get("nowscore_context") or deep.get("context") or ((deep.get("nowscore") or {}).get("context") or {})
     context_items = []
     coach = nowscore_context.get("coach") or {}
