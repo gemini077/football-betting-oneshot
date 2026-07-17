@@ -466,7 +466,7 @@ def build_automatic_model(context: dict) -> dict:
         "score_reasoning": score_reasoning,
         "mathematical_first": f"90分钟主胜{probabilities['home']:.1%}、平局{probabilities['draw']:.1%}、客胜{probabilities['away']:.1%}；λ={lambda_home:.2f}-{lambda_away:.2f}。",
         "market_first": f"多公司去水共识主胜{market_probabilities['home']:.1%}、平局{market_probabilities['draw']:.1%}、客胜{market_probabilities['away']:.1%}；大小球中轴{target_total:.2f}。",
-        "match_story": "；".join([control_story, tempo_story, *script_effects]) + "。",
+        "match_story": "；".join(part.rstrip("。；") for part in [control_story, tempo_story, *script_effects]) + "。",
         "market_conflict": market_conflict,
         "score_vs_outcome_explanation": score_explanation,
         "maximum_error_points": dynamic_errors[:4],

@@ -644,8 +644,10 @@ def parse_company_trend(text: str, company_id: int, kickoff: object = None, comp
             quote = {**common, "home_water": _number(row[2]), "line": row[3], "line_number": handicap_number(row[3]), "away_water": _number(row[4])}
         sections[section].append(quote)
     count = sum(len(items) for items in sections.values())
-    safe_name = str(company_name or SOURCE_COMPANY_NAMES.get(company_id) or "").strip()
-    if len(safe_name) < 2 or safe_name.isdigit():
+    safe_name = str(company_name or "").strip()
+    if len(safe_name) < 2 or safe_name.isdigit() or safe_name.startswith("Nowscore-"):
+        safe_name = SOURCE_COMPANY_NAMES.get(company_id, "")
+    if len(safe_name) < 2:
         safe_name = f"Nowscore-{company_id}"
     return {
         "source_company_id": company_id, "name": safe_name,

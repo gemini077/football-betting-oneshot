@@ -137,6 +137,8 @@ class NowscoreMarketTests(unittest.TestCase):
     def test_unknown_page_label_uses_public_source_company_name(self):
         trend = parse_company_trend("<table></table>", 35, "2026-07-18 01:00")
         self.assertEqual("Wewbet", trend["name"])
+        trend = parse_company_trend("<table></table>", 22, "2026-07-18 01:00", "Nowscore-22")
+        self.assertEqual("10BET", trend["name"])
 
     def test_first_move_deduplicates_same_company_across_markets(self):
         rows = [

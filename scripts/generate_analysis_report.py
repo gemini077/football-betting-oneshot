@@ -708,7 +708,13 @@ def build_payload(
             "value": f"{referee.get('name')}；公开执法样本 {((referee.get('summaries') or [{}])[0]).get('matches', '—')} 场",
             "source_url": (nowscore_context.get("source_urls") or {}).get("referee"),
         })
-    script_context = (((payload.get("fundamentals") or {}).get("nowscore_context") or {}).get("script_context") or {})
+    payload_fundamentals = payload.get("fundamentals") or {}
+    structured_fundamentals = payload_fundamentals.get("structured_form") or {}
+    script_context = (
+        (payload_fundamentals.get("nowscore_context") or {}).get("script_context")
+        or (structured_fundamentals.get("nowscore_context") or {}).get("script_context")
+        or {}
+    )
     for index, effect in enumerate(script_context.get("effects") or [], start=1):
         context_items.append({
             "label": f"比赛剧本修正 {index}",
