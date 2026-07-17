@@ -107,7 +107,10 @@ def latest_schedule(target_date: str) -> tuple[Path | None, dict]:
         rows.append((len(payload.get("matches") or []), path.stat().st_mtime, path, payload))
     if not rows:
         return None, {"matches": [], "date": target_date, "success": False}
-    _, _, path, payload = max(rows, key=lambda row: (row[0], row[1]))
+    # The newest successful Sporttery response is the source of truth.  An old
+    # file with more rows must not keep the workbench stuck on yesterday's
+    # schedule after the official feed has changed.
+    _, _, path, payload = max(rows, key=lambda row: (row[1], row[0]))
     return path, payload
 
 
@@ -519,7 +522,7 @@ def pending_completed_row(home: str, away: str, kickoff: Any, report: dict | Non
     }
 
 
-def build(target_date: str, output_root: Path = OUTPUT, force_latest: bool = False) -> tuple[Path, Path]:
+def build(target_date: str, output_root: Path = OUTPUT) -> tuple[Path, Path]:
     runtime = load_json(RUNTIME, {})
     base_date = date.fromisoformat(target_date)
     schedule_sources = []
@@ -702,7 +705,7 @@ def build(target_date: str, output_root: Path = OUTPUT, force_latest: bool = Fal
         "real_bets": real_bets,
         "target_date": target_date, "generated_at": generated.isoformat(),
         "schedule_refreshed_at": max(schedule_refresh_times) if schedule_refresh_times else None,
-        "published_as_latest": force_latest or base_date >= date.today(),
+        "published_as_latest": base_date >= date.today(),
         "automatic_analysis": "selected_match_via_local_bridge", "automatic_betting": False,
         "requires_explicit_lock_confirmation": True, "lock_state_changed": False,
         "schedule_source": [str(path.relative_to(ROOT)).replace("\\", "/") for path in schedule_sources],
@@ -723,7 +726,7 @@ def build(target_date: str, output_root: Path = OUTPUT, force_latest: bool = Fal
         encoding="utf-8",
     )
     latest = output_root / "latest.html"
-    publish_latest = force_latest or base_date >= date.today()
+    publish_latest = base_date >= date.today()
     if publish_latest:
         shutil.copy2(index, latest)
         (output_root / "latest.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -819,12 +822,11 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="生成统一赛程、赛前分析和赛后复盘工作台")
     parser.add_argument("--date", default=date.today().isoformat())
     parser.add_argument("--output-root", default=str(OUTPUT))
-    parser.add_argument("--publish-latest", action="store_true")
     args = parser.parse_args()
-    index, latest = build(args.date, Path(args.output_root), force_latest=args.publish_latest)
+    index, latest = build(args.date, Path(args.output_root))
     print(json.dumps({
         "index": str(index), "latest": str(latest),
-        "published_as_latest": args.publish_latest or date.fromisoformat(args.date) >= date.today(),
+        "published_as_latest": date.fromisoformat(args.date) >= date.today(),
         "automatic_analysis": "selected_match_via_local_bridge", "lock_state_changed": False,
     }, ensure_ascii=False, indent=2))
     return 0

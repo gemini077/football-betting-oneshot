@@ -11,12 +11,24 @@ from risk_engine import dixon_coles_score_matrix
 
 def _deep_snapshot(context: dict) -> dict:
     sources = context.get("source_snapshots") or {}
-    for source_name in ("500_deep", "nowscore"):
-        source = sources.get(source_name) or {}
-        snapshots = source.get("snapshots") if isinstance(source, dict) else []
-        if snapshots and isinstance(snapshots[0], dict):
-            return snapshots[0]
-    return {}
+    nowscore_rows = (sources.get("nowscore") or {}).get("snapshots") or []
+    fallback_rows = (sources.get("500_deep") or {}).get("snapshots") or []
+    primary = nowscore_rows[0] if nowscore_rows and isinstance(nowscore_rows[0], dict) else {}
+    fallback = fallback_rows[0] if fallback_rows and isinstance(fallback_rows[0], dict) else {}
+    if not primary:
+        return fallback
+    # Keep non-market form/context fields from 500 when Nowscore does not
+    # provide them, while Nowscore always wins for the three market families.
+    merged = {**fallback, **primary}
+    for key in ("ouzhi", "yazhi", "daxiao"):
+        if not (primary.get(key) or {}).get("bookmakers") and not (primary.get(key) or {}).get("companies"):
+            merged[key] = fallback.get(key) or primary.get(key) or {}
+    primary_form = (primary.get("shuju") or {}).get("recent_form")
+    if not primary_form and fallback.get("shuju"):
+        merged["shuju"] = fallback.get("shuju")
+    merged.setdefault("source_provenance", {})["market_primary"] = "nowscore"
+    merged["source_provenance"]["market_fallback"] = "500.com"
+    return merged
 
 
 def _rate(row: dict, key: str) -> float | None:
@@ -106,6 +118,46 @@ def _model_rows(matrix: dict[tuple[int, int], float]) -> tuple[list[dict], list[
         for goals, probability in sorted(exact_totals.items()) if goals <= 6
     ]
     return score_rows, total_rows, {"yes": round(btts_yes, 6), "no": round(1 - btts_yes, 6)}
+
+
+def _scenario_score_pick(
+    matrix: dict[tuple[int, int], float],
+    probabilities: dict,
+    total_rows: list[dict],
+    btts: dict,
+) -> tuple[str, str]:
+    """Pick one coherent score scenario, rather than copying the top matrix cell."""
+    result = max(probabilities, key=probabilities.get)
+    total_mode_row = max(total_rows, key=lambda row: float(row.get("probability") or 0))
+    total_mode = str(total_mode_row.get("goals") or "")
+    btts_yes = float(btts.get("yes") or 0) >= 0.5
+    maximum = max(matrix.values()) if matrix else 0.0
+    candidates = []
+    for (home, away), probability in matrix.items():
+        if probability < maximum * 0.42:
+            continue
+        outcome = "home" if home > away else "draw" if home == away else "away"
+        total_matches = (total_mode == "6+" and home + away >= 6) or total_mode == str(home + away)
+        btts_matches = (home > 0 and away > 0) == btts_yes
+        utility = math.log(max(probability, 1e-12))
+        utility += 0.20 if outcome == result else 0.0
+        utility += 0.13 if total_matches else 0.0
+        utility += 0.08 if btts_matches else 0.0
+        candidates.append((utility, probability, home, away, outcome, total_matches, btts_matches))
+    if not candidates:
+        (home, away), probability = max(matrix.items(), key=lambda item: item[1])
+        return f"{home}-{away}", "比分矩阵没有形成更稳定的情景组合，因此保留概率峰值。"
+    _, probability, home, away, outcome, total_matches, btts_matches = max(candidates)
+    labels = {"home": "主胜", "draw": "平局", "away": "客胜"}
+    reasons = [f"符合{labels[outcome]}主剧本"]
+    if total_matches:
+        reasons.append(f"落在总进球众数{total_mode}")
+    if btts_matches:
+        reasons.append("符合双方进球倾向")
+    return (
+        f"{home}-{away}",
+        f"模型在可行比分区间内综合方向、总进球与双方进球情景后选择该落点（单格概率{probability:.1%}；{'、'.join(reasons)}），不是照抄最低赔率或市场第一。",
+    )
 
 
 def _split_quarter(line: float) -> list[float]:
@@ -278,7 +330,7 @@ def build_automatic_model(context: dict) -> dict:
         tempo_story = "总进球中枢偏低；上半场试探和低比分停留时间可能较长"
     else:
         tempo_story = "总进球中枢处于常规区间，2至3球是主要密集带"
-    top_score = score_rows[0]["score"]
+    top_score, score_reasoning = _scenario_score_pick(matrix, probabilities, total_rows, btts)
     model_market_gap = probabilities[top_result] - market_probabilities[top_result]
     market_conflict = (
         f"模型对{labels[top_result]}的判断比多公司市场高{abs(model_market_gap):.1%}，需要用阵容与临盘验证这部分分歧"
@@ -306,7 +358,8 @@ def build_automatic_model(context: dict) -> dict:
     ])
     decisions = {
         "unique_primary_dimension": f"胜平负：{labels[top_result]}（模型{probabilities[top_result]:.1%}）",
-        "unique_score": score_rows[0]["score"],
+        "unique_score": top_score,
+        "score_reasoning": score_reasoning,
         "mathematical_first": f"90分钟主胜{probabilities['home']:.1%}、平局{probabilities['draw']:.1%}、客胜{probabilities['away']:.1%}；λ={lambda_home:.2f}-{lambda_away:.2f}。",
         "market_first": f"多公司去水共识主胜{market_probabilities['home']:.1%}、平局{market_probabilities['draw']:.1%}、客胜{market_probabilities['away']:.1%}；大小球中轴{target_total:.2f}。",
         "match_story": f"{control_story}；{tempo_story}。",

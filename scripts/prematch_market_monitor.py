@@ -12,6 +12,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from prematch_fundamentals import collect_prematch_fundamentals
+from decision_evolution import append_record, attach_evolution
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -91,7 +92,8 @@ def due_matches(workspace, now, hours_before=8.0, state=None):
     state = state or {}
     rows = []
     for match in workspace.get("matches") or []:
-        if str(match.get("report_state") or "") not in {"已分析", "仅市场基线"}:
+        report_ready = bool(match.get("report_url") or match.get("analysis_report"))
+        if not report_ready and str(match.get("report_state") or "") not in {"已分析", "仅市场基线"}:
             continue
         completed = state.get(str(match.get("id") or "")) or {}
         stage = due_stage(match, now, hours_before, completed=completed)
@@ -179,6 +181,7 @@ def refresh_match(match, stage=None, now=None):
     context = analysis_context(manifest_path, request)
     analysis = deterministic_analysis(context, request)
     checkpoint = checkpoint_meta(match, now, stage)
+    analysis, evolution_record = attach_evolution(analysis, match_id, checkpoint)
     analysis.setdefault("report", {})["market_checkpoint"] = checkpoint
     analysis.setdefault("automation", {})["market_refresh"] = {
         **checkpoint,
@@ -200,6 +203,7 @@ def refresh_match(match, stage=None, now=None):
         "--fetch-manifest", str(render_manifest), "--analysis-json", str(analysis_path),
     ])
     report_path = report.get("report") or report.get("html")
+    append_record(evolution_record)
     checkpoint_record = {
         **checkpoint,
         "match_id": match_id,
@@ -211,6 +215,8 @@ def refresh_match(match, stage=None, now=None):
         "report_html": report_path,
         "model_recalculated": True,
         "real_bet_created": False,
+        "decision": evolution_record.get("decision"),
+        "change": evolution_record.get("change"),
     }
     checkpoint_path = CHECKPOINT_ROOT / safe_id / f"{stage}.json"
     checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
@@ -218,7 +224,7 @@ def refresh_match(match, stage=None, now=None):
     return {
         "match": label, "status": "refreshed", "stage": stage,
         "checkpoint": checkpoint, "report": report_path,
-        "model_recalculated": True,
+        "model_recalculated": True, "change": evolution_record.get("change"),
     }
 
 
@@ -252,27 +258,30 @@ def main():
                 "stage": match.get("_monitor_stage"),
                 "status": "error", "error": str(error)[:1000],
             })
-    error_rows = [row for row in results if row.get("status") == "error"]
-    if error_rows:
-        stamp = now.strftime("%Y%m%d_%H%M%S")
-        error_path = ROOT / "data" / "market_history" / "errors" / f"{stamp}_monitor_errors.json"
-        error_path.parent.mkdir(parents=True, exist_ok=True)
-        error_path.write_text(json.dumps({
-            "checked_at": now.isoformat(),
-            "errors": error_rows,
-        }, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     if any(row.get("status") == "refreshed" for row in results):
         STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
         STATE_PATH.write_text(json.dumps(state, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         run_json([
             sys.executable, "scripts/match_workspace.py", "--date",
             str(workspace.get("target_date") or now.date().isoformat()),
-            "--publish-latest",
         ])
         subprocess.run([sys.executable, "scripts/build_public_site.py"], cwd=ROOT, check=True)
-    print(json.dumps({"checked_at": now.isoformat(), "due": len(results), "results": results}, ensure_ascii=True, indent=2))
-    refreshed = any(row.get("status") == "refreshed" for row in results)
-    return 1 if error_rows and not refreshed else 0
+    errors = [row for row in results if row.get("status") == "error"]
+    if errors:
+        error_dir = ROOT / "data" / "market_history" / "errors"
+        error_dir.mkdir(parents=True, exist_ok=True)
+        error_stamp = now.strftime("%Y%m%d_%H%M%S")
+        (error_dir / f"{error_stamp}_monitor_errors.json").write_text(
+            json.dumps({"checked_at": now.isoformat(), "errors": errors}, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+    print(json.dumps({"checked_at": now.isoformat(), "due": len(results), "results": results}, ensure_ascii=False, indent=2))
+    # A single provider/match failure must not discard checkpoints that were
+    # refreshed successfully in the same cycle.  Failed rows remain absent
+    # from state and are therefore eligible for the next bounded retry.
+    has_success = any(row.get("status") == "refreshed" for row in results)
+    has_error = any(row.get("status") == "error" for row in results)
+    return 1 if has_error and not has_success else 0
 
 
 if __name__ == "__main__":

@@ -26,7 +26,7 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 API_URL = "https://api.deepseek.com/chat/completions"
 DEFAULT_MODEL = "deepseek-v4-pro"
-MODEL_VERSION = "v0.16.3"
+MODEL_VERSION = "v0.17.0"
 AUTO_INPUT_ROOT = ROOT / "data" / "analysis_inputs" / "automated"
 WORKSPACE_PATH = ROOT / "data" / "match_workspace" / "latest.json"
 DEEP_FALLBACK_ROOT = ROOT / "data" / "source_cache" / "deep_fallback"
@@ -561,6 +561,7 @@ def mark_initial_market_checkpoint(context: dict, now: datetime | None = None) -
 
 
 def run_pipeline(request: dict, api_key: str = "", model_name: str = DEFAULT_MODEL, *, use_llm: bool = False) -> dict:
+    from decision_evolution import append_record, attach_evolution
     print("[phase 1/5] fetching match evidence", file=sys.stderr, flush=True)
     fetch_date = fetch_date_for_request(request)
     fetch = run_json_command([
@@ -587,6 +588,14 @@ def run_pipeline(request: dict, api_key: str = "", model_name: str = DEFAULT_MOD
         print("[phase 2/5] deterministic core (no LLM tokens)", file=sys.stderr, flush=True)
         analysis = deterministic_analysis(context, request)
     initial_checkpoint = mark_initial_market_checkpoint(context)
+    if not initial_checkpoint:
+        initial_checkpoint = {
+            "stage": "INITIAL",
+            "captured_at": datetime.now().astimezone().isoformat(),
+            "initial_capture": True,
+        }
+    match_id = str((context.get("selected_workspace_match") or {}).get("id") or request.get("match_id") or "")
+    analysis, evolution_record = attach_evolution(analysis, match_id, initial_checkpoint)
     if initial_checkpoint:
         analysis.setdefault("report", {})["market_checkpoint"] = initial_checkpoint
         analysis.setdefault("automation", {})["market_refresh"] = {
@@ -612,6 +621,7 @@ def run_pipeline(request: dict, api_key: str = "", model_name: str = DEFAULT_MOD
         sys.executable, "scripts/generate_analysis_report.py",
         "--fetch-manifest", str(render_manifest), "--analysis-json", str(output),
     ])
+    append_record(evolution_record)
     print("[phase 5/5] rebuilding homepage", file=sys.stderr, flush=True)
     run_json_command([sys.executable, "scripts/match_workspace.py", "--date", request["business_date"]])
     subprocess.run([sys.executable, "scripts/build_public_site.py"], cwd=ROOT, check=True)

@@ -562,8 +562,6 @@ def build_payload(
     history_path = PROJECT_ROOT / "data" / "market_history" / str(deep.get("shuju_id")) / "market_history.jsonl"
     market_history = load_history(history_path)
     market_intelligence = analyze_market_intelligence(deep, tier_config, history=market_history) if deep else {}
-    market_intelligence = dict(market_intelligence or {})
-    market_intelligence["consensus"] = market_intelligence.get("consensus") or {}
     trap_registry = load_json(PROJECT_ROOT / "config" / "trap_rules.json")
     analysis_model = (analysis or {}).get("model")
     risk_engine = analyze_risk_engine(deep, market_intelligence, trap_registry, model=analysis_model) if deep else {}
@@ -698,8 +696,40 @@ def narrative_bridge(payload: dict) -> dict[str, str]:
     return {
         "match_story": str(decisions.get("match_story") or f"{control}；总进球中枢{total:.2f}，{tempo}。"),
         "market_conflict": str(decisions.get("market_conflict") or market_story),
-        "score_explanation": str(decisions.get("score_vs_outcome_explanation") or f"{score}是单个比分格的最高点；{primary}是多个比分格合计，二者不要求同方向。"),
+        "score_explanation": str(decisions.get("score_reasoning") or decisions.get("score_vs_outcome_explanation") or f"{score}是模型综合比赛剧本、总进球区间与双方进球倾向后的单一落点；{primary}是多个比分格合计，二者不要求同方向。"),
     }
+
+
+def decision_evolution_html(payload: dict) -> str:
+    """Render user-facing judgement changes without exposing scheduler stages."""
+    evolution = payload.get("decision_evolution") or {}
+    history = evolution.get("history") or []
+    if not history:
+        return '<div class="empty-panel">当前是首次判断；后续盘口、阵容或比赛环境发生有效变化时，这里会解释结论为何调整。</div>'
+    rows = []
+    for index, item in enumerate(history[-6:], 1):
+        captured = display_beijing_time(item.get("captured_at"))
+        state = "判断调整" if item.get("changed") else "判断维持"
+        rows.append([
+            index,
+            captured,
+            state,
+            item.get("headline"),
+            item.get("summary"),
+        ])
+    return table(["序号", "更新时间", "状态", "结论变化", "为什么"], rows)
+
+
+def market_story_html(payload: dict) -> str:
+    interpretation = (payload.get("market") or {}).get("interpretation") or {}
+    rows = [
+        ("盘口走势", interpretation.get("market_pressure") or "当前报价尚未形成足以改变判断的单边压力"),
+        ("资金流向", interpretation.get("money_flow") or "没有可核验成交量时，只描述价格压力，不冒充真实资金流"),
+        ("机构行为", interpretation.get("bookmaker_behaviour") or "当前多家公司调整尚未形成稳定的先后跟随关系"),
+    ]
+    return '<div class="story-grid">' + "".join(
+        f'<div><small>{e(label)}</small><b>{e(value)}</b></div>' for label, value in rows
+    ) + '</div>'
 
 
 def render(payload: dict) -> str:
@@ -718,9 +748,8 @@ def render(payload: dict) -> str:
     consensus = market.get("consensus") or {}
     consensus_open = consensus.get("open") or {}
     consensus_current = consensus.get("current") or {}
-    intelligence_consensus = (payload.get("market_intelligence") or {}).get("consensus") or {}
     consensus_prob = (
-        (intelligence_consensus.get("shin") or {}).get("probabilities")
+        payload.get("market_intelligence", {}).get("consensus", {}).get("shin", {}).get("probabilities")
         or no_vig(consensus_current)
     )
     official_spf = market.get("official_spf") or {}
@@ -1030,7 +1059,7 @@ def render(payload: dict) -> str:
         '<div class="decision-strip">'
         f'<div><small>胜平负主线</small><b>{e(primary_dimension)}</b><em>{e(decisions.get("mathematical_first"))}</em></div>'
         f'<div><small>盘口对照</small><b>{e(decisions.get("market_first"))}</b><em>市场只用于校准和发现分歧，不替代模型主线。</em></div>'
-        f'<div class="accent"><small>单一比分落点</small><b>{e(unique_score)}</b><em>这是概率最高的一个比分格，不代表要买比分列表，也不等于胜平负总概率的第一方向。首要错点：{e(primary_error)}</em></div>'
+        f'<div class="accent"><small>模型推演比分</small><b>{e(unique_score)}</b><em>{e(decisions.get("score_reasoning") or "这是比赛剧本、总进球区间、双方进球倾向与比分分布共同筛出的唯一落点，不是照抄最低赔率或市场第一。") } 首要错点：{e(primary_error)}</em></div>'
         '</div>'
     )
 
@@ -1177,18 +1206,21 @@ def render(payload: dict) -> str:
         script_content += f'<div class="plain-conclusion"><b>比赛剧本</b><ul>{script_items}</ul></div>'
 
     market_content += timeline_svg(genuine_market_timeline(match))
+    market_content += market_story_html(payload)
+    evolution_content = decision_evolution_html(payload)
 
     cards = [
         card("先看答案", "01", headline, True),
-        card("模型给出的胜平负", "02", model_content),
-        card("模型和市场哪里不一样", "03", divergence_content),
-        card("盘口和赔率说明了什么", "04", market_content + rq_market_content),
-        card("球队信息与比赛剧本", "05", script_content),
-        card("进球数判断与敏感性", "06", totals_content, True),
-        card("比分概率矩阵与首推比分", "07", score_content, True),
-        card("EV与实时渠道复算", "08", betting_content, True),
-        card("为什么这样判断", "09", evidence, True),
-        card("可能判断错在哪里", "10", error_content, True),
+        card("判断是怎样变化的", "02", evolution_content, True),
+        card("模型给出的胜平负", "03", model_content),
+        card("模型和市场哪里不一样", "04", divergence_content),
+        card("盘口、资金与机构行为", "05", market_content + rq_market_content, True),
+        card("球队信息与比赛剧本", "06", script_content),
+        card("进球数判断与敏感性", "07", totals_content, True),
+        card("比分概率矩阵与模型推演比分", "08", score_content, True),
+        card("EV与实时渠道复算", "09", betting_content, True),
+        card("为什么这样判断", "10", evidence, True),
+        card("可能判断错在哪里", "11", error_content, True),
     ]
     internal_audit = (
         '<details class="internal-audit">'
@@ -1294,7 +1326,7 @@ def main() -> int:
         "postmatch_schedule": str(schedule_path) if schedule_path else None,
         "postmatch_workflow": str(workflow_path) if workflow_path else None,
         "postmatch_schedule_error": schedule_error,
-    }, ensure_ascii=True, indent=2))
+    }, ensure_ascii=False, indent=2))
     return 0
 
 

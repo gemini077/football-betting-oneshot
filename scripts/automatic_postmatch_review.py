@@ -151,7 +151,15 @@ def _movement(report: dict) -> str:
     return "；".join(pieces) + f"。最大变化支持：{support}；若临场方向反转并跨回初盘价，则取消该价格信号。"
 
 
-def _root_cause(report: dict, actual_outcome: str, actual_score: str, misses: list[str], classification: str) -> dict:
+def _root_cause(
+    report: dict,
+    actual_outcome: str,
+    actual_score: str,
+    misses: list[str],
+    classification: str,
+    primary_market: str = "胜平负",
+    primary_pick: str | None = None,
+) -> dict:
     probs = (report.get("model") or {}).get("probabilities") or {}
     labels = {"home": "主胜", "draw": "平局", "away": "客胜"}
     numeric = {labels[key]: float(value) for key, value in probs.items() if key in labels and isinstance(value, (int, float))}
@@ -163,8 +171,15 @@ def _root_cause(report: dict, actual_outcome: str, actual_score: str, misses: li
     rank = next((index + 1 for index, row in enumerate(score_rows) if str(row.get("score")) == actual_score), None)
     score_note = f"实际比分在赛前矩阵第{rank}位" if rank else "实际比分未进入赛前主要比分区间"
     audit = "；".join(misses) if misses else "主维度及辅助维度均按冻结判断通过"
-    counter = (f"模型当时首位为{top}，实际{actual_outcome}概率低{gap:.1%}；"
-               f"若赛前将{actual_outcome}上调超过{gap:.1%}，主方向会翻转。{score_note}。")
+    if primary_market == "胜平负":
+        counter = (f"模型当时首位为{top}，实际{actual_outcome}概率低{gap:.1%}；"
+                   f"若赛前将{actual_outcome}上调超过{gap:.1%}，主方向会翻转。{score_note}。")
+    else:
+        counter = (
+            f"赛前主维度是{primary_market}的“{primary_pick or '未命名方向'}”，实际比分为{actual_score}。"
+            "要使该方向翻转，赛前进球中枢或双方进球概率必须跨过对应盘口边界；"
+            "缺少可复核参数时不编造精确阈值。" + score_note + "。"
+        )
     identifiable = "赛前可通过概率差、实际比分尾部排名和价格反向条件识别；不能用赛后比分倒推改写首推"
     change = ("主维度错误进入同类样本校准池；累计同型错误达到3场后再调整胜平负/低比分权重"
               if "错误" in classification else "本场不改主模型参数，只记录比分分布残差")
@@ -225,7 +240,7 @@ def build_review(schedule: dict, report: dict, now: datetime) -> dict:
     btts_hit = btts_pick == btts_actual if btts_pick else None
     misses = []
     if primary_hit is False:
-        misses.append(f"胜平负首推{primary_pick}，实际{actual_outcome}")
+        misses.append(f"{primary_market}首推{primary_pick}，实际{primary_actual}")
     if score_hit is False:
         misses.append(f"唯一比分{score_pick[0]}-{score_pick[1]}，实际{actual_score}；相邻比分不计命中")
     if total_hit is False:
@@ -285,7 +300,10 @@ def build_review(schedule: dict, report: dict, now: datetime) -> dict:
         "最大错点类型": "模型方向错误" if primary_hit is False else "比分分布误差" if score_hit is False else "无核心错点",
         "复盘摘要": summary,
         "_timeline": {**_market_timeline(report), "盘口变化与赛果方向": _movement(report), "最终赛果验证": actual_score, "来源/备注": "自动复盘读取冻结赛前报告；没有的时间节点明确保留为空，不用赛后价格回填"},
-        "_root_cause": _root_cause(report, actual_outcome, actual_score, misses, classification),
+        "_root_cause": _root_cause(
+            report, actual_outcome, actual_score, misses, classification,
+            primary_market, primary_pick,
+        ),
     }
 
 
