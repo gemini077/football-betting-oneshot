@@ -34,6 +34,24 @@ var next_value = [];
 
 
 class NowscoreMarketTests(unittest.TestCase):
+    def test_sporttery_alias_resolves_mjallby_fixture_2912209(self):
+        rows = [{
+            "nowscore_id": 2912209,
+            "home_team": "\u7c73\u4e9a\u5c14\u6bd4",
+            "home_team_en": "Mjallby AIF",
+            "away_team": "\u74e6\u65af\u7279\u62c9\u65af",
+            "away_team_en": "Vasteras SK FK",
+            "kickoff_local": "2026-07-18T01:00+08:00",
+        }]
+        match = resolve_match(
+            "\u7c73\u4e9a\u5c14\u6bd4",
+            "\u97e6\u65af\u7279\u7f57\u65af",
+            "2026-07-18 01:00",
+            rows,
+        )
+        self.assertEqual("EXACT_MATCH", match["status"])
+        self.assertEqual(2912209, match["nowscore_id"])
+
     def test_schedule_and_exact_resolution(self):
         rows = parse_schedule_js(SCHEDULE)
         self.assertEqual(2912840, rows[0]["nowscore_id"])

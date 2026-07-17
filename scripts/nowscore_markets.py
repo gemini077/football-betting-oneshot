@@ -148,6 +148,7 @@ def parse_schedule_js(text: str) -> list[dict]:
 
 def _normal(value: object) -> str:
     text = str(value or "").casefold().replace("(主)", "")
+    text = text.replace("(主)", "").replace("(中)", "")
     return re.sub(r"[^0-9a-z\u4e00-\u9fff]", "", text)
 
 
