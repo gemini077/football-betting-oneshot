@@ -567,22 +567,33 @@ def build_payload(
     home_price = trend_directions.get("one_x_two_home") or {}
     asian_home = trend_directions.get("asian_home") or {}
     first_moves = trend_panel.get("first_moves") or []
-    first_move_text = "；".join(
-        f"{item.get('name')} {item.get('captured_at')}"
-        for item in first_moves[:3]
-    )
+    market_labels = {"one_x_two": "欧赔", "asian": "亚盘", "total": "大小球"}
+    def _move_text(item: dict) -> str:
+        markets = item.get("markets") or [item.get("market")]
+        market_text = "+".join(market_labels.get(value, str(value)) for value in markets if value)
+        captured = str(item.get("captured_at") or "").replace("T", " ")[:16]
+        return f"{item.get('name')}（{market_text}）{captured[5:]}"
+    first_move_text = "；".join(_move_text(item) for item in first_moves[:3])
+    total_direction = trend_directions.get("total") or {}
+    if home_price.get("lengthened", 0) > home_price.get("shortened", 0) and asian_home.get("weakened", 0) >= asian_home.get("strengthened", 0):
+        pressure_conclusion = "欧赔与亚盘同向削弱主队，属于明显的主队降温；这是主胜模型线的主要反证，不等于自动改选客队。"
+    elif home_price.get("shortened", 0) > home_price.get("lengthened", 0) and asian_home.get("strengthened", 0) >= asian_home.get("weakened", 0):
+        pressure_conclusion = "欧赔与亚盘同向增强主队，市场对主队支持正在加强；仍需结合当前价格判断是否已过热。"
+    else:
+        pressure_conclusion = "欧赔与亚盘没有形成同向共识，当前更像分歧盘，不能用单一升降赔直接定方向。"
     market_interpretation = {
         "market_pressure": (
             f"已读取{trend_panel.get('company_count', 0)}家公司、{trend_panel.get('snapshot_count', 0)}条历史报价；"
             f"主胜降赔{home_price.get('shortened', 0)}家、升赔{home_price.get('lengthened', 0)}家，"
-            f"亚洲盘主队加强{asian_home.get('strengthened', 0)}家、减弱{asian_home.get('weakened', 0)}家。"
+            f"亚洲盘主队加强{asian_home.get('strengthened', 0)}家、减弱{asian_home.get('weakened', 0)}家；"
+            f"大小球升盘{total_direction.get('up', 0)}家、降盘{total_direction.get('down', 0)}家。{pressure_conclusion}"
             if trend_panel.get("snapshot_count") else "尚未取得足够的多公司历史报价轨迹。"
         ),
         "money_flow": (
             "真实成交资金仅采用交易所成交量；Nowscore公司轨迹属于价格与盘口压力，不冒充资金流。"
         ),
         "bookmaker_behaviour": (
-            f"最早可识别的公司变动：{first_move_text}。" if first_move_text else "尚未形成可核验的公司先后变动链。"
+            f"最早记录到的公司变动（不等同因果领盘）：{first_move_text}。" if first_move_text else "尚未形成可核验的公司先后变动链。"
         ),
     }
     trap_registry = load_json(PROJECT_ROOT / "config" / "trap_rules.json")
@@ -696,6 +707,16 @@ def build_payload(
             "label": "裁判",
             "value": f"{referee.get('name')}；公开执法样本 {((referee.get('summaries') or [{}])[0]).get('matches', '—')} 场",
             "source_url": (nowscore_context.get("source_urls") or {}).get("referee"),
+        })
+    script_context = (((payload.get("fundamentals") or {}).get("nowscore_context") or {}).get("script_context") or {})
+    for index, effect in enumerate(script_context.get("effects") or [], start=1):
+        context_items.append({
+            "label": f"比赛剧本修正 {index}",
+            "value": effect,
+            "source_url": (
+                (nowscore_context.get("source_urls") or {}).get("coach")
+                if "教练" in effect else (nowscore_context.get("source_urls") or {}).get("referee")
+            ),
         })
     if (nowscore_context.get("panlu") or {}).get("count"):
         context_items.append({

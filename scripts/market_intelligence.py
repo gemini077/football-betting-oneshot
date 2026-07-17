@@ -311,7 +311,17 @@ def nowscore_trend_panel(company_trends: list[dict]) -> dict:
                     })
                     break
                 previous = row
-    first_moves.sort(key=lambda row: row["captured_at"])
+    # A provider can move several market families at the same minute.  The
+    # user-facing report needs one provider event, not duplicate company rows.
+    deduplicated_moves: dict[object, dict] = {}
+    for move in sorted(first_moves, key=lambda row: row["captured_at"]):
+        key = move.get("source_company_id") or move.get("name")
+        existing = deduplicated_moves.get(key)
+        if existing is None:
+            deduplicated_moves[key] = {**move, "markets": [move.get("market")]}
+        elif move.get("market") not in existing["markets"]:
+            existing["markets"].append(move.get("market"))
+    first_moves = sorted(deduplicated_moves.values(), key=lambda row: row["captured_at"])
     snapshot_count = sum(item["snapshot_count"] for rows in markets.values() for item in rows)
     company_count = len({item["source_company_id"] for rows in markets.values() for item in rows})
     return {

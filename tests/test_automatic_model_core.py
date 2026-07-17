@@ -74,3 +74,37 @@ def test_deterministic_model_uses_checked_espn_form_when_deep_page_is_missing():
     assert result["model"]["method"] == "recent_form_market_calibrated_poisson_v2"
     assert result["model"]["calibration"]["form_source"] == "ESPN近5场赛事样本"
     assert any("ESPN" in item for item in result["model"]["limitations"])
+
+
+def test_coach_and_referee_shape_match_script_without_overriding_probability():
+    deep = {
+        "source_provenance": {"form_primary": "nowscore_analysis"},
+        "shuju": {"recent_form": {
+            "home_overall": {"matches": 10, "goals_for": 18, "goals_against": 9},
+            "away_overall": {"matches": 10, "goals_for": 10, "goals_against": 16},
+            "home_home": {"matches": 10, "goals_for": 20, "goals_against": 8},
+            "away_away": {"matches": 10, "goals_for": 8, "goals_against": 18},
+        }},
+        "ouzhi": {"bookmakers": [{"spf_current": {"home": 1.70, "draw": 3.8, "away": 5.0}}]},
+        "daxiao": {"companies": [{"current_line": 2.75}]},
+        "nowscore_context": {
+            "coach": {
+                "home": {"name": "主帅甲", "team_records": [{"matches": 20, "points_per_match": 2.1, "venue_flag": "1"}]},
+                "away": {"name": "客帅乙", "team_records": [{"matches": 18, "points_per_match": 1.1, "venue_flag": "0"}]},
+            },
+            "referee": {"name": "裁判甲", "summaries": [{
+                "matches": 50,
+                "home": {"avg_yellow": 2.5, "avg_red": 0.10, "win_rate": "46%"},
+                "away": {"avg_yellow": 2.3, "avg_red": 0.08, "win_rate": "32%"},
+            }]},
+        },
+    }
+    result = build_automatic_model({
+        "selected_workspace_match": {"home": "主队", "away": "客队"},
+        "source_snapshots": {"500_deep": {"snapshots": [deep]}},
+    })
+    story = result["decisions"]["match_story"]
+    assert "教练剧本" in story
+    assert "裁判剧本" in story
+    assert result["fundamentals"]["nowscore_context"]["script_context"]["model_usage"].endswith("not_probability_override")
+    assert any("红牌" in item for item in result["decisions"]["maximum_error_points"])

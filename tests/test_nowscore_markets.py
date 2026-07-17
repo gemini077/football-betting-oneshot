@@ -1,4 +1,9 @@
 import unittest
+from pathlib import Path
+import sys
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "scripts"))
 
 from scripts.nowscore_markets import (
     handicap_number,
@@ -12,6 +17,7 @@ from scripts.nowscore_markets import (
     resolve_match,
     _verified,
 )
+from market_intelligence import nowscore_trend_panel
 
 
 SCHEDULE = """A[0]=[2912840,0,0,0,'瓦勒伦加',0,'Valerenga','奥勒松',0,'Aalesund FK','01:00','2026,6,17,01,00,00',0,0,0,0,0,0,0,0,0,0,0,'半/一',0,0,0,2.75];"""
@@ -127,6 +133,27 @@ class NowscoreMarketTests(unittest.TestCase):
         self.assertEqual(3, trend["snapshot_count"])
         self.assertEqual(2.75, trend["markets"]["total"][0]["line_number"])
         self.assertEqual("2026-07-17T16:24+08:00", trend["markets"]["one_x_two"][0]["captured_at"])
+
+    def test_unknown_page_label_uses_public_source_company_name(self):
+        trend = parse_company_trend("<table></table>", 35, "2026-07-18 01:00")
+        self.assertEqual("Wewbet", trend["name"])
+
+    def test_first_move_deduplicates_same_company_across_markets(self):
+        rows = [
+            {"source_company_id": 35, "name": "Wewbet", "markets": {
+                "asian": [
+                    {"captured_at": "2026-07-17T10:00+08:00", "home_water": 0.90, "line_number": -0.5, "away_water": 0.90},
+                    {"captured_at": "2026-07-17T10:05+08:00", "home_water": 0.85, "line_number": -0.5, "away_water": 0.95},
+                ],
+                "one_x_two": [
+                    {"captured_at": "2026-07-17T10:00+08:00", "home": 1.80, "draw": 3.5, "away": 4.2},
+                    {"captured_at": "2026-07-17T10:05+08:00", "home": 1.85, "draw": 3.5, "away": 4.1},
+                ],
+            }},
+        ]
+        panel = nowscore_trend_panel(rows)
+        self.assertEqual(1, len(panel["first_moves"]))
+        self.assertEqual({"asian", "one_x_two"}, set(panel["first_moves"][0]["markets"]))
 
 
 if __name__ == "__main__":

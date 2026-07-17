@@ -269,10 +269,81 @@ def _nowscore_context_fundamentals(deep: dict) -> dict:
         items.append(f"裁判：{referee['name']}；公开执法样本 {overall.get('matches', '—')} 场。")
     if panlu.get("count"):
         items.append(f"Nowscore盘路历史已读取 {panlu['count']} 场，仅作风格与盘口复核，不直接改写概率。")
+    script_context = _nowscore_script_context(coach, referee)
+    items.extend(script_context.get("effects") or [])
     return {
         "coach": coach, "referee": referee, "panlu": panlu,
+        "script_context": script_context,
         "items": items, "status": "Nowscore赛前背景已核验" if items else "Nowscore赛前背景未取得",
         "sources": list((context.get("source_urls") or {}).values()),
+    }
+
+
+def _number_or_none(value: object) -> float | None:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _coach_venue_record(profile: dict, venue_flag: str) -> dict:
+    rows = list(profile.get("team_records") or []) or list(profile.get("coach_records") or [])
+    venue_rows = [row for row in rows if str(row.get("venue_flag") or "") == venue_flag]
+    candidates = venue_rows or rows
+    return max(candidates, key=lambda row: int(row.get("matches") or 0), default={})
+
+
+def _percent_number(value: object) -> float | None:
+    try:
+        return float(str(value).replace("%", "").strip())
+    except (TypeError, ValueError):
+        return None
+
+
+def _nowscore_script_context(coach: dict, referee: dict) -> dict:
+    """Convert verified context into bounded match-script evidence.
+
+    These features shape tempo, resilience and tail-risk narratives.  They do
+    not mechanically alter Poisson lambdas until a holdout calibration exists.
+    """
+    effects: list[str] = []
+    risks: list[str] = []
+    home_profile, away_profile = coach.get("home") or {}, coach.get("away") or {}
+    home_record = _coach_venue_record(home_profile, "1")
+    away_record = _coach_venue_record(away_profile, "0")
+    home_ppg = _number_or_none(home_record.get("points_per_match"))
+    away_ppg = _number_or_none(away_record.get("points_per_match"))
+    if home_ppg is not None and away_ppg is not None:
+        home_sample, away_sample = int(home_record.get("matches") or 0), int(away_record.get("matches") or 0)
+        if min(home_sample, away_sample) >= 5 and abs(home_ppg - away_ppg) >= 0.35:
+            stronger = "主队教练的主场组织与拿分稳定性更强" if home_ppg > away_ppg else "客队教练的客场组织与拿分稳定性更强"
+            effects.append(f"教练剧本：{stronger}（主场PPG {home_ppg:.2f}，客场PPG {away_ppg:.2f}；样本 {home_sample}/{away_sample} 场），更支持其在僵持阶段掌控调整节奏。")
+        else:
+            effects.append(f"教练剧本：主队教练主场PPG {home_ppg:.2f}、客队教练客场PPG {away_ppg:.2f}（样本 {home_sample}/{away_sample} 场），差距不足以单独改写主线。")
+
+    summaries = list(referee.get("summaries") or [])
+    referee_row = next((row for row in summaries if int(row.get("matches") or 0) >= 20), summaries[0] if summaries else {})
+    home_ref, away_ref = referee_row.get("home") or {}, referee_row.get("away") or {}
+    yellow = sum(value for value in (_number_or_none(home_ref.get("avg_yellow")), _number_or_none(away_ref.get("avg_yellow"))) if value is not None)
+    red = sum(value for value in (_number_or_none(home_ref.get("avg_red")), _number_or_none(away_ref.get("avg_red"))) if value is not None)
+    home_rate, away_rate = _percent_number(home_ref.get("win_rate")), _percent_number(away_ref.get("win_rate"))
+    referee_matches = int(referee_row.get("matches") or 0)
+    if referee.get("name") and referee_matches:
+        if yellow >= 4.5 or red >= 0.15:
+            effects.append(f"裁判剧本：{referee.get('name')}在{referee_matches}场公开样本中场均双方合计黄牌约{yellow:.2f}、红牌约{red:.2f}，比赛中断与红牌尾部风险偏高，领先方未必能平稳控场。")
+            risks.append("裁判公开样本的牌数与红牌率偏高，比分右尾和比赛状态突变风险高于基础泊松假设")
+        elif yellow >= 3.2 or red >= 0.10:
+            effects.append(f"裁判剧本：{referee.get('name')}在{referee_matches}场公开样本中场均双方合计黄牌约{yellow:.2f}、红牌约{red:.2f}，对抗和定位球权重中等偏高。")
+        else:
+            effects.append(f"裁判剧本：{referee.get('name')}的{referee_matches}场公开样本未显示异常高牌风险，裁判因素暂不主导比赛节奏。")
+        if home_rate is not None and away_rate is not None and abs(home_rate - away_rate) >= 8:
+            leaning = "主队" if home_rate > away_rate else "客队"
+            effects.append(f"裁判历史样本下{leaning}胜率更高（主{home_rate:.0f}% / 客{away_rate:.0f}%），仅作为剧本倾向，不视为因果优势。")
+    return {
+        "coach": {"home_record": home_record, "away_record": away_record},
+        "referee": {"name": referee.get("name"), "sample": referee_matches, "combined_yellow": round(yellow, 2), "combined_red": round(red, 2)},
+        "effects": effects, "risks": risks,
+        "model_usage": "match_script_and_uncertainty_only_not_probability_override",
     }
 
 
@@ -379,6 +450,9 @@ def build_automatic_model(context: dict) -> dict:
         home_win_rate = float(home_home.get("wins") or 0) / home_home_games
         if home_win_rate >= 0.6:
             dynamic_errors.append(f"{home_name}近{int(home_home_games)}个主场胜率{home_win_rate:.0%}，客胜主线可能低估主场韧性")
+    script_context = nowscore_fundamentals.get("script_context") or {}
+    script_effects = script_context.get("effects") or []
+    dynamic_errors.extend(script_context.get("risks") or [])
     dynamic_errors.append("若早段进球、红牌或比赛节奏偏离基准，总进球与比分尾部会同步变化")
     if abs(model_market_gap) >= 0.05:
         dynamic_errors.append(market_conflict)
@@ -392,7 +466,7 @@ def build_automatic_model(context: dict) -> dict:
         "score_reasoning": score_reasoning,
         "mathematical_first": f"90分钟主胜{probabilities['home']:.1%}、平局{probabilities['draw']:.1%}、客胜{probabilities['away']:.1%}；λ={lambda_home:.2f}-{lambda_away:.2f}。",
         "market_first": f"多公司去水共识主胜{market_probabilities['home']:.1%}、平局{market_probabilities['draw']:.1%}、客胜{market_probabilities['away']:.1%}；大小球中轴{target_total:.2f}。",
-        "match_story": f"{control_story}；{tempo_story}。",
+        "match_story": "；".join([control_story, tempo_story, *script_effects]) + "。",
         "market_conflict": market_conflict,
         "score_vs_outcome_explanation": score_explanation,
         "maximum_error_points": dynamic_errors[:4],

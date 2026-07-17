@@ -58,6 +58,16 @@ COMPANIES = {
     49: (11, "Bwin"),
 }
 
+# Public Nowscore source-company labels.  Keep this separate from the
+# project's canonical bookmaker IDs: it is only used for transparent display
+# and must not accidentally merge two providers in the market tables.
+SOURCE_COMPANY_NAMES = {
+    1: "澳门", 3: "皇冠", 4: "立博", 8: "bet365", 9: "威廉希尔",
+    12: "易胜博", 14: "伟德", 17: "Mansion88", 19: "Interwetten",
+    22: "10BET", 24: "12BET", 31: "SBOBET", 35: "Wewbet",
+    42: "18BET", 47: "Pinnacle", 49: "Bwin",
+}
+
 
 def _fetch_bytes(url: str, timeout: int = 30) -> bytes:
     request = urllib.request.Request(
@@ -634,7 +644,7 @@ def parse_company_trend(text: str, company_id: int, kickoff: object = None, comp
             quote = {**common, "home_water": _number(row[2]), "line": row[3], "line_number": handicap_number(row[3]), "away_water": _number(row[4])}
         sections[section].append(quote)
     count = sum(len(items) for items in sections.values())
-    safe_name = str(company_name or "").strip()
+    safe_name = str(company_name or SOURCE_COMPANY_NAMES.get(company_id) or "").strip()
     if len(safe_name) < 2 or safe_name.isdigit():
         safe_name = f"Nowscore-{company_id}"
     return {
