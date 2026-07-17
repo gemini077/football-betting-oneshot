@@ -1,0 +1,2591 @@
+{
+  "report": {
+    "model_name": "Football Betting OneShot",
+    "model_version": "v0.17.1",
+    "report_type": "确定性赛前分析",
+    "analysis_timestamp": "2026-07-17T11:04:59+00:00",
+    "final_execution_version": false,
+    "ai_provider": null,
+    "ai_model": null,
+    "market_checkpoint": {
+      "stage": "T-6H",
+      "captured_at": "2026-07-17T11:04:59.207373+00:00",
+      "target_minutes_before": 360,
+      "actual_minutes_before": 355.01,
+      "lateness_minutes": 4.99,
+      "exact": false
+    }
+  },
+  "match": {
+    "business_date": "2026-07-17",
+    "match_id": "500-1362710",
+    "home": "米亚尔比",
+    "away": "韦斯特罗斯",
+    "match_num": "周五202",
+    "competition": "瑞典超级联赛",
+    "league": "瑞典超级联赛",
+    "kickoff_local": "2026-07-18 01:00"
+  },
+  "decisions": {
+    "unique_primary_dimension": "胜平负：主胜（模型49.2%）",
+    "unique_score": "2-1",
+    "score_reasoning": "模型在可行比分区间内综合方向、总进球与双方进球情景后选择该落点（单格概率9.4%；符合主胜主剧本、落在总进球众数3、符合双方进球倾向），不是照抄最低赔率或市场第一。",
+    "mathematical_first": "90分钟主胜49.2%、平局22.8%、客胜28.0%；λ=1.84-1.33。",
+    "market_first": "多公司去水共识主胜50.3%、平局25.0%、客胜24.6%；大小球中轴2.50。",
+    "match_story": "米亚尔比更可能掌握主动，但韦斯特罗斯仍有足够进球期望制造反击或定位球威胁；总进球中枢偏高；早段进球会显著放大开放对攻和右尾比分风险；教练剧本：主队教练的主场组织与拿分稳定性更强（主场PPG 2.21，客场PPG 1.45；样本 14/22 场），更支持其在僵持阶段掌控调整节奏。；裁判剧本：S.李察在134场公开样本中场均双方合计黄牌约3.15、红牌约0.13，对抗和定位球权重中等偏高。。",
+    "market_conflict": "多公司市场对主胜的定价比模型更强1.1%，不能把市场热度直接当成模型优势",
+    "score_vs_outcome_explanation": "唯一比分2-1只是单个比分格的最高点；胜平负主线主胜是多个比分格合计，二者不要求同方向。",
+    "maximum_error_points": [
+      "若早段进球、红牌或比赛节奏偏离基准，总进球与比分尾部会同步变化",
+      "首发或关键伤停与当前假设不一致，会直接改变双方λ",
+      "临盘若出现跨公司同步升降盘，本次赛前快照的价格结构会失效"
+    ],
+    "value_judgement": "仅完成模型概率与市场基线；须取得用户渠道即时赔率后才计算EV。",
+    "final_state": "空仓｜未锁单"
+  },
+  "model": {
+    "status": "确定性融合模型（可核验近期攻防 + 市场校准）",
+    "method": "recent_form_market_calibrated_poisson_v2",
+    "lambda_home": 1.835233,
+    "lambda_away": 1.334767,
+    "rho": 0.0,
+    "expected_goals": 3.17,
+    "probabilities": {
+      "home": 0.492382,
+      "draw": 0.227959,
+      "away": 0.279659
+    },
+    "total_goals_buckets": [
+      {
+        "goals": "0",
+        "probability": 0.042004
+      },
+      {
+        "goals": "1",
+        "probability": 0.133151
+      },
+      {
+        "goals": "2",
+        "probability": 0.211045
+      },
+      {
+        "goals": "3",
+        "probability": 0.223004
+      },
+      {
+        "goals": "4",
+        "probability": 0.176731
+      },
+      {
+        "goals": "5",
+        "probability": 0.112047
+      },
+      {
+        "goals": "6+",
+        "probability": 0.102018
+      }
+    ],
+    "btts": {
+      "yes": 0.619208,
+      "no": 0.380792,
+      "judgement": "双方进球偏是"
+    },
+    "score_probabilities": [
+      {
+        "score": "1-1",
+        "probability": 0.102892,
+        "fair_odds": 9.7189,
+        "rank": 1
+      },
+      {
+        "score": "2-1",
+        "probability": 0.094416,
+        "fair_odds": 10.5915,
+        "rank": 2
+      },
+      {
+        "score": "1-0",
+        "probability": 0.077086,
+        "fair_odds": 12.9725,
+        "rank": 3
+      },
+      {
+        "score": "2-0",
+        "probability": 0.070736,
+        "fair_odds": 14.1371,
+        "rank": 4
+      },
+      {
+        "score": "1-2",
+        "probability": 0.068669,
+        "fair_odds": 14.5627,
+        "rank": 5
+      },
+      {
+        "score": "2-2",
+        "probability": 0.063012,
+        "fair_odds": 15.8701,
+        "rank": 6
+      },
+      {
+        "score": "3-1",
+        "probability": 0.057758,
+        "fair_odds": 17.3135,
+        "rank": 7
+      },
+      {
+        "score": "0-1",
+        "probability": 0.056065,
+        "fair_odds": 17.8364,
+        "rank": 8
+      },
+      {
+        "score": "3-0",
+        "probability": 0.043272,
+        "fair_odds": 23.1095,
+        "rank": 9
+      },
+      {
+        "score": "0-0",
+        "probability": 0.042004,
+        "fair_odds": 23.8075,
+        "rank": 10
+      }
+    ],
+    "calibration": {
+      "form_lambda_home": 2.033333,
+      "form_lambda_away": 1.583333,
+      "market_total_line_median": 2.5,
+      "market_probabilities": {
+        "home": 0.5033021368584133,
+        "draw": 0.2502644480270904,
+        "away": 0.2464334151144963
+      },
+      "form_weight": 0.6,
+      "market_weight": 0.4,
+      "form_source": "Nowscore近期赛事数据",
+      "venue_proxy_used": false
+    },
+    "limitations": [
+      "近期样本含不同赛事与对手强度，尚未完成逐队Elo/xG对手校正",
+      "确认首发、即时伤停、天气与临场战术需在开赛前另行修正",
+      "市场信息用于校准，因此该概率不是完全独立于赔率的纯基本面概率"
+    ]
+  },
+  "data_quality": {
+    "status": "模型已计算，临场信息待补",
+    "missing": [
+      "确认首发",
+      "即时伤停",
+      "用户渠道即时赔率"
+    ],
+    "notes": [
+      "近期攻防来源：Nowscore近期赛事数据。",
+      "模型数值由固定公式生成，DeepSeek不参与概率计算。",
+      "已从所选主页场次注入体彩胜平负赔率，并计算去水市场基线；该基线不是模型概率。"
+    ],
+    "overall": "FORM_AND_MARKET_MODEL"
+  },
+  "fundamentals": {
+    "status": "近期攻防已核验；未能唯一匹配外部赛程",
+    "items": [
+      {
+        "label": "主队近10场",
+        "value": "3胜4平3负，进22球/失21球",
+        "source": "500.com赛前数据快照"
+      },
+      {
+        "label": "主队近10个主场",
+        "value": "6胜1平3负，进20球/失10球",
+        "source": "500.com赛前数据快照"
+      },
+      {
+        "label": "客队近10场",
+        "value": "4胜2平4负，进20球/失20球",
+        "source": "500.com赛前数据快照"
+      },
+      {
+        "label": "客队近10个客场",
+        "value": "5胜1平4负，进17球/失20球",
+        "source": "500.com赛前数据快照"
+      },
+      {
+        "label": "外部赛程",
+        "value": "已按开赛时间核验，候选2场，未强行匹配"
+      }
+    ],
+    "structured_form": {
+      "status": "Nowscore赛前背景已核验",
+      "checked_at": "2026-07-17T11:04:58+00:00",
+      "items": [
+        {
+          "label": "主队近10场",
+          "value": "3胜4平3负，进22球/失21球",
+          "source": "500.com赛前数据快照"
+        },
+        {
+          "label": "主队近10个主场",
+          "value": "6胜1平3负，进20球/失10球",
+          "source": "500.com赛前数据快照"
+        },
+        {
+          "label": "客队近10场",
+          "value": "4胜2平4负，进20球/失20球",
+          "source": "500.com赛前数据快照"
+        },
+        {
+          "label": "客队近10个客场",
+          "value": "5胜1平4负，进17球/失20球",
+          "source": "500.com赛前数据快照"
+        },
+        {
+          "label": "外部赛程",
+          "value": "已按开赛时间核验，候选2场，未强行匹配"
+        },
+        "教练：主队 卡爾·馬裏烏斯·阿克蘇姆；客队 亞歷山大·魯賓。",
+        "裁判：S.李察；公开执法样本 134 场。",
+        "Nowscore盘路历史已读取 60 场，仅作风格与盘口复核，不直接改写概率。",
+        "教练剧本：主队教练的主场组织与拿分稳定性更强（主场PPG 2.21，客场PPG 1.45；样本 14/22 场），更支持其在僵持阶段掌控调整节奏。",
+        "裁判剧本：S.李察在134场公开样本中场均双方合计黄牌约3.15、红牌约0.13，对抗和定位球权重中等偏高。"
+      ],
+      "sources": [
+        "https://live.nowscore.com/info/coach/2912209.htm?l=1",
+        "https://live.nowscore.com/info/referee/2912209.htm?l=1",
+        "https://live.nowscore.com/panlu/2912209.html"
+      ],
+      "recent_form": {
+        "home_overall": {
+          "matches": 10,
+          "wins": 3,
+          "draws": 4,
+          "losses": 3,
+          "goals_for": 22,
+          "goals_against": 21
+        },
+        "home_home": {
+          "matches": 10,
+          "wins": 6,
+          "draws": 1,
+          "losses": 3,
+          "goals_for": 20,
+          "goals_against": 10
+        },
+        "away_overall": {
+          "matches": 10,
+          "wins": 4,
+          "draws": 2,
+          "losses": 4,
+          "goals_for": 20,
+          "goals_against": 20
+        },
+        "away_away": {
+          "matches": 10,
+          "wins": 5,
+          "draws": 1,
+          "losses": 4,
+          "goals_for": 17,
+          "goals_against": 20
+        }
+      },
+      "form_source": "500.com赛前数据快照",
+      "metric": "recent actual goals, not xG",
+      "nowscore_context": {
+        "coach": {
+          "home": {
+            "name": "卡爾·馬裏烏斯·阿克蘇姆",
+            "birth_date": "1990-02-18",
+            "nationality": "挪威",
+            "coach_records": [
+              {
+                "competition_or_team": "瑞典超",
+                "matches": 5,
+                "wins": 2,
+                "draws": 0,
+                "losses": 3,
+                "goals_for": 6,
+                "goals_against": 5,
+                "points_per_match": 1.2,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "瑞典超",
+                "matches": 7,
+                "wins": 2,
+                "draws": 4,
+                "losses": 1,
+                "goals_for": 13,
+                "goals_against": 12,
+                "points_per_match": 1.43,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "球會友誼",
+                "matches": 4,
+                "wins": 0,
+                "draws": 2,
+                "losses": 2,
+                "goals_for": 5,
+                "goals_against": 10,
+                "points_per_match": 0.5,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "球會友誼",
+                "matches": 3,
+                "wins": 2,
+                "draws": 1,
+                "losses": 0,
+                "goals_for": 10,
+                "goals_against": 5,
+                "points_per_match": 2.33,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "瑞典盃",
+                "matches": 5,
+                "wins": 5,
+                "draws": 0,
+                "losses": 0,
+                "goals_for": 13,
+                "goals_against": 2,
+                "points_per_match": 3.0,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "瑞典盃",
+                "matches": 1,
+                "wins": 1,
+                "draws": 0,
+                "losses": 0,
+                "goals_for": 3,
+                "goals_against": 0,
+                "points_per_match": 3.0,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "大西洋盃",
+                "matches": 1,
+                "wins": 1,
+                "draws": 0,
+                "losses": 0,
+                "goals_for": 4,
+                "goals_against": 1,
+                "points_per_match": 3.0,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "大西洋盃",
+                "matches": 1,
+                "wins": 0,
+                "draws": 0,
+                "losses": 1,
+                "goals_for": 0,
+                "goals_against": 1,
+                "points_per_match": 0.0,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "瑞典超",
+                "matches": 12,
+                "wins": 4,
+                "draws": 4,
+                "losses": 4,
+                "goals_for": 19,
+                "goals_against": 17,
+                "points_per_match": 1.33,
+                "venue_flag": ""
+              },
+              {
+                "competition_or_team": "球會友誼",
+                "matches": 7,
+                "wins": 2,
+                "draws": 3,
+                "losses": 2,
+                "goals_for": 15,
+                "goals_against": 15,
+                "points_per_match": 1.29,
+                "venue_flag": ""
+              },
+              {
+                "competition_or_team": "瑞典盃",
+                "matches": 6,
+                "wins": 6,
+                "draws": 0,
+                "losses": 0,
+                "goals_for": 16,
+                "goals_against": 2,
+                "points_per_match": 3.0,
+                "venue_flag": ""
+              },
+              {
+                "competition_or_team": "大西洋盃",
+                "matches": 2,
+                "wins": 1,
+                "draws": 0,
+                "losses": 1,
+                "goals_for": 4,
+                "goals_against": 2,
+                "points_per_match": 1.5,
+                "venue_flag": ""
+              },
+              {
+                "competition_or_team": "瑞典超",
+                "matches": 5,
+                "wins": 2,
+                "draws": 0,
+                "losses": 3,
+                "goals_for": 6,
+                "goals_against": 5,
+                "points_per_match": 1.2,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "瑞典超",
+                "matches": 7,
+                "wins": 2,
+                "draws": 4,
+                "losses": 1,
+                "goals_for": 13,
+                "goals_against": 12,
+                "points_per_match": 1.43,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "球會友誼",
+                "matches": 4,
+                "wins": 0,
+                "draws": 2,
+                "losses": 2,
+                "goals_for": 5,
+                "goals_against": 10,
+                "points_per_match": 0.5,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "球會友誼",
+                "matches": 3,
+                "wins": 2,
+                "draws": 1,
+                "losses": 0,
+                "goals_for": 10,
+                "goals_against": 5,
+                "points_per_match": 2.33,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "瑞典盃",
+                "matches": 5,
+                "wins": 5,
+                "draws": 0,
+                "losses": 0,
+                "goals_for": 13,
+                "goals_against": 2,
+                "points_per_match": 3.0,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "瑞典盃",
+                "matches": 1,
+                "wins": 1,
+                "draws": 0,
+                "losses": 0,
+                "goals_for": 3,
+                "goals_against": 0,
+                "points_per_match": 3.0,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "大西洋盃",
+                "matches": 1,
+                "wins": 1,
+                "draws": 0,
+                "losses": 0,
+                "goals_for": 4,
+                "goals_against": 1,
+                "points_per_match": 3.0,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "大西洋盃",
+                "matches": 1,
+                "wins": 0,
+                "draws": 0,
+                "losses": 1,
+                "goals_for": 0,
+                "goals_against": 1,
+                "points_per_match": 0.0,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "瑞典超",
+                "matches": 12,
+                "wins": 4,
+                "draws": 4,
+                "losses": 4,
+                "goals_for": 19,
+                "goals_against": 17,
+                "points_per_match": 1.33,
+                "venue_flag": ""
+              },
+              {
+                "competition_or_team": "球會友誼",
+                "matches": 7,
+                "wins": 2,
+                "draws": 3,
+                "losses": 2,
+                "goals_for": 15,
+                "goals_against": 15,
+                "points_per_match": 1.29,
+                "venue_flag": ""
+              },
+              {
+                "competition_or_team": "瑞典盃",
+                "matches": 6,
+                "wins": 6,
+                "draws": 0,
+                "losses": 0,
+                "goals_for": 16,
+                "goals_against": 2,
+                "points_per_match": 3.0,
+                "venue_flag": ""
+              },
+              {
+                "competition_or_team": "大西洋盃",
+                "matches": 2,
+                "wins": 1,
+                "draws": 0,
+                "losses": 1,
+                "goals_for": 4,
+                "goals_against": 2,
+                "points_per_match": 1.5,
+                "venue_flag": ""
+              }
+            ],
+            "team_records": [
+              {
+                "competition_or_team": "米贊比",
+                "matches": 14,
+                "wins": 10,
+                "draws": 1,
+                "losses": 3,
+                "goals_for": 33,
+                "goals_against": 13,
+                "points_per_match": 2.21,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "米贊比",
+                "matches": 13,
+                "wins": 3,
+                "draws": 6,
+                "losses": 4,
+                "goals_for": 21,
+                "goals_against": 23,
+                "points_per_match": 1.15,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "米贊比",
+                "matches": 27,
+                "wins": 13,
+                "draws": 7,
+                "losses": 7,
+                "goals_for": 54,
+                "goals_against": 36,
+                "points_per_match": 1.7,
+                "venue_flag": ""
+              },
+              {
+                "competition_or_team": "米贊比",
+                "matches": 14,
+                "wins": 10,
+                "draws": 1,
+                "losses": 3,
+                "goals_for": 33,
+                "goals_against": 13,
+                "points_per_match": 2.21,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "米贊比",
+                "matches": 13,
+                "wins": 3,
+                "draws": 6,
+                "losses": 4,
+                "goals_for": 21,
+                "goals_against": 23,
+                "points_per_match": 1.15,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "米贊比",
+                "matches": 27,
+                "wins": 13,
+                "draws": 7,
+                "losses": 7,
+                "goals_for": 54,
+                "goals_against": 36,
+                "points_per_match": 1.7,
+                "venue_flag": ""
+              }
+            ]
+          },
+          "away": {
+            "name": "亞歷山大·魯賓",
+            "birth_date": "1989-05-16",
+            "nationality": "",
+            "coach_records": [
+              {
+                "competition_or_team": "瑞典超",
+                "matches": 12,
+                "wins": 2,
+                "draws": 6,
+                "losses": 4,
+                "goals_for": 24,
+                "goals_against": 24,
+                "points_per_match": 1.0,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "瑞典超",
+                "matches": 12,
+                "wins": 8,
+                "draws": 0,
+                "losses": 4,
+                "goals_for": 20,
+                "goals_against": 22,
+                "points_per_match": 2.0,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "球會友誼",
+                "matches": 6,
+                "wins": 0,
+                "draws": 2,
+                "losses": 4,
+                "goals_for": 8,
+                "goals_against": 12,
+                "points_per_match": 0.33,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "球會友誼",
+                "matches": 12,
+                "wins": 6,
+                "draws": 2,
+                "losses": 4,
+                "goals_for": 22,
+                "goals_against": 8,
+                "points_per_match": 1.67,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "瑞典盃",
+                "matches": 2,
+                "wins": 0,
+                "draws": 0,
+                "losses": 2,
+                "goals_for": 0,
+                "goals_against": 2,
+                "points_per_match": 0.0,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "瑞典盃",
+                "matches": 4,
+                "wins": 2,
+                "draws": 0,
+                "losses": 2,
+                "goals_for": 6,
+                "goals_against": 8,
+                "points_per_match": 1.5,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "瑞典超",
+                "matches": 24,
+                "wins": 10,
+                "draws": 6,
+                "losses": 8,
+                "goals_for": 44,
+                "goals_against": 46,
+                "points_per_match": 1.5,
+                "venue_flag": ""
+              },
+              {
+                "competition_or_team": "球會友誼",
+                "matches": 18,
+                "wins": 6,
+                "draws": 4,
+                "losses": 8,
+                "goals_for": 30,
+                "goals_against": 20,
+                "points_per_match": 1.22,
+                "venue_flag": ""
+              },
+              {
+                "competition_or_team": "瑞典盃",
+                "matches": 6,
+                "wins": 2,
+                "draws": 0,
+                "losses": 4,
+                "goals_for": 6,
+                "goals_against": 10,
+                "points_per_match": 1.0,
+                "venue_flag": ""
+              },
+              {
+                "competition_or_team": "瑞典超",
+                "matches": 12,
+                "wins": 2,
+                "draws": 6,
+                "losses": 4,
+                "goals_for": 24,
+                "goals_against": 24,
+                "points_per_match": 1.0,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "瑞典超",
+                "matches": 12,
+                "wins": 8,
+                "draws": 0,
+                "losses": 4,
+                "goals_for": 20,
+                "goals_against": 22,
+                "points_per_match": 2.0,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "球會友誼",
+                "matches": 6,
+                "wins": 0,
+                "draws": 2,
+                "losses": 4,
+                "goals_for": 8,
+                "goals_against": 12,
+                "points_per_match": 0.33,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "球會友誼",
+                "matches": 12,
+                "wins": 6,
+                "draws": 2,
+                "losses": 4,
+                "goals_for": 22,
+                "goals_against": 8,
+                "points_per_match": 1.67,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "瑞典盃",
+                "matches": 2,
+                "wins": 0,
+                "draws": 0,
+                "losses": 2,
+                "goals_for": 0,
+                "goals_against": 2,
+                "points_per_match": 0.0,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "瑞典盃",
+                "matches": 4,
+                "wins": 2,
+                "draws": 0,
+                "losses": 2,
+                "goals_for": 6,
+                "goals_against": 8,
+                "points_per_match": 1.5,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "瑞典超",
+                "matches": 24,
+                "wins": 10,
+                "draws": 6,
+                "losses": 8,
+                "goals_for": 44,
+                "goals_against": 46,
+                "points_per_match": 1.5,
+                "venue_flag": ""
+              },
+              {
+                "competition_or_team": "球會友誼",
+                "matches": 18,
+                "wins": 6,
+                "draws": 4,
+                "losses": 8,
+                "goals_for": 30,
+                "goals_against": 20,
+                "points_per_match": 1.22,
+                "venue_flag": ""
+              },
+              {
+                "competition_or_team": "瑞典盃",
+                "matches": 6,
+                "wins": 2,
+                "draws": 0,
+                "losses": 4,
+                "goals_for": 6,
+                "goals_against": 10,
+                "points_per_match": 1.0,
+                "venue_flag": ""
+              }
+            ],
+            "team_records": [
+              {
+                "competition_or_team": "韋斯特羅斯",
+                "matches": 26,
+                "wins": 8,
+                "draws": 8,
+                "losses": 10,
+                "goals_for": 46,
+                "goals_against": 34,
+                "points_per_match": 1.23,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "韋斯特羅斯",
+                "matches": 22,
+                "wins": 10,
+                "draws": 2,
+                "losses": 10,
+                "goals_for": 34,
+                "goals_against": 42,
+                "points_per_match": 1.45,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "韋斯特羅斯",
+                "matches": 48,
+                "wins": 18,
+                "draws": 10,
+                "losses": 20,
+                "goals_for": 80,
+                "goals_against": 76,
+                "points_per_match": 1.33,
+                "venue_flag": ""
+              },
+              {
+                "competition_or_team": "韋斯特羅斯",
+                "matches": 26,
+                "wins": 8,
+                "draws": 8,
+                "losses": 10,
+                "goals_for": 46,
+                "goals_against": 34,
+                "points_per_match": 1.23,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "韋斯特羅斯",
+                "matches": 22,
+                "wins": 10,
+                "draws": 2,
+                "losses": 10,
+                "goals_for": 34,
+                "goals_against": 42,
+                "points_per_match": 1.45,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "韋斯特羅斯",
+                "matches": 48,
+                "wins": 18,
+                "draws": 10,
+                "losses": 20,
+                "goals_for": 80,
+                "goals_against": 76,
+                "points_per_match": 1.33,
+                "venue_flag": ""
+              }
+            ]
+          }
+        },
+        "referee": {
+          "name": "S.李察",
+          "birth_date": "",
+          "nationality": "瑞典",
+          "summaries": [
+            {
+              "competition": "所有赛事",
+              "matches": 134,
+              "home": {
+                "side": "home",
+                "wins": 53,
+                "draws": 33,
+                "losses": 48,
+                "avg_fouls": 5.07,
+                "avg_yellow": 1.5,
+                "avg_red": 0.06,
+                "win_rate": "40%"
+              },
+              "away": {
+                "side": "away",
+                "wins": 48,
+                "draws": 33,
+                "losses": 53,
+                "avg_fouls": 5.53,
+                "avg_yellow": 1.65,
+                "avg_red": 0.07,
+                "win_rate": "36%"
+              }
+            },
+            {
+              "competition": "瑞典超",
+              "matches": 57,
+              "home": {
+                "side": "home",
+                "wins": 21,
+                "draws": 11,
+                "losses": 25,
+                "avg_fouls": 11.21,
+                "avg_yellow": 1.51,
+                "avg_red": 0.05,
+                "win_rate": "37%"
+              },
+              "away": {
+                "side": "away",
+                "wins": 25,
+                "draws": 11,
+                "losses": 21,
+                "avg_fouls": 12.12,
+                "avg_yellow": 1.61,
+                "avg_red": 0.04,
+                "win_rate": "44%"
+              }
+            }
+          ],
+          "home_team_history_count": 14,
+          "away_team_history_count": 15
+        },
+        "panlu": {
+          "matches": [
+            {
+              "match_id": 2912202,
+              "competition": "瑞典超",
+              "kickoff": "26-07-12 20:00",
+              "home_team": "韋斯特羅斯",
+              "away_team": "迪加科斯",
+              "home_team_id": 1525,
+              "away_team_id": 2088,
+              "full_time": {
+                "home": 2,
+                "away": 0
+              },
+              "half_time": {
+                "home": 1,
+                "away": 0
+              },
+              "asian_line": 0.25,
+              "total_line": 2.5,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2912200,
+              "competition": "瑞典超",
+              "kickoff": "26-07-11 21:00",
+              "home_team": "米贊比",
+              "away_team": "AIK蘇納",
+              "home_team_id": 2091,
+              "away_team_id": 400,
+              "full_time": {
+                "home": 1,
+                "away": 2
+              },
+              "half_time": {
+                "home": 0,
+                "away": 0
+              },
+              "asian_line": 0.5,
+              "total_line": 2.75,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2912192,
+              "competition": "瑞典超",
+              "kickoff": "26-07-04 21:00",
+              "home_team": "咸史泰斯",
+              "away_team": "韋斯特羅斯",
+              "home_team_id": 424,
+              "away_team_id": 1525,
+              "full_time": {
+                "home": 1,
+                "away": 3
+              },
+              "half_time": {
+                "home": 1,
+                "away": 2
+              },
+              "asian_line": 0,
+              "total_line": 2.5,
+              "provider_flags": [
+                1,
+                0
+              ]
+            },
+            {
+              "match_id": 2912194,
+              "competition": "瑞典超",
+              "kickoff": "26-07-04 01:00",
+              "home_team": "天狼星",
+              "away_team": "米贊比",
+              "home_team_id": 2782,
+              "away_team_id": 2091,
+              "full_time": {
+                "home": 4,
+                "away": 4
+              },
+              "half_time": {
+                "home": 1,
+                "away": 0
+              },
+              "asian_line": 0.75,
+              "total_line": 2.75,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 3006928,
+              "competition": "球會友誼",
+              "kickoff": "26-06-28 20:00",
+              "home_team": "AIK蘇納",
+              "away_team": "韋斯特羅斯",
+              "home_team_id": 400,
+              "away_team_id": 1525,
+              "full_time": {
+                "home": 3,
+                "away": 2
+              },
+              "half_time": {
+                "home": 2,
+                "away": 1
+              },
+              "asian_line": 0,
+              "total_line": 3,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 3004767,
+              "competition": "球會友誼",
+              "kickoff": "26-06-27 20:00",
+              "home_team": "哥本哈根",
+              "away_team": "米贊比",
+              "home_team_id": 227,
+              "away_team_id": 2091,
+              "full_time": {
+                "home": 5,
+                "away": 3
+              },
+              "half_time": {
+                "home": 3,
+                "away": 2
+              },
+              "asian_line": 0.75,
+              "total_line": 3.5,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 3006305,
+              "competition": "球會友誼",
+              "kickoff": "26-06-24 20:00",
+              "home_team": "米贊比",
+              "away_team": "咸史泰斯",
+              "home_team_id": 2091,
+              "away_team_id": 424,
+              "full_time": {
+                "home": 3,
+                "away": 3
+              },
+              "half_time": {
+                "home": 1,
+                "away": 0
+              },
+              "asian_line": 1.25,
+              "total_line": 2.75,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2912186,
+              "competition": "瑞典超",
+              "kickoff": "26-05-31 20:00",
+              "home_team": "韋斯特羅斯",
+              "away_team": "哥登堡",
+              "home_team_id": 1525,
+              "away_team_id": 413,
+              "full_time": {
+                "home": 4,
+                "away": 5
+              },
+              "half_time": {
+                "home": 2,
+                "away": 4
+              },
+              "asian_line": 0,
+              "total_line": 2.5,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2912173,
+              "competition": "瑞典超",
+              "kickoff": "26-05-26 01:00",
+              "home_team": "哥登堡",
+              "away_team": "米贊比",
+              "home_team_id": 413,
+              "away_team_id": 2091,
+              "full_time": {
+                "home": 1,
+                "away": 1
+              },
+              "half_time": {
+                "home": 0,
+                "away": 0
+              },
+              "asian_line": 0,
+              "total_line": 2.5,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2912177,
+              "competition": "瑞典超",
+              "kickoff": "26-05-24 22:30",
+              "home_team": "馬模",
+              "away_team": "韋斯特羅斯",
+              "home_team_id": 408,
+              "away_team_id": 1525,
+              "full_time": {
+                "home": 2,
+                "away": 3
+              },
+              "half_time": {
+                "home": 1,
+                "away": 2
+              },
+              "asian_line": 0.75,
+              "total_line": 2.75,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2912222,
+              "competition": "瑞典超",
+              "kickoff": "26-05-22 01:00",
+              "home_team": "艾夫斯堡",
+              "away_team": "米贊比",
+              "home_team_id": 417,
+              "away_team_id": 2091,
+              "full_time": {
+                "home": 1,
+                "away": 1
+              },
+              "half_time": {
+                "home": 1,
+                "away": 0
+              },
+              "asian_line": 0,
+              "total_line": 2.25,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2912170,
+              "competition": "瑞典超",
+              "kickoff": "26-05-17 22:30",
+              "home_team": "韋斯特羅斯",
+              "away_team": "AIK蘇納",
+              "home_team_id": 1525,
+              "away_team_id": 400,
+              "full_time": {
+                "home": 1,
+                "away": 1
+              },
+              "half_time": {
+                "home": 1,
+                "away": 1
+              },
+              "asian_line": -0.25,
+              "total_line": 2.5,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2912168,
+              "competition": "瑞典超",
+              "kickoff": "26-05-17 22:30",
+              "home_team": "米贊比",
+              "away_team": "赫根",
+              "home_team_id": 2091,
+              "away_team_id": 1518,
+              "full_time": {
+                "home": 0,
+                "away": 1
+              },
+              "half_time": {
+                "home": 0,
+                "away": 0
+              },
+              "asian_line": 0.5,
+              "total_line": 2.75,
+              "provider_flags": [
+                1,
+                0
+              ]
+            },
+            {
+              "match_id": 2968609,
+              "competition": "瑞典盃",
+              "kickoff": "26-05-14 21:30",
+              "home_team": "米贊比",
+              "away_team": "哈馬比",
+              "home_team_id": 2091,
+              "away_team_id": 410,
+              "full_time": {
+                "home": 2,
+                "away": 1
+              },
+              "half_time": {
+                "home": 2,
+                "away": 1
+              },
+              "asian_line": 0,
+              "total_line": 2.5,
+              "provider_flags": [
+                1,
+                0
+              ]
+            },
+            {
+              "match_id": 2912156,
+              "competition": "瑞典超",
+              "kickoff": "26-05-09 21:00",
+              "home_team": "迪加科斯",
+              "away_team": "米贊比",
+              "home_team_id": 2088,
+              "away_team_id": 2091,
+              "full_time": {
+                "home": 1,
+                "away": 4
+              },
+              "half_time": {
+                "home": 0,
+                "away": 3
+              },
+              "asian_line": -0.25,
+              "total_line": 2.5,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2912162,
+              "competition": "瑞典超",
+              "kickoff": "26-05-09 21:00",
+              "home_team": "韋斯特羅斯",
+              "away_team": "加爾斯",
+              "home_team_id": 1525,
+              "away_team_id": 1522,
+              "full_time": {
+                "home": 0,
+                "away": 1
+              },
+              "half_time": {
+                "home": 0,
+                "away": 0
+              },
+              "asian_line": -0.25,
+              "total_line": 2.5,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2912152,
+              "competition": "瑞典超",
+              "kickoff": "26-05-03 20:00",
+              "home_team": "哈馬比",
+              "away_team": "韋斯特羅斯",
+              "home_team_id": 410,
+              "away_team_id": 1525,
+              "full_time": {
+                "home": 3,
+                "away": 0
+              },
+              "half_time": {
+                "home": 0,
+                "away": 0
+              },
+              "asian_line": 1.5,
+              "total_line": 3,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2912153,
+              "competition": "瑞典超",
+              "kickoff": "26-05-03 20:00",
+              "home_team": "馬模",
+              "away_team": "米贊比",
+              "home_team_id": 408,
+              "away_team_id": 2091,
+              "full_time": {
+                "home": 2,
+                "away": 3
+              },
+              "half_time": {
+                "home": 0,
+                "away": 1
+              },
+              "asian_line": 0.25,
+              "total_line": 2.25,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2912144,
+              "competition": "瑞典超",
+              "kickoff": "26-04-28 01:00",
+              "home_team": "米贊比",
+              "away_team": "咸史泰斯",
+              "home_team_id": 2091,
+              "away_team_id": 424,
+              "full_time": {
+                "home": 2,
+                "away": 0
+              },
+              "half_time": {
+                "home": 0,
+                "away": 0
+              },
+              "asian_line": 1.25,
+              "total_line": 2.75,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2912140,
+              "competition": "瑞典超",
+              "kickoff": "26-04-26 22:30",
+              "home_team": "龐馬普卡納",
+              "away_team": "韋斯特羅斯",
+              "home_team_id": 1526,
+              "away_team_id": 1525,
+              "full_time": {
+                "home": 1,
+                "away": 2
+              },
+              "half_time": {
+                "home": 1,
+                "away": 1
+              },
+              "asian_line": 0.25,
+              "total_line": 2.5,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2912133,
+              "competition": "瑞典超",
+              "kickoff": "26-04-24 01:00",
+              "home_team": "加爾斯",
+              "away_team": "米贊比",
+              "home_team_id": 1522,
+              "away_team_id": 2091,
+              "full_time": {
+                "home": 0,
+                "away": 0
+              },
+              "half_time": {
+                "home": 0,
+                "away": 0
+              },
+              "asian_line": 0,
+              "total_line": 2.5,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2912138,
+              "competition": "瑞典超",
+              "kickoff": "26-04-23 01:00",
+              "home_team": "韋斯特羅斯",
+              "away_team": "赫根",
+              "home_team_id": 1525,
+              "away_team_id": 1518,
+              "full_time": {
+                "home": 3,
+                "away": 3
+              },
+              "half_time": {
+                "home": 2,
+                "away": 1
+              },
+              "asian_line": -0.25,
+              "total_line": 2.75,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2912129,
+              "competition": "瑞典超",
+              "kickoff": "26-04-18 21:00",
+              "home_team": "米贊比",
+              "away_team": "龐馬普卡納",
+              "home_team_id": 2091,
+              "away_team_id": 1526,
+              "full_time": {
+                "home": 3,
+                "away": 0
+              },
+              "half_time": {
+                "home": 3,
+                "away": 0
+              },
+              "asian_line": 1,
+              "total_line": 2.75,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2912130,
+              "competition": "瑞典超",
+              "kickoff": "26-04-18 21:00",
+              "home_team": "天狼星",
+              "away_team": "韋斯特羅斯",
+              "home_team_id": 2782,
+              "away_team_id": 1525,
+              "full_time": {
+                "home": 4,
+                "away": 1
+              },
+              "half_time": {
+                "home": 3,
+                "away": 0
+              },
+              "asian_line": 1,
+              "total_line": 2.75,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2912120,
+              "competition": "瑞典超",
+              "kickoff": "26-04-11 21:00",
+              "home_team": "米贊比",
+              "away_team": "奧基迪",
+              "home_team_id": 2091,
+              "away_team_id": 409,
+              "full_time": {
+                "home": 0,
+                "away": 2
+              },
+              "half_time": {
+                "home": 0,
+                "away": 2
+              },
+              "asian_line": 1.25,
+              "total_line": 3,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2912122,
+              "competition": "瑞典超",
+              "kickoff": "26-04-11 21:00",
+              "home_team": "韋斯特羅斯",
+              "away_team": "艾夫斯堡",
+              "home_team_id": 1525,
+              "away_team_id": 417,
+              "full_time": {
+                "home": 2,
+                "away": 2
+              },
+              "half_time": {
+                "home": 0,
+                "away": 0
+              },
+              "asian_line": 0,
+              "total_line": 2.75,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2912113,
+              "competition": "瑞典超",
+              "kickoff": "26-04-05 20:00",
+              "home_team": "卡馬亞",
+              "away_team": "韋斯特羅斯",
+              "home_team_id": 426,
+              "away_team_id": 1525,
+              "full_time": {
+                "home": 0,
+                "away": 1
+              },
+              "half_time": {
+                "home": 0,
+                "away": 1
+              },
+              "asian_line": 0.25,
+              "total_line": 2.5,
+              "provider_flags": [
+                0,
+                1
+              ]
+            },
+            {
+              "match_id": 2912112,
+              "competition": "瑞典超",
+              "kickoff": "26-04-04 21:00",
+              "home_team": "哈馬比",
+              "away_team": "米贊比",
+              "home_team_id": 410,
+              "away_team_id": 2091,
+              "full_time": {
+                "home": 3,
+                "away": 0
+              },
+              "half_time": {
+                "home": 2,
+                "away": 0
+              },
+              "asian_line": 0.5,
+              "total_line": 2.5,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2967168,
+              "competition": "球會友誼",
+              "kickoff": "26-03-28 21:00",
+              "home_team": "韋斯特羅斯",
+              "away_team": "桑德維肯斯",
+              "home_team_id": 1525,
+              "away_team_id": 2162,
+              "full_time": {
+                "home": 3,
+                "away": 1
+              },
+              "half_time": {
+                "home": 2,
+                "away": 0
+              },
+              "asian_line": 1.5,
+              "total_line": 3,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2965255,
+              "competition": "球會友誼",
+              "kickoff": "26-03-27 22:00",
+              "home_team": "赫根",
+              "away_team": "米贊比",
+              "home_team_id": 1518,
+              "away_team_id": 2091,
+              "full_time": {
+                "home": 2,
+                "away": 2
+              },
+              "half_time": {
+                "home": 0,
+                "away": 2
+              },
+              "asian_line": -0.75,
+              "total_line": 3,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2962291,
+              "competition": "瑞典盃",
+              "kickoff": "26-03-22 23:00",
+              "home_team": "米贊比",
+              "away_team": "加爾斯",
+              "home_team_id": 2091,
+              "away_team_id": 1522,
+              "full_time": {
+                "home": 3,
+                "away": 0
+              },
+              "half_time": {
+                "home": 2,
+                "away": 0
+              },
+              "asian_line": 0.5,
+              "total_line": 2.75,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2963283,
+              "competition": "球會友誼",
+              "kickoff": "26-03-22 21:00",
+              "home_team": "龐馬普卡納",
+              "away_team": "韋斯特羅斯",
+              "home_team_id": 1526,
+              "away_team_id": 1525,
+              "full_time": {
+                "home": 2,
+                "away": 2
+              },
+              "half_time": {
+                "home": 1,
+                "away": 2
+              },
+              "asian_line": 0.25,
+              "total_line": 4.75,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2959475,
+              "competition": "球會友誼",
+              "kickoff": "26-03-15 21:00",
+              "home_team": "韋斯特羅斯",
+              "away_team": "奧斯達辛斯",
+              "home_team_id": 1525,
+              "away_team_id": 2156,
+              "full_time": {
+                "home": 3,
+                "away": 0
+              },
+              "half_time": {
+                "home": 1,
+                "away": 0
+              },
+              "asian_line": 1.25,
+              "total_line": 3.5,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2958957,
+              "competition": "瑞典盃",
+              "kickoff": "26-03-14 22:15",
+              "home_team": "米贊比",
+              "away_team": "馬模",
+              "home_team_id": 2091,
+              "away_team_id": 408,
+              "full_time": {
+                "home": 4,
+                "away": 0
+              },
+              "half_time": {
+                "home": 2,
+                "away": 0
+              },
+              "asian_line": 0.25,
+              "total_line": 2.5,
+              "provider_flags": [
+                0,
+                1
+              ]
+            },
+            {
+              "match_id": 2907086,
+              "competition": "瑞典盃",
+              "kickoff": "26-03-10 02:00",
+              "home_team": "韋斯特羅斯",
+              "away_team": "奧迪沃特",
+              "home_team_id": 1525,
+              "away_team_id": 2768,
+              "full_time": {
+                "home": 0,
+                "away": 1
+              },
+              "half_time": {
+                "home": 0,
+                "away": 0
+              },
+              "asian_line": 1.5,
+              "total_line": 3.5,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2907073,
+              "competition": "瑞典盃",
+              "kickoff": "26-03-07 20:00",
+              "home_team": "米贊比",
+              "away_team": "華納莫",
+              "home_team_id": 2091,
+              "away_team_id": 2178,
+              "full_time": {
+                "home": 2,
+                "away": 1
+              },
+              "half_time": {
+                "home": 1,
+                "away": 0
+              },
+              "asian_line": 1.75,
+              "total_line": 3.25,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2951366,
+              "competition": "球會友誼",
+              "kickoff": "26-03-04 21:30",
+              "home_team": "韋斯特羅斯",
+              "away_team": "加費萊",
+              "home_team_id": 1525,
+              "away_team_id": 1519,
+              "full_time": {
+                "home": 4,
+                "away": 0
+              },
+              "half_time": {
+                "home": 3,
+                "away": 0
+              },
+              "asian_line": 1.5,
+              "total_line": 3.5,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2907067,
+              "competition": "瑞典盃",
+              "kickoff": "26-03-01 22:00",
+              "home_team": "赫根",
+              "away_team": "韋斯特羅斯",
+              "home_team_id": 1518,
+              "away_team_id": 1525,
+              "full_time": {
+                "home": 4,
+                "away": 1
+              },
+              "half_time": {
+                "home": 1,
+                "away": 0
+              },
+              "asian_line": 0.75,
+              "total_line": 2.75,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2907072,
+              "competition": "瑞典盃",
+              "kickoff": "26-02-28 02:00",
+              "home_team": "奧基迪",
+              "away_team": "米贊比",
+              "home_team_id": 409,
+              "away_team_id": 2091,
+              "full_time": {
+                "home": 0,
+                "away": 3
+              },
+              "half_time": {
+                "home": 0,
+                "away": 1
+              },
+              "asian_line": -1,
+              "total_line": 2.75,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2948297,
+              "competition": "球會友誼",
+              "kickoff": "26-02-24 21:40",
+              "home_team": "韋斯特羅斯",
+              "away_team": "安高平",
+              "home_team_id": 1525,
+              "away_team_id": 2722,
+              "full_time": {
+                "home": 1,
+                "away": 1
+              },
+              "half_time": {
+                "home": 0,
+                "away": 0
+              },
+              "asian_line": 1.75,
+              "total_line": 3.25,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2907051,
+              "competition": "瑞典盃",
+              "kickoff": "26-02-22 20:00",
+              "home_team": "AIK蘇納",
+              "away_team": "韋斯特羅斯",
+              "home_team_id": 400,
+              "away_team_id": 1525,
+              "full_time": {
+                "home": 0,
+                "away": 2
+              },
+              "half_time": {
+                "home": 0,
+                "away": 2
+              },
+              "asian_line": 1,
+              "total_line": 2.5,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2907056,
+              "competition": "瑞典盃",
+              "kickoff": "26-02-21 20:00",
+              "home_team": "米贊比",
+              "away_team": "卡馬亞",
+              "home_team_id": 2091,
+              "away_team_id": 426,
+              "full_time": {
+                "home": 2,
+                "away": 0
+              },
+              "half_time": {
+                "home": 1,
+                "away": 0
+              },
+              "asian_line": 1.25,
+              "total_line": 2.5,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2943743,
+              "competition": "球會友誼",
+              "kickoff": "26-02-14 21:00",
+              "home_team": "韋斯特羅斯",
+              "away_team": "迪加科斯",
+              "home_team_id": 1525,
+              "away_team_id": 2088,
+              "full_time": {
+                "home": 0,
+                "away": 1
+              },
+              "half_time": {
+                "home": 0,
+                "away": 0
+              },
+              "asian_line": 0,
+              "total_line": 2.5,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2936872,
+              "competition": "球會友誼",
+              "kickoff": "26-02-07 20:00",
+              "home_team": "韋斯特羅斯",
+              "away_team": "佐加頓斯",
+              "home_team_id": 1525,
+              "away_team_id": 421,
+              "full_time": {
+                "home": 0,
+                "away": 1
+              },
+              "half_time": {
+                "home": 0,
+                "away": 1
+              },
+              "asian_line": -0.75,
+              "total_line": 2.75,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2936663,
+              "competition": "球會友誼",
+              "kickoff": "26-02-07 03:30",
+              "home_team": "洛辛堡",
+              "away_team": "米贊比",
+              "home_team_id": 507,
+              "away_team_id": 2091,
+              "full_time": {
+                "home": 0,
+                "away": 0
+              },
+              "half_time": {
+                "home": 0,
+                "away": 0
+              },
+              "asian_line": 0,
+              "total_line": 2.75,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2930185,
+              "competition": "大西洋盃",
+              "kickoff": "26-02-04 03:30",
+              "home_team": "米贊比",
+              "away_team": "阿爾提斯般奴",
+              "home_team_id": 2091,
+              "away_team_id": 6643,
+              "full_time": {
+                "home": 4,
+                "away": 1
+              },
+              "half_time": {
+                "home": 2,
+                "away": 1
+              },
+              "asian_line": 1,
+              "total_line": 3,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2930210,
+              "competition": "球會友誼",
+              "kickoff": "26-02-01 19:00",
+              "home_team": "大田市民",
+              "away_team": "韋斯特羅斯",
+              "home_team_id": 488,
+              "away_team_id": 1525,
+              "full_time": {
+                "home": 1,
+                "away": 0
+              },
+              "half_time": {
+                "home": 0,
+                "away": 0
+              },
+              "asian_line": 0.25,
+              "total_line": 2.75,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2928234,
+              "competition": "大西洋盃",
+              "kickoff": "26-01-30 22:00",
+              "home_team": "特羅素",
+              "away_team": "米贊比",
+              "home_team_id": 514,
+              "away_team_id": 2091,
+              "full_time": {
+                "home": 1,
+                "away": 0
+              },
+              "half_time": {
+                "home": 0,
+                "away": 0
+              },
+              "asian_line": 0,
+              "total_line": 2.5,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2926035,
+              "competition": "球會友誼",
+              "kickoff": "26-01-24 21:30",
+              "home_team": "寧比",
+              "away_team": "米贊比",
+              "home_team_id": 1697,
+              "away_team_id": 2091,
+              "full_time": {
+                "home": 3,
+                "away": 0
+              },
+              "half_time": {
+                "home": 1,
+                "away": 0
+              },
+              "asian_line": -0.75,
+              "total_line": 2.75,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2922437,
+              "competition": "球會友誼",
+              "kickoff": "26-01-17 21:00",
+              "home_team": "米贊比",
+              "away_team": "卡馬亞",
+              "home_team_id": 2091,
+              "away_team_id": 426,
+              "full_time": {
+                "home": 4,
+                "away": 0
+              },
+              "half_time": {
+                "home": 1,
+                "away": 0
+              },
+              "asian_line": 1,
+              "total_line": 3,
+              "provider_flags": [
+                0,
+                0
+              ]
+            }
+          ],
+          "count": 60
+        },
+        "script_context": {
+          "coach": {
+            "home_record": {
+              "competition_or_team": "米贊比",
+              "matches": 14,
+              "wins": 10,
+              "draws": 1,
+              "losses": 3,
+              "goals_for": 33,
+              "goals_against": 13,
+              "points_per_match": 2.21,
+              "venue_flag": "1"
+            },
+            "away_record": {
+              "competition_or_team": "韋斯特羅斯",
+              "matches": 22,
+              "wins": 10,
+              "draws": 2,
+              "losses": 10,
+              "goals_for": 34,
+              "goals_against": 42,
+              "points_per_match": 1.45,
+              "venue_flag": "0"
+            }
+          },
+          "referee": {
+            "name": "S.李察",
+            "sample": 134,
+            "combined_yellow": 3.15,
+            "combined_red": 0.13
+          },
+          "effects": [
+            "教练剧本：主队教练的主场组织与拿分稳定性更强（主场PPG 2.21，客场PPG 1.45；样本 14/22 场），更支持其在僵持阶段掌控调整节奏。",
+            "裁判剧本：S.李察在134场公开样本中场均双方合计黄牌约3.15、红牌约0.13，对抗和定位球权重中等偏高。"
+          ],
+          "risks": [],
+          "model_usage": "match_script_and_uncertainty_only_not_probability_override"
+        },
+        "items": [
+          "教练：主队 卡爾·馬裏烏斯·阿克蘇姆；客队 亞歷山大·魯賓。",
+          "裁判：S.李察；公开执法样本 134 场。",
+          "Nowscore盘路历史已读取 60 场，仅作风格与盘口复核，不直接改写概率。",
+          "教练剧本：主队教练的主场组织与拿分稳定性更强（主场PPG 2.21，客场PPG 1.45；样本 14/22 场），更支持其在僵持阶段掌控调整节奏。",
+          "裁判剧本：S.李察在134场公开样本中场均双方合计黄牌约3.15、红牌约0.13，对抗和定位球权重中等偏高。"
+        ],
+        "status": "Nowscore赛前背景已核验",
+        "sources": [
+          "https://live.nowscore.com/info/coach/2912209.htm?l=1",
+          "https://live.nowscore.com/info/referee/2912209.htm?l=1",
+          "https://live.nowscore.com/panlu/2912209.html"
+        ]
+      }
+    },
+    "sources": [],
+    "recent_form": {
+      "home_overall": {
+        "matches": 10,
+        "wins": 3,
+        "draws": 4,
+        "losses": 3,
+        "goals_for": 22,
+        "goals_against": 21
+      },
+      "home_home": {
+        "matches": 10,
+        "wins": 6,
+        "draws": 1,
+        "losses": 3,
+        "goals_for": 20,
+        "goals_against": 10
+      },
+      "away_overall": {
+        "matches": 10,
+        "wins": 4,
+        "draws": 2,
+        "losses": 4,
+        "goals_for": 20,
+        "goals_against": 20
+      },
+      "away_away": {
+        "matches": 10,
+        "wins": 5,
+        "draws": 1,
+        "losses": 4,
+        "goals_for": 17,
+        "goals_against": 20
+      }
+    },
+    "form_source": "500.com赛前数据快照",
+    "checked_at": "2026-07-17T11:04:58+00:00"
+  },
+  "evidence_chain": [
+    {
+      "title": "足球维度",
+      "items": [
+        "米亚尔比近10个主场6胜1平3负，韦斯特罗斯近10个客场5胜1平4负",
+        "近期主客场攻防推导λ：米亚尔比2.03，韦斯特罗斯1.58",
+        "米亚尔比更可能掌握主动，但韦斯特罗斯仍有足够进球期望制造反击或定位球威胁；总进球中枢偏高；早段进球会显著放大开放对攻和右尾比分风险；教练剧本：主队教练的主场组织与拿分稳定性更强（主场PPG 2.21，客场PPG 1.45；样本 14/22 场），更支持其在僵持阶段掌控调整节奏。；裁判剧本：S.李察在134场公开样本中场均双方合计黄牌约3.15、红牌约0.13，对抗和定位球权重中等偏高。。"
+      ]
+    },
+    {
+      "title": "教练、裁判与历史盘路",
+      "items": [
+        "教练：主队 卡爾·馬裏烏斯·阿克蘇姆；客队 亞歷山大·魯賓。",
+        "裁判：S.李察；公开执法样本 134 场。",
+        "Nowscore盘路历史已读取 60 场，仅作风格与盘口复核，不直接改写概率。",
+        "教练剧本：主队教练的主场组织与拿分稳定性更强（主场PPG 2.21，客场PPG 1.45；样本 14/22 场），更支持其在僵持阶段掌控调整节奏。",
+        "裁判剧本：S.李察在134场公开样本中场均双方合计黄牌约3.15、红牌约0.13，对抗和定位球权重中等偏高。",
+        "这些信息用于解释比赛脚本与风险点；在完成历史校准前，不直接机械增减胜平负概率。"
+      ]
+    },
+    {
+      "title": "市场维度",
+      "items": [
+        "去水共识：主胜50.3%、平局25.0%、客胜24.6%",
+        "大小球中轴：2.5；市场占40%校准权重，不替代模型。",
+        "多公司市场对主胜的定价比模型更强1.1%，不能把市场热度直接当成模型优势"
+      ]
+    },
+    {
+      "title": "执行维度",
+      "items": [
+        "每个玩法分别展示当前价、模型概率、EV与最低可接受赔率；低于门槛一律不过线。",
+        "执行价额外要求8%安全边际；模型包含市场校准，因此正EV只是价格复核信号。",
+        "唯一比分2-1只是单个比分格的最高点；胜平负主线主胜是多个比分格合计，二者不要求同方向。"
+      ]
+    },
+    {
+      "title": "模型与临场核验",
+      "items": [
+        "公开事实核验状态：Nowscore赛前背景已核验。",
+        "确认首发、关键伤停、天气或盘口换线与假设冲突时，必须重算而非沿用旧报告。"
+      ]
+    }
+  ],
+  "betting": {
+    "candidates": [],
+    "state": "空仓｜未锁单",
+    "execution_authorized": false,
+    "lock_state_changed": false,
+    "bankroll_state_changed": false,
+    "price_audit": [
+      {
+        "market": "SPF主胜",
+        "model_probability": 0.492382,
+        "conservative_probability": 0.417382,
+        "minimum_acceptable_decimal_odds": 2.588,
+        "odds": 1.61,
+        "ev": -0.207265,
+        "audit_role": "模型价格门槛，不是投注指令",
+        "price_source": "竞彩赛前SPF"
+      },
+      {
+        "market": "SPF平局",
+        "model_probability": 0.227959,
+        "conservative_probability": 0.152959,
+        "minimum_acceptable_decimal_odds": 7.061,
+        "odds": 3.75,
+        "ev": -0.145154,
+        "audit_role": "模型价格门槛，不是投注指令",
+        "price_source": "竞彩赛前SPF"
+      },
+      {
+        "market": "SPF客胜",
+        "model_probability": 0.279659,
+        "conservative_probability": 0.204659,
+        "minimum_acceptable_decimal_odds": 5.277,
+        "odds": 4.15,
+        "ev": 0.160585,
+        "audit_role": "模型价格门槛，不是投注指令",
+        "price_source": "竞彩赛前SPF"
+      },
+      {
+        "market": "立博 大2.5",
+        "model_probability": 0.6138,
+        "push_probability": 0.0,
+        "odds": 1.61,
+        "ev": -0.011782,
+        "minimum_acceptable_decimal_odds": 1.76,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "立博 小2.5",
+        "model_probability": 0.3862,
+        "push_probability": 0.0,
+        "odds": 2.15,
+        "ev": -0.16967,
+        "minimum_acceptable_decimal_odds": 2.796,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "威廉希尔 大2.5",
+        "model_probability": 0.6138,
+        "push_probability": 0.0,
+        "odds": 1.62,
+        "ev": -0.005644,
+        "minimum_acceptable_decimal_odds": 1.76,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "威廉希尔 小2.5",
+        "model_probability": 0.3862,
+        "push_probability": 0.0,
+        "odds": 2.2,
+        "ev": -0.15036,
+        "minimum_acceptable_decimal_odds": 2.796,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "Interwetten 大2.5",
+        "model_probability": 0.6138,
+        "push_probability": 0.0,
+        "odds": 1.6,
+        "ev": -0.01792,
+        "minimum_acceptable_decimal_odds": 1.76,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "Interwetten 小2.5",
+        "model_probability": 0.3862,
+        "push_probability": 0.0,
+        "odds": 2.2,
+        "ev": -0.15036,
+        "minimum_acceptable_decimal_odds": 2.796,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "10 大3",
+        "model_probability": 0.390796,
+        "push_probability": 0.223004,
+        "odds": 1.95,
+        "ev": -0.014944,
+        "minimum_acceptable_decimal_odds": 2.147,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "10 小3",
+        "model_probability": 0.3862,
+        "push_probability": 0.223004,
+        "odds": 1.76,
+        "ev": -0.097284,
+        "minimum_acceptable_decimal_odds": 2.173,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "Bwin 大2.5",
+        "model_probability": 0.6138,
+        "push_probability": 0.0,
+        "odds": 1.61,
+        "ev": -0.011782,
+        "minimum_acceptable_decimal_odds": 1.76,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "Bwin 小2.5",
+        "model_probability": 0.3862,
+        "push_probability": 0.0,
+        "odds": 2.15,
+        "ev": -0.16967,
+        "minimum_acceptable_decimal_odds": 2.796,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "澳门 主-0.5",
+        "model_probability": 0.492382,
+        "push_probability": 0.0,
+        "odds": 1.81,
+        "ev": -0.108788,
+        "minimum_acceptable_decimal_odds": 2.193,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "澳门 客+0.5",
+        "model_probability": 0.507618,
+        "push_probability": 0.0,
+        "odds": 1.97,
+        "ev": 7e-06,
+        "minimum_acceptable_decimal_odds": 2.128,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "皇冠 主-0.5",
+        "model_probability": 0.492382,
+        "push_probability": 0.0,
+        "odds": 1.85,
+        "ev": -0.089093,
+        "minimum_acceptable_decimal_odds": 2.193,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "皇冠 客+0.5",
+        "model_probability": 0.507618,
+        "push_probability": 0.0,
+        "odds": 2.02,
+        "ev": 0.025388,
+        "minimum_acceptable_decimal_odds": 2.128,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "bet365 主-0.5",
+        "model_probability": 0.492382,
+        "push_probability": 0.0,
+        "odds": 1.85,
+        "ev": -0.089093,
+        "minimum_acceptable_decimal_odds": 2.193,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "bet365 客+0.5",
+        "model_probability": 0.507618,
+        "push_probability": 0.0,
+        "odds": 1.95,
+        "ev": -0.010145,
+        "minimum_acceptable_decimal_odds": 2.128,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "威廉希尔 主-0.5",
+        "model_probability": 0.492382,
+        "push_probability": 0.0,
+        "odds": 1.85,
+        "ev": -0.089093,
+        "minimum_acceptable_decimal_odds": 2.193,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "威廉希尔 客+0.5",
+        "model_probability": 0.507618,
+        "push_probability": 0.0,
+        "odds": 1.85,
+        "ev": -0.060907,
+        "minimum_acceptable_decimal_odds": 2.128,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "易胜博 主-0.5",
+        "model_probability": 0.492382,
+        "push_probability": 0.0,
+        "odds": 1.87,
+        "ev": -0.079246,
+        "minimum_acceptable_decimal_odds": 2.193,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "易胜博 客+0.5",
+        "model_probability": 0.507618,
+        "push_probability": 0.0,
+        "odds": 1.96,
+        "ev": -0.005069,
+        "minimum_acceptable_decimal_odds": 2.128,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "伟德 主-0.5",
+        "model_probability": 0.492382,
+        "push_probability": 0.0,
+        "odds": 1.84,
+        "ev": -0.094017,
+        "minimum_acceptable_decimal_odds": 2.193,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "伟德 客+0.5",
+        "model_probability": 0.507618,
+        "push_probability": 0.0,
+        "odds": 1.95,
+        "ev": -0.010145,
+        "minimum_acceptable_decimal_odds": 2.128,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      }
+    ]
+  },
+  "automation": {
+    "provider": "fixed-python-core",
+    "generated_at": "2026-07-17T11:04:59+00:00",
+    "owner_authorized_request": true,
+    "llm_used": false,
+    "market_refresh": {
+      "stage": "T-6H",
+      "captured_at": "2026-07-17T11:04:59.207373+00:00",
+      "target_minutes_before": 360,
+      "actual_minutes_before": 355.01,
+      "lateness_minutes": 4.99,
+      "exact": false,
+      "initial_capture": true,
+      "model_recalculated": true,
+      "execution_authorized": false,
+      "lock_state_changed": false,
+      "bankroll_state_changed": false
+    }
+  },
+  "market": {
+    "official_spf": {
+      "home": 1.61,
+      "draw": 3.75,
+      "away": 4.15
+    },
+    "official_rqspf": {
+      "handicap": -1,
+      "home": 2.98,
+      "draw": 3.4,
+      "away": 2.0
+    },
+    "official_market_baseline": {
+      "prices": {
+        "home": 1.61,
+        "draw": 3.75,
+        "away": 4.15
+      },
+      "overround": 1.128749,
+      "payout_rate": 0.885937,
+      "fair_probabilities": {
+        "home": 0.550271,
+        "draw": 0.23625,
+        "away": 0.213479
+      },
+      "role": "official_market_baseline_only_not_model_probability"
+    },
+    "interpretation": {
+      "money_flow": "没有可核验的交易所成交量，不把赔率变化称为真实资金流",
+      "bookmaker_behaviour": "机构调整暂未形成可核验的先后链",
+      "market_pressure": "盘口水位暂未形成一致方向",
+      "actual_volume_available": false
+    }
+  },
+  "decision_evolution": {
+    "latest": {
+      "kind": "stable",
+      "headline": "核心判断维持不变",
+      "summary": "新盘口和球队信息尚不足以越过决策边界；继续维持胜平负：主胜（模型49.2%）与比分2-1。",
+      "changed": false
+    },
+    "history": [
+      {
+        "captured_at": "2026-07-17T09:48:28.324101+00:00",
+        "headline": "初始判断：主胜；首推比分2-1",
+        "summary": "模型建立初始比赛剧本，主维度为胜平负：主胜（模型49.6%）。盘口水位暂未形成一致方向；没有可核验的交易所成交量，不把赔率变化称为真实资金流。",
+        "changed": true
+      },
+      {
+        "captured_at": "2026-07-17T10:19:13.551179+00:00",
+        "headline": "主维度由“胜平负：主胜（模型49.6%）”调整为“胜平负：主胜（模型49.3%）”",
+        "summary": "主维度由“胜平负：主胜（模型49.6%）”调整为“胜平负：主胜（模型49.3%）”。模型已按新信息重算，冻结注单不会被事后改写。",
+        "changed": true
+      },
+      {
+        "captured_at": "2026-07-17T10:46:46.224916+00:00",
+        "headline": "核心判断维持不变",
+        "summary": "新盘口和球队信息尚不足以越过决策边界；继续维持胜平负：主胜（模型49.3%）与比分2-1。",
+        "changed": false
+      },
+      {
+        "captured_at": "2026-07-17T10:50:42.888070+00:00",
+        "headline": "核心判断维持不变",
+        "summary": "新盘口和球队信息尚不足以越过决策边界；继续维持胜平负：主胜（模型49.3%）与比分2-1。",
+        "changed": false
+      },
+      {
+        "captured_at": "2026-07-17T11:03:49.257473+00:00",
+        "headline": "主维度由“胜平负：主胜（模型49.3%）”调整为“胜平负：主胜（模型49.2%）”",
+        "summary": "主维度由“胜平负：主胜（模型49.3%）”调整为“胜平负：主胜（模型49.2%）”。模型已按新信息重算，冻结注单不会被事后改写。",
+        "changed": true
+      },
+      {
+        "captured_at": "2026-07-17T11:04:59.207373+00:00",
+        "headline": "核心判断维持不变",
+        "summary": "新盘口和球队信息尚不足以越过决策边界；继续维持胜平负：主胜（模型49.2%）与比分2-1。",
+        "changed": false
+      }
+    ],
+    "internal_checkpoints_hidden": true
+  }
+}
