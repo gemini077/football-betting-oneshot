@@ -271,7 +271,71 @@ def water_flow_panel(companies: list[dict]) -> dict:
     }
 
 
-def lead_lag_panel(companies: list[dict]) -> dict:
+def nowscore_trend_panel(company_trends: list[dict]) -> dict:
+    """Summarize bookmaker price histories; these are not transaction volumes."""
+    markets = {"asian": [], "total": [], "one_x_two": []}
+    first_moves: list[dict] = []
+    direction_counts = {
+        "one_x_two_home": {"shortened": 0, "lengthened": 0, "flat": 0},
+        "asian_home": {"strengthened": 0, "weakened": 0, "flat": 0},
+        "total": {"up": 0, "down": 0, "flat": 0},
+    }
+    for company in company_trends or []:
+        for market, target in markets.items():
+            rows = [row for row in ((company.get("markets") or {}).get(market) or []) if row.get("captured_at")]
+            rows.sort(key=lambda row: row["captured_at"])
+            if not rows:
+                continue
+            target.append({
+                "source_company_id": company.get("source_company_id"), "name": company.get("name"),
+                "snapshot_count": len(rows), "first_at": rows[0]["captured_at"], "last_at": rows[-1]["captured_at"],
+            })
+            if market == "one_x_two" and rows[0].get("home") is not None and rows[-1].get("home") is not None:
+                delta = float(rows[-1]["home"]) - float(rows[0]["home"])
+                direction_counts["one_x_two_home"]["shortened" if delta < -0.005 else "lengthened" if delta > 0.005 else "flat"] += 1
+            elif market == "asian" and rows[0].get("line_number") is not None and rows[-1].get("line_number") is not None:
+                delta = float(rows[-1]["line_number"]) - float(rows[0]["line_number"])
+                direction_counts["asian_home"]["strengthened" if delta < -0.01 else "weakened" if delta > 0.01 else "flat"] += 1
+            elif market == "total" and rows[0].get("line_number") is not None and rows[-1].get("line_number") is not None:
+                delta = float(rows[-1]["line_number"]) - float(rows[0]["line_number"])
+                direction_counts["total"]["up" if delta > 0.01 else "down" if delta < -0.01 else "flat"] += 1
+            comparable = ("home_water", "line_number", "away_water") if market == "asian" else (
+                ("over", "line_number", "under") if market == "total" else ("home", "draw", "away")
+            )
+            previous = rows[0]
+            for row in rows[1:]:
+                if any(row.get(key) != previous.get(key) for key in comparable):
+                    first_moves.append({
+                        "market": market, "source_company_id": company.get("source_company_id"),
+                        "name": company.get("name"), "captured_at": row["captured_at"],
+                    })
+                    break
+                previous = row
+    first_moves.sort(key=lambda row: row["captured_at"])
+    snapshot_count = sum(item["snapshot_count"] for rows in markets.values() for item in rows)
+    company_count = len({item["source_company_id"] for rows in markets.values() for item in rows})
+    return {
+        "calculation_status": "completed" if company_count >= 3 and snapshot_count >= 12 else "degraded" if snapshot_count else "not_run",
+        "company_count": company_count, "snapshot_count": snapshot_count,
+        "markets": markets, "first_moves": first_moves[:12],
+        "direction_counts": direction_counts,
+        "semantic_scope": "bookmaker_price_and_line_history_not_transaction_flow",
+        "reason": None if company_count >= 3 and snapshot_count >= 12 else "独立公司历史轨迹不足",
+    }
+
+
+def lead_lag_panel(companies: list[dict], company_trends: list[dict] | None = None) -> dict:
+    trend_panel = nowscore_trend_panel(company_trends or [])
+    if trend_panel.get("calculation_status") == "completed":
+        return {
+            "calculation_status": "completed",
+            "priority": [1055, 3, 5],
+            "observed": trend_panel.get("first_moves") or [],
+            "chain": trend_panel.get("first_moves") or [],
+            "company_count": trend_panel.get("company_count"),
+            "snapshot_count": trend_panel.get("snapshot_count"),
+            "reason": None,
+        }
     priority = [1055, 3, 5]
     observed = []
     for cid in priority:
@@ -372,7 +436,10 @@ def analyze(deep: dict, tier_config: dict, league_median_dri: float | None = Non
     tiers = tier_panel(bookmakers, tier_config)
     scs = scs_panel(bookmakers, tier_config, history)
     dri = dri_panel(ouzhi, league_median_dri)
-    lead_lag = lead_lag_panel(deep.get("yazhi", {}).get("companies", []))
+    nowscore_context = deep.get("nowscore_context") or deep.get("context") or ((deep.get("nowscore") or {}).get("context") or {})
+    company_trends = nowscore_context.get("company_trends") or []
+    trend_panel = nowscore_trend_panel(company_trends)
+    lead_lag = lead_lag_panel(deep.get("yazhi", {}).get("companies", []), company_trends)
     water_flow = water_flow_panel(deep.get("yazhi", {}).get("companies", []))
     exchange = exchange_panel(deep.get("touzhu", {}), consensus_probability, history)
     kelly = kelly_panel(bookmakers, tier_config)
@@ -400,6 +467,7 @@ def analyze(deep: dict, tier_config: dict, league_median_dri: float | None = Non
             "scs": scs,
             "dri": dri,
             "lead_lag": lead_lag,
+            "nowscore_trends": trend_panel,
             "water_flow": water_flow,
             "exchange": exchange,
             "kelly": kelly,

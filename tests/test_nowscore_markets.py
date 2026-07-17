@@ -2,6 +2,10 @@ import unittest
 
 from scripts.nowscore_markets import (
     handicap_number,
+    parse_coach_page,
+    parse_company_trend,
+    parse_panlu_page,
+    parse_referee_page,
     parse_analysis_data,
     parse_schedule_js,
     parse_three_in_one,
@@ -89,6 +93,40 @@ class NowscoreMarketTests(unittest.TestCase):
         self.assertEqual(3, form["home_overall"]["goals_against"])
         self.assertEqual(1, form["home_home"]["matches"])
         self.assertEqual(1, form["away_away"]["matches"])
+
+    def test_numeric_split_total_line_is_normalized(self):
+        self.assertEqual(2.75, handicap_number("2.5/3"))
+
+    def test_context_pages_are_structured(self):
+        coach = parse_coach_page("""
+        <table><tr><td>姓名：</td><td>主帅甲</td></tr><tr><td>生日：</td><td>1980-01-01</td></tr>
+        <tr><td>姓名：</td><td>客帅乙</td></tr></table>
+        <script>var hc_data=[['', '', 26, '', '联赛', 10, 6, 2, 2, 18, 9, 2.0, 0, 0, '1']]; var gc_data=[];</script>
+        """)
+        self.assertEqual("主帅甲", coach["home"]["name"])
+        self.assertEqual(10, coach["home"]["coach_records"][0]["matches"])
+        referee = parse_referee_page("""
+        <table><tr><td>姓名：</td><td>裁判甲</td></tr><tr><td>国籍：</td><td>瑞典</td></tr>
+        <tr><td>所有赛事</td><td>20</td><td>主场球队</td><td>8胜 5平 7负</td><td>10</td><td>2</td><td>0.1</td><td>40%</td></tr>
+        <tr><td>客场球队</td><td>7胜 5平 8负</td><td>11</td><td>2.1</td><td>0.1</td><td>35%</td><td></td><td></td></tr></table>
+        """)
+        self.assertEqual("裁判甲", referee["name"])
+        self.assertEqual(20, referee["summaries"][0]["matches"])
+        panlu = parse_panlu_page("var a[0]=[1,'联赛','', '2026-07-01','主','客',10,20,2,1,1,0,'半球',1,0,'2.5'];")
+        self.assertEqual(1, panlu["count"])
+
+    def test_company_history_is_split_into_three_markets(self):
+        trend = parse_company_trend("""
+        <table><tr><th>时</th><th>比分</th><th>主</th><th>盘</th><th>客</th><th>变化</th><th>状</th></tr>
+        <tr><td></td><td>-</td><td>0.85</td><td>半球</td><td>1.02</td><td>07-17 18:20</td><td>即</td></tr>
+        <tr><th>时</th><th>比分</th><th>大</th><th>盘</th><th>小</th><th>变化</th><th>状</th></tr>
+        <tr><td></td><td>-</td><td>0.82</td><td>2.5/3</td><td>1.05</td><td>07-17 17:34</td><td>即</td></tr>
+        <tr><th>时</th><th>比分</th><th>主</th><th>和局</th><th>客</th><th>变化</th><th>状</th></tr>
+        <tr><td></td><td>-</td><td>1.85</td><td>4.00</td><td>3.95</td><td>07-17 16:24</td><td>即</td></tr></table>
+        """, 3, "2026-07-18 01:00", "皇冠")
+        self.assertEqual(3, trend["snapshot_count"])
+        self.assertEqual(2.75, trend["markets"]["total"][0]["line_number"])
+        self.assertEqual("2026-07-17T16:24+08:00", trend["markets"]["one_x_two"][0]["captured_at"])
 
 
 if __name__ == "__main__":

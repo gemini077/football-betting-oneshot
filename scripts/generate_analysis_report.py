@@ -562,6 +562,29 @@ def build_payload(
     history_path = PROJECT_ROOT / "data" / "market_history" / str(deep.get("shuju_id")) / "market_history.jsonl"
     market_history = load_history(history_path)
     market_intelligence = analyze_market_intelligence(deep, tier_config, history=market_history) if deep else {}
+    trend_panel = ((market_intelligence.get("modules") or {}).get("nowscore_trends") or {})
+    trend_directions = trend_panel.get("direction_counts") or {}
+    home_price = trend_directions.get("one_x_two_home") or {}
+    asian_home = trend_directions.get("asian_home") or {}
+    first_moves = trend_panel.get("first_moves") or []
+    first_move_text = "；".join(
+        f"{item.get('name')} {item.get('captured_at')}"
+        for item in first_moves[:3]
+    )
+    market_interpretation = {
+        "market_pressure": (
+            f"已读取{trend_panel.get('company_count', 0)}家公司、{trend_panel.get('snapshot_count', 0)}条历史报价；"
+            f"主胜降赔{home_price.get('shortened', 0)}家、升赔{home_price.get('lengthened', 0)}家，"
+            f"亚洲盘主队加强{asian_home.get('strengthened', 0)}家、减弱{asian_home.get('weakened', 0)}家。"
+            if trend_panel.get("snapshot_count") else "尚未取得足够的多公司历史报价轨迹。"
+        ),
+        "money_flow": (
+            "真实成交资金仅采用交易所成交量；Nowscore公司轨迹属于价格与盘口压力，不冒充资金流。"
+        ),
+        "bookmaker_behaviour": (
+            f"最早可识别的公司变动：{first_move_text}。" if first_move_text else "尚未形成可核验的公司先后变动链。"
+        ),
+    }
     trap_registry = load_json(PROJECT_ROOT / "config" / "trap_rules.json")
     analysis_model = (analysis or {}).get("model")
     risk_engine = analyze_risk_engine(deep, market_intelligence, trap_registry, model=analysis_model) if deep else {}
@@ -621,6 +644,8 @@ def build_payload(
             "consensus": {"open": consensus_open, "current": consensus_current},
             "betfair": betfair,
             "polymarket": polymarket or {},
+            "interpretation": market_interpretation,
+            "nowscore_context_quality": (deep.get("nowscore_context") or deep.get("context") or {}).get("quality") or {},
             "euro_bookmaker_count": deep.get("ouzhi", {}).get("total", 0),
             "asian_company_count": deep.get("yazhi", {}).get("total", 0),
             "rq_company_count": deep.get("rangqiu", {}).get("total", 0),
@@ -652,6 +677,31 @@ def build_payload(
         ),
     }
     payload = normalize_page_pl_labels(enforce_complete_report_gate(merge_dict(base, analysis or {})))
+    nowscore_context = deep.get("nowscore_context") or deep.get("context") or ((deep.get("nowscore") or {}).get("context") or {})
+    context_items = []
+    coach = nowscore_context.get("coach") or {}
+    referee = nowscore_context.get("referee") or {}
+    if (coach.get("home") or {}).get("name") or (coach.get("away") or {}).get("name"):
+        context_items.append({
+            "label": "教练",
+            "value": f"主队 {(coach.get('home') or {}).get('name') or '未提供'}；客队 {(coach.get('away') or {}).get('name') or '未提供'}",
+            "source_url": (nowscore_context.get("source_urls") or {}).get("coach"),
+        })
+    if referee.get("name"):
+        context_items.append({
+            "label": "裁判",
+            "value": f"{referee.get('name')}；公开执法样本 {((referee.get('summaries') or [{}])[0]).get('matches', '—')} 场",
+            "source_url": (nowscore_context.get("source_urls") or {}).get("referee"),
+        })
+    if (nowscore_context.get("panlu") or {}).get("count"):
+        context_items.append({
+            "label": "盘路样本",
+            "value": f"已读取 {(nowscore_context.get('panlu') or {}).get('count')} 场历史，仅用于风格和盘口复核",
+            "source_url": (nowscore_context.get("source_urls") or {}).get("panlu"),
+        })
+    existing_items = (payload.get("fundamentals") or {}).get("items") or []
+    existing_items = [item for item in existing_items if isinstance(item, dict)]
+    payload.setdefault("fundamentals", {})["items"] = existing_items + context_items
     payload["betting"] = normalize_betting_portfolio(payload.get("betting"))
     payload["report"]["model_name"] = state.get("model_name", "Football Betting OneShot")
     payload["report"]["model_version"] = state.get("model_version", "v0.12.0")
@@ -813,7 +863,7 @@ def render(payload: dict) -> str:
     exchange_module = mbi_modules.get("exchange") or {}
     kelly_module = mbi_modules.get("kelly") or {}
     lead_observed = " → ".join(
-        f"{item.get('name')} {item.get('change_time')}"
+        f"{item.get('name')} {item.get('captured_at') or item.get('change_time')}"
         for item in lead_lag.get("observed", [])
     ) or "—"
     exchange_gaps = exchange_module.get("volume_minus_market_probability_pp") or {}

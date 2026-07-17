@@ -471,6 +471,13 @@ def apply_deterministic_core(analysis: dict, context: dict) -> dict:
             ],
         },
     ]
+    nowscore_context = fundamentals.get("nowscore_context") or {}
+    context_items = list(nowscore_context.get("items") or [])
+    if context_items:
+        analysis["evidence_chain"].insert(1, {
+            "title": "教练、裁判与历史盘路",
+            "items": context_items + ["这些信息用于解释比赛脚本与风险点；在完成历史校准前，不直接机械增减胜平负概率。"],
+        })
     return analysis
 
 

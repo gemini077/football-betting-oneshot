@@ -253,8 +253,32 @@ def _price_audit(deep: dict, matrix: dict[tuple[int, int], float], probabilities
     return rows
 
 
+def _nowscore_context_fundamentals(deep: dict) -> dict:
+    context = deep.get("nowscore_context") or deep.get("context") or ((deep.get("nowscore") or {}).get("context") or {})
+    coach = context.get("coach") or {}
+    referee = context.get("referee") or {}
+    panlu = context.get("panlu") or {}
+    items = []
+    home_coach = (coach.get("home") or {}).get("name")
+    away_coach = (coach.get("away") or {}).get("name")
+    if home_coach or away_coach:
+        items.append(f"教练：主队 {home_coach or '未提供'}；客队 {away_coach or '未提供'}。")
+    if referee.get("name"):
+        summaries = referee.get("summaries") or []
+        overall = summaries[0] if summaries else {}
+        items.append(f"裁判：{referee['name']}；公开执法样本 {overall.get('matches', '—')} 场。")
+    if panlu.get("count"):
+        items.append(f"Nowscore盘路历史已读取 {panlu['count']} 场，仅作风格与盘口复核，不直接改写概率。")
+    return {
+        "coach": coach, "referee": referee, "panlu": panlu,
+        "items": items, "status": "Nowscore赛前背景已核验" if items else "Nowscore赛前背景未取得",
+        "sources": list((context.get("source_urls") or {}).values()),
+    }
+
+
 def build_automatic_model(context: dict) -> dict:
     deep = _deep_snapshot(context)
+    nowscore_fundamentals = _nowscore_context_fundamentals(deep)
     deep_form = (deep.get("shuju") or {}).get("recent_form") or {}
     prematch_facts = context.get("prematch_fundamentals") or {}
     form = deep_form or prematch_facts.get("recent_form") or {}
@@ -392,9 +416,13 @@ def build_automatic_model(context: dict) -> dict:
         "price_audit": _price_audit(deep, matrix, probabilities),
         "data_quality": {"status": "模型已计算，临场信息待补", "overall": "FORM_AND_MARKET_MODEL", "missing": ["确认首发", "即时伤停", "用户渠道即时赔率"], "notes": [f"近期攻防来源：{form_source or '未标明'}。", "模型数值由固定公式生成，DeepSeek不参与概率计算。"]},
         "fundamentals": {
+            **(context.get("prematch_fundamentals") or {}),
             "recent_form": form,
             "metric": "recent actual goals, not xG",
-            **(context.get("prematch_fundamentals") or {}),
+            "nowscore_context": nowscore_fundamentals,
+            "items": list((context.get("prematch_fundamentals") or {}).get("items") or []) + list(nowscore_fundamentals.get("items") or []),
+            "status": nowscore_fundamentals.get("status") or (context.get("prematch_fundamentals") or {}).get("status"),
+            "sources": list((context.get("prematch_fundamentals") or {}).get("sources") or []) + list(nowscore_fundamentals.get("sources") or []),
         },
         "live_ev_profiles": live_profile,
     }
