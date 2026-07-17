@@ -20,7 +20,7 @@ from postmatch_queue import BASE_DIR, SHANGHAI, load_json, normalize, parse_date
 SCHEDULE_ROOT = BASE_DIR / "data" / "postmatch_automation" / "schedules"
 RESULT_ROOT = BASE_DIR / "data" / "postmatch_automation" / "results"
 FINAL_STATUSES = {"result_verified", "reviewed"}
-RESULT_STRATEGY_VERSION = "nowscore_detail_v1"
+RESULT_STRATEGY_VERSION = "nowscore_detail_v2"
 SCORE_PATTERN = re.compile(
     r'<p\s+class=["\']odds_hd_bf["\'][^>]*>\s*<strong>\s*(\d+)\s*[:：]\s*(\d+)\s*</strong>',
     re.IGNORECASE,
@@ -42,15 +42,22 @@ def resolve_nowscore_id(schedule: dict[str, Any]) -> int | None:
     """Recover the verified Nowscore id already captured during pre-match work."""
     if schedule.get("nowscore_id"):
         return int(schedule["nowscore_id"])
-    match_filter = None
+    match_filters: set[str] = set()
     source_report = BASE_DIR / str(schedule.get("source_report") or "")
     if source_report.exists():
         try:
             report = load_json(source_report)
-            match_filter = str((report.get("match") or {}).get("match_id") or "")
+            report_match = report.get("match") or {}
+            match_id = str(report_match.get("match_id") or "").strip()
+            if match_id:
+                match_filters.add(match_id)
+            report_home = str(report_match.get("home") or schedule.get("home") or "").strip()
+            report_away = str(report_match.get("away") or schedule.get("away") or "").strip()
+            if report_home and report_away:
+                match_filters.add(f"{report_home} vs {report_away}")
         except (OSError, json.JSONDecodeError, ValueError):
             pass
-    if not match_filter:
+    if not match_filters:
         return None
     manifests = sorted((BASE_DIR / "data" / "fetch_runs").glob("**/*_fetch_manifest.json"), reverse=True)
     for manifest_path in manifests:
@@ -58,7 +65,7 @@ def resolve_nowscore_id(schedule: dict[str, Any]) -> int | None:
             manifest = load_json(manifest_path)
         except (OSError, json.JSONDecodeError):
             continue
-        if str(manifest.get("match_filter") or "") != match_filter:
+        if str(manifest.get("match_filter") or "").strip() not in match_filters:
             continue
         for row in (((manifest.get("sources") or {}).get("nowscore") or {}).get("matches") or []):
             if row.get("status") == "OK" and row.get("nowscore_id"):
