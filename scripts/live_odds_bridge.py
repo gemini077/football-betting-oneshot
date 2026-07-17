@@ -46,6 +46,7 @@ CORRECT_SCORE_MARKET_CODES = {
     "1100485", # 上半场高倍波胆
 }
 DEFAULT_ALLOWED_PAGE_HOSTS = {"user-pc-new.hl99yjjpf.com"}
+WORKSPACE_ALLOWED_ORIGINS = {"https://gemini077.github.io"}
 RUNTIME_STATE_PATH = PROJECT_ROOT / "05_RUNTIME_STATE.json"
 DEFAULT_EV_PROFILE_ROOT = PROJECT_ROOT / "data" / "live_ev_profiles"
 WORKSPACE_SELECTION_PATH = PROJECT_ROOT / "data" / "match_workspace" / "selected_matches.json"
@@ -890,6 +891,11 @@ def _allowed_origin(origin: str | None) -> bool:
     return origin == "null" or origin.startswith("chrome-extension://")
 
 
+def _allowed_workspace_origin(origin: str | None) -> bool:
+    """Allow only the published workspace (and local file previews) to queue analysis."""
+    return not origin or origin == "null" or origin in WORKSPACE_ALLOWED_ORIGINS
+
+
 def public_model_state() -> dict:
     """Expose only the local model bankroll/risk fields needed by the overlay."""
     try:
@@ -983,7 +989,11 @@ def make_handler(
         def _send_workspace_json(self, status: int, payload: dict) -> None:
             body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
             self.send_response(status)
-            self.send_header("Access-Control-Allow-Origin", "*")
+            origin = self.headers.get("Origin")
+            if origin and _allowed_workspace_origin(origin):
+                self.send_header("Access-Control-Allow-Origin", origin)
+                self.send_header("Vary", "Origin")
+            self.send_header("Access-Control-Allow-Private-Network", "true")
             self.send_header("Content-Type", "application/json; charset=utf-8")
             self.send_header("Content-Length", str(len(body)))
             self.send_header("Cache-Control", "no-store")
@@ -992,10 +1002,18 @@ def make_handler(
 
         def do_OPTIONS(self) -> None:  # noqa: N802
             if urlparse(self.path).path.rstrip("/") == "/v1/analysis-selections":
+                origin = self.headers.get("Origin")
+                if not _allowed_workspace_origin(origin):
+                    self._send_workspace_json(403, {"ok": False, "error": "origin_not_allowed"})
+                    return
                 self.send_response(204)
-                self.send_header("Access-Control-Allow-Origin", "*")
+                if origin:
+                    self.send_header("Access-Control-Allow-Origin", origin)
+                    self.send_header("Vary", "Origin")
                 self.send_header("Access-Control-Allow-Headers", "Content-Type")
                 self.send_header("Access-Control-Allow-Methods", "GET,POST,OPTIONS")
+                self.send_header("Access-Control-Allow-Private-Network", "true")
+                self.send_header("Access-Control-Max-Age", "600")
                 self.end_headers()
                 return
             origin = self.headers.get("Origin")
@@ -1051,6 +1069,8 @@ def make_handler(
             request_path = urlparse(self.path).path.rstrip("/")
             if request_path == "/v1/analysis-selections":
                 try:
+                    if not _allowed_workspace_origin(self.headers.get("Origin")):
+                        raise BridgeValidationError("origin_not_allowed")
                     length = int(self.headers.get("Content-Length") or 0)
                     if length <= 0 or length > 100_000:
                         raise BridgeValidationError("invalid_body_size")
