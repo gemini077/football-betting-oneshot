@@ -1,0 +1,1935 @@
+{
+  "report": {
+    "model_name": "Football Betting OneShot",
+    "model_version": "v0.18.2",
+    "report_type": "确定性赛前分析",
+    "analysis_timestamp": "2026-07-18T14:37:23+00:00",
+    "final_execution_version": false,
+    "ai_provider": null,
+    "ai_model": null,
+    "market_checkpoint": {
+      "stage": "INITIAL",
+      "captured_at": "2026-07-18T14:37:23.751255+00:00",
+      "initial_capture": true
+    }
+  },
+  "match": {
+    "business_date": "2026-07-18",
+    "match_id": "500-1373093",
+    "home": "仁川联",
+    "away": "全北现代"
+  },
+  "decisions": {
+    "unique_primary_dimension": "胜平负：主胜（模型44.2%）",
+    "unique_score": "1-0",
+    "score_reasoning": "模型在可行比分区间内综合方向、总进球与双方进球情景后选择该落点（单格概率17.3%；符合主胜主剧本、落在总进球众数1、符合双方进球倾向），不是照抄最低赔率或市场第一。",
+    "mathematical_first": "90分钟主胜44.2%、平局31.3%、客胜24.4%；λ=1.12-0.75。",
+    "market_first": "多公司去水共识主胜88.2%、平局8.7%、客胜3.0%；大小球中轴1.50。",
+    "match_story": "主队更可能掌握主动，但客队仍有足够进球期望制造反击或定位球威胁；总进球中枢偏低；上半场试探和低比分停留时间可能较长；裁判剧本：樸秉鎮在11场公开样本中场均双方合计黄牌约3.09、红牌约0.36，比赛中断与红牌尾部风险偏高，领先方未必能平稳控场；裁判历史样本下主队胜率更高（主45% / 客27%），仅作为剧本倾向，不视为因果优势。",
+    "market_conflict": "多公司市场对主胜的定价比模型更强44.0%，不能把市场热度直接当成模型优势",
+    "score_vs_outcome_explanation": "唯一比分1-0只是单个比分格的最高点；胜平负主线主胜是多个比分格合计，二者不要求同方向。",
+    "maximum_error_points": [
+      "客队近10个客场输球率仅10%，主胜主线可能高估主场压制",
+      "裁判公开样本的牌数与红牌率偏高，比分右尾和比赛状态突变风险高于基础泊松假设",
+      "若早段进球、红牌或比赛节奏偏离基准，总进球与比分尾部会同步变化",
+      "多公司市场对主胜的定价比模型更强44.0%，不能把市场热度直接当成模型优势"
+    ],
+    "value_judgement": "仅完成模型概率与市场基线；须取得用户渠道即时赔率后才计算EV。",
+    "final_state": "空仓｜未锁单"
+  },
+  "model": {
+    "status": "确定性融合模型（可核验近期攻防 + 市场校准）",
+    "method": "recent_form_market_calibrated_poisson_v2",
+    "lambda_home": 1.120352,
+    "lambda_away": 0.749648,
+    "rho": 0.0,
+    "expected_goals": 1.87,
+    "probabilities": {
+      "home": 0.442373,
+      "draw": 0.31342,
+      "away": 0.244206
+    },
+    "total_goals_buckets": [
+      {
+        "goals": "0",
+        "probability": 0.154124
+      },
+      {
+        "goals": "1",
+        "probability": 0.288211
+      },
+      {
+        "goals": "2",
+        "probability": 0.269478
+      },
+      {
+        "goals": "3",
+        "probability": 0.167974
+      },
+      {
+        "goals": "4",
+        "probability": 0.078528
+      },
+      {
+        "goals": "5",
+        "probability": 0.029369
+      },
+      {
+        "goals": "6+",
+        "probability": 0.012316
+      }
+    ],
+    "btts": {
+      "yes": 0.355426,
+      "no": 0.644574,
+      "judgement": "双方进球偏否"
+    },
+    "score_probabilities": [
+      {
+        "score": "1-0",
+        "probability": 0.172673,
+        "fair_odds": 5.7913,
+        "rank": 1
+      },
+      {
+        "score": "0-0",
+        "probability": 0.154124,
+        "fair_odds": 6.4883,
+        "rank": 2
+      },
+      {
+        "score": "1-1",
+        "probability": 0.129444,
+        "fair_odds": 7.7254,
+        "rank": 3
+      },
+      {
+        "score": "0-1",
+        "probability": 0.115539,
+        "fair_odds": 8.6551,
+        "rank": 4
+      },
+      {
+        "score": "2-0",
+        "probability": 0.096727,
+        "fair_odds": 10.3384,
+        "rank": 5
+      },
+      {
+        "score": "2-1",
+        "probability": 0.072511,
+        "fair_odds": 13.791,
+        "rank": 6
+      },
+      {
+        "score": "1-2",
+        "probability": 0.048519,
+        "fair_odds": 20.6106,
+        "rank": 7
+      },
+      {
+        "score": "0-2",
+        "probability": 0.043307,
+        "fair_odds": 23.0911,
+        "rank": 8
+      },
+      {
+        "score": "3-0",
+        "probability": 0.036123,
+        "fair_odds": 27.6834,
+        "rank": 9
+      },
+      {
+        "score": "2-2",
+        "probability": 0.027179,
+        "fair_odds": 36.7931,
+        "rank": 10
+      }
+    ],
+    "total_line_analysis": [
+      {
+        "line": 2.5,
+        "over": {
+          "win_equivalent_probability": 0.288188,
+          "loss_equivalent_probability": 0.711812,
+          "push_equivalent_probability": 0.0,
+          "fair_odds": 3.47
+        },
+        "under": {
+          "win_equivalent_probability": 0.711812,
+          "loss_equivalent_probability": 0.288188,
+          "push_equivalent_probability": 0.0,
+          "fair_odds": 1.4049
+        }
+      },
+      {
+        "line": 2.75,
+        "over": {
+          "win_equivalent_probability": 0.2042,
+          "loss_equivalent_probability": 0.711812,
+          "push_equivalent_probability": 0.083987,
+          "fair_odds": 4.4859
+        },
+        "under": {
+          "win_equivalent_probability": 0.711812,
+          "loss_equivalent_probability": 0.2042,
+          "push_equivalent_probability": 0.083987,
+          "fair_odds": 1.2869
+        }
+      },
+      {
+        "line": 3.0,
+        "over": {
+          "win_equivalent_probability": 0.120213,
+          "loss_equivalent_probability": 0.711812,
+          "push_equivalent_probability": 0.167974,
+          "fair_odds": 6.9212
+        },
+        "under": {
+          "win_equivalent_probability": 0.711812,
+          "loss_equivalent_probability": 0.120213,
+          "push_equivalent_probability": 0.167974,
+          "fair_odds": 1.1689
+        }
+      },
+      {
+        "line": 3.25,
+        "over": {
+          "win_equivalent_probability": 0.120213,
+          "loss_equivalent_probability": 0.7958,
+          "push_equivalent_probability": 0.083987,
+          "fair_odds": 7.6199
+        },
+        "under": {
+          "win_equivalent_probability": 0.7958,
+          "loss_equivalent_probability": 0.120213,
+          "push_equivalent_probability": 0.083987,
+          "fair_odds": 1.1511
+        }
+      },
+      {
+        "line": 3.5,
+        "over": {
+          "win_equivalent_probability": 0.120213,
+          "loss_equivalent_probability": 0.879787,
+          "push_equivalent_probability": 0.0,
+          "fair_odds": 8.3186
+        },
+        "under": {
+          "win_equivalent_probability": 0.879787,
+          "loss_equivalent_probability": 0.120213,
+          "push_equivalent_probability": 0.0,
+          "fair_odds": 1.1366
+        }
+      }
+    ],
+    "calibration": {
+      "form_lambda_home": 0.983333,
+      "form_lambda_away": 1.133333,
+      "market_total_line_median": 1.5,
+      "market_probabilities": {
+        "home": 0.8824994896395801,
+        "draw": 0.08741956263958875,
+        "away": 0.030080947720831173
+      },
+      "form_weight": 0.6,
+      "market_weight": 0.4,
+      "form_source": "Nowscore近期赛事数据",
+      "venue_proxy_used": false
+    },
+    "limitations": [
+      "近期样本含不同赛事与对手强度，尚未完成逐队Elo/xG对手校正",
+      "确认首发、即时伤停、天气与临场战术需在开赛前另行修正",
+      "市场信息用于校准，因此该概率不是完全独立于赔率的纯基本面概率"
+    ]
+  },
+  "data_quality": {
+    "status": "模型已计算，临场信息待补",
+    "missing": [
+      "确认首发",
+      "即时伤停",
+      "用户渠道即时赔率"
+    ],
+    "notes": [
+      "近期攻防来源：Nowscore近期赛事数据。",
+      "模型数值由固定公式生成，DeepSeek不参与概率计算。"
+    ],
+    "overall": "FORM_AND_MARKET_MODEL"
+  },
+  "fundamentals": {
+    "status": "Nowscore赛前背景已核验",
+    "items": [
+      {
+        "label": "主队近10场",
+        "value": "4胜2平4负，进12球/失7球",
+        "source": "500.com赛前数据快照"
+      },
+      {
+        "label": "主队近10个主场",
+        "value": "4胜0平6负，进13球/失12球",
+        "source": "500.com赛前数据快照"
+      },
+      {
+        "label": "客队近10场",
+        "value": "5胜3平2负，进17球/失9球",
+        "source": "500.com赛前数据快照"
+      },
+      {
+        "label": "客队近10个客场",
+        "value": "3胜6平1负，进10球/失6球",
+        "source": "500.com赛前数据快照"
+      },
+      "裁判：樸秉鎮；公开执法样本 11 场。",
+      "Nowscore盘路历史已读取 60 场，仅作风格与盘口复核，不直接改写概率。",
+      "裁判剧本：樸秉鎮在11场公开样本中场均双方合计黄牌约3.09、红牌约0.36，比赛中断与红牌尾部风险偏高，领先方未必能平稳控场。",
+      "裁判历史样本下主队胜率更高（主45% / 客27%），仅作为剧本倾向，不视为因果优势。"
+    ],
+    "structured_form": {
+      "status": "Nowscore赛前背景已核验",
+      "checked_at": "2026-07-18T14:37:23+00:00",
+      "items": [
+        {
+          "label": "主队近10场",
+          "value": "4胜2平4负，进12球/失7球",
+          "source": "500.com赛前数据快照"
+        },
+        {
+          "label": "主队近10个主场",
+          "value": "4胜0平6负，进13球/失12球",
+          "source": "500.com赛前数据快照"
+        },
+        {
+          "label": "客队近10场",
+          "value": "5胜3平2负，进17球/失9球",
+          "source": "500.com赛前数据快照"
+        },
+        {
+          "label": "客队近10个客场",
+          "value": "3胜6平1负，进10球/失6球",
+          "source": "500.com赛前数据快照"
+        },
+        "裁判：樸秉鎮；公开执法样本 11 场。",
+        "Nowscore盘路历史已读取 60 场，仅作风格与盘口复核，不直接改写概率。",
+        "裁判剧本：樸秉鎮在11场公开样本中场均双方合计黄牌约3.09、红牌约0.36，比赛中断与红牌尾部风险偏高，领先方未必能平稳控场。",
+        "裁判历史样本下主队胜率更高（主45% / 客27%），仅作为剧本倾向，不视为因果优势。"
+      ],
+      "sources": [
+        "https://live.nowscore.com/info/coach/2929659.htm?l=1",
+        "https://live.nowscore.com/info/referee/2929659.htm?l=1",
+        "https://live.nowscore.com/panlu/2929659.html"
+      ],
+      "recent_form": {
+        "home_overall": {
+          "matches": 10,
+          "wins": 4,
+          "draws": 2,
+          "losses": 4,
+          "goals_for": 12,
+          "goals_against": 7
+        },
+        "home_home": {
+          "matches": 10,
+          "wins": 4,
+          "draws": 0,
+          "losses": 6,
+          "goals_for": 13,
+          "goals_against": 12
+        },
+        "away_overall": {
+          "matches": 10,
+          "wins": 5,
+          "draws": 3,
+          "losses": 2,
+          "goals_for": 17,
+          "goals_against": 9
+        },
+        "away_away": {
+          "matches": 10,
+          "wins": 3,
+          "draws": 6,
+          "losses": 1,
+          "goals_for": 10,
+          "goals_against": 6
+        }
+      },
+      "form_source": "500.com赛前数据快照",
+      "metric": "recent actual goals, not xG",
+      "nowscore_context": {
+        "coach": {
+          "home": {
+            "coach_records": [],
+            "team_records": []
+          },
+          "away": {
+            "coach_records": [],
+            "team_records": []
+          }
+        },
+        "referee": {
+          "name": "樸秉鎮",
+          "birth_date": "",
+          "nationality": "韩国",
+          "summaries": [
+            {
+              "competition": "所有赛事",
+              "matches": 11,
+              "home": {
+                "side": "home",
+                "wins": 5,
+                "draws": 3,
+                "losses": 3,
+                "avg_fouls": 13.27,
+                "avg_yellow": 1.18,
+                "avg_red": 0.18,
+                "win_rate": "45%"
+              },
+              "away": {
+                "side": "away",
+                "wins": 3,
+                "draws": 3,
+                "losses": 5,
+                "avg_fouls": 14.64,
+                "avg_yellow": 1.91,
+                "avg_red": 0.18,
+                "win_rate": "27%"
+              }
+            }
+          ],
+          "home_team_history_count": 1,
+          "away_team_history_count": 2
+        },
+        "panlu": {
+          "matches": [
+            {
+              "match_id": 2929654,
+              "competition": "韓K聯",
+              "kickoff": "26-07-12 18:30",
+              "home_team": "仁川聯",
+              "away_team": "FC安養",
+              "home_team_id": 497,
+              "away_team_id": 21249,
+              "full_time": {
+                "home": 0,
+                "away": 1
+              },
+              "half_time": {
+                "home": 0,
+                "away": 1
+              },
+              "asian_line": 0.5,
+              "total_line": 2.25,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2929653,
+              "competition": "韓K聯",
+              "kickoff": "26-07-11 18:30",
+              "home_team": "蔚山HD",
+              "away_team": "全北汽車",
+              "home_team_id": 480,
+              "away_team_id": 484,
+              "full_time": {
+                "home": 1,
+                "away": 3
+              },
+              "half_time": {
+                "home": 0,
+                "away": 1
+              },
+              "asian_line": 0,
+              "total_line": 2.5,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2929650,
+              "competition": "韓K聯",
+              "kickoff": "26-07-05 18:30",
+              "home_team": "FC首爾",
+              "away_team": "仁川聯",
+              "home_team_id": 741,
+              "away_team_id": 497,
+              "full_time": {
+                "home": 1,
+                "away": 0
+              },
+              "half_time": {
+                "home": 0,
+                "away": 0
+              },
+              "asian_line": 0.5,
+              "total_line": 2.25,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2929647,
+              "competition": "韓K聯",
+              "kickoff": "26-07-04 18:30",
+              "home_team": "全北汽車",
+              "away_team": "FC江原",
+              "home_team_id": 484,
+              "away_team_id": 9945,
+              "full_time": {
+                "home": 1,
+                "away": 2
+              },
+              "half_time": {
+                "home": 0,
+                "away": 1
+              },
+              "asian_line": 0.25,
+              "total_line": 2,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2929642,
+              "competition": "韓K聯",
+              "kickoff": "26-05-17 15:40",
+              "home_team": "全北汽車",
+              "away_team": "金泉尚武",
+              "home_team_id": 484,
+              "away_team_id": 494,
+              "full_time": {
+                "home": 1,
+                "away": 0
+              },
+              "half_time": {
+                "home": 0,
+                "away": 0
+              },
+              "asian_line": 0.75,
+              "total_line": 2.5,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2929640,
+              "competition": "韓K聯",
+              "kickoff": "26-05-16 18:00",
+              "home_team": "仁川聯",
+              "away_team": "FC光州",
+              "home_team_id": 497,
+              "away_team_id": 16584,
+              "full_time": {
+                "home": 4,
+                "away": 0
+              },
+              "half_time": {
+                "home": 2,
+                "away": 0
+              },
+              "asian_line": 1,
+              "total_line": 2.25,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2929637,
+              "competition": "韓K聯",
+              "kickoff": "26-05-13 18:30",
+              "home_team": "富川FC",
+              "away_team": "全北汽車",
+              "home_team_id": 7800,
+              "away_team_id": 484,
+              "full_time": {
+                "home": 0,
+                "away": 0
+              },
+              "half_time": {
+                "home": 0,
+                "away": 0
+              },
+              "asian_line": -0.5,
+              "total_line": 2.25,
+              "provider_flags": [
+                1,
+                0
+              ]
+            },
+            {
+              "match_id": 2929635,
+              "competition": "韓K聯",
+              "kickoff": "26-05-12 18:30",
+              "home_team": "仁川聯",
+              "away_team": "浦項制鐵",
+              "home_team_id": 497,
+              "away_team_id": 481,
+              "full_time": {
+                "home": 0,
+                "away": 1
+              },
+              "half_time": {
+                "home": 0,
+                "away": 1
+              },
+              "asian_line": 0,
+              "total_line": 2,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2929632,
+              "competition": "韓K聯",
+              "kickoff": "26-05-10 15:30",
+              "home_team": "FC安養",
+              "away_team": "全北汽車",
+              "home_team_id": 21249,
+              "away_team_id": 484,
+              "full_time": {
+                "home": 1,
+                "away": 1
+              },
+              "half_time": {
+                "home": 0,
+                "away": 0
+              },
+              "asian_line": -0.25,
+              "total_line": 2.25,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2929628,
+              "competition": "韓K聯",
+              "kickoff": "26-05-09 15:30",
+              "home_team": "金泉尚武",
+              "away_team": "仁川聯",
+              "home_team_id": 494,
+              "away_team_id": 497,
+              "full_time": {
+                "home": 0,
+                "away": 3
+              },
+              "half_time": {
+                "home": 0,
+                "away": 2
+              },
+              "asian_line": 0.25,
+              "total_line": 2.25,
+              "provider_flags": [
+                0,
+                1
+              ]
+            },
+            {
+              "match_id": 2929623,
+              "competition": "韓K聯",
+              "kickoff": "26-05-05 15:30",
+              "home_team": "大田市民",
+              "away_team": "仁川聯",
+              "home_team_id": 488,
+              "away_team_id": 497,
+              "full_time": {
+                "home": 0,
+                "away": 0
+              },
+              "half_time": {
+                "home": 0,
+                "away": 0
+              },
+              "asian_line": 0.25,
+              "total_line": 2.25,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2929622,
+              "competition": "韓K聯",
+              "kickoff": "26-05-05 13:00",
+              "home_team": "全北汽車",
+              "away_team": "FC光州",
+              "home_team_id": 484,
+              "away_team_id": 16584,
+              "full_time": {
+                "home": 4,
+                "away": 0
+              },
+              "half_time": {
+                "home": 1,
+                "away": 0
+              },
+              "asian_line": 1.25,
+              "total_line": 2.5,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2929618,
+              "competition": "韓K聯",
+              "kickoff": "26-05-02 15:30",
+              "home_team": "濟州SK",
+              "away_team": "全北汽車",
+              "home_team_id": 4075,
+              "away_team_id": 484,
+              "full_time": {
+                "home": 0,
+                "away": 2
+              },
+              "half_time": {
+                "home": 0,
+                "away": 1
+              },
+              "asian_line": -0.5,
+              "total_line": 2.25,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2929617,
+              "competition": "韓K聯",
+              "kickoff": "26-05-02 15:30",
+              "home_team": "仁川聯",
+              "away_team": "FC江原",
+              "home_team_id": 497,
+              "away_team_id": 9945,
+              "full_time": {
+                "home": 0,
+                "away": 1
+              },
+              "half_time": {
+                "home": 0,
+                "away": 1
+              },
+              "asian_line": 0,
+              "total_line": 2,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2929612,
+              "competition": "韓K聯",
+              "kickoff": "26-04-26 13:00",
+              "home_team": "全北汽車",
+              "away_team": "浦項制鐵",
+              "home_team_id": 484,
+              "away_team_id": 481,
+              "full_time": {
+                "home": 3,
+                "away": 2
+              },
+              "half_time": {
+                "home": 2,
+                "away": 1
+              },
+              "asian_line": 0.5,
+              "total_line": 2.25,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2929611,
+              "competition": "韓K聯",
+              "kickoff": "26-04-25 15:30",
+              "home_team": "仁川聯",
+              "away_team": "濟州SK",
+              "home_team_id": 497,
+              "away_team_id": 4075,
+              "full_time": {
+                "home": 1,
+                "away": 0
+              },
+              "half_time": {
+                "home": 0,
+                "away": 0
+              },
+              "asian_line": 0.5,
+              "total_line": 2.25,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2929604,
+              "competition": "韓K聯",
+              "kickoff": "26-04-21 18:30",
+              "home_team": "全北汽車",
+              "away_team": "仁川聯",
+              "home_team_id": 484,
+              "away_team_id": 497,
+              "full_time": {
+                "home": 1,
+                "away": 2
+              },
+              "half_time": {
+                "home": 1,
+                "away": 1
+              },
+              "asian_line": 0.5,
+              "total_line": 2.25,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2929599,
+              "competition": "韓K聯",
+              "kickoff": "26-04-18 15:30",
+              "home_team": "富川FC",
+              "away_team": "仁川聯",
+              "home_team_id": 7800,
+              "away_team_id": 497,
+              "full_time": {
+                "home": 2,
+                "away": 2
+              },
+              "half_time": {
+                "home": 0,
+                "away": 2
+              },
+              "asian_line": -0.25,
+              "total_line": 2,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2929597,
+              "competition": "韓K聯",
+              "kickoff": "26-04-18 13:00",
+              "home_team": "FC江原",
+              "away_team": "全北汽車",
+              "home_team_id": 9945,
+              "away_team_id": 484,
+              "full_time": {
+                "home": 1,
+                "away": 1
+              },
+              "half_time": {
+                "home": 0,
+                "away": 1
+              },
+              "asian_line": 0.25,
+              "total_line": 2.25,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2929594,
+              "competition": "韓K聯",
+              "kickoff": "26-04-11 15:30",
+              "home_team": "仁川聯",
+              "away_team": "蔚山HD",
+              "home_team_id": 497,
+              "away_team_id": 480,
+              "full_time": {
+                "home": 1,
+                "away": 2
+              },
+              "half_time": {
+                "home": 0,
+                "away": 1
+              },
+              "asian_line": 0,
+              "total_line": 2.25,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2929592,
+              "competition": "韓K聯",
+              "kickoff": "26-04-11 13:00",
+              "home_team": "FC首爾",
+              "away_team": "全北汽車",
+              "home_team_id": 741,
+              "away_team_id": 484,
+              "full_time": {
+                "home": 1,
+                "away": 0
+              },
+              "half_time": {
+                "home": 0,
+                "away": 0
+              },
+              "asian_line": 0.25,
+              "total_line": 2.25,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2929590,
+              "competition": "韓K聯",
+              "kickoff": "26-04-05 15:30",
+              "home_team": "仁川聯",
+              "away_team": "金泉尚武",
+              "home_team_id": 497,
+              "away_team_id": 494,
+              "full_time": {
+                "home": 2,
+                "away": 1
+              },
+              "half_time": {
+                "home": 2,
+                "away": 0
+              },
+              "asian_line": 0.25,
+              "total_line": 2.25,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2929586,
+              "competition": "韓K聯",
+              "kickoff": "26-04-04 13:00",
+              "home_team": "全北汽車",
+              "away_team": "蔚山HD",
+              "home_team_id": 484,
+              "away_team_id": 480,
+              "full_time": {
+                "home": 2,
+                "away": 0
+              },
+              "half_time": {
+                "home": 1,
+                "away": 0
+              },
+              "asian_line": 0.25,
+              "total_line": 2.5,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2929582,
+              "competition": "韓K聯",
+              "kickoff": "26-03-22 15:30",
+              "home_team": "FC安養",
+              "away_team": "仁川聯",
+              "home_team_id": 21249,
+              "away_team_id": 497,
+              "full_time": {
+                "home": 0,
+                "away": 1
+              },
+              "half_time": {
+                "home": 0,
+                "away": 0
+              },
+              "asian_line": 0,
+              "total_line": 2,
+              "provider_flags": [
+                1,
+                0
+              ]
+            },
+            {
+              "match_id": 2929579,
+              "competition": "韓K聯",
+              "kickoff": "26-03-21 13:00",
+              "home_team": "大田市民",
+              "away_team": "全北汽車",
+              "home_team_id": 488,
+              "away_team_id": 484,
+              "full_time": {
+                "home": 0,
+                "away": 1
+              },
+              "half_time": {
+                "home": 0,
+                "away": 1
+              },
+              "asian_line": 0,
+              "total_line": 2.5,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2929577,
+              "competition": "韓K聯",
+              "kickoff": "26-03-18 18:30",
+              "home_team": "全北汽車",
+              "away_team": "FC安養",
+              "home_team_id": 484,
+              "away_team_id": 21249,
+              "full_time": {
+                "home": 2,
+                "away": 1
+              },
+              "half_time": {
+                "home": 1,
+                "away": 1
+              },
+              "asian_line": 0.5,
+              "total_line": 2.5,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2929575,
+              "competition": "韓K聯",
+              "kickoff": "26-03-18 18:30",
+              "home_team": "仁川聯",
+              "away_team": "大田市民",
+              "home_team_id": 497,
+              "away_team_id": 488,
+              "full_time": {
+                "home": 1,
+                "away": 3
+              },
+              "half_time": {
+                "home": 1,
+                "away": 1
+              },
+              "asian_line": 0,
+              "total_line": 2.25,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2929572,
+              "competition": "韓K聯",
+              "kickoff": "26-03-15 15:30",
+              "home_team": "浦項制鐵",
+              "away_team": "仁川聯",
+              "home_team_id": 481,
+              "away_team_id": 497,
+              "full_time": {
+                "home": 1,
+                "away": 1
+              },
+              "half_time": {
+                "home": 0,
+                "away": 1
+              },
+              "asian_line": 0.25,
+              "total_line": 2.25,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2929567,
+              "competition": "韓K聯",
+              "kickoff": "26-03-14 13:00",
+              "home_team": "FC光州",
+              "away_team": "全北汽車",
+              "home_team_id": 16584,
+              "away_team_id": 484,
+              "full_time": {
+                "home": 0,
+                "away": 0
+              },
+              "half_time": {
+                "home": 0,
+                "away": 0
+              },
+              "asian_line": -0.25,
+              "total_line": 2.25,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2929565,
+              "competition": "韓K聯",
+              "kickoff": "26-03-08 13:00",
+              "home_team": "金泉尚武",
+              "away_team": "全北汽車",
+              "home_team_id": 494,
+              "away_team_id": 484,
+              "full_time": {
+                "home": 1,
+                "away": 1
+              },
+              "half_time": {
+                "home": 0,
+                "away": 0
+              },
+              "asian_line": 0,
+              "total_line": 2.75,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2929564,
+              "competition": "韓K聯",
+              "kickoff": "26-03-07 15:30",
+              "home_team": "FC光州",
+              "away_team": "仁川聯",
+              "home_team_id": 16584,
+              "away_team_id": 497,
+              "full_time": {
+                "home": 3,
+                "away": 2
+              },
+              "half_time": {
+                "home": 1,
+                "away": 1
+              },
+              "asian_line": 0.25,
+              "total_line": 2,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2921961,
+              "competition": "韓K聯",
+              "kickoff": "26-03-01 13:00",
+              "home_team": "全北汽車",
+              "away_team": "富川FC",
+              "home_team_id": 484,
+              "away_team_id": 7800,
+              "full_time": {
+                "home": 2,
+                "away": 3
+              },
+              "half_time": {
+                "home": 1,
+                "away": 1
+              },
+              "asian_line": 1.5,
+              "total_line": 2.5,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2921958,
+              "competition": "韓K聯",
+              "kickoff": "26-02-28 13:00",
+              "home_team": "仁川聯",
+              "away_team": "FC首爾",
+              "home_team_id": 497,
+              "away_team_id": 741,
+              "full_time": {
+                "home": 1,
+                "away": 2
+              },
+              "half_time": {
+                "home": 0,
+                "away": 0
+              },
+              "asian_line": -0.5,
+              "total_line": 2.25,
+              "provider_flags": [
+                0,
+                1
+              ]
+            },
+            {
+              "match_id": 2947478,
+              "competition": "韓K盃",
+              "kickoff": "26-02-21 13:00",
+              "home_team": "全北汽車",
+              "away_team": "大田市民",
+              "home_team_id": 484,
+              "away_team_id": 488,
+              "full_time": {
+                "home": 2,
+                "away": 0
+              },
+              "half_time": {
+                "home": 1,
+                "away": 0
+              },
+              "asian_line": 0.75,
+              "total_line": 2.5,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2938060,
+              "competition": "球會友誼",
+              "kickoff": "26-02-08 21:00",
+              "home_team": "全北汽車",
+              "away_team": "馬模",
+              "home_team_id": 484,
+              "away_team_id": 408,
+              "full_time": {
+                "home": 2,
+                "away": 1
+              },
+              "half_time": {
+                "home": 0,
+                "away": 0
+              },
+              "asian_line": 0,
+              "total_line": 2.75,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2932538,
+              "competition": "球會友誼",
+              "kickoff": "26-01-31 21:00",
+              "home_team": "溫哥華白帽",
+              "away_team": "仁川聯",
+              "home_team_id": 5533,
+              "away_team_id": 497,
+              "full_time": {
+                "home": 1,
+                "away": 0
+              },
+              "half_time": {
+                "home": 1,
+                "away": 0
+              },
+              "asian_line": 0.5,
+              "total_line": 2.5,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2925993,
+              "competition": "球會友誼",
+              "kickoff": "26-01-24 21:00",
+              "home_team": "奧林莫斯",
+              "away_team": "全北汽車",
+              "home_team_id": 684,
+              "away_team_id": 484,
+              "full_time": {
+                "home": 1,
+                "away": 1
+              },
+              "half_time": {
+                "home": 1,
+                "away": 1
+              },
+              "asian_line": 0.75,
+              "total_line": 2.75,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2888626,
+              "competition": "韓國杯",
+              "kickoff": "25-12-06 12:30",
+              "home_team": "FC光州",
+              "away_team": "全北汽車",
+              "home_team_id": 16584,
+              "away_team_id": 484,
+              "full_time": {
+                "home": 1,
+                "away": 1
+              },
+              "half_time": {
+                "home": 0,
+                "away": 1
+              },
+              "asian_line": -0.25,
+              "total_line": 2.5,
+              "provider_flags": [
+                1,
+                1
+              ]
+            },
+            {
+              "match_id": 2892307,
+              "competition": "韓K聯",
+              "kickoff": "25-11-30 15:30",
+              "home_team": "全北汽車",
+              "away_team": "FC首爾",
+              "home_team_id": 484,
+              "away_team_id": 741,
+              "full_time": {
+                "home": 2,
+                "away": 1
+              },
+              "half_time": {
+                "home": 0,
+                "away": 0
+              },
+              "asian_line": 0.25,
+              "total_line": 2.5,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2720023,
+              "competition": "韓K2聯",
+              "kickoff": "25-11-23 13:00",
+              "home_team": "仁川聯",
+              "away_team": "忠北清州",
+              "home_team_id": 497,
+              "away_team_id": 10072,
+              "full_time": {
+                "home": 0,
+                "away": 1
+              },
+              "half_time": {
+                "home": 0,
+                "away": 1
+              },
+              "asian_line": 1.25,
+              "total_line": 2.25,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2892304,
+              "competition": "韓K聯",
+              "kickoff": "25-11-22 15:30",
+              "home_team": "浦項制鐵",
+              "away_team": "全北汽車",
+              "home_team_id": 481,
+              "away_team_id": 484,
+              "full_time": {
+                "home": 0,
+                "away": 0
+              },
+              "half_time": {
+                "home": 0,
+                "away": 0
+              },
+              "asian_line": 0.25,
+              "total_line": 2.5,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2892300,
+              "competition": "韓K聯",
+              "kickoff": "25-11-08 15:30",
+              "home_team": "全北汽車",
+              "away_team": "大田市民",
+              "home_team_id": 484,
+              "away_team_id": 488,
+              "full_time": {
+                "home": 3,
+                "away": 1
+              },
+              "half_time": {
+                "home": 0,
+                "away": 0
+              },
+              "asian_line": 0.5,
+              "total_line": 2.75,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2720014,
+              "competition": "韓K2聯",
+              "kickoff": "25-11-08 13:00",
+              "home_team": "全南天龍",
+              "away_team": "仁川聯",
+              "home_team_id": 506,
+              "away_team_id": 497,
+              "full_time": {
+                "home": 2,
+                "away": 1
+              },
+              "half_time": {
+                "home": 0,
+                "away": 0
+              },
+              "asian_line": -0.25,
+              "total_line": 2.5,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2720010,
+              "competition": "韓K2聯",
+              "kickoff": "25-11-02 13:00",
+              "home_team": "仁川聯",
+              "away_team": "釜山偶像",
+              "home_team_id": 497,
+              "away_team_id": 501,
+              "full_time": {
+                "home": 0,
+                "away": 0
+              },
+              "half_time": {
+                "home": 0,
+                "away": 0
+              },
+              "asian_line": 0.25,
+              "total_line": 2,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2892297,
+              "competition": "韓K聯",
+              "kickoff": "25-11-01 13:00",
+              "home_team": "FC江原",
+              "away_team": "全北汽車",
+              "home_team_id": 9945,
+              "away_team_id": 484,
+              "full_time": {
+                "home": 0,
+                "away": 0
+              },
+              "half_time": {
+                "home": 0,
+                "away": 0
+              },
+              "asian_line": -0.25,
+              "total_line": 2.5,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2720004,
+              "competition": "韓K2聯",
+              "kickoff": "25-10-26 13:00",
+              "home_team": "仁川聯",
+              "away_team": "慶南FC",
+              "home_team_id": 497,
+              "away_team_id": 4074,
+              "full_time": {
+                "home": 3,
+                "away": 0
+              },
+              "half_time": {
+                "home": 1,
+                "away": 0
+              },
+              "asian_line": 1,
+              "total_line": 2.5,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2892293,
+              "competition": "韓K聯",
+              "kickoff": "25-10-25 13:00",
+              "home_team": "全北汽車",
+              "away_team": "金泉尚武",
+              "home_team_id": 484,
+              "away_team_id": 494,
+              "full_time": {
+                "home": 2,
+                "away": 3
+              },
+              "half_time": {
+                "home": 2,
+                "away": 1
+              },
+              "asian_line": 0.25,
+              "total_line": 3,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2719992,
+              "competition": "韓K2聯",
+              "kickoff": "25-10-19 13:00",
+              "home_team": "安山小綠人",
+              "away_team": "仁川聯",
+              "home_team_id": 32085,
+              "away_team_id": 497,
+              "full_time": {
+                "home": 0,
+                "away": 1
+              },
+              "half_time": {
+                "home": 0,
+                "away": 1
+              },
+              "asian_line": -1,
+              "total_line": 2.25,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2716668,
+              "competition": "韓K聯",
+              "kickoff": "25-10-18 13:00",
+              "home_team": "全北汽車",
+              "away_team": "水原FC",
+              "home_team_id": 484,
+              "away_team_id": 5586,
+              "full_time": {
+                "home": 2,
+                "away": 0
+              },
+              "half_time": {
+                "home": 1,
+                "away": 0
+              },
+              "asian_line": 0.75,
+              "total_line": 3,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2719991,
+              "competition": "韓K2聯",
+              "kickoff": "25-10-12 15:30",
+              "home_team": "城南FC",
+              "away_team": "仁川聯",
+              "home_team_id": 477,
+              "away_team_id": 497,
+              "full_time": {
+                "home": 2,
+                "away": 2
+              },
+              "half_time": {
+                "home": 0,
+                "away": 2
+              },
+              "asian_line": -0.25,
+              "total_line": 2.25,
+              "provider_flags": [
+                1,
+                0
+              ]
+            }
+          ],
+          "count": 60
+        },
+        "script_context": {
+          "coach": {
+            "home_record": {},
+            "away_record": {}
+          },
+          "referee": {
+            "name": "樸秉鎮",
+            "sample": 11,
+            "combined_yellow": 3.09,
+            "combined_red": 0.36
+          },
+          "effects": [
+            "裁判剧本：樸秉鎮在11场公开样本中场均双方合计黄牌约3.09、红牌约0.36，比赛中断与红牌尾部风险偏高，领先方未必能平稳控场。",
+            "裁判历史样本下主队胜率更高（主45% / 客27%），仅作为剧本倾向，不视为因果优势。"
+          ],
+          "risks": [
+            "裁判公开样本的牌数与红牌率偏高，比分右尾和比赛状态突变风险高于基础泊松假设"
+          ],
+          "model_usage": "match_script_and_uncertainty_only_not_probability_override"
+        },
+        "items": [
+          "裁判：樸秉鎮；公开执法样本 11 场。",
+          "Nowscore盘路历史已读取 60 场，仅作风格与盘口复核，不直接改写概率。",
+          "裁判剧本：樸秉鎮在11场公开样本中场均双方合计黄牌约3.09、红牌约0.36，比赛中断与红牌尾部风险偏高，领先方未必能平稳控场。",
+          "裁判历史样本下主队胜率更高（主45% / 客27%），仅作为剧本倾向，不视为因果优势。"
+        ],
+        "status": "Nowscore赛前背景已核验",
+        "sources": [
+          "https://live.nowscore.com/info/coach/2929659.htm?l=1",
+          "https://live.nowscore.com/info/referee/2929659.htm?l=1",
+          "https://live.nowscore.com/panlu/2929659.html"
+        ]
+      }
+    },
+    "sources": [
+      "https://live.nowscore.com/info/coach/2929659.htm?l=1",
+      "https://live.nowscore.com/info/referee/2929659.htm?l=1",
+      "https://live.nowscore.com/panlu/2929659.html"
+    ]
+  },
+  "evidence_chain": [
+    {
+      "title": "足球维度",
+      "items": [
+        "主队近10个主场4胜0平6负，客队近10个客场3胜6平1负",
+        "近期主客场攻防推导λ：主队0.98，客队1.13",
+        "主队更可能掌握主动，但客队仍有足够进球期望制造反击或定位球威胁；总进球中枢偏低；上半场试探和低比分停留时间可能较长；裁判剧本：樸秉鎮在11场公开样本中场均双方合计黄牌约3.09、红牌约0.36，比赛中断与红牌尾部风险偏高，领先方未必能平稳控场；裁判历史样本下主队胜率更高（主45% / 客27%），仅作为剧本倾向，不视为因果优势。"
+      ]
+    },
+    {
+      "title": "教练、裁判与历史盘路",
+      "items": [
+        "裁判：樸秉鎮；公开执法样本 11 场。",
+        "Nowscore盘路历史已读取 60 场，仅作风格与盘口复核，不直接改写概率。",
+        "裁判剧本：樸秉鎮在11场公开样本中场均双方合计黄牌约3.09、红牌约0.36，比赛中断与红牌尾部风险偏高，领先方未必能平稳控场。",
+        "裁判历史样本下主队胜率更高（主45% / 客27%），仅作为剧本倾向，不视为因果优势。",
+        "这些信息用于解释比赛脚本与风险点；在完成历史校准前，不直接机械增减胜平负概率。"
+      ]
+    },
+    {
+      "title": "市场维度",
+      "items": [
+        "去水共识：主胜88.2%、平局8.7%、客胜3.0%",
+        "大小球中轴：1.5；市场占40%校准权重，不替代模型。",
+        "多公司市场对主胜的定价比模型更强44.0%，不能把市场热度直接当成模型优势"
+      ]
+    },
+    {
+      "title": "执行维度",
+      "items": [
+        "每个玩法分别展示当前价、模型概率、EV与最低可接受赔率；低于门槛一律不过线。",
+        "执行价额外要求8%安全边际；模型包含市场校准，因此正EV只是价格复核信号。",
+        "唯一比分1-0只是单个比分格的最高点；胜平负主线主胜是多个比分格合计，二者不要求同方向。"
+      ]
+    },
+    {
+      "title": "模型与临场核验",
+      "items": [
+        "公开事实核验状态：Nowscore赛前背景已核验。",
+        "确认首发、关键伤停、天气或盘口换线与假设冲突时，必须重算而非沿用旧报告。"
+      ]
+    }
+  ],
+  "betting": {
+    "candidates": [],
+    "state": "空仓｜未锁单",
+    "execution_authorized": false,
+    "lock_state_changed": false,
+    "bankroll_state_changed": false,
+    "price_audit": [
+      {
+        "market": "SPF主胜",
+        "model_probability": 0.442373,
+        "conservative_probability": 0.367373,
+        "minimum_acceptable_decimal_odds": 2.94,
+        "odds": null,
+        "ev": null,
+        "audit_role": "模型价格门槛，不是投注指令"
+      },
+      {
+        "market": "SPF平局",
+        "model_probability": 0.31342,
+        "conservative_probability": 0.23842,
+        "minimum_acceptable_decimal_odds": 4.53,
+        "odds": null,
+        "ev": null,
+        "audit_role": "模型价格门槛，不是投注指令"
+      },
+      {
+        "market": "SPF客胜",
+        "model_probability": 0.244206,
+        "conservative_probability": 0.169206,
+        "minimum_acceptable_decimal_odds": 6.383,
+        "odds": null,
+        "ev": null,
+        "audit_role": "模型价格门槛，不是投注指令"
+      },
+      {
+        "market": "澳门 大1.5",
+        "model_probability": 0.557665,
+        "push_probability": 0.0,
+        "odds": 2.4,
+        "ev": 0.338396,
+        "minimum_acceptable_decimal_odds": 1.937,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "澳门 小1.5",
+        "model_probability": 0.442335,
+        "push_probability": 0.0,
+        "odds": 1.3,
+        "ev": -0.424965,
+        "minimum_acceptable_decimal_odds": 2.442,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "皇冠 大1.5",
+        "model_probability": 0.557665,
+        "push_probability": 0.0,
+        "odds": 7.25,
+        "ev": 3.043072,
+        "minimum_acceptable_decimal_odds": 1.937,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "皇冠 小1.5",
+        "model_probability": 0.442335,
+        "push_probability": 0.0,
+        "odds": 1.01,
+        "ev": -0.553242,
+        "minimum_acceptable_decimal_odds": 2.442,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "立博 大2.5",
+        "model_probability": 0.288188,
+        "push_probability": 0.0,
+        "odds": 12.0,
+        "ev": 2.458251,
+        "minimum_acceptable_decimal_odds": 3.748,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "立博 小2.5",
+        "model_probability": 0.711812,
+        "push_probability": 0.0,
+        "odds": 1.01,
+        "ev": -0.281069,
+        "minimum_acceptable_decimal_odds": 1.517,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "bet365 大1.5",
+        "model_probability": 0.557665,
+        "push_probability": 0.0,
+        "odds": 9.0,
+        "ev": 4.018986,
+        "minimum_acceptable_decimal_odds": 1.937,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "bet365 小1.5",
+        "model_probability": 0.442335,
+        "push_probability": 0.0,
+        "odds": 1.07,
+        "ev": -0.526702,
+        "minimum_acceptable_decimal_odds": 2.442,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "威廉希尔 大1.5",
+        "model_probability": 0.557665,
+        "push_probability": 0.0,
+        "odds": 12.0,
+        "ev": 5.691981,
+        "minimum_acceptable_decimal_odds": 1.937,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "威廉希尔 小1.5",
+        "model_probability": 0.442335,
+        "push_probability": 0.0,
+        "odds": 1.03,
+        "ev": -0.544395,
+        "minimum_acceptable_decimal_odds": 2.442,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "易胜博 大1.5",
+        "model_probability": 0.557665,
+        "push_probability": 0.0,
+        "odds": 11.0,
+        "ev": 5.134316,
+        "minimum_acceptable_decimal_odds": 1.937,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "易胜博 小1.5",
+        "model_probability": 0.442335,
+        "push_probability": 0.0,
+        "odds": 1.02,
+        "ev": -0.548818,
+        "minimum_acceptable_decimal_odds": 2.442,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "澳门 主-0",
+        "model_probability": 0.442373,
+        "push_probability": 0.31342,
+        "odds": 2.36,
+        "ev": 0.357421,
+        "minimum_acceptable_decimal_odds": 1.676,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "澳门 客+0",
+        "model_probability": 0.244206,
+        "push_probability": 0.31342,
+        "odds": 1.4,
+        "ev": -0.344691,
+        "minimum_acceptable_decimal_odds": 3.036,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "皇冠 主+0.25",
+        "model_probability": 0.599083,
+        "push_probability": 0.15671,
+        "odds": 1.03,
+        "ev": -0.226234,
+        "minimum_acceptable_decimal_odds": 1.52,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "皇冠 客-0.25",
+        "model_probability": 0.244206,
+        "push_probability": 0.15671,
+        "odds": 7.25,
+        "ev": 0.927206,
+        "minimum_acceptable_decimal_odds": 3.729,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "bet365 主-0",
+        "model_probability": 0.442373,
+        "push_probability": 0.31342,
+        "odds": 2.5,
+        "ev": 0.419353,
+        "minimum_acceptable_decimal_odds": 1.676,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "bet365 客+0",
+        "model_probability": 0.244206,
+        "push_probability": 0.31342,
+        "odds": 1.5,
+        "ev": -0.32027,
+        "minimum_acceptable_decimal_odds": 3.036,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "威廉希尔 主+0.5",
+        "model_probability": 0.755794,
+        "push_probability": 0.0,
+        "odds": 1.5,
+        "ev": 0.13369,
+        "minimum_acceptable_decimal_odds": 1.429,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "威廉希尔 客-0.5",
+        "model_probability": 0.244206,
+        "push_probability": 0.0,
+        "odds": 2.45,
+        "ev": -0.401694,
+        "minimum_acceptable_decimal_odds": 4.422,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "易胜博 主-0",
+        "model_probability": 0.442373,
+        "push_probability": 0.31342,
+        "odds": 2.0,
+        "ev": 0.198167,
+        "minimum_acceptable_decimal_odds": 1.676,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "易胜博 客+0",
+        "model_probability": 0.244206,
+        "push_probability": 0.31342,
+        "odds": 1.92,
+        "ev": -0.217703,
+        "minimum_acceptable_decimal_odds": 3.036,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "伟德 主-0",
+        "model_probability": 0.442373,
+        "push_probability": 0.31342,
+        "odds": 2.42,
+        "ev": 0.383964,
+        "minimum_acceptable_decimal_odds": 1.676,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "伟德 客+0",
+        "model_probability": 0.244206,
+        "push_probability": 0.31342,
+        "odds": 1.56,
+        "ev": -0.305618,
+        "minimum_acceptable_decimal_odds": 3.036,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      }
+    ]
+  },
+  "automation": {
+    "provider": "fixed-python-core",
+    "generated_at": "2026-07-18T14:37:23+00:00",
+    "owner_authorized_request": true,
+    "llm_used": false,
+    "market_refresh": {
+      "stage": "INITIAL",
+      "captured_at": "2026-07-18T14:37:23.751255+00:00",
+      "initial_capture": true,
+      "model_recalculated": true,
+      "execution_authorized": false,
+      "lock_state_changed": false,
+      "bankroll_state_changed": false
+    }
+  },
+  "decision_evolution": {
+    "latest": {
+      "kind": "initial",
+      "headline": "初始判断：主胜；首推比分1-0",
+      "summary": "模型建立初始比赛剧本，主维度为胜平负：主胜（模型44.2%）。0家公司、0条轨迹：主胜降赔0家/升赔0家，亚洲盘主队加强0家/减弱0家，大小球升盘0家/降盘0家。综合价格压力偏向两侧未拉开。；没有可核验的交易所成交量；当前只能确认报价形成的两侧未拉开价格压力，不能称为真实资金流。；Sharp层方向不足；目的推断：当前更像分散调价和平衡风险，尚没有足够证据说明机构在主动表达单边方向。可信度：低。；市场方向尚未拉开，不改变模型主线，只保留观察。",
+      "changed": true
+    },
+    "history": [
+      {
+        "captured_at": "2026-07-18T14:37:23.751255+00:00",
+        "headline": "初始判断：主胜；首推比分1-0",
+        "summary": "模型建立初始比赛剧本，主维度为胜平负：主胜（模型44.2%）。0家公司、0条轨迹：主胜降赔0家/升赔0家，亚洲盘主队加强0家/减弱0家，大小球升盘0家/降盘0家。综合价格压力偏向两侧未拉开。；没有可核验的交易所成交量；当前只能确认报价形成的两侧未拉开价格压力，不能称为真实资金流。；Sharp层方向不足；目的推断：当前更像分散调价和平衡风险，尚没有足够证据说明机构在主动表达单边方向。可信度：低。；市场方向尚未拉开，不改变模型主线，只保留观察。",
+        "changed": true
+      }
+    ],
+    "internal_checkpoints_hidden": true
+  },
+  "market": {
+    "interpretation": {
+      "money_flow": "没有可核验的交易所成交量；当前只能确认报价形成的两侧未拉开价格压力，不能称为真实资金流。",
+      "bookmaker_behaviour": "Sharp层方向不足；目的推断：当前更像分散调价和平衡风险，尚没有足够证据说明机构在主动表达单边方向。可信度：低。",
+      "market_pressure": "0家公司、0条轨迹：主胜降赔0家/升赔0家，亚洲盘主队加强0家/减弱0家，大小球升盘0家/降盘0家。综合价格压力偏向两侧未拉开。",
+      "model_impact": "市场方向尚未拉开，不改变模型主线，只保留观察。",
+      "purpose": "当前更像分散调价和平衡风险，尚没有足够证据说明机构在主动表达单边方向。",
+      "confidence": "低",
+      "late_market_weight": "normal",
+      "actual_volume_available": false
+    }
+  }
+}
