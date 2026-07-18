@@ -66,11 +66,29 @@ jobs:
           echo "analysis failed after 3 evidence refresh attempts" >&2
           exit 1
 
+      - name: Verify any results that became due while analysis was queued
+        run: |
+          BUSINESS_DATE="${{ inputs.business_date || '' }}"
+          if [[ -n "$BUSINESS_DATE" ]]; then
+            python scripts/sync_result_schedules.py --date "$BUSINESS_DATE"
+          else
+            python scripts/sync_result_schedules.py
+          fi
+          python scripts/postmatch_result.py
+          python scripts/automatic_postmatch_review.py
+          python scripts/postmatch_dashboard.py
+          if [[ -n "$BUSINESS_DATE" ]]; then
+            python scripts/match_workspace.py --date "$BUSINESS_DATE"
+          else
+            python scripts/match_workspace.py
+          fi
+          python scripts/build_public_site.py
+
       - name: Save generated analysis
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/fetch_runs data/analysis_inputs/automated data/analysis_reports data/live_ev_profiles data/market_history data/match_archive data/postmatch_automation data/match_workspace data/paper_ledger
+          git add data/fetch_runs data/analysis_inputs/automated data/analysis_reports data/live_ev_profiles data/market_history data/match_archive data/postmatch_automation data/postmatch_reviews data/postmatch_dashboard data/match_workspace data/paper_ledger
           if ! git diff --cached --quiet; then
             git commit -m "analyze selected football match [skip ci]"
             git push

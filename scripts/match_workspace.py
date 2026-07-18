@@ -124,7 +124,7 @@ def latest_reports() -> dict[str, dict]:
         key = f"{norm(match.get('home'))}|{norm(match.get('away'))}"
         reports[key] = {
             "path": path,
-            "html": next(path.parent.glob("*.html"), None),
+            "html": report_html_path(path),
             "payload": payload,
         }
     return reports
@@ -139,8 +139,22 @@ def all_reports() -> list[dict]:
         payload = load_json(path, {})
         match = payload.get("match") or {}
         if match.get("home") and match.get("away"):
-            rows.append({"path": path, "html": next(path.parent.glob("*.html"), None), "payload": payload})
+            rows.append({"path": path, "html": report_html_path(path), "payload": payload})
     return rows
+
+
+def report_html_path(json_path: Path) -> Path | None:
+    """Return only the HTML generated from the same frozen JSON report.
+
+    The ``current`` directory contains several reports.  Picking the first HTML
+    in that directory silently linked every match to whichever file happened
+    to sort first.
+    """
+    exact = json_path.with_suffix(".html")
+    if exact.exists():
+        return exact
+    candidates = list(json_path.parent.glob("*.html"))
+    return candidates[0] if len(candidates) == 1 else None
 
 
 def verified_result_map() -> dict[str, tuple[int, int]]:

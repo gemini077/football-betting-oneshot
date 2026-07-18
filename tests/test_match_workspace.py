@@ -7,7 +7,7 @@ import unittest
 from datetime import date, timedelta
 from pathlib import Path
 
-from scripts.match_workspace import RUNTIME, build, build_daily_portfolio, create_unique_output_dir, find_review, render, report_candidates, report_summary, review_rows
+from scripts.match_workspace import RUNTIME, build, build_daily_portfolio, create_unique_output_dir, find_review, render, report_candidates, report_html_path, report_summary, review_rows
 
 
 class MatchWorkspacePortfolioTests(unittest.TestCase):
@@ -32,6 +32,17 @@ class MatchWorkspacePortfolioTests(unittest.TestCase):
             second = create_unique_output_dir(output, "20260715_075740")
             self.assertEqual("20260715_075740", first.name)
             self.assertEqual("20260715_075740_02", second.name)
+
+    def test_report_html_is_paired_by_basename_not_first_file_in_directory(self):
+        with tempfile.TemporaryDirectory() as temp:
+            folder = Path(temp)
+            wanted = folder / "wanted.json"
+            wanted.write_text("{}", encoding="utf-8")
+            (folder / "other.html").write_text("OTHER", encoding="utf-8")
+            exact = folder / "wanted.html"
+            exact.write_text("WANTED", encoding="utf-8")
+
+            self.assertEqual(exact, report_html_path(wanted))
 
     def test_empty_portfolio_keeps_all_three_layers_empty(self):
         portfolio = build_daily_portfolio([], {"exposure": {"open_bets": [], "current_open_exposure": 0}})

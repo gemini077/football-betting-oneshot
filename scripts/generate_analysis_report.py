@@ -93,6 +93,7 @@ def build_base_engine_audit(
     totals = deep.get("daxiao", {}).get("companies", [])
     exchange = deep.get("touzhu", {})
     exchange_transactions = exchange.get("pl_flow", {}).get("transactions", [])
+    exchange_metadata = exchange.get("betfair_metadata", {})
     structured_fundamentals = deep.get("shuju") or {}
 
     euro_open_current = sum(
@@ -122,7 +123,7 @@ def build_base_engine_audit(
 
     modules = {
         "global_consensus": module(
-            "30家公司分层共识",
+            "多公司分层共识",
             "ready" if euro_open_current >= 25 else "degraded",
             f"{euro_open_current}家公司具备欧赔开盘与即时；三层权重尚待计算",
         ),
@@ -148,8 +149,13 @@ def build_base_engine_audit(
         ),
         "exchange": module(
             "交易所背离与量价验证",
-            "degraded" if exchange.get("betfair") else "missing",
-            f"必发快照可用，近期交易{len(exchange_transactions)}条；尚不足正式4小时基线",
+            ("partial" if exchange_metadata.get("completeness") == "partial" else "ready")
+            if exchange.get("betfair") else "missing",
+            (
+                f"500/SPdex聚合成交快照可用，近期交易{len(exchange_transactions)}条；"
+                f"完整度={exchange_metadata.get('completeness', 'unknown')}，"
+                f"缺价方向={','.join(exchange_metadata.get('missing_price_outcomes') or []) or '无'}"
+            ),
         ),
         "kelly": module(
             "页面凯利指数共识",
@@ -162,7 +168,7 @@ def build_base_engine_audit(
             "degraded" if structured_fundamentals else "missing",
             "结构化基本面可用" if structured_fundamentals else "shuju结构化结果为空，需联网补齐基本面",
         ),
-        "traps": module("陷阱扫描", "degraded", "21条欧亚专项与49条全量规则尚待执行"),
+        "traps": module("陷阱扫描", "degraded", "仅执行代码中已明确定义且可复核的规则，不用宣称总数补齐缺口"),
     }
     if market_intelligence:
         market_modules = market_intelligence.get("modules", {})
@@ -170,7 +176,7 @@ def build_base_engine_audit(
         mapped = int(tier_data.get("mapped_count", 0))
         unmapped = len(tier_data.get("unmapped", []))
         modules["global_consensus"]["calculation_status"] = "completed" if unmapped == 0 else "degraded"
-        modules["global_consensus"]["detail"] = f"30家公司均值已计算；三层已确认映射{mapped}家，未映射{unmapped}家"
+        modules["global_consensus"]["detail"] = f"{euro_open_current}家公司均值已计算；三层已确认映射{mapped}家，未映射{unmapped}家"
         for key in ("scs", "dri", "lead_lag", "water_flow", "exchange", "kelly"):
             result = market_modules.get(key, {})
             if result:
@@ -868,8 +874,8 @@ def render(payload: dict) -> str:
 
     market_rows = [
         ["竞彩官方", num(official_spf.get("home")), num(official_spf.get("draw")), num(official_spf.get("away")), "执行价格参考"],
-        ["30家公司开盘均值", num(consensus_open.get("home")), num(consensus_open.get("draw")), num(consensus_open.get("away")), "全球分析基线"],
-        ["30家公司即时均值", num(consensus_current.get("home")), num(consensus_current.get("draw")), num(consensus_current.get("away")), "全球分析基线"],
+        ["多公司开盘均值", num(consensus_open.get("home")), num(consensus_open.get("draw")), num(consensus_open.get("away")), "全球分析基线"],
+        ["多公司即时均值", num(consensus_current.get("home")), num(consensus_current.get("draw")), num(consensus_current.get("away")), "全球分析基线"],
         ["Pinnacle开盘", num(pin_open.get("home")), num(pin_open.get("draw")), num(pin_open.get("away")), "Sharp层参考"],
         ["Pinnacle即时", num(pin_current.get("home")), num(pin_current.get("draw")), num(pin_current.get("away")), f"Sharp层参考；返还率 {num(pinnacle.get('return_current_pct'))}%"],
     ]
@@ -878,7 +884,7 @@ def render(payload: dict) -> str:
 
     base_audit = payload.get("base_engine_audit") or {}
     audit_rows = []
-    status_label = {"ready": "数据就绪", "degraded": "降级", "missing": "数据缺失", "completed": "已计算", "not_run": "未计算"}
+    status_label = {"ready": "数据就绪", "partial": "部分可用", "degraded": "样本不足", "missing": "数据缺失", "completed": "已计算", "not_run": "未计算"}
     for item in (base_audit.get("modules") or {}).values():
         audit_rows.append([
             item.get("label"),

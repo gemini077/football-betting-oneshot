@@ -36,6 +36,17 @@ class DeepParserTests(unittest.TestCase):
         self.assertIsNone(betfair["away"]["pl_index"])
         self.assertEqual("display_only", parsed["betfair_metadata"]["page_simulated_pl_signal_usage"])
 
+    def test_touzhu_keeps_volume_when_exchange_price_is_missing(self):
+        row = lambda team, price: f"""<tr><td>{team}</td><td>2.10</td><td>33.3%</td><td>-</td><td>33.3%</td><td>{price}</td><td>12,345</td><td>-</td><td>-</td><td>1</td><td>2</td></tr>"""
+        html = "热度分析<table>" + row("主队", "1.92") + row("平局", "-") + row("客队", "-") + "<tr><td>数据提点</td></tr></table>"
+
+        parsed = parse_touzhu(html)
+
+        self.assertEqual(12345, parsed["betfair"]["draw"]["betfair_volume"])
+        self.assertIsNone(parsed["betfair"]["draw"]["betfair_price"])
+        self.assertEqual("partial", parsed["betfair_metadata"]["completeness"])
+        self.assertEqual(["draw", "away"], parsed["betfair_metadata"]["missing_price_outcomes"])
+
     def test_ouzhi_summary_uses_stable_ids(self):
         html = """
         <td class="tb_plgs" title="P*********"><a href="?cid=1055"></a></td>

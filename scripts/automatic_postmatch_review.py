@@ -414,8 +414,12 @@ def generate(schedule_root: Path = SCHEDULE_ROOT, review_root: Path = REVIEW_ROO
         schedule = load_json(path)
         if schedule.get("status") not in {"result_verified", "reviewed"} or not schedule.get("result_90m"):
             continue
-        source = BASE_DIR / str(schedule.get("source_report") or "")
-        if not source.exists():
+        source_report = str(schedule.get("source_report") or "").strip()
+        source = BASE_DIR / source_report if source_report else None
+        # Result-only tasks intentionally have no model report.  Their verified
+        # score still updates the workspace, but they must not enter the model
+        # review builder or be interpreted as BASE_DIR itself.
+        if source is None or not source.is_file():
             outcomes.append({"match_key": schedule.get("match_key"), "status": "missing_source_report"})
             continue
         review = build_review(schedule, load_json(source), now)
