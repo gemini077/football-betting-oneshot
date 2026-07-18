@@ -1,0 +1,769 @@
+{
+  "report": {
+    "model_name": "Football Betting OneShot",
+    "model_version": "v0.18.2",
+    "report_type": "确定性赛前分析",
+    "analysis_timestamp": "2026-07-18T14:24:27+00:00",
+    "final_execution_version": false,
+    "ai_provider": null,
+    "ai_model": null,
+    "market_checkpoint": {
+      "stage": "INITIAL",
+      "captured_at": "2026-07-18T14:24:27.413382+00:00",
+      "initial_capture": true
+    }
+  },
+  "match": {
+    "business_date": "2026-07-17",
+    "match_id": "500-1362710",
+    "home": "米亚尔比",
+    "away": "韦斯特罗斯"
+  },
+  "decisions": {
+    "unique_primary_dimension": "胜平负：主胜（模型49.6%）",
+    "unique_score": "2-1",
+    "score_reasoning": "模型在可行比分区间内综合方向、总进球与双方进球情景后选择该落点（单格概率9.4%；符合主胜主剧本、落在总进球众数3、符合双方进球倾向），不是照抄最低赔率或市场第一。",
+    "mathematical_first": "90分钟主胜49.6%、平局22.4%、客胜28.0%；λ=1.89-1.38。",
+    "market_first": "多公司去水共识主胜51.1%、平局24.9%、客胜23.9%；大小球中轴2.75。",
+    "match_story": "主队更可能掌握主动，但客队仍有足够进球期望制造反击或定位球威胁；总进球中枢偏高；早段进球会显著放大开放对攻和右尾比分风险。",
+    "market_conflict": "多公司市场对主胜的定价比模型更强1.6%，不能把市场热度直接当成模型优势",
+    "score_vs_outcome_explanation": "唯一比分2-1只是单个比分格的最高点；胜平负主线主胜是多个比分格合计，二者不要求同方向。",
+    "maximum_error_points": [
+      "若早段进球、红牌或比赛节奏偏离基准，总进球与比分尾部会同步变化",
+      "首发或关键伤停与当前假设不一致，会直接改变双方λ",
+      "临盘若出现跨公司同步升降盘，本次赛前快照的价格结构会失效"
+    ],
+    "value_judgement": "仅完成模型概率与市场基线；须取得用户渠道即时赔率后才计算EV。",
+    "final_state": "空仓｜未锁单"
+  },
+  "model": {
+    "status": "确定性融合模型（可核验近期攻防 + 市场校准）",
+    "method": "recent_form_market_calibrated_poisson_v2",
+    "lambda_home": 1.891982,
+    "lambda_away": 1.378018,
+    "rho": 0.0,
+    "expected_goals": 3.27,
+    "probabilities": {
+      "home": 0.495782,
+      "draw": 0.223783,
+      "away": 0.280434
+    },
+    "total_goals_buckets": [
+      {
+        "goals": "0",
+        "probability": 0.038006
+      },
+      {
+        "goals": "1",
+        "probability": 0.124281
+      },
+      {
+        "goals": "2",
+        "probability": 0.203199
+      },
+      {
+        "goals": "3",
+        "probability": 0.221487
+      },
+      {
+        "goals": "4",
+        "probability": 0.181066
+      },
+      {
+        "goals": "5",
+        "probability": 0.118417
+      },
+      {
+        "goals": "6+",
+        "probability": 0.113542
+      }
+    ],
+    "btts": {
+      "yes": 0.635156,
+      "no": 0.364844,
+      "judgement": "双方进球偏是"
+    },
+    "score_probabilities": [
+      {
+        "score": "1-1",
+        "probability": 0.09909,
+        "fair_odds": 10.0919,
+        "rank": 1
+      },
+      {
+        "score": "2-1",
+        "probability": 0.093738,
+        "fair_odds": 10.668,
+        "rank": 2
+      },
+      {
+        "score": "1-0",
+        "probability": 0.071907,
+        "fair_odds": 13.9068,
+        "rank": 3
+      },
+      {
+        "score": "1-2",
+        "probability": 0.068274,
+        "fair_odds": 14.6469,
+        "rank": 4
+      },
+      {
+        "score": "2-0",
+        "probability": 0.068024,
+        "fair_odds": 14.7007,
+        "rank": 5
+      },
+      {
+        "score": "2-2",
+        "probability": 0.064586,
+        "fair_odds": 15.4831,
+        "rank": 6
+      },
+      {
+        "score": "3-1",
+        "probability": 0.059117,
+        "fair_odds": 16.9156,
+        "rank": 7
+      },
+      {
+        "score": "0-1",
+        "probability": 0.052374,
+        "fair_odds": 19.0936,
+        "rank": 8
+      },
+      {
+        "score": "3-0",
+        "probability": 0.0429,
+        "fair_odds": 23.31,
+        "rank": 9
+      },
+      {
+        "score": "3-2",
+        "probability": 0.040732,
+        "fair_odds": 24.5507,
+        "rank": 10
+      }
+    ],
+    "total_line_analysis": [
+      {
+        "line": 2.5,
+        "over": {
+          "win_equivalent_probability": 0.634513,
+          "loss_equivalent_probability": 0.365487,
+          "push_equivalent_probability": 0.0,
+          "fair_odds": 1.576
+        },
+        "under": {
+          "win_equivalent_probability": 0.365487,
+          "loss_equivalent_probability": 0.634513,
+          "push_equivalent_probability": 0.0,
+          "fair_odds": 2.7361
+        }
+      },
+      {
+        "line": 2.75,
+        "over": {
+          "win_equivalent_probability": 0.523769,
+          "loss_equivalent_probability": 0.365487,
+          "push_equivalent_probability": 0.110744,
+          "fair_odds": 1.6978
+        },
+        "under": {
+          "win_equivalent_probability": 0.365487,
+          "loss_equivalent_probability": 0.523769,
+          "push_equivalent_probability": 0.110744,
+          "fair_odds": 2.4331
+        }
+      },
+      {
+        "line": 3.0,
+        "over": {
+          "win_equivalent_probability": 0.413026,
+          "loss_equivalent_probability": 0.365487,
+          "push_equivalent_probability": 0.221487,
+          "fair_odds": 1.8849
+        },
+        "under": {
+          "win_equivalent_probability": 0.365487,
+          "loss_equivalent_probability": 0.413026,
+          "push_equivalent_probability": 0.221487,
+          "fair_odds": 2.1301
+        }
+      },
+      {
+        "line": 3.25,
+        "over": {
+          "win_equivalent_probability": 0.413026,
+          "loss_equivalent_probability": 0.476231,
+          "push_equivalent_probability": 0.110744,
+          "fair_odds": 2.153
+        },
+        "under": {
+          "win_equivalent_probability": 0.476231,
+          "loss_equivalent_probability": 0.413026,
+          "push_equivalent_probability": 0.110744,
+          "fair_odds": 1.8673
+        }
+      },
+      {
+        "line": 3.5,
+        "over": {
+          "win_equivalent_probability": 0.413026,
+          "loss_equivalent_probability": 0.586974,
+          "push_equivalent_probability": 0.0,
+          "fair_odds": 2.4212
+        },
+        "under": {
+          "win_equivalent_probability": 0.586974,
+          "loss_equivalent_probability": 0.413026,
+          "push_equivalent_probability": 0.0,
+          "fair_odds": 1.7037
+        }
+      }
+    ],
+    "calibration": {
+      "form_lambda_home": 2.033333,
+      "form_lambda_away": 1.583333,
+      "market_total_line_median": 2.75,
+      "market_probabilities": {
+        "home": 0.5114342344767301,
+        "draw": 0.24927289640022424,
+        "away": 0.23929286912304573
+      },
+      "form_weight": 0.6,
+      "market_weight": 0.4,
+      "form_source": "500.com赛前数据快照",
+      "venue_proxy_used": false
+    },
+    "limitations": [
+      "近期样本含不同赛事与对手强度，尚未完成逐队Elo/xG对手校正",
+      "确认首发、即时伤停、天气与临场战术需在开赛前另行修正",
+      "市场信息用于校准，因此该概率不是完全独立于赔率的纯基本面概率"
+    ]
+  },
+  "data_quality": {
+    "status": "模型已计算，临场信息待补",
+    "missing": [
+      "确认首发",
+      "即时伤停",
+      "用户渠道即时赔率"
+    ],
+    "notes": [
+      "近期攻防来源：500.com赛前数据快照。",
+      "模型数值由固定公式生成，DeepSeek不参与概率计算。"
+    ],
+    "overall": "FORM_AND_MARKET_MODEL"
+  },
+  "fundamentals": {
+    "status": "Nowscore赛前背景未取得",
+    "items": [
+      {
+        "label": "主队近10场",
+        "value": "3胜4平3负，进22球/失21球",
+        "source": "500.com赛前数据快照"
+      },
+      {
+        "label": "主队近10个主场",
+        "value": "6胜1平3负，进20球/失10球",
+        "source": "500.com赛前数据快照"
+      },
+      {
+        "label": "客队近10场",
+        "value": "4胜2平4负，进20球/失20球",
+        "source": "500.com赛前数据快照"
+      },
+      {
+        "label": "客队近10个客场",
+        "value": "5胜1平4负，进17球/失20球",
+        "source": "500.com赛前数据快照"
+      }
+    ],
+    "structured_form": {
+      "status": "Nowscore赛前背景未取得",
+      "checked_at": "2026-07-18T14:24:27+00:00",
+      "items": [
+        {
+          "label": "主队近10场",
+          "value": "3胜4平3负，进22球/失21球",
+          "source": "500.com赛前数据快照"
+        },
+        {
+          "label": "主队近10个主场",
+          "value": "6胜1平3负，进20球/失10球",
+          "source": "500.com赛前数据快照"
+        },
+        {
+          "label": "客队近10场",
+          "value": "4胜2平4负，进20球/失20球",
+          "source": "500.com赛前数据快照"
+        },
+        {
+          "label": "客队近10个客场",
+          "value": "5胜1平4负，进17球/失20球",
+          "source": "500.com赛前数据快照"
+        }
+      ],
+      "sources": [],
+      "recent_form": {
+        "home_overall": {
+          "team": "米亚尔比",
+          "matches": 10,
+          "wins": 3,
+          "draws": 4,
+          "losses": 3,
+          "goals_for": 22,
+          "goals_against": 21
+        },
+        "away_overall": {
+          "team": "瓦斯特拉斯",
+          "matches": 10,
+          "wins": 4,
+          "draws": 2,
+          "losses": 4,
+          "goals_for": 20,
+          "goals_against": 20
+        },
+        "home_home": {
+          "team": "米亚尔比",
+          "matches": 10,
+          "wins": 6,
+          "draws": 1,
+          "losses": 3,
+          "goals_for": 20,
+          "goals_against": 10
+        },
+        "away_away": {
+          "team": "瓦斯特拉斯",
+          "matches": 10,
+          "wins": 5,
+          "draws": 1,
+          "losses": 4,
+          "goals_for": 17,
+          "goals_against": 20
+        }
+      },
+      "form_source": "500.com赛前数据快照",
+      "metric": "recent actual goals, not xG",
+      "nowscore_context": {
+        "coach": {},
+        "referee": {},
+        "panlu": {},
+        "script_context": {
+          "coach": {
+            "home_record": {},
+            "away_record": {}
+          },
+          "referee": {
+            "name": null,
+            "sample": 0,
+            "combined_yellow": 0,
+            "combined_red": 0
+          },
+          "effects": [],
+          "risks": [],
+          "model_usage": "match_script_and_uncertainty_only_not_probability_override"
+        },
+        "items": [],
+        "status": "Nowscore赛前背景未取得",
+        "sources": []
+      }
+    },
+    "sources": []
+  },
+  "evidence_chain": [
+    {
+      "title": "足球维度",
+      "items": [
+        "主队近10个主场6胜1平3负，客队近10个客场5胜1平4负",
+        "近期主客场攻防推导λ：主队2.03，客队1.58",
+        "主队更可能掌握主动，但客队仍有足够进球期望制造反击或定位球威胁；总进球中枢偏高；早段进球会显著放大开放对攻和右尾比分风险。"
+      ]
+    },
+    {
+      "title": "市场维度",
+      "items": [
+        "去水共识：主胜51.1%、平局24.9%、客胜23.9%",
+        "大小球中轴：2.75；市场占40%校准权重，不替代模型。",
+        "多公司市场对主胜的定价比模型更强1.6%，不能把市场热度直接当成模型优势"
+      ]
+    },
+    {
+      "title": "执行维度",
+      "items": [
+        "每个玩法分别展示当前价、模型概率、EV与最低可接受赔率；低于门槛一律不过线。",
+        "执行价额外要求8%安全边际；模型包含市场校准，因此正EV只是价格复核信号。",
+        "唯一比分2-1只是单个比分格的最高点；胜平负主线主胜是多个比分格合计，二者不要求同方向。"
+      ]
+    },
+    {
+      "title": "模型与临场核验",
+      "items": [
+        "公开事实核验状态：Nowscore赛前背景未取得。",
+        "确认首发、关键伤停、天气或盘口换线与假设冲突时，必须重算而非沿用旧报告。"
+      ]
+    }
+  ],
+  "betting": {
+    "candidates": [],
+    "state": "空仓｜未锁单",
+    "execution_authorized": false,
+    "lock_state_changed": false,
+    "bankroll_state_changed": false,
+    "price_audit": [
+      {
+        "market": "SPF主胜",
+        "model_probability": 0.495782,
+        "conservative_probability": 0.420782,
+        "minimum_acceptable_decimal_odds": 2.567,
+        "odds": null,
+        "ev": null,
+        "audit_role": "模型价格门槛，不是投注指令"
+      },
+      {
+        "market": "SPF平局",
+        "model_probability": 0.223783,
+        "conservative_probability": 0.148783,
+        "minimum_acceptable_decimal_odds": 7.259,
+        "odds": null,
+        "ev": null,
+        "audit_role": "模型价格门槛，不是投注指令"
+      },
+      {
+        "market": "SPF客胜",
+        "model_probability": 0.280434,
+        "conservative_probability": 0.205434,
+        "minimum_acceptable_decimal_odds": 5.257,
+        "odds": null,
+        "ev": null,
+        "audit_role": "模型价格门槛，不是投注指令"
+      },
+      {
+        "market": "威*** 大2.5",
+        "model_probability": 0.634513,
+        "push_probability": 0.0,
+        "odds": 1.62,
+        "ev": 0.027911,
+        "minimum_acceptable_decimal_odds": 1.702,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "威*** 小2.5",
+        "model_probability": 0.365487,
+        "push_probability": 0.0,
+        "odds": 2.2,
+        "ev": -0.195929,
+        "minimum_acceptable_decimal_odds": 2.955,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "*门 大2.75",
+        "model_probability": 0.523769,
+        "push_probability": 0.110744,
+        "odds": 1.83,
+        "ev": 0.069242,
+        "minimum_acceptable_decimal_odds": 1.834,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "*门 小2.75",
+        "model_probability": 0.365487,
+        "push_probability": 0.110744,
+        "odds": 1.89,
+        "ev": -0.198486,
+        "minimum_acceptable_decimal_odds": 2.628,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "立* 大2.5",
+        "model_probability": 0.634513,
+        "push_probability": 0.0,
+        "odds": 1.61,
+        "ev": 0.021566,
+        "minimum_acceptable_decimal_odds": 1.702,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "立* 小2.5",
+        "model_probability": 0.365487,
+        "push_probability": 0.0,
+        "odds": 2.15,
+        "ev": -0.214203,
+        "minimum_acceptable_decimal_odds": 2.955,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "B***** 大2.75",
+        "model_probability": 0.523769,
+        "push_probability": 0.110744,
+        "odds": 1.82,
+        "ev": 0.064004,
+        "minimum_acceptable_decimal_odds": 1.834,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "B***** 小2.75",
+        "model_probability": 0.365487,
+        "push_probability": 0.110744,
+        "odds": 1.97,
+        "ev": -0.169247,
+        "minimum_acceptable_decimal_odds": 2.628,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "I********** 大2.5",
+        "model_probability": 0.634513,
+        "push_probability": 0.0,
+        "odds": 1.6,
+        "ev": 0.015221,
+        "minimum_acceptable_decimal_odds": 1.702,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "I********** 小2.5",
+        "model_probability": 0.365487,
+        "push_probability": 0.0,
+        "odds": 2.2,
+        "ev": -0.195929,
+        "minimum_acceptable_decimal_odds": 2.955,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "*冠 大2.75",
+        "model_probability": 0.523769,
+        "push_probability": 0.110744,
+        "odds": 1.82,
+        "ev": 0.064004,
+        "minimum_acceptable_decimal_odds": 1.834,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "*冠 小2.75",
+        "model_probability": 0.365487,
+        "push_probability": 0.110744,
+        "odds": 2.05,
+        "ev": -0.140008,
+        "minimum_acceptable_decimal_odds": 2.628,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "威*** 主-0.5",
+        "model_probability": 0.495782,
+        "push_probability": 0.0,
+        "odds": 1.75,
+        "ev": -0.132381,
+        "minimum_acceptable_decimal_odds": 2.178,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "威*** 客+0.5",
+        "model_probability": 0.504218,
+        "push_probability": 0.0,
+        "odds": 1.95,
+        "ev": -0.016776,
+        "minimum_acceptable_decimal_odds": 2.142,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "*门 主-0.5",
+        "model_probability": 0.495782,
+        "push_probability": 0.0,
+        "odds": 1.81,
+        "ev": -0.102634,
+        "minimum_acceptable_decimal_odds": 2.178,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "*门 客+0.5",
+        "model_probability": 0.504218,
+        "push_probability": 0.0,
+        "odds": 1.97,
+        "ev": -0.006691,
+        "minimum_acceptable_decimal_odds": 2.142,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "立* 主-0.5",
+        "model_probability": 0.495782,
+        "push_probability": 0.0,
+        "odds": 1.75,
+        "ev": -0.132381,
+        "minimum_acceptable_decimal_odds": 2.178,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "立* 客+0.5",
+        "model_probability": 0.504218,
+        "push_probability": 0.0,
+        "odds": 1.95,
+        "ev": -0.016776,
+        "minimum_acceptable_decimal_odds": 2.142,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "B***** 主-0.5",
+        "model_probability": 0.495782,
+        "push_probability": 0.0,
+        "odds": 1.8,
+        "ev": -0.107592,
+        "minimum_acceptable_decimal_odds": 2.178,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "B***** 客+0.5",
+        "model_probability": 0.504218,
+        "push_probability": 0.0,
+        "odds": 2.0,
+        "ev": 0.008435,
+        "minimum_acceptable_decimal_odds": 2.142,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "I********** 主-0.5",
+        "model_probability": 0.495782,
+        "push_probability": 0.0,
+        "odds": 1.8,
+        "ev": -0.107592,
+        "minimum_acceptable_decimal_odds": 2.178,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "I********** 客+0.5",
+        "model_probability": 0.504218,
+        "push_probability": 0.0,
+        "odds": 1.9,
+        "ev": -0.041986,
+        "minimum_acceptable_decimal_odds": 2.142,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "*冠 主-0.5",
+        "model_probability": 0.495782,
+        "push_probability": 0.0,
+        "odds": 1.84,
+        "ev": -0.08776,
+        "minimum_acceptable_decimal_odds": 2.178,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "*冠 客+0.5",
+        "model_probability": 0.504218,
+        "push_probability": 0.0,
+        "odds": 2.03,
+        "ev": 0.023562,
+        "minimum_acceptable_decimal_odds": 2.142,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      }
+    ]
+  },
+  "automation": {
+    "provider": "fixed-python-core",
+    "generated_at": "2026-07-18T14:24:27+00:00",
+    "owner_authorized_request": true,
+    "llm_used": false,
+    "market_refresh": {
+      "stage": "INITIAL",
+      "captured_at": "2026-07-18T14:24:27.413382+00:00",
+      "initial_capture": true,
+      "model_recalculated": true,
+      "execution_authorized": false,
+      "lock_state_changed": false,
+      "bankroll_state_changed": false
+    }
+  },
+  "decision_evolution": {
+    "latest": {
+      "kind": "stable",
+      "headline": "核心判断维持不变",
+      "summary": "新盘口和球队信息尚不足以越过决策边界；继续维持胜平负：主胜（模型49.6%）与比分2-1。市场方向尚未拉开，不改变模型主线，只保留观察。",
+      "changed": false
+    },
+    "history": [
+      {
+        "captured_at": "2026-07-17T09:48:28.324101+00:00",
+        "headline": "初始判断：主胜；首推比分2-1",
+        "summary": "模型建立初始比赛剧本，主维度为胜平负：主胜（模型49.6%）。盘口水位暂未形成一致方向；没有可核验的交易所成交量，不把赔率变化称为真实资金流。",
+        "changed": true
+      },
+      {
+        "captured_at": "2026-07-17T10:19:13.551179+00:00",
+        "headline": "主维度由“胜平负：主胜（模型49.6%）”调整为“胜平负：主胜（模型49.3%）”",
+        "summary": "主维度由“胜平负：主胜（模型49.6%）”调整为“胜平负：主胜（模型49.3%）”。模型已按新信息重算，冻结注单不会被事后改写。",
+        "changed": true
+      },
+      {
+        "captured_at": "2026-07-17T10:46:46.224916+00:00",
+        "headline": "核心判断维持不变",
+        "summary": "新盘口和球队信息尚不足以越过决策边界；继续维持胜平负：主胜（模型49.3%）与比分2-1。",
+        "changed": false
+      },
+      {
+        "captured_at": "2026-07-17T10:50:42.888070+00:00",
+        "headline": "核心判断维持不变",
+        "summary": "新盘口和球队信息尚不足以越过决策边界；继续维持胜平负：主胜（模型49.3%）与比分2-1。",
+        "changed": false
+      },
+      {
+        "captured_at": "2026-07-17T11:03:49.257473+00:00",
+        "headline": "主维度由“胜平负：主胜（模型49.3%）”调整为“胜平负：主胜（模型49.2%）”",
+        "summary": "主维度由“胜平负：主胜（模型49.3%）”调整为“胜平负：主胜（模型49.2%）”。模型已按新信息重算，冻结注单不会被事后改写。",
+        "changed": true
+      },
+      {
+        "captured_at": "2026-07-17T11:04:59.207373+00:00",
+        "headline": "核心判断维持不变",
+        "summary": "新盘口和球队信息尚不足以越过决策边界；继续维持胜平负：主胜（模型49.2%）与比分2-1。",
+        "changed": false
+      },
+      {
+        "captured_at": "2026-07-17T11:09:02.532032+00:00",
+        "headline": "核心判断维持不变",
+        "summary": "新盘口和球队信息尚不足以越过决策边界；继续维持胜平负：主胜（模型49.2%）与比分2-1。",
+        "changed": false
+      },
+      {
+        "captured_at": "2026-07-17T11:28:14.465660+00:00",
+        "headline": "主维度由“胜平负：主胜（模型49.2%）”调整为“胜平负：主胜（模型49.3%）”；0家公司、0条轨迹：主胜降赔0家/升赔0家，亚洲盘主队加强0家/减弱0家，大小球升盘0家/降盘0家。综合价格压力偏向两侧未拉开。；没有可核验的交易所成交量；当前只能确认报价形成的两侧未拉开价格压力，不能称为真实资金流。",
+        "summary": "主维度由“胜平负：主胜（模型49.2%）”调整为“胜平负：主胜（模型49.3%）”；0家公司、0条轨迹：主胜降赔0家/升赔0家，亚洲盘主队加强0家/减弱0家，大小球升盘0家/降盘0家。综合价格压力偏向两侧未拉开。；没有可核验的交易所成交量；当前只能确认报价形成的两侧未拉开价格压力，不能称为真实资金流。；市场方向尚未拉开，不改变模型主线，只保留观察。；Sharp层方向不足；目的推断：当前更像分散调价和平衡风险，尚没有足够证据说明机构在主动表达单边方向。可信度：低。。模型已按新信息重算，冻结注单不会被事后改写。",
+        "changed": true
+      },
+      {
+        "captured_at": "2026-07-17T11:43:06.976206+00:00",
+        "headline": "核心判断维持不变",
+        "summary": "新盘口和球队信息尚不足以越过决策边界；继续维持胜平负：主胜（模型49.3%）与比分2-1。市场方向尚未拉开，不改变模型主线，只保留观察。",
+        "changed": false
+      },
+      {
+        "captured_at": "2026-07-17T15:47:29.257212+00:00",
+        "headline": "主维度由“胜平负：主胜（模型49.3%）”调整为“胜平负：主胜（模型49.8%）”",
+        "summary": "主维度由“胜平负：主胜（模型49.3%）”调整为“胜平负：主胜（模型49.8%）”。模型已按新信息重算，冻结注单不会被事后改写。",
+        "changed": true
+      },
+      {
+        "captured_at": "2026-07-18T14:23:21.377110+00:00",
+        "headline": "主维度由“胜平负：主胜（模型49.8%）”调整为“胜平负：主胜（模型49.6%）”",
+        "summary": "主维度由“胜平负：主胜（模型49.8%）”调整为“胜平负：主胜（模型49.6%）”。模型已按新信息重算，冻结注单不会被事后改写。",
+        "changed": true
+      },
+      {
+        "captured_at": "2026-07-18T14:24:27.413382+00:00",
+        "headline": "核心判断维持不变",
+        "summary": "新盘口和球队信息尚不足以越过决策边界；继续维持胜平负：主胜（模型49.6%）与比分2-1。市场方向尚未拉开，不改变模型主线，只保留观察。",
+        "changed": false
+      }
+    ],
+    "internal_checkpoints_hidden": true
+  },
+  "market": {
+    "interpretation": {
+      "money_flow": "没有可核验的交易所成交量；当前只能确认报价形成的两侧未拉开价格压力，不能称为真实资金流。",
+      "bookmaker_behaviour": "Sharp层方向不足；目的推断：当前更像分散调价和平衡风险，尚没有足够证据说明机构在主动表达单边方向。可信度：低。",
+      "market_pressure": "0家公司、0条轨迹：主胜降赔0家/升赔0家，亚洲盘主队加强0家/减弱0家，大小球升盘0家/降盘0家。综合价格压力偏向两侧未拉开。",
+      "model_impact": "市场方向尚未拉开，不改变模型主线，只保留观察。",
+      "purpose": "当前更像分散调价和平衡风险，尚没有足够证据说明机构在主动表达单边方向。",
+      "confidence": "低",
+      "late_market_weight": "normal",
+      "actual_volume_available": false
+    }
+  }
+}
