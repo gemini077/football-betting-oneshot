@@ -612,6 +612,17 @@ class LiveOddsBridgeTests(unittest.TestCase):
             self.assertEqual(2, result["attempts"])
             self.assertIsNone(result["last_error"])
 
+    def test_persistent_analysis_queue_records_final_cloud_success(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            queue = PersistentAnalysisQueue(
+                Path(tmp) / "queue.json",
+                launcher=lambda match: {"status": "completed", "run_id": 123, "conclusion": "success"},
+            )
+            queue.enqueue({"id": "202", "business_date": "2026-07-17", "home": "A", "away": "B"})
+            result = queue.process_once()
+            self.assertEqual("completed", result["status"])
+            self.assertEqual(123, result["dispatch"]["run_id"])
+
     def test_workspace_selection_persists_before_background_dispatch(self):
         with tempfile.TemporaryDirectory() as tmp:
             store = BridgeStore(Path(tmp) / "captures", stamp="20260717_090000")

@@ -30,6 +30,7 @@ MODEL_VERSION = "v0.18.0"
 AUTO_INPUT_ROOT = ROOT / "data" / "analysis_inputs" / "automated"
 WORKSPACE_PATH = ROOT / "data" / "match_workspace" / "latest.json"
 DEEP_FALLBACK_ROOT = ROOT / "data" / "source_cache" / "deep_fallback"
+DIAGNOSTIC_ROOT = ROOT / "data" / "analysis_jobs" / "diagnostics"
 
 
 def load_json(path: Path) -> Any:
@@ -532,6 +533,43 @@ def has_publishable_model(context: dict) -> bool:
     return isinstance(scores, list) and any(isinstance(item, dict) and item.get("score") for item in scores)
 
 
+def persist_failure_diagnostic(request: dict, reason: str, *, fetch: dict | None = None, manifest_path: Path | None = None, context: dict | None = None) -> Path:
+    """Keep enough evidence to explain and safely retry every failed analysis."""
+    now = datetime.now().astimezone()
+    safe_id = re.sub(r"[^A-Za-z0-9_-]", "_", str(request.get("match_id") or "match"))
+    target = DIAGNOSTIC_ROOT / f"{now.strftime('%Y%m%d_%H%M%S')}_{safe_id}.json"
+    sources = {}
+    if context:
+        for name, source in (context.get("source_snapshots") or {}).items():
+            if isinstance(source, dict):
+                sources[name] = {
+                    "status": source.get("status") or (source.get("metadata") or {}).get("status"),
+                    "snapshot_count": len(source.get("snapshots") or []),
+                    "metadata": prune(source.get("metadata") or {}),
+                }
+    core = (context or {}).get("deterministic_core") or {}
+    model = core.get("model") if isinstance(core, dict) else None
+    payload = {
+        "schema_version": "1.0", "failed_at": now.isoformat(timespec="seconds"),
+        "request": request, "reason": reason, "retryable": True,
+        "fetch": prune(fetch or {}), "manifest": str(manifest_path or ""),
+        "sources": sources,
+        "model_gate": {
+            "minimum_evidence": has_minimum_analysis_evidence(context or {}),
+            "publishable": has_publishable_model(context or {}),
+            "lambda_home": (model or {}).get("lambda_home") if isinstance(model, dict) else None,
+            "lambda_away": (model or {}).get("lambda_away") if isinstance(model, dict) else None,
+            "probabilities_present": bool(isinstance(model, dict) and model.get("probabilities")),
+            "score_matrix_present": bool(isinstance(model, dict) and model.get("score_probabilities")),
+        },
+    }
+    DIAGNOSTIC_ROOT.mkdir(parents=True, exist_ok=True)
+    temporary = target.with_suffix(".tmp")
+    temporary.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    temporary.replace(target)
+    return target
+
+
 def run_json_command(command: list[str], allow_failure: bool = False, timeout: int = 180) -> dict:
     try:
         completed = subprocess.run(
@@ -610,16 +648,19 @@ def run_pipeline(request: dict, api_key: str = "", model_name: str = DEFAULT_MOD
     if not manifest_path.is_absolute():
         manifest_path = ROOT / manifest_path
     if not manifest_path.exists():
-        raise RuntimeError("Fetch completed without a manifest")
+        diagnostic = persist_failure_diagnostic(request, "Fetch completed without a manifest", fetch=fetch, manifest_path=manifest_path)
+        raise RuntimeError(f"Fetch completed without a manifest; diagnostic={diagnostic.relative_to(ROOT)}")
 
     context = analysis_context(manifest_path, request)
     if not has_minimum_analysis_evidence(context):
-        raise RuntimeError("Analysis aborted: no official odds or matched source evidence; no report was published")
+        reason = "Analysis aborted: no official odds or matched source evidence; no report was published"
+        diagnostic = persist_failure_diagnostic(request, reason, fetch=fetch, manifest_path=manifest_path, context=context)
+        raise RuntimeError(f"{reason}; diagnostic={diagnostic.relative_to(ROOT)}")
     if not has_publishable_model(context):
-        raise RuntimeError(
-            "Analysis aborted: deep form/market evidence did not produce lambda, probabilities and a score matrix; "
-            "no incomplete report was published"
-        )
+        reason = ("Analysis aborted: deep form/market evidence did not produce lambda, probabilities and a score matrix; "
+                  "no incomplete report was published")
+        diagnostic = persist_failure_diagnostic(request, reason, fetch=fetch, manifest_path=manifest_path, context=context)
+        raise RuntimeError(f"{reason}; diagnostic={diagnostic.relative_to(ROOT)}")
     if use_llm and api_key:
         print("[phase 2/5] optional compact DeepSeek narration", file=sys.stderr, flush=True)
         raw = call_deepseek(context, api_key, model_name)

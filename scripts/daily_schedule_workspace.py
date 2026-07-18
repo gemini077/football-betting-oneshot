@@ -11,6 +11,38 @@ from pathlib import Path
 from fetch_sporttery import DEFAULT_CACHE_DIR, fetch_jingcai_odds
 from fetch_trade_matches import fetch_trade_matches
 from match_workspace import ROOT, build
+from nowscore_markets import fetch_schedule as fetch_nowscore_schedule, prebind_match
+
+
+def _kickoff(row: dict) -> str:
+    match_date = str(row.get("matchDate") or row.get("businessDate") or "")[:10]
+    match_time = str(row.get("matchTime") or "")[:5]
+    return f"{match_date}T{match_time}:00+08:00" if match_date and match_time else ""
+
+
+def attach_nowscore_bindings(payloads: list[dict]) -> dict:
+    """Resolve every fixture once during schedule intake, before analysis is requested."""
+    try:
+        provider_schedule = fetch_nowscore_schedule()
+    except Exception as error:
+        return {"status": "FETCH_ERROR", "error": f"{type(error).__name__}: {error}", "bound": 0}
+    bound = ambiguous = missing = 0
+    for payload in payloads:
+        for row in payload.get("matches") or []:
+            resolved = prebind_match(row.get("homeTeam") or "", row.get("awayTeam") or "", _kickoff(row), provider_schedule)
+            status = str(resolved.get("status") or "")
+            row["nowscoreMatchStatus"] = status
+            row["nowscoreMatchConfidence"] = resolved.get("match_confidence")
+            if resolved.get("nowscore_id"):
+                row["nowscoreId"] = int(resolved["nowscore_id"])
+                row["nowscoreProviderHome"] = resolved.get("home_team")
+                row["nowscoreProviderAway"] = resolved.get("away_team")
+                bound += 1
+            elif status in {"AMBIGUOUS_MATCH", "LOW_CONFIDENCE_MATCH"}:
+                ambiguous += 1
+            else:
+                missing += 1
+    return {"status": "OK", "schedule_count": len(provider_schedule), "bound": bound, "ambiguous": ambiguous, "missing": missing}
 
 
 def fallback_trade_schedule(business_date: str, no_cache: bool) -> dict:
@@ -66,9 +98,13 @@ def main() -> int:
             fallback = fallback_trade_schedule(business_date, args.no_cache)
             if fallback.get("success"):
                 payload = fallback
+        payloads.append(payload)
+    nowscore_binding = attach_nowscore_bindings(payloads)
+    for offset, payload in enumerate(payloads):
+        business_date = str(payload.get("date") or (base_date + timedelta(days=offset)).isoformat())
+        payload["nowscore_binding"] = nowscore_binding
         schedule_path = output_dir / f"{stamp}_sporttery_{business_date}.json"
         schedule_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-        payloads.append(payload)
         schedule_paths.append(schedule_path)
     match_ids = {
         str(row.get("matchId") or "|".join(str(row.get(key) or "") for key in ("matchNum", "homeTeam", "awayTeam")))
@@ -101,6 +137,7 @@ def main() -> int:
         "user_entry": str(latest), "automatic_analysis": False,
         "automatic_betting": False, "lock_state_changed": False,
         "refresh_status": "success" if len(successful_payloads) == len(payloads) else "partial_success",
+        "nowscore_binding": nowscore_binding,
         "workspace_rebuilt": not args.fetch_only,
     }, ensure_ascii=False, indent=2))
     return 0

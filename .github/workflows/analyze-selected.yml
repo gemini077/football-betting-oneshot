@@ -1,4 +1,5 @@
 name: Analyze selected match
+run-name: Analyze selected ${{ inputs.request_id || github.event.issue.number }}
 
 on:
   workflow_dispatch:
@@ -12,6 +13,9 @@ on:
       match:
         description: Match name, for example England vs Argentina
         required: true
+      request_id:
+        description: Persistent local queue request ID
+        required: false
   issues:
     types: [opened]
 
@@ -22,7 +26,7 @@ permissions:
   id-token: write
 
 concurrency:
-  group: football-betting-oneshot-write
+  group: football-betting-oneshot-selected-analysis
   cancel-in-progress: false
 
 jobs:
@@ -69,6 +73,18 @@ jobs:
           git add data/fetch_runs data/analysis_inputs/automated data/analysis_reports data/live_ev_profiles data/market_history data/match_archive data/postmatch_automation data/match_workspace data/paper_ledger
           if ! git diff --cached --quiet; then
             git commit -m "analyze selected football match [skip ci]"
+            git push
+          fi
+
+      - name: Persist failure diagnostics
+        if: failure()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/analysis_jobs/diagnostics data/fetch_runs data/provider_match_crosswalk.json || true
+          if ! git diff --cached --quiet; then
+            git commit -m "diagnose failed football analysis [skip ci]"
+            git pull --rebase origin main
             git push
           fi
 

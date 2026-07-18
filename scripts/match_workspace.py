@@ -597,6 +597,9 @@ def build(target_date: str, output_root: Path = OUTPUT) -> tuple[Path, Path]:
             "business_date": row.get("businessDate"),
             "kickoff": kickoff,
             "spf": row.get("spf") or {}, "rqspf": row.get("rqspf") or {},
+            "nowscore_id": row.get("nowscoreId"),
+            "nowscore_match_status": row.get("nowscoreMatchStatus"),
+            "nowscore_match_confidence": row.get("nowscoreMatchConfidence"),
             "official": True, "report_state": summary["state"], "primary": summary["primary"],
             "primary_error": summary["error"], "betting_state": summary["betting"],
             "report_url": relative_uri(report.get("html") if report else None, output_dir),
@@ -717,7 +720,7 @@ def build(target_date: str, output_root: Path = OUTPUT) -> tuple[Path, Path]:
         "target_date": target_date, "generated_at": generated.isoformat(),
         "schedule_refreshed_at": max(schedule_refresh_times) if schedule_refresh_times else None,
         "published_as_latest": base_date >= date.today(),
-        "automatic_analysis": "selected_match_via_local_bridge", "automatic_betting": False,
+        "automatic_analysis": "owner_selected_fifo_plus_bounded_core_events", "automatic_betting": False,
         "requires_explicit_lock_confirmation": True, "lock_state_changed": False,
         "schedule_source": [str(path.relative_to(ROOT)).replace("\\", "/") for path in schedule_sources],
         "available_cash": max(0.0, float((runtime.get("bankroll") or {}).get("current_balance") or 0) - (sum(float(row.get("stake") or 0) for row in real_open) or portfolio["locked_exposure"])),
@@ -781,6 +784,7 @@ $('#tabPrematch').onclick=()=>current?showPrematch():showEmpty('请先选择比�
   hero.querySelector('h1').insertAdjacentElement('afterend',heroChips);
   const scheduleTime=DATA.schedule_refreshed_at?new Date(DATA.schedule_refreshed_at).toLocaleString():'沿用最近成功赛程';
   $('#subtitle').textContent=`模拟账与真实账分离 · 已结模拟 ${ps.settled||0} 注 · 赛程数据 ${scheduleTime} · 页面生成 ${new Date(DATA.generated_at).toLocaleString()}`;
+  const syncCopy=document.querySelector('.sync span');if(syncCopy)syncCopy.textContent='核心赛事限额自动分析 · 其余由你选择 · 未明确锁单不写真实注单';
   const account=document.querySelector('.kpis');
   account.classList.add('account-kpis');
   account.innerHTML=`<div class="kpi"><b id="balance">¥${Number(DATA.balance||0).toFixed(2)}</b><span>当前账户余额</span></div><div class="kpi"><b>¥${Number(DATA.available_cash||0).toFixed(2)}</b><span>可用现金</span></div><div class="kpi"><b>¥${Number(DATA.real_exposure||0).toFixed(2)}</b><span>真实锁单暴露</span></div><div class="kpi"><b id="openBetCount">${(DATA.open_bets||[]).length}</b><span>真实未结注单</span></div><div class="kpi"><b id="analyzedCount">${DATA.matches.filter(m=>m.report_state==='已分析').length}</b><span>已有赛前报告</span></div><div class="kpi"><b id="completedCount">${DATA.completed.length}</b><span>已完成复盘</span></div><span id="upcomingCount" hidden>${DATA.matches.length}</span><span id="selectedCount" hidden>${selected.length}</span>`;
@@ -855,7 +859,7 @@ def main() -> int:
     print(json.dumps({
         "index": str(index), "latest": str(latest),
         "published_as_latest": date.fromisoformat(args.date) >= date.today(),
-        "automatic_analysis": "selected_match_via_local_bridge", "lock_state_changed": False,
+        "automatic_analysis": "owner_selected_fifo_plus_bounded_core_events", "lock_state_changed": False,
     }, ensure_ascii=False, indent=2))
     return 0
 

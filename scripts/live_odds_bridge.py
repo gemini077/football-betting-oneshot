@@ -185,6 +185,40 @@ def _publish_deep_fallback(match: dict, gh: str) -> dict:
     return {"status": "published", "path": remote_path, "sha": blob_sha}
 
 
+def _wait_for_workflow_result(gh: str, request_id: str, dispatched_after: float, timeout_seconds: int = 1800) -> dict:
+    """Return only after GitHub has produced a final conclusion for this request."""
+    deadline = time.time() + timeout_seconds
+    run_id = None
+    while time.time() < deadline:
+        listed = subprocess.run(
+            [gh, "run", "list", "--repo", GITHUB_REPOSITORY, "--workflow", "analyze-selected.yml",
+             "--event", "workflow_dispatch", "--limit", "30",
+             "--json", "databaseId,displayTitle,status,conclusion,createdAt,url"],
+            cwd=PROJECT_ROOT, text=True, capture_output=True, timeout=30,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0,
+        )
+        if listed.returncode == 0:
+            try:
+                runs = json.loads(listed.stdout or "[]")
+            except json.JSONDecodeError:
+                runs = []
+            matched = next((row for row in runs if request_id in str(row.get("displayTitle") or "")), None)
+            if matched:
+                run_id = matched.get("databaseId")
+                if matched.get("status") == "completed":
+                    conclusion = str(matched.get("conclusion") or "unknown")
+                    if conclusion != "success":
+                        raise BridgeValidationError(
+                            f"analysis workflow {run_id} finished with {conclusion}; {matched.get('url') or ''}".strip()
+                        )
+                    return {
+                        "status": "completed", "mode": "github_workflow_dispatch",
+                        "run_id": run_id, "run_url": matched.get("url"), "conclusion": conclusion,
+                    }
+        time.sleep(8 if run_id else 3)
+    raise BridgeValidationError(f"analysis workflow {run_id or request_id} result timeout")
+
+
 def launch_selected_analysis(match: dict) -> dict:
     """Queue one owner-selected analysis without navigating the browser."""
     match_id = str(match.get("id") or "").strip()
@@ -192,6 +226,9 @@ def launch_selected_analysis(match: dict) -> dict:
     if not match_id or not business_date:
         raise BridgeValidationError("match id and business_date are required")
     label = f"{match.get('home')} vs {match.get('away')}"
+    request_id = str(match.get("_analysis_job_id") or hashlib.sha256(
+        f"{business_date}:{match_id}:{time.time_ns()}".encode("utf-8")
+    ).hexdigest()[:16])
     gh_candidates = [
         os.environ.get("FBOS_GH_PATH"), shutil.which("gh"),
         r"D:\Software\GitHub CLI\gh.exe",
@@ -206,15 +243,16 @@ def launch_selected_analysis(match: dict) -> dict:
                 "-f", f"business_date={business_date}",
                 "-f", f"match_id={match_id}",
                 "-f", f"match={label}",
+                "-f", f"request_id={request_id}",
             ],
             cwd=PROJECT_ROOT, text=True, capture_output=True, timeout=30,
             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0,
         )
         if completed.returncode == 0:
-            return {
-                "status": "queued", "mode": "github_workflow_dispatch",
-                "cloud_evidence": fallback,
-            }
+            result = _wait_for_workflow_result(gh, request_id, time.time())
+            result["cloud_evidence"] = fallback
+            result["request_id"] = request_id
+            return result
         raise BridgeValidationError((completed.stderr or completed.stdout or "workflow dispatch failed").strip())
 
     stamp = _now().strftime("%Y%m%d_%H%M%S")
@@ -358,6 +396,7 @@ class PersistentAnalysisQueue:
             self._write_state()
             job_id = job["job_id"]
             match = dict(job["match"])
+            match["_analysis_job_id"] = job_id
         try:
             dispatch = self.launcher(match)
         except Exception as exc:  # dispatcher must survive transient CLI/network failures
@@ -376,7 +415,7 @@ class PersistentAnalysisQueue:
                 return self._public_job(current)
         with self._condition:
             current = next(item for item in self._state["jobs"] if item.get("job_id") == job_id)
-            current["status"] = "dispatched"
+            current["status"] = "completed" if dispatch.get("status") == "completed" else "dispatched"
             current["dispatch"] = dispatch
             current["last_error"] = None
             current["next_attempt_at"] = 0.0

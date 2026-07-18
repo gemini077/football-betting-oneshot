@@ -23,9 +23,12 @@ from html.parser import HTMLParser
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+from provider_match_registry import lookup as lookup_provider_binding
+from provider_match_registry import record_binding
+from team_identity import clean_display_name, team_similarity
+
 
 ROOT = Path(__file__).resolve().parents[1]
-ALIASES_PATH = ROOT / "data" / "team_aliases.json"
 CACHE_ROOT = ROOT / "data" / "source_cache" / "nowscore"
 SCHEDULE_URL = "https://live.nowscore.com/data/bf1.js"
 MARKET_URL = "https://live.nowscore.com/odds/match/{match_id}.htm"
@@ -151,51 +154,15 @@ def parse_schedule_js(text: str) -> list[dict]:
             continue
         matches.append({
             "nowscore_id": match_id,
-            "home_team": str(row[4] or "").strip(),
-            "home_team_en": str(row[6] or "").strip(),
-            "away_team": str(row[7] or "").strip(),
-            "away_team_en": str(row[9] or "").strip(),
+            "home_team": clean_display_name(row[4]),
+            "home_team_en": clean_display_name(row[6]),
+            "away_team": clean_display_name(row[7]),
+            "away_team_en": clean_display_name(row[9]),
             "kickoff_local": kickoff.isoformat(timespec="minutes"),
             "schedule_open_handicap": row[25] if len(row) > 25 else None,
             "schedule_total_line": row[29] if len(row) > 29 else None,
         })
     return matches
-
-
-def _normal(value: object) -> str:
-    text = str(value or "").casefold().replace("(主)", "")
-    text = text.replace("(主)", "").replace("(中)", "")
-    return re.sub(r"[^0-9a-z\u4e00-\u9fff]", "", text)
-
-
-def _alias_groups() -> dict[str, set[str]]:
-    groups: dict[str, set[str]] = {}
-    try:
-        payload = json.loads(ALIASES_PATH.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return groups
-    for team in payload.get("teams") or []:
-        names = {_normal(team.get("canonical"))}
-        names.update(_normal(item) for item in team.get("aliases") or [])
-        names.discard("")
-        for name in names:
-            groups[name] = names
-    return groups
-
-
-def _names(value: str, groups: dict[str, set[str]]) -> set[str]:
-    normalized = _normal(value)
-    return set(groups.get(normalized) or {normalized}) - {""}
-
-
-def _team_score(target: set[str], provider: set[str]) -> float:
-    if target & provider:
-        return 1.0
-    for left in target:
-        for right in provider:
-            if min(len(left), len(right)) >= 4 and (left in right or right in left):
-                return 0.88
-    return 0.0
 
 
 def _parse_kickoff(value: object) -> datetime | None:
@@ -215,41 +182,65 @@ def resolve_match(
     schedule: list[dict],
     maximum_kickoff_difference_minutes: int = 180,
 ) -> dict:
-    groups = _alias_groups()
-    target_home, target_away = _names(home, groups), _names(away, groups)
     target_time = _parse_kickoff(kickoff)
+    target = {"home": home, "away": away, "kickoff": str(kickoff or "")}
+    binding = lookup_provider_binding(target, "nowscore")
+    bound_id = int(binding["id"]) if binding and str(binding.get("id") or "").isdigit() else None
     candidates = []
     for match in schedule:
-        provider_home = _names(match.get("home_team", ""), groups) | _names(match.get("home_team_en", ""), groups)
-        provider_away = _names(match.get("away_team", ""), groups) | _names(match.get("away_team_en", ""), groups)
-        home_score = _team_score(target_home, provider_home)
-        away_score = _team_score(target_away, provider_away)
+        home_rows = [team_similarity(home, match.get("home_team", "")), team_similarity(home, match.get("home_team_en", ""))]
+        away_rows = [team_similarity(away, match.get("away_team", "")), team_similarity(away, match.get("away_team_en", ""))]
+        home_score, home_basis = max(home_rows, key=lambda row: row[0])
+        away_score, away_basis = max(away_rows, key=lambda row: row[0])
         provider_time = _parse_kickoff(match.get("kickoff_local"))
         difference = (
             abs((provider_time - target_time).total_seconds()) / 60
             if provider_time and target_time else None
         )
-        if home_score < 0.88 or away_score < 0.88:
+        if bound_id and int(match.get("nowscore_id") or 0) == bound_id:
+            home_score = away_score = 1.0
+            home_basis = away_basis = "stored_verified_binding"
+        if home_score < 0.75 or away_score < 0.75:
             continue
         if difference is not None and difference > maximum_kickoff_difference_minutes:
             continue
+        time_score = 1.0 if difference is None else max(0.0, 1.0 - difference / maximum_kickoff_difference_minutes)
+        confidence = 0.4 * home_score + 0.4 * away_score + 0.2 * time_score
         candidates.append({
             **match,
             "home_match_score": home_score,
             "away_match_score": away_score,
+            "home_match_basis": home_basis,
+            "away_match_basis": away_basis,
             "kickoff_difference_minutes": difference,
+            "match_confidence": round(confidence, 6),
         })
-    candidates.sort(key=lambda row: (row["home_match_score"] + row["away_match_score"], -(row["kickoff_difference_minutes"] or 0)), reverse=True)
+    candidates.sort(key=lambda row: (row["match_confidence"], -(row["kickoff_difference_minutes"] or 0)), reverse=True)
     if not candidates:
         return {"status": "NO_EXACT_MATCH", "home": home, "away": away, "kickoff": str(kickoff or "")}
     best = candidates[0]
-    if len(candidates) > 1:
-        first_key = (best["home_match_score"] + best["away_match_score"], best["kickoff_difference_minutes"])
-        second = candidates[1]
-        second_key = (second["home_match_score"] + second["away_match_score"], second["kickoff_difference_minutes"])
-        if first_key == second_key:
-            return {"status": "AMBIGUOUS_MATCH", "candidates": candidates[:5]}
+    if best["match_confidence"] < 0.82:
+        return {"status": "LOW_CONFIDENCE_MATCH", "candidates": candidates[:5]}
+    if len(candidates) > 1 and best["match_confidence"] - candidates[1]["match_confidence"] < 0.05:
+        return {"status": "AMBIGUOUS_MATCH", "candidates": candidates[:5]}
     return {"status": "EXACT_MATCH", **best}
+
+
+def fetch_schedule() -> list[dict]:
+    return parse_schedule_js(_decode(_fetch_bytes(f"{SCHEDULE_URL}?_={int(time.time())}")))
+
+
+def prebind_match(home: str, away: str, kickoff: object, schedule: list[dict]) -> dict:
+    resolved = resolve_match(home, away, kickoff, schedule)
+    if resolved.get("status") != "EXACT_MATCH":
+        return resolved
+    match = {"home": home, "away": away, "kickoff": str(kickoff or "")}
+    record_binding(
+        match, "nowscore", resolved["nowscore_id"], confidence=resolved["match_confidence"],
+        verification="schedule_pair_time", provider_home=resolved.get("home_team", ""),
+        provider_away=resolved.get("away_team", ""), provider_kickoff=resolved.get("kickoff_local", ""),
+    )
+    return resolved
 
 
 class _OddsTableParser(HTMLParser):
@@ -656,13 +647,12 @@ def parse_company_trend(text: str, company_id: int, kickoff: object = None, comp
 
 
 def _verified(target: dict, page_identity: dict, maximum_minutes: int = 180) -> tuple[bool, list[str]]:
-    groups = _alias_groups()
     reasons = []
-    home_score = _team_score(_names(target.get("home", ""), groups), _names(page_identity.get("home_team", ""), groups))
-    away_score = _team_score(_names(target.get("away", ""), groups), _names(page_identity.get("away_team", ""), groups))
-    if home_score < 0.88:
+    home_score, _ = team_similarity(target.get("home", ""), page_identity.get("home_team", ""))
+    away_score, _ = team_similarity(target.get("away", ""), page_identity.get("away_team", ""))
+    if home_score < 0.75:
         reasons.append("HOME_TEAM_MISMATCH")
-    if away_score < 0.88:
+    if away_score < 0.75:
         reasons.append("AWAY_TEAM_MISMATCH")
     target_time, page_time = _parse_kickoff(target.get("kickoff")), _parse_kickoff(page_identity.get("kickoff_local"))
     if target_time and page_time and abs((target_time - page_time).total_seconds()) / 60 > maximum_minutes:
@@ -782,6 +772,14 @@ def fetch_match_markets(home: str, away: str, kickoff: object, explicit_id: int 
             "nowscore_id": match_id, "target": target, "page_identity": parsed["identity"],
             "identity_errors": reasons, "resolution": resolved,
         }
+    confidence = float((resolved or {}).get("match_confidence") or 1.0)
+    record_binding(
+        target, "nowscore", match_id, confidence=confidence,
+        verification="market_page_identity_verified",
+        provider_home=parsed["identity"].get("home_team", ""),
+        provider_away=parsed["identity"].get("away_team", ""),
+        provider_kickoff=parsed["identity"].get("kickoff_local", ""),
+    )
     analysis_error = None
     shuju = {}
     analysis_cache = CACHE_ROOT / "raw" / f"{match_id}_analysis.js"
