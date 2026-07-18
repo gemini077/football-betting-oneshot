@@ -75,6 +75,44 @@ def _market_total(deep: dict) -> float | None:
     return median(lines) if lines else None
 
 
+def _total_line_pricing(expected_goals: float, line: float) -> dict:
+    """Price an Asian total at its exact quarter line, including pushes/halves."""
+    distribution = []
+    covered = 0.0
+    for goals in range(16):
+        probability = math.exp(-expected_goals) * expected_goals ** goals / math.factorial(goals)
+        distribution.append((goals, probability))
+        covered += probability
+    distribution.append((16, max(0.0, 1.0 - covered)))
+
+    def component(goals: int, component_line: float, side: str) -> tuple[float, float]:
+        if side == "over":
+            return (1.0, 0.0) if goals > component_line else ((0.0, 1.0) if goals < component_line else (0.0, 0.0))
+        return (1.0, 0.0) if goals < component_line else ((0.0, 1.0) if goals > component_line else (0.0, 0.0))
+
+    quarter = round(line * 4) / 4
+    if int(round(quarter * 4)) % 2:
+        lower = math.floor(quarter * 2) / 2
+        components = (lower, lower + 0.5)
+    else:
+        components = (quarter,)
+    priced = {"line": quarter}
+    for side in ("over", "under"):
+        win_equivalent = loss_equivalent = 0.0
+        for goals, probability in distribution:
+            outcomes = [component(goals, value, side) for value in components]
+            win_equivalent += probability * fmean(item[0] for item in outcomes)
+            loss_equivalent += probability * fmean(item[1] for item in outcomes)
+        fair_odds = 1.0 + loss_equivalent / win_equivalent if win_equivalent > 0 else None
+        priced[side] = {
+            "win_equivalent_probability": round(win_equivalent, 6),
+            "loss_equivalent_probability": round(loss_equivalent, 6),
+            "push_equivalent_probability": round(max(0.0, 1.0 - win_equivalent - loss_equivalent), 6),
+            "fair_odds": round(fair_odds, 4) if fair_odds is not None else None,
+        }
+    return priced
+
+
 def _outcomes(matrix: dict[tuple[int, int], float]) -> dict:
     result = {"home": 0.0, "draw": 0.0, "away": 0.0}
     for (home, away), probability in matrix.items():
@@ -398,6 +436,10 @@ def build_automatic_model(context: dict) -> dict:
         "expected_goals": round(total, 6),
         "probabilities": {key: round(value, 6) for key, value in probabilities.items()},
         "total_goals_buckets": total_rows, "btts": btts, "score_probabilities": score_rows,
+        "total_line_analysis": [
+            _total_line_pricing(total, line)
+            for line in (2.5, 2.75, 3.0, 3.25, 3.5)
+        ],
         "calibration": {
             "form_lambda_home": round(home_form, 6), "form_lambda_away": round(away_form, 6),
             "market_total_line_median": market_total, "market_probabilities": market_probabilities,

@@ -44,7 +44,7 @@ def migrate_schedules(now: datetime | None = None) -> dict:
         kickoff = parse_kickoff(merged.get("kickoff_local"))
         if kickoff:
             merged["verification_expires_at"] = (kickoff + timedelta(hours=24)).isoformat()
-        merged["retry_policy"] = {"maximum_retries": 24, "retry_after_minutes": 30, "only_when_result_not_final": True}
+        merged["retry_policy"] = {"maximum_retries": 1, "retry_after_minutes": 45, "only_when_result_not_final": True}
         if merged.get("status") == "blocked_result_not_final" and kickoff and now < kickoff + timedelta(hours=24):
             merged["status"] = "retry_scheduled"
             merged["review_due_at"] = now.isoformat()

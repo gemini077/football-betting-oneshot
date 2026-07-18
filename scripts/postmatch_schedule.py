@@ -44,7 +44,7 @@ def create_schedule(report_path: Path, output_root: Path = DEFAULT_OUTPUT_ROOT) 
         "status": "scheduled",
         "verification_attempts": 0,
         "verification_expires_at": (kickoff + timedelta(hours=24)).isoformat(),
-        "retry_policy": {"maximum_retries": 24, "retry_after_minutes": 30, "only_when_result_not_final": True},
+        "retry_policy": {"maximum_retries": 1, "retry_after_minutes": 45, "only_when_result_not_final": True},
         "automation_policy": "one_shot_only_no_periodic_model_polling",
         "source_report": report_path.relative_to(BASE_DIR).as_posix(),
     }
@@ -59,6 +59,9 @@ def create_schedule(report_path: Path, output_root: Path = DEFAULT_OUTPUT_ROOT) 
         # reset an active verifier or create a duplicate schedule.
         schedule["verification_attempts"] = existing.get("verification_attempts", 0)
         schedule["status"] = existing.get("status", "scheduled")
+        for field in ("nowscore_id", "shuju_id", "provider_match_id"):
+            if schedule.get(field) in (None, "") and existing.get(field) not in (None, ""):
+                schedule[field] = existing[field]
         if schedule["status"] == "retry_scheduled":
             schedule["review_due_at"] = existing.get("review_due_at", schedule["review_due_at"])
     output.write_text(json.dumps(schedule, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")

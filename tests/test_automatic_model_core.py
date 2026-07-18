@@ -30,6 +30,14 @@ def test_deterministic_model_generates_complete_probability_matrix():
     assert result["decisions"]["match_story"]
     assert "单个比分格" in result["decisions"]["score_vs_outcome_explanation"]
     assert result["decisions"]["market_conflict"]
+    lines = {row["line"]: row for row in model["total_line_analysis"]}
+    assert set(lines) == {2.5, 2.75, 3.0, 3.25, 3.5}
+    assert abs(
+        lines[3.5]["over"]["win_equivalent_probability"]
+        + lines[3.5]["under"]["win_equivalent_probability"]
+        - 1
+    ) < 1e-5
+    assert lines[3.0]["over"]["push_equivalent_probability"] > 0
 
 
 def test_deterministic_model_refuses_to_invent_missing_form():

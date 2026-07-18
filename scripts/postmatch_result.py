@@ -15,12 +15,14 @@ from typing import Any
 from fetch_and_parse import fetch_page
 from fetch_trade_matches import fetch_trade_matches
 from postmatch_queue import BASE_DIR, SHANGHAI, load_json, normalize, parse_datetime
+from match_identity import canonical_match_id
 
 
 SCHEDULE_ROOT = BASE_DIR / "data" / "postmatch_automation" / "schedules"
 RESULT_ROOT = BASE_DIR / "data" / "postmatch_automation" / "results"
 FINAL_STATUSES = {"result_verified", "reviewed"}
 RESULT_STRATEGY_VERSION = "nowscore_matchdetail_v3"
+WORKSPACE_PATH = BASE_DIR / "data" / "match_workspace" / "latest.json"
 SCORE_PATTERN = re.compile(
     r'<p\s+class=["\']odds_hd_bf["\'][^>]*>\s*<strong>\s*(\d+)\s*[:：]\s*(\d+)\s*</strong>',
     re.IGNORECASE,
@@ -42,6 +44,32 @@ def resolve_nowscore_id(schedule: dict[str, Any]) -> int | None:
     """Recover the verified Nowscore id already captured during pre-match work."""
     if schedule.get("nowscore_id"):
         return int(schedule["nowscore_id"])
+    # The public workspace is refreshed more often than a frozen report.  Use
+    # its later verified provider binding before scanning old fetch manifests.
+    try:
+        workspace = load_json(WORKSPACE_PATH)
+    except (OSError, json.JSONDecodeError):
+        workspace = {}
+    provider_id = str(schedule.get("provider_match_id") or "").strip()
+    schedule_key = str(schedule.get("canonical_match_id") or schedule.get("match_key") or "")
+    schedule_kickoff = parse_datetime(schedule.get("kickoff_local"))
+    for row in list(workspace.get("matches") or []) + list(workspace.get("completed") or []):
+        row_id = str(row.get("id") or row.get("match_id") or "").strip()
+        same_provider = bool(provider_id and row_id == provider_id)
+        same_canonical = bool(schedule_key and canonical_match_id(row) == schedule_key)
+        same_teams = (
+            normalize(row.get("home")) == normalize(schedule.get("home"))
+            and normalize(row.get("away")) == normalize(schedule.get("away"))
+        )
+        row_kickoff = parse_datetime(row.get("kickoff") or row.get("kickoff_local"))
+        same_kickoff = bool(
+            schedule_kickoff and row_kickoff
+            and abs((schedule_kickoff - row_kickoff).total_seconds()) <= 15 * 60
+        )
+        if (same_provider or same_canonical or (same_teams and same_kickoff)) and row.get("nowscore_id"):
+            schedule["nowscore_id"] = int(row["nowscore_id"])
+            schedule["nowscore_identity_source"] = "match_workspace"
+            return schedule["nowscore_id"]
     match_filters: set[str] = set()
     source_report = BASE_DIR / str(schedule.get("source_report") or "")
     if source_report.exists():

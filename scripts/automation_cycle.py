@@ -53,6 +53,9 @@ def cycle(business_date: str) -> dict:
     outcomes["workspace_before"] = run([
         python, "scripts/match_workspace.py", "--date", business_date,
     ])
+    outcomes["identity_migration"] = run([
+        python, "scripts/migrate_automation_identity.py",
+    ], optional=True)
     outcomes["prematch_due"] = run([
         python, "scripts/prematch_market_monitor.py",
     ], optional=True)

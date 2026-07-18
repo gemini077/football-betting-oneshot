@@ -194,7 +194,7 @@ def test_analysis_context_places_deterministic_core_at_top_level(tmp_path, monke
     assert context["deterministic_core"]["model"]["probabilities"]["home"] > 0
     output = deterministic_analysis(context, {"match_id": "123", "match": "甲 vs 乙", "business_date": "2026-07-15"})
     assert output["automation"]["llm_used"] is False
-    assert output["report"]["model_version"] == "v0.18.0"
+    assert output["report"]["model_version"] == "v0.18.1"
     assert output["betting"]["state"] == "空仓｜未锁单"
     assert len(output["evidence_chain"]) == 4
 

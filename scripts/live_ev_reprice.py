@@ -25,7 +25,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_OUTPUT_ROOT = PROJECT_ROOT / "data" / "live_ev_reprices"
 DEFAULT_BRIDGE_URL = "http://127.0.0.1:8765"
 MODEL_NAME = "Football Betting OneShot"
-MODEL_VERSION = "v0.18.0"
+MODEL_VERSION = "v0.18.1"
 SUPPORTED_CONTRACT_TYPES = {"binary_no_push", "three_way_selection"}
 
 

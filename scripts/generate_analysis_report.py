@@ -1104,6 +1104,18 @@ def render(payload: dict) -> str:
         ["总进球数", "模型概率"],
         [[f'{item.get("bucket", item.get("goals", "—"))}球', pct(item.get("probability"))] for item in totals_rows],
     )
+    line_rows = []
+    for item in model.get("total_line_analysis") or []:
+        over, under = item.get("over") or {}, item.get("under") or {}
+        line_rows.append([
+            num(item.get("line"), 2),
+            pct(over.get("win_equivalent_probability")), num(over.get("fair_odds"), 2),
+            pct(under.get("win_equivalent_probability")), num(under.get("fair_odds"), 2),
+            "当前市场中轴" if item.get("line") == (model.get("calibration") or {}).get("market_total_line_median") else "情景换线",
+        ])
+    if line_rows:
+        totals_content += '<h3 class="subhead">按实际盘口线计算</h3>'
+        totals_content += table(["盘口", "大球有效胜率", "大球公平赔率", "小球有效胜率", "小球公平赔率", "用途"], line_rows)
     totals_content += f'<div class="callout"><b>BTTS</b><span>{e(model.get("btts", {}).get("judgement"))}</span></div>'
     sensitivity_rows = []
     for item in sensitivity_scenarios(model):
@@ -1401,7 +1413,18 @@ def main() -> int:
         report_payload_path=payload_path,
     )
     payload_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-    report_path.write_text(render(payload), encoding="utf-8")
+    rendered_report = render(payload)
+    report_path.write_text(rendered_report, encoding="utf-8")
+    stable_dir = Path(args.output_root) / "current"
+    stable_dir.mkdir(parents=True, exist_ok=True)
+    stable_key = safe_name(
+        f"{match.get('business_date') or 'unknown'}_{match.get('match_num') or 'extra'}_"
+        f"{match['home']}_vs_{match['away']}"
+    )
+    stable_payload_path = stable_dir / f"{stable_key}.json"
+    stable_report_path = stable_dir / f"{stable_key}.html"
+    stable_payload_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    stable_report_path.write_text(rendered_report, encoding="utf-8")
     schedule_path = None
     schedule_error = None
     workflow_path = None
@@ -1416,6 +1439,8 @@ def main() -> int:
     print(json.dumps({
         "report": str(report_path),
         "payload": str(payload_path),
+        "stable_report": str(stable_report_path),
+        "stable_payload": str(stable_payload_path),
         "report_type": payload["report"]["report_type"],
         "final_execution_version": payload["report"]["final_execution_version"],
         "postmatch_schedule": str(schedule_path) if schedule_path else None,

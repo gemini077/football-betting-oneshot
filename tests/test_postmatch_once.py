@@ -3,6 +3,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import patch
 
+import postmatch_result
 from postmatch_result import parse_header_score, verify_schedule
 from sync_postmatch_workflow import active_due_times, render
 
@@ -54,6 +55,31 @@ def test_missing_result_gets_only_one_retry(tmp_path):
     assert first_outcome["status"] == "retry_scheduled"
     assert second_outcome["status"] == "blocked_result_not_final"
     assert saved["verification_attempts"] == 2
+
+
+def test_postmatch_backfills_nowscore_id_from_latest_workspace(tmp_path, monkeypatch):
+    schedule = write_schedule(
+        tmp_path / "schedule.json",
+        match_key="FBOS-202607151800-test",
+        canonical_match_id="FBOS-202607151800-test",
+        provider_match_id="500-123",
+        nowscore_id=None,
+    )
+    workspace = tmp_path / "latest.json"
+    workspace.write_text(json.dumps({
+        "matches": [{
+            "id": "500-123", "home": "涓婚槦", "away": "瀹㈤槦",
+            "kickoff": "2026-07-15 18:00", "nowscore_id": 2929657,
+        }],
+    }, ensure_ascii=False), encoding="utf-8")
+    monkeypatch.setattr(postmatch_result, "WORKSPACE_PATH", workspace)
+    monkeypatch.setattr(postmatch_result, "fetch_nowscore_result", lambda match_id: ((2, 2), f"nowscore:{match_id}", None))
+    outcome = verify_schedule(schedule, datetime(2026, 7, 15, 20, 20, tzinfo=SHANGHAI), tmp_path / "results")
+    saved = json.loads(schedule.read_text(encoding="utf-8"))
+    assert outcome["status"] == "result_verified"
+    assert saved["nowscore_id"] == 2929657
+    assert saved["result_90m"] == "2-2"
+    assert saved["result_source"] == "nowscore_match_detail"
 
 
 def test_generated_cron_contains_only_future_active_schedule(tmp_path):
