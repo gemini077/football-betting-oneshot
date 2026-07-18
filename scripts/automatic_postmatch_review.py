@@ -13,6 +13,7 @@ from typing import Any
 
 from market_history import load_history
 from postmatch_queue import BASE_DIR, SHANGHAI, load_json
+from match_identity import identity_aliases
 
 
 SCHEDULE_ROOT = BASE_DIR / "data" / "postmatch_automation" / "schedules"
@@ -109,7 +110,7 @@ def _market_timeline(report: dict) -> dict:
 
 def _probability(report: dict, outcome: str) -> float | None:
     key = {"主胜": "home", "平局": "draw", "客胜": "away"}[outcome]
-    value = (report.get("model") or {}).get("probabilities", {}).get(key)
+    value = ((report.get("model") or {}).get("probabilities") or {}).get(key)
     try:
         return float(value)
     except (TypeError, ValueError):
@@ -187,6 +188,107 @@ def _root_cause(
             "是否修改模型": "观察累计，禁止单场追参", "具体修改建议": change,
             "收敛结论": classification, "生效状态": "观察池", "优先级": "P1" if "错误" in classification else "P2",
             "最大错点触发透视": f"赛前概率首位{top}；实际结果{actual_outcome}；{score_note}"}
+
+
+def _checkpoint_rows(report: dict) -> list[dict]:
+    """Recover every real checkpoint even when legacy provider ids differ."""
+    match = report.get("match") or {}
+    aliases = identity_aliases(match)
+    home, away = str(match.get("home") or ""), str(match.get("away") or "")
+    rows = []
+    for path in (BASE_DIR / "data" / "market_history" / "checkpoints").glob("*/*.json"):
+        try:
+            row = load_json(path)
+        except (OSError, json.JSONDecodeError):
+            continue
+        same = (
+            str(row.get("canonical_match_id") or "") in aliases
+            or str(row.get("match_id") or "") in aliases
+            or (str(row.get("home") or "") == home and str(row.get("away") or "") == away)
+        )
+        if not same:
+            continue
+        decision = row.get("decision") or {}
+        analysis_path = BASE_DIR / str(row.get("analysis_input") or "")
+        if not decision and analysis_path.exists():
+            try:
+                analysis = load_json(analysis_path)
+                decision = {
+                    "probabilities": (analysis.get("model") or {}).get("probabilities") or {},
+                    "primary_dimension": (analysis.get("decisions") or {}).get("unique_primary_dimension"),
+                    "unique_score": (analysis.get("decisions") or {}).get("unique_score"),
+                    **((analysis.get("market") or {}).get("interpretation") or {}),
+                }
+            except (OSError, json.JSONDecodeError):
+                pass
+        rows.append({**row, "decision": decision})
+    return sorted(rows, key=lambda row: str(row.get("captured_at") or ""))
+
+
+def _rich_market_timeline(report: dict) -> dict:
+    rows = _checkpoint_rows(report)
+    if not rows:
+        return {
+            "快照覆盖": "没有找到可复核的独立赛前快照；不把开盘与终盘误写成连续走势。",
+            "判断如何变化": "无有效节点，无法证明判断曾发生变化。",
+            "最后有效判断": str((report.get("decisions") or {}).get("unique_primary_dimension") or "未形成"),
+            "数据有效性": "仅复盘冻结报告本身，不能声称资金持续流入或机构连续调整。",
+        }
+    changes, previous = [], None
+    for row in rows:
+        decision = row.get("decision") or {}
+        probs = decision.get("probabilities") or {}
+        leader = max(probs, key=probs.get) if probs else None
+        snapshot = {"leader": leader, "primary": decision.get("primary_dimension"), "score": decision.get("unique_score")}
+        if previous is None:
+            changes.append(f"首次判断：{snapshot['primary'] or '主维度未形成'}；比分 {snapshot['score'] or '未收敛'}。")
+        else:
+            parts = []
+            if snapshot["leader"] != previous["leader"]:
+                parts.append(f"胜平负首位由 {previous['leader'] or '未形成'} 变为 {snapshot['leader'] or '未形成'}")
+            if snapshot["primary"] != previous["primary"]:
+                parts.append(f"主维度由“{previous['primary']}”变为“{snapshot['primary']}”")
+            if snapshot["score"] != previous["score"]:
+                parts.append(f"比分由 {previous['score']} 调整为 {snapshot['score']}")
+            if parts:
+                changes.append("；".join(parts) + "。")
+        previous = snapshot
+    last = rows[-1].get("decision") or {}
+    late = sum(1 for row in rows if row.get("capture_quality") == "late_recovery" or float(row.get("lateness_minutes") or 0) > 25)
+    return {
+        "快照覆盖": f"共保存 {len(rows)} 个独立赛前快照，其中 {late} 个为延迟恢复快照；每个节点只使用当时真实价格。",
+        "判断如何变化": " ".join(changes) if changes else "核心判断始终未越过模型决策边界。",
+        "临盘资金与机构行为": str(last.get("bookmaker_behaviour") or last.get("purpose") or "无真实成交量证据，只依据多公司价格方向判断市场压力。"),
+        "对最终判断的影响": str(last.get("model_impact") or "盘口信息未达到推翻基本模型的阈值。"),
+        "最后有效判断": f"{last.get('primary_dimension') or '未形成'}；比分 {last.get('unique_score') or '未收敛'}。",
+        "数据有效性": "延迟快照明确标记，不补造错过的节点；缺少交易量时不把赔率变化冒充真实资金流。",
+    }
+
+
+def _rich_root_cause(report: dict, actual_outcome: str, actual_score: str, misses: list[str], classification: str) -> dict:
+    rows = _checkpoint_rows(report)
+    decisions = report.get("decisions") or {}
+    score_rows = (report.get("model") or {}).get("score_probabilities") or []
+    rank = next((i + 1 for i, row in enumerate(score_rows) if str(row.get("score")) == actual_score), None)
+    risks = [str(item) for item in decisions.get("maximum_error_points") or [] if item]
+    primary_values = {str((row.get("decision") or {}).get("primary_dimension")) for row in rows if row.get("decision")}
+    stable = len(primary_values) <= 1
+    if not misses:
+        cause = "主维度结算正确；仍独立检查比分和附属市场，不用方向命中掩盖其他错误。"
+    elif stable:
+        cause = "方向在有效快照中保持稳定，但实际赛果落在模型次要分支；主要误差来自概率校准而非临场反转。"
+    else:
+        cause = "赛前判断发生过反转，最终快照没有充分吸收冲突信号；临盘权重或冲突处理是首要检查项。"
+    return {
+        "结算错项": "；".join(misses) if misses else "主维度无错误；附属维度按各自规则独立结算。",
+        "最可能根因": cause,
+        "赛前已知风险": "；".join(risks) if risks else "冻结报告没有列出可验证的额外风险点。",
+        "反事实条件": f"只有独立赛前信息把“{actual_outcome}”推到首位，或使原首推跌破执行边界，才应改变结论；不能用赛后比分倒推。",
+        "比分误差定位": f"实际比分 {actual_score} 在赛前矩阵排名第 {rank}。" if rank else f"实际比分 {actual_score} 未进入主要比分区间。",
+        "模型修正": "本场进入同类样本池，不改单场参数；累计至少 20 场后分别校准方向概率、低比分相关性和临盘冲突权重。",
+        "修正状态": "观察池；禁止因单场结果追改参数。",
+        "复盘结论": classification,
+    }
 
 
 def settle_real_bets(home: str, away: str, home_goals: int, away_goals: int) -> list[dict]:
@@ -299,11 +401,8 @@ def build_review(schedule: dict, report: dict, now: datetime) -> dict:
         "错点归因（单选）": misses[0] if misses else "核心结算维度未发现错误",
         "最大错点类型": "模型方向错误" if primary_hit is False else "比分分布误差" if score_hit is False else "无核心错点",
         "复盘摘要": summary,
-        "_timeline": {**_market_timeline(report), "盘口变化与赛果方向": _movement(report), "最终赛果验证": actual_score, "来源/备注": "自动复盘读取冻结赛前报告；没有的时间节点明确保留为空，不用赛后价格回填"},
-        "_root_cause": _root_cause(
-            report, actual_outcome, actual_score, misses, classification,
-            primary_market, primary_pick,
-        ),
+        "_timeline": {**_rich_market_timeline(report), "最终赛果验证": actual_score, "来源说明": "只使用真实保存的赛前快照，不用赛后价格回填。"},
+        "_root_cause": _rich_root_cause(report, actual_outcome, actual_score, misses, classification),
     }
 
 

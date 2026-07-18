@@ -122,7 +122,7 @@ def safe_slug(value: Any) -> str:
 
 def row_match_id(row: dict[str, Any], *keys: str) -> str:
     for key in keys:
-        match = re.search(r"(?:^|[^A-Za-z0-9])(M\d+|shuju[_:]?\d+|fixture[_:]?[^｜|\s]+)", text(row.get(key)), re.IGNORECASE)
+        match = re.search(r"(?:^|[^A-Za-z0-9])(FBOS-\d{12}-[0-9a-f]{10}|M\d+|shuju[_:]?\d+|fixture[_:]?[^｜|\s]+)", text(row.get(key)), re.IGNORECASE)
         if match:
             return match.group(1).replace(":", "_")
     return ""
@@ -197,24 +197,40 @@ def render_review_page(signal: dict[str, Any], timeline: dict[str, Any], root: d
         for market, pick, result in audit_rows
     )
     timeline_fields = [
-        ("开赛倒计时", timeline.get("开赛倒计时")), ("锁单窗口", timeline.get("锁单窗口合规性")),
+        ("快照覆盖", timeline.get("快照覆盖")),
+        ("判断如何变化", timeline.get("判断如何变化")),
+        ("临盘资金与机构行为", timeline.get("临盘资金与机构行为")),
+        ("对最终判断的影响", timeline.get("对最终判断的影响")),
+        ("最后有效判断", timeline.get("最后有效判断")),
+        ("数据有效性", timeline.get("数据有效性")),
         ("初盘定位", timeline.get("初盘定位")),
         ("最后赛前快照", timeline.get("终盘定位（最后赛前快照）") or timeline.get("终盘定位（临场15min）")),
-        ("完整变化轨迹", timeline.get("终盘对比初盘变化")), ("经验库触发", timeline.get("经验库触发类型")),
-        ("盘口与赛果", timeline.get("盘口变化与赛果方向")), ("欧亚校验", timeline.get("欧亚理论盘型校验")),
-        ("赛果验证", timeline.get("最终赛果验证")), ("数据完整度", timeline.get("数据完整度")),
-        ("来源", timeline.get("来源/备注")),
+        ("完整变化轨迹", timeline.get("终盘对比初盘变化")),
+        ("赛果验证", timeline.get("最终赛果验证")),
+        ("来源", timeline.get("来源说明") or timeline.get("来源/备注")),
     ]
-    timeline_html = "".join(f'<div class="fact"><b>{esc(label)}</b><span>{esc(value)}</span></div>' for label, value in timeline_fields)
+    timeline_html = "".join(
+        f'<div class="fact"><b>{esc(label)}</b><span>{esc(value)}</span></div>'
+        for label, value in timeline_fields if value not in (None, "", "—")
+    ) or '<div class="empty-cell">没有可复核的赛前节点记录</div>'
     root_fields = [
-        ("决策节点审计", root.get("决策节点审计")), ("反事实推演", root.get("反事实推演")),
-        ("赛前可识别性", root.get("赛前可识别性")), ("是否修改模型", root.get("是否修改模型")),
-        ("具体修改建议", root.get("具体修改建议")), ("收敛结论", root.get("收敛结论")),
+        ("结算错项", root.get("结算错项")),
+        ("最可能根因", root.get("最可能根因")),
+        ("赛前已知风险", root.get("赛前已知风险")),
+        ("反事实条件", root.get("反事实条件")),
+        ("比分误差定位", root.get("比分误差定位")),
+        ("模型修正", root.get("模型修正")),
+        ("修正状态", root.get("修正状态")),
+        ("复盘结论", root.get("复盘结论")),
+        ("决策节点审计", root.get("决策节点审计")),
+        ("反事实推演", root.get("反事实推演")),
+        ("具体修改建议", root.get("具体修改建议")),
         ("最大错点类型", root.get("最大错点类型") or signal.get("最大错点类型")),
-        ("生效状态", root.get("生效状态")), ("优先级", root.get("优先级")),
-        ("错点触发透视", root.get("最大错点触发透视")),
     ]
-    root_html = "".join(f'<div class="fact"><b>{esc(label)}</b><span>{esc(value)}</span></div>' for label, value in root_fields)
+    root_html = "".join(
+        f'<div class="fact"><b>{esc(label)}</b><span>{esc(value)}</span></div>'
+        for label, value in root_fields if value not in (None, "", "—")
+    ) or '<div class="empty-cell">本场尚未形成可验证的根因结论</div>'
     lock_rows = "".join(
         f'<tr><td>{esc(row.get("注单ID"))}</td><td>{esc(row.get("投注层标签"))}</td><td>{esc(row.get("投注方向"))}</td><td>{esc(row.get("下注赔率"))}</td><td>{esc(row.get("下注金额"))}</td><td>{esc(row.get("注单状态"))}</td><td>{esc(row.get("盈亏"))}</td></tr>'
         for row in locks

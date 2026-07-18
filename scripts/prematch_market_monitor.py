@@ -13,6 +13,7 @@ from zoneinfo import ZoneInfo
 
 from prematch_fundamentals import collect_prematch_fundamentals
 from decision_evolution import append_record, attach_evolution
+from match_identity import canonical_match_id, identity_aliases
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -31,7 +32,6 @@ CHECKPOINTS = (
     (10, "T-10M"),
 )
 TARGET_MINUTES = {stage: minutes for minutes, stage in CHECKPOINTS}
-MAX_LATENESS_MINUTES = 25
 SHANGHAI = ZoneInfo("Asia/Shanghai")
 
 
@@ -59,20 +59,30 @@ def minutes_before_kickoff(match, now):
     return (kickoff - now).total_seconds() / 60
 
 
-def due_stage(match, now, hours_before=8.0, completed=None, max_lateness_minutes=MAX_LATENESS_MINUTES):
-    """Return only the nearest real checkpoint; never relabel an older miss."""
+def due_stage(match, now, hours_before=8.0, completed=None, max_lateness_minutes=None):
+    """Return the nearest passed checkpoint.
+
+    GitHub schedules are best effort and can be late.  A late run captures one
+    real snapshot (never fabricates several historical snapshots) and labels
+    it as recovery data instead of silently losing the entire match.
+    """
     minutes = minutes_before_kickoff(match, now)
     if minutes is None or minutes < 0 or minutes > hours_before * 60:
         return None
+    completed = completed or {}
+    captured = {
+        stage for stage, payload in completed.items()
+        if not isinstance(payload, dict) or payload.get("status", "captured") == "captured"
+    }
     candidates = []
     for target, stage in CHECKPOINTS:
         lateness = target - minutes
-        if 0 <= lateness <= max_lateness_minutes:
+        if lateness >= 0:
             candidates.append((lateness, stage))
     if not candidates:
         return None
     _lateness, stage = min(candidates)
-    return None if stage in (completed or {}) else stage
+    return None if stage in captured else stage
 
 
 def checkpoint_meta(match, now, stage):
@@ -85,6 +95,7 @@ def checkpoint_meta(match, now, stage):
         "actual_minutes_before": round(actual, 2) if actual is not None else None,
         "lateness_minutes": round(target - actual, 2) if actual is not None else None,
         "exact": actual is not None and abs(target - actual) < 0.51,
+        "capture_quality": "on_time" if actual is not None and abs(target - actual) <= 5 else "late_recovery",
     }
 
 
@@ -95,15 +106,21 @@ def due_matches(workspace, now, hours_before=8.0, state=None):
         report_ready = bool(match.get("report_url") or match.get("analysis_report"))
         if not report_ready and str(match.get("report_state") or "") not in {"已分析", "仅市场基线"}:
             continue
-        completed = state.get(str(match.get("id") or "")) or {}
+        canonical_id = canonical_match_id(match)
+        completed = state.get(canonical_id) or {}
+        if not completed:
+            for alias in identity_aliases(match):
+                if isinstance(state.get(alias), dict):
+                    completed.update(state[alias])
         stage = due_stage(match, now, hours_before, completed=completed)
         if stage:
-            rows.append({**match, "_monitor_stage": stage})
+            rows.append({**match, "_monitor_stage": stage, "_canonical_match_id": canonical_id})
     return sorted(rows, key=lambda row: row.get("kickoff") or "")
 
 
 def matching_analysis(match):
     match_id = str(match.get("id") or "")
+    canonical_id = canonical_match_id(match)
     home, away = str(match.get("home") or ""), str(match.get("away") or "")
     for path in sorted(INPUT_ROOT.glob("*.json"), reverse=True):
         try:
@@ -181,7 +198,9 @@ def refresh_match(match, stage=None, now=None):
     context = analysis_context(manifest_path, request)
     analysis = deterministic_analysis(context, request)
     checkpoint = checkpoint_meta(match, now, stage)
-    analysis, evolution_record = attach_evolution(analysis, match_id, checkpoint)
+    analysis.setdefault("match", {})["canonical_match_id"] = canonical_id
+    analysis.setdefault("match", {})["provider_match_id"] = match_id
+    analysis, evolution_record = attach_evolution(analysis, canonical_id, checkpoint)
     analysis.setdefault("report", {})["market_checkpoint"] = checkpoint
     analysis.setdefault("automation", {})["market_refresh"] = {
         **checkpoint,
@@ -207,6 +226,7 @@ def refresh_match(match, stage=None, now=None):
     checkpoint_record = {
         **checkpoint,
         "match_id": match_id,
+        "canonical_match_id": canonical_id,
         "home": match.get("home"),
         "away": match.get("away"),
         "kickoff": match.get("kickoff"),
@@ -218,7 +238,7 @@ def refresh_match(match, stage=None, now=None):
         "decision": evolution_record.get("decision"),
         "change": evolution_record.get("change"),
     }
-    checkpoint_path = CHECKPOINT_ROOT / safe_id / f"{stage}.json"
+    checkpoint_path = CHECKPOINT_ROOT / canonical_id / f"{stage}.json"
     checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
     checkpoint_path.write_text(json.dumps(checkpoint_record, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     return {
@@ -246,21 +266,31 @@ def main():
 
     results = []
     for match in due:
+        canonical_id = match.get("_canonical_match_id") or canonical_match_id(match)
         try:
             result = refresh_match(match, match["_monitor_stage"], now)
             results.append(result)
             if result.get("status") == "refreshed":
                 stage = match["_monitor_stage"]
-                state.setdefault(str(match.get("id") or ""), {})[stage] = result["checkpoint"]
+                state.setdefault(canonical_id, {})[stage] = {
+                    **result["checkpoint"], "status": "captured"
+                }
         except Exception as error:
+            stage = match.get("_monitor_stage")
+            state.setdefault(canonical_id, {})[stage] = {
+                "status": "failed",
+                "last_attempt_at": now.isoformat(),
+                "error": str(error)[:1000],
+            }
             results.append({
                 "match": f"{match.get('home')} vs {match.get('away')}",
                 "stage": match.get("_monitor_stage"),
                 "status": "error", "error": str(error)[:1000],
             })
-    if any(row.get("status") == "refreshed" for row in results):
+    if results:
         STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
         STATE_PATH.write_text(json.dumps(state, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    if any(row.get("status") == "refreshed" for row in results):
         run_json([
             sys.executable, "scripts/match_workspace.py", "--date",
             str(workspace.get("target_date") or now.date().isoformat()),

@@ -158,15 +158,9 @@ def score_contract(payload: dict) -> dict | None:
     score = parse_score(decisions.get("unique_score"))
     if score is None:
         return None
-    contracts = (
-        (((payload.get("market") or {}).get("polymarket") or {}).get("correct_score") or {}).get("contracts")
-        or []
-    )
-    chosen = None
-    for row in contracts:
-        if parse_score(row.get("selection_label")) == score and number(row.get("best_ask")):
-            chosen = row
-            break
+    # Polymarket is an analysis signal only.  It is deliberately excluded from
+    # executable paper prices.  A later local-channel capture may fill the
+    # frozen candidate through ``initial_price_overrides``.
     probability = None
     for row in (payload.get("model") or {}).get("score_probabilities") or []:
         if parse_score(row.get("score")) == score:
@@ -184,16 +178,75 @@ def score_contract(payload: dict) -> dict | None:
         "stake_units": 0.0,
         "price_source": None,
     }
-    if chosen:
-        ask = number(chosen.get("best_ask"))
-        fee_rate = number((chosen.get("fee_schedule") or {}).get("rate")) or 0.0
-        gross_profit = (1 / ask) - 1
-        result["odds"] = 1 + gross_profit * (1 - fee_rate)
-        result["raw_ask_probability"] = ask
-        result["fee_rate"] = fee_rate
-        result["ev"] = probability * result["odds"] - 1 if probability is not None else None
-        result["price_source"] = "Polymarket赛前最佳卖价（扣页面费率后诊断）"
     return result
+
+
+def _source_rank(label: str) -> int:
+    """Execution source priority, never a best-odds cherry pick."""
+    value = str(label or "").casefold()
+    priorities = (
+        (("用户渠道", "本地渠道", "local"), 0),
+        (("竞彩", "spf"), 1),
+        (("pinnacle", "平博"), 2),
+        (("皇冠", "crown"), 3),
+        (("bet365", "365"), 4),
+        (("500",), 5),
+    )
+    for tokens, rank in priorities:
+        if any(token in value for token in tokens):
+            return rank
+    return 20
+
+
+def audited_contracts(payload: dict) -> list[dict]:
+    """Convert every independently settleable quoted market into candidates.
+
+    Duplicate companies for the same contract are resolved using the fixed
+    source hierarchy.  This prevents choosing a bookmaker after seeing which
+    one offers the most favourable price.
+    """
+    selected: dict[str, tuple[int, dict]] = {}
+    for row in (payload.get("betting") or {}).get("price_audit") or []:
+        label = str(row.get("market") or "").strip()
+        odds = number(row.get("odds"))
+        probability = number(row.get("model_probability"))
+        if not label or odds is None or probability is None:
+            continue
+        contract = None
+        total = re.search(r"([大小])\s*(\d+(?:\.\d+)?)", label)
+        if total:
+            side, line_text = total.groups()
+            line = float(line_text)
+            contract = {
+                "ticket_type": "market",
+                "market_group": "大小球",
+                "market": f"全场{side}{line:g}",
+                "selection": "over" if side == "大" else "under",
+                "line": line,
+            }
+        elif "SPF主胜" in label:
+            contract = {"ticket_type": "market", "market_group": "胜平负", "market": "90分钟主胜", "selection": "home", "line": None}
+        elif "SPF平局" in label:
+            contract = {"ticket_type": "market", "market_group": "胜平负", "market": "90分钟平局", "selection": "draw", "line": None}
+        elif "SPF客胜" in label:
+            contract = {"ticket_type": "market", "market_group": "胜平负", "market": "90分钟客胜", "selection": "away", "line": None}
+        if contract is None:
+            continue
+        contract.update({
+            "odds": odds,
+            "probability": probability,
+            "conservative_probability": number(row.get("conservative_probability")),
+            "ev": number(row.get("ev")),
+            "conservative_ev": number(row.get("conservative_ev")),
+            "push_probability": number(row.get("push_probability")),
+            "stake_units": 0.0,
+            "price_source": label,
+        })
+        semantic = f"{contract['market_group']}|{contract['selection']}|{contract.get('line')}"
+        rank = _source_rank(label)
+        if semantic not in selected or rank < selected[semantic][0]:
+            selected[semantic] = (rank, contract)
+    return [row for _rank, row in selected.values()]
 
 
 def settle_ticket(ticket: dict, score: tuple[int, int] | None) -> dict:
@@ -297,7 +350,10 @@ def summarize(tickets: list[dict]) -> dict:
 
 def freeze_key(ticket: dict) -> str:
     """One immutable paper contract per match and report dimension."""
-    return f"{ticket.get('match_key')}|{ticket.get('ticket_type')}"
+    return "|".join(str(value) for value in (
+        ticket.get("match_key"), ticket.get("ticket_type"), ticket.get("market"),
+        ticket.get("selection"), ticket.get("line"),
+    ))
 
 
 def report_is_prematch(payload: dict) -> bool:
@@ -397,9 +453,15 @@ def build_paper_ledger(
             "real_execution": False,
             "ledger": "模型模拟账",
         }
-        for contract in (primary_contract(payload), score_contract(payload)):
+        contracts = [primary_contract(payload), score_contract(payload), *audited_contracts(payload)]
+        seen_contracts: set[str] = set()
+        for contract in contracts:
             if contract is None:
                 continue
+            semantic = f"{contract.get('market_group')}|{contract.get('selection')}|{contract.get('line')}"
+            if semantic in seen_contracts:
+                continue
+            seen_contracts.add(semantic)
             candidate = {"ticket_id": f"SIM-{next_id:04d}", **base, **contract}
             candidate = apply_ev_staking(candidate)
             candidate_key = freeze_key(candidate)

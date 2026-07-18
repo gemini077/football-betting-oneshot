@@ -65,6 +65,26 @@ def test_negative_ev_contract_has_price_but_is_rejected_without_stake():
     assert all(row["ticket_id"] != primary["ticket_id"] for row in ledger["tickets"])
 
 
+def test_all_distinct_positive_ev_audited_markets_are_screened():
+    payload = report()
+    payload["betting"]["price_audit"].append({
+        "market": "皇冠小3.5", "odds": 1.95, "model_probability": 0.6, "ev": 0.17,
+    })
+    ledger = build_paper_ledger([payload], {})
+    assert {row["market"] for row in ledger["tickets"]} >= {"全场小2.5", "全场小3.5"}
+
+
+def test_polymarket_correct_score_is_analysis_only_not_executable_price():
+    payload = report()
+    payload["market"] = {"polymarket": {"correct_score": {"contracts": [{
+        "selection_label": "1-1", "best_ask": 0.1, "fee_schedule": {"rate": 0},
+    }]}}}
+    ledger = build_paper_ledger([payload], {})
+    score = next(row for row in ledger["price_pending_candidates"] if row["ticket_type"] == "correct_score")
+    assert score["odds"] is None
+    assert score["price_source"] is None
+
+
 def test_first_captured_price_repairs_frozen_observation_without_reselecting():
     first = build_paper_ledger([report(odds=None)], {})
     primary = next(row for row in first["price_pending_candidates"] if row["ticket_type"] == "primary")
