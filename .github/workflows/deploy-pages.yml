@@ -58,6 +58,8 @@ jobs:
           fi
           if ! git diff --cached --quiet; then
             git commit -m "refresh public football data [skip ci]"
+            git stash push --include-untracked -m "ci-transient-untracked-files" || true
+            git pull --rebase origin main
             git push
           fi
 
