@@ -62,9 +62,6 @@ def cycle(business_date: str) -> dict:
     outcomes["results_due"] = run([
         python, "scripts/postmatch_result.py",
     ], optional=True)
-    outcomes["postmatch_trigger"] = run([
-        python, "scripts/sync_postmatch_workflow.py",
-    ], optional=True)
     outcomes["reviews"] = run([
         python, "scripts/automatic_postmatch_review.py",
     ], optional=True)
