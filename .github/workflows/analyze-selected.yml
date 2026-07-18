@@ -91,6 +91,8 @@ jobs:
           git add data/fetch_runs data/analysis_inputs/automated data/analysis_reports data/live_ev_profiles data/market_history data/match_archive data/postmatch_automation data/postmatch_reviews data/postmatch_dashboard data/match_workspace data/paper_ledger
           if ! git diff --cached --quiet; then
             git commit -m "analyze selected football match [skip ci]"
+            git stash push --include-untracked -m "ci-transient-untracked-files" || true
+            git pull --rebase origin main
             git push
           fi
 
