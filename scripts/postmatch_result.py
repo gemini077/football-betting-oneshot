@@ -54,7 +54,7 @@ def resolve_nowscore_id(schedule: dict[str, Any]) -> int | None:
     schedule_key = str(schedule.get("canonical_match_id") or schedule.get("match_key") or "")
     schedule_kickoff = parse_datetime(schedule.get("kickoff_local"))
     for row in list(workspace.get("matches") or []) + list(workspace.get("completed") or []):
-        row_id = str(row.get("id") or row.get("match_id") or "").strip()
+        row_id = str(row.get("provider_match_id") or row.get("id") or row.get("match_id") or "").strip()
         same_provider = bool(provider_id and row_id == provider_id)
         same_canonical = bool(schedule_key and canonical_match_id(row) == schedule_key)
         same_teams = (
@@ -214,8 +214,9 @@ def verify_schedule(path: Path, now: datetime, result_root: Path = RESULT_ROOT) 
     if status in FINAL_STATUSES:
         return {"path": str(path), "status": "skipped_final"}
     due = parse_datetime(schedule.get("review_due_at"))
-    strategy_upgrade = schedule.get("result_strategy_version") != RESULT_STRATEGY_VERSION
-    if due is None or (now < due and not strategy_upgrade):
+    # A parser upgrade must never make a future fixture eligible early.  It is
+    # applied on the first check after the saved due time instead.
+    if due is None or now < due:
         return {"path": str(path), "status": "skipped_not_due"}
 
     attempts = int(schedule.get("verification_attempts") or 0) + 1

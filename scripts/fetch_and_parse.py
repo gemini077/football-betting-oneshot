@@ -573,6 +573,10 @@ def parse_touzhu(html_text):
             value = value.replace(',', '').strip()
             return int(value) if re.fullmatch(r'-?\d+', value) else None
 
+        def optional_float(value):
+            value = value.replace(',', '').strip()
+            return float(value) if re.fullmatch(r'-?\d+(?:\.\d+)?', value) else None
+
         data_rows = []
         for row_html in re.findall(r'<tr[^>]*>(.*?)</tr>', section, re.DOTALL):
             cells = [clean_cell(cell) for cell in re.findall(r'<td[^>]*>(.*?)</td>', row_html, re.DOTALL)]
@@ -582,14 +586,17 @@ def parse_touzhu(html_text):
         if len(data_rows) >= 3:
             betfair = OrderedDict()
             for outcome, cells in zip(("home", "draw", "away"), data_rows[:3]):
-                page_simulated_pl = int(cells[7].replace(',', ''))
+                page_simulated_pl = optional_int(cells[7])
                 betfair[outcome] = OrderedDict([
                     ("team", cells[0]),
                     ("euro_odds", float(cells[1])),
                     ("euro_prob_pct", float(cells[2].rstrip('%'))),
                     ("volume_ratio_pct", float(cells[4].rstrip('%'))),
-                    ("betfair_price", float(cells[5])),
-                    ("betfair_volume", int(cells[6].replace(',', ''))),
+                    # 500/SPdex can publish volume before a visible last-traded
+                    # price.  Keep that useful partial market instead of
+                    # dropping the complete exchange panel on a literal "-".
+                    ("betfair_price", optional_float(cells[5])),
+                    ("betfair_volume", optional_int(cells[6])),
                     ("page_simulated_pl", page_simulated_pl),
                     # Legacy source-compatible alias. This is a third-party page
                     # calculation, not verified total liability for any operator.
@@ -599,8 +606,12 @@ def parse_touzhu(html_text):
                     ("pl_index", optional_int(cells[10])),
                 ])
             result["betfair"] = betfair
+            missing_prices = [key for key, row in betfair.items() if row.get("betfair_price") is None]
             result["betfair_metadata"] = OrderedDict([
                 ("market_type", "betfair_exchange"),
+                ("source", "500.com_spdex_aggregation"),
+                ("completeness", "partial" if missing_prices else "complete"),
+                ("missing_price_outcomes", missing_prices),
                 ("volume_scope", "visible_page_exchange_volume"),
                 ("page_simulated_pl_semantics", "third_party_derived_not_operator_total_liability"),
                 ("page_simulated_pl_signal_usage", "display_only"),

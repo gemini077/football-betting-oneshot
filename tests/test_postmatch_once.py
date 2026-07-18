@@ -57,6 +57,22 @@ def test_missing_result_gets_only_one_retry(tmp_path):
     assert saved["verification_attempts"] == 2
 
 
+def test_strategy_upgrade_never_checks_a_future_fixture(tmp_path):
+    schedule = write_schedule(
+        tmp_path / "schedule.json",
+        review_due_at="2026-07-16T20:15:00+08:00",
+        result_strategy_version="old-parser",
+    )
+    before = schedule.read_text(encoding="utf-8")
+    outcome = verify_schedule(
+        schedule,
+        datetime(2026, 7, 15, 20, 20, tzinfo=SHANGHAI),
+        tmp_path / "results",
+    )
+    assert outcome["status"] == "skipped_not_due"
+    assert schedule.read_text(encoding="utf-8") == before
+
+
 def test_postmatch_backfills_nowscore_id_from_latest_workspace(tmp_path, monkeypatch):
     schedule = write_schedule(
         tmp_path / "schedule.json",
@@ -80,6 +96,30 @@ def test_postmatch_backfills_nowscore_id_from_latest_workspace(tmp_path, monkeyp
     assert saved["nowscore_id"] == 2929657
     assert saved["result_90m"] == "2-2"
     assert saved["result_source"] == "nowscore_match_detail"
+
+
+def test_postmatch_matches_workspace_provider_match_id(tmp_path, monkeypatch):
+    schedule = write_schedule(
+        tmp_path / "schedule.json",
+        match_key="FBOS-provider-test",
+        canonical_match_id="FBOS-provider-test",
+        provider_match_id="500-123",
+        nowscore_id=None,
+    )
+    workspace = tmp_path / "latest.json"
+    workspace.write_text(json.dumps({
+        "completed": [{
+            "provider_match_id": "500-123", "home": "different", "away": "names",
+            "kickoff": "2026-07-15 18:00", "nowscore_id": 2929657,
+        }],
+    }), encoding="utf-8")
+    monkeypatch.setattr(postmatch_result, "WORKSPACE_PATH", workspace)
+    monkeypatch.setattr(postmatch_result, "fetch_nowscore_result", lambda match_id: ((2, 1), f"nowscore:{match_id}", None))
+
+    outcome = verify_schedule(schedule, datetime(2026, 7, 15, 20, 20, tzinfo=SHANGHAI), tmp_path / "results")
+
+    assert outcome["status"] == "result_verified"
+    assert json.loads(schedule.read_text(encoding="utf-8"))["nowscore_id"] == 2929657
 
 
 def test_postmatch_backfills_nowscore_id_from_schedule_snapshot(tmp_path, monkeypatch):

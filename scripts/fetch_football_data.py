@@ -20,6 +20,7 @@ from liansai_api import fetch_all as fetch_liansai_all
 from market_history import rebuild_history
 from nowscore_markets import fetch_match_markets as fetch_nowscore_markets
 from polymarket_public import fetch_snapshot as fetch_polymarket_snapshot
+from spdex_exchange import fetch_snapshot as fetch_spdex_snapshot, merge_into as merge_spdex_exchange
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -365,6 +366,15 @@ def main() -> int:
     for shuju_id in deep_ids:
         result = fetch_and_parse(shuju_id, args.date, DEEP_CACHE_DIR, args.no_cache)
         identity_match = discovered_by_id.get(shuju_id) or ((selected_matches or official_matches or [{}])[0] if len(deep_ids) == 1 else {})
+        if identity_match:
+            home, away, _ = _identity_fields(identity_match)
+            try:
+                spdex = fetch_spdex_snapshot(home, away, identity_match.get("match_num") or identity_match.get("matchNum"))
+                result = merge_spdex_exchange(result, spdex)
+            except Exception as exc:
+                # Exchange evidence is supplemental; a transient third-party
+                # failure must not discard Nowscore/500 market analysis.
+                result.setdefault("source_warnings", []).append(f"spdex_exchange_unavailable: {type(exc).__name__}")
         if not args.skip_nowscore and identity_match:
             home, away, kickoff = _identity_fields(identity_match)
             if home and away:
