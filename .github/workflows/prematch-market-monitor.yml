@@ -1,6 +1,8 @@
 name: Refresh analyzed pre-match markets
 on:
   workflow_dispatch:
+  repository_dispatch:
+    types: [prematch_checkpoint_due]
   schedule:
     # Offset from the crowded top-of-hour boundary; GitHub may still queue
     # scheduled jobs, so the monitor records actual capture time and lateness.

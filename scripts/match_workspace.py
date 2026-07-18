@@ -130,6 +130,17 @@ def latest_reports() -> dict[str, dict]:
     return reports
 
 
+def all_reports() -> list[dict]:
+    """Return every immutable report snapshot for checkpoint/ledger work."""
+    rows = []
+    for path in sorted((DATA / "analysis_reports").glob("*/*.json"), key=lambda p: p.stat().st_mtime):
+        payload = load_json(path, {})
+        match = payload.get("match") or {}
+        if match.get("home") and match.get("away"):
+            rows.append({"path": path, "html": next(path.parent.glob("*.html"), None), "payload": payload})
+    return rows
+
+
 def verified_result_map() -> dict[str, tuple[int, int]]:
     """Read verified 90-minute scores without manufacturing missing results."""
     results: dict[str, tuple[int, int]] = {}
@@ -685,7 +696,7 @@ def build(target_date: str, output_root: Path = OUTPUT) -> tuple[Path, Path]:
     price_overrides_payload = load_json(paper_root / "initial_price_overrides.json", {}) or {}
     initial_price_overrides = price_overrides_payload.get("tickets") or {}
     paper_ledger = build_paper_ledger(
-        list(reports.values()),
+        all_reports(),
         verified_result_map(),
         frozen_tickets=frozen_tickets,
         initial_price_overrides=initial_price_overrides,

@@ -38,7 +38,9 @@ def render(due_times: list[datetime]) -> str:
     return f'''name: One-shot post-match verification
 
 on:
-  workflow_dispatch:{schedule}
+  workflow_dispatch:
+  repository_dispatch:
+    types: [postmatch_verification_due]{schedule}
 
 permissions:
   contents: write
@@ -78,7 +80,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add .github/workflows/postmatch-once.yml data/postmatch_automation data/postmatch_reviews data/match_workspace data/postmatch_dashboard data/paper_ledger
+          git add .github/workflows/postmatch-once.yml data/postmatch_automation data/postmatch_reviews data/postmatch_reports data/match_workspace data/postmatch_dashboard data/paper_ledger
           if ! git diff --cached --quiet; then
             git commit -m "verify scheduled match result [skip ci]"
             git push

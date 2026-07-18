@@ -55,6 +55,15 @@ def test_checkpoint_meta_records_actual_lateness_instead_of_claiming_exact():
     assert meta["exact"] is False
 
 
+def test_failed_nearest_checkpoint_remains_retryable_and_is_labeled_recovery():
+    workspace = {"matches": [analyzed_match()]}
+    failed = {"1": {"T-90M": {"status": "failed", "error": "temporary"}}}
+    due = due_matches(workspace, datetime.fromisoformat("2026-07-16 01:35"), state=failed)
+    assert due[0]["_monitor_stage"] == "T-90M"
+    meta = checkpoint_meta(analyzed_match(), datetime.fromisoformat("2026-07-16 01:58"), "T-90M")
+    assert meta["capture_quality"] == "late_recovery"
+
+
 def test_github_utc_clock_is_compared_against_beijing_kickoff():
     utc_now = datetime.fromisoformat("2026-07-15T17:00:00+00:00")
     due = due_matches({"matches": [analyzed_match()]}, utc_now, state={})

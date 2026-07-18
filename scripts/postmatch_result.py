@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verify due match results exactly once, with at most one delayed retry."""
+"""Verify due results with bounded multi-source retries until final."""
 
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ from postmatch_queue import BASE_DIR, SHANGHAI, load_json, normalize, parse_date
 SCHEDULE_ROOT = BASE_DIR / "data" / "postmatch_automation" / "schedules"
 RESULT_ROOT = BASE_DIR / "data" / "postmatch_automation" / "results"
 FINAL_STATUSES = {"result_verified", "reviewed"}
-RESULT_STRATEGY_VERSION = "nowscore_detail_v2"
+RESULT_STRATEGY_VERSION = "nowscore_matchdetail_v3"
 SCORE_PATTERN = re.compile(
     r'<p\s+class=["\']odds_hd_bf["\'][^>]*>\s*<strong>\s*(\d+)\s*[:：]\s*(\d+)\s*</strong>',
     re.IGNORECASE,
@@ -99,22 +99,31 @@ def parse_nowscore_detail(page: str) -> tuple[int, int] | None:
 
 
 def fetch_nowscore_result(match_id: int) -> tuple[tuple[int, int] | None, str, str | None]:
-    url = f"https://live.nowscore.com/detail/{match_id}.html"
-    try:
-        request = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-        with urllib.request.urlopen(request, timeout=30) as response:
-            raw = response.read()
-        for encoding in ("utf-8-sig", "gb18030", "utf-8"):
-            try:
-                page = raw.decode(encoding)
-                break
-            except UnicodeDecodeError:
-                continue
-        else:
-            page = raw.decode("utf-8", errors="replace")
-        return parse_nowscore_detail(page), url, None
-    except Exception as exc:
-        return None, url, str(exc)
+    urls = [
+        f"https://live.nowscore.com/MatchDetail/{match_id}.html",
+        f"https://live.nowscore.com/detail/{match_id}.html",
+    ]
+    errors = []
+    for url in urls:
+        try:
+            request = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+            with urllib.request.urlopen(request, timeout=30) as response:
+                raw = response.read()
+            for encoding in ("utf-8-sig", "gb18030", "utf-8"):
+                try:
+                    page = raw.decode(encoding)
+                    break
+                except UnicodeDecodeError:
+                    continue
+            else:
+                page = raw.decode("utf-8", errors="replace")
+            score = parse_nowscore_detail(page) or parse_header_score(page)
+            if score is not None:
+                return score, url, None
+            errors.append(f"{url}: result_not_final")
+        except Exception as exc:
+            errors.append(f"{url}: {exc}")
+    return None, urls[0], "; ".join(errors)
 
 
 def resolve_shuju_id(schedule: dict[str, Any]) -> int | str | None:
@@ -147,9 +156,6 @@ def verify_schedule(path: Path, now: datetime, result_root: Path = RESULT_ROOT) 
     status = str(schedule.get("status") or "scheduled")
     if status in FINAL_STATUSES:
         return {"path": str(path), "status": "skipped_final"}
-    if status == "blocked_result_not_final" and schedule.get("result_strategy_version") == RESULT_STRATEGY_VERSION:
-        return {"path": str(path), "status": "skipped_final"}
-
     due = parse_datetime(schedule.get("review_due_at"))
     strategy_upgrade = schedule.get("result_strategy_version") != RESULT_STRATEGY_VERSION
     if due is None or (now < due and not strategy_upgrade):
@@ -229,13 +235,15 @@ def verify_schedule(path: Path, now: datetime, result_root: Path = RESULT_ROOT) 
             }
         )
         outcome = "result_verified"
-    elif attempts <= int((schedule.get("retry_policy") or {}).get("maximum_retries", 1)):
+    expires = parse_datetime(schedule.get("verification_expires_at"))
+    within_window = expires is None or now < expires
+    if score is None and within_window and attempts <= int((schedule.get("retry_policy") or {}).get("maximum_retries", 24)):
         retry_minutes = int((schedule.get("retry_policy") or {}).get("retry_after_minutes", 45))
         schedule["status"] = "retry_scheduled"
         schedule["review_due_at"] = (now + timedelta(minutes=retry_minutes)).isoformat()
         schedule["last_error"] = error or "result_not_final"
         outcome = "retry_scheduled"
-    else:
+    elif score is None:
         schedule["status"] = "blocked_result_not_final"
         schedule["last_error"] = error or "result_not_final_after_bounded_retry"
         outcome = "blocked_result_not_final"
