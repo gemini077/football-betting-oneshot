@@ -20,18 +20,20 @@ def test_due_matches_only_returns_analyzed_at_real_checkpoint():
         {"id": "3", "report_state": "已分析", "kickoff": "2026-07-17 03:00"},
     ]}
     due = due_matches(workspace, datetime.fromisoformat("2026-07-15 23:00"))
-    assert [row["id"] for row in due] == ["1"]
-    assert due[0]["_monitor_stage"] == "T-4H"
+    assert [row["id"] for row in due] == ["1", "1", "1"]
+    assert [row["_monitor_stage"] for row in due] == ["T-8H", "T-6H", "T-4H"]
 
 
-def test_each_checkpoint_runs_once_and_stale_checkpoints_are_not_backfilled():
+def test_each_checkpoint_runs_once_and_all_stale_checkpoints_are_backfilled():
     workspace = {"matches": [analyzed_match()]}
-    assert due_matches(workspace, datetime.fromisoformat("2026-07-16 01:30"), state={})[0]["_monitor_stage"] == "T-90M"
-    done = {"1": {"T-90M": {"captured_at": "2026-07-16T01:30:00"}}}
+    due = due_matches(workspace, datetime.fromisoformat("2026-07-16 01:30"), state={})
+    assert [row["_monitor_stage"] for row in due] == ["T-8H", "T-6H", "T-4H", "T-2H", "T-90M"]
+    done = {"1": {stage: {"status": "captured"} for stage in ("T-8H", "T-6H", "T-4H", "T-2H", "T-90M")}}
     assert due_matches(workspace, datetime.fromisoformat("2026-07-16 01:30"), state=done) == []
-    assert due_matches(workspace, datetime.fromisoformat("2026-07-16 02:30"), state=done)[0]["_monitor_stage"] == "T-30M"
+    assert [row["_monitor_stage"] for row in due_matches(workspace, datetime.fromisoformat("2026-07-16 02:30"), state=done)] == ["T-60M", "T-30M"]
+    done["1"].update({stage: {"status": "captured"} for stage in ("T-60M", "T-30M")})
     assert due_matches(workspace, datetime.fromisoformat("2026-07-16 02:50"), state=done)[0]["_monitor_stage"] == "T-10M"
-    done["1"]["T-10M"] = {"captured_at": "2026-07-16T02:50:00"}
+    done["1"]["T-10M"] = {"status": "captured", "captured_at": "2026-07-16T02:50:00"}
     assert due_matches(workspace, datetime.fromisoformat("2026-07-16 02:52"), state=done) == []
 
 
@@ -44,7 +46,7 @@ def test_all_eight_checkpoints_are_addressable():
         "2026-07-16 02:30": "T-30M", "2026-07-16 02:50": "T-10M",
     }
     for current, expected in checks.items():
-        assert due_matches(workspace, datetime.fromisoformat(current), state={})[0]["_monitor_stage"] == expected
+        assert due_matches(workspace, datetime.fromisoformat(current), state={})[-1]["_monitor_stage"] == expected
 
 
 def test_checkpoint_meta_records_actual_lateness_instead_of_claiming_exact():
@@ -57,17 +59,20 @@ def test_checkpoint_meta_records_actual_lateness_instead_of_claiming_exact():
 
 def test_failed_nearest_checkpoint_remains_retryable_and_is_labeled_recovery():
     workspace = {"matches": [analyzed_match()]}
-    failed = {"1": {"T-90M": {"status": "failed", "error": "temporary"}}}
+    failed = {"1": {
+        **{stage: {"status": "captured"} for stage in ("T-8H", "T-6H", "T-4H", "T-2H")},
+        "T-90M": {"status": "failed", "error": "temporary"},
+    }}
     due = due_matches(workspace, datetime.fromisoformat("2026-07-16 01:35"), state=failed)
     assert due[0]["_monitor_stage"] == "T-90M"
     meta = checkpoint_meta(analyzed_match(), datetime.fromisoformat("2026-07-16 01:58"), "T-90M")
-    assert meta["capture_quality"] == "late_recovery"
+    assert meta["capture_quality"] == "pending_recovery"
 
 
 def test_github_utc_clock_is_compared_against_beijing_kickoff():
     utc_now = datetime.fromisoformat("2026-07-15T17:00:00+00:00")
     due = due_matches({"matches": [analyzed_match()]}, utc_now, state={})
-    assert due[0]["_monitor_stage"] == "T-2H"
+    assert due[-1]["_monitor_stage"] == "T-2H"
 
 
 def test_partial_refresh_errors_do_not_block_successful_publication(tmp_path, monkeypatch):
@@ -77,10 +82,13 @@ def test_partial_refresh_errors_do_not_block_successful_publication(tmp_path, mo
     monkeypatch.setattr(monitor, "WORKSPACE", workspace)
     monkeypatch.setattr(monitor, "STATE_PATH", state)
     monkeypatch.setattr(monitor, "ROOT", tmp_path)
-    monkeypatch.setattr(monitor, "due_matches", lambda *_args: [
-        {"id": "ok", "home": "A", "away": "B", "_monitor_stage": "T-2H"},
-        {"id": "bad", "home": "C", "away": "D", "_monitor_stage": "T-2H"},
+    monkeypatch.setattr(monitor, "load_registry", lambda: {"tasks": {}})
+    monkeypatch.setattr(monitor, "due_events", lambda *_args: [
+        {"id": "ok", "home": "A", "away": "B", "_monitor_stage": "T-2H", "_canonical_match_id": "ok"},
+        {"id": "bad", "home": "C", "away": "D", "_monitor_stage": "T-2H", "_canonical_match_id": "bad"},
     ])
+    monkeypatch.setattr(monitor, "update_checkpoint", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(monitor, "save_registry", lambda *_args, **_kwargs: None)
     def refresh(match, stage, _now):
         if match["id"] == "bad":
             raise RuntimeError("broken feed")

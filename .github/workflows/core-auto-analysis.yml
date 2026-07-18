@@ -31,6 +31,8 @@ jobs:
       - run: pip install -r requirements.txt
       - name: Generate at most two pending core reports
         run: python scripts/core_auto_reports.py --max-jobs 2
+      - name: Register every analyzed match for checkpoint monitoring
+        run: python scripts/prematch_market_monitor.py --sync-tasks
       - name: Save reports and queue state
         shell: bash
         run: |

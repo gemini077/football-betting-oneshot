@@ -68,6 +68,7 @@ jobs:
 
       - name: Verify any results that became due while analysis was queued
         run: |
+          python scripts/prematch_market_monitor.py --sync-tasks
           BUSINESS_DATE="${{ inputs.business_date || '' }}"
           if [[ -n "$BUSINESS_DATE" ]]; then
             python scripts/sync_result_schedules.py --date "$BUSINESS_DATE"

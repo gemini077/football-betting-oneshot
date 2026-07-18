@@ -19,9 +19,11 @@ from zoneinfo import ZoneInfo
 try:
     from paper_ledger import build_paper_ledger, pair_key, parse_score
     from paper_channel_prices import sync_channel_price_overrides
+    from match_identity import canonical_match_id
 except ImportError:  # package import used by tests
     from scripts.paper_ledger import build_paper_ledger, pair_key, parse_score
     from scripts.paper_channel_prices import sync_channel_price_overrides
+    from scripts.match_identity import canonical_match_id
 
 try:
     from openpyxl import load_workbook
@@ -49,6 +51,66 @@ def parse_kickoff_local(value: Any) -> datetime | None:
 def match_should_be_finished(kickoff: Any, now: datetime) -> bool:
     parsed = parse_kickoff_local(kickoff)
     return parsed is not None and now >= parsed + timedelta(hours=2, minutes=15)
+
+
+def attach_prematch_monitor_state(matches: list[dict], generated: datetime) -> dict:
+    """Attach checkpoint health without coupling it to the daily schedule file."""
+    registry = load_json(DATA / "market_history" / "prematch_tasks.json", {}) or {}
+    tasks = registry.get("tasks") or {}
+    terminal = {"captured", "historical_recovery", "late_live", "permanently_missing"}
+    summary = {
+        "task_count": len(tasks),
+        "tracked_matches": 0,
+        "overdue_pending": 0,
+        "next_due_at": None,
+        "updated_at": registry.get("updated_at"),
+    }
+    next_due: list[datetime] = []
+    for match in matches:
+        task = tasks.get(canonical_match_id(match))
+        if not task:
+            continue
+        checkpoints = list((task.get("checkpoints") or {}).values())
+        completed = [row for row in checkpoints if row.get("status") in terminal]
+        pending = [row for row in checkpoints if row.get("status") not in terminal]
+        completed.sort(key=lambda row: str(row.get("planned_at") or ""))
+        pending.sort(key=lambda row: str(row.get("planned_at") or ""))
+        overdue = []
+        for row in pending:
+            try:
+                planned = datetime.fromisoformat(str(row.get("planned_at") or ""))
+            except ValueError:
+                continue
+            if planned <= generated:
+                overdue.append(row)
+            else:
+                next_due.append(planned)
+        latest = completed[-1] if completed else None
+        following = pending[0] if pending else None
+        if overdue:
+            health = "有临盘节点待恢复"
+        elif not pending:
+            health = "临盘节点已完成"
+        elif latest:
+            health = "临盘持续跟踪中"
+        else:
+            health = "等待首个临盘节点"
+        match["prematch_monitor"] = {
+            "label": health,
+            "completed": len(completed),
+            "total": len(checkpoints),
+            "overdue": len(overdue),
+            "latest_stage": (latest or {}).get("stage"),
+            "latest_status": (latest or {}).get("status"),
+            "latest_captured_at": (latest or {}).get("captured_at"),
+            "next_stage": (following or {}).get("stage"),
+            "next_planned_at": (following or {}).get("planned_at"),
+        }
+        summary["tracked_matches"] += 1
+        summary["overdue_pending"] += len(overdue)
+    if next_due:
+        summary["next_due_at"] = min(next_due).isoformat()
+    return summary
 
 PORTFOLIO_LAYERS = {
     "保本层": {
@@ -730,6 +792,7 @@ def build(target_date: str, output_root: Path = OUTPUT) -> tuple[Path, Path]:
     locked_match_ids = {str(row.get("match_id")) for row in real_open if row.get("match_id") is not None}
     for item in matches:
         item["bet_locked"] = str(item.get("id")) in locked_match_ids
+    prematch_monitor = attach_prematch_monitor_state(matches, generated)
     payload = {
         "model_name": runtime.get("model_name"), "model_version": runtime.get("model_version"),
         "balance": (runtime.get("bankroll") or {}).get("current_balance"),
@@ -762,6 +825,7 @@ def build(target_date: str, output_root: Path = OUTPUT) -> tuple[Path, Path]:
         "available_cash": max(0.0, float((runtime.get("bankroll") or {}).get("current_balance") or 0) - (sum(float(row.get("stake") or 0) for row in real_open) or portfolio["locked_exposure"])),
         "real_exposure": sum(float(row.get("stake") or 0) for row in real_open) or portfolio["locked_exposure"],
         "matches": matches, "completed": completed, "portfolio": portfolio,
+        "prematch_monitor": prematch_monitor,
         "paper_ledger": paper_ledger,
         "postmatch_dashboard_url": relative_uri(DATA / "postmatch_dashboard" / "latest.html", output_dir),
     }
@@ -795,7 +859,7 @@ const ANALYSIS_ENDPOINT='http://127.0.0.1:8765/v1/analysis-selections';let queue
 async function flushAnalysisQueue(){if(queueFlushRunning)return;queueFlushRunning=true;const pending=selected.filter(x=>['pending_local','waiting_bridge'].includes(x.request_status));for(const item of pending){item.request_status='submitting';item.last_attempt_at=new Date().toISOString();persistSelections();render();try{const response=await fetch(ANALYSIS_ENDPOINT,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({match:item})});const result=await response.json().catch(()=>({}));if(!response.ok||!result.ok)throw new Error(result.error||`HTTP ${response.status}`);item.request_status=result.analysis_job?.status||'queued';item.server_job_id=result.analysis_job?.job_id||null;item.last_error=null}catch(error){item.request_status='waiting_bridge';item.last_error=String(error?.message||error).slice(0,300)}item.updated_at=new Date().toISOString();persistSelections();render()}queueFlushRunning=false}
 function saveSelection(m){if(!m)return;if(m.report_state==='已分析'){if(m.report_url)openMatch(m,'prematch');return}const id=key(m),existing=selectionFor(m),now=new Date().toISOString(),queued={id:m.id,match_num:m.match_num,home:m.home,away:m.away,league:m.league,kickoff:m.kickoff,business_date:m.business_date||DATA.target_date,selected_at:existing?.selected_at||now,updated_at:now,analysis_requested:true,request_status:'pending_local'};selected=selected.filter(x=>String(x.id)!==id);selected.push(queued);persistSelections();render();flushAnalysisQueue()}
 function queueLabel(m){const status=selectionFor(m)?.request_status;return status==='submitting'?'正在提交…':status==='waiting_bridge'||status==='pending_local'?'本地已排队':status==='retry_wait'?'等待重试':'已加入分析队列'}
-function upcomingRow(m){const spf=m.spf||{},analyzed=m.report_state==='已分析',hasReport=Boolean(m.report_url);const actions=hasReport?`<button class="action primary" data-open="${key(m)}">打开报告</button>${analyzed?`<button class="action" data-bet="${key(m)}">已下单</button>`:`<button class="action" data-select="${key(m)}">重新分析</button>`}`:`<button class="action ${isSelected(m)?'selected':'primary'}" data-select="${key(m)}">${isSelected(m)?queueLabel(m):'分析这场'}</button>`;return `<tr data-row="${key(m)}"><td><b>${m.kickoff||'—'}</b><div class="muted">${m.match_num||'—'} · ${m.league||'—'}</div></td><td><div class="match-name">${m.home} <span class="muted">vs</span> ${m.away}</div><div class="muted">${m.official?'体彩在售':'额外关注'}</div></td><td><div class="odds-inline"><span class="odd">胜 ${spf.home??'—'}</span><span class="odd">平 ${spf.draw??'—'}</span><span class="odd">负 ${spf.away??'—'}</span></div></td><td><span class="badge ${analyzed?'good':'blue'}">${m.report_state}</span> ${!analyzed&&isSelected(m)?'<span class="badge gold">持久队列</span>':''}</td><td><b>${m.primary||'—'}</b><div class="risk-line">错点：${m.primary_error||'—'}</div><div class="muted">${m.betting_state||'未锁单'}</div></td><td><div class="actions">${actions}</div></td></tr>`}
+function upcomingRow(m){const spf=m.spf||{},monitor=m.prematch_monitor||{},analyzed=m.report_state==='已分析',hasReport=Boolean(m.report_url);const actions=hasReport?`<button class="action primary" data-open="${key(m)}">打开报告</button>${analyzed?`<button class="action" data-bet="${key(m)}">已下单</button>`:`<button class="action" data-select="${key(m)}">重新分析</button>`}`:`<button class="action ${isSelected(m)?'selected':'primary'}" data-select="${key(m)}">${isSelected(m)?queueLabel(m):'分析这场'}</button>`;const monitorText=monitor.label?`<div class="muted">${monitor.label} · ${monitor.completed||0}/${monitor.total||0}${monitor.next_stage?` · 下一节点 ${monitor.next_stage}`:''}</div>`:'';return `<tr data-row="${key(m)}"><td><b>${m.kickoff||'—'}</b><div class="muted">${m.match_num||'—'} · ${m.league||'—'}</div></td><td><div class="match-name">${m.home} <span class="muted">vs</span> ${m.away}</div><div class="muted">${m.official?'体彩在售':'额外关注'}</div></td><td><div class="odds-inline"><span class="odd">胜 ${spf.home??'—'}</span><span class="odd">平 ${spf.draw??'—'}</span><span class="odd">负 ${spf.away??'—'}</span></div></td><td><span class="badge ${analyzed?'good':'blue'}">${m.report_state}</span> ${!analyzed&&isSelected(m)?'<span class="badge gold">持久队列</span>':''}${monitorText}</td><td><b>${m.primary||'—'}</b><div class="risk-line">错点：${m.primary_error||'—'}</div><div class="muted">${m.betting_state||'未锁单'}</div></td><td><div class="actions">${actions}</div></td></tr>`}
 function completedRow(m){return `<tr><td><div class="match-name">${m.home} <span class="muted">vs</span> ${m.away}</div></td><td><b>${m.result_90m||'—'}</b></td><td>${m.after_extra_time||'—'}</td><td><span class="badge ${m.bet_locked?'gold':'blue'}">${m.bet_locked?'已锁单':'未锁单'}</span></td><td>${m.classification||'—'}</td><td><div class="actions"><button class="action primary" data-review="${m.id}">赛后复盘</button>${m.prematch_report_url?`<button class="action" data-prematch="${m.id}">赛前分析</button>`:''}</div></td></tr>`}
 function numberText(v,d=2){const n=Number(v);return Number.isFinite(n)?n.toFixed(d):'—'}function pctText(v){const n=Number(v);return Number.isFinite(n)?`${(n*100).toFixed(1)}%`:'—'}function renderPortfolio(){const p=DATA.portfolio||{},layers=p.layers||[];$('#portfolioState').textContent=p.state||'三层均为空仓';$('#portfolioLayers').innerHTML=layers.map(layer=>`<article class="portfolio-layer" style="--layer-color:${layer.color||'#ffbd5c'}"><div class="layer-head"><h3>${layer.name}</h3><span class="layer-count">${layer.ticket_count||0}</span></div><p>${layer.role||''}</p><div class="layer-meta"><span>候选 ${layer.candidate_count||0}</span><span>已锁 ${layer.locked_count||0}</span><span>暴露 ¥${numberText(layer.locked_exposure||0)}</span></div></article>`).join('')||'<div class="empty-row">暂无层级配置</div>';const tickets=[...(p.candidates||[]),...(p.open_bets||[])];$('#portfolioTickets').innerHTML=tickets.map(t=>`<tr><td><b>${t.ticket_id||t.id||'—'}</b></td><td><span class="badge gold">${t.tier||'中轴层'}</span></td><td>${t.match||'—'}</td><td>${t.market||t.selection||'—'}</td><td>${numberText(t.user_channel_odds??t.observed_odds??t.odds)}</td><td>${pctText(t.repriced_ev??t.initial_ev??t.ev)}</td><td>${t.amount==null?'—':`¥${numberText(t.amount)}`}</td><td>${t.form||'单关'}</td><td><span class="badge ${String(t.status||'').includes('锁')?'good':'blue'}">${t.status||'候选未锁单'}</span></td></tr>`).join('')||'<tr><td colspan="9" class="empty-row">当前没有通过阈值的候选，也没有已锁票据</td></tr>';$('#portfolioParlays').innerHTML=(p.parlays||[]).map(t=>`<tr><td><b>${t.ticket_id||t.id||'—'}</b></td><td>${t.tier||'—'}</td><td>${(t.legs||[]).map(x=>typeof x==='string'?x:(x.label||x.market||x.match||'—')).join(' × ')||'—'}</td><td>${numberText(t.combined_odds)}</td><td>${pctText(t.ev)}</td><td>${t.correlation||'待审计'}</td><td>${t.status||'候选未锁单'}</td></tr>`).join('')||'<tr><td colspan="7" class="empty-row">没有通过审核的跨场串联；不为凑票强行组合</td></tr>';$('#portfolioOverlap').innerHTML=(p.overlap_audit||[]).map(t=>`<tr><td>${t.match||'—'}</td><td>${(t.ticket_ids||[]).join('、')||'—'}</td><td>${t.risk||'—'}</td><td>${t.control||'—'}</td></tr>`).join('')||'<tr><td colspan="4" class="empty-row">当前没有同场重复暴露</td></tr>'}
 function render(){const q=$('#search').value.trim().toLowerCase();const rows=DATA.matches.filter(m=>(!q||JSON.stringify(m).toLowerCase().includes(q))&&(mode==='all'||mode==='pending'&&m.report_state!=='已分析'||mode==='done'&&m.report_state==='已分析'||mode==='selected'&&isSelected(m)));$('#upcoming').innerHTML=rows.map(upcomingRow).join('')||'<tr><td colspan="6" class="empty-row">没有符合条件的场次</td></tr>';$('#completed').innerHTML=DATA.completed.map(completedRow).join('')||'<tr><td colspan="6" class="empty-row">暂无已完成复盘</td></tr>';$('#upcomingCount').textContent=DATA.matches.length;$('#analyzedCount').textContent=DATA.matches.filter(m=>m.report_state==='已分析').length;$('#selectedCount').textContent=selected.length;document.querySelectorAll('[data-select]').forEach(b=>b.onclick=()=>saveSelection(DATA.matches.find(m=>key(m)===b.dataset.select)));document.querySelectorAll('[data-open]').forEach(b=>b.onclick=()=>openMatch(DATA.matches.find(m=>key(m)===b.dataset.open),'prematch'));document.querySelectorAll('[data-review]').forEach(b=>b.onclick=()=>openCompleted(DATA.completed.find(x=>String(x.id)===b.dataset.review),'review'));document.querySelectorAll('[data-prematch]').forEach(b=>b.onclick=()=>openCompleted(DATA.completed.find(x=>String(x.id)===b.dataset.prematch),'prematch'))}

@@ -7,13 +7,17 @@ import json
 import re
 import subprocess
 import sys
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from prematch_fundamentals import collect_prematch_fundamentals
 from decision_evolution import append_record, attach_evolution
 from match_identity import canonical_match_id, identity_aliases
+from historical_market_recovery import recover_manifest
+from prematch_task_registry import (
+    due_events, load_registry, save_registry, sync_registry, update_checkpoint,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -60,42 +64,45 @@ def minutes_before_kickoff(match, now):
 
 
 def due_stage(match, now, hours_before=8.0, completed=None, max_lateness_minutes=None):
-    """Return the nearest passed checkpoint.
+    """Compatibility helper returning the earliest overdue uncaptured stage."""
+    stages = due_stages(match, now, hours_before, completed)
+    return stages[0] if stages else None
 
-    GitHub schedules are best effort and can be late.  A late run captures one
-    real snapshot (never fabricates several historical snapshots) and labels
-    it as recovery data instead of silently losing the entire match.
-    """
+
+def due_stages(match, now, hours_before=8.0, completed=None):
+    """Return every elapsed checkpoint that is not durably completed."""
     minutes = minutes_before_kickoff(match, now)
-    if minutes is None or minutes < 0 or minutes > hours_before * 60:
-        return None
+    if minutes is None or minutes < -360 or minutes > hours_before * 60:
+        return []
     completed = completed or {}
     captured = {
         stage for stage, payload in completed.items()
-        if not isinstance(payload, dict) or payload.get("status", "captured") == "captured"
+        if not isinstance(payload, dict) or payload.get("status", "captured")
+        in {"captured", "historical_recovery", "late_live", "permanently_missing"}
     }
     candidates = []
     for target, stage in CHECKPOINTS:
-        lateness = target - minutes
-        if lateness >= 0:
-            candidates.append((lateness, stage))
-    if not candidates:
-        return None
-    _lateness, stage = min(candidates)
-    return None if stage in captured else stage
+        if target - minutes >= 0 and stage not in captured:
+            candidates.append(stage)
+    return candidates
 
 
 def checkpoint_meta(match, now, stage):
     actual = minutes_before_kickoff(match, now)
     target = TARGET_MINUTES[stage]
+    kickoff = parse_time(match.get("kickoff"))
+    if kickoff and kickoff.tzinfo is None:
+        kickoff = kickoff.replace(tzinfo=SHANGHAI)
+    planned = kickoff - timedelta(minutes=target) if kickoff else None
     return {
         "stage": stage,
-        "captured_at": now.isoformat(),
+        "scheduled_at": planned.isoformat() if planned else None,
+        "captured_at": now.astimezone(SHANGHAI).isoformat(),
         "target_minutes_before": target,
         "actual_minutes_before": round(actual, 2) if actual is not None else None,
         "lateness_minutes": round(target - actual, 2) if actual is not None else None,
         "exact": actual is not None and abs(target - actual) < 0.51,
-        "capture_quality": "on_time" if actual is not None and abs(target - actual) <= 5 else "late_recovery",
+        "capture_quality": "on_time" if actual is not None and abs(target - actual) <= 5 else "pending_recovery",
     }
 
 
@@ -112,8 +119,7 @@ def due_matches(workspace, now, hours_before=8.0, state=None):
             for alias in identity_aliases(match):
                 if isinstance(state.get(alias), dict):
                     completed.update(state[alias])
-        stage = due_stage(match, now, hours_before, completed=completed)
-        if stage:
+        for stage in due_stages(match, now, hours_before, completed=completed):
             rows.append({**match, "_monitor_stage": stage, "_canonical_match_id": canonical_id})
     return sorted(rows, key=lambda row: row.get("kickoff") or "")
 
@@ -176,7 +182,7 @@ def refresh_match(match, stage=None, now=None):
     """Fetch a new snapshot and recalculate the complete deterministic model."""
     from deepseek_auto_analysis import analysis_context, deterministic_analysis, report_manifest
 
-    now = now or datetime.now().astimezone()
+    now = now or datetime.now(SHANGHAI)
     stage = stage or due_stage(match, now)
     label = f"{match.get('home')} vs {match.get('away')}"
     match_id = str(match.get("id") or "")
@@ -199,13 +205,39 @@ def refresh_match(match, stage=None, now=None):
     manifest_path = Path(fetched["manifest"])
     if not manifest_path.is_absolute():
         manifest_path = ROOT / manifest_path
+    checkpoint = checkpoint_meta(match, now, stage)
+    recovery = None
+    if float(checkpoint.get("lateness_minutes") or 0) > 5:
+        recovery = recover_manifest(manifest_path, checkpoint.get("scheduled_at"))
+        checkpoint["capture_quality"] = (
+            "historical_recovery" if recovery.get("status") == "recovered" else "late_live"
+        )
+        checkpoint["historical_recovery"] = recovery
+        kickoff = parse_time(match.get("kickoff"))
+        if kickoff and kickoff.tzinfo is None:
+            kickoff = kickoff.replace(tzinfo=SHANGHAI)
+        if recovery.get("status") != "recovered" and kickoff and now >= kickoff:
+            checkpoint["capture_quality"] = "permanently_missing"
+            return {
+                "match": label,
+                "status": "missed_checkpoint",
+                "stage": stage,
+                "checkpoint": checkpoint,
+                "model_recalculated": False,
+                "reason": "赛前历史轨迹没有该节点，且比赛已经开赛；保留原报告，不用当前价冒充历史价。",
+            }
     context = analysis_context(manifest_path, request)
     analysis = deterministic_analysis(context, request)
-    checkpoint = checkpoint_meta(match, now, stage)
     analysis.setdefault("match", {})["canonical_match_id"] = canonical_id
     analysis.setdefault("match", {})["provider_match_id"] = match_id
     analysis, evolution_record = attach_evolution(analysis, canonical_id, checkpoint)
     analysis.setdefault("report", {})["market_checkpoint"] = checkpoint
+    analysis.setdefault("report", {})["checkpoint_health"] = {
+        "stage": stage, "scheduled_at": checkpoint.get("scheduled_at"),
+        "captured_at": checkpoint.get("captured_at"),
+        "status": checkpoint.get("capture_quality"),
+        "recovered_quotes": ((recovery or {}).get("recovered_quotes") or 0),
+    }
     analysis.setdefault("automation", {})["market_refresh"] = {
         **checkpoint,
         "model_recalculated": True,
@@ -253,17 +285,31 @@ def refresh_match(match, stage=None, now=None):
 
 
 def main():
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--now")
     parser.add_argument("--hours-before", type=float, default=8.0)
     parser.add_argument("--count-due", action="store_true")
+    parser.add_argument("--match-id", help="只处理一个canonical/provider比赛ID")
+    parser.add_argument("--checkpoint", choices=[stage for _, stage in CHECKPOINTS])
+    parser.add_argument("--sync-tasks", action="store_true")
     args = parser.parse_args()
-    now = parse_time(args.now) if args.now else datetime.now().astimezone()
+    now = parse_time(args.now) if args.now else datetime.now(SHANGHAI)
     if now is None:
         raise SystemExit("--now must be an ISO timestamp")
     workspace = load_json(WORKSPACE) if WORKSPACE.exists() else {"matches": []}
     state = load_json(STATE_PATH) if STATE_PATH.exists() else {}
-    due = due_matches(workspace, now, args.hours_before, state)
+    if args.sync_tasks:
+        synced = sync_registry()
+        registry = synced["registry"]
+    else:
+        registry = load_registry()
+        synced = {"task_count": len(registry.get("tasks") or {})}
+    due = due_events(registry, now, args.match_id, args.checkpoint)
+    if args.sync_tasks and not args.count_due:
+        print(json.dumps({"checked_at": now.isoformat(), "task_count": synced["task_count"]}, ensure_ascii=False, indent=2))
+        return 0
     if args.count_due:
         print(len(due))
         return 0
@@ -274,11 +320,20 @@ def main():
         try:
             result = refresh_match(match, match["_monitor_stage"], now)
             results.append(result)
-            if result.get("status") == "refreshed":
+            if result.get("status") in {"refreshed", "missed_checkpoint"}:
                 stage = match["_monitor_stage"]
+                quality = (result.get("checkpoint") or {}).get("capture_quality") or "captured"
                 state.setdefault(canonical_id, {})[stage] = {
-                    **result["checkpoint"], "status": "captured"
+                    **result["checkpoint"], "status": quality
                 }
+                update_checkpoint(
+                    registry, canonical_id, stage, quality,
+                    captured_at=result["checkpoint"].get("captured_at"),
+                    actual_minutes_before=result["checkpoint"].get("actual_minutes_before"),
+                    lateness_minutes=result["checkpoint"].get("lateness_minutes"),
+                    report=result.get("report"),
+                    reason=result.get("reason"),
+                )
         except Exception as error:
             stage = match.get("_monitor_stage")
             state.setdefault(canonical_id, {})[stage] = {
@@ -286,6 +341,11 @@ def main():
                 "last_attempt_at": now.isoformat(),
                 "error": str(error)[:1000],
             }
+            if canonical_id in registry.get("tasks", {}) and stage:
+                update_checkpoint(
+                    registry, canonical_id, stage, "retry_wait",
+                    last_attempt_at=now.isoformat(), error=str(error)[:1000],
+                )
             results.append({
                 "match": f"{match.get('home')} vs {match.get('away')}",
                 "stage": match.get("_monitor_stage"),
@@ -294,6 +354,7 @@ def main():
     if results:
         STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
         STATE_PATH.write_text(json.dumps(state, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        save_registry(registry)
     if any(row.get("status") == "refreshed" for row in results):
         run_json([
             sys.executable, "scripts/match_workspace.py", "--date",
