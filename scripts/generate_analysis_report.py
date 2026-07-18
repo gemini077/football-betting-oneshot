@@ -7,6 +7,7 @@ import argparse
 import html
 import json
 import re
+import sys
 from statistics import fmean
 from datetime import datetime
 from pathlib import Path
@@ -855,6 +856,20 @@ def render(payload: dict) -> str:
     betfair = market.get("betfair") or {}
     polymarket = market.get("polymarket") or {}
     poly_match = polymarket.get("match") or {}
+    checkpoint = report.get("market_checkpoint") or {}
+    checkpoint_health = report.get("checkpoint_health") or {}
+    checkpoint_status = checkpoint_health.get("status") or checkpoint.get("capture_quality")
+    checkpoint_labels = {
+        "on_time": "准时抓取", "historical_recovery": "历史赔率恢复",
+        "late_live": "延迟实时快照", "pending_recovery": "等待恢复",
+    }
+    checkpoint_chip = ""
+    if checkpoint.get("stage"):
+        checkpoint_chip = (
+            f'<span class="chip">临盘更新 <b>{e(checkpoint.get("stage"))} · '
+            f'{e(checkpoint_labels.get(checkpoint_status, checkpoint_status or "状态未知"))}</b> · '
+            f'{e(display_beijing_time(checkpoint.get("captured_at")))}</span>'
+        )
 
     quality_rows = [
         ["竞彩主源", "完整" if official_spf else "缺失", "SPF / RQSPF / 销售比赛"],
@@ -1370,7 +1385,7 @@ def render(payload: dict) -> str:
 <header class="hero"><div class="eyebrow">{e(str(report.get('model_name', 'Football Betting OneShot')).upper())} · {e(report.get('model_version'))} · MARKET INTELLIGENCE</div>
 <h1>{e(match.get('home'))}<span>VS</span>{e(match.get('away'))}</h1>
 <div class="hero-sub">{e(report.get('report_type'))} · {e(execution_label)} · 90分钟含伤停，不含加时与点球</div>
-<div class="chips"><span class="chip">赛事 <b>{e(match.get('competition'))}</b></span><span class="chip">竞彩日 <b>{e(match.get('business_date'))}</b></span><span class="chip">开球 <b>{e(match.get('kickoff_local'))}</b></span><span class="chip">编号 <b>{e(match.get('match_num'))}</b></span><span class="chip">快照 <b>{e(display_beijing_time(report.get('snapshot_timestamp')))}</b></span></div></header>
+<div class="chips"><span class="chip">赛事 <b>{e(match.get('competition'))}</b></span><span class="chip">竞彩日 <b>{e(match.get('business_date'))}</b></span><span class="chip">开球 <b>{e(match.get('kickoff_local'))}</b></span><span class="chip">编号 <b>{e(match.get('match_num'))}</b></span><span class="chip">快照 <b>{e(display_beijing_time(report.get('snapshot_timestamp')))}</b></span>{checkpoint_chip}</div></header>
 <nav class="report-nav" aria-label="报告快速导航"><a href="#summary">结论</a><a href="#model">概率</a><a href="#market">盘口资金</a><a href="#script">球队剧本</a><a href="#goals">进球数</a><a href="#scores">比分</a><a href="#value">EV</a><a href="#risks">错点</a><a href="#evolution">判断变化</a></nav>
 <div class="grid">{"".join(cards)}</div>
 {internal_audit}
@@ -1380,6 +1395,8 @@ def render(payload: dict) -> str:
 
 
 def main() -> int:
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     parser = argparse.ArgumentParser(description="生成Football Betting OneShot可视化HTML报告")
     parser.add_argument("--fetch-manifest", required=True, help="抓取批次manifest路径")
     parser.add_argument("--analysis-json", help="可选：完整模型分析结果JSON")

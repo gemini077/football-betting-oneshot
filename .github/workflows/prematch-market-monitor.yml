@@ -25,7 +25,14 @@ jobs:
       - name: Check whether an analyzed match reached a new checkpoint
         id: due
         shell: bash
-        run: echo "count=$(python scripts/prematch_market_monitor.py --count-due)" >> "$GITHUB_OUTPUT"
+        env:
+          TARGET_MATCH_ID: ${{ github.event.client_payload.match_id }}
+          TARGET_CHECKPOINT: ${{ github.event.client_payload.checkpoint }}
+        run: |
+          args=(--count-due)
+          [[ -n "$TARGET_MATCH_ID" ]] && args+=(--match-id "$TARGET_MATCH_ID")
+          [[ -n "$TARGET_CHECKPOINT" ]] && args+=(--checkpoint "$TARGET_CHECKPOINT")
+          echo "count=$(python scripts/prematch_market_monitor.py "${args[@]}")" >> "$GITHUB_OUTPUT"
       - uses: actions/setup-python@v5
         if: steps.due.outputs.count != '0'
         with:
@@ -35,7 +42,14 @@ jobs:
         run: pip install -r requirements.txt
       - name: Refresh analyzed matches at the eight pre-match checkpoints
         if: steps.due.outputs.count != '0'
-        run: python scripts/prematch_market_monitor.py
+        env:
+          TARGET_MATCH_ID: ${{ github.event.client_payload.match_id }}
+          TARGET_CHECKPOINT: ${{ github.event.client_payload.checkpoint }}
+        run: |
+          args=()
+          [[ -n "$TARGET_MATCH_ID" ]] && args+=(--match-id "$TARGET_MATCH_ID")
+          [[ -n "$TARGET_CHECKPOINT" ]] && args+=(--checkpoint "$TARGET_CHECKPOINT")
+          python scripts/prematch_market_monitor.py "${args[@]}"
       - name: Verify overdue results before publishing refreshed pages
         if: steps.due.outputs.count != '0'
         run: |
