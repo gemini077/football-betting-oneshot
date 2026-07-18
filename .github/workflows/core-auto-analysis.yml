@@ -9,7 +9,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: football-betting-oneshot-core-auto
+  group: football-betting-oneshot-write
   cancel-in-progress: false
 
 jobs:
@@ -34,6 +34,7 @@ jobs:
           git add -A -- data
           if ! git diff --cached --quiet; then
             git commit -m "auto-analyze core football events [skip ci]"
+            git stash push --include-untracked -m "ci-transient-untracked-files" || true
             git pull --rebase origin main
             git push
           fi

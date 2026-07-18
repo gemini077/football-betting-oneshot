@@ -26,7 +26,7 @@ permissions:
   id-token: write
 
 concurrency:
-  group: football-betting-oneshot-selected-analysis
+  group: football-betting-oneshot-write
   cancel-in-progress: false
 
 jobs:
@@ -84,6 +84,7 @@ jobs:
           git add data/analysis_jobs/diagnostics data/fetch_runs data/provider_match_crosswalk.json || true
           if ! git diff --cached --quiet; then
             git commit -m "diagnose failed football analysis [skip ci]"
+            git stash push --include-untracked -m "ci-transient-untracked-files" || true
             git pull --rebase origin main
             git push
           fi
