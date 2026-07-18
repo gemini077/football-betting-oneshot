@@ -589,6 +589,8 @@ def build(target_date: str, output_root: Path = OUTPUT) -> tuple[Path, Path]:
         kickoff = f"{row.get('matchDate')} {str(row.get('matchTime') or '')[:5]}"
         if match_should_be_finished(kickoff, generated):
             item = pending_completed_row(home, away, kickoff, report, output_dir, f"schedule-{key}", verified_results)
+            item["nowscore_id"] = row.get("nowscoreId")
+            item["provider_match_id"] = row.get("matchId")
             completed.append(item)
             completed_ids.add(str(item["id"]))
             continue
