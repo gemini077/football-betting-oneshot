@@ -1,0 +1,2915 @@
+{
+  "report": {
+    "model_name": "Football Betting OneShot",
+    "model_version": "v0.18.2",
+    "report_type": "确定性赛前分析",
+    "analysis_timestamp": "2026-07-18T14:38:35+00:00",
+    "final_execution_version": false,
+    "ai_provider": null,
+    "ai_model": null,
+    "market_checkpoint": {
+      "stage": "INITIAL",
+      "captured_at": "2026-07-18T14:38:35.596561+00:00",
+      "initial_capture": true
+    }
+  },
+  "match": {
+    "business_date": "2026-07-18",
+    "match_id": "500-1373106",
+    "home": "大田市民",
+    "away": "蔚山现代"
+  },
+  "decisions": {
+    "unique_primary_dimension": "胜平负：客胜（模型40.7%）",
+    "unique_score": "1-2",
+    "score_reasoning": "模型在可行比分区间内综合方向、总进球与双方进球情景后选择该落点（单格概率8.7%；符合客胜主剧本、落在总进球众数3、符合双方进球倾向），不是照抄最低赔率或市场第一。",
+    "mathematical_first": "90分钟主胜35.7%、平局23.6%、客胜40.7%；λ=1.52-1.64。",
+    "market_first": "多公司去水共识主胜7.9%、平局85.3%、客胜6.8%；大小球中轴4.50。",
+    "match_story": "双方预期进球接近，比赛更可能由先入球、定位球或临场换人打破均衡；总进球中枢偏高；早段进球会显著放大开放对攻和右尾比分风险；裁判剧本：蔡卓俊在6场公开样本中场均双方合计黄牌约5.50、红牌约0.17，比赛中断与红牌尾部风险偏高，领先方未必能平稳控场。",
+    "market_conflict": "模型对客胜的判断比多公司市场高33.9%，需要用阵容与临盘验证这部分分歧",
+    "score_vs_outcome_explanation": "唯一比分1-2只是单个比分格的最高点；胜平负主线客胜是多个比分格合计，二者不要求同方向。",
+    "maximum_error_points": [
+      "裁判公开样本的牌数与红牌率偏高，比分右尾和比赛状态突变风险高于基础泊松假设",
+      "若早段进球、红牌或比赛节奏偏离基准，总进球与比分尾部会同步变化",
+      "模型对客胜的判断比多公司市场高33.9%，需要用阵容与临盘验证这部分分歧",
+      "首发或关键伤停与当前假设不一致，会直接改变双方λ"
+    ],
+    "value_judgement": "仅完成模型概率与市场基线；须取得用户渠道即时赔率后才计算EV。",
+    "final_state": "空仓｜未锁单"
+  },
+  "model": {
+    "status": "确定性融合模型（可核验近期攻防 + 市场校准）",
+    "method": "recent_form_market_calibrated_poisson_v2",
+    "lambda_home": 1.5218,
+    "lambda_away": 1.6382,
+    "rho": 0.0,
+    "expected_goals": 3.16,
+    "probabilities": {
+      "home": 0.357244,
+      "draw": 0.235523,
+      "away": 0.407233
+    },
+    "total_goals_buckets": [
+      {
+        "goals": "0",
+        "probability": 0.042426
+      },
+      {
+        "goals": "1",
+        "probability": 0.134065
+      },
+      {
+        "goals": "2",
+        "probability": 0.211823
+      },
+      {
+        "goals": "3",
+        "probability": 0.22312
+      },
+      {
+        "goals": "4",
+        "probability": 0.176265
+      },
+      {
+        "goals": "5",
+        "probability": 0.1114
+      },
+      {
+        "goals": "6+",
+        "probability": 0.1009
+      }
+    ],
+    "btts": {
+      "yes": 0.629778,
+      "no": 0.370222,
+      "judgement": "双方进球偏是"
+    },
+    "score_probabilities": [
+      {
+        "score": "1-1",
+        "probability": 0.105768,
+        "fair_odds": 9.4547,
+        "rank": 1
+      },
+      {
+        "score": "1-2",
+        "probability": 0.086634,
+        "fair_odds": 11.5427,
+        "rank": 2
+      },
+      {
+        "score": "2-1",
+        "probability": 0.080479,
+        "fair_odds": 12.4256,
+        "rank": 3
+      },
+      {
+        "score": "0-1",
+        "probability": 0.069502,
+        "fair_odds": 14.3881,
+        "rank": 4
+      },
+      {
+        "score": "2-2",
+        "probability": 0.06592,
+        "fair_odds": 15.1699,
+        "rank": 5
+      },
+      {
+        "score": "1-0",
+        "probability": 0.064564,
+        "fair_odds": 15.4886,
+        "rank": 6
+      },
+      {
+        "score": "0-2",
+        "probability": 0.056929,
+        "fair_odds": 17.5658,
+        "rank": 7
+      },
+      {
+        "score": "2-0",
+        "probability": 0.049126,
+        "fair_odds": 20.3557,
+        "rank": 8
+      },
+      {
+        "score": "1-3",
+        "probability": 0.047308,
+        "fair_odds": 21.138,
+        "rank": 9
+      },
+      {
+        "score": "0-0",
+        "probability": 0.042426,
+        "fair_odds": 23.5706,
+        "rank": 10
+      }
+    ],
+    "total_line_analysis": [
+      {
+        "line": 2.5,
+        "over": {
+          "win_equivalent_probability": 0.611686,
+          "loss_equivalent_probability": 0.388314,
+          "push_equivalent_probability": 0.0,
+          "fair_odds": 1.6348
+        },
+        "under": {
+          "win_equivalent_probability": 0.388314,
+          "loss_equivalent_probability": 0.611686,
+          "push_equivalent_probability": 0.0,
+          "fair_odds": 2.5752
+        }
+      },
+      {
+        "line": 2.75,
+        "over": {
+          "win_equivalent_probability": 0.500125,
+          "loss_equivalent_probability": 0.388314,
+          "push_equivalent_probability": 0.11156,
+          "fair_odds": 1.7764
+        },
+        "under": {
+          "win_equivalent_probability": 0.388314,
+          "loss_equivalent_probability": 0.500125,
+          "push_equivalent_probability": 0.11156,
+          "fair_odds": 2.2879
+        }
+      },
+      {
+        "line": 3.0,
+        "over": {
+          "win_equivalent_probability": 0.388565,
+          "loss_equivalent_probability": 0.388314,
+          "push_equivalent_probability": 0.22312,
+          "fair_odds": 1.9994
+        },
+        "under": {
+          "win_equivalent_probability": 0.388314,
+          "loss_equivalent_probability": 0.388565,
+          "push_equivalent_probability": 0.22312,
+          "fair_odds": 2.0006
+        }
+      },
+      {
+        "line": 3.25,
+        "over": {
+          "win_equivalent_probability": 0.388565,
+          "loss_equivalent_probability": 0.499875,
+          "push_equivalent_probability": 0.11156,
+          "fair_odds": 2.2865
+        },
+        "under": {
+          "win_equivalent_probability": 0.499875,
+          "loss_equivalent_probability": 0.388565,
+          "push_equivalent_probability": 0.11156,
+          "fair_odds": 1.7773
+        }
+      },
+      {
+        "line": 3.5,
+        "over": {
+          "win_equivalent_probability": 0.388565,
+          "loss_equivalent_probability": 0.611435,
+          "push_equivalent_probability": 0.0,
+          "fair_odds": 2.5736
+        },
+        "under": {
+          "win_equivalent_probability": 0.611435,
+          "loss_equivalent_probability": 0.388565,
+          "push_equivalent_probability": 0.0,
+          "fair_odds": 1.6355
+        }
+      }
+    ],
+    "calibration": {
+      "form_lambda_home": 1.066667,
+      "form_lambda_away": 1.2,
+      "market_total_line_median": 4.5,
+      "market_probabilities": {
+        "home": 0.07936430244094435,
+        "draw": 0.8527525284359456,
+        "away": 0.06788316912311008
+      },
+      "form_weight": 0.6,
+      "market_weight": 0.4,
+      "form_source": "Nowscore近期赛事数据",
+      "venue_proxy_used": false
+    },
+    "limitations": [
+      "近期样本含不同赛事与对手强度，尚未完成逐队Elo/xG对手校正",
+      "确认首发、即时伤停、天气与临场战术需在开赛前另行修正",
+      "市场信息用于校准，因此该概率不是完全独立于赔率的纯基本面概率"
+    ]
+  },
+  "data_quality": {
+    "status": "模型已计算，临场信息待补",
+    "missing": [
+      "确认首发",
+      "即时伤停",
+      "用户渠道即时赔率"
+    ],
+    "notes": [
+      "近期攻防来源：Nowscore近期赛事数据。",
+      "模型数值由固定公式生成，DeepSeek不参与概率计算。"
+    ],
+    "overall": "FORM_AND_MARKET_MODEL"
+  },
+  "fundamentals": {
+    "status": "Nowscore赛前背景已核验",
+    "items": [
+      {
+        "label": "主队近10场",
+        "value": "3胜3平4负，进13球/失10球",
+        "source": "500.com赛前数据快照"
+      },
+      {
+        "label": "主队近10个主场",
+        "value": "1胜4平5负，进6球/失12球",
+        "source": "500.com赛前数据快照"
+      },
+      {
+        "label": "客队近10场",
+        "value": "4胜2平4负，进14球/失15球",
+        "source": "500.com赛前数据快照"
+      },
+      {
+        "label": "客队近10个客场",
+        "value": "4胜3平3负，进12球/失12球",
+        "source": "500.com赛前数据快照"
+      },
+      "教练：主队 黄善洪；客队 未提供。",
+      "裁判：蔡卓俊；公开执法样本 6 场。",
+      "Nowscore盘路历史已读取 60 场，仅作风格与盘口复核，不直接改写概率。",
+      "裁判剧本：蔡卓俊在6场公开样本中场均双方合计黄牌约5.50、红牌约0.17，比赛中断与红牌尾部风险偏高，领先方未必能平稳控场。"
+    ],
+    "structured_form": {
+      "status": "Nowscore赛前背景已核验",
+      "checked_at": "2026-07-18T14:38:35+00:00",
+      "items": [
+        {
+          "label": "主队近10场",
+          "value": "3胜3平4负，进13球/失10球",
+          "source": "500.com赛前数据快照"
+        },
+        {
+          "label": "主队近10个主场",
+          "value": "1胜4平5负，进6球/失12球",
+          "source": "500.com赛前数据快照"
+        },
+        {
+          "label": "客队近10场",
+          "value": "4胜2平4负，进14球/失15球",
+          "source": "500.com赛前数据快照"
+        },
+        {
+          "label": "客队近10个客场",
+          "value": "4胜3平3负，进12球/失12球",
+          "source": "500.com赛前数据快照"
+        },
+        "教练：主队 黄善洪；客队 未提供。",
+        "裁判：蔡卓俊；公开执法样本 6 场。",
+        "Nowscore盘路历史已读取 60 场，仅作风格与盘口复核，不直接改写概率。",
+        "裁判剧本：蔡卓俊在6场公开样本中场均双方合计黄牌约5.50、红牌约0.17，比赛中断与红牌尾部风险偏高，领先方未必能平稳控场。"
+      ],
+      "sources": [
+        "https://live.nowscore.com/info/coach/2929657.htm?l=1",
+        "https://live.nowscore.com/info/referee/2929657.htm?l=1",
+        "https://live.nowscore.com/panlu/2929657.html"
+      ],
+      "recent_form": {
+        "home_overall": {
+          "matches": 10,
+          "wins": 3,
+          "draws": 3,
+          "losses": 4,
+          "goals_for": 13,
+          "goals_against": 10
+        },
+        "home_home": {
+          "matches": 10,
+          "wins": 1,
+          "draws": 4,
+          "losses": 5,
+          "goals_for": 6,
+          "goals_against": 12
+        },
+        "away_overall": {
+          "matches": 10,
+          "wins": 4,
+          "draws": 2,
+          "losses": 4,
+          "goals_for": 14,
+          "goals_against": 15
+        },
+        "away_away": {
+          "matches": 10,
+          "wins": 4,
+          "draws": 3,
+          "losses": 3,
+          "goals_for": 12,
+          "goals_against": 12
+        }
+      },
+      "form_source": "500.com赛前数据快照",
+      "metric": "recent actual goals, not xG",
+      "nowscore_context": {
+        "coach": {
+          "home": {
+            "name": "黄善洪",
+            "birth_date": "1968-07-14",
+            "nationality": "韩国",
+            "coach_records": [
+              {
+                "competition_or_team": "韓K聯",
+                "matches": 41,
+                "wins": 16,
+                "draws": 9,
+                "losses": 16,
+                "goals_for": 58,
+                "goals_against": 51,
+                "points_per_match": 1.39,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "韓K聯",
+                "matches": 41,
+                "wins": 4,
+                "draws": 15,
+                "losses": 22,
+                "goals_for": 44,
+                "goals_against": 67,
+                "points_per_match": 0.66,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "韓K聯",
+                "matches": 94,
+                "wins": 44,
+                "draws": 25,
+                "losses": 25,
+                "goals_for": 126,
+                "goals_against": 96,
+                "points_per_match": 1.67,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "韓K聯",
+                "matches": 94,
+                "wins": 50,
+                "draws": 24,
+                "losses": 20,
+                "goals_for": 165,
+                "goals_against": 93,
+                "points_per_match": 1.85,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "韓K聯",
+                "matches": 35,
+                "wins": 14,
+                "draws": 14,
+                "losses": 7,
+                "goals_for": 49,
+                "goals_against": 35,
+                "points_per_match": 1.6,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "韓K聯",
+                "matches": 36,
+                "wins": 16,
+                "draws": 7,
+                "losses": 13,
+                "goals_for": 51,
+                "goals_against": 43,
+                "points_per_match": 1.53,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "韓K聯",
+                "matches": 40,
+                "wins": 15,
+                "draws": 13,
+                "losses": 12,
+                "goals_for": 46,
+                "goals_against": 45,
+                "points_per_match": 1.45,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "韓K聯",
+                "matches": 38,
+                "wins": 16,
+                "draws": 12,
+                "losses": 10,
+                "goals_for": 61,
+                "goals_against": 46,
+                "points_per_match": 1.58,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "球會友誼",
+                "matches": 4,
+                "wins": 1,
+                "draws": 3,
+                "losses": 0,
+                "goals_for": 3,
+                "goals_against": 2,
+                "points_per_match": 1.5,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "球會友誼",
+                "matches": 1,
+                "wins": 1,
+                "draws": 0,
+                "losses": 0,
+                "goals_for": 1,
+                "goals_against": 0,
+                "points_per_match": 3.0,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "球會友誼",
+                "matches": 5,
+                "wins": 2,
+                "draws": 1,
+                "losses": 2,
+                "goals_for": 6,
+                "goals_against": 6,
+                "points_per_match": 1.4,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "球會友誼",
+                "matches": 4,
+                "wins": 2,
+                "draws": 0,
+                "losses": 2,
+                "goals_for": 11,
+                "goals_against": 3,
+                "points_per_match": 1.5,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "球會友誼",
+                "matches": 2,
+                "wins": 1,
+                "draws": 0,
+                "losses": 1,
+                "goals_for": 1,
+                "goals_against": 1,
+                "points_per_match": 1.5,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "球會友誼",
+                "matches": 8,
+                "wins": 1,
+                "draws": 2,
+                "losses": 5,
+                "goals_for": 3,
+                "goals_against": 9,
+                "points_per_match": 0.62,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "球會友誼",
+                "matches": 1,
+                "wins": 1,
+                "draws": 0,
+                "losses": 0,
+                "goals_for": 2,
+                "goals_against": 1,
+                "points_per_match": 3.0,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "球會友誼",
+                "matches": 4,
+                "wins": 1,
+                "draws": 2,
+                "losses": 1,
+                "goals_for": 6,
+                "goals_against": 6,
+                "points_per_match": 1.25,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "球會友誼",
+                "matches": 2,
+                "wins": 1,
+                "draws": 1,
+                "losses": 0,
+                "goals_for": 4,
+                "goals_against": 3,
+                "points_per_match": 2.0,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "亞冠精英",
+                "matches": 11,
+                "wins": 6,
+                "draws": 2,
+                "losses": 3,
+                "goals_for": 16,
+                "goals_against": 10,
+                "points_per_match": 1.82,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "亞冠精英",
+                "matches": 12,
+                "wins": 4,
+                "draws": 7,
+                "losses": 1,
+                "goals_for": 11,
+                "goals_against": 7,
+                "points_per_match": 1.58,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "亞冠精英",
+                "matches": 5,
+                "wins": 3,
+                "draws": 0,
+                "losses": 2,
+                "goals_for": 8,
+                "goals_against": 6,
+                "points_per_match": 1.8,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "亞冠精英",
+                "matches": 5,
+                "wins": 1,
+                "draws": 1,
+                "losses": 3,
+                "goals_for": 9,
+                "goals_against": 16,
+                "points_per_match": 0.8,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "韓K盃",
+                "matches": 1,
+                "wins": 0,
+                "draws": 0,
+                "losses": 1,
+                "goals_for": 0,
+                "goals_against": 2,
+                "points_per_match": 0.0,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "亞運男足",
+                "matches": 5,
+                "wins": 5,
+                "draws": 0,
+                "losses": 0,
+                "goals_for": 21,
+                "goals_against": 3,
+                "points_per_match": 3.0,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "亞運男足",
+                "matches": 2,
+                "wins": 2,
+                "draws": 0,
+                "losses": 0,
+                "goals_for": 6,
+                "goals_against": 0,
+                "points_per_match": 3.0,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "韓聯盃",
+                "matches": 14,
+                "wins": 8,
+                "draws": 3,
+                "losses": 3,
+                "goals_for": 19,
+                "goals_against": 15,
+                "points_per_match": 1.93,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "韓聯盃",
+                "matches": 12,
+                "wins": 5,
+                "draws": 1,
+                "losses": 6,
+                "goals_for": 16,
+                "goals_against": 19,
+                "points_per_match": 1.33,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "韓聯盃",
+                "matches": 4,
+                "wins": 2,
+                "draws": 0,
+                "losses": 2,
+                "goals_for": 7,
+                "goals_against": 4,
+                "points_per_match": 1.5,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "韓聯盃",
+                "matches": 2,
+                "wins": 2,
+                "draws": 0,
+                "losses": 0,
+                "goals_for": 5,
+                "goals_against": 1,
+                "points_per_match": 3.0,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "韓國杯",
+                "matches": 7,
+                "wins": 3,
+                "draws": 2,
+                "losses": 2,
+                "goals_for": 9,
+                "goals_against": 6,
+                "points_per_match": 1.57,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "韓國杯",
+                "matches": 2,
+                "wins": 1,
+                "draws": 0,
+                "losses": 1,
+                "goals_for": 3,
+                "goals_against": 2,
+                "points_per_match": 1.5,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "韓國杯",
+                "matches": 9,
+                "wins": 3,
+                "draws": 4,
+                "losses": 2,
+                "goals_for": 13,
+                "goals_against": 12,
+                "points_per_match": 1.44,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "韓國杯",
+                "matches": 10,
+                "wins": 8,
+                "draws": 2,
+                "losses": 0,
+                "goals_for": 23,
+                "goals_against": 7,
+                "points_per_match": 2.6,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "韓國杯",
+                "matches": 5,
+                "wins": 3,
+                "draws": 2,
+                "losses": 0,
+                "goals_for": 5,
+                "goals_against": 1,
+                "points_per_match": 2.2,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "韓國杯",
+                "matches": 1,
+                "wins": 0,
+                "draws": 0,
+                "losses": 1,
+                "goals_for": 1,
+                "goals_against": 2,
+                "points_per_match": 0.0,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "韓國杯",
+                "matches": 3,
+                "wins": 2,
+                "draws": 1,
+                "losses": 0,
+                "goals_for": 6,
+                "goals_against": 1,
+                "points_per_match": 2.33,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "韓國杯",
+                "matches": 2,
+                "wins": 0,
+                "draws": 1,
+                "losses": 1,
+                "goals_for": 2,
+                "goals_against": 3,
+                "points_per_match": 0.5,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "韓國杯",
+                "matches": 1,
+                "wins": 1,
+                "draws": 0,
+                "losses": 0,
+                "goals_for": 2,
+                "goals_against": 1,
+                "points_per_match": 3.0,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "韓K2聯",
+                "matches": 9,
+                "wins": 4,
+                "draws": 3,
+                "losses": 2,
+                "goals_for": 14,
+                "goals_against": 13,
+                "points_per_match": 1.67,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "韓K2聯",
+                "matches": 9,
+                "wins": 4,
+                "draws": 3,
+                "losses": 2,
+                "goals_for": 12,
+                "goals_against": 10,
+                "points_per_match": 1.67,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "國際友誼",
+                "matches": 7,
+                "wins": 4,
+                "draws": 0,
+                "losses": 3,
+                "goals_for": 11,
+                "goals_against": 6,
+                "points_per_match": 1.71,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "國際友誼",
+                "matches": 3,
+                "wins": 0,
+                "draws": 2,
+                "losses": 1,
+                "goals_for": 1,
+                "goals_against": 2,
+                "points_per_match": 0.67,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "亞洲杯U23",
+                "matches": 5,
+                "wins": 4,
+                "draws": 1,
+                "losses": 0,
+                "goals_for": 11,
+                "goals_against": 1,
+                "points_per_match": 2.6,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "亞洲杯U23",
+                "matches": 8,
+                "wins": 6,
+                "draws": 0,
+                "losses": 2,
+                "goals_for": 17,
+                "goals_against": 7,
+                "points_per_match": 2.25,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "西亞青錦",
+                "matches": 2,
+                "wins": 1,
+                "draws": 1,
+                "losses": 0,
+                "goals_for": 3,
+                "goals_against": 2,
+                "points_per_match": 2.0,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "西亞青錦",
+                "matches": 1,
+                "wins": 1,
+                "draws": 0,
+                "losses": 0,
+                "goals_for": 1,
+                "goals_against": 0,
+                "points_per_match": 3.0,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "韓K聯",
+                "matches": 82,
+                "wins": 20,
+                "draws": 24,
+                "losses": 38,
+                "goals_for": 102,
+                "goals_against": 118,
+                "points_per_match": 1.02,
+                "venue_flag": ""
+              },
+              {
+                "competition_or_team": "韓K聯",
+                "matches": 188,
+                "wins": 94,
+                "draws": 49,
+                "losses": 45,
+                "goals_for": 291,
+                "goals_against": 189,
+                "points_per_match": 1.76,
+                "venue_flag": ""
+              },
+              {
+                "competition_or_team": "韓K聯",
+                "matches": 71,
+                "wins": 30,
+                "draws": 21,
+                "losses": 20,
+                "goals_for": 100,
+                "goals_against": 78,
+                "points_per_match": 1.56,
+                "venue_flag": ""
+              },
+              {
+                "competition_or_team": "韓K聯",
+                "matches": 78,
+                "wins": 31,
+                "draws": 25,
+                "losses": 22,
+                "goals_for": 107,
+                "goals_against": 91,
+                "points_per_match": 1.51,
+                "venue_flag": ""
+              },
+              {
+                "competition_or_team": "球會友誼",
+                "matches": 5,
+                "wins": 2,
+                "draws": 3,
+                "losses": 0,
+                "goals_for": 4,
+                "goals_against": 2,
+                "points_per_match": 1.8,
+                "venue_flag": ""
+              }
+            ],
+            "team_records": [
+              {
+                "competition_or_team": "釜山偶像",
+                "matches": 63,
+                "wins": 28,
+                "draws": 14,
+                "losses": 21,
+                "goals_for": 87,
+                "goals_against": 72,
+                "points_per_match": 1.56,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "釜山偶像",
+                "matches": 59,
+                "wins": 11,
+                "draws": 19,
+                "losses": 29,
+                "goals_for": 66,
+                "goals_against": 90,
+                "points_per_match": 0.88,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "浦項制鐵",
+                "matches": 120,
+                "wins": 57,
+                "draws": 31,
+                "losses": 32,
+                "goals_for": 171,
+                "goals_against": 122,
+                "points_per_match": 1.68,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "浦項制鐵",
+                "matches": 125,
+                "wins": 66,
+                "draws": 34,
+                "losses": 25,
+                "goals_for": 212,
+                "goals_against": 117,
+                "points_per_match": 1.86,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "FC首爾",
+                "matches": 47,
+                "wins": 21,
+                "draws": 16,
+                "losses": 10,
+                "goals_for": 63,
+                "goals_against": 43,
+                "points_per_match": 1.68,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "FC首爾",
+                "matches": 50,
+                "wins": 18,
+                "draws": 10,
+                "losses": 22,
+                "goals_for": 64,
+                "goals_against": 70,
+                "points_per_match": 1.28,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "大田市民",
+                "matches": 44,
+                "wins": 16,
+                "draws": 15,
+                "losses": 13,
+                "goals_for": 52,
+                "goals_against": 51,
+                "points_per_match": 1.43,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "大田市民",
+                "matches": 44,
+                "wins": 18,
+                "draws": 14,
+                "losses": 12,
+                "goals_for": 69,
+                "goals_against": 55,
+                "points_per_match": 1.55,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "延邊富德",
+                "matches": 1,
+                "wins": 1,
+                "draws": 0,
+                "losses": 0,
+                "goals_for": 2,
+                "goals_against": 1,
+                "points_per_match": 3.0,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "南韓U23",
+                "matches": 17,
+                "wins": 12,
+                "draws": 2,
+                "losses": 3,
+                "goals_for": 40,
+                "goals_against": 12,
+                "points_per_match": 2.24,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "南韓U23",
+                "matches": 16,
+                "wins": 11,
+                "draws": 2,
+                "losses": 3,
+                "goals_for": 31,
+                "goals_against": 9,
+                "points_per_match": 2.19,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "大田市民",
+                "matches": 12,
+                "wins": 6,
+                "draws": 4,
+                "losses": 2,
+                "goals_for": 20,
+                "goals_against": 14,
+                "points_per_match": 1.83,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "大田市民",
+                "matches": 9,
+                "wins": 4,
+                "draws": 3,
+                "losses": 2,
+                "goals_for": 12,
+                "goals_against": 10,
+                "points_per_match": 1.67,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "釜山偶像",
+                "matches": 122,
+                "wins": 39,
+                "draws": 33,
+                "losses": 50,
+                "goals_for": 153,
+                "goals_against": 162,
+                "points_per_match": 1.23,
+                "venue_flag": ""
+              },
+              {
+                "competition_or_team": "浦項制鐵",
+                "matches": 245,
+                "wins": 123,
+                "draws": 65,
+                "losses": 57,
+                "goals_for": 383,
+                "goals_against": 239,
+                "points_per_match": 1.77,
+                "venue_flag": ""
+              },
+              {
+                "competition_or_team": "FC首爾",
+                "matches": 97,
+                "wins": 39,
+                "draws": 26,
+                "losses": 32,
+                "goals_for": 127,
+                "goals_against": 113,
+                "points_per_match": 1.47,
+                "venue_flag": ""
+              },
+              {
+                "competition_or_team": "大田市民",
+                "matches": 88,
+                "wins": 34,
+                "draws": 29,
+                "losses": 25,
+                "goals_for": 121,
+                "goals_against": 106,
+                "points_per_match": 1.49,
+                "venue_flag": ""
+              },
+              {
+                "competition_or_team": "延邊富德",
+                "matches": 1,
+                "wins": 1,
+                "draws": 0,
+                "losses": 0,
+                "goals_for": 2,
+                "goals_against": 1,
+                "points_per_match": 3.0,
+                "venue_flag": ""
+              },
+              {
+                "competition_or_team": "南韓U23",
+                "matches": 33,
+                "wins": 23,
+                "draws": 4,
+                "losses": 6,
+                "goals_for": 71,
+                "goals_against": 21,
+                "points_per_match": 2.21,
+                "venue_flag": ""
+              },
+              {
+                "competition_or_team": "大田市民",
+                "matches": 21,
+                "wins": 10,
+                "draws": 7,
+                "losses": 4,
+                "goals_for": 32,
+                "goals_against": 24,
+                "points_per_match": 1.76,
+                "venue_flag": ""
+              },
+              {
+                "competition_or_team": "釜山偶像",
+                "matches": 63,
+                "wins": 28,
+                "draws": 14,
+                "losses": 21,
+                "goals_for": 87,
+                "goals_against": 72,
+                "points_per_match": 1.56,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "釜山偶像",
+                "matches": 59,
+                "wins": 11,
+                "draws": 19,
+                "losses": 29,
+                "goals_for": 66,
+                "goals_against": 90,
+                "points_per_match": 0.88,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "浦項制鐵",
+                "matches": 120,
+                "wins": 57,
+                "draws": 31,
+                "losses": 32,
+                "goals_for": 171,
+                "goals_against": 122,
+                "points_per_match": 1.68,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "浦項制鐵",
+                "matches": 125,
+                "wins": 66,
+                "draws": 34,
+                "losses": 25,
+                "goals_for": 212,
+                "goals_against": 117,
+                "points_per_match": 1.86,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "FC首爾",
+                "matches": 47,
+                "wins": 21,
+                "draws": 16,
+                "losses": 10,
+                "goals_for": 63,
+                "goals_against": 43,
+                "points_per_match": 1.68,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "FC首爾",
+                "matches": 50,
+                "wins": 18,
+                "draws": 10,
+                "losses": 22,
+                "goals_for": 64,
+                "goals_against": 70,
+                "points_per_match": 1.28,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "大田市民",
+                "matches": 56,
+                "wins": 22,
+                "draws": 19,
+                "losses": 15,
+                "goals_for": 72,
+                "goals_against": 65,
+                "points_per_match": 1.52,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "大田市民",
+                "matches": 53,
+                "wins": 22,
+                "draws": 17,
+                "losses": 14,
+                "goals_for": 81,
+                "goals_against": 65,
+                "points_per_match": 1.57,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "延邊富德",
+                "matches": 1,
+                "wins": 1,
+                "draws": 0,
+                "losses": 0,
+                "goals_for": 2,
+                "goals_against": 1,
+                "points_per_match": 3.0,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "南韓U23",
+                "matches": 17,
+                "wins": 12,
+                "draws": 2,
+                "losses": 3,
+                "goals_for": 40,
+                "goals_against": 12,
+                "points_per_match": 2.24,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "南韓U23",
+                "matches": 16,
+                "wins": 11,
+                "draws": 2,
+                "losses": 3,
+                "goals_for": 31,
+                "goals_against": 9,
+                "points_per_match": 2.19,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "釜山偶像",
+                "matches": 122,
+                "wins": 39,
+                "draws": 33,
+                "losses": 50,
+                "goals_for": 153,
+                "goals_against": 162,
+                "points_per_match": 1.23,
+                "venue_flag": ""
+              },
+              {
+                "competition_or_team": "浦項制鐵",
+                "matches": 245,
+                "wins": 123,
+                "draws": 65,
+                "losses": 57,
+                "goals_for": 383,
+                "goals_against": 239,
+                "points_per_match": 1.77,
+                "venue_flag": ""
+              },
+              {
+                "competition_or_team": "FC首爾",
+                "matches": 97,
+                "wins": 39,
+                "draws": 26,
+                "losses": 32,
+                "goals_for": 127,
+                "goals_against": 113,
+                "points_per_match": 1.47,
+                "venue_flag": ""
+              },
+              {
+                "competition_or_team": "大田市民",
+                "matches": 109,
+                "wins": 44,
+                "draws": 36,
+                "losses": 29,
+                "goals_for": 153,
+                "goals_against": 130,
+                "points_per_match": 1.54,
+                "venue_flag": ""
+              },
+              {
+                "competition_or_team": "延邊富德",
+                "matches": 1,
+                "wins": 1,
+                "draws": 0,
+                "losses": 0,
+                "goals_for": 2,
+                "goals_against": 1,
+                "points_per_match": 3.0,
+                "venue_flag": ""
+              },
+              {
+                "competition_or_team": "南韓U23",
+                "matches": 33,
+                "wins": 23,
+                "draws": 4,
+                "losses": 6,
+                "goals_for": 71,
+                "goals_against": 21,
+                "points_per_match": 2.21,
+                "venue_flag": ""
+              }
+            ]
+          },
+          "away": {
+            "name": "",
+            "birth_date": "",
+            "nationality": "",
+            "coach_records": [],
+            "team_records": []
+          }
+        },
+        "referee": {
+          "name": "蔡卓俊",
+          "birth_date": "",
+          "nationality": "韩国",
+          "summaries": [
+            {
+              "competition": "所有赛事",
+              "matches": 6,
+              "home": {
+                "side": "home",
+                "wins": 2,
+                "draws": 2,
+                "losses": 2,
+                "avg_fouls": 9.17,
+                "avg_yellow": 2.67,
+                "avg_red": 0.17,
+                "win_rate": "33%"
+              },
+              "away": {
+                "side": "away",
+                "wins": 2,
+                "draws": 2,
+                "losses": 2,
+                "avg_fouls": 15.17,
+                "avg_yellow": 2.83,
+                "avg_red": 0.0,
+                "win_rate": "33%"
+              }
+            }
+          ],
+          "home_team_history_count": 0,
+          "away_team_history_count": 0
+        },
+        "panlu": {
+          "matches": [
+            {
+              "match_id": 2929655,
+              "competition": "韓K聯",
+              "kickoff": "26-07-12 18:30",
+              "home_team": "濟州SK",
+              "away_team": "大田市民",
+              "home_team_id": 4075,
+              "away_team_id": 488,
+              "full_time": {
+                "home": 0,
+                "away": 0
+              },
+              "half_time": {
+                "home": 0,
+                "away": 0
+              },
+              "asian_line": 0,
+              "total_line": 2.25,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2929653,
+              "competition": "韓K聯",
+              "kickoff": "26-07-11 18:30",
+              "home_team": "蔚山HD",
+              "away_team": "全北汽車",
+              "home_team_id": 480,
+              "away_team_id": 484,
+              "full_time": {
+                "home": 1,
+                "away": 3
+              },
+              "half_time": {
+                "home": 0,
+                "away": 1
+              },
+              "asian_line": 0,
+              "total_line": 2.5,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2929649,
+              "competition": "韓K聯",
+              "kickoff": "26-07-05 18:30",
+              "home_team": "FC光州",
+              "away_team": "蔚山HD",
+              "home_team_id": 16584,
+              "away_team_id": 480,
+              "full_time": {
+                "home": 1,
+                "away": 1
+              },
+              "half_time": {
+                "home": 0,
+                "away": 0
+              },
+              "asian_line": -1,
+              "total_line": 2.5,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2929646,
+              "competition": "韓K聯",
+              "kickoff": "26-07-04 18:30",
+              "home_team": "大田市民",
+              "away_team": "富川FC",
+              "home_team_id": 488,
+              "away_team_id": 7800,
+              "full_time": {
+                "home": 2,
+                "away": 2
+              },
+              "half_time": {
+                "home": 0,
+                "away": 0
+              },
+              "asian_line": 0.75,
+              "total_line": 2.25,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2929644,
+              "competition": "韓K聯",
+              "kickoff": "26-05-17 18:00",
+              "home_team": "FC江原",
+              "away_team": "蔚山HD",
+              "home_team_id": 9945,
+              "away_team_id": 480,
+              "full_time": {
+                "home": 2,
+                "away": 0
+              },
+              "half_time": {
+                "home": 2,
+                "away": 0
+              },
+              "asian_line": 0.25,
+              "total_line": 2.25,
+              "provider_flags": [
+                0,
+                1
+              ]
+            },
+            {
+              "match_id": 2929639,
+              "competition": "韓K聯",
+              "kickoff": "26-05-16 15:30",
+              "home_team": "大田市民",
+              "away_team": "FC首爾",
+              "home_team_id": 488,
+              "away_team_id": 741,
+              "full_time": {
+                "home": 1,
+                "away": 2
+              },
+              "half_time": {
+                "home": 0,
+                "away": 1
+              },
+              "asian_line": 0,
+              "total_line": 2.25,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2929638,
+              "competition": "韓K聯",
+              "kickoff": "26-05-13 18:30",
+              "home_team": "蔚山HD",
+              "away_team": "濟州SK",
+              "home_team_id": 480,
+              "away_team_id": 4075,
+              "full_time": {
+                "home": 2,
+                "away": 1
+              },
+              "half_time": {
+                "home": 2,
+                "away": 0
+              },
+              "asian_line": 0.5,
+              "total_line": 2.25,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2929633,
+              "competition": "韓K聯",
+              "kickoff": "26-05-12 18:30",
+              "home_team": "FC江原",
+              "away_team": "大田市民",
+              "home_team_id": 9945,
+              "away_team_id": 488,
+              "full_time": {
+                "home": 2,
+                "away": 0
+              },
+              "half_time": {
+                "home": 0,
+                "away": 0
+              },
+              "asian_line": 0.25,
+              "total_line": 2.25,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2929631,
+              "competition": "韓K聯",
+              "kickoff": "26-05-10 13:00",
+              "home_team": "蔚山HD",
+              "away_team": "富川FC",
+              "home_team_id": 480,
+              "away_team_id": 7800,
+              "full_time": {
+                "home": 1,
+                "away": 0
+              },
+              "half_time": {
+                "home": 1,
+                "away": 0
+              },
+              "asian_line": 0.75,
+              "total_line": 2.5,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2929630,
+              "competition": "韓K聯",
+              "kickoff": "26-05-09 18:00",
+              "home_team": "大田市民",
+              "away_team": "浦項制鐵",
+              "home_team_id": 488,
+              "away_team_id": 481,
+              "full_time": {
+                "home": 0,
+                "away": 2
+              },
+              "half_time": {
+                "home": 0,
+                "away": 0
+              },
+              "asian_line": 0.25,
+              "total_line": 2.25,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2929625,
+              "competition": "韓K聯",
+              "kickoff": "26-05-05 15:30",
+              "home_team": "金泉尚武",
+              "away_team": "蔚山HD",
+              "home_team_id": 494,
+              "away_team_id": 480,
+              "full_time": {
+                "home": 1,
+                "away": 2
+              },
+              "half_time": {
+                "home": 0,
+                "away": 1
+              },
+              "asian_line": 0,
+              "total_line": 2.5,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2929623,
+              "competition": "韓K聯",
+              "kickoff": "26-05-05 15:30",
+              "home_team": "大田市民",
+              "away_team": "仁川聯",
+              "home_team_id": 488,
+              "away_team_id": 497,
+              "full_time": {
+                "home": 0,
+                "away": 0
+              },
+              "half_time": {
+                "home": 0,
+                "away": 0
+              },
+              "asian_line": 0.25,
+              "total_line": 2.25,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2929620,
+              "competition": "韓K聯",
+              "kickoff": "26-05-02 18:00",
+              "home_team": "FC光州",
+              "away_team": "大田市民",
+              "home_team_id": 16584,
+              "away_team_id": 488,
+              "full_time": {
+                "home": 0,
+                "away": 5
+              },
+              "half_time": {
+                "home": 0,
+                "away": 2
+              },
+              "asian_line": -0.5,
+              "total_line": 2.25,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2929616,
+              "competition": "韓K聯",
+              "kickoff": "26-05-02 13:00",
+              "home_team": "蔚山HD",
+              "away_team": "浦項制鐵",
+              "home_team_id": 480,
+              "away_team_id": 481,
+              "full_time": {
+                "home": 0,
+                "away": 1
+              },
+              "half_time": {
+                "home": 0,
+                "away": 0
+              },
+              "asian_line": 0.5,
+              "total_line": 2.25,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2929614,
+              "competition": "韓K聯",
+              "kickoff": "26-04-26 15:30",
+              "home_team": "蔚山HD",
+              "away_team": "大田市民",
+              "home_team_id": 480,
+              "away_team_id": 488,
+              "full_time": {
+                "home": 1,
+                "away": 4
+              },
+              "half_time": {
+                "home": 0,
+                "away": 3
+              },
+              "asian_line": 0.25,
+              "total_line": 2.5,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2929607,
+              "competition": "韓K聯",
+              "kickoff": "26-04-22 18:30",
+              "home_team": "大田市民",
+              "away_team": "濟州SK",
+              "home_team_id": 488,
+              "away_team_id": 4075,
+              "full_time": {
+                "home": 0,
+                "away": 1
+              },
+              "half_time": {
+                "home": 0,
+                "away": 1
+              },
+              "asian_line": 0.75,
+              "total_line": 2.5,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2929606,
+              "competition": "韓K聯",
+              "kickoff": "26-04-22 18:30",
+              "home_team": "FC安養",
+              "away_team": "蔚山HD",
+              "home_team_id": 21249,
+              "away_team_id": 480,
+              "full_time": {
+                "home": 1,
+                "away": 1
+              },
+              "half_time": {
+                "home": 1,
+                "away": 0
+              },
+              "asian_line": -0.25,
+              "total_line": 2.25,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2929601,
+              "competition": "韓K聯",
+              "kickoff": "26-04-19 13:00",
+              "home_team": "蔚山HD",
+              "away_team": "FC光州",
+              "home_team_id": 480,
+              "away_team_id": 16584,
+              "full_time": {
+                "home": 5,
+                "away": 1
+              },
+              "half_time": {
+                "home": 2,
+                "away": 1
+              },
+              "asian_line": 1,
+              "total_line": 2.5,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2929598,
+              "competition": "韓K聯",
+              "kickoff": "26-04-18 13:00",
+              "home_team": "FC首爾",
+              "away_team": "大田市民",
+              "home_team_id": 741,
+              "away_team_id": 488,
+              "full_time": {
+                "home": 0,
+                "away": 1
+              },
+              "half_time": {
+                "home": 0,
+                "away": 1
+              },
+              "asian_line": 0.5,
+              "total_line": 2.5,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2929562,
+              "competition": "韓K聯",
+              "kickoff": "26-04-15 18:30",
+              "home_team": "蔚山HD",
+              "away_team": "FC首爾",
+              "home_team_id": 480,
+              "away_team_id": 741,
+              "full_time": {
+                "home": 1,
+                "away": 4
+              },
+              "half_time": {
+                "home": 0,
+                "away": 3
+              },
+              "asian_line": 0,
+              "total_line": 2.5,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2929595,
+              "competition": "韓K聯",
+              "kickoff": "26-04-12 13:00",
+              "home_team": "大田市民",
+              "away_team": "FC江原",
+              "home_team_id": 488,
+              "away_team_id": 9945,
+              "full_time": {
+                "home": 0,
+                "away": 2
+              },
+              "half_time": {
+                "home": 0,
+                "away": 1
+              },
+              "asian_line": 0.25,
+              "total_line": 2.25,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2929594,
+              "competition": "韓K聯",
+              "kickoff": "26-04-11 15:30",
+              "home_team": "仁川聯",
+              "away_team": "蔚山HD",
+              "home_team_id": 497,
+              "away_team_id": 480,
+              "full_time": {
+                "home": 1,
+                "away": 2
+              },
+              "half_time": {
+                "home": 0,
+                "away": 1
+              },
+              "asian_line": 0,
+              "total_line": 2.25,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2929588,
+              "competition": "韓K聯",
+              "kickoff": "26-04-04 15:30",
+              "home_team": "浦項制鐵",
+              "away_team": "大田市民",
+              "home_team_id": 481,
+              "away_team_id": 488,
+              "full_time": {
+                "home": 1,
+                "away": 0
+              },
+              "half_time": {
+                "home": 1,
+                "away": 0
+              },
+              "asian_line": 0,
+              "total_line": 2.25,
+              "provider_flags": [
+                0,
+                1
+              ]
+            },
+            {
+              "match_id": 2929586,
+              "competition": "韓K聯",
+              "kickoff": "26-04-04 13:00",
+              "home_team": "全北汽車",
+              "away_team": "蔚山HD",
+              "home_team_id": 484,
+              "away_team_id": 480,
+              "full_time": {
+                "home": 2,
+                "away": 0
+              },
+              "half_time": {
+                "home": 1,
+                "away": 0
+              },
+              "asian_line": 0.25,
+              "total_line": 2.5,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2929581,
+              "competition": "韓K聯",
+              "kickoff": "26-03-22 13:00",
+              "home_team": "蔚山HD",
+              "away_team": "金泉尚武",
+              "home_team_id": 480,
+              "away_team_id": 494,
+              "full_time": {
+                "home": 0,
+                "away": 0
+              },
+              "half_time": {
+                "home": 0,
+                "away": 0
+              },
+              "asian_line": 0.25,
+              "total_line": 2.5,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2929579,
+              "competition": "韓K聯",
+              "kickoff": "26-03-21 13:00",
+              "home_team": "大田市民",
+              "away_team": "全北汽車",
+              "home_team_id": 488,
+              "away_team_id": 484,
+              "full_time": {
+                "home": 0,
+                "away": 1
+              },
+              "half_time": {
+                "home": 0,
+                "away": 1
+              },
+              "asian_line": 0,
+              "total_line": 2.5,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2929576,
+              "competition": "韓K聯",
+              "kickoff": "26-03-18 18:30",
+              "home_team": "濟州SK",
+              "away_team": "蔚山HD",
+              "home_team_id": 4075,
+              "away_team_id": 480,
+              "full_time": {
+                "home": 0,
+                "away": 2
+              },
+              "half_time": {
+                "home": 0,
+                "away": 0
+              },
+              "asian_line": 0,
+              "total_line": 2.5,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2929575,
+              "competition": "韓K聯",
+              "kickoff": "26-03-18 18:30",
+              "home_team": "仁川聯",
+              "away_team": "大田市民",
+              "home_team_id": 497,
+              "away_team_id": 488,
+              "full_time": {
+                "home": 1,
+                "away": 3
+              },
+              "half_time": {
+                "home": 1,
+                "away": 1
+              },
+              "asian_line": 0,
+              "total_line": 2.25,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2929569,
+              "competition": "韓K聯",
+              "kickoff": "26-03-15 13:00",
+              "home_team": "富川FC",
+              "away_team": "蔚山HD",
+              "home_team_id": 7800,
+              "away_team_id": 480,
+              "full_time": {
+                "home": 1,
+                "away": 2
+              },
+              "half_time": {
+                "home": 1,
+                "away": 1
+              },
+              "asian_line": -0.5,
+              "total_line": 2.25,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2929568,
+              "competition": "韓K聯",
+              "kickoff": "26-03-14 15:30",
+              "home_team": "大田市民",
+              "away_team": "金泉尚武",
+              "home_team_id": 488,
+              "away_team_id": 494,
+              "full_time": {
+                "home": 1,
+                "away": 1
+              },
+              "half_time": {
+                "home": 0,
+                "away": 1
+              },
+              "asian_line": 0.25,
+              "total_line": 2.5,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2929563,
+              "competition": "韓K聯",
+              "kickoff": "26-03-07 15:30",
+              "home_team": "富川FC",
+              "away_team": "大田市民",
+              "home_team_id": 7800,
+              "away_team_id": 488,
+              "full_time": {
+                "home": 1,
+                "away": 1
+              },
+              "half_time": {
+                "home": 0,
+                "away": 0
+              },
+              "asian_line": -0.25,
+              "total_line": 2.5,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2921963,
+              "competition": "韓K聯",
+              "kickoff": "26-03-02 13:00",
+              "home_team": "大田市民",
+              "away_team": "FC安養",
+              "home_team_id": 488,
+              "away_team_id": 21249,
+              "full_time": {
+                "home": 1,
+                "away": 1
+              },
+              "half_time": {
+                "home": 0,
+                "away": 0
+              },
+              "asian_line": 0.5,
+              "total_line": 2.5,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2921959,
+              "competition": "韓K聯",
+              "kickoff": "26-02-28 13:00",
+              "home_team": "蔚山HD",
+              "away_team": "FC江原",
+              "home_team_id": 480,
+              "away_team_id": 9945,
+              "full_time": {
+                "home": 3,
+                "away": 1
+              },
+              "half_time": {
+                "home": 2,
+                "away": 0
+              },
+              "asian_line": 0.25,
+              "total_line": 2.25,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2947478,
+              "competition": "韓K盃",
+              "kickoff": "26-02-21 13:00",
+              "home_team": "全北汽車",
+              "away_team": "大田市民",
+              "home_team_id": 484,
+              "away_team_id": 488,
+              "full_time": {
+                "home": 2,
+                "away": 0
+              },
+              "half_time": {
+                "home": 1,
+                "away": 0
+              },
+              "asian_line": 0.75,
+              "total_line": 2.5,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2860642,
+              "competition": "亞冠精英",
+              "kickoff": "26-02-18 18:00",
+              "home_team": "上海海港",
+              "away_team": "蔚山HD",
+              "home_team_id": 7642,
+              "away_team_id": 480,
+              "full_time": {
+                "home": 0,
+                "away": 0
+              },
+              "half_time": {
+                "home": 0,
+                "away": 0
+              },
+              "asian_line": -0.75,
+              "total_line": 2.75,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2860636,
+              "competition": "亞冠精英",
+              "kickoff": "26-02-11 18:00",
+              "home_team": "蔚山HD",
+              "away_team": "墨爾本城",
+              "home_team_id": 480,
+              "away_team_id": 14549,
+              "full_time": {
+                "home": 1,
+                "away": 2
+              },
+              "half_time": {
+                "home": 0,
+                "away": 1
+              },
+              "asian_line": 0.5,
+              "total_line": 2.5,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2936784,
+              "competition": "球會友誼",
+              "kickoff": "26-02-05 18:00",
+              "home_team": "桑恩達",
+              "away_team": "大田市民",
+              "home_team_id": 512,
+              "away_team_id": 488,
+              "full_time": {
+                "home": 1,
+                "away": 1
+              },
+              "half_time": {
+                "home": 0,
+                "away": 0
+              },
+              "asian_line": -0.25,
+              "total_line": 2.25,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2930210,
+              "competition": "球會友誼",
+              "kickoff": "26-02-01 19:00",
+              "home_team": "大田市民",
+              "away_team": "韋斯特羅斯",
+              "home_team_id": 488,
+              "away_team_id": 1525,
+              "full_time": {
+                "home": 1,
+                "away": 0
+              },
+              "half_time": {
+                "home": 0,
+                "away": 0
+              },
+              "asian_line": 0.25,
+              "total_line": 2.75,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2923271,
+              "competition": "球會友誼",
+              "kickoff": "26-01-20 18:00",
+              "home_team": "卡帕提",
+              "away_team": "大田市民",
+              "home_team_id": 3257,
+              "away_team_id": 488,
+              "full_time": {
+                "home": 1,
+                "away": 2
+              },
+              "half_time": {
+                "home": 1,
+                "away": 1
+              },
+              "asian_line": 0.25,
+              "total_line": 2.5,
+              "provider_flags": [
+                1,
+                1
+              ]
+            },
+            {
+              "match_id": 2860625,
+              "competition": "亞冠精英",
+              "kickoff": "25-12-09 18:00",
+              "home_team": "町田澤維亞",
+              "away_team": "蔚山HD",
+              "home_team_id": 10035,
+              "away_team_id": 480,
+              "full_time": {
+                "home": 3,
+                "away": 1
+              },
+              "half_time": {
+                "home": 2,
+                "away": 0
+              },
+              "asian_line": 1,
+              "total_line": 2.75,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2892306,
+              "competition": "韓K聯",
+              "kickoff": "25-11-30 15:30",
+              "home_team": "金泉尚武",
+              "away_team": "大田市民",
+              "home_team_id": 494,
+              "away_team_id": 488,
+              "full_time": {
+                "home": 0,
+                "away": 3
+              },
+              "half_time": {
+                "home": 0,
+                "away": 1
+              },
+              "asian_line": 0,
+              "total_line": 2.75,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2892322,
+              "competition": "韓K聯",
+              "kickoff": "25-11-30 13:00",
+              "home_team": "蔚山HD",
+              "away_team": "濟州SK",
+              "home_team_id": 480,
+              "away_team_id": 4075,
+              "full_time": {
+                "home": 0,
+                "away": 1
+              },
+              "half_time": {
+                "home": 0,
+                "away": 0
+              },
+              "asian_line": 0.75,
+              "total_line": 2.75,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2860623,
+              "competition": "亞冠精英",
+              "kickoff": "25-11-26 18:00",
+              "home_team": "蔚山HD",
+              "away_team": "武里南聯",
+              "home_team_id": 480,
+              "away_team_id": 4028,
+              "full_time": {
+                "home": 0,
+                "away": 0
+              },
+              "half_time": {
+                "home": 0,
+                "away": 0
+              },
+              "asian_line": 0.25,
+              "total_line": 2.75,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2892318,
+              "competition": "韓K聯",
+              "kickoff": "25-11-22 15:30",
+              "home_team": "FC光州",
+              "away_team": "蔚山HD",
+              "home_team_id": 16584,
+              "away_team_id": 480,
+              "full_time": {
+                "home": 2,
+                "away": 0
+              },
+              "half_time": {
+                "home": 1,
+                "away": 0
+              },
+              "asian_line": 0,
+              "total_line": 2.5,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2892302,
+              "competition": "韓K聯",
+              "kickoff": "25-11-22 13:00",
+              "home_team": "大田市民",
+              "away_team": "FC江原",
+              "home_team_id": 488,
+              "away_team_id": 9945,
+              "full_time": {
+                "home": 1,
+                "away": 1
+              },
+              "half_time": {
+                "home": 1,
+                "away": 0
+              },
+              "asian_line": 0.25,
+              "total_line": 2.5,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2892316,
+              "competition": "韓K聯",
+              "kickoff": "25-11-09 15:30",
+              "home_team": "蔚山HD",
+              "away_team": "水原FC",
+              "home_team_id": 480,
+              "away_team_id": 5586,
+              "full_time": {
+                "home": 1,
+                "away": 0
+              },
+              "half_time": {
+                "home": 0,
+                "away": 0
+              },
+              "asian_line": 0.5,
+              "total_line": 3,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2892300,
+              "competition": "韓K聯",
+              "kickoff": "25-11-08 15:30",
+              "home_team": "全北汽車",
+              "away_team": "大田市民",
+              "home_team_id": 484,
+              "away_team_id": 488,
+              "full_time": {
+                "home": 3,
+                "away": 1
+              },
+              "half_time": {
+                "home": 0,
+                "away": 0
+              },
+              "asian_line": 0.5,
+              "total_line": 2.75,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2860617,
+              "competition": "亞冠精英",
+              "kickoff": "25-11-05 18:00",
+              "home_team": "神戶勝利船",
+              "away_team": "蔚山HD",
+              "home_team_id": 203,
+              "away_team_id": 480,
+              "full_time": {
+                "home": 1,
+                "away": 0
+              },
+              "half_time": {
+                "home": 0,
+                "away": 0
+              },
+              "asian_line": 1,
+              "total_line": 2.75,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2892311,
+              "competition": "韓K聯",
+              "kickoff": "25-11-01 15:30",
+              "home_team": "FC安養",
+              "away_team": "蔚山HD",
+              "home_team_id": 21249,
+              "away_team_id": 480,
+              "full_time": {
+                "home": 3,
+                "away": 1
+              },
+              "half_time": {
+                "home": 1,
+                "away": 1
+              },
+              "asian_line": -0.25,
+              "total_line": 2.5,
+              "provider_flags": [
+                0,
+                1
+              ]
+            },
+            {
+              "match_id": 2892296,
+              "competition": "韓K聯",
+              "kickoff": "25-11-01 13:00",
+              "home_team": "大田市民",
+              "away_team": "FC首爾",
+              "home_team_id": 488,
+              "away_team_id": 741,
+              "full_time": {
+                "home": 3,
+                "away": 1
+              },
+              "half_time": {
+                "home": 0,
+                "away": 0
+              },
+              "asian_line": 0,
+              "total_line": 2.75,
+              "provider_flags": [
+                0,
+                0
+              ]
+            }
+          ],
+          "count": 60
+        },
+        "script_context": {
+          "coach": {
+            "home_record": {
+              "competition_or_team": "浦項制鐵",
+              "matches": 125,
+              "wins": 66,
+              "draws": 34,
+              "losses": 25,
+              "goals_for": 212,
+              "goals_against": 117,
+              "points_per_match": 1.86,
+              "venue_flag": "1"
+            },
+            "away_record": {}
+          },
+          "referee": {
+            "name": "蔡卓俊",
+            "sample": 6,
+            "combined_yellow": 5.5,
+            "combined_red": 0.17
+          },
+          "effects": [
+            "裁判剧本：蔡卓俊在6场公开样本中场均双方合计黄牌约5.50、红牌约0.17，比赛中断与红牌尾部风险偏高，领先方未必能平稳控场。"
+          ],
+          "risks": [
+            "裁判公开样本的牌数与红牌率偏高，比分右尾和比赛状态突变风险高于基础泊松假设"
+          ],
+          "model_usage": "match_script_and_uncertainty_only_not_probability_override"
+        },
+        "items": [
+          "教练：主队 黄善洪；客队 未提供。",
+          "裁判：蔡卓俊；公开执法样本 6 场。",
+          "Nowscore盘路历史已读取 60 场，仅作风格与盘口复核，不直接改写概率。",
+          "裁判剧本：蔡卓俊在6场公开样本中场均双方合计黄牌约5.50、红牌约0.17，比赛中断与红牌尾部风险偏高，领先方未必能平稳控场。"
+        ],
+        "status": "Nowscore赛前背景已核验",
+        "sources": [
+          "https://live.nowscore.com/info/coach/2929657.htm?l=1",
+          "https://live.nowscore.com/info/referee/2929657.htm?l=1",
+          "https://live.nowscore.com/panlu/2929657.html"
+        ]
+      }
+    },
+    "sources": [
+      "https://live.nowscore.com/info/coach/2929657.htm?l=1",
+      "https://live.nowscore.com/info/referee/2929657.htm?l=1",
+      "https://live.nowscore.com/panlu/2929657.html"
+    ]
+  },
+  "evidence_chain": [
+    {
+      "title": "足球维度",
+      "items": [
+        "主队近10个主场1胜4平5负，客队近10个客场4胜3平3负",
+        "近期主客场攻防推导λ：主队1.07，客队1.20",
+        "双方预期进球接近，比赛更可能由先入球、定位球或临场换人打破均衡；总进球中枢偏高；早段进球会显著放大开放对攻和右尾比分风险；裁判剧本：蔡卓俊在6场公开样本中场均双方合计黄牌约5.50、红牌约0.17，比赛中断与红牌尾部风险偏高，领先方未必能平稳控场。"
+      ]
+    },
+    {
+      "title": "教练、裁判与历史盘路",
+      "items": [
+        "教练：主队 黄善洪；客队 未提供。",
+        "裁判：蔡卓俊；公开执法样本 6 场。",
+        "Nowscore盘路历史已读取 60 场，仅作风格与盘口复核，不直接改写概率。",
+        "裁判剧本：蔡卓俊在6场公开样本中场均双方合计黄牌约5.50、红牌约0.17，比赛中断与红牌尾部风险偏高，领先方未必能平稳控场。",
+        "这些信息用于解释比赛脚本与风险点；在完成历史校准前，不直接机械增减胜平负概率。"
+      ]
+    },
+    {
+      "title": "市场维度",
+      "items": [
+        "去水共识：主胜7.9%、平局85.3%、客胜6.8%",
+        "大小球中轴：4.5；市场占40%校准权重，不替代模型。",
+        "模型对客胜的判断比多公司市场高33.9%，需要用阵容与临盘验证这部分分歧"
+      ]
+    },
+    {
+      "title": "执行维度",
+      "items": [
+        "每个玩法分别展示当前价、模型概率、EV与最低可接受赔率；低于门槛一律不过线。",
+        "执行价额外要求8%安全边际；模型包含市场校准，因此正EV只是价格复核信号。",
+        "唯一比分1-2只是单个比分格的最高点；胜平负主线客胜是多个比分格合计，二者不要求同方向。"
+      ]
+    },
+    {
+      "title": "模型与临场核验",
+      "items": [
+        "公开事实核验状态：Nowscore赛前背景已核验。",
+        "确认首发、关键伤停、天气或盘口换线与假设冲突时，必须重算而非沿用旧报告。"
+      ]
+    }
+  ],
+  "betting": {
+    "candidates": [],
+    "state": "空仓｜未锁单",
+    "execution_authorized": false,
+    "lock_state_changed": false,
+    "bankroll_state_changed": false,
+    "price_audit": [
+      {
+        "market": "SPF主胜",
+        "model_probability": 0.357244,
+        "conservative_probability": 0.282244,
+        "minimum_acceptable_decimal_odds": 3.826,
+        "odds": null,
+        "ev": null,
+        "audit_role": "模型价格门槛，不是投注指令"
+      },
+      {
+        "market": "SPF平局",
+        "model_probability": 0.235523,
+        "conservative_probability": 0.160523,
+        "minimum_acceptable_decimal_odds": 6.728,
+        "odds": null,
+        "ev": null,
+        "audit_role": "模型价格门槛，不是投注指令"
+      },
+      {
+        "market": "SPF客胜",
+        "model_probability": 0.407233,
+        "conservative_probability": 0.332233,
+        "minimum_acceptable_decimal_odds": 3.251,
+        "odds": null,
+        "ev": null,
+        "audit_role": "模型价格门槛，不是投注指令"
+      },
+      {
+        "market": "澳门 大4.5",
+        "model_probability": 0.2123,
+        "push_probability": 0.0,
+        "odds": 2.35,
+        "ev": -0.501095,
+        "minimum_acceptable_decimal_odds": 5.087,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "澳门 小4.5",
+        "model_probability": 0.7877,
+        "push_probability": 0.0,
+        "odds": 1.35,
+        "ev": 0.063395,
+        "minimum_acceptable_decimal_odds": 1.371,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "皇冠 大4.5",
+        "model_probability": 0.2123,
+        "push_probability": 0.0,
+        "odds": 7.25,
+        "ev": 0.539175,
+        "minimum_acceptable_decimal_odds": 5.087,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "皇冠 小4.5",
+        "model_probability": 0.7877,
+        "push_probability": 0.0,
+        "odds": 1.02,
+        "ev": -0.196546,
+        "minimum_acceptable_decimal_odds": 1.371,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "立博 大2.5",
+        "model_probability": 0.611686,
+        "push_probability": 0.0,
+        "odds": 1.14,
+        "ev": -0.302678,
+        "minimum_acceptable_decimal_odds": 1.766,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "立博 小2.5",
+        "model_probability": 0.388314,
+        "push_probability": 0.0,
+        "odds": 4.6,
+        "ev": 0.786246,
+        "minimum_acceptable_decimal_odds": 2.781,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "bet365 大4.5",
+        "model_probability": 0.2123,
+        "push_probability": 0.0,
+        "odds": 5.9,
+        "ev": 0.25257,
+        "minimum_acceptable_decimal_odds": 5.087,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "bet365 小4.5",
+        "model_probability": 0.7877,
+        "push_probability": 0.0,
+        "odds": 1.13,
+        "ev": -0.109899,
+        "minimum_acceptable_decimal_odds": 1.371,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "威廉希尔 大4.5",
+        "model_probability": 0.2123,
+        "push_probability": 0.0,
+        "odds": 10.0,
+        "ev": 1.123,
+        "minimum_acceptable_decimal_odds": 5.087,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "威廉希尔 小4.5",
+        "model_probability": 0.7877,
+        "push_probability": 0.0,
+        "odds": 1.04,
+        "ev": -0.180792,
+        "minimum_acceptable_decimal_odds": 1.371,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "易胜博 大4.5",
+        "model_probability": 0.2123,
+        "push_probability": 0.0,
+        "odds": 6.3,
+        "ev": 0.33749,
+        "minimum_acceptable_decimal_odds": 5.087,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "易胜博 小4.5",
+        "model_probability": 0.7877,
+        "push_probability": 0.0,
+        "odds": 1.02,
+        "ev": -0.196546,
+        "minimum_acceptable_decimal_odds": 1.371,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "澳门 主-0",
+        "model_probability": 0.357244,
+        "push_probability": 0.235523,
+        "odds": 1.82,
+        "ev": -0.114293,
+        "minimum_acceptable_decimal_odds": 2.311,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "澳门 客+0",
+        "model_probability": 0.407233,
+        "push_probability": 0.235523,
+        "odds": 1.94,
+        "ev": 0.025555,
+        "minimum_acceptable_decimal_odds": 2.027,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "皇冠 主-0.25",
+        "model_probability": 0.357244,
+        "push_probability": 0.117762,
+        "odds": 8.14,
+        "ev": 2.025726,
+        "minimum_acceptable_decimal_odds": 2.667,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "皇冠 客+0.25",
+        "model_probability": 0.524994,
+        "push_probability": 0.117762,
+        "odds": 1.02,
+        "ev": -0.346744,
+        "minimum_acceptable_decimal_odds": 1.815,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "bet365 主-0",
+        "model_probability": 0.357244,
+        "push_probability": 0.235523,
+        "odds": 1.53,
+        "ev": -0.217894,
+        "minimum_acceptable_decimal_odds": 2.311,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "bet365 客+0",
+        "model_probability": 0.407233,
+        "push_probability": 0.235523,
+        "odds": 2.43,
+        "ev": 0.225099,
+        "minimum_acceptable_decimal_odds": 2.027,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "威廉希尔 主-0.5",
+        "model_probability": 0.357244,
+        "push_probability": 0.0,
+        "odds": 2.4,
+        "ev": -0.142615,
+        "minimum_acceptable_decimal_odds": 3.023,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "威廉希尔 客+0.5",
+        "model_probability": 0.642756,
+        "push_probability": 0.0,
+        "odds": 1.53,
+        "ev": -0.016583,
+        "minimum_acceptable_decimal_odds": 1.68,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "易胜博 主-0",
+        "model_probability": 0.357244,
+        "push_probability": 0.235523,
+        "odds": 1.74,
+        "ev": -0.142872,
+        "minimum_acceptable_decimal_odds": 2.311,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "易胜博 客+0",
+        "model_probability": 0.407233,
+        "push_probability": 0.235523,
+        "odds": 2.21,
+        "ev": 0.135508,
+        "minimum_acceptable_decimal_odds": 2.027,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "伟德 主-0",
+        "model_probability": 0.357244,
+        "push_probability": 0.235523,
+        "odds": 1.7,
+        "ev": -0.157162,
+        "minimum_acceptable_decimal_odds": 2.311,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "伟德 客+0",
+        "model_probability": 0.407233,
+        "push_probability": 0.235523,
+        "odds": 2.13,
+        "ev": 0.102929,
+        "minimum_acceptable_decimal_odds": 2.027,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      }
+    ]
+  },
+  "automation": {
+    "provider": "fixed-python-core",
+    "generated_at": "2026-07-18T14:38:35+00:00",
+    "owner_authorized_request": true,
+    "llm_used": false,
+    "market_refresh": {
+      "stage": "INITIAL",
+      "captured_at": "2026-07-18T14:38:35.596561+00:00",
+      "initial_capture": true,
+      "model_recalculated": true,
+      "execution_authorized": false,
+      "lock_state_changed": false,
+      "bankroll_state_changed": false
+    }
+  },
+  "decision_evolution": {
+    "latest": {
+      "kind": "changed",
+      "headline": "主胜概率下调29.5个百分点；主维度由“胜平负：主胜（模型65.2%）”调整为“胜平负：客胜（模型40.7%）”；最可能比分由2-1调整为1-2",
+      "summary": "主胜概率下调29.5个百分点；主维度由“胜平负：主胜（模型65.2%）”调整为“胜平负：客胜（模型40.7%）”；最可能比分由2-1调整为1-2。模型已按新信息重算，冻结注单不会被事后改写。",
+      "changed": true
+    },
+    "history": [
+      {
+        "captured_at": "2026-07-18T08:54:59.806200+00:00",
+        "headline": "初始判断：主胜；首推比分2-1",
+        "summary": "模型建立初始比赛剧本，主维度为胜平负：主胜（模型65.2%）。0家公司、0条轨迹：主胜降赔0家/升赔0家，亚洲盘主队加强0家/减弱0家，大小球升盘0家/降盘0家。综合价格压力偏向两侧未拉开。；没有可核验的交易所成交量；当前只能确认报价形成的两侧未拉开价格压力，不能称为真实资金流。；Sharp层方向不足；目的推断：当前更像分散调价和平衡风险，尚没有足够证据说明机构在主动表达单边方向。可信度：低。；市场方向尚未拉开，不改变模型主线，只保留观察。",
+        "changed": true
+      },
+      {
+        "captured_at": "2026-07-18T14:38:35.596561+00:00",
+        "headline": "主胜概率下调29.5个百分点；主维度由“胜平负：主胜（模型65.2%）”调整为“胜平负：客胜（模型40.7%）”；最可能比分由2-1调整为1-2",
+        "summary": "主胜概率下调29.5个百分点；主维度由“胜平负：主胜（模型65.2%）”调整为“胜平负：客胜（模型40.7%）”；最可能比分由2-1调整为1-2。模型已按新信息重算，冻结注单不会被事后改写。",
+        "changed": true
+      }
+    ],
+    "internal_checkpoints_hidden": true
+  },
+  "market": {
+    "interpretation": {
+      "money_flow": "没有可核验的交易所成交量；当前只能确认报价形成的两侧未拉开价格压力，不能称为真实资金流。",
+      "bookmaker_behaviour": "Sharp层方向不足；目的推断：当前更像分散调价和平衡风险，尚没有足够证据说明机构在主动表达单边方向。可信度：低。",
+      "market_pressure": "0家公司、0条轨迹：主胜降赔0家/升赔0家，亚洲盘主队加强0家/减弱0家，大小球升盘0家/降盘0家。综合价格压力偏向两侧未拉开。",
+      "model_impact": "市场方向尚未拉开，不改变模型主线，只保留观察。",
+      "purpose": "当前更像分散调价和平衡风险，尚没有足够证据说明机构在主动表达单边方向。",
+      "confidence": "低",
+      "late_market_weight": "normal",
+      "actual_volume_available": false
+    }
+  }
+}
