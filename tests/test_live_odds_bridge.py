@@ -590,7 +590,30 @@ class LiveOddsBridgeTests(unittest.TestCase):
             self.assertEqual(0, queue.snapshot()["active"])
             restored = PersistentAnalysisQueue(Path(tmp) / "queue.json", launcher=lambda match: None)
             self.assertEqual(2, len(restored.snapshot()["jobs"]))
-            self.assertEqual("dispatched", restored.snapshot()["jobs"][0]["status"])
+            self.assertEqual("retry_wait", restored.snapshot()["jobs"][0]["status"])
+
+    def test_persistent_analysis_queue_migrates_legacy_dispatch_with_existing_report_to_completed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            queue_path = Path(tmp) / "queue.json"
+            queue_path.write_text(json.dumps({
+                "schema_version": "1.0",
+                "jobs": [{
+                    "job_id": "legacy", "match_key": "2026-07-17:301",
+                    "match": {"id": "301", "business_date": "2026-07-17"},
+                    "status": "dispatched", "attempts": 1,
+                    "dispatch": {"status": "queued"},
+                }],
+            }), encoding="utf-8")
+            workspace = Path(tmp) / "workspace.json"
+            workspace.write_text(json.dumps({
+                "matches": [{"id": "301", "report_url": "report.html"}],
+            }), encoding="utf-8")
+            with patch.object(bridge_module, "PROJECT_ROOT", Path(tmp)):
+                target = Path(tmp) / "data" / "match_workspace"
+                target.mkdir(parents=True)
+                workspace.replace(target / "latest.json")
+                restored = PersistentAnalysisQueue(queue_path, launcher=lambda match: None)
+            self.assertEqual("completed", restored.snapshot()["jobs"][0]["status"])
 
     def test_persistent_analysis_queue_retries_after_transient_dispatch_failure(self):
         with tempfile.TemporaryDirectory() as tmp:

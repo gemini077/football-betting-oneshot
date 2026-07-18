@@ -36,7 +36,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_OUTPUT_ROOT = PROJECT_ROOT / "data" / "live_odds_bridge" / "captures"
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8765
-MODEL_VERSION = "v0.18.0"
+MODEL_VERSION = "v0.18.1"
 MODULE_VERSION = "v0.9.0"
 
 CORRECT_SCORE_MARKET_CODES = {
@@ -309,11 +309,45 @@ class PersistentAnalysisQueue:
         except (OSError, json.JSONDecodeError):
             pass
         changed = False
+        workspace_rows = []
+        try:
+            workspace = json.loads((PROJECT_ROOT / "data" / "match_workspace" / "latest.json").read_text(encoding="utf-8"))
+            workspace_rows = list(workspace.get("matches") or []) + list(workspace.get("completed") or [])
+        except (OSError, json.JSONDecodeError):
+            workspace_rows = []
+
+        def report_exists(job: dict) -> bool:
+            match = job.get("match") or {}
+            match_id = str(match.get("id") or "")
+            return any(
+                str(row.get("id") or "") == match_id
+                and bool(row.get("report_url") or row.get("prematch_report_url"))
+                for row in workspace_rows
+            )
+
         for job in state.get("jobs", []):
             if job.get("status") == "dispatching":
                 job["status"] = "queued"
                 job["last_error"] = "bridge_restarted_during_dispatch"
                 job["next_attempt_at"] = 0.0
+                changed = True
+            elif job.get("status") == "dispatched":
+                # Schema v1 treated "workflow accepted" as terminal.  Reconcile
+                # those legacy rows on restart: an existing report is complete;
+                # otherwise the match must return to the bounded retry queue.
+                dispatch = job.get("dispatch") or {}
+                cloud_success = (
+                    dispatch.get("status") == "completed"
+                    and dispatch.get("conclusion") in (None, "success")
+                )
+                if report_exists(job) or cloud_success:
+                    job["status"] = "completed"
+                    job["last_error"] = None
+                else:
+                    job["status"] = "retry_wait"
+                    job["last_error"] = "legacy_dispatch_not_reconciled"
+                    job["next_attempt_at"] = 0.0
+                job["updated_at"] = _now().isoformat()
                 changed = True
         if changed:
             self._write_state(state)

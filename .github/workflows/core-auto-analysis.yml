@@ -43,6 +43,8 @@ jobs:
             git pull --rebase origin main
             git push
           fi
+      - name: Build public site even when no core match is pending
+        run: python scripts/build_public_site.py
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

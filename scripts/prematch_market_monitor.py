@@ -180,6 +180,10 @@ def refresh_match(match, stage=None, now=None):
     stage = stage or due_stage(match, now)
     label = f"{match.get('home')} vs {match.get('away')}"
     match_id = str(match.get("id") or "")
+    # Keep every snapshot, report and post-match task on the same stable key.
+    # Previously this variable was only created by the outer loop, so the
+    # scheduled GitHub runner crashed before it could publish any checkpoint.
+    canonical_id = match.get("_canonical_match_id") or canonical_match_id(match)
     if not stage:
         return {"match": label, "status": "skipped_not_at_checkpoint"}
     request = {
