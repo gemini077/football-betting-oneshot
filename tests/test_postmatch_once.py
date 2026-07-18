@@ -82,6 +82,36 @@ def test_postmatch_backfills_nowscore_id_from_latest_workspace(tmp_path, monkeyp
     assert saved["result_source"] == "nowscore_match_detail"
 
 
+def test_postmatch_backfills_nowscore_id_from_schedule_snapshot(tmp_path, monkeypatch):
+    schedule = write_schedule(
+        tmp_path / "schedule.json",
+        match_key="FBOS-202607151800-test",
+        canonical_match_id="FBOS-202607151800-test",
+        provider_match_id="500-123",
+        nowscore_id=None,
+    )
+    update_dir = tmp_path / "data" / "schedule_updates" / "run"
+    update_dir.mkdir(parents=True)
+    (update_dir / "run_sporttery_2026-07-15.json").write_text(json.dumps({
+        "matches": [{
+            "homeTeam": "主队", "awayTeam": "客队",
+            "matchDate": "2026-07-15", "matchTime": "18:00:00",
+            "nowscoreId": 2929657,
+        }],
+    }, ensure_ascii=False), encoding="utf-8")
+    empty_workspace = tmp_path / "empty-workspace.json"
+    empty_workspace.write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(postmatch_result, "BASE_DIR", tmp_path)
+    monkeypatch.setattr(postmatch_result, "WORKSPACE_PATH", empty_workspace)
+    monkeypatch.setattr(postmatch_result, "fetch_nowscore_result", lambda match_id: ((2, 2), f"nowscore:{match_id}", None))
+    outcome = verify_schedule(schedule, datetime(2026, 7, 15, 20, 20, tzinfo=SHANGHAI), tmp_path / "results")
+    saved = json.loads(schedule.read_text(encoding="utf-8"))
+    assert outcome["status"] == "result_verified"
+    assert saved["nowscore_id"] == 2929657
+    assert saved["nowscore_identity_source"] == "sporttery_schedule_snapshot"
+    assert saved["result_90m"] == "2-2"
+
+
 def test_generated_cron_contains_only_future_active_schedule(tmp_path):
     write_schedule(tmp_path / "active.json", review_due_at="2026-07-16T06:15:00+08:00")
     write_schedule(

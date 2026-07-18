@@ -70,6 +70,35 @@ def resolve_nowscore_id(schedule: dict[str, Any]) -> int | None:
             schedule["nowscore_id"] = int(row["nowscore_id"])
             schedule["nowscore_identity_source"] = "match_workspace"
             return schedule["nowscore_id"]
+    # A finished match may already have moved out of the workspace before the
+    # verifier runs.  The successful Sporttery schedule snapshots retain the
+    # verified Nowscore binding, so use them as the next authoritative source.
+    schedule_files = sorted(
+        (BASE_DIR / "data" / "schedule_updates").glob("**/*_sporttery_*.json"),
+        key=lambda path: path.stat().st_mtime,
+        reverse=True,
+    )
+    for schedule_path in schedule_files:
+        try:
+            schedule_payload = load_json(schedule_path)
+        except (OSError, json.JSONDecodeError):
+            continue
+        for row in schedule_payload.get("matches") or []:
+            same_teams = (
+                normalize(row.get("homeTeam")) == normalize(schedule.get("home"))
+                and normalize(row.get("awayTeam")) == normalize(schedule.get("away"))
+            )
+            row_kickoff = parse_datetime(
+                f"{row.get('matchDate')}T{str(row.get('matchTime') or '')[:5]}:00+08:00"
+            )
+            same_kickoff = bool(
+                schedule_kickoff and row_kickoff
+                and abs((schedule_kickoff - row_kickoff).total_seconds()) <= 15 * 60
+            )
+            if same_teams and same_kickoff and row.get("nowscoreId"):
+                schedule["nowscore_id"] = int(row["nowscoreId"])
+                schedule["nowscore_identity_source"] = "sporttery_schedule_snapshot"
+                return schedule["nowscore_id"]
     match_filters: set[str] = set()
     source_report = BASE_DIR / str(schedule.get("source_report") or "")
     if source_report.exists():
