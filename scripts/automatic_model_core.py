@@ -75,6 +75,19 @@ def _market_total(deep: dict) -> float | None:
     return median(lines) if lines else None
 
 
+def _market_handicap(deep: dict) -> float | None:
+    """Return the median home-team Asian handicap from current quotes."""
+    lines = []
+    for company in (deep.get("yazhi") or {}).get("companies") or []:
+        try:
+            line = float(company.get("current_handicap"))
+        except (TypeError, ValueError):
+            continue
+        if -5.0 <= line <= 5.0:
+            lines.append(line)
+    return median(lines) if lines else None
+
+
 def _total_line_pricing(expected_goals: float, line: float) -> dict:
     """Price an Asian total at its exact quarter line, including pushes/halves."""
     distribution = []
@@ -163,38 +176,129 @@ def _scenario_score_pick(
     probabilities: dict,
     total_rows: list[dict],
     btts: dict,
-) -> tuple[str, str]:
-    """Pick one coherent score scenario, rather than copying the top matrix cell."""
+    *,
+    expected_goals: float,
+    market_probabilities: dict | None = None,
+    market_total: float | None = None,
+    market_handicap: float | None = None,
+    script_context: dict | None = None,
+) -> tuple[str, str, dict]:
+    """Select one model scenario after reconciling probability, market and script.
+
+    The exact-score matrix supplies the candidate set, not the final answer.  A
+    candidate must also fit the model result branch, total-goal centre, BTTS,
+    current 1X2 consensus, Asian handicap and verified match-script evidence.
+    This deliberately prevents both "mathematical first cell" and "market
+    shortest price" from becoming an automatic score recommendation.
+    """
     result = max(probabilities, key=probabilities.get)
+    market_probabilities = market_probabilities or {}
+    market_result = max(market_probabilities, key=market_probabilities.get) if market_probabilities else None
     total_mode_row = max(total_rows, key=lambda row: float(row.get("probability") or 0))
     total_mode = str(total_mode_row.get("goals") or "")
     btts_yes = float(btts.get("yes") or 0) >= 0.5
     maximum = max(matrix.values()) if matrix else 0.0
-    candidates = []
+    script_context = script_context or {}
+    script_risks = list(script_context.get("risks") or [])
+    high_tail_risk = any(token in " ".join(script_risks) for token in ("红牌", "右尾", "突变"))
+    candidates: list[dict] = []
     for (home, away), probability in matrix.items():
         if probability < maximum * 0.42:
             continue
         outcome = "home" if home > away else "draw" if home == away else "away"
-        total_matches = (total_mode == "6+" and home + away >= 6) or total_mode == str(home + away)
+        goals = home + away
+        total_matches = (total_mode == "6+" and goals >= 6) or total_mode == str(goals)
         btts_matches = (home > 0 and away > 0) == btts_yes
-        utility = math.log(max(probability, 1e-12))
-        utility += 0.20 if outcome == result else 0.0
-        utility += 0.13 if total_matches else 0.0
-        utility += 0.08 if btts_matches else 0.0
-        candidates.append((utility, probability, home, away, outcome, total_matches, btts_matches))
+        target_total = market_total if market_total is not None else expected_goals
+        total_fit = max(0.0, 1.0 - abs(goals - target_total) / 1.75)
+        margin_fit = None
+        if market_handicap is not None:
+            market_margin = -market_handicap
+            margin_fit = max(0.0, 1.0 - abs((home - away) - market_margin) / 1.75)
+        components = {
+            "比分矩阵": 0.55 * probability / max(maximum, 1e-12),
+            "模型方向": 0.18 if outcome == result else -0.12,
+            "总进球中枢": 0.14 * total_fit,
+            "双方进球": 0.08 if btts_matches else -0.04,
+            "市场方向": 0.10 if market_result and outcome == market_result else (-0.05 if market_result else 0.0),
+            "亚洲让球": 0.10 * margin_fit if margin_fit is not None else 0.0,
+            "比赛剧本": 0.04 if high_tail_risk and goals >= math.ceil(expected_goals) else (-0.03 if high_tail_risk and goals <= 1 else 0.0),
+        }
+        utility = sum(components.values())
+        candidates.append({
+            "score": f"{home}-{away}",
+            "home": home,
+            "away": away,
+            "probability": probability,
+            "outcome": outcome,
+            "goals": goals,
+            "total_matches": total_matches,
+            "btts_matches": btts_matches,
+            "utility": utility,
+            "components": components,
+        })
     if not candidates:
         (home, away), probability = max(matrix.items(), key=lambda item: item[1])
-        return f"{home}-{away}", "比分矩阵没有形成更稳定的情景组合，因此保留概率峰值。"
-    _, probability, home, away, outcome, total_matches, btts_matches = max(candidates)
+        trace = {
+            "method": "scenario_selector_v2_fallback",
+            "selected_score": f"{home}-{away}",
+            "selected_probability": round(probability, 6),
+            "confidence": "低",
+            "main_risk": "可行比分候选不足，只能回退到比分矩阵峰值",
+            "candidates": [],
+        }
+        return f"{home}-{away}", "可行比分区间没有形成稳定情景组合，暂时回退到矩阵峰值。", trace
+    candidates.sort(key=lambda row: (row["utility"], row["probability"]), reverse=True)
+    selected = candidates[0]
+    probability = float(selected["probability"])
+    home, away, outcome = int(selected["home"]), int(selected["away"]), str(selected["outcome"])
+    total_matches, btts_matches = bool(selected["total_matches"]), bool(selected["btts_matches"])
     labels = {"home": "主胜", "draw": "平局", "away": "客胜"}
     reasons = [f"符合{labels[outcome]}主剧本"]
     if total_matches:
         reasons.append(f"落在总进球众数{total_mode}")
     if btts_matches:
         reasons.append("符合双方进球倾向")
+    if market_result and outcome == market_result:
+        reasons.append("与多公司去水方向一致")
+    if market_handicap is not None:
+        reasons.append(f"净胜球接近亚洲让球中枢{market_handicap:+g}")
+    gap = selected["utility"] - candidates[1]["utility"] if len(candidates) > 1 else selected["utility"]
+    confidence = "高" if gap >= 0.12 and probability >= 0.09 else "中" if gap >= 0.05 else "低"
+    candidate_rows = []
+    for rank, row in enumerate(candidates[:8], 1):
+        candidate_rows.append({
+            "rank": rank,
+            "score": row["score"],
+            "matrix_probability": round(float(row["probability"]), 6),
+            "scenario_score": round(float(row["utility"]), 6),
+            "factor_contributions": {key: round(float(value), 4) for key, value in row["components"].items()},
+            "decision": "selected" if rank == 1 else "rejected",
+            "rejection_reason": None if rank == 1 else "综合情景分低于最终落点，不按相邻比分算命中",
+        })
+    trace = {
+        "method": "scenario_selector_v2",
+        "selected_score": f"{home}-{away}",
+        "selected_probability": round(probability, 6),
+        "mathematical_first_score": (
+            f"{max(matrix, key=matrix.get)[0]}-{max(matrix, key=matrix.get)[1]}" if matrix else None
+        ),
+        "model_outcome_leader": result,
+        "market_outcome_leader": market_result,
+        "total_goal_centre": round(float(market_total if market_total is not None else expected_goals), 3),
+        "asian_handicap_median": market_handicap,
+        "btts_yes": btts_yes,
+        "confidence": confidence,
+        "utility_gap_to_second": round(float(gap), 6),
+        "main_risk": script_risks[0] if script_risks else f"第二候选{candidates[1]['score']}仍有接近的情景得分" if len(candidates) > 1 else "单一候选稳定性仍需临盘复核",
+        "selected_factors": reasons,
+        "candidates": candidate_rows,
+        "rule": "比分预测与比分投注分离；只有取得可成交赔率且EV通过，才生成模拟注单。",
+    }
     return (
         f"{home}-{away}",
-        f"模型在可行比分区间内综合方向、总进球与双方进球情景后选择该落点（单格概率{probability:.1%}；{'、'.join(reasons)}），不是照抄最低赔率或市场第一。",
+        f"模型在可行比分区间内综合攻防概率、胜平负、大小球、BTTS、亚洲让球、机构方向与比赛剧本后选择该落点（单格概率{probability:.1%}；{'、'.join(reasons)}；置信度{confidence}），不是照抄数学第一或市场第一。",
+        trace,
     )
 
 
@@ -412,6 +516,7 @@ def build_automatic_model(context: dict) -> dict:
     away_form = _mean([away_venue, away_venue, away_general])
     market_probabilities = _consensus_probabilities(deep) or context.get("official_market_baseline", {}).get("fair_probabilities")
     market_total = _market_total(deep)
+    market_handicap = _market_handicap(deep)
     if home_form is None or away_form is None or not market_probabilities:
         return {"model": None, "data_quality": {"status": "仅市场基线", "missing": ["可解析的主客场近期攻防样本"]}}
 
@@ -473,7 +578,18 @@ def build_automatic_model(context: dict) -> dict:
         tempo_story = "总进球中枢偏低；上半场试探和低比分停留时间可能较长"
     else:
         tempo_story = "总进球中枢处于常规区间，2至3球是主要密集带"
-    top_score, score_reasoning = _scenario_score_pick(matrix, probabilities, total_rows, btts)
+    script_context = nowscore_fundamentals.get("script_context") or {}
+    top_score, score_reasoning, score_selection_trace = _scenario_score_pick(
+        matrix,
+        probabilities,
+        total_rows,
+        btts,
+        expected_goals=total,
+        market_probabilities=market_probabilities,
+        market_total=market_total,
+        market_handicap=market_handicap,
+        script_context=script_context,
+    )
     model_market_gap = probabilities[top_result] - market_probabilities[top_result]
     market_conflict = (
         f"模型对{labels[top_result]}的判断比多公司市场高{abs(model_market_gap):.1%}，需要用阵容与临盘验证这部分分歧"
@@ -492,7 +608,6 @@ def build_automatic_model(context: dict) -> dict:
         home_win_rate = float(home_home.get("wins") or 0) / home_home_games
         if home_win_rate >= 0.6:
             dynamic_errors.append(f"{home_name}近{int(home_home_games)}个主场胜率{home_win_rate:.0%}，客胜主线可能低估主场韧性")
-    script_context = nowscore_fundamentals.get("script_context") or {}
     script_effects = script_context.get("effects") or []
     dynamic_errors.extend(script_context.get("risks") or [])
     dynamic_errors.append("若早段进球、红牌或比赛节奏偏离基准，总进球与比分尾部会同步变化")
@@ -506,6 +621,7 @@ def build_automatic_model(context: dict) -> dict:
         "unique_primary_dimension": f"胜平负：{labels[top_result]}（模型{probabilities[top_result]:.1%}）",
         "unique_score": top_score,
         "score_reasoning": score_reasoning,
+        "score_selection_trace": score_selection_trace,
         "mathematical_first": f"90分钟主胜{probabilities['home']:.1%}、平局{probabilities['draw']:.1%}、客胜{probabilities['away']:.1%}；λ={lambda_home:.2f}-{lambda_away:.2f}。",
         "market_first": f"多公司去水共识主胜{market_probabilities['home']:.1%}、平局{market_probabilities['draw']:.1%}、客胜{market_probabilities['away']:.1%}；大小球中轴{target_total:.2f}。",
         "match_story": "；".join(part.rstrip("。；") for part in [control_story, tempo_story, *script_effects]) + "。",

@@ -33,18 +33,23 @@ def sample_review():
 def test_individual_postmatch_report_is_complete_standalone_page():
     page = render_review_page(sample_review(), {}, {}, [], datetime(2026, 7, 16, 12, 0))
     for section in (
-        "01｜复盘结论",
-        "02｜全部玩法严格结算",
-        "03｜赛前推理回放",
-        "04｜盘口时间线与数据有效性",
-        "05｜根因、反事实与模型修正",
-        "06｜模拟注单结算",
-        "07｜真实注单结算",
+        "01｜赛果与复盘结论",
+        "02｜比赛过程与关键事实",
+        "03｜全部模型维度严格结算",
+        "04｜模拟注单结算",
+        "05｜真实注单结算",
+        "06｜唯一比分推演审计",
+        "07｜盘口、机构行为与数据有效性",
+        "08｜赛前风险如何被验证",
+        "09｜分层根因",
+        "10｜反事实、模型修正与样本归档",
+        "11｜判断变化",
     ):
         assert section in page
     assert "命中" in page
     assert "<dialog" not in page
     assert "<iframe" not in page
+    assert "<details>" in page
 
 
 def test_review_generator_writes_stable_match_url():
