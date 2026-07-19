@@ -1,0 +1,3192 @@
+{
+  "report": {
+    "model_name": "Football Betting OneShot",
+    "model_version": "v0.18.2",
+    "report_type": "确定性赛前分析",
+    "analysis_timestamp": "2026-07-19T03:42:06+00:00",
+    "final_execution_version": false,
+    "ai_provider": null,
+    "ai_model": null,
+    "market_checkpoint": {
+      "stage": "INITIAL",
+      "captured_at": "2026-07-19T03:42:06.516168+00:00",
+      "initial_capture": true
+    }
+  },
+  "match": {
+    "business_date": "2026-07-19",
+    "match_id": "500-1359167",
+    "home": "西班牙",
+    "away": "阿根廷",
+    "match_num": "周日104",
+    "competition": "世界杯",
+    "league": "世界杯",
+    "kickoff_local": "2026-07-20 03:00"
+  },
+  "decisions": {
+    "unique_primary_dimension": "胜平负：主胜（模型41.4%）",
+    "unique_score": "1-1",
+    "score_reasoning": "模型在可行比分区间内综合方向、总进球与双方进球情景后选择该落点（单格概率12.7%；符合平局主剧本、落在总进球众数2、符合双方进球倾向），不是照抄最低赔率或市场第一。",
+    "mathematical_first": "90分钟主胜41.4%、平局26.7%、客胜32.0%；λ=1.36-1.17。",
+    "market_first": "多公司去水共识主胜41.5%、平局31.4%、客胜27.1%；大小球中轴2.50。",
+    "match_story": "双方预期进球接近，比赛更可能由先入球、定位球或临场换人打破均衡；总进球中枢处于常规区间，2至3球是主要密集带；教练剧本：主队教练主场PPG 1.61、客队教练客场PPG 3.00（样本 56/2 场），差距不足以单独改写主线；裁判剧本：斯拉夫科.云薛在111场公开样本中场均双方合计黄牌约3.96、红牌约0.15，比赛中断与红牌尾部风险偏高，领先方未必能平稳控场；裁判历史样本下主队胜率更高（主41% / 客28%），仅作为剧本倾向，不视为因果优势。",
+    "market_conflict": "多公司市场对主胜的定价比模型更强0.1%，不能把市场热度直接当成模型优势",
+    "score_vs_outcome_explanation": "唯一比分1-1只是单个比分格的最高点；胜平负主线主胜是多个比分格合计，二者不要求同方向。",
+    "maximum_error_points": [
+      "裁判公开样本的牌数与红牌率偏高，比分右尾和比赛状态突变风险高于基础泊松假设",
+      "若早段进球、红牌或比赛节奏偏离基准，总进球与比分尾部会同步变化",
+      "首发或关键伤停与当前假设不一致，会直接改变双方λ",
+      "临盘若出现跨公司同步升降盘，本次赛前快照的价格结构会失效"
+    ],
+    "value_judgement": "仅完成模型概率与市场基线；须取得用户渠道即时赔率后才计算EV。",
+    "final_state": "空仓｜未锁单"
+  },
+  "model": {
+    "status": "确定性融合模型（可核验近期攻防 + 市场校准）",
+    "method": "recent_form_market_calibrated_poisson_v2",
+    "lambda_home": 1.364727,
+    "lambda_away": 1.165273,
+    "rho": 0.0,
+    "expected_goals": 2.53,
+    "probabilities": {
+      "home": 0.413933,
+      "draw": 0.266546,
+      "away": 0.319521
+    },
+    "total_goals_buckets": [
+      {
+        "goals": "0",
+        "probability": 0.079659
+      },
+      {
+        "goals": "1",
+        "probability": 0.201537
+      },
+      {
+        "goals": "2",
+        "probability": 0.254945
+      },
+      {
+        "goals": "3",
+        "probability": 0.215003
+      },
+      {
+        "goals": "4",
+        "probability": 0.13599
+      },
+      {
+        "goals": "5",
+        "probability": 0.068811
+      },
+      {
+        "goals": "6+",
+        "probability": 0.044055
+      }
+    ],
+    "btts": {
+      "yes": 0.512371,
+      "no": 0.487629,
+      "judgement": "双方进球偏否"
+    },
+    "score_probabilities": [
+      {
+        "score": "1-1",
+        "probability": 0.12668,
+        "fair_odds": 7.8939,
+        "rank": 1
+      },
+      {
+        "score": "1-0",
+        "probability": 0.108713,
+        "fair_odds": 9.1985,
+        "rank": 2
+      },
+      {
+        "score": "0-1",
+        "probability": 0.092825,
+        "fair_odds": 10.773,
+        "rank": 3
+      },
+      {
+        "score": "2-1",
+        "probability": 0.086442,
+        "fair_odds": 11.5685,
+        "rank": 4
+      },
+      {
+        "score": "0-0",
+        "probability": 0.079659,
+        "fair_odds": 12.5535,
+        "rank": 5
+      },
+      {
+        "score": "2-0",
+        "probability": 0.074182,
+        "fair_odds": 13.4804,
+        "rank": 6
+      },
+      {
+        "score": "1-2",
+        "probability": 0.073808,
+        "fair_odds": 13.5486,
+        "rank": 7
+      },
+      {
+        "score": "0-2",
+        "probability": 0.054083,
+        "fair_odds": 18.4901,
+        "rank": 8
+      },
+      {
+        "score": "2-2",
+        "probability": 0.050364,
+        "fair_odds": 19.8554,
+        "rank": 9
+      },
+      {
+        "score": "3-1",
+        "probability": 0.039323,
+        "fair_odds": 25.4303,
+        "rank": 10
+      }
+    ],
+    "total_line_analysis": [
+      {
+        "line": 2.5,
+        "over": {
+          "win_equivalent_probability": 0.463859,
+          "loss_equivalent_probability": 0.536141,
+          "push_equivalent_probability": 0.0,
+          "fair_odds": 2.1558
+        },
+        "under": {
+          "win_equivalent_probability": 0.536141,
+          "loss_equivalent_probability": 0.463859,
+          "push_equivalent_probability": 0.0,
+          "fair_odds": 1.8652
+        }
+      },
+      {
+        "line": 2.75,
+        "over": {
+          "win_equivalent_probability": 0.356357,
+          "loss_equivalent_probability": 0.536141,
+          "push_equivalent_probability": 0.107502,
+          "fair_odds": 2.5045
+        },
+        "under": {
+          "win_equivalent_probability": 0.536141,
+          "loss_equivalent_probability": 0.356357,
+          "push_equivalent_probability": 0.107502,
+          "fair_odds": 1.6647
+        }
+      },
+      {
+        "line": 3.0,
+        "over": {
+          "win_equivalent_probability": 0.248856,
+          "loss_equivalent_probability": 0.536141,
+          "push_equivalent_probability": 0.215003,
+          "fair_odds": 3.1544
+        },
+        "under": {
+          "win_equivalent_probability": 0.536141,
+          "loss_equivalent_probability": 0.248856,
+          "push_equivalent_probability": 0.215003,
+          "fair_odds": 1.4642
+        }
+      },
+      {
+        "line": 3.25,
+        "over": {
+          "win_equivalent_probability": 0.248856,
+          "loss_equivalent_probability": 0.643643,
+          "push_equivalent_probability": 0.107502,
+          "fair_odds": 3.5864
+        },
+        "under": {
+          "win_equivalent_probability": 0.643643,
+          "loss_equivalent_probability": 0.248856,
+          "push_equivalent_probability": 0.107502,
+          "fair_odds": 1.3866
+        }
+      },
+      {
+        "line": 3.5,
+        "over": {
+          "win_equivalent_probability": 0.248856,
+          "loss_equivalent_probability": 0.751144,
+          "push_equivalent_probability": 0.0,
+          "fair_odds": 4.0184
+        },
+        "under": {
+          "win_equivalent_probability": 0.751144,
+          "loss_equivalent_probability": 0.248856,
+          "push_equivalent_probability": 0.0,
+          "fair_odds": 1.3313
+        }
+      }
+    ],
+    "calibration": {
+      "form_lambda_home": 1.35,
+      "form_lambda_away": 1.2,
+      "market_total_line_median": 2.5,
+      "market_probabilities": {
+        "home": 0.4149107383105775,
+        "draw": 0.3140909964972056,
+        "away": 0.2709982651922169
+      },
+      "form_weight": 0.6,
+      "market_weight": 0.4,
+      "form_source": "Nowscore近期赛事数据",
+      "venue_proxy_used": false
+    },
+    "limitations": [
+      "近期样本含不同赛事与对手强度，尚未完成逐队Elo/xG对手校正",
+      "确认首发、即时伤停、天气与临场战术需在开赛前另行修正",
+      "市场信息用于校准，因此该概率不是完全独立于赔率的纯基本面概率"
+    ]
+  },
+  "data_quality": {
+    "status": "模型已计算，临场信息待补",
+    "missing": [
+      "确认首发",
+      "即时伤停",
+      "用户渠道即时赔率"
+    ],
+    "notes": [
+      "近期攻防来源：Nowscore近期赛事数据。",
+      "模型数值由固定公式生成，DeepSeek不参与概率计算。",
+      "已从所选主页场次注入体彩胜平负赔率，并计算去水市场基线；该基线不是模型概率。"
+    ],
+    "overall": "FORM_AND_MARKET_MODEL"
+  },
+  "fundamentals": {
+    "status": "赛程、交锋、场地、首发发布状态、伤停发布状态与天气发布状态已联网核验",
+    "items": [
+      {
+        "label": "主队近10场",
+        "value": "7胜3平0负，进17球/失3球",
+        "source": "500.com赛前数据快照"
+      },
+      {
+        "label": "主队近10个主场",
+        "value": "6胜4平0负，进21球/失4球",
+        "source": "500.com赛前数据快照"
+      },
+      {
+        "label": "客队近10场",
+        "value": "8胜2平0负，进25球/失6球",
+        "source": "500.com赛前数据快照"
+      },
+      {
+        "label": "客队近10个客场",
+        "value": "6胜1平3负，进18球/失8球",
+        "source": "500.com赛前数据快照"
+      },
+      {
+        "label": "赛程交叉核验",
+        "value": "Argentina at Spain",
+        "source_url": "https://www.espn.com/soccer/match/_/gameId/760517"
+      },
+      {
+        "label": "比赛场地",
+        "value": "MetLife Stadium · East Rutherford, New Jersey · USA",
+        "source_url": "https://www.espn.com/soccer/match/_/gameId/760517"
+      },
+      {
+        "label": "确认首发",
+        "value": "尚未发布（已联网检查，临近开赛自动任务会重查）",
+        "source_url": "https://www.espn.com/soccer/match/_/gameId/760517"
+      },
+      {
+        "label": "伤停核验",
+        "value": "赛前页未返回结构化伤停名单；不等同于无人伤停",
+        "source_url": "https://www.espn.com/soccer/match/_/gameId/760517"
+      },
+      {
+        "label": "天气",
+        "value": "上游赛前页尚未发布（已联网检查）",
+        "source_url": "https://www.espn.com/soccer/match/_/gameId/760517"
+      }
+    ],
+    "structured_form": {
+      "status": "Nowscore赛前背景已核验",
+      "checked_at": "2026-07-19T03:42:06+00:00",
+      "items": [
+        {
+          "label": "主队近10场",
+          "value": "7胜3平0负，进17球/失3球",
+          "source": "500.com赛前数据快照"
+        },
+        {
+          "label": "主队近10个主场",
+          "value": "6胜4平0负，进21球/失4球",
+          "source": "500.com赛前数据快照"
+        },
+        {
+          "label": "客队近10场",
+          "value": "8胜2平0负，进25球/失6球",
+          "source": "500.com赛前数据快照"
+        },
+        {
+          "label": "客队近10个客场",
+          "value": "6胜1平3负，进18球/失8球",
+          "source": "500.com赛前数据快照"
+        },
+        {
+          "label": "赛程交叉核验",
+          "value": "Argentina at Spain",
+          "source_url": "https://www.espn.com/soccer/match/_/gameId/760517"
+        },
+        {
+          "label": "比赛场地",
+          "value": "MetLife Stadium · East Rutherford, New Jersey · USA",
+          "source_url": "https://www.espn.com/soccer/match/_/gameId/760517"
+        },
+        {
+          "label": "确认首发",
+          "value": "尚未发布（已联网检查，临近开赛自动任务会重查）",
+          "source_url": "https://www.espn.com/soccer/match/_/gameId/760517"
+        },
+        {
+          "label": "伤停核验",
+          "value": "赛前页未返回结构化伤停名单；不等同于无人伤停",
+          "source_url": "https://www.espn.com/soccer/match/_/gameId/760517"
+        },
+        {
+          "label": "天气",
+          "value": "上游赛前页尚未发布（已联网检查）",
+          "source_url": "https://www.espn.com/soccer/match/_/gameId/760517"
+        },
+        "教练：主队 德拉富恩特；客队 史基朗尼。",
+        "裁判：斯拉夫科.云薛；公开执法样本 111 场。",
+        "Nowscore盘路历史已读取 60 场，仅作风格与盘口复核，不直接改写概率。",
+        "教练剧本：主队教练主场PPG 1.61、客队教练客场PPG 3.00（样本 56/2 场），差距不足以单独改写主线。",
+        "裁判剧本：斯拉夫科.云薛在111场公开样本中场均双方合计黄牌约3.96、红牌约0.15，比赛中断与红牌尾部风险偏高，领先方未必能平稳控场。",
+        "裁判历史样本下主队胜率更高（主41% / 客28%），仅作为剧本倾向，不视为因果优势。"
+      ],
+      "sources": [
+        "https://www.espn.com/soccer/match/_/gameId/760517",
+        "https://live.nowscore.com/info/coach/2907406.htm?l=1",
+        "https://live.nowscore.com/info/referee/2907406.htm?l=1",
+        "https://live.nowscore.com/panlu/2907406.html"
+      ],
+      "recent_form": {
+        "home_overall": {
+          "matches": 10,
+          "wins": 7,
+          "draws": 3,
+          "losses": 0,
+          "goals_for": 17,
+          "goals_against": 3
+        },
+        "home_home": {
+          "matches": 10,
+          "wins": 6,
+          "draws": 4,
+          "losses": 0,
+          "goals_for": 21,
+          "goals_against": 4
+        },
+        "away_overall": {
+          "matches": 10,
+          "wins": 8,
+          "draws": 2,
+          "losses": 0,
+          "goals_for": 25,
+          "goals_against": 6
+        },
+        "away_away": {
+          "matches": 10,
+          "wins": 6,
+          "draws": 1,
+          "losses": 3,
+          "goals_for": 18,
+          "goals_against": 8
+        }
+      },
+      "form_source": "500.com赛前数据快照",
+      "metric": "recent actual goals, not xG",
+      "nowscore_context": {
+        "coach": {
+          "home": {
+            "name": "德拉富恩特",
+            "birth_date": "1961-06-21",
+            "nationality": "西班牙",
+            "coach_records": [
+              {
+                "competition_or_team": "西甲",
+                "matches": 38,
+                "wins": 9,
+                "draws": 9,
+                "losses": 20,
+                "goals_for": 37,
+                "goals_against": 62,
+                "points_per_match": 0.95,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "西甲",
+                "matches": 38,
+                "wins": 16,
+                "draws": 10,
+                "losses": 12,
+                "goals_for": 50,
+                "goals_against": 43,
+                "points_per_match": 1.53,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "球會友誼",
+                "matches": 13,
+                "wins": 7,
+                "draws": 0,
+                "losses": 6,
+                "goals_for": 20,
+                "goals_against": 20,
+                "points_per_match": 1.62,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "球會友誼",
+                "matches": 3,
+                "wins": 1,
+                "draws": 2,
+                "losses": 0,
+                "goals_for": 4,
+                "goals_against": 1,
+                "points_per_match": 1.67,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "球會友誼",
+                "matches": 1,
+                "wins": 0,
+                "draws": 1,
+                "losses": 0,
+                "goals_for": 0,
+                "goals_against": 0,
+                "points_per_match": 1.0,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "球會友誼",
+                "matches": 2,
+                "wins": 1,
+                "draws": 1,
+                "losses": 0,
+                "goals_for": 4,
+                "goals_against": 1,
+                "points_per_match": 2.0,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "球會友誼",
+                "matches": 1,
+                "wins": 1,
+                "draws": 0,
+                "losses": 0,
+                "goals_for": 1,
+                "goals_against": 0,
+                "points_per_match": 3.0,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "奧運男足",
+                "matches": 3,
+                "wins": 1,
+                "draws": 2,
+                "losses": 0,
+                "goals_for": 1,
+                "goals_against": 0,
+                "points_per_match": 1.67,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "奧運男足",
+                "matches": 2,
+                "wins": 0,
+                "draws": 2,
+                "losses": 0,
+                "goals_for": 3,
+                "goals_against": 3,
+                "points_per_match": 1.0,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "西盃",
+                "matches": 8,
+                "wins": 1,
+                "draws": 3,
+                "losses": 4,
+                "goals_for": 9,
+                "goals_against": 15,
+                "points_per_match": 0.75,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "西盃",
+                "matches": 7,
+                "wins": 4,
+                "draws": 3,
+                "losses": 0,
+                "goals_for": 13,
+                "goals_against": 4,
+                "points_per_match": 2.14,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "西盃",
+                "matches": 2,
+                "wins": 1,
+                "draws": 0,
+                "losses": 1,
+                "goals_for": 1,
+                "goals_against": 1,
+                "points_per_match": 1.5,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "歐青U21外",
+                "matches": 11,
+                "wins": 10,
+                "draws": 0,
+                "losses": 1,
+                "goals_for": 38,
+                "goals_against": 5,
+                "points_per_match": 2.73,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "歐青U21外",
+                "matches": 11,
+                "wins": 10,
+                "draws": 1,
+                "losses": 0,
+                "goals_for": 31,
+                "goals_against": 5,
+                "points_per_match": 2.82,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "歐青U19",
+                "matches": 17,
+                "wins": 9,
+                "draws": 4,
+                "losses": 4,
+                "goals_for": 32,
+                "goals_against": 16,
+                "points_per_match": 1.82,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "歐青U19",
+                "matches": 10,
+                "wins": 8,
+                "draws": 1,
+                "losses": 1,
+                "goals_for": 22,
+                "goals_against": 7,
+                "points_per_match": 2.5,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "四國賽",
+                "matches": 3,
+                "wins": 3,
+                "draws": 0,
+                "losses": 0,
+                "goals_for": 9,
+                "goals_against": 1,
+                "points_per_match": 3.0,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "四國賽",
+                "matches": 2,
+                "wins": 1,
+                "draws": 1,
+                "losses": 0,
+                "goals_for": 3,
+                "goals_against": 2,
+                "points_per_match": 2.0,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "歐青U21",
+                "matches": 8,
+                "wins": 5,
+                "draws": 2,
+                "losses": 1,
+                "goals_for": 16,
+                "goals_against": 5,
+                "points_per_match": 2.12,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "歐青U21",
+                "matches": 2,
+                "wins": 1,
+                "draws": 0,
+                "losses": 1,
+                "goals_for": 4,
+                "goals_against": 3,
+                "points_per_match": 1.5,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "地中運",
+                "matches": 4,
+                "wins": 4,
+                "draws": 0,
+                "losses": 0,
+                "goals_for": 11,
+                "goals_against": 5,
+                "points_per_match": 3.0,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "國際友誼",
+                "matches": 8,
+                "wins": 6,
+                "draws": 1,
+                "losses": 1,
+                "goals_for": 17,
+                "goals_against": 3,
+                "points_per_match": 2.38,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "國際友誼",
+                "matches": 5,
+                "wins": 4,
+                "draws": 0,
+                "losses": 1,
+                "goals_for": 12,
+                "goals_against": 6,
+                "points_per_match": 2.4,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "國際友誼",
+                "matches": 8,
+                "wins": 5,
+                "draws": 1,
+                "losses": 2,
+                "goals_for": 17,
+                "goals_against": 7,
+                "points_per_match": 2.0,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "國際友誼",
+                "matches": 2,
+                "wins": 1,
+                "draws": 1,
+                "losses": 0,
+                "goals_for": 4,
+                "goals_against": 1,
+                "points_per_match": 2.0,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "國際友誼",
+                "matches": 7,
+                "wins": 6,
+                "draws": 1,
+                "losses": 0,
+                "goals_for": 18,
+                "goals_against": 2,
+                "points_per_match": 2.71,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "國際友誼",
+                "matches": 2,
+                "wins": 1,
+                "draws": 1,
+                "losses": 0,
+                "goals_for": 5,
+                "goals_against": 2,
+                "points_per_match": 2.0,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "國際友誼",
+                "matches": 1,
+                "wins": 0,
+                "draws": 1,
+                "losses": 0,
+                "goals_for": 1,
+                "goals_against": 1,
+                "points_per_match": 1.0,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "西協乙",
+                "matches": 18,
+                "wins": 3,
+                "draws": 6,
+                "losses": 9,
+                "goals_for": 16,
+                "goals_against": 25,
+                "points_per_match": 0.83,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "西協乙",
+                "matches": 18,
+                "wins": 8,
+                "draws": 6,
+                "losses": 4,
+                "goals_for": 22,
+                "goals_against": 19,
+                "points_per_match": 1.67,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "西協乙",
+                "matches": 38,
+                "wins": 17,
+                "draws": 9,
+                "losses": 12,
+                "goals_for": 36,
+                "goals_against": 32,
+                "points_per_match": 1.58,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "西協乙",
+                "matches": 38,
+                "wins": 4,
+                "draws": 20,
+                "losses": 14,
+                "goals_for": 28,
+                "goals_against": 47,
+                "points_per_match": 0.84,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "西協乙",
+                "matches": 5,
+                "wins": 2,
+                "draws": 3,
+                "losses": 0,
+                "goals_for": 9,
+                "goals_against": 6,
+                "points_per_match": 1.8,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "西協乙",
+                "matches": 4,
+                "wins": 1,
+                "draws": 1,
+                "losses": 2,
+                "goals_for": 5,
+                "goals_against": 6,
+                "points_per_match": 1.0,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "西甲",
+                "matches": 76,
+                "wins": 25,
+                "draws": 19,
+                "losses": 32,
+                "goals_for": 87,
+                "goals_against": 105,
+                "points_per_match": 1.24,
+                "venue_flag": ""
+              },
+              {
+                "competition_or_team": "球會友誼",
+                "matches": 16,
+                "wins": 8,
+                "draws": 2,
+                "losses": 6,
+                "goals_for": 24,
+                "goals_against": 21,
+                "points_per_match": 1.62,
+                "venue_flag": ""
+              },
+              {
+                "competition_or_team": "球會友誼",
+                "matches": 1,
+                "wins": 0,
+                "draws": 1,
+                "losses": 0,
+                "goals_for": 0,
+                "goals_against": 0,
+                "points_per_match": 1.0,
+                "venue_flag": ""
+              },
+              {
+                "competition_or_team": "球會友誼",
+                "matches": 2,
+                "wins": 1,
+                "draws": 1,
+                "losses": 0,
+                "goals_for": 4,
+                "goals_against": 1,
+                "points_per_match": 2.0,
+                "venue_flag": ""
+              },
+              {
+                "competition_or_team": "球會友誼",
+                "matches": 1,
+                "wins": 1,
+                "draws": 0,
+                "losses": 0,
+                "goals_for": 1,
+                "goals_against": 0,
+                "points_per_match": 3.0,
+                "venue_flag": ""
+              },
+              {
+                "competition_or_team": "奧運男足",
+                "matches": 5,
+                "wins": 1,
+                "draws": 4,
+                "losses": 0,
+                "goals_for": 4,
+                "goals_against": 3,
+                "points_per_match": 1.4,
+                "venue_flag": ""
+              },
+              {
+                "competition_or_team": "西盃",
+                "matches": 15,
+                "wins": 5,
+                "draws": 6,
+                "losses": 4,
+                "goals_for": 22,
+                "goals_against": 19,
+                "points_per_match": 1.4,
+                "venue_flag": ""
+              },
+              {
+                "competition_or_team": "西盃",
+                "matches": 2,
+                "wins": 1,
+                "draws": 0,
+                "losses": 1,
+                "goals_for": 1,
+                "goals_against": 1,
+                "points_per_match": 1.5,
+                "venue_flag": ""
+              },
+              {
+                "competition_or_team": "歐青U21外",
+                "matches": 22,
+                "wins": 20,
+                "draws": 1,
+                "losses": 1,
+                "goals_for": 69,
+                "goals_against": 10,
+                "points_per_match": 2.77,
+                "venue_flag": ""
+              },
+              {
+                "competition_or_team": "歐青U19",
+                "matches": 27,
+                "wins": 17,
+                "draws": 5,
+                "losses": 5,
+                "goals_for": 54,
+                "goals_against": 23,
+                "points_per_match": 2.07,
+                "venue_flag": ""
+              },
+              {
+                "competition_or_team": "四國賽",
+                "matches": 5,
+                "wins": 4,
+                "draws": 1,
+                "losses": 0,
+                "goals_for": 12,
+                "goals_against": 3,
+                "points_per_match": 2.6,
+                "venue_flag": ""
+              },
+              {
+                "competition_or_team": "歐青U21",
+                "matches": 10,
+                "wins": 6,
+                "draws": 2,
+                "losses": 2,
+                "goals_for": 20,
+                "goals_against": 8,
+                "points_per_match": 2.0,
+                "venue_flag": ""
+              },
+              {
+                "competition_or_team": "地中運",
+                "matches": 4,
+                "wins": 4,
+                "draws": 0,
+                "losses": 0,
+                "goals_for": 11,
+                "goals_against": 5,
+                "points_per_match": 3.0,
+                "venue_flag": ""
+              },
+              {
+                "competition_or_team": "國際友誼",
+                "matches": 13,
+                "wins": 10,
+                "draws": 1,
+                "losses": 2,
+                "goals_for": 29,
+                "goals_against": 9,
+                "points_per_match": 2.38,
+                "venue_flag": ""
+              },
+              {
+                "competition_or_team": "國際友誼",
+                "matches": 10,
+                "wins": 6,
+                "draws": 2,
+                "losses": 2,
+                "goals_for": 21,
+                "goals_against": 8,
+                "points_per_match": 2.0,
+                "venue_flag": ""
+              },
+              {
+                "competition_or_team": "國際友誼",
+                "matches": 9,
+                "wins": 7,
+                "draws": 2,
+                "losses": 0,
+                "goals_for": 23,
+                "goals_against": 4,
+                "points_per_match": 2.56,
+                "venue_flag": ""
+              }
+            ],
+            "team_records": [
+              {
+                "competition_or_team": "畢爾包",
+                "matches": 59,
+                "wins": 17,
+                "draws": 12,
+                "losses": 30,
+                "goals_for": 66,
+                "goals_against": 97,
+                "points_per_match": 1.07,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "畢爾包",
+                "matches": 48,
+                "wins": 21,
+                "draws": 15,
+                "losses": 12,
+                "goals_for": 67,
+                "goals_against": 48,
+                "points_per_match": 1.62,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "艾拉維斯",
+                "matches": 6,
+                "wins": 2,
+                "draws": 4,
+                "losses": 0,
+                "goals_for": 9,
+                "goals_against": 6,
+                "points_per_match": 1.67,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "西班牙U19",
+                "matches": 29,
+                "wins": 17,
+                "draws": 7,
+                "losses": 5,
+                "goals_for": 56,
+                "goals_against": 22,
+                "points_per_match": 2.0,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "西班牙U18",
+                "matches": 3,
+                "wins": 2,
+                "draws": 1,
+                "losses": 0,
+                "goals_for": 5,
+                "goals_against": 1,
+                "points_per_match": 2.33,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "西班牙U23",
+                "matches": 4,
+                "wins": 1,
+                "draws": 3,
+                "losses": 0,
+                "goals_for": 2,
+                "goals_against": 1,
+                "points_per_match": 1.5,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "西班牙U23",
+                "matches": 2,
+                "wins": 0,
+                "draws": 2,
+                "losses": 0,
+                "goals_for": 3,
+                "goals_against": 3,
+                "points_per_match": 1.0,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "艾拉維斯",
+                "matches": 6,
+                "wins": 2,
+                "draws": 1,
+                "losses": 3,
+                "goals_for": 6,
+                "goals_against": 7,
+                "points_per_match": 1.17,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "西班牙U21",
+                "matches": 26,
+                "wins": 21,
+                "draws": 3,
+                "losses": 2,
+                "goals_for": 72,
+                "goals_against": 12,
+                "points_per_match": 2.54,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "西班牙U21",
+                "matches": 15,
+                "wins": 12,
+                "draws": 2,
+                "losses": 1,
+                "goals_for": 40,
+                "goals_against": 10,
+                "points_per_match": 2.53,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "西班牙U19",
+                "matches": 18,
+                "wins": 15,
+                "draws": 1,
+                "losses": 2,
+                "goals_for": 43,
+                "goals_against": 14,
+                "points_per_match": 2.56,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "西班牙U18",
+                "matches": 12,
+                "wins": 9,
+                "draws": 1,
+                "losses": 2,
+                "goals_for": 28,
+                "goals_against": 12,
+                "points_per_match": 2.33,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "畢爾包B隊",
+                "matches": 18,
+                "wins": 3,
+                "draws": 6,
+                "losses": 9,
+                "goals_for": 16,
+                "goals_against": 25,
+                "points_per_match": 0.83,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "畢爾包B隊",
+                "matches": 18,
+                "wins": 8,
+                "draws": 6,
+                "losses": 4,
+                "goals_for": 22,
+                "goals_against": 19,
+                "points_per_match": 1.67,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "畢爾包B隊",
+                "matches": 38,
+                "wins": 17,
+                "draws": 9,
+                "losses": 12,
+                "goals_for": 36,
+                "goals_against": 32,
+                "points_per_match": 1.58,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "畢爾包B隊",
+                "matches": 38,
+                "wins": 4,
+                "draws": 20,
+                "losses": 14,
+                "goals_for": 28,
+                "goals_against": 47,
+                "points_per_match": 0.84,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "畢爾包",
+                "matches": 107,
+                "wins": 38,
+                "draws": 27,
+                "losses": 42,
+                "goals_for": 133,
+                "goals_against": 145,
+                "points_per_match": 1.32,
+                "venue_flag": ""
+              },
+              {
+                "competition_or_team": "艾拉維斯",
+                "matches": 12,
+                "wins": 4,
+                "draws": 5,
+                "losses": 3,
+                "goals_for": 15,
+                "goals_against": 13,
+                "points_per_match": 1.42,
+                "venue_flag": ""
+              },
+              {
+                "competition_or_team": "西班牙U19",
+                "matches": 47,
+                "wins": 32,
+                "draws": 8,
+                "losses": 7,
+                "goals_for": 99,
+                "goals_against": 36,
+                "points_per_match": 2.21,
+                "venue_flag": ""
+              },
+              {
+                "competition_or_team": "西班牙U18",
+                "matches": 15,
+                "wins": 11,
+                "draws": 2,
+                "losses": 2,
+                "goals_for": 33,
+                "goals_against": 13,
+                "points_per_match": 2.33,
+                "venue_flag": ""
+              },
+              {
+                "competition_or_team": "西班牙U23",
+                "matches": 6,
+                "wins": 1,
+                "draws": 5,
+                "losses": 0,
+                "goals_for": 5,
+                "goals_against": 4,
+                "points_per_match": 1.33,
+                "venue_flag": ""
+              },
+              {
+                "competition_or_team": "西班牙U21",
+                "matches": 41,
+                "wins": 33,
+                "draws": 5,
+                "losses": 3,
+                "goals_for": 112,
+                "goals_against": 22,
+                "points_per_match": 2.54,
+                "venue_flag": ""
+              },
+              {
+                "competition_or_team": "畢爾包B隊",
+                "matches": 36,
+                "wins": 11,
+                "draws": 12,
+                "losses": 13,
+                "goals_for": 38,
+                "goals_against": 44,
+                "points_per_match": 1.25,
+                "venue_flag": ""
+              },
+              {
+                "competition_or_team": "畢爾包B隊",
+                "matches": 76,
+                "wins": 21,
+                "draws": 29,
+                "losses": 26,
+                "goals_for": 64,
+                "goals_against": 79,
+                "points_per_match": 1.21,
+                "venue_flag": ""
+              },
+              {
+                "competition_or_team": "畢爾包",
+                "matches": 59,
+                "wins": 17,
+                "draws": 12,
+                "losses": 30,
+                "goals_for": 66,
+                "goals_against": 97,
+                "points_per_match": 1.07,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "畢爾包",
+                "matches": 48,
+                "wins": 21,
+                "draws": 15,
+                "losses": 12,
+                "goals_for": 67,
+                "goals_against": 48,
+                "points_per_match": 1.62,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "艾拉維斯",
+                "matches": 6,
+                "wins": 2,
+                "draws": 4,
+                "losses": 0,
+                "goals_for": 9,
+                "goals_against": 6,
+                "points_per_match": 1.67,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "西班牙U19",
+                "matches": 29,
+                "wins": 17,
+                "draws": 7,
+                "losses": 5,
+                "goals_for": 56,
+                "goals_against": 22,
+                "points_per_match": 2.0,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "西班牙U18",
+                "matches": 3,
+                "wins": 2,
+                "draws": 1,
+                "losses": 0,
+                "goals_for": 5,
+                "goals_against": 1,
+                "points_per_match": 2.33,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "西班牙U23",
+                "matches": 4,
+                "wins": 1,
+                "draws": 3,
+                "losses": 0,
+                "goals_for": 2,
+                "goals_against": 1,
+                "points_per_match": 1.5,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "西班牙U23",
+                "matches": 2,
+                "wins": 0,
+                "draws": 2,
+                "losses": 0,
+                "goals_for": 3,
+                "goals_against": 3,
+                "points_per_match": 1.0,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "艾拉維斯",
+                "matches": 6,
+                "wins": 2,
+                "draws": 1,
+                "losses": 3,
+                "goals_for": 6,
+                "goals_against": 7,
+                "points_per_match": 1.17,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "西班牙U21",
+                "matches": 26,
+                "wins": 21,
+                "draws": 3,
+                "losses": 2,
+                "goals_for": 72,
+                "goals_against": 12,
+                "points_per_match": 2.54,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "西班牙U21",
+                "matches": 15,
+                "wins": 12,
+                "draws": 2,
+                "losses": 1,
+                "goals_for": 40,
+                "goals_against": 10,
+                "points_per_match": 2.53,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "西班牙U19",
+                "matches": 18,
+                "wins": 15,
+                "draws": 1,
+                "losses": 2,
+                "goals_for": 43,
+                "goals_against": 14,
+                "points_per_match": 2.56,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "西班牙U18",
+                "matches": 12,
+                "wins": 9,
+                "draws": 1,
+                "losses": 2,
+                "goals_for": 28,
+                "goals_against": 12,
+                "points_per_match": 2.33,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "畢爾包B隊",
+                "matches": 56,
+                "wins": 7,
+                "draws": 26,
+                "losses": 23,
+                "goals_for": 44,
+                "goals_against": 72,
+                "points_per_match": 0.84,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "畢爾包B隊",
+                "matches": 56,
+                "wins": 25,
+                "draws": 15,
+                "losses": 16,
+                "goals_for": 58,
+                "goals_against": 51,
+                "points_per_match": 1.61,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "畢爾包",
+                "matches": 107,
+                "wins": 38,
+                "draws": 27,
+                "losses": 42,
+                "goals_for": 133,
+                "goals_against": 145,
+                "points_per_match": 1.32,
+                "venue_flag": ""
+              },
+              {
+                "competition_or_team": "艾拉維斯",
+                "matches": 12,
+                "wins": 4,
+                "draws": 5,
+                "losses": 3,
+                "goals_for": 15,
+                "goals_against": 13,
+                "points_per_match": 1.42,
+                "venue_flag": ""
+              },
+              {
+                "competition_or_team": "西班牙U19",
+                "matches": 47,
+                "wins": 32,
+                "draws": 8,
+                "losses": 7,
+                "goals_for": 99,
+                "goals_against": 36,
+                "points_per_match": 2.21,
+                "venue_flag": ""
+              },
+              {
+                "competition_or_team": "西班牙U18",
+                "matches": 15,
+                "wins": 11,
+                "draws": 2,
+                "losses": 2,
+                "goals_for": 33,
+                "goals_against": 13,
+                "points_per_match": 2.33,
+                "venue_flag": ""
+              },
+              {
+                "competition_or_team": "西班牙U23",
+                "matches": 6,
+                "wins": 1,
+                "draws": 5,
+                "losses": 0,
+                "goals_for": 5,
+                "goals_against": 4,
+                "points_per_match": 1.33,
+                "venue_flag": ""
+              },
+              {
+                "competition_or_team": "西班牙U21",
+                "matches": 41,
+                "wins": 33,
+                "draws": 5,
+                "losses": 3,
+                "goals_for": 112,
+                "goals_against": 22,
+                "points_per_match": 2.54,
+                "venue_flag": ""
+              },
+              {
+                "competition_or_team": "畢爾包B隊",
+                "matches": 112,
+                "wins": 32,
+                "draws": 41,
+                "losses": 39,
+                "goals_for": 102,
+                "goals_against": 123,
+                "points_per_match": 1.22,
+                "venue_flag": ""
+              }
+            ]
+          },
+          "away": {
+            "name": "史基朗尼",
+            "birth_date": "1978-05-16",
+            "nationality": "阿根廷",
+            "coach_records": [
+              {
+                "competition_or_team": "COTIF盃",
+                "matches": 4,
+                "wins": 1,
+                "draws": 2,
+                "losses": 1,
+                "goals_for": 4,
+                "goals_against": 3,
+                "points_per_match": 1.25,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "COTIF盃",
+                "matches": 2,
+                "wins": 2,
+                "draws": 0,
+                "losses": 0,
+                "goals_for": 6,
+                "goals_against": 0,
+                "points_per_match": 3.0,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "COTIF盃",
+                "matches": 6,
+                "wins": 3,
+                "draws": 2,
+                "losses": 1,
+                "goals_for": 10,
+                "goals_against": 3,
+                "points_per_match": 1.83,
+                "venue_flag": ""
+              },
+              {
+                "competition_or_team": "COTIF盃",
+                "matches": 4,
+                "wins": 1,
+                "draws": 2,
+                "losses": 1,
+                "goals_for": 4,
+                "goals_against": 3,
+                "points_per_match": 1.25,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "COTIF盃",
+                "matches": 2,
+                "wins": 2,
+                "draws": 0,
+                "losses": 0,
+                "goals_for": 6,
+                "goals_against": 0,
+                "points_per_match": 3.0,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "COTIF盃",
+                "matches": 6,
+                "wins": 3,
+                "draws": 2,
+                "losses": 1,
+                "goals_for": 10,
+                "goals_against": 3,
+                "points_per_match": 1.83,
+                "venue_flag": ""
+              }
+            ],
+            "team_records": [
+              {
+                "competition_or_team": "阿根廷U20",
+                "matches": 4,
+                "wins": 1,
+                "draws": 2,
+                "losses": 1,
+                "goals_for": 4,
+                "goals_against": 3,
+                "points_per_match": 1.25,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "阿根廷U20",
+                "matches": 2,
+                "wins": 2,
+                "draws": 0,
+                "losses": 0,
+                "goals_for": 6,
+                "goals_against": 0,
+                "points_per_match": 3.0,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "阿根廷U20",
+                "matches": 6,
+                "wins": 3,
+                "draws": 2,
+                "losses": 1,
+                "goals_for": 10,
+                "goals_against": 3,
+                "points_per_match": 1.83,
+                "venue_flag": ""
+              },
+              {
+                "competition_or_team": "阿根廷U20",
+                "matches": 4,
+                "wins": 1,
+                "draws": 2,
+                "losses": 1,
+                "goals_for": 4,
+                "goals_against": 3,
+                "points_per_match": 1.25,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "阿根廷U20",
+                "matches": 2,
+                "wins": 2,
+                "draws": 0,
+                "losses": 0,
+                "goals_for": 6,
+                "goals_against": 0,
+                "points_per_match": 3.0,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "阿根廷U20",
+                "matches": 6,
+                "wins": 3,
+                "draws": 2,
+                "losses": 1,
+                "goals_for": 10,
+                "goals_against": 3,
+                "points_per_match": 1.83,
+                "venue_flag": ""
+              }
+            ]
+          }
+        },
+        "referee": {
+          "name": "斯拉夫科.云薛",
+          "birth_date": "1979-11-25",
+          "nationality": "斯洛文尼亚",
+          "summaries": [
+            {
+              "competition": "所有赛事",
+              "matches": 111,
+              "home": {
+                "side": "home",
+                "wins": 46,
+                "draws": 34,
+                "losses": 31,
+                "avg_fouls": 12.38,
+                "avg_yellow": 1.83,
+                "avg_red": 0.03,
+                "win_rate": "41%"
+              },
+              "away": {
+                "side": "away",
+                "wins": 31,
+                "draws": 34,
+                "losses": 46,
+                "avg_fouls": 11.77,
+                "avg_yellow": 2.13,
+                "avg_red": 0.12,
+                "win_rate": "28%"
+              }
+            }
+          ],
+          "home_team_history_count": 2,
+          "away_team_history_count": 1
+        },
+        "panlu": {
+          "matches": [
+            {
+              "match_id": 2907405,
+              "competition": "世界盃",
+              "kickoff": "26-07-16 03:00",
+              "home_team": "英格蘭",
+              "away_team": "阿根廷",
+              "home_team_id": 744,
+              "away_team_id": 766,
+              "full_time": {
+                "home": 1,
+                "away": 2
+              },
+              "half_time": {
+                "home": 0,
+                "away": 0
+              },
+              "asian_line": 0,
+              "total_line": 2.25,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2907404,
+              "competition": "世界盃",
+              "kickoff": "26-07-15 03:00",
+              "home_team": "法國",
+              "away_team": "西班牙",
+              "home_team_id": 649,
+              "away_team_id": 772,
+              "full_time": {
+                "home": 0,
+                "away": 2
+              },
+              "half_time": {
+                "home": 0,
+                "away": 1
+              },
+              "asian_line": 0.25,
+              "total_line": 2.5,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2907403,
+              "competition": "世界盃",
+              "kickoff": "26-07-12 09:00",
+              "home_team": "阿根廷",
+              "away_team": "瑞士",
+              "home_team_id": 766,
+              "away_team_id": 648,
+              "full_time": {
+                "home": 1,
+                "away": 1
+              },
+              "half_time": {
+                "home": 1,
+                "away": 0
+              },
+              "asian_line": 0.75,
+              "total_line": 2.25,
+              "provider_flags": [
+                0,
+                1
+              ]
+            },
+            {
+              "match_id": 2907401,
+              "competition": "世界盃",
+              "kickoff": "26-07-11 03:00",
+              "home_team": "西班牙",
+              "away_team": "比利時",
+              "home_team_id": 772,
+              "away_team_id": 645,
+              "full_time": {
+                "home": 2,
+                "away": 1
+              },
+              "half_time": {
+                "home": 1,
+                "away": 1
+              },
+              "asian_line": 0.75,
+              "total_line": 2.75,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2907398,
+              "competition": "世界盃",
+              "kickoff": "26-07-08 00:00",
+              "home_team": "阿根廷",
+              "away_team": "埃及",
+              "home_team_id": 766,
+              "away_team_id": 735,
+              "full_time": {
+                "home": 3,
+                "away": 2
+              },
+              "half_time": {
+                "home": 0,
+                "away": 1
+              },
+              "asian_line": 1.25,
+              "total_line": 2.5,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2907396,
+              "competition": "世界盃",
+              "kickoff": "26-07-07 03:00",
+              "home_team": "葡萄牙",
+              "away_team": "西班牙",
+              "home_team_id": 765,
+              "away_team_id": 772,
+              "full_time": {
+                "home": 0,
+                "away": 1
+              },
+              "half_time": {
+                "home": 0,
+                "away": 0
+              },
+              "asian_line": -0.5,
+              "total_line": 2.5,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2907390,
+              "competition": "世界盃",
+              "kickoff": "26-07-04 06:00",
+              "home_team": "阿根廷",
+              "away_team": "佛得角共和國",
+              "home_team_id": 766,
+              "away_team_id": 790,
+              "full_time": {
+                "home": 1,
+                "away": 1
+              },
+              "half_time": {
+                "home": 1,
+                "away": 0
+              },
+              "asian_line": 2,
+              "total_line": 3,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2907386,
+              "competition": "世界盃",
+              "kickoff": "26-07-03 03:00",
+              "home_team": "西班牙",
+              "away_team": "奧地利",
+              "home_team_id": 772,
+              "away_team_id": 647,
+              "full_time": {
+                "home": 3,
+                "away": 0
+              },
+              "half_time": {
+                "home": 1,
+                "away": 0
+              },
+              "asian_line": 1.5,
+              "total_line": 2.5,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2906972,
+              "competition": "世界盃",
+              "kickoff": "26-06-28 10:00",
+              "home_team": "約旦",
+              "away_team": "阿根廷",
+              "home_team_id": 881,
+              "away_team_id": 766,
+              "full_time": {
+                "home": 1,
+                "away": 3
+              },
+              "half_time": {
+                "home": 0,
+                "away": 2
+              },
+              "asian_line": -1.75,
+              "total_line": 3,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2906966,
+              "competition": "世界盃",
+              "kickoff": "26-06-27 08:00",
+              "home_team": "烏拉圭",
+              "away_team": "西班牙",
+              "home_team_id": 767,
+              "away_team_id": 772,
+              "full_time": {
+                "home": 0,
+                "away": 1
+              },
+              "half_time": {
+                "home": 0,
+                "away": 1
+              },
+              "asian_line": -0.75,
+              "total_line": 2.5,
+              "provider_flags": [
+                1,
+                0
+              ]
+            },
+            {
+              "match_id": 2906969,
+              "competition": "世界盃",
+              "kickoff": "26-06-23 01:00",
+              "home_team": "阿根廷",
+              "away_team": "奧地利",
+              "home_team_id": 766,
+              "away_team_id": 647,
+              "full_time": {
+                "home": 2,
+                "away": 0
+              },
+              "half_time": {
+                "home": 1,
+                "away": 0
+              },
+              "asian_line": 0.75,
+              "total_line": 2.5,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2906963,
+              "competition": "世界盃",
+              "kickoff": "26-06-22 00:00",
+              "home_team": "西班牙",
+              "away_team": "沙地阿拉伯",
+              "home_team_id": 772,
+              "away_team_id": 891,
+              "full_time": {
+                "home": 4,
+                "away": 0
+              },
+              "half_time": {
+                "home": 3,
+                "away": 0
+              },
+              "asian_line": 2.25,
+              "total_line": 3,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2906728,
+              "competition": "世界盃",
+              "kickoff": "26-06-17 09:00",
+              "home_team": "阿根廷",
+              "away_team": "阿爾及利亞",
+              "home_team_id": 766,
+              "away_team_id": 18406,
+              "full_time": {
+                "home": 3,
+                "away": 0
+              },
+              "half_time": {
+                "home": 1,
+                "away": 0
+              },
+              "asian_line": 1.25,
+              "total_line": 2.5,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2906725,
+              "competition": "世界盃",
+              "kickoff": "26-06-16 00:00",
+              "home_team": "西班牙",
+              "away_team": "佛得角共和國",
+              "home_team_id": 772,
+              "away_team_id": 790,
+              "full_time": {
+                "home": 0,
+                "away": 0
+              },
+              "half_time": {
+                "home": 0,
+                "away": 0
+              },
+              "asian_line": 2.5,
+              "total_line": 3.5,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2992899,
+              "competition": "國際友誼",
+              "kickoff": "26-06-10 09:00",
+              "home_team": "阿根廷",
+              "away_team": "冰島",
+              "home_team_id": 766,
+              "away_team_id": 756,
+              "full_time": {
+                "home": 3,
+                "away": 0
+              },
+              "half_time": {
+                "home": 1,
+                "away": 0
+              },
+              "asian_line": 2,
+              "total_line": 3.25,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2991398,
+              "competition": "國際友誼",
+              "kickoff": "26-06-09 10:00",
+              "home_team": "秘魯",
+              "away_team": "西班牙",
+              "home_team_id": 774,
+              "away_team_id": 772,
+              "full_time": {
+                "home": 1,
+                "away": 3
+              },
+              "half_time": {
+                "home": 0,
+                "away": 2
+              },
+              "asian_line": -2,
+              "total_line": 3,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2992205,
+              "competition": "國際友誼",
+              "kickoff": "26-06-07 08:00",
+              "home_team": "阿根廷",
+              "away_team": "洪都拉斯",
+              "home_team_id": 766,
+              "away_team_id": 794,
+              "full_time": {
+                "home": 2,
+                "away": 0
+              },
+              "half_time": {
+                "home": 1,
+                "away": 0
+              },
+              "asian_line": 2.25,
+              "total_line": 3.25,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2990967,
+              "competition": "國際友誼",
+              "kickoff": "26-06-05 03:00",
+              "home_team": "西班牙",
+              "away_team": "伊拉克",
+              "home_team_id": 772,
+              "away_team_id": 874,
+              "full_time": {
+                "home": 1,
+                "away": 1
+              },
+              "half_time": {
+                "home": 1,
+                "away": 1
+              },
+              "asian_line": 2.75,
+              "total_line": 3.5,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2966695,
+              "competition": "國際友誼",
+              "kickoff": "26-04-01 07:30",
+              "home_team": "阿根廷",
+              "away_team": "贊比亞",
+              "home_team_id": 766,
+              "away_team_id": 807,
+              "full_time": {
+                "home": 5,
+                "away": 0
+              },
+              "half_time": {
+                "home": 2,
+                "away": 0
+              },
+              "asian_line": 2.75,
+              "total_line": 3.25,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2966686,
+              "competition": "國際友誼",
+              "kickoff": "26-04-01 03:00",
+              "home_team": "西班牙",
+              "away_team": "埃及",
+              "home_team_id": 772,
+              "away_team_id": 735,
+              "full_time": {
+                "home": 0,
+                "away": 0
+              },
+              "half_time": {
+                "home": 0,
+                "away": 0
+              },
+              "asian_line": 2,
+              "total_line": 3.25,
+              "provider_flags": [
+                0,
+                1
+              ]
+            },
+            {
+              "match_id": 2964801,
+              "competition": "國際友誼",
+              "kickoff": "26-03-28 07:15",
+              "home_team": "阿根廷",
+              "away_team": "毛里塔尼亞",
+              "home_team_id": 766,
+              "away_team_id": 5281,
+              "full_time": {
+                "home": 2,
+                "away": 1
+              },
+              "half_time": {
+                "home": 2,
+                "away": 0
+              },
+              "asian_line": 3.5,
+              "total_line": 4.25,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2963964,
+              "competition": "國際友誼",
+              "kickoff": "26-03-28 04:00",
+              "home_team": "西班牙",
+              "away_team": "塞爾維亞",
+              "home_team_id": 772,
+              "away_team_id": 642,
+              "full_time": {
+                "home": 3,
+                "away": 0
+              },
+              "half_time": {
+                "home": 2,
+                "away": 0
+              },
+              "asian_line": 1.5,
+              "total_line": 3,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2756232,
+              "competition": "歐洲預選",
+              "kickoff": "25-11-19 03:45",
+              "home_team": "西班牙",
+              "away_team": "土耳其",
+              "home_team_id": 772,
+              "away_team_id": 762,
+              "full_time": {
+                "home": 2,
+                "away": 2
+              },
+              "half_time": {
+                "home": 1,
+                "away": 1
+              },
+              "asian_line": 1.75,
+              "total_line": 3.25,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2756231,
+              "competition": "歐洲預選",
+              "kickoff": "25-11-16 01:00",
+              "home_team": "格魯吉亞",
+              "away_team": "西班牙",
+              "home_team_id": 901,
+              "away_team_id": 772,
+              "full_time": {
+                "home": 0,
+                "away": 4
+              },
+              "half_time": {
+                "home": 0,
+                "away": 3
+              },
+              "asian_line": -2,
+              "total_line": 3,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2899085,
+              "competition": "國際友誼",
+              "kickoff": "25-11-15 00:10",
+              "home_team": "安哥拉",
+              "away_team": "阿根廷",
+              "home_team_id": 804,
+              "away_team_id": 766,
+              "full_time": {
+                "home": 0,
+                "away": 2
+              },
+              "half_time": {
+                "home": 0,
+                "away": 1
+              },
+              "asian_line": -1.75,
+              "total_line": 2.75,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2888684,
+              "competition": "國際友誼",
+              "kickoff": "25-10-15 08:10",
+              "home_team": "波多黎各",
+              "away_team": "阿根廷",
+              "home_team_id": 7492,
+              "away_team_id": 766,
+              "full_time": {
+                "home": 0,
+                "away": 6
+              },
+              "half_time": {
+                "home": 0,
+                "away": 3
+              },
+              "asian_line": -3.75,
+              "total_line": 4.5,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2756230,
+              "competition": "歐洲預選",
+              "kickoff": "25-10-15 02:45",
+              "home_team": "西班牙",
+              "away_team": "保加利亞",
+              "home_team_id": 772,
+              "away_team_id": 769,
+              "full_time": {
+                "home": 4,
+                "away": 0
+              },
+              "half_time": {
+                "home": 1,
+                "away": 0
+              },
+              "asian_line": 3.5,
+              "total_line": 4.25,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2756195,
+              "competition": "歐洲預選",
+              "kickoff": "25-10-12 02:45",
+              "home_team": "西班牙",
+              "away_team": "格魯吉亞",
+              "home_team_id": 772,
+              "away_team_id": 901,
+              "full_time": {
+                "home": 2,
+                "away": 0
+              },
+              "half_time": {
+                "home": 1,
+                "away": 0
+              },
+              "asian_line": 2.5,
+              "total_line": 3.5,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2885472,
+              "competition": "國際友誼",
+              "kickoff": "25-10-11 08:10",
+              "home_team": "阿根廷",
+              "away_team": "委內瑞拉",
+              "home_team_id": 766,
+              "away_team_id": 777,
+              "full_time": {
+                "home": 1,
+                "away": 0
+              },
+              "half_time": {
+                "home": 1,
+                "away": 0
+              },
+              "asian_line": 1.5,
+              "total_line": 3,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2470123,
+              "competition": "南美預選",
+              "kickoff": "25-09-10 07:00",
+              "home_team": "厄瓜多爾",
+              "away_team": "阿根廷",
+              "home_team_id": 779,
+              "away_team_id": 766,
+              "full_time": {
+                "home": 1,
+                "away": 0
+              },
+              "half_time": {
+                "home": 1,
+                "away": 0
+              },
+              "asian_line": -0.25,
+              "total_line": 2,
+              "provider_flags": [
+                1,
+                1
+              ]
+            },
+            {
+              "match_id": 2756194,
+              "competition": "歐洲預選",
+              "kickoff": "25-09-08 02:45",
+              "home_team": "土耳其",
+              "away_team": "西班牙",
+              "home_team_id": 762,
+              "away_team_id": 772,
+              "full_time": {
+                "home": 0,
+                "away": 6
+              },
+              "half_time": {
+                "home": 0,
+                "away": 3
+              },
+              "asian_line": -0.75,
+              "total_line": 2.75,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2470120,
+              "competition": "南美預選",
+              "kickoff": "25-09-05 07:30",
+              "home_team": "阿根廷",
+              "away_team": "委內瑞拉",
+              "home_team_id": 766,
+              "away_team_id": 777,
+              "full_time": {
+                "home": 3,
+                "away": 0
+              },
+              "half_time": {
+                "home": 1,
+                "away": 0
+              },
+              "asian_line": 1.75,
+              "total_line": 3,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2756193,
+              "competition": "歐洲預選",
+              "kickoff": "25-09-05 02:45",
+              "home_team": "保加利亞",
+              "away_team": "西班牙",
+              "home_team_id": 769,
+              "away_team_id": 772,
+              "full_time": {
+                "home": 0,
+                "away": 3
+              },
+              "half_time": {
+                "home": 0,
+                "away": 3
+              },
+              "asian_line": -2.25,
+              "total_line": 3.25,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2470113,
+              "competition": "南美預選",
+              "kickoff": "25-06-11 08:00",
+              "home_team": "阿根廷",
+              "away_team": "哥倫比亞",
+              "home_team_id": 766,
+              "away_team_id": 775,
+              "full_time": {
+                "home": 1,
+                "away": 1
+              },
+              "half_time": {
+                "home": 0,
+                "away": 1
+              },
+              "asian_line": 0.75,
+              "total_line": 2.25,
+              "provider_flags": [
+                1,
+                0
+              ]
+            },
+            {
+              "match_id": 2784008,
+              "competition": "歐國聯",
+              "kickoff": "25-06-09 03:00",
+              "home_team": "葡萄牙",
+              "away_team": "西班牙",
+              "home_team_id": 765,
+              "away_team_id": 772,
+              "full_time": {
+                "home": 2,
+                "away": 2
+              },
+              "half_time": {
+                "home": 1,
+                "away": 2
+              },
+              "asian_line": -0.5,
+              "total_line": 2.75,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2470108,
+              "competition": "南美預選",
+              "kickoff": "25-06-06 09:00",
+              "home_team": "智利",
+              "away_team": "阿根廷",
+              "home_team_id": 780,
+              "away_team_id": 766,
+              "full_time": {
+                "home": 0,
+                "away": 1
+              },
+              "half_time": {
+                "home": 0,
+                "away": 1
+              },
+              "asian_line": -0.75,
+              "total_line": 2.25,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2756183,
+              "competition": "歐國聯",
+              "kickoff": "25-06-06 03:00",
+              "home_team": "西班牙",
+              "away_team": "法國",
+              "home_team_id": 772,
+              "away_team_id": 649,
+              "full_time": {
+                "home": 5,
+                "away": 4
+              },
+              "half_time": {
+                "home": 2,
+                "away": 0
+              },
+              "asian_line": 0.25,
+              "total_line": 2.25,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2470104,
+              "competition": "南美預選",
+              "kickoff": "25-03-26 08:00",
+              "home_team": "阿根廷",
+              "away_team": "巴西",
+              "home_team_id": 766,
+              "away_team_id": 778,
+              "full_time": {
+                "home": 4,
+                "away": 1
+              },
+              "half_time": {
+                "home": 3,
+                "away": 1
+              },
+              "asian_line": 0.5,
+              "total_line": 2,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2694228,
+              "competition": "歐國聯",
+              "kickoff": "25-03-24 03:45",
+              "home_team": "西班牙",
+              "away_team": "荷蘭",
+              "home_team_id": 772,
+              "away_team_id": 646,
+              "full_time": {
+                "home": 2,
+                "away": 2
+              },
+              "half_time": {
+                "home": 1,
+                "away": 0
+              },
+              "asian_line": 0.75,
+              "total_line": 2.75,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2470100,
+              "competition": "南美預選",
+              "kickoff": "25-03-22 07:30",
+              "home_team": "烏拉圭",
+              "away_team": "阿根廷",
+              "home_team_id": 767,
+              "away_team_id": 766,
+              "full_time": {
+                "home": 0,
+                "away": 1
+              },
+              "half_time": {
+                "home": 0,
+                "away": 0
+              },
+              "asian_line": 0,
+              "total_line": 2,
+              "provider_flags": [
+                0,
+                1
+              ]
+            },
+            {
+              "match_id": 2694225,
+              "competition": "歐國聯",
+              "kickoff": "25-03-21 03:45",
+              "home_team": "荷蘭",
+              "away_team": "西班牙",
+              "home_team_id": 646,
+              "away_team_id": 772,
+              "full_time": {
+                "home": 2,
+                "away": 2
+              },
+              "half_time": {
+                "home": 1,
+                "away": 1
+              },
+              "asian_line": 0,
+              "total_line": 2.5,
+              "provider_flags": [
+                1,
+                0
+              ]
+            },
+            {
+              "match_id": 2470093,
+              "competition": "南美預選",
+              "kickoff": "24-11-20 08:00",
+              "home_team": "阿根廷",
+              "away_team": "秘魯",
+              "home_team_id": 766,
+              "away_team_id": 774,
+              "full_time": {
+                "home": 1,
+                "away": 0
+              },
+              "half_time": {
+                "home": 0,
+                "away": 0
+              },
+              "asian_line": 2,
+              "total_line": 2.75,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2597515,
+              "competition": "歐國聯",
+              "kickoff": "24-11-19 03:45",
+              "home_team": "西班牙",
+              "away_team": "瑞士",
+              "home_team_id": 772,
+              "away_team_id": 648,
+              "full_time": {
+                "home": 3,
+                "away": 2
+              },
+              "half_time": {
+                "home": 1,
+                "away": 0
+              },
+              "asian_line": 1,
+              "total_line": 2.75,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2597513,
+              "competition": "歐國聯",
+              "kickoff": "24-11-16 03:45",
+              "home_team": "丹麥",
+              "away_team": "西班牙",
+              "home_team_id": 638,
+              "away_team_id": 772,
+              "full_time": {
+                "home": 1,
+                "away": 2
+              },
+              "half_time": {
+                "home": 0,
+                "away": 1
+              },
+              "asian_line": -0.75,
+              "total_line": 2.5,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2470086,
+              "competition": "南美預選",
+              "kickoff": "24-11-15 07:30",
+              "home_team": "巴拉圭",
+              "away_team": "阿根廷",
+              "home_team_id": 776,
+              "away_team_id": 766,
+              "full_time": {
+                "home": 2,
+                "away": 1
+              },
+              "half_time": {
+                "home": 1,
+                "away": 1
+              },
+              "asian_line": -0.75,
+              "total_line": 2,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2470084,
+              "competition": "南美預選",
+              "kickoff": "24-10-16 08:00",
+              "home_team": "阿根廷",
+              "away_team": "玻利維亞",
+              "home_team_id": 766,
+              "away_team_id": 773,
+              "full_time": {
+                "home": 6,
+                "away": 0
+              },
+              "half_time": {
+                "home": 3,
+                "away": 0
+              },
+              "asian_line": 2.75,
+              "total_line": 3.5,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2597510,
+              "competition": "歐國聯",
+              "kickoff": "24-10-16 02:45",
+              "home_team": "西班牙",
+              "away_team": "塞爾維亞",
+              "home_team_id": 772,
+              "away_team_id": 642,
+              "full_time": {
+                "home": 3,
+                "away": 0
+              },
+              "half_time": {
+                "home": 1,
+                "away": 0
+              },
+              "asian_line": 1.5,
+              "total_line": 2.75,
+              "provider_flags": [
+                0,
+                1
+              ]
+            },
+            {
+              "match_id": 2597509,
+              "competition": "歐國聯",
+              "kickoff": "24-10-13 02:45",
+              "home_team": "西班牙",
+              "away_team": "丹麥",
+              "home_team_id": 772,
+              "away_team_id": 638,
+              "full_time": {
+                "home": 1,
+                "away": 0
+              },
+              "half_time": {
+                "home": 0,
+                "away": 0
+              },
+              "asian_line": 1.25,
+              "total_line": 2.75,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2470078,
+              "competition": "南美預選",
+              "kickoff": "24-10-11 05:20",
+              "home_team": "委內瑞拉",
+              "away_team": "阿根廷",
+              "home_team_id": 777,
+              "away_team_id": 766,
+              "full_time": {
+                "home": 1,
+                "away": 1
+              },
+              "half_time": {
+                "home": 0,
+                "away": 1
+              },
+              "asian_line": -1,
+              "total_line": 2.25,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2470073,
+              "competition": "南美預選",
+              "kickoff": "24-09-11 04:30",
+              "home_team": "哥倫比亞",
+              "away_team": "阿根廷",
+              "home_team_id": 775,
+              "away_team_id": 766,
+              "full_time": {
+                "home": 2,
+                "away": 1
+              },
+              "half_time": {
+                "home": 1,
+                "away": 0
+              },
+              "asian_line": 0,
+              "total_line": 2,
+              "provider_flags": [
+                0,
+                0
+              ]
+            }
+          ],
+          "count": 60
+        },
+        "script_context": {
+          "coach": {
+            "home_record": {
+              "competition_or_team": "畢爾包B隊",
+              "matches": 56,
+              "wins": 25,
+              "draws": 15,
+              "losses": 16,
+              "goals_for": 58,
+              "goals_against": 51,
+              "points_per_match": 1.61,
+              "venue_flag": "1"
+            },
+            "away_record": {
+              "competition_or_team": "阿根廷U20",
+              "matches": 2,
+              "wins": 2,
+              "draws": 0,
+              "losses": 0,
+              "goals_for": 6,
+              "goals_against": 0,
+              "points_per_match": 3.0,
+              "venue_flag": "0"
+            }
+          },
+          "referee": {
+            "name": "斯拉夫科.云薛",
+            "sample": 111,
+            "combined_yellow": 3.96,
+            "combined_red": 0.15
+          },
+          "effects": [
+            "教练剧本：主队教练主场PPG 1.61、客队教练客场PPG 3.00（样本 56/2 场），差距不足以单独改写主线。",
+            "裁判剧本：斯拉夫科.云薛在111场公开样本中场均双方合计黄牌约3.96、红牌约0.15，比赛中断与红牌尾部风险偏高，领先方未必能平稳控场。",
+            "裁判历史样本下主队胜率更高（主41% / 客28%），仅作为剧本倾向，不视为因果优势。"
+          ],
+          "risks": [
+            "裁判公开样本的牌数与红牌率偏高，比分右尾和比赛状态突变风险高于基础泊松假设"
+          ],
+          "model_usage": "match_script_and_uncertainty_only_not_probability_override"
+        },
+        "items": [
+          "教练：主队 德拉富恩特；客队 史基朗尼。",
+          "裁判：斯拉夫科.云薛；公开执法样本 111 场。",
+          "Nowscore盘路历史已读取 60 场，仅作风格与盘口复核，不直接改写概率。",
+          "教练剧本：主队教练主场PPG 1.61、客队教练客场PPG 3.00（样本 56/2 场），差距不足以单独改写主线。",
+          "裁判剧本：斯拉夫科.云薛在111场公开样本中场均双方合计黄牌约3.96、红牌约0.15，比赛中断与红牌尾部风险偏高，领先方未必能平稳控场。",
+          "裁判历史样本下主队胜率更高（主41% / 客28%），仅作为剧本倾向，不视为因果优势。"
+        ],
+        "status": "Nowscore赛前背景已核验",
+        "sources": [
+          "https://live.nowscore.com/info/coach/2907406.htm?l=1",
+          "https://live.nowscore.com/info/referee/2907406.htm?l=1",
+          "https://live.nowscore.com/panlu/2907406.html"
+        ]
+      }
+    },
+    "sources": [
+      "https://www.espn.com/soccer/match/_/gameId/760517"
+    ],
+    "recent_form": {
+      "home_overall": {
+        "matches": 10,
+        "wins": 7,
+        "draws": 3,
+        "losses": 0,
+        "goals_for": 17,
+        "goals_against": 3
+      },
+      "home_home": {
+        "matches": 10,
+        "wins": 6,
+        "draws": 4,
+        "losses": 0,
+        "goals_for": 21,
+        "goals_against": 4
+      },
+      "away_overall": {
+        "matches": 10,
+        "wins": 8,
+        "draws": 2,
+        "losses": 0,
+        "goals_for": 25,
+        "goals_against": 6
+      },
+      "away_away": {
+        "matches": 10,
+        "wins": 6,
+        "draws": 1,
+        "losses": 3,
+        "goals_for": 18,
+        "goals_against": 8
+      }
+    },
+    "form_source": "500.com赛前数据快照",
+    "checked_at": "2026-07-19T03:42:06+00:00"
+  },
+  "evidence_chain": [
+    {
+      "title": "足球维度",
+      "items": [
+        "西班牙近10个主场6胜4平0负，阿根廷近10个客场6胜1平3负",
+        "近期主客场攻防推导λ：西班牙1.35，阿根廷1.20",
+        "双方预期进球接近，比赛更可能由先入球、定位球或临场换人打破均衡；总进球中枢处于常规区间，2至3球是主要密集带；教练剧本：主队教练主场PPG 1.61、客队教练客场PPG 3.00（样本 56/2 场），差距不足以单独改写主线；裁判剧本：斯拉夫科.云薛在111场公开样本中场均双方合计黄牌约3.96、红牌约0.15，比赛中断与红牌尾部风险偏高，领先方未必能平稳控场；裁判历史样本下主队胜率更高（主41% / 客28%），仅作为剧本倾向，不视为因果优势。"
+      ]
+    },
+    {
+      "title": "教练、裁判与历史盘路",
+      "items": [
+        "教练：主队 德拉富恩特；客队 史基朗尼。",
+        "裁判：斯拉夫科.云薛；公开执法样本 111 场。",
+        "Nowscore盘路历史已读取 60 场，仅作风格与盘口复核，不直接改写概率。",
+        "教练剧本：主队教练主场PPG 1.61、客队教练客场PPG 3.00（样本 56/2 场），差距不足以单独改写主线。",
+        "裁判剧本：斯拉夫科.云薛在111场公开样本中场均双方合计黄牌约3.96、红牌约0.15，比赛中断与红牌尾部风险偏高，领先方未必能平稳控场。",
+        "裁判历史样本下主队胜率更高（主41% / 客28%），仅作为剧本倾向，不视为因果优势。",
+        "这些信息用于解释比赛脚本与风险点；在完成历史校准前，不直接机械增减胜平负概率。"
+      ]
+    },
+    {
+      "title": "市场维度",
+      "items": [
+        "去水共识：主胜41.5%、平局31.4%、客胜27.1%",
+        "大小球中轴：2.5；市场占40%校准权重，不替代模型。",
+        "多公司市场对主胜的定价比模型更强0.1%，不能把市场热度直接当成模型优势"
+      ]
+    },
+    {
+      "title": "执行维度",
+      "items": [
+        "每个玩法分别展示当前价、模型概率、EV与最低可接受赔率；低于门槛一律不过线。",
+        "执行价额外要求8%安全边际；模型包含市场校准，因此正EV只是价格复核信号。",
+        "唯一比分1-1只是单个比分格的最高点；胜平负主线主胜是多个比分格合计，二者不要求同方向。"
+      ]
+    },
+    {
+      "title": "模型与临场核验",
+      "items": [
+        "公开事实核验状态：Nowscore赛前背景已核验。",
+        "确认首发、关键伤停、天气或盘口换线与假设冲突时，必须重算而非沿用旧报告。"
+      ]
+    }
+  ],
+  "betting": {
+    "candidates": [],
+    "state": "空仓｜未锁单",
+    "execution_authorized": false,
+    "lock_state_changed": false,
+    "bankroll_state_changed": false,
+    "price_audit": [
+      {
+        "market": "SPF主胜",
+        "model_probability": 0.413933,
+        "conservative_probability": 0.338933,
+        "minimum_acceptable_decimal_odds": 3.186,
+        "odds": 2.02,
+        "ev": -0.163855,
+        "audit_role": "模型价格门槛，不是投注指令",
+        "price_source": "竞彩赛前SPF"
+      },
+      {
+        "market": "SPF平局",
+        "model_probability": 0.266546,
+        "conservative_probability": 0.191546,
+        "minimum_acceptable_decimal_odds": 5.638,
+        "odds": 2.87,
+        "ev": -0.235013,
+        "audit_role": "模型价格门槛，不是投注指令",
+        "price_source": "竞彩赛前SPF"
+      },
+      {
+        "market": "SPF客胜",
+        "model_probability": 0.319521,
+        "conservative_probability": 0.244521,
+        "minimum_acceptable_decimal_odds": 4.417,
+        "odds": 3.5,
+        "ev": 0.118324,
+        "audit_role": "模型价格门槛，不是投注指令",
+        "price_source": "竞彩赛前SPF"
+      },
+      {
+        "market": "立博 大2.5",
+        "model_probability": 0.463859,
+        "push_probability": 0.0,
+        "odds": 2.2,
+        "ev": 0.02049,
+        "minimum_acceptable_decimal_odds": 2.328,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "立博 小2.5",
+        "model_probability": 0.536141,
+        "push_probability": 0.0,
+        "odds": 1.6,
+        "ev": -0.142174,
+        "minimum_acceptable_decimal_odds": 2.014,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "威廉希尔 大2.5",
+        "model_probability": 0.463859,
+        "push_probability": 0.0,
+        "odds": 2.25,
+        "ev": 0.043683,
+        "minimum_acceptable_decimal_odds": 2.328,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "威廉希尔 小2.5",
+        "model_probability": 0.536141,
+        "push_probability": 0.0,
+        "odds": 1.6,
+        "ev": -0.142174,
+        "minimum_acceptable_decimal_odds": 2.014,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "澳门 主-0.25",
+        "model_probability": 0.413933,
+        "push_probability": 0.133273,
+        "odds": 1.92,
+        "ev": -0.071975,
+        "minimum_acceptable_decimal_odds": 2.261,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "澳门 客+0.25",
+        "model_probability": 0.452794,
+        "push_probability": 0.133273,
+        "odds": 1.92,
+        "ev": 0.002637,
+        "minimum_acceptable_decimal_odds": 2.067,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "皇冠 主-0.25",
+        "model_probability": 0.413933,
+        "push_probability": 0.133273,
+        "odds": 1.93,
+        "ev": -0.067836,
+        "minimum_acceptable_decimal_odds": 2.261,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "皇冠 客+0.25",
+        "model_probability": 0.452794,
+        "push_probability": 0.133273,
+        "odds": 1.95,
+        "ev": 0.016221,
+        "minimum_acceptable_decimal_odds": 2.067,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "bet365 主-0.25",
+        "model_probability": 0.413933,
+        "push_probability": 0.133273,
+        "odds": 1.93,
+        "ev": -0.067836,
+        "minimum_acceptable_decimal_odds": 2.261,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "bet365 客+0.25",
+        "model_probability": 0.452794,
+        "push_probability": 0.133273,
+        "odds": 1.93,
+        "ev": 0.007165,
+        "minimum_acceptable_decimal_odds": 2.067,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "威廉希尔 主-0.25",
+        "model_probability": 0.413933,
+        "push_probability": 0.133273,
+        "odds": 1.85,
+        "ev": -0.100951,
+        "minimum_acceptable_decimal_odds": 2.261,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "威廉希尔 客+0.25",
+        "model_probability": 0.452794,
+        "push_probability": 0.133273,
+        "odds": 1.77,
+        "ev": -0.065282,
+        "minimum_acceptable_decimal_odds": 2.067,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "易胜博 主-0.25",
+        "model_probability": 0.413933,
+        "push_probability": 0.133273,
+        "odds": 1.94,
+        "ev": -0.063697,
+        "minimum_acceptable_decimal_odds": 2.261,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "易胜博 客+0.25",
+        "model_probability": 0.452794,
+        "push_probability": 0.133273,
+        "odds": 1.91,
+        "ev": -0.001891,
+        "minimum_acceptable_decimal_odds": 2.067,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "伟德 主-0.25",
+        "model_probability": 0.413933,
+        "push_probability": 0.133273,
+        "odds": 1.89,
+        "ev": -0.084393,
+        "minimum_acceptable_decimal_odds": 2.261,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "伟德 客+0.25",
+        "model_probability": 0.452794,
+        "push_probability": 0.133273,
+        "odds": 1.87,
+        "ev": -0.020003,
+        "minimum_acceptable_decimal_odds": 2.067,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      }
+    ]
+  },
+  "automation": {
+    "provider": "fixed-python-core",
+    "generated_at": "2026-07-19T03:42:06+00:00",
+    "owner_authorized_request": true,
+    "llm_used": false,
+    "market_refresh": {
+      "stage": "INITIAL",
+      "captured_at": "2026-07-19T03:42:06.516168+00:00",
+      "initial_capture": true,
+      "model_recalculated": true,
+      "execution_authorized": false,
+      "lock_state_changed": false,
+      "bankroll_state_changed": false
+    }
+  },
+  "market": {
+    "official_spf": {
+      "home": 2.02,
+      "draw": 2.87,
+      "away": 3.5
+    },
+    "official_rqspf": {
+      "handicap": -1,
+      "home": 4.35,
+      "draw": 3.55,
+      "away": 1.62
+    },
+    "official_market_baseline": {
+      "prices": {
+        "home": 2.02,
+        "draw": 2.87,
+        "away": 3.5
+      },
+      "overround": 1.129196,
+      "payout_rate": 0.885586,
+      "fair_probabilities": {
+        "home": 0.438409,
+        "draw": 0.308567,
+        "away": 0.253025
+      },
+      "role": "official_market_baseline_only_not_model_probability"
+    },
+    "interpretation": {
+      "money_flow": "没有可核验的交易所成交量；当前只能确认报价形成的两侧未拉开价格压力，不能称为真实资金流。",
+      "bookmaker_behaviour": "Sharp层方向不足；目的推断：当前更像分散调价和平衡风险，尚没有足够证据说明机构在主动表达单边方向。可信度：低。",
+      "market_pressure": "0家公司、0条轨迹：主胜降赔0家/升赔0家，亚洲盘主队加强0家/减弱0家，大小球升盘0家/降盘0家。综合价格压力偏向两侧未拉开。",
+      "model_impact": "市场方向尚未拉开，不改变模型主线，只保留观察。",
+      "purpose": "当前更像分散调价和平衡风险，尚没有足够证据说明机构在主动表达单边方向。",
+      "confidence": "低",
+      "late_market_weight": "normal",
+      "actual_volume_available": false
+    }
+  },
+  "decision_evolution": {
+    "latest": {
+      "kind": "initial",
+      "headline": "初始判断：主胜；首推比分1-1",
+      "summary": "模型建立初始比赛剧本，主维度为胜平负：主胜（模型41.4%）。0家公司、0条轨迹：主胜降赔0家/升赔0家，亚洲盘主队加强0家/减弱0家，大小球升盘0家/降盘0家。综合价格压力偏向两侧未拉开。；没有可核验的交易所成交量；当前只能确认报价形成的两侧未拉开价格压力，不能称为真实资金流。；Sharp层方向不足；目的推断：当前更像分散调价和平衡风险，尚没有足够证据说明机构在主动表达单边方向。可信度：低。；市场方向尚未拉开，不改变模型主线，只保留观察。",
+      "changed": true
+    },
+    "history": [
+      {
+        "captured_at": "2026-07-19T03:42:06.516168+00:00",
+        "headline": "初始判断：主胜；首推比分1-1",
+        "summary": "模型建立初始比赛剧本，主维度为胜平负：主胜（模型41.4%）。0家公司、0条轨迹：主胜降赔0家/升赔0家，亚洲盘主队加强0家/减弱0家，大小球升盘0家/降盘0家。综合价格压力偏向两侧未拉开。；没有可核验的交易所成交量；当前只能确认报价形成的两侧未拉开价格压力，不能称为真实资金流。；Sharp层方向不足；目的推断：当前更像分散调价和平衡风险，尚没有足够证据说明机构在主动表达单边方向。可信度：低。；市场方向尚未拉开，不改变模型主线，只保留观察。",
+        "changed": true
+      }
+    ],
+    "internal_checkpoints_hidden": true
+  }
+}
