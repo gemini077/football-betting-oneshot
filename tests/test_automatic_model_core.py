@@ -3,7 +3,7 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
-from automatic_model_core import build_automatic_model
+from automatic_model_core import _scenario_score_pick, build_automatic_model
 
 
 def test_deterministic_model_generates_complete_probability_matrix():
@@ -24,7 +24,10 @@ def test_deterministic_model_generates_complete_probability_matrix():
     assert len(model["score_probabilities"]) == 10
     assert model["score_probabilities"][0]["fair_odds"] > 1
     assert any(row["market"] == "SPF主胜" for row in result["price_audit"])
-    assert result["decisions"]["unique_score"] == model["score_probabilities"][0]["score"]
+    trace = result["decisions"]["score_selection_trace"]
+    assert trace["selected_score"] == result["decisions"]["unique_score"]
+    assert trace["method"] == "scenario_selector_v2"
+    assert trace["candidates"]
     assert result["live_ev_profiles"]["active"] is True
     assert result["live_ev_profiles"]["contract"]["market_name"] == "全场独赢"
     assert result["decisions"]["match_story"]
@@ -116,3 +119,27 @@ def test_coach_and_referee_shape_match_script_without_overriding_probability():
     assert "裁判剧本" in story
     assert result["fundamentals"]["nowscore_context"]["script_context"]["model_usage"].endswith("not_probability_override")
     assert any("红牌" in item for item in result["decisions"]["maximum_error_points"])
+
+
+def test_unique_score_is_scenario_choice_not_mathematical_or_market_shortcut():
+    matrix = {
+        (1, 1): 0.12,
+        (2, 1): 0.11,
+        (1, 0): 0.08,
+        (0, 1): 0.06,
+        (0, 0): 0.05,
+    }
+    score, reasoning, trace = _scenario_score_pick(
+        matrix,
+        {"home": 0.55, "draw": 0.25, "away": 0.20},
+        [{"goals": "3", "probability": 0.40}, {"goals": "2", "probability": 0.30}],
+        {"yes": 0.65, "no": 0.35},
+        expected_goals=2.8,
+        market_probabilities={"home": 0.58, "draw": 0.24, "away": 0.18},
+        market_total=3.0,
+        market_handicap=-1.0,
+        script_context={},
+    )
+    assert trace["mathematical_first_score"] == "1-1"
+    assert score == "2-1"
+    assert "不是照抄数学第一或市场第一" in reasoning

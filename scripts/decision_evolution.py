@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import math
+import re
 from pathlib import Path
 from typing import Any
 
@@ -20,6 +21,19 @@ ROOT = Path(__file__).resolve().parents[1]
 TIMELINE_ROOT = ROOT / "data" / "match_archive"
 OUTCOMES = ("home", "draw", "away")
 OUTCOME_LABELS = {"home": "主胜", "draw": "平局", "away": "客胜"}
+
+
+def _primary_signature(value: Any) -> str:
+    text = str(value or "")
+    for outcome in ("主胜", "平局", "客胜"):
+        if outcome in text:
+            return f"胜平负:{outcome}"
+    total = re.search(r"(大|小)\s*(\d+(?:\.\d+)?)", text)
+    if total:
+        return f"大小球:{total.group(1)}{total.group(2)}"
+    if "双方进球" in text or "BTTS" in text.upper():
+        return "BTTS:是" if any(token in text for token in ("是", "Yes", "YES")) else "BTTS:否"
+    return re.sub(r"[（(][^）)]*%[^）)]*[）)]", "", text).strip()
 
 
 def _number(value: Any) -> float | None:
@@ -68,6 +82,8 @@ def decision_snapshot(analysis: dict, checkpoint: dict | None = None) -> dict:
         "outcome_leader": leader,
         "outcome_leader_label": OUTCOME_LABELS.get(leader),
         "unique_score": decisions.get("unique_score"),
+        "score_selection_trace": decisions.get("score_selection_trace") or {},
+        "score_reasoning": decisions.get("score_reasoning"),
         "primary_dimension": decisions.get("unique_primary_dimension"),
         "value_judgement": decisions.get("value_judgement"),
         "lambda_home": _number(model.get("lambda_home")),
@@ -104,11 +120,13 @@ def describe_change(previous: dict | None, current: dict) -> dict:
         changes.append(f"{OUTCOME_LABELS[key]}概率{'上调' if delta > 0 else '下调'}{abs(delta) * 100:.1f}个百分点")
 
     old_primary, new_primary = previous.get("primary_dimension"), current.get("primary_dimension")
-    if old_primary and new_primary and old_primary != new_primary:
+    if old_primary and new_primary and _primary_signature(old_primary) != _primary_signature(new_primary):
         changes.append(f"主维度由“{old_primary}”调整为“{new_primary}”")
     old_score, new_score = previous.get("unique_score"), current.get("unique_score")
     if old_score and new_score and old_score != new_score:
-        changes.append(f"最可能比分由{old_score}调整为{new_score}")
+        trace = current.get("score_selection_trace") or {}
+        factors = "、".join(str(item) for item in (trace.get("selected_factors") or [])[:3])
+        changes.append(f"最可能比分由{old_score}调整为{new_score}" + (f"（{factors}）" if factors else ""))
     if previous.get("market_pressure") != current.get("market_pressure"):
         changes.append(str(current.get("market_pressure")))
     if previous.get("money_flow") != current.get("money_flow"):
@@ -177,6 +195,9 @@ def attach_evolution(
             "headline": (row.get("change") or {}).get("headline"),
             "summary": (row.get("change") or {}).get("summary"),
             "changed": (row.get("change") or {}).get("changed"),
+            "score": (row.get("decision") or {}).get("unique_score"),
+            "score_reasoning": (row.get("decision") or {}).get("score_reasoning"),
+            "score_selection_trace": (row.get("decision") or {}).get("score_selection_trace") or {},
         }
         for row in timeline
     ]
@@ -185,6 +206,9 @@ def attach_evolution(
         "headline": change["headline"],
         "summary": change["summary"],
         "changed": change["changed"],
+        "score": current.get("unique_score"),
+        "score_reasoning": current.get("score_reasoning"),
+        "score_selection_trace": current.get("score_selection_trace") or {},
     })
     analysis["decision_evolution"] = {
         "latest": change,

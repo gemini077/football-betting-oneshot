@@ -135,20 +135,23 @@ def review_data(workbook_path: Path) -> tuple[list[dict[str, Any]], list[dict[st
     timeline = table_rows(wb["03_时间轴与盘口验证"], 3)
     roots = table_rows(wb["05_根因决策树与修正池"], 3)
 
-    known = {str(row.get("MatchID") or "") for row in signals}
+    signal_index = {str(row.get("MatchID") or ""): index for index, row in enumerate(signals) if row.get("MatchID")}
     for path in sorted((BASE_DIR / "data" / "postmatch_reviews").glob("*.json")):
         payload = load_json(path, {}) or {}
         match_id = str(payload.get("MatchID") or payload.get("match_key") or path.stem)
-        if not payload.get("赛事与对阵") or match_id in known:
+        if not payload.get("赛事与对阵"):
             continue
         payload["MatchID"] = match_id
         payload["kickoff_local"] = (payload.get("match") or {}).get("kickoff_local")
-        signals.append(payload)
+        if match_id in signal_index:
+            signals[signal_index[match_id]] = {**signals[signal_index[match_id]], **payload}
+        else:
+            signal_index[match_id] = len(signals)
+            signals.append(payload)
         if isinstance(payload.get("_timeline"), dict):
             timeline.append({"记录ID": match_id, "比赛ID与对阵": f"{match_id}｜{payload.get('赛事与对阵')}", **payload["_timeline"]})
         if isinstance(payload.get("_root_cause"), dict):
             roots.append({"比赛场次": f"{match_id}｜{payload.get('赛事与对阵')}", **payload["_root_cause"]})
-        known.add(match_id)
     runtime = load_json(RUNTIME_PATH, {}) or {}
     reviewed = runtime.get("latest_reviewed_matches") or []
     for row in signals:
@@ -186,11 +189,13 @@ def render_review_page(signal: dict[str, Any], timeline: dict[str, Any], root: d
     settlement = signal.get("settlement") if isinstance(signal.get("settlement"), dict) else {}
 
     audit_rows = [
+        ("模型胜平负首位", (settlement.get("model_1x2") or {}).get("pick"), (settlement.get("model_1x2") or {}).get("hit")),
         ("唯一主维度", signal.get("赛前首推主维度"), signal.get("主维度是否命中")),
         ("唯一正确比分", signal.get("赛前唯一首推比分"), signal.get("比分是否命中")),
         ("亚洲让球", signal.get("赛前亚盘方向"), (settlement.get("asian_handicap") or {}).get("hit") if settlement else "按复盘摘要核验"),
         ("大小球/总进球", signal.get("赛前大小球方向"), (settlement.get("total_goals_mode") or {}).get("hit") if settlement else "按复盘摘要核验"),
         ("双方进球", signal.get("赛前BTTS判断"), (settlement.get("btts") or {}).get("hit") if settlement else "按复盘摘要核验"),
+        ("预期总进球", (settlement.get("expected_goals") or {}).get("pick"), "残差 " + text((signal.get("model_diagnostics") or {}).get("total_goals_residual"))),
     ]
     audit_html = "".join(
         f'<tr><td>{esc(market)}</td><td>{esc(pick)}</td><td><span class="pill {badge_class(settlement_label(result))}">{esc(settlement_label(result))}</span></td></tr>'
@@ -198,8 +203,8 @@ def render_review_page(signal: dict[str, Any], timeline: dict[str, Any], root: d
     )
     timeline_fields = [
         ("快照覆盖", timeline.get("快照覆盖")),
-        ("判断如何变化", timeline.get("判断如何变化")),
         ("临盘资金与机构行为", timeline.get("临盘资金与机构行为")),
+        ("盘口客观方向", timeline.get("盘口客观方向")),
         ("对最终判断的影响", timeline.get("对最终判断的影响")),
         ("最后有效判断", timeline.get("最后有效判断")),
         ("数据有效性", timeline.get("数据有效性")),
@@ -216,10 +221,18 @@ def render_review_page(signal: dict[str, Any], timeline: dict[str, Any], root: d
     root_fields = [
         ("结算错项", root.get("结算错项")),
         ("最可能根因", root.get("最可能根因")),
+        ("数据层", root.get("数据层根因")),
+        ("概率层", root.get("概率层根因")),
+        ("市场层", root.get("市场层根因")),
+        ("比赛剧本层", root.get("比赛剧本层根因")),
+        ("决策层", root.get("决策层根因")),
+        ("自动化层", root.get("自动化层根因")),
         ("赛前已知风险", root.get("赛前已知风险")),
         ("反事实条件", root.get("反事实条件")),
+        ("比分反事实", root.get("比分反事实")),
         ("比分误差定位", root.get("比分误差定位")),
         ("模型修正", root.get("模型修正")),
+        ("样本标签", root.get("样本标签")),
         ("修正状态", root.get("修正状态")),
         ("复盘结论", root.get("复盘结论")),
         ("决策节点审计", root.get("决策节点审计")),
@@ -231,6 +244,52 @@ def render_review_page(signal: dict[str, Any], timeline: dict[str, Any], root: d
         f'<div class="fact"><b>{esc(label)}</b><span>{esc(value)}</span></div>'
         for label, value in root_fields if value not in (None, "", "—")
     ) or '<div class="empty-cell">本场尚未形成可验证的根因结论</div>'
+    evidence = signal.get("postmatch_evidence") or {}
+    process = signal.get("match_process") or {}
+    diagnostics = signal.get("model_diagnostics") or {}
+    score_audit = signal.get("score_selection_audit") or {}
+    important_stats = process.get("技术统计") or {}
+    stat_rows = "".join(
+        f'<tr><td>{esc(label)}</td><td>{esc(values.get("home"))}</td><td>{esc(values.get("away"))}</td></tr>'
+        for label, values in important_stats.items()
+        if label in {"射门", "射正", "控球率", "预期进球(xG)", "角球", "犯规", "黄牌", "红牌"} and isinstance(values, dict)
+    ) or '<tr><td colspan="3" class="empty-cell">赛后技术统计未取得，已明确保留为空。</td></tr>'
+    event_rows = "".join(
+        f'<tr><td>{esc(row.get("minute"))}</td><td>{esc("主队" if row.get("side") == "home" else "客队" if row.get("side") == "away" else "—")}</td><td>{esc(row.get("type"))}</td><td>{esc(row.get("detail"))}</td></tr>'
+        for row in (process.get("关键事件") or [])
+    ) or '<tr><td colspan="4" class="empty-cell">关键事件未取得。</td></tr>'
+    score_row_parts = []
+    for row in score_audit.get("candidates") or []:
+        probability_text = f"{float(row.get('matrix_probability') or 0):.1%}"
+        contribution_text = "；".join(
+            f"{key}{float(value):+.2f}" for key, value in (row.get("factor_contributions") or {}).items()
+        )
+        decision_text = "选中" if row.get("decision") == "selected" else row.get("rejection_reason")
+        score_row_parts.append(
+            f'<tr><td>{esc(row.get("rank"))}</td><td><b>{esc(row.get("score"))}</b></td>'
+            f'<td>{esc(probability_text)}</td><td>{esc(row.get("scenario_score"))}</td>'
+            f'<td>{esc(contribution_text)}</td><td>{esc(decision_text)}</td></tr>'
+        )
+    score_rows = "".join(score_row_parts) or '<tr><td colspan="6" class="empty-cell">旧报告未保存比分候选轨迹，只能严格核验冻结首推。</td></tr>'
+    diagnostic_html = "".join(_field(label, diagnostics.get(key), accent=key in {"brier_score_1x2", "actual_score_rank"}) for label, key in (
+        ("实际赛果概率", "actual_outcome_probability"), ("Brier", "brier_score_1x2"), ("Log Loss", "log_loss_1x2"),
+        ("实际比分概率", "actual_score_probability"), ("实际比分排名", "actual_score_rank"), ("总进球残差", "total_goals_residual"),
+    ))
+    evolution = signal.get("decision_evolution") or {}
+    evolution_rows = evolution.get("history") or []
+    evolution_html = "".join(
+        f'<div class="fact"><b>{esc(row.get("captured_at"))}</b><span><strong>{esc(row.get("headline"))}</strong><br>{esc(row.get("summary"))}</span></div>'
+        for row in evolution_rows
+    )
+    if not evolution_html:
+        evolution_html = "".join(
+            f'<div class="fact"><b>{esc(label)}</b><span>{esc(value)}</span></div>'
+            for label, value in (
+                ("是否反转", timeline.get("判断是否反转")),
+                ("比分变化", timeline.get("比分判断变化")),
+                ("完整判断变化", timeline.get("判断如何变化")),
+            ) if value not in (None, "", "—")
+        ) or '<div class="empty-cell">没有保存足以重建判断变化的独立节点。</div>'
     lock_rows = "".join(
         f'<tr><td>{esc(row.get("注单ID"))}</td><td>{esc(row.get("投注层标签"))}</td><td>{esc(row.get("投注方向"))}</td><td>{esc(row.get("下注赔率"))}</td><td>{esc(row.get("下注金额"))}</td><td>{esc(row.get("注单状态"))}</td><td>{esc(row.get("盈亏"))}</td></tr>'
         for row in locks
@@ -246,17 +305,21 @@ def render_review_page(signal: dict[str, Any], timeline: dict[str, Any], root: d
     return f'''<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{esc(match_name)}｜完整赛后复盘</title><style>
 :root{{--bg:#0a0811;--panel:#151020;--panel2:#1d142b;--ink:#f8f3fb;--body:#cdc4d7;--mut:#948aa2;--line:rgba(255,255,255,.1);--red:#ff3657;--pink:#ff7189;--purple:#9b7fd0;--green:#39d6a0;--amber:#ffbd5c}}
-*{{box-sizing:border-box}}body{{margin:0;padding:30px;background:radial-gradient(70% 40% at 50% -5%,rgba(255,54,87,.24),transparent 70%),linear-gradient(180deg,#181025,#0a0811 52%);color:var(--body);font:14px/1.65 "Segoe UI","Microsoft YaHei",sans-serif}}.page{{max-width:1380px;margin:auto}}a{{color:#d9c8f2;text-decoration:none}}.back{{display:inline-flex;padding:8px 12px;border:1px solid rgba(155,127,208,.45);border-radius:9px;background:rgba(155,127,208,.08);margin-bottom:16px}}.hero{{position:relative;overflow:hidden;border:1px solid var(--line);border-radius:22px;padding:42px;background:linear-gradient(145deg,rgba(255,54,87,.18),transparent 42%),linear-gradient(25deg,#100b1b,#211232)}}.eyebrow{{color:var(--pink);font-size:12px;font-weight:800;letter-spacing:.25em}}h1{{color:var(--ink);font-size:clamp(30px,5vw,62px);line-height:1.08;margin:14px 0 8px}}.score{{font-size:clamp(38px,7vw,78px);font-weight:900;color:var(--red);line-height:1}}.meta{{color:var(--mut)}}.grid{{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:18px;margin-top:20px}}.card{{grid-column:span 6;padding:22px;border:1px solid var(--line);border-radius:16px;background:linear-gradient(180deg,rgba(255,255,255,.035),rgba(255,255,255,.018));overflow:hidden}}.full{{grid-column:span 12}}h2{{color:var(--ink);font-size:17px;margin:0 0 16px}}.metrics{{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-top:22px}}.metric{{padding:14px;border:1px solid var(--line);border-radius:11px;background:rgba(255,255,255,.025)}}.metric.accent{{border-color:rgba(255,54,87,.45);background:rgba(255,54,87,.07)}}.metric small{{display:block;color:var(--mut);font-size:11px}}.metric strong{{display:block;color:var(--ink);font-size:15px;margin-top:5px}}.summary{{padding:18px;border-left:3px solid var(--red);background:rgba(255,54,87,.06);border-radius:0 12px 12px 0;color:var(--ink);font-size:16px}}.table-wrap{{overflow:auto;border:1px solid var(--line);border-radius:11px}}table{{width:100%;border-collapse:collapse;min-width:720px}}th,td{{padding:11px 12px;border-bottom:1px solid var(--line);text-align:left}}th{{color:var(--mut);font-size:11px;background:rgba(255,255,255,.035)}}.pill{{display:inline-flex;padding:4px 9px;border-radius:999px;background:#273047}}.pill.good{{color:var(--green);background:rgba(57,214,160,.1)}}.pill.bad{{color:#ff8e9f;background:rgba(255,54,87,.12)}}.pill.warn{{color:var(--amber);background:rgba(255,189,92,.1)}}.facts{{display:grid;gap:0}}.fact{{display:grid;grid-template-columns:150px 1fr;gap:18px;padding:12px;border-bottom:1px solid var(--line)}}.fact b{{color:var(--mut)}}.fact span{{color:var(--ink)}}.empty-cell{{text-align:center;color:var(--mut)}}footer{{margin-top:24px;padding-top:16px;border-top:1px solid var(--line);color:var(--mut);font-size:12px}}
-@media(max-width:900px){{body{{padding:15px}}.hero{{padding:28px 22px}}.card,.full{{grid-column:span 12}}.metrics{{grid-template-columns:repeat(2,1fr)}}}}@media(max-width:540px){{.metrics{{grid-template-columns:1fr}}.fact{{grid-template-columns:1fr;gap:4px}}}}
+*{{box-sizing:border-box}}body{{margin:0;padding:30px;background:radial-gradient(70% 40% at 50% -5%,rgba(255,54,87,.24),transparent 70%),linear-gradient(180deg,#181025,#0a0811 52%);color:var(--body);font:14px/1.65 "Segoe UI","Microsoft YaHei",sans-serif}}.page{{max-width:1380px;margin:auto}}a{{color:#d9c8f2;text-decoration:none}}.back{{display:inline-flex;padding:8px 12px;border:1px solid rgba(155,127,208,.45);border-radius:9px;background:rgba(155,127,208,.08);margin-bottom:16px}}.hero{{position:relative;overflow:hidden;border:1px solid var(--line);border-radius:22px;padding:42px;background:linear-gradient(145deg,rgba(255,54,87,.18),transparent 42%),linear-gradient(25deg,#100b1b,#211232)}}.eyebrow{{color:var(--pink);font-size:12px;font-weight:800;letter-spacing:.25em}}h1{{color:var(--ink);font-size:clamp(30px,5vw,62px);line-height:1.08;margin:14px 0 8px}}.score{{font-size:clamp(38px,7vw,78px);font-weight:900;color:var(--red);line-height:1}}.meta{{color:var(--mut)}}.grid{{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:18px;margin-top:20px}}.card{{grid-column:span 6;padding:22px;border:1px solid var(--line);border-radius:16px;background:linear-gradient(180deg,rgba(255,255,255,.035),rgba(255,255,255,.018));overflow:hidden}}.full{{grid-column:span 12}}h2{{color:var(--ink);font-size:17px;margin:0 0 16px}}h3{{color:var(--ink);font-size:14px;margin:0 0 10px}}.metrics{{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-top:22px}}.metric{{padding:14px;border:1px solid var(--line);border-radius:11px;background:rgba(255,255,255,.025)}}.metric.accent{{border-color:rgba(255,54,87,.45);background:rgba(255,54,87,.07)}}.metric small{{display:block;color:var(--mut);font-size:11px}}.metric strong{{display:block;color:var(--ink);font-size:15px;margin-top:5px}}.summary{{padding:18px;border-left:3px solid var(--red);background:rgba(255,54,87,.06);border-radius:0 12px 12px 0;color:var(--ink);font-size:16px}}.table-wrap{{overflow:auto;border:1px solid var(--line);border-radius:11px}}table{{width:100%;border-collapse:collapse;min-width:720px}}th,td{{padding:11px 12px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}}th{{color:var(--mut);font-size:11px;background:rgba(255,255,255,.035)}}.pill{{display:inline-flex;padding:4px 9px;border-radius:999px;background:#273047}}.pill.good{{color:var(--green);background:rgba(57,214,160,.1)}}.pill.bad{{color:#ff8e9f;background:rgba(255,54,87,.12)}}.pill.warn{{color:var(--amber);background:rgba(255,189,92,.1)}}.facts{{display:grid;gap:0}}.fact{{display:grid;grid-template-columns:170px 1fr;gap:18px;padding:12px;border-bottom:1px solid var(--line)}}.fact b{{color:var(--mut)}}.fact span{{color:var(--ink)}}.subgrid{{display:grid;grid-template-columns:1fr 1fr;gap:16px}}details{{border:1px solid var(--line);border-radius:12px;background:rgba(255,255,255,.02)}}summary{{cursor:pointer;list-style:none;padding:15px 17px;color:var(--ink);font-weight:800}}summary::-webkit-details-marker{{display:none}}summary::after{{content:"＋";float:right;color:var(--pink)}}details[open] summary::after{{content:"－"}}details .detail-body{{padding:0 17px 17px}}.empty-cell{{text-align:center;color:var(--mut)}}footer{{margin-top:24px;padding-top:16px;border-top:1px solid var(--line);color:var(--mut);font-size:12px}}
+@media(max-width:900px){{body{{padding:15px}}.hero{{padding:28px 22px}}.card,.full{{grid-column:span 12}}.metrics{{grid-template-columns:repeat(2,1fr)}}.subgrid{{grid-template-columns:1fr}}}}@media(max-width:540px){{.metrics{{grid-template-columns:1fr}}.fact{{grid-template-columns:1fr;gap:4px}}}}
 </style></head><body><main class="page"><a class="back" href="../match_workspace/latest.html">← 返回比赛工作台</a>
 <header class="hero"><div class="eyebrow">FOOTBALL BETTING ONESHOT · POST-MATCH REVIEW</div><h1>{esc(match_name)}</h1><div class="score">{esc(score)}</div><div class="meta">{esc(match_id)} · 90分钟含伤停，不含加时与点球 · 生成于 {esc(generated_at.strftime('%Y-%m-%d %H:%M:%S'))}</div><div class="metrics">{_field('主维度结算',signal.get('主维度是否命中'),accent=True)}{_field('唯一比分',signal.get('比分是否命中'))}{_field('模型逻辑',classification)}{_field('最大错点',signal.get('最大错点类型'))}{_field('随机事件',signal.get('随机事件剔除'))}{_field('样本有效性',signal.get('是否有效样本'))}</div></header>
-<div class="grid"><section class="card full"><h2>01｜复盘结论</h2><div class="summary">{esc(signal.get('复盘摘要'))}</div></section>
-<section class="card full"><h2>02｜全部玩法严格结算</h2><div class="table-wrap"><table><thead><tr><th>玩法</th><th>赛前冻结判断</th><th>赛后严格结算</th></tr></thead><tbody>{audit_html}</tbody></table></div><p class="meta">相邻比分只用于误差诊断，永远不算精确命中；辅助玩法命中不替代唯一主维度。</p></section>
-<section class="card"><h2>03｜赛前推理回放</h2><div class="facts">{_field('三维交叉验证',signal.get('赛前三维交叉验证结论'))}{_field('盘路性质',signal.get('盘路性质判定'))}{_field('赛前最大错点',signal.get('赛前最大错点'))}{_field('赛后错点归因',signal.get('错点归因（单选）'))}{_field('相邻比分污染',signal.get('相邻比分污染'))}{_field('冷门/右尾污染',signal.get('冷门/右尾污染'))}</div></section>
-<section class="card"><h2>04｜盘口时间线与数据有效性</h2><div class="facts">{timeline_html}</div></section>
-<section class="card full"><h2>05｜根因、反事实与模型修正</h2><div class="facts">{root_html}</div></section>
-<section class="card full"><h2>06｜模拟注单结算</h2><div class="table-wrap"><table><thead><tr><th>模拟ID</th><th>玩法</th><th>方向</th><th>冻结赔率</th><th>金额</th><th>状态</th><th>盈亏</th></tr></thead><tbody>{paper_rows}</tbody></table></div></section>
-<section class="card full"><h2>07｜真实注单结算</h2><div class="table-wrap"><table><thead><tr><th>注单ID</th><th>玩法</th><th>方向</th><th>实际赔率</th><th>实际金额</th><th>状态</th><th>盈亏</th></tr></thead><tbody>{real_rows}</tbody></table></div></section></div>
+<div class="grid"><section class="card full"><h2>01｜赛果与复盘结论</h2><div class="summary">{esc(signal.get('复盘摘要'))}</div><div class="metrics">{diagnostic_html}</div></section>
+<section class="card full"><h2>02｜比赛过程与关键事实</h2><div class="facts">{_field('半场比分',process.get('半场比分'))}{_field('阵型',process.get('阵型'))}{_field('场地天气',process.get('场地天气'))}{_field('赛后证据状态',evidence.get('status'))}{_field('事实来源',process.get('事实来源'))}</div><div class="subgrid"><div><h3>关键事件</h3><div class="table-wrap"><table><thead><tr><th>时间</th><th>球队</th><th>事件</th><th>详情</th></tr></thead><tbody>{event_rows}</tbody></table></div></div><div><h3>核心技术统计</h3><div class="table-wrap"><table><thead><tr><th>指标</th><th>主队</th><th>客队</th></tr></thead><tbody>{stat_rows}</tbody></table></div></div></div></section>
+<section class="card full"><h2>03｜全部模型维度严格结算</h2><div class="table-wrap"><table><thead><tr><th>玩法</th><th>赛前冻结判断</th><th>赛后严格结算</th></tr></thead><tbody>{audit_html}</tbody></table></div><p class="meta">相邻比分永远不算精确命中；连续预测使用残差，不强行包装成红黑。</p></section>
+<section class="card"><h2>04｜模拟注单结算</h2><div class="table-wrap"><table><thead><tr><th>模拟ID</th><th>玩法</th><th>方向</th><th>冻结赔率</th><th>金额</th><th>状态</th><th>盈亏</th></tr></thead><tbody>{paper_rows}</tbody></table></div></section>
+<section class="card"><h2>05｜真实注单结算</h2><div class="table-wrap"><table><thead><tr><th>注单ID</th><th>玩法</th><th>方向</th><th>实际赔率</th><th>实际金额</th><th>状态</th><th>盈亏</th></tr></thead><tbody>{real_rows}</tbody></table></div></section>
+<section class="card full"><h2>06｜唯一比分推演审计</h2><div class="summary">首推 {esc(score_audit.get('selected_score') or signal.get('赛前唯一首推比分'))} · 置信度 {esc(score_audit.get('confidence'))} · 主要风险：{esc(score_audit.get('main_risk'))}</div><div class="table-wrap"><table><thead><tr><th>排名</th><th>候选比分</th><th>矩阵概率</th><th>综合情景分</th><th>因子贡献</th><th>选择/淘汰原因</th></tr></thead><tbody>{score_rows}</tbody></table></div><p class="meta">比分预测与比分投注分离；没有可成交赔率或EV不通过，不生成模拟注单。</p></section>
+<section class="card full"><h2>07｜盘口、机构行为与数据有效性</h2><div class="facts">{timeline_html}</div></section>
+<section class="card"><h2>08｜赛前风险如何被验证</h2><div class="facts">{_field('赛前最大错点',signal.get('赛前最大错点'))}{_field('赛后错点归因',signal.get('错点归因（单选）'))}{_field('冷门/右尾概率',signal.get('冷门/右尾污染'))}{_field('相邻比分规则',signal.get('相邻比分污染'))}</div></section>
+<section class="card"><h2>09｜分层根因</h2><div class="facts">{root_html}</div></section>
+<section class="card full"><h2>10｜反事实、模型修正与样本归档</h2><div class="facts">{_field('方向反事实',root.get('反事实条件'))}{_field('比分反事实',root.get('比分反事实'))}{_field('模型修正',root.get('模型修正'))}{_field('样本标签',root.get('样本标签'))}{_field('修正状态',root.get('修正状态'))}</div></section>
+<section class="card full"><h2>11｜判断变化</h2><p class="meta">这里只显示结论摘要；展开后查看各次真实快照如何改变概率、主维度与唯一比分。</p><details><summary>{esc(timeline.get('判断是否反转') or '查看完整判断变化')}</summary><div class="detail-body facts">{evolution_html}</div></details></section></div>
 <footer>冻结赛前判断后再核验赛果；没有的价格和时间节点保持为空，不用赛后信息回填。未明确“锁单/已下单”时，不生成真实注单或账户盈亏。</footer></main></body></html>'''
 
 
