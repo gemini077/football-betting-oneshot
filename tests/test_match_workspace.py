@@ -25,6 +25,11 @@ class MatchWorkspacePortfolioTests(unittest.TestCase):
             error = checked.stderr.decode("utf-8", errors="replace")
             self.assertEqual(0, checked.returncode, f"inline script {index}: {error}")
 
+    def test_formatters_are_initialized_before_calibration_card_uses_them(self):
+        page = render("{}")
+
+        self.assertLess(page.index("const rate=v=>"), page.index("CALIBRATION LOOP"))
+
     def test_same_second_rebuild_uses_a_unique_output_directory(self):
         with tempfile.TemporaryDirectory() as temp:
             output = Path(temp)
