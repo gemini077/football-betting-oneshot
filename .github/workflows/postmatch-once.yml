@@ -4,6 +4,12 @@ on:
   workflow_dispatch:
   repository_dispatch:
     types: [postmatch_verification_due]
+  schedule:
+    - cron: "45 12 22 7 *"
+    - cron: "15 19 22 7 *"
+    - cron: "45 1 23 7 *"
+    - cron: "45 2 23 7 *"
+    - cron: "45 4 23 7 *"
 
 permissions:
   contents: write
@@ -46,8 +52,6 @@ jobs:
           git add .github/workflows/postmatch-once.yml data/postmatch_automation data/postmatch_reviews data/postmatch_reports data/match_workspace data/postmatch_dashboard data/paper_ledger
           if ! git diff --cached --quiet; then
             git commit -m "verify scheduled match result [skip ci]"
-            git stash push --include-untracked -m "ci-transient-untracked-files" || true
-            git pull --rebase origin main
             git push
           fi
       - uses: actions/configure-pages@v5
