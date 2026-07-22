@@ -21,7 +21,7 @@ from match_identity import canonical_match_id
 SCHEDULE_ROOT = BASE_DIR / "data" / "postmatch_automation" / "schedules"
 RESULT_ROOT = BASE_DIR / "data" / "postmatch_automation" / "results"
 FINAL_STATUSES = {"result_verified", "reviewed"}
-RESULT_STRATEGY_VERSION = "nowscore_matchdetail_v3"
+RESULT_STRATEGY_VERSION = "nowscore_matchdetail_v4_dual_source_phase_aware"
 WORKSPACE_PATH = BASE_DIR / "data" / "match_workspace" / "latest.json"
 SCORE_PATTERN = re.compile(
     r'<p\s+class=["\']odds_hd_bf["\'][^>]*>\s*<strong>\s*(\d+)\s*[:：]\s*(\d+)\s*</strong>',
@@ -131,31 +131,69 @@ def resolve_nowscore_id(schedule: dict[str, Any]) -> int | None:
     return None
 
 
-def parse_nowscore_detail(page: str) -> tuple[int, int] | None:
-    """Read a final 90-minute score from Nowscore's archived event page."""
+def _event_minute(event_html: str) -> int | None:
+    """Extract the displayed minute, including 90+ stoppage time."""
+    cells = re.findall(r"<td[^>]*>(.*?)</td>", event_html, re.I | re.S)
+    if len(cells) < 5:
+        return None
+    minute_text = html_lib.unescape(re.sub(r"<[^>]+>", "", cells[2])).strip()
+    match = re.search(r"(\d{1,3})(?:\s*\+\s*\d{1,2})?", minute_text)
+    return int(match.group(1)) if match else None
+
+
+def _score_result(home: int, away: int, *, after_extra_time: str | None = None) -> dict[str, Any]:
+    return {
+        "score_90m": f"{home}-{away}",
+        "after_extra_time": after_extra_time,
+        "penalties": None,
+        "scope": "regulation_90m_plus_stoppage",
+    }
+
+
+def _result_from_tuple(score: tuple[int, int]) -> dict[str, Any]:
+    return _score_result(score[0], score[1])
+
+
+def parse_nowscore_detail(page: str) -> dict[str, Any] | None:
+    """Read 90-minute and extra-time scores from Nowscore's event page.
+
+    Nowscore places an own-goal event on the side receiving the goal.  The
+    column position is therefore the authoritative scoring side; data-kind 8
+    must not be inverted a second time.
+    """
     state = re.search(r"var\s+state\s*=\s*(-?\d+)", page or "")
     if not state or int(state.group(1)) != -1:
         return None
-    home = away = 0
+    home = away = extra_home = extra_away = 0
     for event in re.finditer(r'<tr[^>]*data-kind=["\'](1|7|8)["\'][^>]*>(.*?)</tr>', page, re.I | re.S):
         cells = re.findall(r"<td[^>]*>(.*?)</td>", event.group(2), re.I | re.S)
         if len(cells) < 5:
+            continue
+        minute = _event_minute(event.group(2))
+        if minute is None:
             continue
         left = html_lib.unescape(re.sub(r"<[^>]+>", "", cells[0])).strip()
         right = html_lib.unescape(re.sub(r"<[^>]+>", "", cells[-1])).strip()
         if not left and not right:
             continue
         scoring_home = bool(left)
-        if event.group(1) == "8":  # own goal is credited to the other side
-            scoring_home = not scoring_home
-        if scoring_home:
-            home += 1
+        if minute <= 90:
+            if scoring_home:
+                home += 1
+            else:
+                away += 1
         else:
-            away += 1
-    return home, away
+            if scoring_home:
+                extra_home += 1
+            else:
+                extra_away += 1
+    after_extra_time = None
+    if extra_home or extra_away:
+        after_extra_time = f"{home + extra_home}-{away + extra_away}"
+    return _score_result(home, away, after_extra_time=after_extra_time)
 
 
-def fetch_nowscore_result(match_id: int) -> tuple[tuple[int, int] | None, str, str | None]:
+def fetch_nowscore_result(match_id: int) -> tuple[dict[str, Any] | None, str, str | None]:
     urls = [
         f"https://live.nowscore.com/MatchDetail/{match_id}.html",
         f"https://live.nowscore.com/detail/{match_id}.html",
@@ -174,9 +212,12 @@ def fetch_nowscore_result(match_id: int) -> tuple[tuple[int, int] | None, str, s
                     continue
             else:
                 page = raw.decode("utf-8", errors="replace")
-            score = parse_nowscore_detail(page) or parse_header_score(page)
-            if score is not None:
-                return score, url, None
+            result = parse_nowscore_detail(page)
+            if result is None:
+                header_score = parse_header_score(page)
+                result = _result_from_tuple(header_score) if header_score is not None else None
+            if result is not None:
+                return result, url, None
             errors.append(f"{url}: result_not_final")
         except Exception as exc:
             errors.append(f"{url}: {exc}")
@@ -222,24 +263,30 @@ def verify_schedule(path: Path, now: datetime, result_root: Path = RESULT_ROOT) 
     attempts = int(schedule.get("verification_attempts") or 0) + 1
     schedule["verification_attempts"] = attempts
     schedule["last_checked_at"] = now.isoformat()
-    score = None
+    nowscore_result = None
+    secondary_score = None
     source_url = None
     result_source = None
     error = None
     schedule["result_strategy_version"] = RESULT_STRATEGY_VERSION
+    had_explicit_nowscore_id = bool(schedule.get("nowscore_id"))
     try:
         nowscore_id = resolve_nowscore_id(schedule)
     except Exception as exc:
         nowscore_id = None
         error = f"nowscore_id_resolution_failed: {exc}"
     if nowscore_id:
-        score, source_url, nowscore_error = fetch_nowscore_result(nowscore_id)
-        if score is not None:
+        nowscore_result, source_url, nowscore_error = fetch_nowscore_result(nowscore_id)
+        # 保留旧调用方返回 (home, away) 元组时的兼容性。
+        if isinstance(nowscore_result, tuple) and len(nowscore_result) == 2:
+            nowscore_result = _result_from_tuple(nowscore_result)
+        if nowscore_result is not None:
             result_source = "nowscore_match_detail"
         elif nowscore_error:
             error = nowscore_error
+    explicit_dual_source = had_explicit_nowscore_id and str(schedule.get("shuju_id") or "").isdigit()
     try:
-        shuju_id = None if score is not None else resolve_shuju_id(schedule)
+        shuju_id = resolve_shuju_id(schedule)
     except Exception as exc:
         shuju_id = None
         error = f"match_id_resolution_failed: {exc}"
@@ -251,16 +298,29 @@ def verify_schedule(path: Path, now: datetime, result_root: Path = RESULT_ROOT) 
             if page.startswith(("HTTP Error", "URL Error")):
                 error = page
             else:
-                score = parse_header_score(page)
-                if score is not None:
-                    result_source = "500.com_match_header"
+                secondary_score = parse_header_score(page)
         except Exception as exc:
             error = str(exc)
     elif error is None:
         error = "missing_shuju_id"
 
-    if score is not None:
-        home_score, away_score = score
+    conflict = False
+    if explicit_dual_source and nowscore_result is not None and secondary_score is not None:
+        if nowscore_result["score_90m"] != f"{secondary_score[0]}-{secondary_score[1]}":
+            conflict = True
+            error = (
+                "result_source_conflict: "
+                f"nowscore={nowscore_result['score_90m']} "
+                f"500={secondary_score[0]}-{secondary_score[1]}"
+            )
+    if explicit_dual_source and nowscore_result is not None and secondary_score is None and shuju_id:
+        conflict = True
+        error = error or "result_secondary_source_unavailable"
+
+    result = None
+    if not conflict and (nowscore_result is not None or secondary_score is not None):
+        result = nowscore_result or _result_from_tuple(secondary_score)
+        home_score, away_score = (int(part) for part in result["score_90m"].split("-"))
         result = {
             "schema_version": "1.0",
             "match_key": schedule.get("match_key"),
@@ -271,9 +331,12 @@ def verify_schedule(path: Path, now: datetime, result_root: Path = RESULT_ROOT) 
             "result_90m": f"{home_score}-{away_score}",
             "home_score": home_score,
             "away_score": away_score,
-            "scope": "regulation_90m_plus_stoppage",
-            "source": result_source or "verified_match_result",
+            "after_extra_time": result.get("after_extra_time"),
+            "penalties": result.get("penalties"),
+            "scope": result.get("scope") or "regulation_90m_plus_stoppage",
+            "source": "nowscore_match_detail+500_com_match_header" if explicit_dual_source and secondary_score is not None and nowscore_result is not None else result_source or "verified_match_result",
             "source_url": source_url,
+            "secondary_source_url": f"https://odds.500.com/fenxi/shuju-{shuju_id}.shtml" if secondary_score is not None else None,
             "verification_attempt": attempts,
         }
         result_root.mkdir(parents=True, exist_ok=True)
@@ -287,6 +350,8 @@ def verify_schedule(path: Path, now: datetime, result_root: Path = RESULT_ROOT) 
             {
                 "status": "result_verified",
                 "result_90m": result["result_90m"],
+                "after_extra_time": result.get("after_extra_time"),
+                "penalties": result.get("penalties"),
                 "result_verified_at": now.isoformat(),
                 "result_source": result["source"],
                 "result_file": result_file,
@@ -295,13 +360,17 @@ def verify_schedule(path: Path, now: datetime, result_root: Path = RESULT_ROOT) 
         outcome = "result_verified"
     expires = parse_datetime(schedule.get("verification_expires_at"))
     within_window = expires is None or now < expires
-    if score is None and within_window and attempts <= int((schedule.get("retry_policy") or {}).get("maximum_retries", 24)):
+    if conflict:
+        schedule["status"] = "blocked_result_conflict"
+        schedule["last_error"] = error or "result_source_conflict"
+        outcome = "blocked_result_conflict"
+    elif result is None and within_window and attempts <= int((schedule.get("retry_policy") or {}).get("maximum_retries", 24)):
         retry_minutes = int((schedule.get("retry_policy") or {}).get("retry_after_minutes", 45))
         schedule["status"] = "retry_scheduled"
         schedule["review_due_at"] = (now + timedelta(minutes=retry_minutes)).isoformat()
         schedule["last_error"] = error or "result_not_final"
         outcome = "retry_scheduled"
-    elif score is None:
+    elif result is None:
         schedule["status"] = "blocked_result_not_final"
         schedule["last_error"] = error or "result_not_final_after_bounded_retry"
         outcome = "blocked_result_not_final"

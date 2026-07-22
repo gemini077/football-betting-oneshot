@@ -4,7 +4,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import postmatch_result
-from postmatch_result import parse_header_score, verify_schedule
+from postmatch_result import parse_header_score, parse_nowscore_detail, verify_schedule
 from sync_postmatch_workflow import active_due_times, render
 
 
@@ -31,6 +31,46 @@ def write_schedule(path: Path, **overrides) -> Path:
 def test_parse_500_header_score():
     page = '<p class="odds_hd_bf"><strong>2:1</strong></p>'
     assert parse_header_score(page) == (2, 1)
+
+
+def test_parse_nowscore_own_goal_uses_beneficiary_side():
+    page = '''
+    <script>var state=-1;</script>
+    <tr data-kind="1"><td></td><td></td><td><b>82'</b></td><td></td><td>away</td></tr>
+    <tr data-kind="8"><td>own goal beneficiary home</td><td></td><td><b>88'</b></td><td></td><td></td></tr>
+    <tr data-kind="1"><td></td><td></td><td><b>90+4'</b></td><td></td><td>away</td></tr>
+    '''
+    result = parse_nowscore_detail(page)
+    assert result["score_90m"] == "1-2"
+    assert result["after_extra_time"] is None
+
+
+def test_parse_nowscore_separates_extra_time():
+    page = '''
+    <script>var state=-1;</script>
+    <tr data-kind="1"><td>home</td><td></td><td><b>106'</b></td><td></td><td></td></tr>
+    '''
+    result = parse_nowscore_detail(page)
+    assert result["score_90m"] == "0-0"
+    assert result["after_extra_time"] == "1-0"
+
+
+def test_conflicting_nowscore_and_500_result_is_blocked(tmp_path):
+    schedule = write_schedule(tmp_path / "schedule.json", nowscore_id=456)
+    now = datetime(2026, 7, 15, 20, 20, tzinfo=SHANGHAI)
+    with patch("postmatch_result.fetch_nowscore_result", return_value=({
+        "score_90m": "0-4", "after_extra_time": None, "penalties": None,
+        "scope": "regulation_90m_plus_stoppage",
+    }, "nowscore:456", None)), patch(
+        "postmatch_result.fetch_page",
+        return_value='<p class="odds_hd_bf"><strong>1:3</strong></p>',
+    ):
+        outcome = verify_schedule(schedule, now, tmp_path / "results")
+    saved = json.loads(schedule.read_text(encoding="utf-8"))
+    assert outcome["status"] == "blocked_result_conflict"
+    assert saved["status"] == "blocked_result_conflict"
+    assert "nowscore=0-4" in saved["last_error"]
+    assert not (tmp_path / "results").exists()
 
 
 def test_due_schedule_verifies_once(tmp_path):

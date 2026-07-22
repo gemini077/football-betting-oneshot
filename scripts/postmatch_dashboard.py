@@ -139,10 +139,13 @@ def review_data(workbook_path: Path) -> tuple[list[dict[str, Any]], list[dict[st
     for path in sorted((BASE_DIR / "data" / "postmatch_reviews").glob("*.json")):
         payload = load_json(path, {}) or {}
         match_id = str(payload.get("MatchID") or payload.get("match_key") or path.stem)
-        if not payload.get("赛事与对阵"):
+        match = payload.get("match") or {}
+        if not payload.get("赛事与对阵") and not (match.get("home") and match.get("away")):
             continue
+        payload.setdefault("赛事与对阵", f"{match.get('home', '')} vs {match.get('away', '')}".strip())
+        payload.setdefault("实际90分钟比分", (payload.get("result") or {}).get("score_90m"))
         payload["MatchID"] = match_id
-        payload["kickoff_local"] = (payload.get("match") or {}).get("kickoff_local")
+        payload["kickoff_local"] = match.get("kickoff_local")
         if match_id in signal_index:
             signals[signal_index[match_id]] = {**signals[signal_index[match_id]], **payload}
         else:

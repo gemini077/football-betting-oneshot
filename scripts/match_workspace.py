@@ -366,12 +366,16 @@ def review_rows(runtime: dict) -> list[dict]:
     for review_path in sorted((DATA / "postmatch_reviews").glob("*.json")):
         payload = load_json(review_path, {})
         match = payload.get("match") or {}
-        if (
-            payload.get("赛事与对阵")
-            and payload.get("实际90分钟比分")
-            and not find_review(match.get("home"), match.get("away"), signals)
-        ):
-            signals.append(payload)
+        # 自动复盘 JSON 以结构化字段为主；主页旧逻辑只识别工作簿的
+        # 中文平铺字段，导致新生成的复盘无法进入工作台。这里补齐
+        # 兼容字段，并按 MatchID/对阵去重。
+        score = (payload.get("result") or {}).get("score_90m")
+        if match.get("home") and match.get("away") and score:
+            payload.setdefault("赛事与对阵", f"{match['home']} vs {match['away']}")
+            payload.setdefault("实际90分钟比分", score)
+            payload.setdefault("MatchID", payload.get("MatchID") or review_path.stem)
+            if not find_review(match.get("home"), match.get("away"), signals):
+                signals.append(payload)
     return signals
 
 
@@ -657,7 +661,7 @@ def build(target_date: str, output_root: Path = OUTPUT) -> tuple[Path, Path]:
         schedule_keys.add(key)
         report = find_report(row, reports)
         review = find_review(home, away, reviews)
-        if review and review.get("实际90分钟比分"):
+        if review and (review.get("实际90分钟比分") or (review.get("result") or {}).get("score_90m")):
             item = completed_row(review, report, output_dir, f"schedule-{key}")
             completed.append(item)
             completed_ids.add(str(item["id"]))
@@ -702,7 +706,7 @@ def build(target_date: str, output_root: Path = OUTPUT) -> tuple[Path, Path]:
         ):
             continue
         review = find_review(match.get("home"), match.get("away"), reviews)
-        if review and review.get("实际90分钟比分"):
+        if review and (review.get("实际90分钟比分") or (review.get("result") or {}).get("score_90m")):
             item = completed_row(review, report, output_dir, f"report-{key}")
             if str(item["id"]) not in completed_ids:
                 completed.append(item)
