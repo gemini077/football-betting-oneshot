@@ -159,8 +159,11 @@ def esc(value: Any) -> str:
 
 
 def latest_schedule(target_date: str) -> tuple[Path | None, dict]:
-    candidates = list((DATA / "schedule_updates").glob(f"**/*{target_date}*.json"))
-    candidates += list((DATA / "fetch_runs").glob(f"**/*sporttery_{target_date}.json"))
+    # 单场深度抓取也会落到 fetch_runs，但不能覆盖全量体彩赛程；否则
+    # 重新分析一场比赛后，工作台会暂时只剩该场及其报告附带场次。
+    schedule_candidates = list((DATA / "schedule_updates").glob(f"**/*{target_date}*.json"))
+    fetch_candidates = list((DATA / "fetch_runs").glob(f"**/*sporttery_{target_date}.json"))
+    candidates = schedule_candidates or fetch_candidates
     rows: list[tuple[int, float, Path, dict]] = []
     for path in candidates:
         payload = load_json(path, {})
