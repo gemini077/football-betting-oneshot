@@ -592,6 +592,7 @@ def build_review(schedule: dict, report: dict, now: datetime) -> dict:
     score_hit = score_pick == actual if score_pick else None
     total_hit = (total_pick == str(total_actual)) if total_pick and total_pick != "6+" else (total_actual >= 6 if total_pick == "6+" else None)
     btts_hit = btts_pick == btts_actual if btts_pick else None
+    score_trace = decisions.get("score_selection_trace") or {}
     misses = []
     if primary_hit is False:
         misses.append(f"{primary_market}首推{primary_pick}，实际{primary_actual}")
@@ -611,7 +612,7 @@ def build_review(schedule: dict, report: dict, now: datetime) -> dict:
         f"总进球{'命中' if total_hit else '未命中' if total_hit is False else '不可结算'}；"
         f"BTTS{'命中' if btts_hit else '未命中' if btts_hit is False else '不可结算'}。"
     )
-    score_trace = decisions.get("score_selection_trace") or {
+    score_trace = score_trace or {
         "method": "legacy_report_without_trace",
         "selected_score": f"{score_pick[0]}-{score_pick[1]}" if score_pick else None,
         "confidence": "旧报告未保存",
@@ -648,7 +649,18 @@ def build_review(schedule: dict, report: dict, now: datetime) -> dict:
         elif primary_actual == "客胜":
             error_tags.append("away_tail_missed")
     if score_hit is False:
-        error_tags.append("score_selector_error")
+        actual_rank = diagnostics.get("actual_score_rank")
+        if actual_rank is not None and int(actual_rank) <= 5:
+            if score_trace.get("selected_score") != score_trace.get("mathematical_first_score"):
+                error_tags.append("selector_override_error")
+            else:
+                error_tags.append("score_matrix_top5_miss")
+        elif actual_rank is not None and int(actual_rank) <= 10:
+            error_tags.append("score_matrix_rank_error")
+        elif actual_rank is not None:
+            error_tags.append("score_matrix_tail_error")
+        else:
+            error_tags.append("score_selector_error")
     if total_hit is False:
         error_tags.append("goal_total_error")
     if btts_hit is False:

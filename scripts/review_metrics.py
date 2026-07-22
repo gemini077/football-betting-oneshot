@@ -41,8 +41,23 @@ def _hit(payload: dict[str, Any], key: str) -> bool | None:
 
 def _tags(payload: dict[str, Any]) -> list[str]:
     tags = list(payload.get("error_tags") or [])
+    score_miss = _hit(payload, "exact_score") is False
+    if score_miss:
+        diagnostics = payload.get("model_diagnostics") or {}
+        trace = payload.get("score_selection_audit") or {}
+        rank = diagnostics.get("actual_score_rank")
+        if rank is not None:
+            tags = [tag for tag in tags if tag != "score_selector_error"]
+            if int(rank) <= 5:
+                selected = trace.get("selected_score")
+                mathematical = trace.get("mathematical_first_score")
+                tags.append("selector_override_error" if selected and mathematical and selected != mathematical else "score_matrix_top5_miss")
+            elif int(rank) <= 10:
+                tags.append("score_matrix_rank_error")
+            else:
+                tags.append("score_matrix_tail_error")
     if tags:
-        return tags
+        return list(dict.fromkeys(tags))
     settlement = payload.get("settlement") or {}
     if _hit(payload, "primary") is False:
         tags.append("direction_error")
@@ -50,7 +65,7 @@ def _tags(payload: dict[str, Any]) -> list[str]:
             tags.append("draw_underestimated")
         elif (settlement.get("primary") or {}).get("actual") == "客胜":
             tags.append("away_tail_missed")
-    if _hit(payload, "exact_score") is False:
+    if score_miss:
         tags.append("score_selector_error")
     if _hit(payload, "total_goals_mode") is False:
         tags.append("goal_total_error")

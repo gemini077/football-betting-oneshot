@@ -249,7 +249,12 @@ def _scenario_score_pick(
         }
         return f"{home}-{away}", "可行比分区间没有形成稳定情景组合，暂时回退到矩阵峰值。", trace
     candidates.sort(key=lambda row: (row["utility"], row["probability"]), reverse=True)
-    selected = candidates[0]
+    challenger = candidates[0]
+    mathematical_home, mathematical_away = max(matrix, key=matrix.get)
+    selected = next(
+        row for row in candidates
+        if (int(row["home"]), int(row["away"])) == (mathematical_home, mathematical_away)
+    )
     probability = float(selected["probability"])
     home, away, outcome = int(selected["home"]), int(selected["away"]), str(selected["outcome"])
     total_matches, btts_matches = bool(selected["total_matches"]), bool(selected["btts_matches"])
@@ -263,8 +268,8 @@ def _scenario_score_pick(
         reasons.append("与多公司去水方向一致")
     if market_handicap is not None:
         reasons.append(f"净胜球接近亚洲让球中枢{market_handicap:+g}")
-    gap = selected["utility"] - candidates[1]["utility"] if len(candidates) > 1 else selected["utility"]
-    confidence = "高" if gap >= 0.12 and probability >= 0.09 else "中" if gap >= 0.05 else "低"
+    gap = challenger["utility"] - candidates[1]["utility"] if len(candidates) > 1 else challenger["utility"]
+    confidence = "高" if gap >= 0.12 and float(challenger["probability"]) >= 0.09 else "中" if gap >= 0.05 else "低"
     candidate_rows = []
     for rank, row in enumerate(candidates[:8], 1):
         candidate_rows.append({
@@ -273,16 +278,16 @@ def _scenario_score_pick(
             "matrix_probability": round(float(row["probability"]), 6),
             "scenario_score": round(float(row["utility"]), 6),
             "factor_contributions": {key: round(float(value), 4) for key, value in row["components"].items()},
-            "decision": "selected" if rank == 1 else "rejected",
-            "rejection_reason": None if rank == 1 else "综合情景分低于最终落点，不按相邻比分算命中",
+            "decision": "challenger_selected" if row is challenger else "matrix_selected" if row is selected else "rejected",
+            "rejection_reason": None if row in (challenger, selected) else "综合情景分低于候选，不按相邻比分算命中",
         })
     trace = {
-        "method": "scenario_selector_v2",
+        "method": "matrix_map_with_scenario_challenger_v1",
         "selected_score": f"{home}-{away}",
         "selected_probability": round(probability, 6),
-        "mathematical_first_score": (
-            f"{max(matrix, key=matrix.get)[0]}-{max(matrix, key=matrix.get)[1]}" if matrix else None
-        ),
+        "mathematical_first_score": f"{mathematical_home}-{mathematical_away}",
+        "scenario_selected_score": challenger["score"],
+        "scenario_selected_probability": round(float(challenger["probability"]), 6),
         "model_outcome_leader": result,
         "market_outcome_leader": market_result,
         "total_goal_centre": round(float(market_total if market_total is not None else expected_goals), 3),
@@ -297,7 +302,7 @@ def _scenario_score_pick(
     }
     return (
         f"{home}-{away}",
-        f"模型在可行比分区间内综合攻防概率、胜平负、大小球、BTTS、亚洲让球、机构方向与比赛剧本后选择该落点（单格概率{probability:.1%}；{'、'.join(reasons)}；置信度{confidence}），不是照抄数学第一或市场第一。",
+        f"正式唯一比分采用比分矩阵峰值（单格概率{probability:.1%}；{'、'.join(reasons)}）。情景选择器建议{challenger['score']}，当前仅作影子候选，待样本外验证后再决定是否覆盖。",
         trace,
     )
 

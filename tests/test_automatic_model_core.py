@@ -26,7 +26,7 @@ def test_deterministic_model_generates_complete_probability_matrix():
     assert any(row["market"] == "SPF主胜" for row in result["price_audit"])
     trace = result["decisions"]["score_selection_trace"]
     assert trace["selected_score"] == result["decisions"]["unique_score"]
-    assert trace["method"] == "scenario_selector_v2"
+    assert trace["method"] == "matrix_map_with_scenario_challenger_v1"
     assert trace["candidates"]
     assert result["live_ev_profiles"]["active"] is True
     assert result["live_ev_profiles"]["contract"]["market_name"] == "全场独赢"
@@ -121,7 +121,7 @@ def test_coach_and_referee_shape_match_script_without_overriding_probability():
     assert any("红牌" in item for item in result["decisions"]["maximum_error_points"])
 
 
-def test_unique_score_is_scenario_choice_not_mathematical_or_market_shortcut():
+def test_unique_score_uses_matrix_map_and_keeps_scenario_as_challenger():
     matrix = {
         (1, 1): 0.12,
         (2, 1): 0.11,
@@ -141,5 +141,6 @@ def test_unique_score_is_scenario_choice_not_mathematical_or_market_shortcut():
         script_context={},
     )
     assert trace["mathematical_first_score"] == "1-1"
-    assert score == "2-1"
-    assert "不是照抄数学第一或市场第一" in reasoning
+    assert score == "1-1"
+    assert trace["scenario_selected_score"] == "2-1"
+    assert "正式唯一比分采用比分矩阵峰值" in reasoning

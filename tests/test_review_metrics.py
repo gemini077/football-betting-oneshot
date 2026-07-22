@@ -25,3 +25,21 @@ def test_metrics_deduplicate_and_weight(tmp_path):
     assert result["metrics"]["primary"]["settled"] == 2
     assert result["error_tags"]["score_selector_error"] == 2
 
+
+def test_score_error_taxonomy_distinguishes_selector_override_from_matrix_tail(tmp_path):
+    override = _review("FBOS-override", True)
+    override["settlement"]["exact_score"]["hit"] = False
+    override["model_diagnostics"] = {"actual_score_rank": 3}
+    override["score_selection_audit"] = {"selected_score": "2-1", "mathematical_first_score": "1-1"}
+    tail = _review("FBOS-tail", True)
+    tail["settlement"]["exact_score"]["hit"] = False
+    tail["model_diagnostics"] = {"actual_score_rank": 12}
+    (tmp_path / "override.json").write_text(json.dumps(override), encoding="utf-8")
+    (tmp_path / "tail.json").write_text(json.dumps(tail), encoding="utf-8")
+
+    result = build_metrics(tmp_path, tmp_path / "status.json")
+
+    assert result["error_tags"]["selector_override_error"] == 1
+    assert result["error_tags"]["score_matrix_tail_error"] == 1
+    assert "score_selector_error" not in result["error_tags"]
+
