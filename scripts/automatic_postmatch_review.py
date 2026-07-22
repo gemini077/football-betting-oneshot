@@ -629,6 +629,44 @@ def build_review(schedule: dict, report: dict, now: datetime) -> dict:
         "场地天气": evidence.get("environment") or "未取得",
         "事实来源": evidence.get("source_url") or "未取得Nowscore赛后详情",
     }
+    data_quality = report.get("data_quality") or {}
+    missing = [str(item) for item in data_quality.get("missing") or [] if item]
+    checkpoint_count = len(_checkpoint_rows(report))
+    if evidence.get("status") == "score_conflict":
+        data_grade, calibration_weight = "D", 0.0
+    elif not missing and checkpoint_count >= 4:
+        data_grade, calibration_weight = "A", 1.0
+    elif len(missing) <= 1 and checkpoint_count >= 2:
+        data_grade, calibration_weight = "B", 0.7
+    else:
+        data_grade, calibration_weight = "C", 0.4
+    error_tags = []
+    if primary_hit is False:
+        error_tags.append("direction_error")
+        if primary_actual == "平局":
+            error_tags.append("draw_underestimated")
+        elif primary_actual == "客胜":
+            error_tags.append("away_tail_missed")
+    if score_hit is False:
+        error_tags.append("score_selector_error")
+    if total_hit is False:
+        error_tags.append("goal_total_error")
+    if btts_hit is False:
+        error_tags.append("btts_error")
+    if not checkpoint_count:
+        error_tags.append("insufficient_snapshots")
+    for item in missing:
+        if "首发" in item:
+            error_tags.append("missing_lineup")
+        elif "伤停" in item:
+            error_tags.append("missing_injury")
+        elif "赔率" in item or "价格" in item:
+            error_tags.append("missing_market_price")
+    error_tags = list(dict.fromkeys(error_tags))
+    formal_pick_eligible = data_grade in {"A", "B"} and primary_pick is not None
+    execution_eligible = formal_pick_eligible and bool((report.get("betting") or {}).get("candidates"))
+    quality_payload = {**data_quality, "data_grade": data_grade, "calibration_weight": calibration_weight,
+                       "missing_count": len(missing), "checkpoint_count": checkpoint_count}
     return {
         "schema_version": "3.0",
         "generated_at": now.isoformat(),
@@ -662,7 +700,15 @@ def build_review(schedule: dict, report: dict, now: datetime) -> dict:
         "errors": misses,
         "maximum_error_points_prematch": maximum_errors,
         "market_movement_review": _movement(report),
-        "data_quality_review": report.get("data_quality") or {},
+        "data_quality_review": quality_payload,
+        "data_grade": data_grade,
+        "calibration_weight": calibration_weight,
+        "prediction_layer": {
+            "research": True,
+            "formal_pick_eligible": formal_pick_eligible,
+            "execution_eligible": execution_eligible,
+        },
+        "error_tags": error_tags,
         "source_report": schedule.get("source_report"),
         "bet_locked": False,
         "赛事与对阵": f"{schedule.get('home')} vs {schedule.get('away')}",
@@ -729,6 +775,11 @@ def main() -> int:
     schedule_root = args.schedule_root if args.schedule_root.is_absolute() else BASE_DIR / args.schedule_root
     review_root = args.review_root if args.review_root.is_absolute() else BASE_DIR / args.review_root
     outcomes = generate(schedule_root, review_root)
+    try:
+        from review_metrics import build_metrics
+        build_metrics(review_root)
+    except Exception as exc:
+        outcomes.append({"status": "metrics_failed", "error": str(exc)})
     print(json.dumps({"reviewed": len([row for row in outcomes if row['status'] == 'reviewed']), "outcomes": outcomes}, ensure_ascii=False))
     return 0
 
