@@ -1,6 +1,8 @@
 import unittest
+import tempfile
 from pathlib import Path
 import sys
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
@@ -18,6 +20,7 @@ from scripts.nowscore_markets import (
     _verified,
 )
 from market_intelligence import nowscore_trend_panel
+import scripts.nowscore_markets as nowscore_markets
 
 
 SCHEDULE = """A[0]=[2912840,0,0,0,'瓦勒伦加',0,'Valerenga','奥勒松',0,'Aalesund FK','01:00','2026,6,17,01,00,00',0,0,0,0,0,0,0,0,0,0,0,'半/一',0,0,0,2.75];"""
@@ -44,6 +47,33 @@ var next_value = [];
 
 
 class NowscoreMarketTests(unittest.TestCase):
+    def test_verified_binding_survives_schedule_outage(self):
+        parsed = {
+            "identity": {"home_team": "A", "away_team": "B", "kickoff_local": "2026-07-20 03:00"},
+            "ouzhi": {"bookmakers": [], "total": 0},
+            "yazhi": {"companies": [], "total": 0},
+            "daxiao": {"companies": [], "total": 0},
+        }
+
+        def fetch(url, timeout=30):
+            if "bf1.js" in url or "analysisJs" in url:
+                raise OSError("temporary")
+            return b"market"
+
+        with tempfile.TemporaryDirectory() as directory, \
+                patch.object(nowscore_markets, "CACHE_ROOT", Path(directory)), \
+                patch.object(nowscore_markets, "_fetch_bytes", side_effect=fetch), \
+                patch.object(nowscore_markets, "lookup_provider_binding", return_value={"id": "77"}), \
+                patch.object(nowscore_markets, "parse_three_in_one", return_value=parsed), \
+                patch.object(nowscore_markets, "_verified", return_value=(True, [])), \
+                patch.object(nowscore_markets, "fetch_context_bundle", return_value={}), \
+                patch.object(nowscore_markets, "record_binding"):
+            result = nowscore_markets.fetch_match_markets("A", "B", "2026-07-20 03:00", no_cache=True)
+
+        self.assertEqual("OK", result["status"])
+        self.assertEqual("STORED_VERIFIED_BINDING", result["resolution"]["status"])
+        self.assertEqual(77, result["nowscore_id"])
+
     def test_sporttery_alias_resolves_mjallby_fixture_2912209(self):
         rows = [{
             "nowscore_id": 2912209,

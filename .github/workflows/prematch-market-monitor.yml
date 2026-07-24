@@ -3,16 +3,12 @@ on:
   workflow_dispatch:
   repository_dispatch:
     types: [prematch_checkpoint_due]
-  schedule:
-    # Offset from the crowded top-of-hour boundary; GitHub may still queue
-    # scheduled jobs, so the monitor records actual capture time and lateness.
-    - cron: "2-59/5 * * * *"
 permissions:
   contents: write
   pages: write
   id-token: write
 concurrency:
-  group: football-betting-oneshot-write
+  group: prematch-checkpoint-write
   cancel-in-progress: false
 jobs:
   refresh-due-markets:
@@ -42,6 +38,7 @@ jobs:
         run: pip install -r requirements.txt
       - name: Refresh analyzed matches at the eight pre-match checkpoints
         if: steps.due.outputs.count != '0'
+        continue-on-error: true
         env:
           TARGET_MATCH_ID: ${{ github.event.client_payload.match_id }}
           TARGET_CHECKPOINT: ${{ github.event.client_payload.checkpoint }}
@@ -50,13 +47,9 @@ jobs:
           [[ -n "$TARGET_MATCH_ID" ]] && args+=(--match-id "$TARGET_MATCH_ID")
           [[ -n "$TARGET_CHECKPOINT" ]] && args+=(--checkpoint "$TARGET_CHECKPOINT")
           python scripts/prematch_market_monitor.py "${args[@]}"
-      - name: Verify overdue results before publishing refreshed pages
+      - name: Rebuild the workspace from durable checkpoint state
         if: steps.due.outputs.count != '0'
         run: |
-          python scripts/sync_result_schedules.py
-          python scripts/postmatch_result.py
-          python scripts/automatic_postmatch_review.py
-          python scripts/postmatch_dashboard.py
           python scripts/match_workspace.py
           python scripts/build_public_site.py
       - name: Save market snapshots and refreshed reports
@@ -66,7 +59,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           # site/ is an ignored build artifact and is uploaded below; only
           # durable source/report data belongs in the repository commit.
-          git add data/fetch_runs data/market_history data/match_archive data/analysis_inputs data/analysis_reports data/live_ev_profiles data/postmatch_automation data/postmatch_reviews data/postmatch_dashboard data/match_workspace
+          git add data/fetch_runs data/market_history data/analysis_inputs data/analysis_reports data/match_workspace
           if ! git diff --cached --quiet; then
             git commit -m "refresh due pre-match markets [skip ci]"
             git stash push --include-untracked -m "ci-transient-untracked-files" || true

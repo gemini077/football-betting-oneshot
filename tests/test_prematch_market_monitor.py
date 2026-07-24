@@ -82,7 +82,10 @@ def test_partial_refresh_errors_do_not_block_successful_publication(tmp_path, mo
     monkeypatch.setattr(monitor, "WORKSPACE", workspace)
     monkeypatch.setattr(monitor, "STATE_PATH", state)
     monkeypatch.setattr(monitor, "ROOT", tmp_path)
-    monkeypatch.setattr(monitor, "load_registry", lambda: {"tasks": {}})
+    monkeypatch.setattr(monitor, "load_registry", lambda: {"tasks": {
+        "ok": {"checkpoints": {"T-2H": {"status": "pending"}}},
+        "bad": {"checkpoints": {"T-2H": {"status": "pending"}}},
+    }})
     monkeypatch.setattr(monitor, "due_events", lambda *_args: [
         {"id": "ok", "home": "A", "away": "B", "_monitor_stage": "T-2H", "_canonical_match_id": "ok"},
         {"id": "bad", "home": "C", "away": "D", "_monitor_stage": "T-2H", "_canonical_match_id": "bad"},
@@ -92,11 +95,13 @@ def test_partial_refresh_errors_do_not_block_successful_publication(tmp_path, mo
     def refresh(match, stage, _now):
         if match["id"] == "bad":
             raise RuntimeError("broken feed")
-        return {"status": "refreshed", "stage": stage, "checkpoint": {"captured_at": "now"}}
+        return {"status": "report_updated", "stage": stage, "checkpoint": {"captured_at": "now"}}
     monkeypatch.setattr(monitor, "refresh_match", refresh)
     monkeypatch.setattr(monitor, "run_json", lambda *_args: {})
     monkeypatch.setattr(monitor.subprocess, "run", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(sys, "argv", ["prematch_market_monitor.py", "--now", "2026-07-16T00:00:00+08:00"])
+    monkeypatch.setattr(sys, "argv", [
+        "prematch_market_monitor.py", "--now", "2026-07-16T00:00:00+08:00", "--max-events", "2",
+    ])
     assert monitor.main() == 0
     assert state.exists()
     assert list((tmp_path / "data" / "market_history" / "errors").glob("*_monitor_errors.json"))
@@ -114,3 +119,61 @@ def test_refresh_fundamentals_preserves_form_and_updates_time_sensitive_facts(tm
     payload = monitor.load_json(analysis)
     assert [item["label"] for item in payload["fundamentals"]["items"]] == ["近期状态", "首发名单"]
     assert payload["fundamentals"]["sources"][0]["url"] == "https://example.com"
+
+
+def test_checkpoint_capture_uses_identity_directly_and_prefers_nowscore(tmp_path, monkeypatch):
+    monkeypatch.setattr(monitor, "ROOT", tmp_path)
+    monkeypatch.setattr(monitor, "fetch_nowscore_markets", lambda *args: {
+        "status": "OK",
+        "ouzhi": {"bookmakers": [{"cid": 1}]},
+        "yazhi": {"companies": []},
+        "daxiao": {"companies": []},
+    })
+    monkeypatch.setattr(
+        monitor,
+        "fetch_and_parse",
+        lambda *args: (_ for _ in ()).throw(AssertionError("500 fallback should not run")),
+    )
+    manifest_path = monitor.capture_market_snapshot(
+        {
+            "id": "500-77",
+            "home": "A",
+            "away": "B",
+            "kickoff": "2026-07-20 03:00",
+            "business_date": "2026-07-19",
+        },
+        "T-2H",
+        datetime.fromisoformat("2026-07-20T01:00:00+08:00"),
+    )
+    manifest = monitor.load_json(manifest_path)
+    assert manifest["sources"]["nowscore"]["success"] is True
+    assert "500_deep" not in manifest["sources"]
+
+
+def test_checkpoint_capture_falls_back_to_500_when_nowscore_fails(tmp_path, monkeypatch):
+    monkeypatch.setattr(monitor, "ROOT", tmp_path)
+    monkeypatch.setattr(
+        monitor,
+        "fetch_nowscore_markets",
+        lambda *args: {"status": "FETCH_ERROR", "error": "temporary"},
+    )
+    monkeypatch.setattr(monitor, "fetch_and_parse", lambda *args: {
+        "shuju_id": 77,
+        "ouzhi": {"bookmakers": [{"cid": 1}]},
+        "yazhi": {"companies": []},
+        "daxiao": {"companies": []},
+    })
+    manifest_path = monitor.capture_market_snapshot(
+        {
+            "id": "500-77",
+            "home": "A",
+            "away": "B",
+            "kickoff": "2026-07-20 03:00",
+            "business_date": "2026-07-19",
+        },
+        "T-2H",
+        datetime.fromisoformat("2026-07-20T01:00:00+08:00"),
+    )
+    manifest = monitor.load_json(manifest_path)
+    assert manifest["sources"]["nowscore"]["success"] is False
+    assert manifest["sources"]["500_deep"]["success"] is True

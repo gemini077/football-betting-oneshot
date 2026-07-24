@@ -1,4 +1,12 @@
-const TERMINAL = new Set(["captured", "historical_recovery", "late_live", "permanently_missing"]);
+const TERMINAL = new Set([
+  "report_updated",
+  "report_failed",
+  "source_unavailable",
+  "captured",
+  "historical_recovery",
+  "late_live",
+  "permanently_missing",
+]);
 const DISPATCH_WINDOWS = [
   { attempt: "primary", startMinutes: 0, endMinutes: 1 },
   { attempt: "bounded_retry", startMinutes: 10, endMinutes: 11 },
@@ -63,7 +71,7 @@ async function run(env, shouldDispatch = true, now = Date.now()) {
   if (!response.ok) throw new Error(`Registry fetch ${response.status}`);
   const registry = await response.json();
   const due = dueEvents(registry.tasks, now);
-  const events = dueEvents(registry.tasks, now, true);
+  const events = dueEvents(registry.tasks, now, true).slice(0, 1);
   if (!shouldDispatch) {
     return {
       status: "ok",

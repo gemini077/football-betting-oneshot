@@ -739,6 +739,17 @@ def fetch_match_markets(home: str, away: str, kickoff: object, explicit_id: int 
 
     if explicit_id:
         resolved = {"status": "EXPLICIT_ID", "nowscore_id": int(explicit_id)}
+    elif schedule_error:
+        binding = lookup_provider_binding(
+            {"home": home, "away": away, "kickoff": str(kickoff or "")},
+            "nowscore",
+        )
+        bound_id = str((binding or {}).get("id") or "")
+        resolved = (
+            {"status": "STORED_VERIFIED_BINDING", "nowscore_id": int(bound_id)}
+            if bound_id.isdigit()
+            else {"status": "SCHEDULE_UNAVAILABLE", "schedule_error": schedule_error}
+        )
     else:
         resolved = resolve_match(home, away, kickoff, schedule)
     if not resolved.get("nowscore_id"):

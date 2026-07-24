@@ -41,6 +41,25 @@ def test_due_events_returns_every_elapsed_pending_checkpoint_once():
     assert "T-8H" not in [row["_monitor_stage"] for row in due_events(registry, datetime.fromisoformat("2026-07-20T01:30:00+08:00"))]
 
 
+def test_new_terminal_states_are_not_replayed():
+    for status in ("report_updated", "report_failed", "source_unavailable"):
+        registry = {"tasks": {}}
+        canonical = register_match(registry, {
+            "id": "77",
+            "home": "A",
+            "away": "B",
+            "kickoff": "2026-07-20 03:00",
+            "report_url": "report.html",
+        })
+        update_checkpoint(registry, canonical, "T-2H", status)
+        due = due_events(
+            registry,
+            datetime.fromisoformat("2026-07-20T01:00:00+08:00"),
+            stage="T-2H",
+        )
+        assert due == []
+
+
 def test_historical_recovery_uses_last_quote_before_cutoff_and_drops_late_exchange():
     payload = {
         "ouzhi": {"bookmakers": [{"source_company_id": 8, "spf_current": {"home": 9, "draw": 9, "away": 9}}]},
