@@ -4,10 +4,12 @@ import shutil
 import subprocess
 import tempfile
 import unittest
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
+from unittest.mock import patch
+from zoneinfo import ZoneInfo
 
-from scripts.match_workspace import DATA, RUNTIME, build, build_daily_portfolio, create_unique_output_dir, find_review, render, report_candidates, report_html_path, report_summary, review_rows
+from scripts.match_workspace import DATA, RUNTIME, build, build_daily_portfolio, create_unique_output_dir, find_review, pending_result_classification, render, report_candidates, report_html_path, report_summary, review_rows
 
 
 class MatchWorkspacePortfolioTests(unittest.TestCase):
@@ -129,6 +131,48 @@ class MatchWorkspacePortfolioTests(unittest.TestCase):
             self.assertEqual("KEEP_CURRENT", latest.read_text(encoding="utf-8"))
             self.assertEqual(paper_before, paper_latest.read_bytes())
             self.assertEqual(frozen_before, frozen.read_bytes())
+
+    def test_recent_automatic_reports_survive_daily_schedule_window(self):
+        expected_pairs = {
+            ("西班牙", "阿根廷"),
+            ("奥胡斯", "波兹南莱赫"),
+            ("格拉茨风暴", "哈茨"),
+            ("米内罗竞技", "巴伊亚"),
+            ("奥莫尼亚", "阿拉木图凯拉特"),
+            ("沙佩科恩斯", "弗拉门戈"),
+            ("圣保罗", "巴拉纳竞技"),
+            ("博塔弗戈", "维多利亚"),
+        }
+        fixed_now = datetime(2026, 7, 24, 15, 0, tzinfo=ZoneInfo("Asia/Shanghai"))
+        with tempfile.TemporaryDirectory() as temp, patch(
+            "scripts.match_workspace.workspace_now",
+            return_value=fixed_now,
+        ):
+            index, _ = build(
+                "2026-07-24",
+                Path(temp),
+                persist_runtime_data=False,
+            )
+            payload = json.loads((index.parent / "workspace.json").read_text(encoding="utf-8"))
+        completed_pairs = {
+            (row.get("home"), row.get("away"))
+            for row in payload["completed"]
+        }
+        self.assertTrue(expected_pairs.issubset(completed_pairs))
+        self.assertLessEqual(len(payload["completed"]), 20)
+
+    def test_pending_result_status_explains_secondary_source_outage(self):
+        label = pending_result_classification({
+            "status": "retry_scheduled",
+            "verification_issue": "secondary_source_unavailable",
+            "result_sources": {
+                "primary": {"score_90m": "0-0"},
+                "secondary": {"status": "unavailable"},
+            },
+        }, None)
+
+        self.assertEqual("Nowscore已确认 0-0，辅源暂不可用，等待一次重试", label)
+        self.assertNotIn("比分不一致", label)
 
     def test_homepage_uses_unified_report_actions_and_compact_sections(self):
         page = render("{}")

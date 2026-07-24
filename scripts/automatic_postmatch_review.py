@@ -747,13 +747,22 @@ def build_review(schedule: dict, report: dict, now: datetime) -> dict:
     }
 
 
-def generate(schedule_root: Path = SCHEDULE_ROOT, review_root: Path = REVIEW_ROOT, now: datetime | None = None) -> list[dict]:
+def generate_selected(
+    schedule_paths: list[Path],
+    review_root: Path = REVIEW_ROOT,
+    now: datetime | None = None,
+    *,
+    regenerate: bool = False,
+) -> list[dict]:
     now = now or datetime.now(SHANGHAI)
     review_root.mkdir(parents=True, exist_ok=True)
     outcomes = []
-    for path in sorted(schedule_root.glob("*.json")):
+    eligible_statuses = {"result_verified"}
+    if regenerate:
+        eligible_statuses.add("reviewed")
+    for path in sorted(schedule_paths):
         schedule = load_json(path)
-        if schedule.get("status") not in {"result_verified", "reviewed"} or not schedule.get("result_90m"):
+        if schedule.get("status") not in eligible_statuses or not schedule.get("result_90m"):
             continue
         source_report = str(schedule.get("source_report") or "").strip()
         source = BASE_DIR / source_report if source_report else None
@@ -779,14 +788,44 @@ def generate(schedule_root: Path = SCHEDULE_ROOT, review_root: Path = REVIEW_ROO
     return outcomes
 
 
+def generate(schedule_root: Path = SCHEDULE_ROOT, review_root: Path = REVIEW_ROOT, now: datetime | None = None) -> list[dict]:
+    """Generate reviews only for newly verified results.
+
+    Reviewed schedules are intentionally left untouched so a routine run cannot
+    rewrite every historical review. Use ``generate_selected`` with
+    ``regenerate=True`` only for an explicit, bounded rebuild.
+    """
+    return generate_selected(sorted(schedule_root.glob("*.json")), review_root, now)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--schedule-root", type=Path, default=SCHEDULE_ROOT)
     parser.add_argument("--review-root", type=Path, default=REVIEW_ROOT)
+    parser.add_argument(
+        "--match-key",
+        action="append",
+        default=[],
+        help="Only generate the named match key; repeat for multiple matches.",
+    )
+    parser.add_argument(
+        "--regenerate",
+        action="store_true",
+        help="Allow explicitly selected reviewed matches to be rebuilt.",
+    )
     args = parser.parse_args()
     schedule_root = args.schedule_root if args.schedule_root.is_absolute() else BASE_DIR / args.schedule_root
     review_root = args.review_root if args.review_root.is_absolute() else BASE_DIR / args.review_root
-    outcomes = generate(schedule_root, review_root)
+    if args.match_key:
+        schedule_paths = [schedule_root / f"{match_key}.json" for match_key in args.match_key]
+        missing = [str(path) for path in schedule_paths if not path.is_file()]
+        if missing:
+            parser.error(f"schedule not found: {', '.join(missing)}")
+        outcomes = generate_selected(schedule_paths, review_root, regenerate=args.regenerate)
+    else:
+        if args.regenerate:
+            parser.error("--regenerate requires at least one --match-key")
+        outcomes = generate(schedule_root, review_root)
     try:
         from review_metrics import build_metrics
         build_metrics(review_root)

@@ -55,7 +55,7 @@ def test_parse_nowscore_separates_extra_time():
     assert result["after_extra_time"] == "1-0"
 
 
-def test_conflicting_nowscore_and_500_result_is_blocked(tmp_path):
+def test_conflicting_nowscore_and_500_result_retries_once_then_stops(tmp_path):
     schedule = write_schedule(tmp_path / "schedule.json", nowscore_id=456)
     now = datetime(2026, 7, 15, 20, 20, tzinfo=SHANGHAI)
     with patch("postmatch_result.fetch_nowscore_result", return_value=({
@@ -65,12 +65,54 @@ def test_conflicting_nowscore_and_500_result_is_blocked(tmp_path):
         "postmatch_result.fetch_page",
         return_value='<p class="odds_hd_bf"><strong>1:3</strong></p>',
     ):
-        outcome = verify_schedule(schedule, now, tmp_path / "results")
+        first_outcome = verify_schedule(schedule, now, tmp_path / "results")
+        second_outcome = verify_schedule(schedule, now + timedelta(minutes=46), tmp_path / "results")
     saved = json.loads(schedule.read_text(encoding="utf-8"))
-    assert outcome["status"] == "blocked_result_conflict"
-    assert saved["status"] == "blocked_result_conflict"
+    assert first_outcome["status"] == "retry_scheduled"
+    assert second_outcome["status"] == "manual_review_required"
+    assert saved["status"] == "manual_review_required"
+    assert saved["verification_issue"] == "result_source_conflict"
     assert "nowscore=0-4" in saved["last_error"]
+    assert saved["verification_attempts"] == 2
     assert not (tmp_path / "results").exists()
+
+
+def test_secondary_source_outage_is_not_mislabelled_as_score_conflict(tmp_path):
+    schedule = write_schedule(tmp_path / "schedule.json", nowscore_id=456)
+    now = datetime(2026, 7, 15, 20, 20, tzinfo=SHANGHAI)
+    with patch("postmatch_result.fetch_nowscore_result", return_value=({
+        "score_90m": "0-0", "after_extra_time": None, "penalties": None,
+        "scope": "regulation_90m_plus_stoppage",
+    }, "nowscore:456", None)), patch(
+        "postmatch_result.fetch_page",
+        return_value="URL Error: [Errno 111] Connection refused",
+    ):
+        first_outcome = verify_schedule(schedule, now, tmp_path / "results")
+        second_outcome = verify_schedule(schedule, now + timedelta(minutes=46), tmp_path / "results")
+    saved = json.loads(schedule.read_text(encoding="utf-8"))
+    assert first_outcome["status"] == "retry_scheduled"
+    assert second_outcome["status"] == "manual_review_required"
+    assert saved["verification_issue"] == "secondary_source_unavailable"
+    assert saved["result_sources"]["primary"]["score_90m"] == "0-0"
+    assert saved["result_sources"]["secondary"]["status"] == "unavailable"
+    assert "result_source_conflict" not in saved["last_error"]
+
+
+def test_terminal_manual_review_is_not_retried(tmp_path):
+    schedule = write_schedule(
+        tmp_path / "schedule.json",
+        nowscore_id=456,
+        status="manual_review_required",
+        verification_attempts=2,
+    )
+    now = datetime(2026, 7, 15, 22, 0, tzinfo=SHANGHAI)
+    with patch("postmatch_result.fetch_nowscore_result") as primary, patch(
+        "postmatch_result.fetch_page",
+    ) as secondary:
+        outcome = verify_schedule(schedule, now, tmp_path / "results")
+    assert outcome["status"] == "skipped_final"
+    primary.assert_not_called()
+    secondary.assert_not_called()
 
 
 def test_due_schedule_verifies_once(tmp_path):
@@ -93,7 +135,8 @@ def test_missing_result_gets_only_one_retry(tmp_path):
         second_outcome = verify_schedule(schedule, first + timedelta(minutes=46), tmp_path / "results")
     saved = json.loads(schedule.read_text(encoding="utf-8"))
     assert first_outcome["status"] == "retry_scheduled"
-    assert second_outcome["status"] == "blocked_result_not_final"
+    assert second_outcome["status"] == "expired_unresolved"
+    assert saved["status"] == "expired_unresolved"
     assert saved["verification_attempts"] == 2
 
 

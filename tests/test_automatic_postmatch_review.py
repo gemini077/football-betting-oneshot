@@ -1,11 +1,43 @@
 from pathlib import Path
 import sys
+import json
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
 import automatic_postmatch_review as review_module
 from automatic_postmatch_review import _primary_settlement, _rich_market_timeline, _rich_root_cause
+
+
+def test_generate_does_not_rewrite_existing_reviewed_schedule(tmp_path, monkeypatch):
+    schedule_root = tmp_path / "schedules"
+    review_root = tmp_path / "reviews"
+    schedule_root.mkdir()
+    reviewed = schedule_root / "already-reviewed.json"
+    original = {
+        "match_key": "already-reviewed",
+        "status": "reviewed",
+        "result_90m": "1-0",
+        "reviewed_at": "2026-07-23T12:00:00+08:00",
+    }
+    reviewed.write_text(json.dumps(original), encoding="utf-8")
+
+    monkeypatch.setattr(
+        review_module,
+        "build_review",
+        lambda schedule, report, now: (_ for _ in ()).throw(AssertionError("must not rebuild")),
+    )
+
+    outcomes = review_module.generate(
+        schedule_root,
+        review_root,
+        datetime(2026, 7, 24, 12, tzinfo=ZoneInfo("Asia/Shanghai")),
+    )
+
+    assert outcomes == []
+    assert json.loads(reviewed.read_text(encoding="utf-8")) == original
 
 
 def test_total_goals_primary_dimension_is_strictly_settled():
