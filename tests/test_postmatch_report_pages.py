@@ -57,3 +57,12 @@ def test_review_generator_writes_stable_match_url():
         links = write_review_pages([sample_review()], [], [], [], datetime(2026, 7, 16, 12, 0), Path(temp))
         assert links["M999"] == "../postmatch_reports/M999.html"
         assert (Path(temp) / "M999.html").exists()
+
+
+def test_review_generator_keeps_existing_frozen_report():
+    with tempfile.TemporaryDirectory() as temp:
+        target = Path(temp) / "M999.html"
+        target.write_text("frozen", encoding="utf-8")
+        links = write_review_pages([sample_review()], [], [], [], datetime(2026, 7, 24, 12, 0), Path(temp))
+        assert links["M999"] == "../postmatch_reports/M999.html"
+        assert target.read_text(encoding="utf-8") == "frozen"

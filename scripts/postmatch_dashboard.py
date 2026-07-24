@@ -326,7 +326,16 @@ def render_review_page(signal: dict[str, Any], timeline: dict[str, Any], root: d
 <footer>冻结赛前判断后再核验赛果；没有的价格和时间节点保持为空，不用赛后信息回填。未明确“锁单/已下单”时，不生成真实注单或账户盈亏。</footer></main></body></html>'''
 
 
-def write_review_pages(signals: list[dict[str, Any]], timelines: list[dict[str, Any]], roots: list[dict[str, Any]], locks: list[dict[str, Any]], generated_at: datetime, output_root: Path = REPORT_ROOT) -> dict[str, str]:
+def write_review_pages(
+    signals: list[dict[str, Any]],
+    timelines: list[dict[str, Any]],
+    roots: list[dict[str, Any]],
+    locks: list[dict[str, Any]],
+    generated_at: datetime,
+    output_root: Path = REPORT_ROOT,
+    *,
+    overwrite: bool = False,
+) -> dict[str, str]:
     output_root.mkdir(parents=True, exist_ok=True)
     timeline_map = {row_match_id(row, "比赛ID与对阵", "记录ID"): row for row in timelines}
     root_map = {row_match_id(row, "比赛场次"): row for row in roots}
@@ -342,7 +351,8 @@ def write_review_pages(signals: list[dict[str, Any]], timelines: list[dict[str, 
         related_paper = [row for row in paper if row.get("match_key") == key]
         related_real = [row for row in real if text(row.get("match")) == name]
         target = output_root / f"{safe_slug(match_id)}.html"
-        target.write_text(render_review_page(signal, timeline_map.get(match_id, {}), root_map.get(match_id, {}), related_locks, generated_at, related_paper, related_real), encoding="utf-8")
+        if overwrite or not target.exists():
+            target.write_text(render_review_page(signal, timeline_map.get(match_id, {}), root_map.get(match_id, {}), related_locks, generated_at, related_paper, related_real), encoding="utf-8")
         links[match_id] = f"../postmatch_reports/{target.name}"
     return links
 
@@ -434,6 +444,11 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--workbook", type=Path)
     parser.add_argument("--output-root", type=Path, default=OUTPUT_ROOT)
+    parser.add_argument(
+        "--rewrite-reports",
+        action="store_true",
+        help="Explicitly rebuild existing frozen individual report pages.",
+    )
     args = parser.parse_args()
     runtime = load_json(RUNTIME_PATH, {})
     queue = load_json(QUEUE_PATH, {})
@@ -446,7 +461,14 @@ def main() -> int:
     snapshot_dir = output_root / run_id
     snapshot_dir.mkdir(parents=True, exist_ok=True)
     rows = review_data(workbook)
-    report_links = write_review_pages(rows[1], rows[2], rows[3], rows[0], now)
+    report_links = write_review_pages(
+        rows[1],
+        rows[2],
+        rows[3],
+        rows[0],
+        now,
+        overwrite=args.rewrite_reports,
+    )
     content = render_html(workbook, runtime, queue, now, rows, report_links)
     snapshot = snapshot_dir / "index.html"
     snapshot.write_text(content, encoding="utf-8")

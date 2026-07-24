@@ -20,7 +20,12 @@ from match_identity import canonical_match_id
 
 SCHEDULE_ROOT = BASE_DIR / "data" / "postmatch_automation" / "schedules"
 RESULT_ROOT = BASE_DIR / "data" / "postmatch_automation" / "results"
-FINAL_STATUSES = {"result_verified", "reviewed"}
+FINAL_STATUSES = {
+    "result_verified",
+    "reviewed",
+    "manual_review_required",
+    "expired_unresolved",
+}
 RESULT_STRATEGY_VERSION = "nowscore_matchdetail_v4_dual_source_phase_aware"
 WORKSPACE_PATH = BASE_DIR / "data" / "match_workspace" / "latest.json"
 SCORE_PATTERN = re.compile(
@@ -265,60 +270,84 @@ def verify_schedule(path: Path, now: datetime, result_root: Path = RESULT_ROOT) 
     schedule["last_checked_at"] = now.isoformat()
     nowscore_result = None
     secondary_score = None
-    source_url = None
+    nowscore_source_url = None
+    secondary_source_url = None
     result_source = None
-    error = None
+    primary_error = None
+    secondary_error = None
     schedule["result_strategy_version"] = RESULT_STRATEGY_VERSION
     had_explicit_nowscore_id = bool(schedule.get("nowscore_id"))
     try:
         nowscore_id = resolve_nowscore_id(schedule)
     except Exception as exc:
         nowscore_id = None
-        error = f"nowscore_id_resolution_failed: {exc}"
+        primary_error = f"nowscore_id_resolution_failed: {exc}"
     if nowscore_id:
-        nowscore_result, source_url, nowscore_error = fetch_nowscore_result(nowscore_id)
+        nowscore_result, nowscore_source_url, nowscore_error = fetch_nowscore_result(nowscore_id)
         # 保留旧调用方返回 (home, away) 元组时的兼容性。
         if isinstance(nowscore_result, tuple) and len(nowscore_result) == 2:
             nowscore_result = _result_from_tuple(nowscore_result)
         if nowscore_result is not None:
             result_source = "nowscore_match_detail"
         elif nowscore_error:
-            error = nowscore_error
+            primary_error = nowscore_error
     explicit_dual_source = had_explicit_nowscore_id and str(schedule.get("shuju_id") or "").isdigit()
     try:
         shuju_id = resolve_shuju_id(schedule)
     except Exception as exc:
         shuju_id = None
-        error = f"match_id_resolution_failed: {exc}"
+        secondary_error = f"match_id_resolution_failed: {exc}"
 
     if shuju_id:
-        source_url = f"https://odds.500.com/fenxi/shuju-{shuju_id}.shtml"
+        secondary_source_url = f"https://odds.500.com/fenxi/shuju-{shuju_id}.shtml"
         try:
-            page = fetch_page(source_url)
+            page = fetch_page(secondary_source_url)
             if page.startswith(("HTTP Error", "URL Error")):
-                error = page
+                secondary_error = page
             else:
                 secondary_score = parse_header_score(page)
+                if secondary_score is None:
+                    secondary_error = "result_not_final"
         except Exception as exc:
-            error = str(exc)
-    elif error is None:
-        error = "missing_shuju_id"
+            secondary_error = str(exc)
+    elif secondary_error is None:
+        secondary_error = "missing_shuju_id"
 
-    conflict = False
+    verification_issue = None
     if explicit_dual_source and nowscore_result is not None and secondary_score is not None:
         if nowscore_result["score_90m"] != f"{secondary_score[0]}-{secondary_score[1]}":
-            conflict = True
-            error = (
+            verification_issue = "result_source_conflict"
+            secondary_error = (
                 "result_source_conflict: "
                 f"nowscore={nowscore_result['score_90m']} "
                 f"500={secondary_score[0]}-{secondary_score[1]}"
             )
     if explicit_dual_source and nowscore_result is not None and secondary_score is None and shuju_id:
-        conflict = True
-        error = error or "result_secondary_source_unavailable"
+        verification_issue = "secondary_source_unavailable"
+        secondary_error = secondary_error or "result_secondary_source_unavailable"
+    if nowscore_result is None and secondary_score is None:
+        verification_issue = "result_not_final"
+
+    schedule["result_sources"] = {
+        "primary": {
+            "name": "nowscore_match_detail",
+            "status": "verified" if nowscore_result is not None else "unavailable",
+            "score_90m": nowscore_result.get("score_90m") if nowscore_result else None,
+            "source_url": nowscore_source_url,
+            "error": primary_error,
+        },
+        "secondary": {
+            "name": "500_com_match_header",
+            "status": "verified" if secondary_score is not None else "unavailable",
+            "score_90m": f"{secondary_score[0]}-{secondary_score[1]}" if secondary_score else None,
+            "source_url": secondary_source_url,
+            "error": secondary_error,
+        },
+    }
+    schedule["verification_issue"] = verification_issue
 
     result = None
-    if not conflict and (nowscore_result is not None or secondary_score is not None):
+    if verification_issue is None and (nowscore_result is not None or secondary_score is not None):
         result = nowscore_result or _result_from_tuple(secondary_score)
         home_score, away_score = (int(part) for part in result["score_90m"].split("-"))
         result = {
@@ -335,8 +364,8 @@ def verify_schedule(path: Path, now: datetime, result_root: Path = RESULT_ROOT) 
             "penalties": result.get("penalties"),
             "scope": result.get("scope") or "regulation_90m_plus_stoppage",
             "source": "nowscore_match_detail+500_com_match_header" if explicit_dual_source and secondary_score is not None and nowscore_result is not None else result_source or "verified_match_result",
-            "source_url": source_url,
-            "secondary_source_url": f"https://odds.500.com/fenxi/shuju-{shuju_id}.shtml" if secondary_score is not None else None,
+            "source_url": nowscore_source_url if nowscore_result is not None else secondary_source_url,
+            "secondary_source_url": secondary_source_url if secondary_score is not None else None,
             "verification_attempt": attempts,
         }
         result_root.mkdir(parents=True, exist_ok=True)
@@ -357,23 +386,29 @@ def verify_schedule(path: Path, now: datetime, result_root: Path = RESULT_ROOT) 
                 "result_file": result_file,
             }
         )
+        schedule.pop("last_error", None)
+        schedule.pop("terminal_reason", None)
         outcome = "result_verified"
     expires = parse_datetime(schedule.get("verification_expires_at"))
     within_window = expires is None or now < expires
-    if conflict:
-        schedule["status"] = "blocked_result_conflict"
-        schedule["last_error"] = error or "result_source_conflict"
-        outcome = "blocked_result_conflict"
-    elif result is None and within_window and attempts <= int((schedule.get("retry_policy") or {}).get("maximum_retries", 24)):
+    retry_limit = int((schedule.get("retry_policy") or {}).get("maximum_retries", 1))
+    issue_error = secondary_error or primary_error or verification_issue or "result_not_final"
+    if result is None and within_window and attempts <= retry_limit:
         retry_minutes = int((schedule.get("retry_policy") or {}).get("retry_after_minutes", 45))
         schedule["status"] = "retry_scheduled"
         schedule["review_due_at"] = (now + timedelta(minutes=retry_minutes)).isoformat()
-        schedule["last_error"] = error or "result_not_final"
+        schedule["last_error"] = issue_error
         outcome = "retry_scheduled"
     elif result is None:
-        schedule["status"] = "blocked_result_not_final"
-        schedule["last_error"] = error or "result_not_final_after_bounded_retry"
-        outcome = "blocked_result_not_final"
+        terminal_status = (
+            "manual_review_required"
+            if verification_issue in {"result_source_conflict", "secondary_source_unavailable"}
+            else "expired_unresolved"
+        )
+        schedule["status"] = terminal_status
+        schedule["terminal_reason"] = verification_issue or "result_not_final_after_bounded_retry"
+        schedule["last_error"] = issue_error
+        outcome = terminal_status
 
     path.write_text(json.dumps(schedule, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     return {"path": str(path), "status": outcome, "attempts": attempts, "score": schedule.get("result_90m")}

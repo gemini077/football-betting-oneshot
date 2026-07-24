@@ -38,6 +38,10 @@ RUNTIME = ROOT / "05_RUNTIME_STATE.json"
 SHANGHAI = ZoneInfo("Asia/Shanghai")
 
 
+def workspace_now() -> datetime:
+    return datetime.now(SHANGHAI)
+
+
 def parse_kickoff_local(value: Any) -> datetime | None:
     text = str(value or "").strip().replace("T", " ")
     for fmt in ("%Y-%m-%d %H:%M", "%Y-%m-%d %H:%M:%S"):
@@ -616,6 +620,80 @@ def completed_row(review: dict, report: dict | None, output_dir: Path, fallback_
     }
 
 
+def safe_report_id(value: Any) -> str:
+    return re.sub(r"[^0-9A-Za-z._-]+", "_", str(value or "")).strip("_") or "review"
+
+
+def structured_review_row(review: dict, report: dict | None, output_dir: Path) -> dict | None:
+    """Convert one automatic JSON review into a workspace completed row."""
+    match = review.get("match") or {}
+    result = review.get("result") or {}
+    home, away = match.get("home"), match.get("away")
+    score = result.get("score_90m")
+    if not home or not away or not score:
+        return None
+    review_id = str(
+        review.get("MatchID")
+        or match.get("canonical_match_id")
+        or canonical_match_id(match)
+    )
+    postmatch_path = DATA / "postmatch_reports" / f"{safe_report_id(review_id)}.html"
+    return {
+        "id": review_id,
+        "home": home,
+        "away": away,
+        "result_90m": score,
+        "after_extra_time": result.get("after_extra_time"),
+        "kickoff": match.get("kickoff_local") or ((report or {}).get("payload") or {}).get("match", {}).get("kickoff_local"),
+        "bet_locked": False,
+        "classification": review.get("review_classification") or "模型复盘已记录",
+        "prematch_report_url": relative_uri(report.get("html") if report else None, output_dir),
+        "postmatch_report_url": relative_uri(postmatch_path if postmatch_path.exists() else None, output_dir),
+        "review": review,
+    }
+
+
+def result_schedule_map() -> dict[str, dict]:
+    """Return the newest result-verification state for each team pair."""
+    schedules: dict[str, dict] = {}
+    for path in sorted((DATA / "postmatch_automation" / "schedules").glob("*.json")):
+        payload = load_json(path, {}) or {}
+        home, away = payload.get("home"), payload.get("away")
+        if not home or not away:
+            continue
+        key = pair_key(home, away)
+        previous = schedules.get(key)
+        if previous is None or str(payload.get("last_checked_at") or "") >= str(previous.get("last_checked_at") or ""):
+            schedules[key] = payload
+    return schedules
+
+
+def pending_result_classification(schedule: dict | None, score: tuple[int, int] | None) -> str:
+    if score:
+        return "赛果已核验，复盘生成中"
+    schedule = schedule or {}
+    status = str(schedule.get("status") or "")
+    issue = str(schedule.get("verification_issue") or "")
+    sources = schedule.get("result_sources") or {}
+    primary_score = ((sources.get("primary") or {}).get("score_90m") or "")
+    if issue == "secondary_source_unavailable":
+        prefix = f"Nowscore已确认 {primary_score}，" if primary_score else ""
+        if status == "retry_scheduled":
+            return f"{prefix}辅源暂不可用，等待一次重试"
+        return f"{prefix}辅源不可用，需人工复核"
+    if issue == "result_source_conflict":
+        return "两个赛果来源比分不一致，需人工复核"
+    if status == "expired_unresolved":
+        return "赛果在有界重试后仍未确认"
+    if status == "manual_review_required":
+        return "自动核验已停止，需人工复核"
+    if status == "retry_scheduled":
+        return "赛果尚未最终确认，等待一次重试"
+    if status in {"blocked_result_conflict", "blocked_result_not_final"}:
+        return "历史核验任务需重新处理"
+    return "赛果待核验"
+
+
 def relative_uri(path: Path | None, output_dir: Path) -> str:
     if not path:
         return ""
@@ -625,7 +703,8 @@ def relative_uri(path: Path | None, output_dir: Path) -> str:
 
 def pending_completed_row(home: str, away: str, kickoff: Any, report: dict | None,
                           output_dir: Path, row_id: str,
-                          verified_results: dict[str, tuple[int, int]]) -> dict:
+                          verified_results: dict[str, tuple[int, int]],
+                          verification_schedule: dict | None = None) -> dict:
     score = verified_results.get(pair_key(home, away))
     return {
         "id": row_id,
@@ -635,10 +714,13 @@ def pending_completed_row(home: str, away: str, kickoff: Any, report: dict | Non
         "after_extra_time": None,
         "kickoff": kickoff,
         "bet_locked": False,
-        "classification": "赛果已核验，复盘生成中" if score else "赛果待核验",
+        "classification": pending_result_classification(verification_schedule, score),
         "prematch_report_url": relative_uri(report.get("html") if report else None, output_dir),
         "postmatch_report_url": "",
         "review": None,
+        "verification_status": (verification_schedule or {}).get("status"),
+        "verification_issue": (verification_schedule or {}).get("verification_issue"),
+        "result_sources": (verification_schedule or {}).get("result_sources") or {},
     }
 
 
@@ -679,13 +761,14 @@ def build(
     }
     reports = latest_reports()
     reviews = review_rows(runtime)
-    generated = datetime.now(SHANGHAI)
+    generated = workspace_now()
     stamp = generated.strftime("%Y%m%d_%H%M%S")
     output_dir = create_unique_output_dir(output_root, stamp)
     matches = []
     completed = []
     completed_ids: set[str] = set()
     verified_results = verified_result_map()
+    verification_schedules = result_schedule_map()
     schedule_keys = set()
     for row in schedule.get("matches") or []:
         home, away = row.get("homeTeam"), row.get("awayTeam")
@@ -700,7 +783,10 @@ def build(
             continue
         kickoff = f"{row.get('matchDate')} {str(row.get('matchTime') or '')[:5]}"
         if match_should_be_finished(kickoff, generated):
-            item = pending_completed_row(home, away, kickoff, report, output_dir, f"schedule-{key}", verified_results)
+            item = pending_completed_row(
+                home, away, kickoff, report, output_dir, f"schedule-{key}",
+                verified_results, verification_schedules.get(pair_key(home, away)),
+            )
             item["nowscore_id"] = row.get("nowscoreId")
             item["provider_match_id"] = row.get("matchId")
             completed.append(item)
@@ -726,11 +812,18 @@ def build(
     # 已有分析但不在当天体彩列表中的关注场次仍可在同一工作台查看。
     for key, report in reports.items():
         match = report["payload"].get("match") or {}
-        if match.get("business_date") not in {
+        kickoff_at = parse_kickoff_local(match.get("kickoff_local"))
+        fallback_business_dates = {
             (base_date - timedelta(days=1)).isoformat(),
             target_date,
             (base_date + timedelta(days=1)).isoformat(),
-        } or key in schedule_keys:
+        }
+        outside_recent_window = (
+            kickoff_at < generated - timedelta(days=7)
+            if kickoff_at is not None
+            else match.get("business_date") not in fallback_business_dates
+        )
+        if outside_recent_window or key in schedule_keys:
             continue
         if any(
             str(match.get("match_num") or "") == str(item.get("match_num") or "")
@@ -750,6 +843,7 @@ def build(
             item = pending_completed_row(
                 match.get("home"), match.get("away"), kickoff, report, output_dir,
                 f"report-{key}", verified_results,
+                verification_schedules.get(pair_key(match.get("home"), match.get("away"))),
             )
             if str(item["id"]) not in completed_ids:
                 completed.append(item)
@@ -769,6 +863,28 @@ def build(
             "prediction_layer": prediction_layer(report),
             "portfolio_candidates": report_candidates(report, match.get("home"), match.get("away")),
         })
+    # Automatic JSON reviews are the source of truth for recent completed
+    # matches.  They must not disappear when the daily Sporttery window moves.
+    for review in reviews:
+        match = review.get("match") or {}
+        home, away = match.get("home"), match.get("away")
+        if not home or not away or not (review.get("result") or {}).get("score_90m"):
+            continue
+        review_id = str(
+            review.get("MatchID")
+            or match.get("canonical_match_id")
+            or canonical_match_id(match)
+        )
+        if review_id in completed_ids or any(
+            pair_key(item.get("home"), item.get("away")) == pair_key(home, away)
+            for item in completed
+        ):
+            continue
+        report = find_report_for_pair(home, away, reports)
+        item = structured_review_row(review, report, output_dir)
+        if item:
+            completed.append(item)
+            completed_ids.add(str(item["id"]))
     for index, row in enumerate(runtime.get("latest_reviewed_matches") or [], start=1):
         name = str(row.get("match") or "")
         pair = re.split(r"\s+vs\s+", name, maxsplit=1, flags=re.IGNORECASE)
@@ -803,6 +919,7 @@ def build(
         })
         completed_ids.add(review_id)
     completed.sort(key=lambda item: str(item.get("kickoff") or ""), reverse=True)
+    completed = completed[:20]
     portfolio = build_daily_portfolio(matches, runtime)
     paper_root = DATA / "paper_ledger"
     if persist_runtime_data:
