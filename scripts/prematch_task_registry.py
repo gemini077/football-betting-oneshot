@@ -20,6 +20,15 @@ CHECKPOINTS = (
     (480, "T-8H"), (360, "T-6H"), (240, "T-4H"), (120, "T-2H"),
     (90, "T-90M"), (60, "T-60M"), (30, "T-30M"), (10, "T-10M"),
 )
+TERMINAL_STATUSES = {
+    "report_updated",
+    "report_failed",
+    "source_unavailable",
+    "captured",
+    "historical_recovery",
+    "late_live",
+    "permanently_missing",
+}
 
 
 def parse_time(value) -> datetime | None:
@@ -149,18 +158,21 @@ def sync_registry(
                 status = old.get("status", "captured")
                 checkpoint.update({**old, "status": status})
     now = datetime.now(SHANGHAI)
-    terminal = {"captured", "historical_recovery", "late_live", "permanently_missing"}
     for task in (registry.get("tasks") or {}).values():
         kickoff = parse_time(task.get("kickoff"))
         if kickoff is None or now <= kickoff + timedelta(hours=6):
             continue
         for checkpoint in (task.get("checkpoints") or {}).values():
-            if checkpoint.get("status") in terminal:
+            if checkpoint.get("status") in TERMINAL_STATUSES:
                 continue
+            prior_error = checkpoint.get("last_error") or checkpoint.get("error")
             checkpoint.update({
                 "status": "permanently_missing",
                 "reason": "任务登记时已超过赛后六小时恢复窗，未伪造历史快照。",
             })
+            checkpoint["closed_at"] = now.isoformat(timespec="seconds")
+            if prior_error:
+                checkpoint["last_error"] = prior_error
     save_registry(registry, registry_path)
     return {"registered_sources": registered, "task_count": len(registry.get("tasks") or {}), "registry": registry}
 
@@ -177,7 +189,7 @@ def due_events(registry: dict, now: datetime, match_id: str | None = None, stage
         for checkpoint_stage, checkpoint in (task.get("checkpoints") or {}).items():
             if stage and checkpoint_stage != stage:
                 continue
-            if checkpoint.get("status") in {"captured", "historical_recovery", "late_live", "permanently_missing"}:
+            if checkpoint.get("status") in TERMINAL_STATUSES:
                 continue
             planned = parse_time(checkpoint.get("planned_at"))
             if planned and planned <= now:

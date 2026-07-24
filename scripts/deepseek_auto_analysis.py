@@ -77,6 +77,9 @@ def prune(value: Any, depth: int = 0) -> Any:
 
 
 def selected_workspace_match(request: dict) -> dict:
+    embedded = request.get("match_snapshot")
+    if isinstance(embedded, dict) and embedded.get("home") and embedded.get("away"):
+        return prune(embedded)
     if not WORKSPACE_PATH.exists():
         return {}
     try:

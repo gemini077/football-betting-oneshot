@@ -37,7 +37,15 @@ test("health still reports overdue events outside dispatch windows", () => {
 });
 
 test("terminal checkpoints are never dispatched", () => {
-  for (const status of ["captured", "historical_recovery", "late_live", "permanently_missing"]) {
+  for (const status of [
+    "report_updated",
+    "report_failed",
+    "source_unavailable",
+    "captured",
+    "historical_recovery",
+    "late_live",
+    "permanently_missing",
+  ]) {
     const terminalTask = {
       ...task,
       checkpoints: {

@@ -15,6 +15,8 @@ from prematch_fundamentals import collect_prematch_fundamentals
 from decision_evolution import append_record, attach_evolution
 from match_identity import canonical_match_id, identity_aliases
 from historical_market_recovery import recover_manifest
+from fetch_and_parse import DEFAULT_CACHE_DIR as DEEP_CACHE_DIR, fetch_and_parse
+from nowscore_markets import fetch_match_markets as fetch_nowscore_markets
 from prematch_task_registry import (
     due_events, load_registry, save_registry, sync_registry, update_checkpoint,
 )
@@ -37,6 +39,7 @@ CHECKPOINTS = (
 )
 TARGET_MINUTES = {stage: minutes for minutes, stage in CHECKPOINTS}
 SHANGHAI = ZoneInfo("Asia/Shanghai")
+MAX_ATTEMPTS = 2
 
 
 def load_json(path):
@@ -78,7 +81,10 @@ def due_stages(match, now, hours_before=8.0, completed=None):
     captured = {
         stage for stage, payload in completed.items()
         if not isinstance(payload, dict) or payload.get("status", "captured")
-        in {"captured", "historical_recovery", "late_live", "permanently_missing"}
+        in {
+            "report_updated", "report_failed", "source_unavailable",
+            "captured", "historical_recovery", "late_live", "permanently_missing",
+        }
     }
     candidates = []
     for target, stage in CHECKPOINTS:
@@ -178,6 +184,100 @@ def refresh_fundamentals(analysis_path, match):
     return checked.get("status")
 
 
+def _relative(path: Path) -> str:
+    return str(path.relative_to(ROOT)).replace("\\", "/")
+
+
+def _usable_500_snapshot(payload: dict) -> bool:
+    return bool(
+        ((payload.get("ouzhi") or {}).get("bookmakers") or [])
+        or ((payload.get("yazhi") or {}).get("companies") or [])
+        or ((payload.get("daxiao") or {}).get("companies") or [])
+    )
+
+
+def capture_market_snapshot(match: dict, stage: str, now: datetime) -> Path:
+    """Persist Nowscore-first evidence without depending on a live schedule list."""
+    stamp = now.astimezone(SHANGHAI).strftime("%Y%m%d_%H%M%S")
+    safe_stage = stage.replace("-", "_")
+    run_dir = ROOT / "data" / "fetch_runs" / f"{stamp}_checkpoint_{safe_stage}"
+    suffix = 1
+    while run_dir.exists():
+        run_dir = ROOT / "data" / "fetch_runs" / f"{stamp}_checkpoint_{safe_stage}_{suffix:02d}"
+        suffix += 1
+    run_dir.mkdir(parents=True)
+    home, away = str(match.get("home") or ""), str(match.get("away") or "")
+    kickoff = match.get("kickoff")
+    manifest = {
+        "run_id": run_dir.name,
+        "fetch_time": now.astimezone(SHANGHAI).isoformat(timespec="seconds"),
+        "target_date": match.get("business_date"),
+        "match_filter": f"{home} vs {away}",
+        "checkpoint": stage,
+        "analysis_input_only": True,
+        "lock_state_changed": False,
+        "sources": {},
+        "warnings": [],
+    }
+    source_errors = []
+    try:
+        nowscore = fetch_nowscore_markets(home, away, kickoff, None, True)
+    except Exception as error:
+        nowscore = {
+            "source": "nowscore_public_3in1",
+            "status": "FETCH_ERROR",
+            "error": f"{type(error).__name__}: {error}",
+        }
+    nowscore_path = run_dir / f"{stamp}_nowscore.json"
+    nowscore_path.write_text(json.dumps(nowscore, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    nowscore_ok = nowscore.get("status") == "OK"
+    manifest["sources"]["nowscore"] = {
+        "status": nowscore.get("status") or "UNKNOWN",
+        "success": nowscore_ok,
+        "match_count": 1 if nowscore_ok else 0,
+        "matches": [{"file": _relative(nowscore_path), "status": nowscore.get("status")}],
+        "analysis_input_only": True,
+    }
+    if not nowscore_ok:
+        source_errors.append(f"nowscore: {nowscore.get('error') or nowscore.get('status')}")
+
+    provider_id = str(match.get("provider_match_id") or match.get("id") or "")
+    shuju_match = re.fullmatch(r"500-(\d+)", provider_id, flags=re.IGNORECASE)
+    if not nowscore_ok and shuju_match:
+        shuju_id = int(shuju_match.group(1))
+        try:
+            fallback = fetch_and_parse(
+                shuju_id,
+                str(match.get("business_date") or str(kickoff or "")[:10]),
+                DEEP_CACHE_DIR,
+                True,
+            )
+        except Exception as error:
+            fallback = {"shuju_id": shuju_id, "error": f"{type(error).__name__}: {error}"}
+        fallback_path = run_dir / f"{stamp}_500_deep_{shuju_id}.json"
+        fallback_path.write_text(json.dumps(fallback, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        fallback_ok = _usable_500_snapshot(fallback)
+        manifest["sources"]["500_deep"] = {
+            "status": "OK" if fallback_ok else "FAILED",
+            "success": fallback_ok,
+            "match_count": 1 if fallback_ok else 0,
+            "matches": [{
+                "file": _relative(fallback_path),
+                "shuju_id": shuju_id,
+                "all_pages_ok": fallback_ok,
+            }],
+        }
+        if not fallback_ok:
+            source_errors.append(f"500.com: {fallback.get('error') or 'no usable market rows'}")
+
+    manifest["source_errors"] = source_errors
+    manifest_path = run_dir / f"{stamp}_fetch_manifest.json"
+    manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    if not any(source.get("success") for source in manifest["sources"].values()):
+        raise RuntimeError("; ".join(source_errors) or "no usable checkpoint market source")
+    return manifest_path
+
+
 def refresh_match(match, stage=None, now=None):
     """Fetch a new snapshot and recalculate the complete deterministic model."""
     from deepseek_auto_analysis import analysis_context, deterministic_analysis, report_manifest
@@ -196,16 +296,55 @@ def refresh_match(match, stage=None, now=None):
         "business_date": str(match.get("business_date") or ""),
         "match_id": match_id,
         "match": label,
+        "match_snapshot": {
+            "id": match_id,
+            "canonical_match_id": canonical_id,
+            "home": match.get("home"),
+            "away": match.get("away"),
+            "league": match.get("league"),
+            "business_date": match.get("business_date"),
+            "kickoff": match.get("kickoff"),
+            "match_num": match.get("match_num"),
+        },
     }
-    fetched = run_json([
-        sys.executable, "scripts/fetch_football_data.py",
-        "--date", request["business_date"], "--match", match_id or label,
-        "--deep", "--no-cache",
-    ])
-    manifest_path = Path(fetched["manifest"])
-    if not manifest_path.is_absolute():
-        manifest_path = ROOT / manifest_path
     checkpoint = checkpoint_meta(match, now, stage)
+    checkpoint_path = CHECKPOINT_ROOT / canonical_id / f"{stage}.json"
+    checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
+    existing = {}
+    if checkpoint_path.exists():
+        try:
+            existing = load_json(checkpoint_path)
+        except (OSError, json.JSONDecodeError):
+            existing = {}
+    existing_manifest = existing.get("fetch_manifest")
+    manifest_path = ROOT / existing_manifest if existing_manifest else None
+    if manifest_path is None or not manifest_path.exists():
+        manifest_path = capture_market_snapshot(match, stage, now)
+        capture_record = {
+            **checkpoint,
+            "status": "snapshot_captured",
+            "report_status": "pending",
+            "match_id": match_id,
+            "canonical_match_id": canonical_id,
+            "home": match.get("home"),
+            "away": match.get("away"),
+            "kickoff": match.get("kickoff"),
+            "fetch_manifest": _relative(manifest_path),
+            "model_recalculated": False,
+            "real_bet_created": False,
+        }
+        checkpoint_path.write_text(
+            json.dumps(capture_record, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        existing = capture_record
+    else:
+        checkpoint.update({
+            key: existing.get(key)
+            for key in ("scheduled_at", "captured_at", "target_minutes_before",
+                        "actual_minutes_before", "lateness_minutes", "exact", "capture_quality")
+            if existing.get(key) is not None
+        })
     recovery = None
     if float(checkpoint.get("lateness_minutes") or 0) > 5:
         recovery = recover_manifest(manifest_path, checkpoint.get("scheduled_at"))
@@ -226,8 +365,27 @@ def refresh_match(match, stage=None, now=None):
                 "model_recalculated": False,
                 "reason": "赛前历史轨迹没有该节点，且比赛已经开赛；保留原报告，不用当前价冒充历史价。",
             }
-    context = analysis_context(manifest_path, request)
-    analysis = deterministic_analysis(context, request)
+    try:
+        context = analysis_context(manifest_path, request)
+        analysis = deterministic_analysis(context, request)
+    except Exception as error:
+        failed = {
+            **existing,
+            **checkpoint,
+            "status": "snapshot_captured",
+            "report_status": "failed",
+            "fetch_manifest": _relative(manifest_path),
+            "report_error": f"{type(error).__name__}: {error}"[:1000],
+        }
+        checkpoint_path.write_text(json.dumps(failed, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        return {
+            "match": label,
+            "status": "snapshot_captured",
+            "stage": stage,
+            "checkpoint": checkpoint,
+            "report_error": failed["report_error"],
+            "model_recalculated": False,
+        }
     analysis.setdefault("match", {})["canonical_match_id"] = canonical_id
     analysis.setdefault("match", {})["provider_match_id"] = match_id
     analysis, evolution_record = attach_evolution(analysis, canonical_id, checkpoint)
@@ -253,14 +411,42 @@ def refresh_match(match, stage=None, now=None):
     analysis_path.write_text(json.dumps(analysis, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
     render_manifest = report_manifest(manifest_path, context)
-    report = run_json([
-        sys.executable, "scripts/generate_analysis_report.py",
-        "--fetch-manifest", str(render_manifest), "--analysis-json", str(analysis_path),
-    ])
+    try:
+        report = run_json([
+            sys.executable, "scripts/generate_analysis_report.py",
+            "--fetch-manifest", str(render_manifest), "--analysis-json", str(analysis_path),
+        ])
+    except Exception as error:
+        failed = {
+            **checkpoint,
+            "status": "snapshot_captured",
+            "report_status": "failed",
+            "match_id": match_id,
+            "canonical_match_id": canonical_id,
+            "home": match.get("home"),
+            "away": match.get("away"),
+            "kickoff": match.get("kickoff"),
+            "fetch_manifest": _relative(manifest_path),
+            "analysis_input": _relative(analysis_path),
+            "report_error": f"{type(error).__name__}: {error}"[:1000],
+            "model_recalculated": True,
+            "real_bet_created": False,
+        }
+        checkpoint_path.write_text(json.dumps(failed, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        return {
+            "match": label,
+            "status": "snapshot_captured",
+            "stage": stage,
+            "checkpoint": checkpoint,
+            "report_error": failed["report_error"],
+            "model_recalculated": True,
+        }
     report_path = report.get("report") or report.get("html")
     append_record(evolution_record)
     checkpoint_record = {
         **checkpoint,
+        "status": "report_updated",
+        "report_status": "updated",
         "match_id": match_id,
         "canonical_match_id": canonical_id,
         "home": match.get("home"),
@@ -274,11 +460,9 @@ def refresh_match(match, stage=None, now=None):
         "decision": evolution_record.get("decision"),
         "change": evolution_record.get("change"),
     }
-    checkpoint_path = CHECKPOINT_ROOT / canonical_id / f"{stage}.json"
-    checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
     checkpoint_path.write_text(json.dumps(checkpoint_record, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     return {
-        "match": label, "status": "refreshed", "stage": stage,
+        "match": label, "status": "report_updated", "stage": stage,
         "checkpoint": checkpoint, "report": report_path,
         "model_recalculated": True, "change": evolution_record.get("change"),
     }
@@ -294,6 +478,7 @@ def main():
     parser.add_argument("--match-id", help="只处理一个canonical/provider比赛ID")
     parser.add_argument("--checkpoint", choices=[stage for _, stage in CHECKPOINTS])
     parser.add_argument("--sync-tasks", action="store_true")
+    parser.add_argument("--max-events", type=int, default=1)
     args = parser.parse_args()
     now = parse_time(args.now) if args.now else datetime.now(SHANGHAI)
     if now is None:
@@ -313,6 +498,7 @@ def main():
     if args.count_due:
         print(len(due))
         return 0
+    due = due[:max(1, args.max_events)]
 
     results = []
     for match in due:
@@ -320,31 +506,59 @@ def main():
         try:
             result = refresh_match(match, match["_monitor_stage"], now)
             results.append(result)
-            if result.get("status") in {"refreshed", "missed_checkpoint"}:
+            if result.get("status") in {"report_updated", "snapshot_captured", "missed_checkpoint"}:
                 stage = match["_monitor_stage"]
                 quality = (result.get("checkpoint") or {}).get("capture_quality") or "captured"
+                current = registry["tasks"][canonical_id]["checkpoints"][stage]
+                attempts = list(current.get("attempts") or [])
+                attempts.append({
+                    "at": now.isoformat(),
+                    "result": result.get("status"),
+                    "error": result.get("report_error"),
+                })
+                if result.get("status") == "report_updated":
+                    durable_status = "report_updated"
+                elif result.get("status") == "missed_checkpoint":
+                    durable_status = "permanently_missing"
+                else:
+                    durable_status = "report_failed" if len(attempts) >= MAX_ATTEMPTS else "snapshot_captured"
                 state.setdefault(canonical_id, {})[stage] = {
-                    **result["checkpoint"], "status": quality
+                    **result["checkpoint"],
+                    "status": durable_status,
+                    "capture_quality": quality,
+                    "report_error": result.get("report_error"),
                 }
                 update_checkpoint(
-                    registry, canonical_id, stage, quality,
+                    registry, canonical_id, stage, durable_status,
                     captured_at=result["checkpoint"].get("captured_at"),
                     actual_minutes_before=result["checkpoint"].get("actual_minutes_before"),
                     lateness_minutes=result["checkpoint"].get("lateness_minutes"),
+                    capture_quality=quality,
+                    report_status="updated" if durable_status == "report_updated" else "failed",
                     report=result.get("report"),
                     reason=result.get("reason"),
+                    last_error=result.get("report_error"),
+                    attempts=attempts,
                 )
         except Exception as error:
             stage = match.get("_monitor_stage")
+            current = registry["tasks"][canonical_id]["checkpoints"][stage]
+            attempts = list(current.get("attempts") or [])
+            attempts.append({"at": now.isoformat(), "result": "source_error", "error": str(error)[:1000]})
+            durable_status = "source_unavailable" if len(attempts) >= MAX_ATTEMPTS else "retry_wait"
             state.setdefault(canonical_id, {})[stage] = {
-                "status": "failed",
+                "status": durable_status,
                 "last_attempt_at": now.isoformat(),
                 "error": str(error)[:1000],
+                "attempts": attempts,
             }
             if canonical_id in registry.get("tasks", {}) and stage:
                 update_checkpoint(
-                    registry, canonical_id, stage, "retry_wait",
-                    last_attempt_at=now.isoformat(), error=str(error)[:1000],
+                    registry, canonical_id, stage, durable_status,
+                    last_attempt_at=now.isoformat(),
+                    error=str(error)[:1000],
+                    last_error=str(error)[:1000],
+                    attempts=attempts,
                 )
             results.append({
                 "match": f"{match.get('home')} vs {match.get('away')}",
@@ -355,7 +569,7 @@ def main():
         STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
         STATE_PATH.write_text(json.dumps(state, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         save_registry(registry)
-    if any(row.get("status") == "refreshed" for row in results):
+    if any(row.get("status") == "report_updated" for row in results):
         run_json([
             sys.executable, "scripts/match_workspace.py", "--date",
             str(workspace.get("target_date") or now.date().isoformat()),
@@ -374,7 +588,7 @@ def main():
     # A single provider/match failure must not discard checkpoints that were
     # refreshed successfully in the same cycle.  Failed rows remain absent
     # from state and are therefore eligible for the next bounded retry.
-    has_success = any(row.get("status") == "refreshed" for row in results)
+    has_success = any(row.get("status") in {"report_updated", "snapshot_captured"} for row in results)
     has_error = any(row.get("status") == "error" for row in results)
     return 1 if has_error and not has_success else 0
 
