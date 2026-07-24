@@ -7,7 +7,7 @@ import unittest
 from datetime import date, timedelta
 from pathlib import Path
 
-from scripts.match_workspace import RUNTIME, build, build_daily_portfolio, create_unique_output_dir, find_review, render, report_candidates, report_html_path, report_summary, review_rows
+from scripts.match_workspace import DATA, RUNTIME, build, build_daily_portfolio, create_unique_output_dir, find_review, render, report_candidates, report_html_path, report_summary, review_rows
 
 
 class MatchWorkspacePortfolioTests(unittest.TestCase):
@@ -115,10 +115,20 @@ class MatchWorkspacePortfolioTests(unittest.TestCase):
             output = Path(temp)
             latest = output / "latest.html"
             latest.write_text("KEEP_CURRENT", encoding="utf-8")
+            paper_latest = DATA / "paper_ledger" / "latest.json"
+            frozen = DATA / "paper_ledger" / "frozen.json"
+            paper_before = paper_latest.read_bytes()
+            frozen_before = frozen.read_bytes()
 
-            build((date.today() - timedelta(days=2)).isoformat(), output)
+            build(
+                (date.today() - timedelta(days=2)).isoformat(),
+                output,
+                persist_runtime_data=False,
+            )
 
             self.assertEqual("KEEP_CURRENT", latest.read_text(encoding="utf-8"))
+            self.assertEqual(paper_before, paper_latest.read_bytes())
+            self.assertEqual(frozen_before, frozen.read_bytes())
 
     def test_homepage_uses_unified_report_actions_and_compact_sections(self):
         page = render("{}")
@@ -129,6 +139,45 @@ class MatchWorkspacePortfolioTests(unittest.TestCase):
         self.assertIn("m.postmatch_report_url||m.prematch_report_url", page)
         self.assertIn("document.querySelector('#reportDialog')?.remove()", page)
         self.assertIn("openAllReviews=()=>openReport(DATA.postmatch_dashboard_url)", page)
+
+    def test_workspace_keeps_stable_kpi_nodes_during_enhancement(self):
+        page = render("{}")
+
+        for node_id in (
+            "balance",
+            "availableCash",
+            "realExposure",
+            "openBetCount",
+            "analyzedCount",
+            "completedCount",
+            "upcomingCount",
+            "selectedCount",
+        ):
+            self.assertIn(f'id="{node_id}"', page)
+        self.assertNotIn("account.innerHTML=", page)
+        self.assertIn("$('#availableCash').textContent=", page)
+        self.assertIn("$('#realExposure').textContent=", page)
+
+    def test_workspace_labels_environment_freshness_and_pending_types(self):
+        page = render("{}")
+
+        self.assertIn('id="environmentStatus"', page)
+        self.assertIn('id="freshnessStatus"', page)
+        self.assertIn("本地预览版", page)
+        self.assertIn("云端正式版", page)
+        self.assertIn("数据刷新较慢", page)
+        self.assertIn("数据可能过期", page)
+        self.assertIn("赛果待核验", page)
+        self.assertIn("模拟待结算", page)
+        self.assertNotIn("待验赛 <b>${ps.pending||0}</b>", page)
+
+    def test_current_fixtures_are_promoted_before_secondary_cards(self):
+        page = render("{}")
+
+        self.assertIn("workspaceMain.insertBefore(controls,paper)", page)
+        self.assertIn("workspaceMain.insertBefore(upcomingSection,paper)", page)
+        self.assertIn("workspaceMain.insertBefore(completedSection,paper)", page)
+        self.assertIn("upcomingSection.dataset.homePriority='current-fixtures'", page)
 
     def test_unanalyzed_match_queues_through_local_bridge_without_github_jump(self):
         page = render("{}")
@@ -155,6 +204,13 @@ class MatchWorkspacePortfolioTests(unittest.TestCase):
         self.assertIn("返回修改", page)
         self.assertIn("最终确认：已真实下注", page)
         self.assertIn("已确认真实下注", page)
+
+    def test_real_bet_cancel_does_not_trigger_required_field_validation(self):
+        page = render("{}")
+
+        self.assertIn('id="cancelBet"', page)
+        self.assertIn("$('#cancelBet').onclick=()=>betDialog.close()", page)
+        self.assertNotIn('<button value="cancel"', page)
 
     def test_market_only_report_is_not_marked_as_analyzed(self):
         report = {
