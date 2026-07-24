@@ -681,6 +681,8 @@ def build_review(schedule: dict, report: dict, now: datetime) -> dict:
                        "missing_count": len(missing), "checkpoint_count": checkpoint_count}
     return {
         "schema_version": "3.0",
+        "model_version": (report.get("report") or {}).get("model_version"),
+        "model_family": (report.get("model") or {}).get("method"),
         "generated_at": now.isoformat(),
         "match": {"home": schedule.get("home"), "away": schedule.get("away"), "kickoff_local": schedule.get("kickoff_local")},
         "result": {"score_90m": actual_score, "outcome": actual_outcome, "total_goals": total_actual, "btts": btts_actual, "scope": "90分钟含伤停，不含加时与点球"},
@@ -829,6 +831,8 @@ def main() -> int:
     try:
         from review_metrics import build_metrics
         build_metrics(review_root)
+        from build_model_calibration import build_calibration, write_calibration
+        write_calibration(build_calibration(review_root))
     except Exception as exc:
         outcomes.append({"status": "metrics_failed", "error": str(exc)})
     print(json.dumps({"reviewed": len([row for row in outcomes if row['status'] == 'reviewed']), "outcomes": outcomes}, ensure_ascii=False))

@@ -26,7 +26,7 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 API_URL = "https://api.deepseek.com/chat/completions"
 DEFAULT_MODEL = "deepseek-v4-pro"
-MODEL_VERSION = "v0.18.2"
+MODEL_VERSION = "v0.19.0"
 AUTO_INPUT_ROOT = ROOT / "data" / "analysis_inputs" / "automated"
 WORKSPACE_PATH = ROOT / "data" / "match_workspace" / "latest.json"
 DEEP_FALLBACK_ROOT = ROOT / "data" / "source_cache" / "deep_fallback"
@@ -174,10 +174,33 @@ def analysis_context(manifest_path: Path, request: dict) -> dict:
                 "snapshots": [prune(load_json(fallback))],
             }
     workspace_match = selected_workspace_match(request)
+    from checkpoint_features import build_checkpoint_features
+    from match_identity import canonical_match_id
+    checkpoint_id = str(
+        workspace_match.get("canonical_match_id")
+        or request.get("match_snapshot", {}).get("canonical_match_id")
+        or canonical_match_id(workspace_match or request.get("match_snapshot") or {})
+    )
+    nowscore_source = sources.get("nowscore") or {}
+    nowscore_snapshots = (
+        nowscore_source.get("snapshots")
+        if isinstance(nowscore_source, dict)
+        else []
+    )
+    current_market_snapshot = (
+        nowscore_snapshots[0]
+        if nowscore_snapshots and isinstance(nowscore_snapshots[0], dict)
+        else (deep_snapshots[0] if deep_snapshots and isinstance(deep_snapshots[0], dict) else None)
+    )
+    checkpoint_features = build_checkpoint_features(
+        checkpoint_id,
+        current_market_snapshot,
+    )
     context = {
         "request": request,
         "selected_workspace_match": workspace_match,
         "official_market_baseline": devig_three_way(workspace_match.get("spf") or {}),
+        "checkpoint_features": checkpoint_features,
         "manifest": prune(manifest),
         "source_snapshots": sources,
         "hard_rules": {
@@ -424,6 +447,20 @@ def apply_deterministic_core(analysis: dict, context: dict) -> dict:
         analysis["live_ev_profiles"] = core["live_ev_profiles"]
     quality = analysis.setdefault("data_quality", {})
     quality.update(core.get("data_quality") or {})
+    from prediction_quality import classify_prediction
+    layer = classify_prediction({
+        "data_quality": quality,
+        "model": core.get("model") or {},
+        "decisions": core.get("decisions") or {},
+        "betting": analysis.get("betting") or {},
+    })
+    decisions = core["decisions"]
+    decisions["prediction_tier"] = "formal" if layer["formal_pick_eligible"] else "research"
+    decisions["data_grade"] = layer["data_grade"]
+    decisions["checkpoint_count"] = layer["checkpoint_count"]
+    decisions["formal_unique_score"] = (
+        decisions.get("unique_score") if layer["formal_pick_eligible"] else None
+    )
     fundamentals = analysis.setdefault("fundamentals", {})
     core_fundamentals = core.get("fundamentals") or {}
     fundamentals["structured_form"] = core_fundamentals
