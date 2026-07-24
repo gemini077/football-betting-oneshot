@@ -1,6 +1,18 @@
 const TERMINAL = new Set(["captured", "historical_recovery", "late_live", "permanently_missing"]);
+const DISPATCH_WINDOWS = [
+  { attempt: "primary", startMinutes: 0, endMinutes: 1 },
+  { attempt: "bounded_retry", startMinutes: 10, endMinutes: 11 },
+];
 
-function dueEvents(tasks, now) {
+function dispatchAttempt(latenessMinutes) {
+  const window = DISPATCH_WINDOWS.find(
+    ({ startMinutes, endMinutes }) =>
+      latenessMinutes >= startMinutes && latenessMinutes < endMinutes,
+  );
+  return window?.attempt || null;
+}
+
+function dueEvents(tasks, now, dispatchableOnly = false) {
   const rows = [];
   for (const [matchId, task] of Object.entries(tasks || {})) {
     const kickoff = Date.parse(task.kickoff);
@@ -9,7 +21,10 @@ function dueEvents(tasks, now) {
       if (TERMINAL.has(state.status)) continue;
       const planned = Date.parse(state.planned_at);
       if (!Number.isFinite(planned) || planned > now) continue;
-      rows.push({ matchId, checkpoint, planned, latenessMinutes: Math.round((now - planned) / 6000) / 10 });
+      const latenessMinutes = Math.round((now - planned) / 6000) / 10;
+      const attempt = dispatchAttempt(latenessMinutes);
+      if (dispatchableOnly && !attempt) continue;
+      rows.push({ matchId, checkpoint, planned, latenessMinutes, attempt });
     }
   }
   return rows.sort((a, b) => a.planned - b.planned).slice(0, 12);
@@ -32,6 +47,7 @@ async function dispatch(env, event) {
         checkpoint: event.checkpoint,
         planned_at: new Date(event.planned).toISOString(),
         idempotency_key: `${event.matchId}:${event.checkpoint}`,
+        dispatch_attempt: event.attempt,
         scheduler: "cloudflare-minute-cron",
       },
     }),
@@ -39,16 +55,23 @@ async function dispatch(env, event) {
   if (!response.ok) throw new Error(`GitHub dispatch ${response.status}: ${await response.text()}`);
 }
 
-async function run(env, shouldDispatch = true) {
+async function run(env, shouldDispatch = true, now = Date.now()) {
   const branch = env.GITHUB_BRANCH || "main";
   const registryUrl = `https://raw.githubusercontent.com/${env.GITHUB_OWNER}/${env.GITHUB_REPO}/${branch}/data/market_history/prematch_tasks.json?t=${Date.now()}`;
   const response = await fetch(registryUrl, { headers: { "Cache-Control": "no-cache" } });
   if (response.status === 404) return { status: "registry_not_published", due: 0, dispatched: 0 };
   if (!response.ok) throw new Error(`Registry fetch ${response.status}`);
   const registry = await response.json();
-  const events = dueEvents(registry.tasks, Date.now());
+  const due = dueEvents(registry.tasks, now);
+  const events = dueEvents(registry.tasks, now, true);
   if (!shouldDispatch) {
-    return { status: "ok", due: events.length, dispatched: 0, results: events };
+    return {
+      status: "ok",
+      due: due.length,
+      dispatchable: events.length,
+      dispatched: 0,
+      results: due,
+    };
   }
   const results = [];
   for (const event of events) {
@@ -59,11 +82,19 @@ async function run(env, shouldDispatch = true) {
       results.push({ ...event, status: "error", error: String(error) });
     }
   }
-  return { status: "ok", due: events.length, dispatched: results.filter(row => row.status === "dispatched").length, results };
+  return {
+    status: "ok",
+    due: due.length,
+    dispatchable: events.length,
+    dispatched: results.filter(row => row.status === "dispatched").length,
+    results,
+  };
 }
 
 export default {
-  async scheduled(_controller, env, ctx) { ctx.waitUntil(run(env, true)); },
+  async scheduled(controller, env, ctx) {
+    ctx.waitUntil(run(env, true, controller.scheduledTime));
+  },
   async fetch(request, env) {
     if (new URL(request.url).pathname !== "/health") return new Response("Not found", { status: 404 });
     try {
@@ -73,3 +104,5 @@ export default {
     }
   },
 };
+
+export { dispatchAttempt, dueEvents, run };
