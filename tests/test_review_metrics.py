@@ -43,3 +43,19 @@ def test_score_error_taxonomy_distinguishes_selector_override_from_matrix_tail(t
     assert result["error_tags"]["score_matrix_tail_error"] == 1
     assert "score_selector_error" not in result["error_tags"]
 
+
+def test_metrics_expose_recent_windows_and_score_coverage(tmp_path):
+    for index in range(6):
+        payload = _review(f"FBOS-{index}", index >= 3)
+        payload["match"]["kickoff_local"] = f"2026-07-{index + 10:02d}T03:00:00+08:00"
+        payload["model_version"] = "v-test"
+        payload["model_diagnostics"] = {"actual_score_rank": index + 1}
+        (tmp_path / f"{index}.json").write_text(json.dumps(payload), encoding="utf-8")
+
+    result = build_metrics(tmp_path, tmp_path / "status.json")
+
+    assert result["rolling"]["5"]["primary"]["hit_rate"] == 0.6
+    assert result["metrics"]["score_coverage"]["top3"] == 0.5
+    assert result["metrics"]["score_coverage"]["top5"] == 0.833333
+    assert result["by_model_version"]["v-test"]["primary"]["settled"] == 6
+

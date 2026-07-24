@@ -77,6 +77,32 @@ def _tags(payload: dict[str, Any]) -> list[str]:
     return list(dict.fromkeys(tags))
 
 
+def _window_metrics(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    result = {}
+    for label, key in (("primary", "primary"), ("model_1x2", "model_1x2"),
+                       ("exact_score", "exact_score"), ("total_goals", "total_goals_mode"),
+                       ("btts", "btts")):
+        values = [_hit(payload, key) for payload in rows]
+        values = [value for value in values if value is not None]
+        result[label] = {
+            "settled": len(values),
+            "hits": sum(values),
+            "hit_rate": round(sum(values) / len(values), 6) if values else None,
+        }
+    ranks = [
+        int((payload.get("model_diagnostics") or {}).get("actual_score_rank"))
+        for payload in rows
+        if (payload.get("model_diagnostics") or {}).get("actual_score_rank") is not None
+    ]
+    result["score_coverage"] = {
+        "top3": round(sum(rank <= 3 for rank in ranks) / len(ranks), 6) if ranks else None,
+        "top5": round(sum(rank <= 5 for rank in ranks) / len(ranks), 6) if ranks else None,
+        "top10": round(sum(rank <= 10 for rank in ranks) / len(ranks), 6) if ranks else None,
+        "mean_actual_rank": round(sum(ranks) / len(ranks), 4) if ranks else None,
+    }
+    return result
+
+
 def build_metrics(review_root: Path = DEFAULT_ROOT, output: Path = DEFAULT_OUTPUT,
                   since: str | None = None) -> dict[str, Any]:
     selected: dict[str, tuple[Path, dict[str, Any]]] = {}
@@ -101,14 +127,21 @@ def build_metrics(review_root: Path = DEFAULT_ROOT, output: Path = DEFAULT_OUTPU
             payload["data_grade"] = "D" if (payload.get("postmatch_evidence") or {}).get("status") == "score_conflict" else "C"
             payload["calibration_weight"] = 0.0 if payload["data_grade"] == "D" else 0.4
         rows.append(payload)
-    metrics: dict[str, Any] = {}
-    for label, key in (("model_1x2", "model_1x2"), ("primary", "primary"),
-                       ("exact_score", "exact_score"), ("total_goals", "total_goals_mode"),
-                       ("btts", "btts")):
-        values = [_hit(payload, key) for payload in rows]
-        values = [value for value in values if value is not None]
-        metrics[label] = {"settled": len(values), "hits": sum(values),
-                          "hit_rate": round(sum(values) / len(values), 6) if values else None}
+    rows.sort(key=lambda payload: str((payload.get("match") or {}).get("kickoff_local") or ""))
+    metrics = _window_metrics(rows)
+    rolling = {
+        str(size): _window_metrics(rows[-size:])
+        for size in (5, 10, 20, 40) if rows
+    }
+    by_grade = {
+        grade: _window_metrics([payload for payload in rows if str(payload.get("data_grade") or "C") == grade])
+        for grade in ("A", "B", "C", "D")
+    }
+    by_version = {}
+    for payload in rows:
+        version = str(payload.get("model_version") or "legacy")
+        by_version.setdefault(version, []).append(payload)
+    by_version = {version: _window_metrics(values) for version, values in by_version.items()}
 
     grades = Counter(str(payload.get("data_grade") or "C") for payload in rows)
     tags = Counter(tag for payload in rows for tag in _tags(payload))
@@ -123,6 +156,9 @@ def build_metrics(review_root: Path = DEFAULT_ROOT, output: Path = DEFAULT_OUTPU
         "scope": {"since": since, "raw_reviews": raw_count, "deduplicated_matches": len(rows)},
         "quality_distribution": dict(sorted(grades.items())),
         "metrics": metrics,
+        "rolling": rolling,
+        "by_grade": by_grade,
+        "by_model_version": by_version,
         "error_tags": dict(tags.most_common()),
         "triggers": trigger,
         "weighted_primary": {"weight": round(weighted_total, 6), "hits_weighted": round(weighted_hits, 6),

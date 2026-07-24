@@ -281,7 +281,7 @@ async function main() {
     return;
   }
 
-  runtime.model_version = "v0.18.2";
+  runtime.model_version = "v0.19.0";
   runtime.updated_at = isoShanghai();
   runtime.latest_review_workbook = outputRel;
   runtime.latest_reviewed_matches = runtime.latest_reviewed_matches ?? [];

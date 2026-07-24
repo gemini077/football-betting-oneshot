@@ -1180,11 +1180,39 @@ def render(payload: dict) -> str:
     ])
     primary_dimension = decisions.get("unique_primary_dimension")
     unique_score = decisions.get("unique_score")
+    prediction_tier = decisions.get("prediction_tier") or "research"
+    score_label = "正式首推比分" if prediction_tier == "formal" else "研究层比分落点"
+    top3_rows = decisions.get("score_top3") or score_rows[:3]
+    if top3_rows:
+        score_content += '<h3 class="subhead">比分 Top3 概率带</h3>' + table(
+            ["层级", "比分", "概率", "使用说明"],
+            [
+                [
+                    f"Top {index + 1}",
+                    item.get("score"),
+                    pct(item.get("probability")),
+                    score_label if index == 0 else "相邻高概率情景",
+                ]
+                for index, item in enumerate(top3_rows[:3])
+            ],
+        )
+    closed_loop = (model.get("calibration") or {}).get("closed_loop") or {}
+    checkpoint_summary = decisions.get("checkpoint_feature_summary") or {}
+    sample = closed_loop.get("sample") or {}
+    score_content += (
+        '<div class="callout"><b>输出层级与校准</b><span>'
+        f'{e(decisions.get("data_grade") or "C")}级 · {e("正式输出" if prediction_tier == "formal" else "研究输出")}；'
+        f'滚动校准样本 {e(sample.get("compatible") or 0)} 场，'
+        f'方向修正{"已启用" if closed_loop.get("direction_applied") else "未通过留出集验证"}，'
+        f'总进球修正{"已启用" if closed_loop.get("total_goals_applied") else "未通过留出集验证"}；'
+        f'有效时间点 {e(checkpoint_summary.get("snapshot_count") or 0)} 个。'
+        '</span></div>'
+    )
     score_content += (
         '<div class="decision-strip">'
         f'<div><small>胜平负主线</small><b>{e(primary_dimension)}</b><em>{e(decisions.get("mathematical_first"))}</em></div>'
         f'<div><small>盘口对照</small><b>{e(decisions.get("market_first"))}</b><em>市场只用于校准和发现分歧，不替代模型主线。</em></div>'
-        f'<div class="accent"><small>模型推演比分</small><b>{e(unique_score)}</b><em>{e(decisions.get("score_reasoning") or "这是比赛剧本、总进球区间、双方进球倾向与比分分布共同筛出的唯一落点，不是照抄最低赔率或市场第一。") } 首要错点：{e(primary_error)}</em></div>'
+        f'<div class="accent"><small>{e(score_label)}</small><b>{e(unique_score)}</b><em>{e(decisions.get("score_reasoning") or "这是比赛剧本、总进球区间、双方进球倾向与比分分布共同筛出的最高概率落点，不是照抄最低赔率或市场第一。") } 首要错点：{e(primary_error)}</em></div>'
         '</div>'
     )
 
@@ -1192,7 +1220,7 @@ def render(payload: dict) -> str:
     conclusion = (
         '<div class="verdict-grid">'
         f'<div><small>唯一主维度</small><b>{e(decisions.get("unique_primary_dimension"))}</b></div>'
-        f'<div><small>唯一首推比分</small><b>{e(decisions.get("unique_score"))}</b></div>'
+        f'<div><small>{e(score_label)}</small><b>{e(decisions.get("unique_score"))}</b></div>'
         f'<div><small>价值判断</small><b>{e(decisions.get("value_judgement"))}</b></div>'
         f'<div><small>最终状态</small><b>{e(decisions.get("final_state"))}</b></div>'
         '</div>'
@@ -1301,7 +1329,7 @@ def render(payload: dict) -> str:
         '<div class="answer-banner">'
         '<div><small>唯一主维度</small>'
         f'<strong>{e(decisions.get("unique_primary_dimension"))}</strong></div>'
-        '<div><small>90分钟首推比分</small>'
+        f'<div><small>{e(score_label)}</small>'
         f'<strong>{e(decisions.get("unique_score"))}</strong></div>'
         '<div><small>现在是否值得投</small>'
         f'<strong>{e(decisions.get("final_state"))}</strong></div>'

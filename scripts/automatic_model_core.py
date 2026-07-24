@@ -3,10 +3,17 @@
 
 from __future__ import annotations
 
+import json
 import math
+from pathlib import Path
 from statistics import fmean, median
 
 from risk_engine import dixon_coles_score_matrix
+
+
+ROOT = Path(__file__).resolve().parents[1]
+MODEL_CALIBRATION_PATH = ROOT / "data" / "model_calibration" / "latest.json"
+MODEL_FAMILY = "recent_form_market_calibrated_poisson_v2"
 
 
 def _deep_snapshot(context: dict) -> dict:
@@ -169,6 +176,72 @@ def _model_rows(matrix: dict[tuple[int, int], float]) -> tuple[list[dict], list[
         for goals, probability in sorted(exact_totals.items()) if goals <= 6
     ]
     return score_rows, total_rows, {"yes": round(btts_yes, 6), "no": round(1 - btts_yes, 6)}
+
+
+def _load_model_calibration(context: dict) -> dict:
+    embedded = context.get("model_calibration")
+    if isinstance(embedded, dict):
+        return embedded
+    try:
+        value = json.loads(MODEL_CALIBRATION_PATH.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return value if isinstance(value, dict) else {}
+
+
+def _calibration_state(context: dict) -> dict:
+    payload = _load_model_calibration(context)
+    compatible = (
+        bool(payload.get("active"))
+        and payload.get("model_family") == MODEL_FAMILY
+    )
+    strength = float((payload.get("policy") or {}).get("strength") or 0) if compatible else 0.0
+    return {
+        "artifact": payload,
+        "compatible": compatible,
+        "strength": max(0.0, min(0.6, strength)),
+        "direction_approved": compatible and bool((payload.get("direction") or {}).get("approved")),
+        "total_approved": compatible and bool((payload.get("total_goals") or {}).get("approved")),
+        "dispersion_approved": compatible and bool((payload.get("dispersion") or {}).get("approved")),
+    }
+
+
+def _reweight_outcomes(matrix: dict[tuple[int, int], float], offsets: dict, strength: float) -> dict:
+    adjusted = {}
+    for (home, away), probability in matrix.items():
+        key = "home" if home > away else "draw" if home == away else "away"
+        adjusted[(home, away)] = probability * math.exp(float(offsets.get(key) or 0) * strength)
+    total = sum(adjusted.values())
+    return {score: value / total for score, value in adjusted.items()} if total else matrix
+
+
+def _mix_dispersion(
+    matrix: dict[tuple[int, int], float],
+    total: float,
+    share: float,
+    weight: float,
+) -> dict:
+    weight = max(0.0, min(0.15, weight))
+    if weight <= 0:
+        return matrix
+    low = dixon_coles_score_matrix({
+        "lambda_home": total * 0.65 * share,
+        "lambda_away": total * 0.65 * (1 - share),
+        "rho": 0.0,
+    })
+    high = dixon_coles_score_matrix({
+        "lambda_home": total * 1.45 * share,
+        "lambda_away": total * 1.45 * (1 - share),
+        "rho": 0.0,
+    })
+    scores = set(matrix) | set(low) | set(high)
+    mixed = {
+        score: (1 - weight) * matrix.get(score, 0.0)
+        + weight * 0.5 * (low.get(score, 0.0) + high.get(score, 0.0))
+        for score in scores
+    }
+    covered = sum(mixed.values())
+    return {score: value / covered for score, value in mixed.items()} if covered else matrix
 
 
 def _scenario_score_pick(
@@ -525,15 +598,35 @@ def build_automatic_model(context: dict) -> dict:
     if home_form is None or away_form is None or not market_probabilities:
         return {"model": None, "data_quality": {"status": "仅市场基线", "missing": ["可解析的主客场近期攻防样本"]}}
 
+    calibration_state = _calibration_state(context)
+    calibration_artifact = calibration_state["artifact"]
+    calibration_strength = calibration_state["strength"]
+    checkpoint_features = context.get("checkpoint_features") or {}
     form_total = max(1.2, min(4.2, home_form + away_form))
     target_total = market_total if market_total is not None else form_total
-    total = 0.60 * form_total + 0.40 * target_total
+    uncalibrated_total = 0.60 * form_total + 0.40 * target_total
+    total_shift = (
+        float((calibration_artifact.get("total_goals") or {}).get("lambda_shift") or 0)
+        if calibration_state["total_approved"] else 0.0
+    )
+    total = max(1.0, min(4.8, uncalibrated_total + total_shift * calibration_strength))
     form_share = max(0.15, min(0.85, home_form / max(home_form + away_form, 0.01)))
     market_share = _market_share(target_total, market_probabilities)
     share = 0.65 * form_share + 0.35 * market_share
     lambda_home = total * share
     lambda_away = total * (1 - share)
     matrix = dixon_coles_score_matrix({"lambda_home": lambda_home, "lambda_away": lambda_away, "rho": 0.0})
+    if calibration_state["dispersion_approved"]:
+        tail_weight = float(
+            (calibration_artifact.get("dispersion") or {}).get("tail_mixture_weight") or 0
+        ) * calibration_strength
+        matrix = _mix_dispersion(matrix, total, share, tail_weight)
+    if calibration_state["direction_approved"]:
+        matrix = _reweight_outcomes(
+            matrix,
+            (calibration_artifact.get("direction") or {}).get("logit_offsets") or {},
+            calibration_strength,
+        )
     probabilities = _outcomes(matrix)
     score_rows, total_rows, btts = _model_rows(matrix)
     btts["judgement"] = "双方进球偏是" if btts["yes"] >= 0.55 else "双方进球偏否"
@@ -541,7 +634,7 @@ def build_automatic_model(context: dict) -> dict:
     labels = {"home": "主胜", "draw": "平局", "away": "客胜"}
     model = {
         "status": "确定性融合模型（可核验近期攻防 + 市场校准）",
-        "method": "recent_form_market_calibrated_poisson_v2",
+        "method": MODEL_FAMILY,
         "lambda_home": round(lambda_home, 6), "lambda_away": round(lambda_away, 6), "rho": 0.0,
         "expected_goals": round(total, 6),
         "probabilities": {key: round(value, 6) for key, value in probabilities.items()},
@@ -556,6 +649,16 @@ def build_automatic_model(context: dict) -> dict:
             "form_weight": 0.60, "market_weight": 0.40,
             "form_source": form_source,
             "venue_proxy_used": not (home_home.get("matches") and away_away.get("matches")),
+            "closed_loop": {
+                "status": calibration_artifact.get("status") or "no_artifact",
+                "active": calibration_state["compatible"],
+                "strength": calibration_strength,
+                "direction_applied": calibration_state["direction_approved"],
+                "total_goals_applied": calibration_state["total_approved"],
+                "dispersion_applied": calibration_state["dispersion_approved"],
+                "sample": calibration_artifact.get("sample") or {},
+            },
+            "checkpoint_features": checkpoint_features,
         },
         "limitations": [
             "近期样本含不同赛事与对手强度，尚未完成逐队Elo/xG对手校正",
@@ -618,6 +721,14 @@ def build_automatic_model(context: dict) -> dict:
     dynamic_errors.append("若早段进球、红牌或比赛节奏偏离基准，总进球与比分尾部会同步变化")
     if abs(model_market_gap) >= 0.05:
         dynamic_errors.append(market_conflict)
+    checkpoint_count = int(checkpoint_features.get("snapshot_count") or 0)
+    if checkpoint_count < 2:
+        dynamic_errors.append("有效市场快照不足2个，当前只能判断价格截面，不能确认临盘方向")
+    elif int(checkpoint_features.get("leader_reversals") or 0) > 0:
+        dynamic_errors.append(
+            f"多时间点市场领先方向已反转{int(checkpoint_features.get('leader_reversals') or 0)}次，"
+            "方向稳定性不足"
+        )
     dynamic_errors.extend([
         "首发或关键伤停与当前假设不一致，会直接改变双方λ",
         "临盘若出现跨公司同步升降盘，本次赛前快照的价格结构会失效",
@@ -625,6 +736,15 @@ def build_automatic_model(context: dict) -> dict:
     decisions = {
         "unique_primary_dimension": f"胜平负：{labels[top_result]}（模型{probabilities[top_result]:.1%}）",
         "unique_score": top_score,
+        "score_top3": score_rows[:3],
+        "prediction_tier": "research",
+        "formal_unique_score": None,
+        "checkpoint_feature_summary": {
+            "snapshot_count": checkpoint_count,
+            "state": checkpoint_features.get("state") or "no_usable_market_snapshots",
+            "leader_reversals": int(checkpoint_features.get("leader_reversals") or 0),
+            "probability_delta": checkpoint_features.get("probability_delta") or {},
+        },
         "score_reasoning": score_reasoning,
         "score_selection_trace": score_selection_trace,
         "mathematical_first": f"90分钟主胜{probabilities['home']:.1%}、平局{probabilities['draw']:.1%}、客胜{probabilities['away']:.1%}；λ={lambda_home:.2f}-{lambda_away:.2f}。",
@@ -645,7 +765,7 @@ def build_automatic_model(context: dict) -> dict:
         live_profile = {
             "active": True, "overlay_primary": True,
             "contract": {"match_id": match_id, "market_code": "1", "market_name": "全场独赢", "handicap_line": "", "selection_code": selection_code, "selection_name": selection_name, "contract_type": "three_way_selection"},
-            "probability": {"point": round(probabilities[top_result], 6), "conservative": round(max(0.01, probabilities[top_result] - (0.10 if not deep_form else 0.075)), 6), "confirmed_model_output": True, "source": "recent_form_market_calibrated_poisson_v2", "calibration_status": "market_calibrated_with_uncertainty_haircut_not_holdout_calibrated"},
+            "probability": {"point": round(probabilities[top_result], 6), "conservative": round(max(0.01, probabilities[top_result] - (0.10 if not deep_form else 0.075)), 6), "confirmed_model_output": True, "source": MODEL_FAMILY, "calibration_status": "walk_forward_partial" if calibration_state["compatible"] else "market_calibrated_with_uncertainty_haircut_not_holdout_calibrated"},
             "price": {"max_quote_age_ms": 15000}, "execution": {"minimum_conservative_ev": 0.08},
         }
     return {

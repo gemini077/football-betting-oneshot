@@ -144,3 +144,36 @@ def test_unique_score_uses_matrix_map_and_keeps_scenario_as_challenger():
     assert score == "1-1"
     assert trace["scenario_selected_score"] == "2-1"
     assert "正式唯一比分采用比分矩阵峰值" in reasoning
+
+
+def test_validated_calibration_changes_total_and_direction_but_keeps_top3():
+    deep = {
+        "shuju": {"recent_form": {
+            "home_overall": {"matches": 10, "goals_for": 15, "goals_against": 12},
+            "away_overall": {"matches": 10, "goals_for": 12, "goals_against": 15},
+            "home_home": {"matches": 10, "goals_for": 17, "goals_against": 10},
+            "away_away": {"matches": 10, "goals_for": 10, "goals_against": 17},
+        }},
+        "ouzhi": {"bookmakers": [{"spf_current": {"home": 1.9, "draw": 3.4, "away": 4.2}}]},
+        "daxiao": {"companies": [{"current_line": 2.5}]},
+    }
+    base_context = {"source_snapshots": {"500_deep": {"snapshots": [deep]}}}
+    baseline = build_automatic_model(base_context)
+    calibrated = build_automatic_model({
+        **base_context,
+        "model_calibration": {
+            "active": True,
+            "status": "partial_active",
+            "model_family": "recent_form_market_calibrated_poisson_v2",
+            "policy": {"strength": 0.3},
+            "sample": {"compatible": 24},
+            "direction": {"approved": True, "logit_offsets": {"home": -0.2, "draw": 0.1, "away": 0.2}},
+            "total_goals": {"approved": True, "lambda_shift": 0.5},
+            "dispersion": {"approved": False},
+        },
+    })
+
+    assert calibrated["model"]["expected_goals"] > baseline["model"]["expected_goals"]
+    assert calibrated["model"]["probabilities"]["home"] < baseline["model"]["probabilities"]["home"]
+    assert calibrated["model"]["calibration"]["closed_loop"]["direction_applied"] is True
+    assert len(calibrated["decisions"]["score_top3"]) == 3
