@@ -230,7 +230,15 @@ def fetch_nowscore_result(match_id: int) -> tuple[dict[str, Any] | None, str, st
 def verify_schedule(path: Path, now: datetime, result_root: Path = RESULT_ROOT) -> dict[str, Any]:
     schedule = load_json(path)
     status = str(schedule.get("status") or "scheduled")
-    if status in FINAL_STATUSES:
+    legacy_secondary_block = (
+        status == "manual_review_required"
+        and schedule.get("result_strategy_version") != RESULT_STRATEGY_VERSION
+        and schedule.get("verification_issue") in {
+            "secondary_source_unavailable",
+            "result_source_conflict",
+        }
+    )
+    if status in FINAL_STATUSES and not legacy_secondary_block:
         return {"path": str(path), "status": "skipped_final"}
     due = parse_datetime(schedule.get("review_due_at"))
     # A parser upgrade must never make a future fixture eligible early.  It is

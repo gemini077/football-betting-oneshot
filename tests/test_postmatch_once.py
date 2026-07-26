@@ -99,6 +99,30 @@ def test_terminal_manual_review_is_not_retried(tmp_path):
     primary.assert_not_called()
 
 
+def test_legacy_secondary_block_is_reopened_under_primary_only_strategy(tmp_path):
+    schedule = write_schedule(
+        tmp_path / "schedule.json",
+        nowscore_id=456,
+        status="manual_review_required",
+        verification_attempts=2,
+        result_strategy_version="nowscore_matchdetail_v4_dual_source_phase_aware",
+        verification_issue="secondary_source_unavailable",
+    )
+    now = datetime(2026, 7, 15, 22, 0, tzinfo=SHANGHAI)
+    with patch("postmatch_result.fetch_nowscore_result", return_value=({
+        "score_90m": "2-0", "after_extra_time": None, "penalties": None,
+        "scope": "regulation_90m_plus_stoppage",
+    }, "nowscore:456", None)):
+        outcome = verify_schedule(schedule, now, tmp_path / "results")
+
+    saved = json.loads(schedule.read_text(encoding="utf-8"))
+    assert outcome["status"] == "result_verified"
+    assert saved["status"] == "result_verified"
+    assert saved["result_90m"] == "2-0"
+    assert saved["verification_quality"] == "authoritative_primary"
+    assert saved["verification_issue"] is None
+
+
 def test_due_schedule_verifies_once(tmp_path):
     schedule = write_schedule(tmp_path / "schedule.json", nowscore_id=456)
     result_root = tmp_path / "results"
