@@ -84,6 +84,23 @@ class LiveOddsBridgeTests(unittest.TestCase):
             bridge_module._publish_deep_fallback({"id": "nowscore-123"}, "gh"),
         )
 
+    def test_cloud_dispatch_continues_when_local_fallback_times_out(self):
+        match = {
+            "id": "500-1373199",
+            "home": "首尔FC",
+            "away": "蔚山现代",
+            "business_date": "2026-07-26",
+        }
+        with patch.object(
+            bridge_module.subprocess,
+            "run",
+            side_effect=bridge_module.subprocess.TimeoutExpired(["python"], 45),
+        ):
+            result = bridge_module._publish_deep_fallback(match, "gh")
+
+        self.assertEqual("unavailable", result["status"])
+        self.assertIn("cloud analysis continued", result["error"])
+
     def test_local_file_report_origin_can_read_loopback_reprice(self):
         self.assertTrue(_allowed_origin("null"))
         self.assertTrue(_allowed_origin("chrome-extension://test-extension"))
@@ -613,6 +630,24 @@ class LiveOddsBridgeTests(unittest.TestCase):
             with patch.object(bridge_module, "PROJECT_ROOT", Path(tmp)):
                 restored = PersistentAnalysisQueue(queue_path, launcher=lambda match: None)
             self.assertEqual("report_ready", restored.snapshot()["jobs"][0]["status"])
+
+    def test_persistent_analysis_queue_expires_stale_completed_job(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            queue_path = Path(tmp) / "queue.json"
+            queue_path.write_text(json.dumps({
+                "schema_version": "1.0",
+                "jobs": [{
+                    "job_id": "stale", "match_key": "2026-07-17:302",
+                    "match": {"id": "302", "business_date": "2026-07-17"},
+                    "status": "completed", "attempts": 1,
+                    "created_at": "2026-07-17T00:00:00+08:00",
+                    "dispatch": {"status": "completed"},
+                }],
+            }), encoding="utf-8")
+            restored = PersistentAnalysisQueue(queue_path, launcher=lambda match: None)
+            job = restored.snapshot()["jobs"][0]
+            self.assertEqual("failed", job["status"])
+            self.assertEqual("workflow_finished_without_report_artifact", job["last_error"])
 
     def test_persistent_analysis_queue_retries_after_transient_dispatch_failure(self):
         with tempfile.TemporaryDirectory() as tmp:

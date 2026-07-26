@@ -148,10 +148,16 @@ def _publish_deep_fallback(match: dict, gh: str) -> dict:
         "--no-cache",
         "--shuju-id", shuju_id,
     ]
-    completed = subprocess.run(
-        command, cwd=PROJECT_ROOT, text=True, capture_output=True, timeout=180,
-        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0,
-    )
+    try:
+        completed = subprocess.run(
+            command, cwd=PROJECT_ROOT, text=True, capture_output=True, timeout=45,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0,
+        )
+    except subprocess.TimeoutExpired:
+        return {
+            "status": "unavailable",
+            "error": "local deep fallback timed out after 45 seconds; cloud analysis continued",
+        }
     snapshot = _verified_deep_snapshot(shuju_id, business_date)
     if completed.returncode != 0 or snapshot is None:
         message = (completed.stderr or completed.stdout or "local deep snapshot unavailable").strip()
@@ -318,17 +324,26 @@ class PersistentAnalysisQueue:
         changed = False
         for job in state.get("jobs", []):
             if job.get("status") == "dispatching":
-                job["status"] = "queued"
-                job["last_error"] = "bridge_restarted_during_dispatch"
+                if self._report_exists(job):
+                    job["status"] = "report_ready"
+                    job["last_error"] = None
+                else:
+                    job["status"] = "queued"
+                    job["last_error"] = "bridge_restarted_during_dispatch"
                 job["next_attempt_at"] = 0.0
                 changed = True
             elif job.get("status") in {"dispatched", "completed", "artifact_pending"}:
                 # A workflow conclusion is transport evidence, not a report.
                 # Only the immutable JSON+HTML artifact pair is terminal.
+                try:
+                    created_at = datetime.fromisoformat(str(job.get("created_at") or ""))
+                    stale = (_now() - created_at).total_seconds() > 6 * 60 * 60
+                except (TypeError, ValueError):
+                    stale = True
                 if self._report_exists(job):
                     job["status"] = "report_ready"
                     job["last_error"] = None
-                elif int(job.get("attempts") or 0) >= self.max_attempts:
+                elif stale or int(job.get("attempts") or 0) >= self.max_attempts:
                     job["status"] = "failed"
                     job["last_error"] = "workflow_finished_without_report_artifact"
                     job["next_attempt_at"] = 0.0
