@@ -61,6 +61,13 @@ ALLOWED_MATCH_API_PATHS = {
     "/v1/w/structureMatchBaseInfoByMids",
     "/v1/w/structureMatchBaseInfoByMidsPB",
 }
+
+
+def pair_identity(home: Any, away: Any) -> str:
+    def clean(value: Any) -> str:
+        return re.sub(r"[\W_]+", "", str(value or "").strip().lower(), flags=re.UNICODE)
+
+    return f"{clean(home)}|{clean(away)}"
 ALLOWED_SOURCE_TYPES = {
     "api_response",
     "worker_message",
@@ -284,7 +291,7 @@ class PersistentAnalysisQueue:
         path: Path,
         launcher=launch_selected_analysis,
         *,
-        max_attempts: int = 8,
+        max_attempts: int = 3,
         retry_delays: tuple[float, ...] = (15.0, 60.0, 180.0, 300.0),
     ):
         self.path = Path(path)
@@ -309,49 +316,58 @@ class PersistentAnalysisQueue:
         except (OSError, json.JSONDecodeError):
             pass
         changed = False
-        workspace_rows = []
-        try:
-            workspace = json.loads((PROJECT_ROOT / "data" / "match_workspace" / "latest.json").read_text(encoding="utf-8"))
-            workspace_rows = list(workspace.get("matches") or []) + list(workspace.get("completed") or [])
-        except (OSError, json.JSONDecodeError):
-            workspace_rows = []
-
-        def report_exists(job: dict) -> bool:
-            match = job.get("match") or {}
-            match_id = str(match.get("id") or "")
-            return any(
-                str(row.get("id") or "") == match_id
-                and bool(row.get("report_url") or row.get("prematch_report_url"))
-                for row in workspace_rows
-            )
-
         for job in state.get("jobs", []):
             if job.get("status") == "dispatching":
                 job["status"] = "queued"
                 job["last_error"] = "bridge_restarted_during_dispatch"
                 job["next_attempt_at"] = 0.0
                 changed = True
-            elif job.get("status") == "dispatched":
-                # Schema v1 treated "workflow accepted" as terminal.  Reconcile
-                # those legacy rows on restart: an existing report is complete;
-                # otherwise the match must return to the bounded retry queue.
-                dispatch = job.get("dispatch") or {}
-                cloud_success = (
-                    dispatch.get("status") == "completed"
-                    and dispatch.get("conclusion") in (None, "success")
-                )
-                if report_exists(job) or cloud_success:
-                    job["status"] = "completed"
+            elif job.get("status") in {"dispatched", "completed", "artifact_pending"}:
+                # A workflow conclusion is transport evidence, not a report.
+                # Only the immutable JSON+HTML artifact pair is terminal.
+                if self._report_exists(job):
+                    job["status"] = "report_ready"
                     job["last_error"] = None
+                elif int(job.get("attempts") or 0) >= self.max_attempts:
+                    job["status"] = "failed"
+                    job["last_error"] = "workflow_finished_without_report_artifact"
+                    job["next_attempt_at"] = 0.0
                 else:
                     job["status"] = "retry_wait"
-                    job["last_error"] = "legacy_dispatch_not_reconciled"
+                    job["last_error"] = "workflow_finished_without_report_artifact"
                     job["next_attempt_at"] = 0.0
                 job["updated_at"] = _now().isoformat()
                 changed = True
         if changed:
             self._write_state(state)
         return state
+
+    @staticmethod
+    def _report_exists(job: dict) -> bool:
+        match = job.get("match") or {}
+        match_id = str(match.get("id") or "")
+        target_pair = pair_identity(match.get("home"), match.get("away"))
+        for path in (PROJECT_ROOT / "data" / "analysis_reports").rglob("*.json"):
+            try:
+                payload = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                continue
+            report_match = payload.get("match") or {}
+            same_id = bool(
+                match_id
+                and match_id in {
+                    str(report_match.get("live_match_id") or ""),
+                    str(report_match.get("match_id") or ""),
+                    str(report_match.get("shuju_id") or ""),
+                }
+            )
+            same_pair = bool(
+                target_pair != "|"
+                and target_pair == pair_identity(report_match.get("home"), report_match.get("away"))
+            )
+            if (same_id or same_pair) and path.with_suffix(".html").exists():
+                return True
+        return False
 
     def _write_state(self, state: dict | None = None) -> None:
         target = state if state is not None else self._state
@@ -449,9 +465,18 @@ class PersistentAnalysisQueue:
                 return self._public_job(current)
         with self._condition:
             current = next(item for item in self._state["jobs"] if item.get("job_id") == job_id)
-            current["status"] = "completed" if dispatch.get("status") == "completed" else "dispatched"
             current["dispatch"] = dispatch
-            current["last_error"] = None
+            if dispatch.get("status") == "completed" and self._report_exists(current):
+                current["status"] = "report_ready"
+                current["last_error"] = None
+            elif dispatch.get("status") == "completed":
+                current["status"] = (
+                    "failed" if current["attempts"] >= self.max_attempts else "retry_wait"
+                )
+                current["last_error"] = "workflow_finished_without_report_artifact"
+            else:
+                current["status"] = "dispatched"
+                current["last_error"] = None
             current["next_attempt_at"] = 0.0
             current["updated_at"] = _now().isoformat()
             self._write_state()

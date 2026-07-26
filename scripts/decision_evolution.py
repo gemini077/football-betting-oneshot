@@ -110,11 +110,18 @@ def describe_change(previous: dict | None, current: dict) -> dict:
     changes: list[str] = []
     old_probs = previous.get("probabilities") or {}
     new_probs = current.get("probabilities") or {}
+    probability_delta = {}
+    all_probability_moves = []
     probability_moves = []
     for key in OUTCOMES:
         old, new = _number(old_probs.get(key)), _number(new_probs.get(key))
-        if old is not None and new is not None and abs(new - old) >= 0.015:
-            probability_moves.append((abs(new - old), key, new - old))
+        if old is not None and new is not None:
+            delta = new - old
+            probability_delta[key] = round(delta, 6)
+            if abs(delta) > 1e-9:
+                all_probability_moves.append((abs(delta), key, delta))
+            if abs(delta) >= 0.015:
+                probability_moves.append((abs(delta), key, delta))
     if probability_moves:
         _, key, delta = max(probability_moves)
         changes.append(f"{OUTCOME_LABELS[key]}概率{'上调' if delta > 0 else '下调'}{abs(delta) * 100:.1f}个百分点")
@@ -127,13 +134,13 @@ def describe_change(previous: dict | None, current: dict) -> dict:
         trace = current.get("score_selection_trace") or {}
         factors = "、".join(str(item) for item in (trace.get("selected_factors") or [])[:3])
         changes.append(f"最可能比分由{old_score}调整为{new_score}" + (f"（{factors}）" if factors else ""))
-    if previous.get("market_pressure") != current.get("market_pressure"):
+    if previous.get("market_pressure") and previous.get("market_pressure") != current.get("market_pressure"):
         changes.append(str(current.get("market_pressure")))
-    if previous.get("money_flow") != current.get("money_flow"):
+    if previous.get("money_flow") and previous.get("money_flow") != current.get("money_flow"):
         changes.append(str(current.get("money_flow")))
-    if previous.get("model_impact") != current.get("model_impact"):
+    if previous.get("model_impact") and previous.get("model_impact") != current.get("model_impact"):
         changes.append(str(current.get("model_impact")))
-    if previous.get("bookmaker_behaviour") != current.get("bookmaker_behaviour"):
+    if previous.get("bookmaker_behaviour") and previous.get("bookmaker_behaviour") != current.get("bookmaker_behaviour"):
         changes.append(str(current.get("bookmaker_behaviour")))
 
     if changes:
@@ -142,12 +149,27 @@ def describe_change(previous: dict | None, current: dict) -> dict:
             "headline": "；".join(changes[:3]),
             "summary": "；".join(changes) + "。模型已按新信息重算，冻结注单不会被事后改写。",
             "changed": True,
+            "probability_delta": probability_delta,
+        }
+    if all_probability_moves:
+        _, key, delta = max(all_probability_moves)
+        direction = "上调" if delta > 0 else "下调"
+        return {
+            "kind": "micro_adjustment",
+            "headline": f"概率微调：{OUTCOME_LABELS[key]}{direction}{abs(delta) * 100:.1f}个百分点",
+            "summary": (
+                f"模型已按新盘口重算；最大概率变化为{abs(delta) * 100:.1f}个百分点，"
+                "未达到1.5个百分点的显著调整阈值，主方向、主维度与唯一比分维持不变。"
+            ),
+            "changed": False,
+            "probability_delta": probability_delta,
         }
     return {
         "kind": "stable",
         "headline": "核心判断维持不变",
         "summary": f"新盘口和球队信息尚不足以越过决策边界；继续维持{current.get('primary_dimension') or '原主维度'}与比分{current.get('unique_score') or '原判断'}。{current.get('model_impact')}",
         "changed": False,
+        "probability_delta": probability_delta,
     }
 
 
@@ -178,6 +200,21 @@ def attach_evolution(
     root: Path = TIMELINE_ROOT,
 ) -> tuple[dict, dict]:
     timeline = load_timeline(match_id, root)
+    if not timeline:
+        match = analysis.get("match") or {}
+        aliases = (
+            match.get("provider_match_id"),
+            match.get("match_id"),
+            match.get("live_match_id"),
+            match.get("shuju_id"),
+        )
+        for alias in aliases:
+            if alias in (None, "", match_id):
+                continue
+            related = load_timeline(alias, root)
+            if related:
+                timeline = related
+                break
     current = decision_snapshot(analysis, checkpoint)
     previous = timeline[-1].get("decision") if timeline else None
     change = describe_change(previous, current)

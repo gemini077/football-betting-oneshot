@@ -9,10 +9,22 @@ from pathlib import Path
 from unittest.mock import patch
 from zoneinfo import ZoneInfo
 
-from scripts.match_workspace import DATA, RUNTIME, build, build_daily_portfolio, create_unique_output_dir, find_review, pending_result_classification, render, report_candidates, report_html_path, report_summary, review_rows
+from scripts.match_workspace import DATA, RUNTIME, build, build_daily_portfolio, create_unique_output_dir, find_review, match_should_be_finished, parse_kickoff_local, pending_result_classification, render, report_candidates, report_html_path, report_summary, review_rows
 
 
 class MatchWorkspacePortfolioTests(unittest.TestCase):
+    def test_timezone_kickoff_without_seconds_is_parsed_and_classified_finished(self):
+        parsed = parse_kickoff_local("2026-07-26T05:30+08:00")
+        self.assertIsNotNone(parsed)
+        self.assertEqual("2026-07-26T05:30:00+08:00", parsed.isoformat())
+        now = datetime(2026, 7, 26, 8, 0, tzinfo=ZoneInfo("Asia/Shanghai"))
+        self.assertTrue(match_should_be_finished("2026-07-26T05:30+08:00", now))
+
+    def test_generated_page_uses_compact_kickoff_formatter(self):
+        page = render("{}")
+        self.assertIn("const formatKickoff=value=>", page)
+        self.assertIn("${formatKickoff(m.kickoff)}", page)
+
     @unittest.skipUnless(shutil.which("node"), "Node.js is required for inline-script syntax validation")
     def test_rendered_inline_scripts_have_valid_javascript_syntax(self):
         scripts = re.findall(r"<script>([\s\S]*?)</script>", render("{}"))

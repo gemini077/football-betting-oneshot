@@ -673,6 +673,7 @@ def mark_initial_market_checkpoint(context: dict, now: datetime | None = None) -
 
 def run_pipeline(request: dict, api_key: str = "", model_name: str = DEFAULT_MODEL, *, use_llm: bool = False) -> dict:
     from decision_evolution import append_record, attach_evolution
+    from match_identity import canonical_match_id
     print("[phase 1/5] fetching match evidence", file=sys.stderr, flush=True)
     fetch_date = fetch_date_for_request(request)
     fetch_command = [
@@ -717,7 +718,20 @@ def run_pipeline(request: dict, api_key: str = "", model_name: str = DEFAULT_MOD
             "captured_at": datetime.now().astimezone().isoformat(),
             "initial_capture": True,
         }
-    match_id = str((context.get("selected_workspace_match") or {}).get("id") or request.get("match_id") or "")
+    selected_match = context.get("selected_workspace_match") or {}
+    match_id = str(
+        analysis.get("match", {}).get("canonical_match_id")
+        or canonical_match_id({
+            "home": selected_match.get("home") or analysis.get("match", {}).get("home"),
+            "away": selected_match.get("away") or analysis.get("match", {}).get("away"),
+            "kickoff_local": (
+                selected_match.get("kickoff")
+                or selected_match.get("kickoff_local")
+                or analysis.get("match", {}).get("kickoff_local")
+            ),
+        })
+    )
+    analysis.setdefault("match", {})["canonical_match_id"] = match_id
     analysis, evolution_record = attach_evolution(analysis, match_id, initial_checkpoint)
     if initial_checkpoint:
         analysis.setdefault("report", {})["market_checkpoint"] = initial_checkpoint
@@ -744,6 +758,18 @@ def run_pipeline(request: dict, api_key: str = "", model_name: str = DEFAULT_MOD
         sys.executable, "scripts/generate_analysis_report.py",
         "--fetch-manifest", str(render_manifest), "--analysis-json", str(output),
     ])
+    report_value = str(report.get("report") or "").strip()
+    if not report_value:
+        raise RuntimeError("Report generation returned no report path")
+    report_path = Path(report_value)
+    if not report_path.is_absolute():
+        report_path = ROOT / report_path
+    report_json = report_path.with_suffix(".json")
+    if not report_path.is_file() or not report_json.is_file():
+        raise RuntimeError(
+            "Report generation finished without the required JSON+HTML artifact pair: "
+            f"json={report_json} html={report_path}"
+        )
     append_record(evolution_record)
     print("[phase 5/5] rebuilding homepage", file=sys.stderr, flush=True)
     run_json_command([sys.executable, "scripts/match_workspace.py", "--date", request["business_date"]])
