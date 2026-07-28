@@ -27,7 +27,7 @@ from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, quote, urlparse
 
 from live_ev_reprice import RepriceValidationError, evaluate_request
 
@@ -232,6 +232,53 @@ def _wait_for_workflow_result(gh: str, request_id: str, dispatched_after: float,
     raise BridgeValidationError(f"analysis workflow {run_id or request_id} result timeout")
 
 
+def _safe_report_component(value: Any) -> str:
+    return re.sub(r'[<>:"/\\|?*]+', "_", str(value or "")).strip(" ._")
+
+
+def _sync_cloud_report_artifact(match: dict, gh: str) -> dict:
+    """Download the immutable current JSON+HTML pair after a successful cloud run."""
+    required = ("business_date", "match_num", "home", "away")
+    if any(not str(match.get(key) or "").strip() for key in required):
+        return {"status": "unavailable", "error": "report identity is incomplete"}
+    stem = _safe_report_component(
+        f"{match['business_date']}_{match['match_num']}_{match['home']}_vs_{match['away']}"
+    )
+    remote_root = "data/analysis_reports/current"
+    downloaded: dict[str, bytes] = {}
+    for suffix in (".json", ".html"):
+        remote_path = f"{remote_root}/{stem}{suffix}"
+        endpoint = f"repos/{GITHUB_REPOSITORY}/contents/{quote(remote_path, safe='/')}?ref=main"
+        response = subprocess.run(
+            [gh, "api", endpoint, "-H", "Accept: application/vnd.github.raw"],
+            cwd=PROJECT_ROOT, capture_output=True, timeout=60,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0,
+        )
+        if response.returncode != 0:
+            error = (response.stderr or response.stdout or b"cloud report download failed")
+            return {"status": "unavailable", "path": remote_path, "error": error.decode("utf-8", "replace")[-1000:]}
+        downloaded[suffix] = response.stdout
+
+    try:
+        payload = json.loads(downloaded[".json"].decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        return {"status": "invalid", "error": f"cloud report JSON is invalid: {type(error).__name__}"}
+    report_match = payload.get("match") or {}
+    if pair_identity(report_match.get("home"), report_match.get("away")) != pair_identity(match.get("home"), match.get("away")):
+        return {"status": "invalid", "error": "cloud report fixture does not match the queued fixture"}
+    if b"<html" not in downloaded[".html"][:1000].lower():
+        return {"status": "invalid", "error": "cloud report HTML is invalid"}
+
+    local_root = PROJECT_ROOT / remote_root
+    local_root.mkdir(parents=True, exist_ok=True)
+    for suffix, content in downloaded.items():
+        target = local_root / f"{stem}{suffix}"
+        temporary = target.with_suffix(target.suffix + ".tmp")
+        temporary.write_bytes(content)
+        temporary.replace(target)
+    return {"status": "synced", "stem": stem}
+
+
 def launch_selected_analysis(match: dict) -> dict:
     """Queue one owner-selected analysis without navigating the browser."""
     match_id = str(match.get("id") or "").strip()
@@ -263,6 +310,7 @@ def launch_selected_analysis(match: dict) -> dict:
         )
         if completed.returncode == 0:
             result = _wait_for_workflow_result(gh, request_id, time.time())
+            result["artifact_sync"] = _sync_cloud_report_artifact(match, gh)
             result["cloud_evidence"] = fallback
             result["request_id"] = request_id
             return result
@@ -323,6 +371,13 @@ class PersistentAnalysisQueue:
             pass
         changed = False
         for job in state.get("jobs", []):
+            if job.get("status") != "report_ready" and self._report_exists(job):
+                job["status"] = "report_ready"
+                job["last_error"] = None
+                job["next_attempt_at"] = 0.0
+                job["updated_at"] = _now().isoformat()
+                changed = True
+                continue
             if job.get("status") == "dispatching":
                 if self._report_exists(job):
                     job["status"] = "report_ready"

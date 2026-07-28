@@ -5,6 +5,7 @@ import sys
 import tempfile
 import threading
 import unittest
+from types import SimpleNamespace
 from unittest.mock import patch
 from pathlib import Path
 from http.server import ThreadingHTTPServer
@@ -16,6 +17,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 
 from live_odds_bridge import (  # noqa: E402
     _allowed_origin,
+    _sync_cloud_report_artifact,
     BridgeStore,
     BridgeValidationError,
     PersistentAnalysisQueue,
@@ -51,6 +53,32 @@ def sample_event():
 
 
 class LiveOddsBridgeTests(unittest.TestCase):
+    def test_cloud_report_pair_is_downloaded_atomically(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            match = {
+                "id": "500-1427653",
+                "business_date": "2026-07-29",
+                "match_num": "周三002",
+                "home": "波兹南莱赫",
+                "away": "奥胡斯",
+            }
+            report = json.dumps({"match": match}, ensure_ascii=False).encode()
+
+            def fake_run(command, **_kwargs):
+                content = report if ".json?ref=main" in command[2] else b"<html><body>report</body></html>"
+                return SimpleNamespace(returncode=0, stdout=content, stderr=b"")
+
+            with patch.object(bridge_module, "PROJECT_ROOT", Path(tmp)), patch.object(
+                bridge_module.subprocess, "run", side_effect=fake_run
+            ):
+                result = _sync_cloud_report_artifact(match, "gh")
+
+            stem = "2026-07-29_周三002_波兹南莱赫_vs_奥胡斯"
+            root = Path(tmp) / "data" / "analysis_reports" / "current"
+            self.assertEqual("synced", result["status"])
+            self.assertTrue((root / f"{stem}.json").exists())
+            self.assertTrue((root / f"{stem}.html").exists())
+
     def test_verified_deep_snapshot_requires_all_model_evidence(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
