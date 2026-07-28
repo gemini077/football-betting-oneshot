@@ -23,6 +23,7 @@ from deepseek_auto_analysis import (  # noqa: E402
     report_manifest,
     request_from_event,
     run_json_command,
+    selected_workspace_match,
     validate_request,
 )
 
@@ -59,6 +60,40 @@ def test_fetch_uses_team_name_and_deep_id_for_synthetic_500_identity():
     assert fetch_match_selector(request) == "IFK哥德堡 vs 布鲁马波卡纳"
     assert fetch_shuju_id(request) == "1362704"
     assert fetch_shuju_id({"match_id": "2040516"}) == ""
+
+
+def test_selected_synthetic_identity_merges_current_official_odds(tmp_path, monkeypatch):
+    workspace = {
+        "matches": [{
+            "id": "2040646",
+            "match_num": "周三002",
+            "home": "波兹南",
+            "away": "奥胡斯",
+            "kickoff": "2026-07-30 01:00",
+            "spf": {"home": 1.63, "draw": 3.8, "away": 3.95},
+        }],
+        "selected_matches": [{
+            "id": "500-1427653",
+            "match_num": "周三002",
+            "home": "波兹南莱赫",
+            "away": "奥胡斯",
+            "kickoff": "2026-07-30 01:00",
+            "analysis_requested": True,
+        }],
+    }
+    path = tmp_path / "latest.json"
+    path.write_text(json.dumps(workspace, ensure_ascii=False), encoding="utf-8")
+    monkeypatch.setattr("deepseek_auto_analysis.WORKSPACE_PATH", path)
+
+    selected = selected_workspace_match({
+        "match_id": "500-1427653",
+        "match": "波兹南莱赫 vs 奥胡斯",
+        "match_snapshot": workspace["selected_matches"][0],
+    })
+
+    assert selected["id"] == "500-1427653"
+    assert selected["home"] == "波兹南莱赫"
+    assert selected["spf"] == {"home": 1.63, "draw": 3.8, "away": 3.95}
 
 
 def test_normalizer_cannot_create_execution_or_locked_bets():

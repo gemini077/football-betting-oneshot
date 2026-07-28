@@ -8,6 +8,11 @@ import urllib.parse
 import urllib.request
 from datetime import datetime, timedelta, timezone
 
+try:
+    from team_identity import team_similarity
+except ImportError:  # pragma: no cover - package-style imports in tests/tools
+    from scripts.team_identity import team_similarity
+
 
 ESPN_SCOREBOARD = "https://site.api.espn.com/apis/site/v2/sports/soccer/all/scoreboard"
 ESPN_SUMMARY = "https://site.api.espn.com/apis/site/v2/sports/soccer/all/summary"
@@ -39,6 +44,47 @@ def _event_datetime(event: dict) -> datetime | None:
         return datetime.fromisoformat(raw.replace("Z", "+00:00"))
     except ValueError:
         return None
+
+
+def _event_team_name(event: dict, side: str) -> str:
+    competitions = event.get("competitions") or []
+    competitors = (competitions[0].get("competitors") or []) if competitions else []
+    row = next((item for item in competitors if item.get("homeAway") == side), {})
+    team = row.get("team") or {}
+    return str(
+        team.get("displayName")
+        or team.get("shortDisplayName")
+        or team.get("name")
+        or team.get("abbreviation")
+        or ""
+    )
+
+
+def _fixture_identity_score(event: dict, workspace: dict) -> float:
+    home_score, _ = team_similarity(_event_team_name(event, "home"), workspace.get("home"))
+    away_score, _ = team_similarity(_event_team_name(event, "away"), workspace.get("away"))
+    return min(home_score, away_score)
+
+
+def _select_timed_event(events: list[dict], workspace: dict, kickoff: datetime) -> dict | None:
+    timed = [
+        event
+        for event in events
+        if (event_time := _event_datetime(event))
+        and abs((event_time - kickoff).total_seconds()) <= 120
+    ]
+    if len(timed) == 1:
+        return timed[0]
+    ranked = sorted(
+        ((_fixture_identity_score(event, workspace), event) for event in timed),
+        key=lambda item: item[0],
+        reverse=True,
+    )
+    if not ranked or ranked[0][0] < 0.88:
+        return None
+    if len(ranked) > 1 and ranked[0][0] == ranked[1][0]:
+        return None
+    return ranked[0][1]
 
 
 def _recent_form_items(deep: dict) -> list[dict]:
@@ -154,17 +200,18 @@ def collect_prematch_fundamentals(workspace: dict, deep: dict, opener=urllib.req
         result["items"].append({"label": "赛前联网核验", "value": f"本次请求失败：{type(error).__name__}；未据此猜测首发或伤停"})
         return result
 
-    matches = []
-    for event in scoreboard.get("events") or []:
-        event_time = _event_datetime(event)
-        if event_time and abs((event_time - kickoff).total_seconds()) <= 120:
-            matches.append(event)
-    if len(matches) != 1:
+    timed_matches = [
+        event
+        for event in scoreboard.get("events") or []
+        if (event_time := _event_datetime(event))
+        and abs((event_time - kickoff).total_seconds()) <= 120
+    ]
+    event = _select_timed_event(scoreboard.get("events") or [], workspace, kickoff)
+    if event is None:
         result["status"] = "近期攻防已核验；未能唯一匹配外部赛程"
-        result["items"].append({"label": "外部赛程", "value": f"已按开赛时间核验，候选{len(matches)}场，未强行匹配"})
+        result["items"].append({"label": "外部赛程", "value": f"已按开赛时间与主客队核验，候选{len(timed_matches)}场，未强行匹配"})
         return result
 
-    event = matches[0]
     event_id = str(event.get("id") or "")
     source_url = f"https://www.espn.com/soccer/match/_/gameId/{event_id}"
     try:

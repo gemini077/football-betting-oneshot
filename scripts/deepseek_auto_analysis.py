@@ -78,23 +78,42 @@ def prune(value: Any, depth: int = 0) -> Any:
 
 def selected_workspace_match(request: dict) -> dict:
     embedded = request.get("match_snapshot")
-    if isinstance(embedded, dict) and embedded.get("home") and embedded.get("away"):
-        return prune(embedded)
+    direct = embedded if isinstance(embedded, dict) and embedded.get("home") and embedded.get("away") else None
     if not WORKSPACE_PATH.exists():
-        return {}
+        return prune(direct) if direct else {}
     try:
         workspace = load_json(WORKSPACE_PATH)
     except (OSError, json.JSONDecodeError):
-        return {}
+        return prune(direct) if direct else {}
     requested_id = str(request.get("match_id") or "")
     requested_name = re.sub(r"\s+", "", str(request.get("match") or "")).casefold()
-    for match in workspace.get("matches") or []:
-        if not isinstance(match, dict):
-            continue
-        match_name = re.sub(r"\s+", "", f"{match.get('home', '')}vs{match.get('away', '')}").casefold()
-        if (requested_id and str(match.get("id") or "") == requested_id) or match_name == requested_name:
-            return prune(match)
-    return {}
+    official_matches = [row for row in workspace.get("matches") or [] if isinstance(row, dict)]
+    selected_matches = [row for row in workspace.get("selected_matches") or [] if isinstance(row, dict)]
+    if direct is None:
+        for match in selected_matches + official_matches:
+            match_name = re.sub(r"\s+", "", f"{match.get('home', '')}vs{match.get('away', '')}").casefold()
+            if (requested_id and str(match.get("id") or "") == requested_id) or match_name == requested_name:
+                direct = match
+                break
+    if direct is None:
+        return {}
+
+    # Owner-selected rows can retain a provider-specific synthetic ID and long
+    # team alias. Merge the current official row by fixture number and kickoff
+    # so its odds survive without weakening the provider-ID boundary.
+    counterpart = next(
+        (
+            row
+            for row in official_matches
+            if (
+                direct.get("match_num")
+                and row.get("match_num") == direct.get("match_num")
+                and row.get("kickoff") == direct.get("kickoff")
+            )
+        ),
+        None,
+    )
+    return prune({**counterpart, **direct}) if counterpart else prune(direct)
 
 
 def fetch_date_for_request(request: dict) -> str:

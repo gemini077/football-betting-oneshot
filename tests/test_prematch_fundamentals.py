@@ -1,13 +1,14 @@
 import io
 import json
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
-from prematch_fundamentals import _espn_recent_form, collect_prematch_fundamentals
+from prematch_fundamentals import _espn_recent_form, _select_timed_event, collect_prematch_fundamentals
 
 
 class Response(io.BytesIO):
@@ -62,6 +63,34 @@ def test_refuses_ambiguous_kickoff_match():
     result = collect_prematch_fundamentals({"kickoff": "2026-07-16 02:15"}, {}, opener)
     assert result["status"] == "近期攻防已核验；未能唯一匹配外部赛程"
     assert "候选2场" in result["items"][-1]["value"]
+
+
+def test_same_time_espn_events_are_disambiguated_with_cross_language_team_aliases():
+    kickoff = datetime(2026, 7, 29, 17, 0, tzinfo=timezone.utc)
+
+    def event(event_id, home, away):
+        return {
+            "id": event_id,
+            "date": "2026-07-29T17:00:00Z",
+            "competitions": [{
+                "competitors": [
+                    {"homeAway": "home", "team": {"displayName": home}},
+                    {"homeAway": "away", "team": {"displayName": away}},
+                ]
+            }],
+        }
+
+    selected = _select_timed_event(
+        [
+            event("other", "FCSB", "Shkendija"),
+            event("401877766", "Lech Poznan", "AGF"),
+            event("other-2", "Ludogorets", "Rijeka"),
+        ],
+        {"home": "波兹南莱赫", "away": "奥胡斯"},
+        kickoff,
+    )
+
+    assert selected["id"] == "401877766"
 
 
 def test_espn_last_five_is_aggregated_from_each_team_perspective():
