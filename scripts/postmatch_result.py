@@ -7,6 +7,7 @@ import argparse
 import html as html_lib
 import json
 import re
+import urllib.parse
 import urllib.request
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -14,6 +15,7 @@ from typing import Any
 
 from postmatch_queue import BASE_DIR, SHANGHAI, load_json, normalize, parse_datetime
 from match_identity import canonical_match_id
+from prematch_fundamentals import ESPN_SCOREBOARD, _select_timed_event
 
 
 SCHEDULE_ROOT = BASE_DIR / "data" / "postmatch_automation" / "schedules"
@@ -24,7 +26,7 @@ FINAL_STATUSES = {
     "manual_review_required",
     "expired_unresolved",
 }
-RESULT_STRATEGY_VERSION = "nowscore_matchdetail_v5_primary_only"
+RESULT_STRATEGY_VERSION = "nowscore_matchdetail_v6_espn_regulation_fallback"
 WORKSPACE_PATH = BASE_DIR / "data" / "match_workspace" / "latest.json"
 SCORE_PATTERN = re.compile(
     r'<p\s+class=["\']odds_hd_bf["\'][^>]*>\s*<strong>\s*(\d+)\s*[:：]\s*(\d+)\s*</strong>',
@@ -227,18 +229,70 @@ def fetch_nowscore_result(match_id: int) -> tuple[dict[str, Any] | None, str, st
     return None, urls[0], "; ".join(errors)
 
 
+def fetch_espn_result(
+    schedule: dict[str, Any],
+    opener=urllib.request.urlopen,
+) -> tuple[dict[str, Any] | None, str | None, str | None]:
+    """Use ESPN only for an exact fixture that is complete after regulation.
+
+    Extra-time and penalty matches are deliberately rejected because ESPN's
+    headline score can include post-regulation goals while this project settles
+    the 90-minute market only.
+    """
+    kickoff = parse_datetime(schedule.get("kickoff_local"))
+    if kickoff is None:
+        return None, None, "missing_kickoff"
+    kickoff_utc = kickoff.astimezone(timezone.utc)
+    query = urllib.parse.urlencode({"dates": kickoff_utc.strftime("%Y%m%d"), "limit": 1000})
+    url = f"{ESPN_SCOREBOARD}?{query}"
+    try:
+        request = urllib.request.Request(url, headers={"User-Agent": "FootballBettingOneShot/0.19"})
+        with opener(request, timeout=30) as response:
+            scoreboard = json.loads(response.read().decode("utf-8"))
+    except Exception as exc:
+        return None, url, f"espn_fetch_failed:{type(exc).__name__}"
+
+    event = _select_timed_event(scoreboard.get("events") or [], schedule, kickoff_utc)
+    if event is None:
+        return None, url, "espn_exact_fixture_not_found"
+    event_id = str(event.get("id") or "")
+    source_url = f"https://www.espn.com/soccer/match/_/gameId/{event_id}" if event_id else url
+    status = event.get("status") or {}
+    status_type = status.get("type") or {}
+    if not status_type.get("completed") or status_type.get("state") != "post":
+        return None, source_url, "result_not_final"
+    try:
+        period = int(status.get("period"))
+    except (TypeError, ValueError):
+        return None, source_url, "espn_regulation_period_unverified"
+    if period != 2:
+        return None, source_url, "espn_extra_time_or_penalties_unsupported"
+
+    competitions = event.get("competitions") or []
+    competitors = (competitions[0].get("competitors") or []) if competitions else []
+    home = next((row for row in competitors if row.get("homeAway") == "home"), None)
+    away = next((row for row in competitors if row.get("homeAway") == "away"), None)
+    try:
+        home_score = int(home["score"])
+        away_score = int(away["score"])
+    except (KeyError, TypeError, ValueError):
+        return None, source_url, "espn_score_unavailable"
+    return _score_result(home_score, away_score), source_url, None
+
+
 def verify_schedule(path: Path, now: datetime, result_root: Path = RESULT_ROOT) -> dict[str, Any]:
     schedule = load_json(path)
     status = str(schedule.get("status") or "scheduled")
-    legacy_secondary_block = (
-        status == "manual_review_required"
+    strategy_upgrade_recheck = (
+        status in {"manual_review_required", "expired_unresolved"}
         and schedule.get("result_strategy_version") != RESULT_STRATEGY_VERSION
         and schedule.get("verification_issue") in {
             "secondary_source_unavailable",
             "result_source_conflict",
+            "result_not_final",
         }
     )
-    if status in FINAL_STATUSES and not legacy_secondary_block:
+    if status in FINAL_STATUSES and not strategy_upgrade_recheck:
         return {"path": str(path), "status": "skipped_final"}
     due = parse_datetime(schedule.get("review_due_at"))
     # A parser upgrade must never make a future fixture eligible early.  It is
@@ -251,7 +305,12 @@ def verify_schedule(path: Path, now: datetime, result_root: Path = RESULT_ROOT) 
     schedule["last_checked_at"] = now.isoformat()
     nowscore_result = None
     nowscore_source_url = None
+    espn_result = None
+    espn_source_url = None
+    espn_error = None
     result_source = None
+    result_source_url = None
+    verification_quality = None
     primary_error = None
     schedule["result_strategy_version"] = RESULT_STRATEGY_VERSION
     try:
@@ -266,8 +325,17 @@ def verify_schedule(path: Path, now: datetime, result_root: Path = RESULT_ROOT) 
             nowscore_result = _result_from_tuple(nowscore_result)
         if nowscore_result is not None:
             result_source = "nowscore_match_detail"
+            result_source_url = nowscore_source_url
+            verification_quality = "authoritative_primary"
         elif nowscore_error:
             primary_error = nowscore_error
+
+    if nowscore_result is None:
+        espn_result, espn_source_url, espn_error = fetch_espn_result(schedule)
+        if espn_result is not None:
+            result_source = "espn_scoreboard"
+            result_source_url = espn_source_url
+            verification_quality = "strict_public_fallback"
 
     schedule["result_sources"] = {
         "primary": {
@@ -277,12 +345,21 @@ def verify_schedule(path: Path, now: datetime, result_root: Path = RESULT_ROOT) 
             "source_url": nowscore_source_url,
             "error": primary_error,
         },
+        "fallback": {
+            "name": "espn_scoreboard",
+            "status": "verified" if espn_result is not None else "unavailable",
+            "score_90m": espn_result.get("score_90m") if espn_result else None,
+            "source_url": espn_source_url,
+            "error": espn_error,
+            "guardrail": "exact teams + kickoff + completed period 2 only",
+        },
     }
-    schedule["verification_issue"] = None if nowscore_result is not None else "result_not_final"
+    verified_result = nowscore_result or espn_result
+    schedule["verification_issue"] = None if verified_result is not None else "result_not_final"
 
     result = None
-    if nowscore_result is not None:
-        result = nowscore_result
+    if verified_result is not None:
+        result = verified_result
         home_score, away_score = (int(part) for part in result["score_90m"].split("-"))
         result = {
             "schema_version": "1.0",
@@ -298,9 +375,9 @@ def verify_schedule(path: Path, now: datetime, result_root: Path = RESULT_ROOT) 
             "penalties": result.get("penalties"),
             "scope": result.get("scope") or "regulation_90m_plus_stoppage",
             "source": result_source or "nowscore_match_detail",
-            "source_url": nowscore_source_url,
+            "source_url": result_source_url,
             "verification_attempt": attempts,
-            "verification_quality": "authoritative_primary",
+            "verification_quality": verification_quality,
         }
         result_root.mkdir(parents=True, exist_ok=True)
         result_path = result_root / f"{safe_key(schedule.get('match_key'))}.json"
@@ -327,7 +404,7 @@ def verify_schedule(path: Path, now: datetime, result_root: Path = RESULT_ROOT) 
     expires = parse_datetime(schedule.get("verification_expires_at"))
     within_window = expires is None or now < expires
     retry_limit = int((schedule.get("retry_policy") or {}).get("maximum_retries", 1))
-    issue_error = primary_error or "result_not_final"
+    issue_error = espn_error or primary_error or "result_not_final"
     if result is None and within_window and attempts <= retry_limit:
         retry_minutes = int((schedule.get("retry_policy") or {}).get("retry_after_minutes", 45))
         schedule["status"] = "retry_scheduled"

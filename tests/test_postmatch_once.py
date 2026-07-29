@@ -1,14 +1,23 @@
 import json
+import io
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import patch
 
 import postmatch_result
-from postmatch_result import parse_header_score, parse_nowscore_detail, verify_schedule
+from postmatch_result import fetch_espn_result, parse_header_score, parse_nowscore_detail, verify_schedule
 from sync_postmatch_workflow import active_due_times, render
 
 
 SHANGHAI = timezone(timedelta(hours=8))
+
+
+class Response(io.BytesIO):
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_):
+        self.close()
 
 
 def write_schedule(path: Path, **overrides) -> Path:
@@ -77,12 +86,90 @@ def test_secondary_source_is_not_requested(tmp_path):
     with patch("postmatch_result.fetch_nowscore_result", return_value=({
         "score_90m": "0-0", "after_extra_time": None, "penalties": None,
         "scope": "regulation_90m_plus_stoppage",
-    }, "nowscore:456", None)):
+    }, "nowscore:456", None)), patch("postmatch_result.fetch_espn_result") as fallback:
         outcome = verify_schedule(schedule, now, tmp_path / "results")
+    fallback.assert_not_called()
     saved = json.loads(schedule.read_text(encoding="utf-8"))
     assert outcome["status"] == "result_verified"
     assert saved["result_sources"]["primary"]["score_90m"] == "0-0"
     assert "secondary" not in saved["result_sources"]
+
+
+def test_espn_fallback_requires_exact_completed_regulation_fixture():
+    event = {
+        "id": "401891534",
+        "name": "Sabah FK at KuPS Kuopio",
+        "date": "2026-07-28T15:00Z",
+        "status": {"period": 2, "type": {"state": "post", "completed": True}},
+        "competitions": [{"competitors": [
+            {"homeAway": "home", "team": {"displayName": "KuPS Kuopio"}, "score": "0"},
+            {"homeAway": "away", "team": {"displayName": "Sabah FK"}, "score": "2"},
+        ]}],
+    }
+
+    def opener(_request, timeout=0):
+        return Response(json.dumps({"events": [event]}).encode())
+
+    result, source_url, error = fetch_espn_result({
+        "home": "库奥皮奥",
+        "away": "萨巴赫",
+        "kickoff_local": "2026-07-28T23:00:00+08:00",
+    }, opener)
+
+    assert result["score_90m"] == "0-2"
+    assert source_url.endswith("/401891534")
+    assert error is None
+
+
+def test_espn_fallback_rejects_extra_time_score():
+    event = {
+        "id": "extra-time",
+        "date": "2026-07-28T15:00Z",
+        "status": {"period": 4, "type": {"state": "post", "completed": True}},
+        "competitions": [{"competitors": [
+            {"homeAway": "home", "team": {"displayName": "KuPS Kuopio"}, "score": "1"},
+            {"homeAway": "away", "team": {"displayName": "Sabah FK"}, "score": "2"},
+        ]}],
+    }
+
+    def opener(_request, timeout=0):
+        return Response(json.dumps({"events": [event]}).encode())
+
+    result, _source_url, error = fetch_espn_result({
+        "home": "库奥皮奥",
+        "away": "萨巴赫",
+        "kickoff_local": "2026-07-28T23:00:00+08:00",
+    }, opener)
+
+    assert result is None
+    assert error == "espn_extra_time_or_penalties_unsupported"
+
+
+def test_expired_primary_failure_reopens_for_new_strict_fallback(tmp_path):
+    schedule = write_schedule(
+        tmp_path / "schedule.json",
+        home="库奥皮奥",
+        away="萨巴赫",
+        kickoff_local="2026-07-28T23:00:00+08:00",
+        review_due_at="2026-07-29T04:46:00+08:00",
+        nowscore_id=None,
+        status="expired_unresolved",
+        verification_attempts=2,
+        result_strategy_version="nowscore_matchdetail_v5_primary_only",
+        verification_issue="result_not_final",
+    )
+    now = datetime(2026, 7, 29, 12, 0, tzinfo=SHANGHAI)
+    with patch("postmatch_result.fetch_espn_result", return_value=({
+        "score_90m": "0-2", "after_extra_time": None, "penalties": None,
+        "scope": "regulation_90m_plus_stoppage",
+    }, "https://www.espn.com/soccer/match/_/gameId/401891534", None)):
+        outcome = verify_schedule(schedule, now, tmp_path / "results")
+
+    saved = json.loads(schedule.read_text(encoding="utf-8"))
+    assert outcome["status"] == "result_verified"
+    assert saved["result_90m"] == "0-2"
+    assert saved["result_source"] == "espn_scoreboard"
+    assert saved["verification_quality"] == "strict_public_fallback"
 
 
 def test_terminal_manual_review_is_not_retried(tmp_path):
