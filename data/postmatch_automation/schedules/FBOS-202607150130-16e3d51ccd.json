@@ -14,11 +14,11 @@
   },
   "automation_policy": "one_shot_only_no_periodic_model_polling",
   "source_report": "data/analysis_reports/20260714_204532/20260714_204532_新圣徒_vs_萨巴赫_盘口解析.json",
-  "verification_attempts": 112,
-  "last_checked_at": "2026-07-24T15:05:02.910944+08:00",
+  "verification_attempts": 113,
+  "last_checked_at": "2026-07-29T12:29:48.523153+08:00",
   "status": "expired_unresolved",
-  "last_error": "missing_shuju_id",
-  "result_strategy_version": "nowscore_matchdetail_v4_dual_source_phase_aware",
+  "last_error": "espn_exact_fixture_not_found",
+  "result_strategy_version": "nowscore_matchdetail_v6_espn_regulation_fallback",
   "canonical_match_id": "FBOS-202607150130-16e3d51ccd",
   "verification_expires_at": "2026-07-16T01:30:00+08:00",
   "result_sources": {
@@ -29,14 +29,15 @@
       "source_url": null,
       "error": null
     },
-    "secondary": {
-      "name": "500_com_match_header",
+    "fallback": {
+      "name": "espn_scoreboard",
       "status": "unavailable",
       "score_90m": null,
-      "source_url": null,
-      "error": "missing_shuju_id"
+      "source_url": "https://site.api.espn.com/apis/site/v2/sports/soccer/all/scoreboard?dates=20260714&limit=1000",
+      "error": "espn_exact_fixture_not_found",
+      "guardrail": "exact teams + kickoff + completed period 2 only"
     }
   },
   "verification_issue": "result_not_final",
-  "terminal_reason": "result_not_final"
+  "terminal_reason": "result_not_final_after_bounded_retry"
 }
