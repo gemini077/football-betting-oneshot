@@ -1,0 +1,2574 @@
+{
+  "report": {
+    "model_name": "Football Betting OneShot",
+    "model_version": "v0.19.0",
+    "report_type": "确定性赛前分析",
+    "analysis_timestamp": "2026-07-30T20:31:19+00:00",
+    "final_execution_version": false,
+    "ai_provider": null,
+    "ai_model": null,
+    "market_checkpoint": {
+      "stage": "T-2H",
+      "scheduled_at": "2026-07-31T04:30:00+08:00",
+      "captured_at": "2026-07-31T04:31:11.648953+08:00",
+      "target_minutes_before": 120,
+      "actual_minutes_before": 118.81,
+      "lateness_minutes": 1.19,
+      "exact": false,
+      "capture_quality": "on_time"
+    },
+    "checkpoint_health": {
+      "stage": "T-2H",
+      "scheduled_at": "2026-07-31T04:30:00+08:00",
+      "captured_at": "2026-07-31T04:31:11.648953+08:00",
+      "status": "on_time",
+      "recovered_quotes": 0
+    }
+  },
+  "match": {
+    "business_date": "2026-07-30",
+    "match_id": "500-1362433",
+    "home": "科林蒂安",
+    "away": "巴拉纳竞技",
+    "match_num": "周四006",
+    "competition": "巴西甲级联赛",
+    "league": "巴西甲级联赛",
+    "kickoff_local": "2026-07-31T06:30+08:00",
+    "canonical_match_id": "FBOS-202607310630-0ae4ce8e3f",
+    "provider_match_id": "500-1362433"
+  },
+  "decisions": {
+    "unique_primary_dimension": "胜平负：主胜（模型48.7%）",
+    "unique_score": "1-0",
+    "score_top3": [
+      {
+        "score": "1-0",
+        "probability": 0.166296,
+        "fair_odds": 6.0134,
+        "rank": 1
+      },
+      {
+        "score": "0-0",
+        "probability": 0.130029,
+        "fair_odds": 7.6906,
+        "rank": 2
+      },
+      {
+        "score": "1-1",
+        "probability": 0.126565,
+        "fair_odds": 7.9011,
+        "rank": 3
+      }
+    ],
+    "prediction_tier": "formal",
+    "formal_unique_score": "1-0",
+    "checkpoint_feature_summary": {
+      "snapshot_count": 5,
+      "state": "tracked",
+      "leader_reversals": 0,
+      "probability_delta": {
+        "home": -0.001993,
+        "draw": 0.002985,
+        "away": -0.000992
+      }
+    },
+    "score_reasoning": "正式唯一比分采用比分矩阵峰值（单格概率16.6%；符合主胜主剧本、符合双方进球倾向、与多公司去水方向一致、净胜球接近亚洲让球中枢-0.5）。情景选择器建议1-0，当前仅作影子候选，待样本外验证后再决定是否覆盖。",
+    "score_selection_trace": {
+      "method": "matrix_map_with_scenario_challenger_v1",
+      "selected_score": "1-0",
+      "selected_probability": 0.166296,
+      "mathematical_first_score": "1-0",
+      "scenario_selected_score": "1-0",
+      "scenario_selected_probability": 0.166296,
+      "model_outcome_leader": "home",
+      "market_outcome_leader": "home",
+      "total_goal_centre": 2.0,
+      "asian_handicap_median": -0.5,
+      "btts_yes": false,
+      "confidence": "高",
+      "utility_gap_to_second": 0.14544,
+      "main_risk": "裁判公开样本的牌数与红牌率偏高，比分右尾和比赛状态突变风险高于基础泊松假设",
+      "selected_factors": [
+        "符合主胜主剧本",
+        "符合双方进球倾向",
+        "与多公司去水方向一致",
+        "净胜球接近亚洲让球中枢-0.5"
+      ],
+      "candidates": [
+        {
+          "rank": 1,
+          "score": "1-0",
+          "matrix_probability": 0.166296,
+          "scenario_score": 1.011429,
+          "factor_contributions": {
+            "比分矩阵": 0.55,
+            "模型方向": 0.18,
+            "总进球中枢": 0.06,
+            "双方进球": 0.08,
+            "市场方向": 0.1,
+            "亚洲让球": 0.0714,
+            "比赛剧本": -0.03
+          },
+          "decision": "challenger_selected",
+          "rejection_reason": null
+        },
+        {
+          "rank": 2,
+          "score": "2-0",
+          "matrix_probability": 0.10634,
+          "scenario_score": 0.865988,
+          "factor_contributions": {
+            "比分矩阵": 0.3517,
+            "模型方向": 0.18,
+            "总进球中枢": 0.14,
+            "双方进球": 0.08,
+            "市场方向": 0.1,
+            "亚洲让球": 0.0143,
+            "比赛剧本": 0.0
+          },
+          "decision": "rejected",
+          "rejection_reason": "综合情景分低于候选，不按相邻比分算命中"
+        },
+        {
+          "rank": 3,
+          "score": "2-1",
+          "matrix_probability": 0.080933,
+          "scenario_score": 0.679103,
+          "factor_contributions": {
+            "比分矩阵": 0.2677,
+            "模型方向": 0.18,
+            "总进球中枢": 0.06,
+            "双方进球": -0.04,
+            "市场方向": 0.1,
+            "亚洲让球": 0.0714,
+            "比赛剧本": 0.04
+          },
+          "decision": "rejected",
+          "rejection_reason": "综合情景分低于候选，不按相邻比分算命中"
+        },
+        {
+          "rank": 4,
+          "score": "1-1",
+          "matrix_probability": 0.126565,
+          "scenario_score": 0.420023,
+          "factor_contributions": {
+            "比分矩阵": 0.4186,
+            "模型方向": -0.12,
+            "总进球中枢": 0.14,
+            "双方进球": -0.04,
+            "市场方向": -0.05,
+            "亚洲让球": 0.0714,
+            "比赛剧本": 0.0
+          },
+          "decision": "rejected",
+          "rejection_reason": "综合情景分低于候选，不按相邻比分算命中"
+        },
+        {
+          "rank": 5,
+          "score": "0-0",
+          "matrix_probability": 0.130029,
+          "scenario_score": 0.381479,
+          "factor_contributions": {
+            "比分矩阵": 0.4301,
+            "模型方向": -0.12,
+            "总进球中枢": 0.0,
+            "双方进球": 0.08,
+            "市场方向": -0.05,
+            "亚洲让球": 0.0714,
+            "比赛剧本": -0.03
+          },
+          "decision": "rejected",
+          "rejection_reason": "综合情景分低于候选，不按相邻比分算命中"
+        },
+        {
+          "rank": 6,
+          "score": "0-1",
+          "matrix_probability": 0.098962,
+          "scenario_score": 0.281589,
+          "factor_contributions": {
+            "比分矩阵": 0.3273,
+            "模型方向": -0.12,
+            "总进球中枢": 0.06,
+            "双方进球": 0.08,
+            "市场方向": -0.05,
+            "亚洲让球": 0.0143,
+            "比赛剧本": -0.03
+          },
+          "decision": "rejected",
+          "rejection_reason": "综合情景分低于候选，不按相邻比分算命中"
+        }
+      ],
+      "rule": "比分预测与比分投注分离；只有取得可成交赔率且EV通过，才生成模拟注单。"
+    },
+    "mathematical_first": "90分钟主胜48.7%、平局29.1%、客胜22.2%；λ=1.28-0.76。",
+    "market_first": "多公司去水共识主胜47.7%、平局30.2%、客胜22.1%；大小球中轴2.00。",
+    "match_story": "科林蒂安更可能掌握主动，但巴拉纳竞技仍有足够进球期望制造反击或定位球威胁；总进球中枢偏低；上半场试探和低比分停留时间可能较长；裁判剧本：紮諾維利在131场公开样本中场均双方合计黄牌约5.00、红牌约0.35，比赛中断与红牌尾部风险偏高，领先方未必能平稳控场；裁判历史样本下主队胜率更高（主45% / 客32%），仅作为剧本倾向，不视为因果优势。",
+    "market_conflict": "模型对主胜的判断比多公司市场高1.0%，需要用阵容与临盘验证这部分分歧",
+    "score_vs_outcome_explanation": "唯一比分1-0只是单个比分格的最高点；胜平负主线主胜是多个比分格合计，二者不要求同方向。",
+    "maximum_error_points": [
+      "裁判公开样本的牌数与红牌率偏高，比分右尾和比赛状态突变风险高于基础泊松假设",
+      "若早段进球、红牌或比赛节奏偏离基准，总进球与比分尾部会同步变化",
+      "首发或关键伤停与当前假设不一致，会直接改变双方λ",
+      "临盘若出现跨公司同步升降盘，本次赛前快照的价格结构会失效"
+    ],
+    "value_judgement": "仅完成模型概率与市场基线；须取得用户渠道即时赔率后才计算EV。",
+    "final_state": "空仓｜未锁单",
+    "data_grade": "B",
+    "checkpoint_count": 5
+  },
+  "model": {
+    "status": "确定性融合模型（可核验近期攻防 + 市场校准）",
+    "method": "recent_form_market_calibrated_poisson_v2",
+    "lambda_home": 1.278919,
+    "lambda_away": 0.761081,
+    "rho": 0.0,
+    "expected_goals": 2.04,
+    "probabilities": {
+      "home": 0.487308,
+      "draw": 0.290934,
+      "away": 0.221759
+    },
+    "total_goals_buckets": [
+      {
+        "goals": "0",
+        "probability": 0.130029
+      },
+      {
+        "goals": "1",
+        "probability": 0.265259
+      },
+      {
+        "goals": "2",
+        "probability": 0.270564
+      },
+      {
+        "goals": "3",
+        "probability": 0.183983
+      },
+      {
+        "goals": "4",
+        "probability": 0.093832
+      },
+      {
+        "goals": "5",
+        "probability": 0.038283
+      },
+      {
+        "goals": "6+",
+        "probability": 0.018051
+      }
+    ],
+    "btts": {
+      "yes": 0.38453,
+      "no": 0.61547,
+      "judgement": "双方进球偏否"
+    },
+    "score_probabilities": [
+      {
+        "score": "1-0",
+        "probability": 0.166296,
+        "fair_odds": 6.0134,
+        "rank": 1
+      },
+      {
+        "score": "0-0",
+        "probability": 0.130029,
+        "fair_odds": 7.6906,
+        "rank": 2
+      },
+      {
+        "score": "1-1",
+        "probability": 0.126565,
+        "fair_odds": 7.9011,
+        "rank": 3
+      },
+      {
+        "score": "2-0",
+        "probability": 0.10634,
+        "fair_odds": 9.4038,
+        "rank": 4
+      },
+      {
+        "score": "0-1",
+        "probability": 0.098962,
+        "fair_odds": 10.1048,
+        "rank": 5
+      },
+      {
+        "score": "2-1",
+        "probability": 0.080933,
+        "fair_odds": 12.3559,
+        "rank": 6
+      },
+      {
+        "score": "1-2",
+        "probability": 0.048163,
+        "fair_odds": 20.7628,
+        "rank": 7
+      },
+      {
+        "score": "3-0",
+        "probability": 0.045333,
+        "fair_odds": 22.0589,
+        "rank": 8
+      },
+      {
+        "score": "0-2",
+        "probability": 0.037659,
+        "fair_odds": 26.5539,
+        "rank": 9
+      },
+      {
+        "score": "3-1",
+        "probability": 0.034502,
+        "fair_odds": 28.9836,
+        "rank": 10
+      }
+    ],
+    "total_line_analysis": [
+      {
+        "line": 2.5,
+        "over": {
+          "win_equivalent_probability": 0.334149,
+          "loss_equivalent_probability": 0.665851,
+          "push_equivalent_probability": 0.0,
+          "fair_odds": 2.9927
+        },
+        "under": {
+          "win_equivalent_probability": 0.665851,
+          "loss_equivalent_probability": 0.334149,
+          "push_equivalent_probability": 0.0,
+          "fair_odds": 1.5018
+        }
+      },
+      {
+        "line": 2.75,
+        "over": {
+          "win_equivalent_probability": 0.242157,
+          "loss_equivalent_probability": 0.665851,
+          "push_equivalent_probability": 0.091992,
+          "fair_odds": 3.7497
+        },
+        "under": {
+          "win_equivalent_probability": 0.665851,
+          "loss_equivalent_probability": 0.242157,
+          "push_equivalent_probability": 0.091992,
+          "fair_odds": 1.3637
+        }
+      },
+      {
+        "line": 3.0,
+        "over": {
+          "win_equivalent_probability": 0.150166,
+          "loss_equivalent_probability": 0.665851,
+          "push_equivalent_probability": 0.183983,
+          "fair_odds": 5.4341
+        },
+        "under": {
+          "win_equivalent_probability": 0.665851,
+          "loss_equivalent_probability": 0.150166,
+          "push_equivalent_probability": 0.183983,
+          "fair_odds": 1.2255
+        }
+      },
+      {
+        "line": 3.25,
+        "over": {
+          "win_equivalent_probability": 0.150166,
+          "loss_equivalent_probability": 0.757843,
+          "push_equivalent_probability": 0.091992,
+          "fair_odds": 6.0467
+        },
+        "under": {
+          "win_equivalent_probability": 0.757843,
+          "loss_equivalent_probability": 0.150166,
+          "push_equivalent_probability": 0.091992,
+          "fair_odds": 1.1981
+        }
+      },
+      {
+        "line": 3.5,
+        "over": {
+          "win_equivalent_probability": 0.150166,
+          "loss_equivalent_probability": 0.849834,
+          "push_equivalent_probability": 0.0,
+          "fair_odds": 6.6593
+        },
+        "under": {
+          "win_equivalent_probability": 0.849834,
+          "loss_equivalent_probability": 0.150166,
+          "push_equivalent_probability": 0.0,
+          "fair_odds": 1.1767
+        }
+      }
+    ],
+    "calibration": {
+      "form_lambda_home": 1.3,
+      "form_lambda_away": 0.766667,
+      "market_total_line_median": 2.0,
+      "market_probabilities": {
+        "home": 0.4772241877436124,
+        "draw": 0.3015001731861731,
+        "away": 0.2212756390702144
+      },
+      "form_weight": 0.6,
+      "market_weight": 0.4,
+      "form_source": "500.com赛前数据快照",
+      "venue_proxy_used": false,
+      "closed_loop": {
+        "status": "shadow_only",
+        "active": false,
+        "strength": 0.0,
+        "direction_applied": false,
+        "total_goals_applied": false,
+        "dispersion_applied": false,
+        "sample": {
+          "compatible": 23,
+          "training": 16,
+          "holdout": 7,
+          "effective_weight": 9.2,
+          "through": "2026-07-24T06:30:00+08:00"
+        }
+      },
+      "checkpoint_features": {
+        "snapshot_count": 5,
+        "state": "tracked",
+        "first_stage": "T-8H",
+        "latest_stage": "T-2H",
+        "first_captured_at": "2026-07-30T22:31:09.686244+08:00",
+        "latest_captured_at": "2026-07-31T04:31:11.648953+08:00",
+        "probability_delta": {
+          "home": -0.001993,
+          "draw": 0.002985,
+          "away": -0.000992
+        },
+        "asian_handicap_delta": 0.0,
+        "total_line_delta": 0.0,
+        "leader_reversals": 0,
+        "latest_leader": "home",
+        "latest_company_count": 18,
+        "latest_dispersion": 0.255949,
+        "points": [
+          {
+            "captured_at": "2026-07-30T22:31:09.686244+08:00",
+            "probabilities": {
+              "home": 0.479217,
+              "draw": 0.298515,
+              "away": 0.222268
+            },
+            "leader": "home",
+            "asian_handicap": -0.5,
+            "total_line": 2.0,
+            "company_count": 18,
+            "dispersion": 0.256949,
+            "stage": "T-8H"
+          },
+          {
+            "captured_at": "2026-07-31T00:31:08.621547+08:00",
+            "probabilities": {
+              "home": 0.478299,
+              "draw": 0.299847,
+              "away": 0.221854
+            },
+            "leader": "home",
+            "asian_handicap": -0.5,
+            "total_line": 2.0,
+            "company_count": 18,
+            "dispersion": 0.256445,
+            "stage": "T-6H"
+          },
+          {
+            "captured_at": "2026-07-31T02:31:13.410775+08:00",
+            "probabilities": {
+              "home": 0.478157,
+              "draw": 0.300103,
+              "away": 0.221741
+            },
+            "leader": "home",
+            "asian_handicap": -0.5,
+            "total_line": 2.0,
+            "company_count": 18,
+            "dispersion": 0.256416,
+            "stage": "T-4H"
+          },
+          {
+            "captured_at": "2026-07-31T04:31:11+08:00",
+            "probabilities": {
+              "home": 0.477224,
+              "draw": 0.3015,
+              "away": 0.221276
+            },
+            "leader": "home",
+            "asian_handicap": -0.5,
+            "total_line": 2.0,
+            "company_count": 18,
+            "dispersion": 0.255949,
+            "stage": "current"
+          },
+          {
+            "captured_at": "2026-07-31T04:31:11.648953+08:00",
+            "probabilities": {
+              "home": 0.477224,
+              "draw": 0.3015,
+              "away": 0.221276
+            },
+            "leader": "home",
+            "asian_handicap": -0.5,
+            "total_line": 2.0,
+            "company_count": 18,
+            "dispersion": 0.255949,
+            "stage": "T-2H"
+          }
+        ]
+      }
+    },
+    "limitations": [
+      "近期样本含不同赛事与对手强度，尚未完成逐队Elo/xG对手校正",
+      "确认首发、即时伤停、天气与临场战术需在开赛前另行修正",
+      "市场信息用于校准，因此该概率不是完全独立于赔率的纯基本面概率"
+    ]
+  },
+  "data_quality": {
+    "status": "模型已计算，临场信息待补",
+    "missing": [
+      "确认首发",
+      "即时伤停",
+      "用户渠道即时赔率"
+    ],
+    "notes": [
+      "近期攻防来源：500.com赛前数据快照。",
+      "模型数值由固定公式生成，DeepSeek不参与概率计算。"
+    ],
+    "overall": "FORM_AND_MARKET_MODEL"
+  },
+  "fundamentals": {
+    "status": "赛程、交锋、场地、首发发布状态、伤停发布状态与天气发布状态已联网核验",
+    "items": [
+      {
+        "label": "赛程交叉核验",
+        "value": "Athletico Paranaense at Corinthians",
+        "source_url": "https://www.espn.com/soccer/match/_/gameId/401841174"
+      },
+      {
+        "label": "主队 ESPN 近5场",
+        "value": "3胜1平1负，进8球/失4球；样本期2026-05-24至2026-07-26",
+        "source": "ESPN lastFiveGames",
+        "source_url": "https://www.espn.com/soccer/match/_/gameId/401841174"
+      },
+      {
+        "label": "客队 ESPN 近5场",
+        "value": "4胜0平1负，进7球/失3球；样本期2026-05-24至2026-07-25",
+        "source": "ESPN lastFiveGames",
+        "source_url": "https://www.espn.com/soccer/match/_/gameId/401841174"
+      },
+      {
+        "label": "比赛场地",
+        "value": "Neo Química Arena · Sao Paulo · Brazil",
+        "source_url": "https://www.espn.com/soccer/match/_/gameId/401841174"
+      },
+      {
+        "label": "确认首发",
+        "value": "尚未发布（已联网检查，临近开赛自动任务会重查）",
+        "source_url": "https://www.espn.com/soccer/match/_/gameId/401841174"
+      },
+      {
+        "label": "伤停核验",
+        "value": "赛前页未返回结构化伤停名单；不等同于无人伤停",
+        "source_url": "https://www.espn.com/soccer/match/_/gameId/401841174"
+      },
+      {
+        "label": "天气",
+        "value": "上游赛前页尚未发布（已联网检查）",
+        "source_url": "https://www.espn.com/soccer/match/_/gameId/401841174"
+      }
+    ],
+    "structured_form": {
+      "status": "Nowscore赛前背景已核验",
+      "checked_at": "2026-07-30T20:31:18+00:00",
+      "items": [
+        {
+          "label": "赛程交叉核验",
+          "value": "Athletico Paranaense at Corinthians",
+          "source_url": "https://www.espn.com/soccer/match/_/gameId/401841174"
+        },
+        {
+          "label": "主队 ESPN 近5场",
+          "value": "3胜1平1负，进8球/失4球；样本期2026-05-24至2026-07-26",
+          "source": "ESPN lastFiveGames",
+          "source_url": "https://www.espn.com/soccer/match/_/gameId/401841174"
+        },
+        {
+          "label": "客队 ESPN 近5场",
+          "value": "4胜0平1负，进7球/失3球；样本期2026-05-24至2026-07-25",
+          "source": "ESPN lastFiveGames",
+          "source_url": "https://www.espn.com/soccer/match/_/gameId/401841174"
+        },
+        {
+          "label": "比赛场地",
+          "value": "Neo Química Arena · Sao Paulo · Brazil",
+          "source_url": "https://www.espn.com/soccer/match/_/gameId/401841174"
+        },
+        {
+          "label": "确认首发",
+          "value": "尚未发布（已联网检查，临近开赛自动任务会重查）",
+          "source_url": "https://www.espn.com/soccer/match/_/gameId/401841174"
+        },
+        {
+          "label": "伤停核验",
+          "value": "赛前页未返回结构化伤停名单；不等同于无人伤停",
+          "source_url": "https://www.espn.com/soccer/match/_/gameId/401841174"
+        },
+        {
+          "label": "天气",
+          "value": "上游赛前页尚未发布（已联网检查）",
+          "source_url": "https://www.espn.com/soccer/match/_/gameId/401841174"
+        },
+        "裁判：紮諾維利；公开执法样本 131 场。",
+        "Nowscore盘路历史已读取 60 场，仅作风格与盘口复核，不直接改写概率。",
+        "裁判剧本：紮諾維利在131场公开样本中场均双方合计黄牌约5.00、红牌约0.35，比赛中断与红牌尾部风险偏高，领先方未必能平稳控场。",
+        "裁判历史样本下主队胜率更高（主45% / 客32%），仅作为剧本倾向，不视为因果优势。"
+      ],
+      "sources": [
+        "https://www.espn.com/soccer/match/_/gameId/401841174",
+        "https://live.nowscore.com/info/coach/2910830.htm?l=1",
+        "https://live.nowscore.com/info/referee/2910830.htm?l=1",
+        "https://live.nowscore.com/panlu/2910830.html"
+      ],
+      "recent_form": {
+        "home_overall": {
+          "matches": 10,
+          "wins": 5,
+          "draws": 3,
+          "losses": 2,
+          "goals_for": 15,
+          "goals_against": 11
+        },
+        "home_home": {
+          "matches": 10,
+          "wins": 7,
+          "draws": 1,
+          "losses": 2,
+          "goals_for": 13,
+          "goals_against": 5
+        },
+        "away_overall": {
+          "matches": 10,
+          "wins": 4,
+          "draws": 3,
+          "losses": 3,
+          "goals_for": 9,
+          "goals_against": 7
+        },
+        "away_away": {
+          "matches": 10,
+          "wins": 2,
+          "draws": 1,
+          "losses": 7,
+          "goals_for": 8,
+          "goals_against": 15
+        }
+      },
+      "form_source": "ESPN近5场赛事样本（含可获得的同赛事历史，非完整联赛近况）",
+      "metric": "recent actual goals, not xG",
+      "nowscore_context": {
+        "coach": {
+          "home": {
+            "coach_records": [],
+            "team_records": []
+          },
+          "away": {
+            "coach_records": [],
+            "team_records": []
+          }
+        },
+        "referee": {
+          "name": "紮諾維利",
+          "birth_date": "",
+          "nationality": "巴西",
+          "summaries": [
+            {
+              "competition": "所有赛事",
+              "matches": 131,
+              "home": {
+                "side": "home",
+                "wins": 59,
+                "draws": 30,
+                "losses": 42,
+                "avg_fouls": 15.56,
+                "avg_yellow": 2.37,
+                "avg_red": 0.14,
+                "win_rate": "45%"
+              },
+              "away": {
+                "side": "away",
+                "wins": 42,
+                "draws": 30,
+                "losses": 59,
+                "avg_fouls": 14.53,
+                "avg_yellow": 2.63,
+                "avg_red": 0.21,
+                "win_rate": "32%"
+              }
+            }
+          ],
+          "home_team_history_count": 11,
+          "away_team_history_count": 10
+        },
+        "panlu": {
+          "matches": [
+            {
+              "match_id": 2910818,
+              "competition": "巴西甲",
+              "kickoff": "26-07-27 03:00",
+              "home_team": "巴希亞",
+              "away_team": "哥連泰斯",
+              "home_team_id": 1979,
+              "away_team_id": 349,
+              "full_time": {
+                "home": 1,
+                "away": 1
+              },
+              "half_time": {
+                "home": 1,
+                "away": 1
+              },
+              "asian_line": 0.25,
+              "total_line": 2.5,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2910817,
+              "competition": "巴西甲",
+              "kickoff": "26-07-26 05:30",
+              "home_team": "巴拉納體育會",
+              "away_team": "國際體育會",
+              "home_team_id": 347,
+              "away_team_id": 369,
+              "full_time": {
+                "home": 2,
+                "away": 0
+              },
+              "half_time": {
+                "home": 1,
+                "away": 0
+              },
+              "asian_line": 0.5,
+              "total_line": 2,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2910810,
+              "competition": "巴西甲",
+              "kickoff": "26-07-24 06:30",
+              "home_team": "哥連泰斯",
+              "away_team": "瑞模貝雷",
+              "home_team_id": 349,
+              "away_team_id": 1964,
+              "full_time": {
+                "home": 3,
+                "away": 0
+              },
+              "half_time": {
+                "home": 3,
+                "away": 0
+              },
+              "asian_line": 1,
+              "total_line": 2.5,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2910815,
+              "competition": "巴西甲",
+              "kickoff": "26-07-23 08:30",
+              "home_team": "聖保羅",
+              "away_team": "巴拉納體育會",
+              "home_team_id": 453,
+              "away_team_id": 347,
+              "full_time": {
+                "home": 1,
+                "away": 2
+              },
+              "half_time": {
+                "home": 1,
+                "away": 0
+              },
+              "asian_line": 0.5,
+              "total_line": 2.25,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 3025810,
+              "competition": "球會友誼",
+              "kickoff": "26-07-13 03:00",
+              "home_team": "卡斯卡韋爾",
+              "away_team": "哥連泰斯",
+              "home_team_id": 13087,
+              "away_team_id": 349,
+              "full_time": {
+                "home": 1,
+                "away": 1
+              },
+              "half_time": {
+                "home": 0,
+                "away": 0
+              },
+              "asian_line": -1.75,
+              "total_line": 3,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 3025406,
+              "competition": "球會友誼",
+              "kickoff": "26-07-11 21:00",
+              "home_team": "巴拉干天奴",
+              "away_team": "巴拉納體育會",
+              "home_team_id": 3820,
+              "away_team_id": 347,
+              "full_time": {
+                "home": 2,
+                "away": 1
+              },
+              "half_time": {
+                "home": 1,
+                "away": 1
+              },
+              "asian_line": 0.25,
+              "total_line": 2.5,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 3024217,
+              "competition": "球會友誼",
+              "kickoff": "26-07-09 08:00",
+              "home_team": "小保加",
+              "away_team": "巴拉納體育會",
+              "home_team_id": 261,
+              "away_team_id": 347,
+              "full_time": {
+                "home": 1,
+                "away": 0
+              },
+              "half_time": {
+                "home": 1,
+                "away": 0
+              },
+              "asian_line": 0.5,
+              "total_line": 2.5,
+              "provider_flags": [
+                0,
+                1
+              ]
+            },
+            {
+              "match_id": 2910802,
+              "competition": "巴西甲",
+              "kickoff": "26-05-31 04:30",
+              "home_team": "甘美奧",
+              "away_team": "哥連泰斯",
+              "home_team_id": 364,
+              "away_team_id": 349,
+              "full_time": {
+                "home": 1,
+                "away": 3
+              },
+              "half_time": {
+                "home": 1,
+                "away": 1
+              },
+              "asian_line": 0.25,
+              "total_line": 2,
+              "provider_flags": [
+                1,
+                0
+              ]
+            },
+            {
+              "match_id": 2910797,
+              "competition": "巴西甲",
+              "kickoff": "26-05-31 03:00",
+              "home_team": "巴拉納體育會",
+              "away_team": "米拉索",
+              "home_team_id": 347,
+              "away_team_id": 7429,
+              "full_time": {
+                "home": 1,
+                "away": 0
+              },
+              "half_time": {
+                "home": 0,
+                "away": 0
+              },
+              "asian_line": 0.5,
+              "total_line": 2.25,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2963599,
+              "competition": "解放者杯",
+              "kickoff": "26-05-28 08:30",
+              "home_team": "哥連泰斯",
+              "away_team": "普拉騰斯",
+              "home_team_id": 349,
+              "away_team_id": 5110,
+              "full_time": {
+                "home": 0,
+                "away": 2
+              },
+              "half_time": {
+                "home": 0,
+                "away": 1
+              },
+              "asian_line": 0.75,
+              "total_line": 2,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2910787,
+              "competition": "巴西甲",
+              "kickoff": "26-05-25 05:30",
+              "home_team": "哥連泰斯",
+              "away_team": "明尼路",
+              "home_team_id": 349,
+              "away_team_id": 343,
+              "full_time": {
+                "home": 1,
+                "away": 0
+              },
+              "half_time": {
+                "home": 0,
+                "away": 0
+              },
+              "asian_line": 0.5,
+              "total_line": 2,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2910793,
+              "competition": "巴西甲",
+              "kickoff": "26-05-25 03:00",
+              "home_team": "瑞模貝雷",
+              "away_team": "巴拉納體育會",
+              "home_team_id": 1964,
+              "away_team_id": 347,
+              "full_time": {
+                "home": 1,
+                "away": 2
+              },
+              "half_time": {
+                "home": 1,
+                "away": 1
+              },
+              "asian_line": 0,
+              "total_line": 2.5,
+              "provider_flags": [
+                1,
+                0
+              ]
+            },
+            {
+              "match_id": 2963585,
+              "competition": "解放者杯",
+              "kickoff": "26-05-22 08:30",
+              "home_team": "彭拿路",
+              "away_team": "哥連泰斯",
+              "home_team_id": 1890,
+              "away_team_id": 349,
+              "full_time": {
+                "home": 1,
+                "away": 1
+              },
+              "half_time": {
+                "home": 1,
+                "away": 0
+              },
+              "asian_line": 0,
+              "total_line": 2.25,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2910777,
+              "competition": "巴西甲",
+              "kickoff": "26-05-18 06:30",
+              "home_team": "巴拉納體育會",
+              "away_team": "法林明高",
+              "home_team_id": 347,
+              "away_team_id": 356,
+              "full_time": {
+                "home": 1,
+                "away": 1
+              },
+              "half_time": {
+                "home": 1,
+                "away": 0
+              },
+              "asian_line": -0.25,
+              "total_line": 2.25,
+              "provider_flags": [
+                0,
+                1
+              ]
+            },
+            {
+              "match_id": 2910780,
+              "competition": "巴西甲",
+              "kickoff": "26-05-18 03:00",
+              "home_team": "保地花高",
+              "away_team": "哥連泰斯",
+              "home_team_id": 467,
+              "away_team_id": 349,
+              "full_time": {
+                "home": 3,
+                "away": 1
+              },
+              "half_time": {
+                "home": 2,
+                "away": 1
+              },
+              "asian_line": 0.25,
+              "total_line": 2.25,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2965573,
+              "competition": "巴西盃",
+              "kickoff": "26-05-15 06:30",
+              "home_team": "哥連泰斯",
+              "away_team": "巴拉FC",
+              "home_team_id": 349,
+              "away_team_id": 27985,
+              "full_time": {
+                "home": 1,
+                "away": 0
+              },
+              "half_time": {
+                "home": 0,
+                "away": 0
+              },
+              "asian_line": 1.75,
+              "total_line": 2.5,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2965583,
+              "competition": "巴西盃",
+              "kickoff": "26-05-15 06:00",
+              "home_team": "戈亞尼恩斯",
+              "away_team": "巴拉納體育會",
+              "home_team_id": 5156,
+              "away_team_id": 347,
+              "full_time": {
+                "home": 0,
+                "away": 0
+              },
+              "half_time": {
+                "home": 0,
+                "away": 0
+              },
+              "asian_line": -0.25,
+              "total_line": 2.25,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2910776,
+              "competition": "巴西甲",
+              "kickoff": "26-05-11 07:30",
+              "home_team": "華斯高",
+              "away_team": "巴拉納體育會",
+              "home_team_id": 456,
+              "away_team_id": 347,
+              "full_time": {
+                "home": 1,
+                "away": 0
+              },
+              "half_time": {
+                "home": 1,
+                "away": 0
+              },
+              "asian_line": 0.5,
+              "total_line": 2.25,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2910769,
+              "competition": "巴西甲",
+              "kickoff": "26-05-11 05:30",
+              "home_team": "哥連泰斯",
+              "away_team": "聖保羅",
+              "home_team_id": 349,
+              "away_team_id": 453,
+              "full_time": {
+                "home": 3,
+                "away": 2
+              },
+              "half_time": {
+                "home": 1,
+                "away": 1
+              },
+              "asian_line": 0.25,
+              "total_line": 2,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2963566,
+              "competition": "解放者杯",
+              "kickoff": "26-05-07 08:30",
+              "home_team": "聖達菲",
+              "away_team": "哥連泰斯",
+              "home_team_id": 2644,
+              "away_team_id": 349,
+              "full_time": {
+                "home": 1,
+                "away": 1
+              },
+              "half_time": {
+                "home": 0,
+                "away": 0
+              },
+              "asian_line": -0.25,
+              "total_line": 2.25,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2910763,
+              "competition": "巴西甲",
+              "kickoff": "26-05-04 07:30",
+              "home_team": "米拉索",
+              "away_team": "哥連泰斯",
+              "home_team_id": 7429,
+              "away_team_id": 349,
+              "full_time": {
+                "home": 2,
+                "away": 1
+              },
+              "half_time": {
+                "home": 2,
+                "away": 0
+              },
+              "asian_line": 0.25,
+              "total_line": 2.25,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2910757,
+              "competition": "巴西甲",
+              "kickoff": "26-05-03 07:30",
+              "home_team": "巴拉納體育會",
+              "away_team": "甘美奧",
+              "home_team_id": 347,
+              "away_team_id": 364,
+              "full_time": {
+                "home": 0,
+                "away": 0
+              },
+              "half_time": {
+                "home": 0,
+                "away": 0
+              },
+              "asian_line": 0.5,
+              "total_line": 2.5,
+              "provider_flags": [
+                1,
+                1
+              ]
+            },
+            {
+              "match_id": 2963550,
+              "competition": "解放者杯",
+              "kickoff": "26-05-01 08:00",
+              "home_team": "哥連泰斯",
+              "away_team": "彭拿路",
+              "home_team_id": 349,
+              "away_team_id": 1890,
+              "full_time": {
+                "home": 2,
+                "away": 0
+              },
+              "half_time": {
+                "home": 2,
+                "away": 0
+              },
+              "asian_line": 1,
+              "total_line": 2,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2910747,
+              "competition": "巴西甲",
+              "kickoff": "26-04-27 05:30",
+              "home_team": "巴拉納體育會",
+              "away_team": "維多利亞",
+              "home_team_id": 347,
+              "away_team_id": 462,
+              "full_time": {
+                "home": 3,
+                "away": 1
+              },
+              "half_time": {
+                "home": 1,
+                "away": 1
+              },
+              "asian_line": 0.75,
+              "total_line": 2.25,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2910752,
+              "competition": "巴西甲",
+              "kickoff": "26-04-27 03:00",
+              "home_team": "哥連泰斯",
+              "away_team": "華斯高",
+              "home_team_id": 349,
+              "away_team_id": 456,
+              "full_time": {
+                "home": 1,
+                "away": 0
+              },
+              "half_time": {
+                "home": 1,
+                "away": 0
+              },
+              "asian_line": 0.5,
+              "total_line": 2.25,
+              "provider_flags": [
+                1,
+                0
+              ]
+            },
+            {
+              "match_id": 2965567,
+              "competition": "巴西盃",
+              "kickoff": "26-04-24 08:30",
+              "home_team": "巴拉納體育會",
+              "away_team": "戈亞尼恩斯",
+              "home_team_id": 347,
+              "away_team_id": 5156,
+              "full_time": {
+                "home": 0,
+                "away": 0
+              },
+              "half_time": {
+                "home": 0,
+                "away": 0
+              },
+              "asian_line": 1,
+              "total_line": 2.25,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2965557,
+              "competition": "巴西盃",
+              "kickoff": "26-04-22 08:30",
+              "home_team": "巴拉FC",
+              "away_team": "哥連泰斯",
+              "home_team_id": 27985,
+              "away_team_id": 349,
+              "full_time": {
+                "home": 0,
+                "away": 1
+              },
+              "half_time": {
+                "home": 0,
+                "away": 1
+              },
+              "asian_line": -1,
+              "total_line": 2.5,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2910743,
+              "competition": "巴西甲",
+              "kickoff": "26-04-20 05:30",
+              "home_team": "彭美拉斯",
+              "away_team": "巴拉納體育會",
+              "home_team_id": 465,
+              "away_team_id": 347,
+              "full_time": {
+                "home": 1,
+                "away": 0
+              },
+              "half_time": {
+                "home": 1,
+                "away": 0
+              },
+              "asian_line": 1,
+              "total_line": 2.5,
+              "provider_flags": [
+                1,
+                0
+              ]
+            },
+            {
+              "match_id": 2910746,
+              "competition": "巴西甲",
+              "kickoff": "26-04-19 07:00",
+              "home_team": "維多利亞",
+              "away_team": "哥連泰斯",
+              "home_team_id": 462,
+              "away_team_id": 349,
+              "full_time": {
+                "home": 0,
+                "away": 0
+              },
+              "half_time": {
+                "home": 0,
+                "away": 0
+              },
+              "asian_line": 0,
+              "total_line": 2,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2963534,
+              "competition": "解放者杯",
+              "kickoff": "26-04-16 08:30",
+              "home_team": "哥連泰斯",
+              "away_team": "聖達菲",
+              "home_team_id": 349,
+              "away_team_id": 2644,
+              "full_time": {
+                "home": 2,
+                "away": 0
+              },
+              "half_time": {
+                "home": 0,
+                "away": 0
+              },
+              "asian_line": 1,
+              "total_line": 2,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2910729,
+              "competition": "巴西甲",
+              "kickoff": "26-04-13 05:30",
+              "home_team": "哥連泰斯",
+              "away_team": "彭美拉斯",
+              "home_team_id": 349,
+              "away_team_id": 465,
+              "full_time": {
+                "home": 0,
+                "away": 0
+              },
+              "half_time": {
+                "home": 0,
+                "away": 0
+              },
+              "asian_line": 0,
+              "total_line": 2.25,
+              "provider_flags": [
+                2,
+                0
+              ]
+            },
+            {
+              "match_id": 2910727,
+              "competition": "巴西甲",
+              "kickoff": "26-04-12 22:00",
+              "home_team": "巴拉納體育會",
+              "away_team": "查比高恩斯",
+              "home_team_id": 347,
+              "away_team_id": 7344,
+              "full_time": {
+                "home": 2,
+                "away": 0
+              },
+              "half_time": {
+                "home": 0,
+                "away": 0
+              },
+              "asian_line": 1,
+              "total_line": 2.5,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2963519,
+              "competition": "解放者杯",
+              "kickoff": "26-04-10 08:00",
+              "home_team": "普拉騰斯",
+              "away_team": "哥連泰斯",
+              "home_team_id": 5110,
+              "away_team_id": 349,
+              "full_time": {
+                "home": 0,
+                "away": 2
+              },
+              "half_time": {
+                "home": 0,
+                "away": 0
+              },
+              "asian_line": 0,
+              "total_line": 1.75,
+              "provider_flags": [
+                1,
+                0
+              ]
+            },
+            {
+              "match_id": 2910720,
+              "competition": "巴西甲",
+              "kickoff": "26-04-06 06:30",
+              "home_team": "哥連泰斯",
+              "away_team": "國際體育會",
+              "home_team_id": 349,
+              "away_team_id": 369,
+              "full_time": {
+                "home": 0,
+                "away": 1
+              },
+              "half_time": {
+                "home": 0,
+                "away": 0
+              },
+              "asian_line": 0.25,
+              "total_line": 2.25,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2910717,
+              "competition": "巴西甲",
+              "kickoff": "26-04-06 04:30",
+              "home_team": "明尼路",
+              "away_team": "巴拉納體育會",
+              "home_team_id": 343,
+              "away_team_id": 347,
+              "full_time": {
+                "home": 2,
+                "away": 1
+              },
+              "half_time": {
+                "home": 1,
+                "away": 0
+              },
+              "asian_line": 0.5,
+              "total_line": 2.25,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2910713,
+              "competition": "巴西甲",
+              "kickoff": "26-04-02 08:30",
+              "home_team": "富明尼斯",
+              "away_team": "哥連泰斯",
+              "home_team_id": 469,
+              "away_team_id": 349,
+              "full_time": {
+                "home": 3,
+                "away": 1
+              },
+              "half_time": {
+                "home": 2,
+                "away": 0
+              },
+              "asian_line": 0.5,
+              "total_line": 2.25,
+              "provider_flags": [
+                0,
+                1
+              ]
+            },
+            {
+              "match_id": 2910707,
+              "competition": "巴西甲",
+              "kickoff": "26-04-02 07:00",
+              "home_team": "巴希亞",
+              "away_team": "巴拉納體育會",
+              "home_team_id": 1979,
+              "away_team_id": 347,
+              "full_time": {
+                "home": 3,
+                "away": 0
+              },
+              "half_time": {
+                "home": 2,
+                "away": 0
+              },
+              "asian_line": 0.5,
+              "total_line": 2.25,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2910667,
+              "competition": "巴西甲",
+              "kickoff": "26-03-30 06:30",
+              "home_team": "巴拉納體育會",
+              "away_team": "保地花高",
+              "home_team_id": 347,
+              "away_team_id": 467,
+              "full_time": {
+                "home": 4,
+                "away": 1
+              },
+              "half_time": {
+                "home": 2,
+                "away": 1
+              },
+              "asian_line": 0.25,
+              "total_line": 2.25,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2910699,
+              "competition": "巴西甲",
+              "kickoff": "26-03-23 07:30",
+              "home_team": "哥連泰斯",
+              "away_team": "法林明高",
+              "home_team_id": 349,
+              "away_team_id": 356,
+              "full_time": {
+                "home": 1,
+                "away": 1
+              },
+              "half_time": {
+                "home": 1,
+                "away": 1
+              },
+              "asian_line": -0.25,
+              "total_line": 2.25,
+              "provider_flags": [
+                0,
+                1
+              ]
+            },
+            {
+              "match_id": 2910697,
+              "competition": "巴西甲",
+              "kickoff": "26-03-23 03:00",
+              "home_team": "巴拉納體育會",
+              "away_team": "哥列迪巴",
+              "home_team_id": 347,
+              "away_team_id": 350,
+              "full_time": {
+                "home": 2,
+                "away": 0
+              },
+              "half_time": {
+                "home": 1,
+                "away": 0
+              },
+              "asian_line": 0.5,
+              "total_line": 2.25,
+              "provider_flags": [
+                0,
+                1
+              ]
+            },
+            {
+              "match_id": 2910690,
+              "competition": "巴西甲",
+              "kickoff": "26-03-20 08:30",
+              "home_team": "查比高恩斯",
+              "away_team": "哥連泰斯",
+              "home_team_id": 7344,
+              "away_team_id": 349,
+              "full_time": {
+                "home": 0,
+                "away": 0
+              },
+              "half_time": {
+                "home": 0,
+                "away": 0
+              },
+              "asian_line": -0.25,
+              "total_line": 2.25,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2910687,
+              "competition": "巴西甲",
+              "kickoff": "26-03-19 06:40",
+              "home_team": "巴拉納體育會",
+              "away_team": "高士路",
+              "home_team_id": 347,
+              "away_team_id": 354,
+              "full_time": {
+                "home": 2,
+                "away": 1
+              },
+              "half_time": {
+                "home": 2,
+                "away": 0
+              },
+              "asian_line": 0.25,
+              "total_line": 2.25,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2910685,
+              "competition": "巴西甲",
+              "kickoff": "26-03-16 03:00",
+              "home_team": "山度士",
+              "away_team": "哥連泰斯",
+              "home_team_id": 337,
+              "away_team_id": 349,
+              "full_time": {
+                "home": 1,
+                "away": 1
+              },
+              "half_time": {
+                "home": 1,
+                "away": 1
+              },
+              "asian_line": 0.25,
+              "total_line": 2.25,
+              "provider_flags": [
+                1,
+                0
+              ]
+            },
+            {
+              "match_id": 2910682,
+              "competition": "巴西甲",
+              "kickoff": "26-03-16 03:00",
+              "home_team": "富明尼斯",
+              "away_team": "巴拉納體育會",
+              "home_team_id": 469,
+              "away_team_id": 347,
+              "full_time": {
+                "home": 3,
+                "away": 2
+              },
+              "half_time": {
+                "home": 2,
+                "away": 1
+              },
+              "asian_line": 0.75,
+              "total_line": 2.5,
+              "provider_flags": [
+                0,
+                1
+              ]
+            },
+            {
+              "match_id": 2910670,
+              "competition": "巴西甲",
+              "kickoff": "26-03-12 08:30",
+              "home_team": "哥連泰斯",
+              "away_team": "哥列迪巴",
+              "home_team_id": 349,
+              "away_team_id": 350,
+              "full_time": {
+                "home": 0,
+                "away": 2
+              },
+              "half_time": {
+                "home": 0,
+                "away": 1
+              },
+              "asian_line": 0.75,
+              "total_line": 2.25,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2948396,
+              "competition": "巴聖錦標",
+              "kickoff": "26-03-01 07:30",
+              "home_team": "路禾利桑天奴",
+              "away_team": "哥連泰斯",
+              "home_team_id": 22595,
+              "away_team_id": 349,
+              "full_time": {
+                "home": 1,
+                "away": 0
+              },
+              "half_time": {
+                "home": 0,
+                "away": 0
+              },
+              "asian_line": -0.25,
+              "total_line": 2.25,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2910661,
+              "competition": "巴西甲",
+              "kickoff": "26-02-26 07:00",
+              "home_team": "高士路",
+              "away_team": "哥連泰斯",
+              "home_team_id": 354,
+              "away_team_id": 349,
+              "full_time": {
+                "home": 1,
+                "away": 1
+              },
+              "half_time": {
+                "home": 1,
+                "away": 0
+              },
+              "asian_line": 0.5,
+              "total_line": 2.25,
+              "provider_flags": [
+                1,
+                0
+              ]
+            },
+            {
+              "match_id": 2910659,
+              "competition": "巴西甲",
+              "kickoff": "26-02-26 06:00",
+              "home_team": "巴拉干天奴",
+              "away_team": "巴拉納體育會",
+              "home_team_id": 3820,
+              "away_team_id": 347,
+              "full_time": {
+                "home": 1,
+                "away": 1
+              },
+              "half_time": {
+                "home": 1,
+                "away": 0
+              },
+              "asian_line": 0.5,
+              "total_line": 2,
+              "provider_flags": [
+                2,
+                0
+              ]
+            },
+            {
+              "match_id": 2945172,
+              "competition": "巴聖錦標",
+              "kickoff": "26-02-23 07:30",
+              "home_team": "葡萄牙人",
+              "away_team": "哥連泰斯",
+              "home_team_id": 1884,
+              "away_team_id": 349,
+              "full_time": {
+                "home": 1,
+                "away": 1
+              },
+              "half_time": {
+                "home": 1,
+                "away": 0
+              },
+              "asian_line": -0.5,
+              "total_line": 2,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2941639,
+              "competition": "巴帕聯",
+              "kickoff": "26-02-23 03:00",
+              "home_team": "巴拉納體育會",
+              "away_team": "隆德里納",
+              "home_team_id": 347,
+              "away_team_id": 1942,
+              "full_time": {
+                "home": 0,
+                "away": 1
+              },
+              "half_time": {
+                "home": 0,
+                "away": 1
+              },
+              "asian_line": 0.75,
+              "total_line": 2.25,
+              "provider_flags": [
+                0,
+                0
+              ]
+            }
+          ],
+          "count": 60
+        },
+        "script_context": {
+          "coach": {
+            "home_record": {},
+            "away_record": {}
+          },
+          "referee": {
+            "name": "紮諾維利",
+            "sample": 131,
+            "combined_yellow": 5.0,
+            "combined_red": 0.35
+          },
+          "effects": [
+            "裁判剧本：紮諾維利在131场公开样本中场均双方合计黄牌约5.00、红牌约0.35，比赛中断与红牌尾部风险偏高，领先方未必能平稳控场。",
+            "裁判历史样本下主队胜率更高（主45% / 客32%），仅作为剧本倾向，不视为因果优势。"
+          ],
+          "risks": [
+            "裁判公开样本的牌数与红牌率偏高，比分右尾和比赛状态突变风险高于基础泊松假设"
+          ],
+          "model_usage": "match_script_and_uncertainty_only_not_probability_override"
+        },
+        "items": [
+          "裁判：紮諾維利；公开执法样本 131 场。",
+          "Nowscore盘路历史已读取 60 场，仅作风格与盘口复核，不直接改写概率。",
+          "裁判剧本：紮諾維利在131场公开样本中场均双方合计黄牌约5.00、红牌约0.35，比赛中断与红牌尾部风险偏高，领先方未必能平稳控场。",
+          "裁判历史样本下主队胜率更高（主45% / 客32%），仅作为剧本倾向，不视为因果优势。"
+        ],
+        "status": "Nowscore赛前背景已核验",
+        "sources": [
+          "https://live.nowscore.com/info/coach/2910830.htm?l=1",
+          "https://live.nowscore.com/info/referee/2910830.htm?l=1",
+          "https://live.nowscore.com/panlu/2910830.html"
+        ]
+      }
+    },
+    "sources": [
+      "https://www.espn.com/soccer/match/_/gameId/401841174"
+    ],
+    "recent_form": {
+      "home_overall": {
+        "matches": 5,
+        "wins": 3,
+        "draws": 1,
+        "losses": 1,
+        "goals_for": 8,
+        "goals_against": 4,
+        "sample_start": "2026-05-24",
+        "sample_end": "2026-07-26",
+        "source": "ESPN lastFiveGames"
+      },
+      "home_home": {
+        "matches": 3,
+        "wins": 2,
+        "draws": 0,
+        "losses": 1,
+        "goals_for": 4,
+        "goals_against": 2,
+        "sample_start": "2026-05-24",
+        "sample_end": "2026-07-23",
+        "source": "ESPN lastFiveGames"
+      },
+      "away_overall": {
+        "matches": 5,
+        "wins": 4,
+        "draws": 0,
+        "losses": 1,
+        "goals_for": 7,
+        "goals_against": 3,
+        "sample_start": "2026-05-24",
+        "sample_end": "2026-07-25",
+        "source": "ESPN lastFiveGames"
+      },
+      "away_away": {
+        "matches": 3,
+        "wins": 2,
+        "draws": 0,
+        "losses": 1,
+        "goals_for": 4,
+        "goals_against": 3,
+        "sample_start": "2026-05-24",
+        "sample_end": "2026-07-23",
+        "source": "ESPN lastFiveGames"
+      }
+    },
+    "form_source": "ESPN近5场赛事样本（含可获得的同赛事历史，非完整联赛近况）",
+    "checked_at": "2026-07-30T20:31:18+00:00"
+  },
+  "evidence_chain": [
+    {
+      "title": "足球维度",
+      "items": [
+        "科林蒂安近10个主场7胜1平2负，巴拉纳竞技近10个客场2胜1平7负",
+        "近期主客场攻防推导λ：科林蒂安1.30，巴拉纳竞技0.77",
+        "科林蒂安更可能掌握主动，但巴拉纳竞技仍有足够进球期望制造反击或定位球威胁；总进球中枢偏低；上半场试探和低比分停留时间可能较长；裁判剧本：紮諾維利在131场公开样本中场均双方合计黄牌约5.00、红牌约0.35，比赛中断与红牌尾部风险偏高，领先方未必能平稳控场；裁判历史样本下主队胜率更高（主45% / 客32%），仅作为剧本倾向，不视为因果优势。"
+      ]
+    },
+    {
+      "title": "教练、裁判与历史盘路",
+      "items": [
+        "裁判：紮諾維利；公开执法样本 131 场。",
+        "Nowscore盘路历史已读取 60 场，仅作风格与盘口复核，不直接改写概率。",
+        "裁判剧本：紮諾維利在131场公开样本中场均双方合计黄牌约5.00、红牌约0.35，比赛中断与红牌尾部风险偏高，领先方未必能平稳控场。",
+        "裁判历史样本下主队胜率更高（主45% / 客32%），仅作为剧本倾向，不视为因果优势。",
+        "这些信息用于解释比赛脚本与风险点；在完成历史校准前，不直接机械增减胜平负概率。"
+      ]
+    },
+    {
+      "title": "市场维度",
+      "items": [
+        "去水共识：主胜47.7%、平局30.2%、客胜22.1%",
+        "大小球中轴：2.0；市场占40%校准权重，不替代模型。",
+        "模型对主胜的判断比多公司市场高1.0%，需要用阵容与临盘验证这部分分歧"
+      ]
+    },
+    {
+      "title": "执行维度",
+      "items": [
+        "每个玩法分别展示当前价、模型概率、EV与最低可接受赔率；低于门槛一律不过线。",
+        "执行价额外要求8%安全边际；模型包含市场校准，因此正EV只是价格复核信号。",
+        "唯一比分1-0只是单个比分格的最高点；胜平负主线主胜是多个比分格合计，二者不要求同方向。"
+      ]
+    },
+    {
+      "title": "模型与临场核验",
+      "items": [
+        "公开事实核验状态：Nowscore赛前背景已核验。",
+        "确认首发、关键伤停、天气或盘口换线与假设冲突时，必须重算而非沿用旧报告。"
+      ]
+    }
+  ],
+  "betting": {
+    "candidates": [],
+    "state": "空仓｜未锁单",
+    "execution_authorized": false,
+    "lock_state_changed": false,
+    "bankroll_state_changed": false,
+    "price_audit": [
+      {
+        "market": "SPF主胜",
+        "model_probability": 0.487308,
+        "conservative_probability": 0.412308,
+        "minimum_acceptable_decimal_odds": 2.619,
+        "odds": null,
+        "ev": null,
+        "audit_role": "模型价格门槛，不是投注指令"
+      },
+      {
+        "market": "SPF平局",
+        "model_probability": 0.290934,
+        "conservative_probability": 0.215934,
+        "minimum_acceptable_decimal_odds": 5.002,
+        "odds": null,
+        "ev": null,
+        "audit_role": "模型价格门槛，不是投注指令"
+      },
+      {
+        "market": "SPF客胜",
+        "model_probability": 0.221759,
+        "conservative_probability": 0.146759,
+        "minimum_acceptable_decimal_odds": 7.359,
+        "odds": null,
+        "ev": null,
+        "audit_role": "模型价格门槛，不是投注指令"
+      },
+      {
+        "market": "澳门 大2",
+        "model_probability": 0.334149,
+        "push_probability": 0.270564,
+        "odds": 1.92,
+        "ev": -0.08787,
+        "minimum_acceptable_decimal_odds": 2.358,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "澳门 小2",
+        "model_probability": 0.395287,
+        "push_probability": 0.270564,
+        "odds": 1.8,
+        "ev": -0.017919,
+        "minimum_acceptable_decimal_odds": 1.993,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "皇冠 大2",
+        "model_probability": 0.334149,
+        "push_probability": 0.270564,
+        "odds": 2.07,
+        "ev": -0.037748,
+        "minimum_acceptable_decimal_odds": 2.358,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "皇冠 小2",
+        "model_probability": 0.395287,
+        "push_probability": 0.270564,
+        "odds": 1.8,
+        "ev": -0.017919,
+        "minimum_acceptable_decimal_odds": 1.993,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "立博 大2.5",
+        "model_probability": 0.334149,
+        "push_probability": 0.0,
+        "odds": 2.6,
+        "ev": -0.131213,
+        "minimum_acceptable_decimal_odds": 3.232,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "立博 小2.5",
+        "model_probability": 0.665851,
+        "push_probability": 0.0,
+        "odds": 1.44,
+        "ev": -0.041175,
+        "minimum_acceptable_decimal_odds": 1.622,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "bet365 大2",
+        "model_probability": 0.334149,
+        "push_probability": 0.270564,
+        "odds": 2.05,
+        "ev": -0.044431,
+        "minimum_acceptable_decimal_odds": 2.358,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "bet365 小2",
+        "model_probability": 0.395287,
+        "push_probability": 0.270564,
+        "odds": 1.8,
+        "ev": -0.017919,
+        "minimum_acceptable_decimal_odds": 1.993,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "威廉希尔 大1.5",
+        "model_probability": 0.604713,
+        "push_probability": 0.0,
+        "odds": 1.53,
+        "ev": -0.07479,
+        "minimum_acceptable_decimal_odds": 1.786,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "威廉希尔 小1.5",
+        "model_probability": 0.395287,
+        "push_probability": 0.0,
+        "odds": 2.4,
+        "ev": -0.051311,
+        "minimum_acceptable_decimal_odds": 2.732,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "易胜博 大2",
+        "model_probability": 0.334149,
+        "push_probability": 0.270564,
+        "odds": 2.03,
+        "ev": -0.051114,
+        "minimum_acceptable_decimal_odds": 2.358,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "易胜博 小2",
+        "model_probability": 0.395287,
+        "push_probability": 0.270564,
+        "odds": 1.82,
+        "ev": -0.010013,
+        "minimum_acceptable_decimal_odds": 1.993,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "澳门 主-0.5",
+        "model_probability": 0.487308,
+        "push_probability": 0.0,
+        "odds": 1.96,
+        "ev": -0.044877,
+        "minimum_acceptable_decimal_odds": 2.216,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "澳门 客+0.5",
+        "model_probability": 0.512692,
+        "push_probability": 0.0,
+        "odds": 1.82,
+        "ev": -0.0669,
+        "minimum_acceptable_decimal_odds": 2.107,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "皇冠 主-0.5",
+        "model_probability": 0.487308,
+        "push_probability": 0.0,
+        "odds": 1.99,
+        "ev": -0.030258,
+        "minimum_acceptable_decimal_odds": 2.216,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "皇冠 客+0.5",
+        "model_probability": 0.512692,
+        "push_probability": 0.0,
+        "odds": 1.89,
+        "ev": -0.031011,
+        "minimum_acceptable_decimal_odds": 2.107,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "bet365 主-0.5",
+        "model_probability": 0.487308,
+        "push_probability": 0.0,
+        "odds": 1.98,
+        "ev": -0.035131,
+        "minimum_acceptable_decimal_odds": 2.216,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "bet365 客+0.5",
+        "model_probability": 0.512692,
+        "push_probability": 0.0,
+        "odds": 1.88,
+        "ev": -0.036138,
+        "minimum_acceptable_decimal_odds": 2.107,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "威廉希尔 主-0.5",
+        "model_probability": 0.487308,
+        "push_probability": 0.0,
+        "odds": 1.85,
+        "ev": -0.098481,
+        "minimum_acceptable_decimal_odds": 2.216,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "威廉希尔 客+0.5",
+        "model_probability": 0.512692,
+        "push_probability": 0.0,
+        "odds": 1.85,
+        "ev": -0.051519,
+        "minimum_acceptable_decimal_odds": 2.107,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "易胜博 主-0.5",
+        "model_probability": 0.487308,
+        "push_probability": 0.0,
+        "odds": 1.96,
+        "ev": -0.044877,
+        "minimum_acceptable_decimal_odds": 2.216,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "易胜博 客+0.5",
+        "model_probability": 0.512692,
+        "push_probability": 0.0,
+        "odds": 1.88,
+        "ev": -0.036138,
+        "minimum_acceptable_decimal_odds": 2.107,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "伟德 主-0.5",
+        "model_probability": 0.487308,
+        "push_probability": 0.0,
+        "odds": 1.96,
+        "ev": -0.044877,
+        "minimum_acceptable_decimal_odds": 2.216,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "伟德 客+0.5",
+        "model_probability": 0.512692,
+        "push_probability": 0.0,
+        "odds": 1.87,
+        "ev": -0.041265,
+        "minimum_acceptable_decimal_odds": 2.107,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      }
+    ]
+  },
+  "automation": {
+    "provider": "fixed-python-core",
+    "generated_at": "2026-07-30T20:31:19+00:00",
+    "owner_authorized_request": true,
+    "llm_used": false,
+    "market_refresh": {
+      "stage": "T-2H",
+      "scheduled_at": "2026-07-31T04:30:00+08:00",
+      "captured_at": "2026-07-31T04:31:11.648953+08:00",
+      "target_minutes_before": 120,
+      "actual_minutes_before": 118.81,
+      "lateness_minutes": 1.19,
+      "exact": false,
+      "capture_quality": "on_time",
+      "model_recalculated": true,
+      "execution_authorized": false,
+      "lock_state_changed": false,
+      "bankroll_state_changed": false
+    }
+  },
+  "market": {
+    "official_spf": null,
+    "official_rqspf": null,
+    "official_market_baseline": null,
+    "interpretation": {
+      "money_flow": "没有可核验的交易所成交量；当前只能确认报价形成的两侧未拉开价格压力，不能称为真实资金流。",
+      "bookmaker_behaviour": "Sharp层方向不足；目的推断：当前更像分散调价和平衡风险，尚没有足够证据说明机构在主动表达单边方向。可信度：低。",
+      "market_pressure": "0家公司、0条轨迹：主胜降赔0家/升赔0家，亚洲盘主队加强0家/减弱0家，大小球升盘0家/降盘0家。综合价格压力偏向两侧未拉开。",
+      "model_impact": "市场方向尚未拉开，不改变模型主线，只保留观察。",
+      "purpose": "当前更像分散调价和平衡风险，尚没有足够证据说明机构在主动表达单边方向。",
+      "confidence": "低",
+      "late_market_weight": "normal",
+      "actual_volume_available": false
+    }
+  },
+  "decision_evolution": {
+    "latest": {
+      "kind": "stable",
+      "headline": "核心判断维持不变",
+      "summary": "新盘口和球队信息尚不足以越过决策边界；继续维持胜平负：主胜（模型48.7%）与比分1-0。市场方向尚未拉开，不改变模型主线，只保留观察。",
+      "changed": false,
+      "probability_delta": {
+        "home": 0.0,
+        "draw": 0.0,
+        "away": 0.0
+      }
+    },
+    "history": [
+      {
+        "captured_at": "2026-07-30T07:18:20.043489+00:00",
+        "headline": "初始判断：主胜；首推比分1-0",
+        "summary": "模型建立初始比赛剧本，主维度为胜平负：主胜（模型48.7%）。0家公司、0条轨迹：主胜降赔0家/升赔0家，亚洲盘主队加强0家/减弱0家，大小球升盘0家/降盘0家。综合价格压力偏向两侧未拉开。；没有可核验的交易所成交量；当前只能确认报价形成的两侧未拉开价格压力，不能称为真实资金流。；Sharp层方向不足；目的推断：当前更像分散调价和平衡风险，尚没有足够证据说明机构在主动表达单边方向。可信度：低。；市场方向尚未拉开，不改变模型主线，只保留观察。",
+        "changed": true,
+        "score": "1-0",
+        "score_reasoning": "正式唯一比分采用比分矩阵峰值（单格概率16.6%；符合主胜主剧本、符合双方进球倾向、与多公司去水方向一致、净胜球接近亚洲让球中枢-0.5）。情景选择器建议1-0，当前仅作影子候选，待样本外验证后再决定是否覆盖。",
+        "score_selection_trace": {
+          "method": "matrix_map_with_scenario_challenger_v1",
+          "selected_score": "1-0",
+          "selected_probability": 0.166296,
+          "mathematical_first_score": "1-0",
+          "scenario_selected_score": "1-0",
+          "scenario_selected_probability": 0.166296,
+          "model_outcome_leader": "home",
+          "market_outcome_leader": "home",
+          "total_goal_centre": 2.0,
+          "asian_handicap_median": -0.5,
+          "btts_yes": false,
+          "confidence": "高",
+          "utility_gap_to_second": 0.14544,
+          "main_risk": "裁判公开样本的牌数与红牌率偏高，比分右尾和比赛状态突变风险高于基础泊松假设",
+          "selected_factors": [
+            "符合主胜主剧本",
+            "符合双方进球倾向",
+            "与多公司去水方向一致",
+            "净胜球接近亚洲让球中枢-0.5"
+          ],
+          "candidates": [
+            {
+              "rank": 1,
+              "score": "1-0",
+              "matrix_probability": 0.166296,
+              "scenario_score": 1.011429,
+              "factor_contributions": {
+                "比分矩阵": 0.55,
+                "模型方向": 0.18,
+                "总进球中枢": 0.06,
+                "双方进球": 0.08,
+                "市场方向": 0.1,
+                "亚洲让球": 0.0714,
+                "比赛剧本": -0.03
+              },
+              "decision": "challenger_selected",
+              "rejection_reason": null
+            },
+            {
+              "rank": 2,
+              "score": "2-0",
+              "matrix_probability": 0.10634,
+              "scenario_score": 0.865988,
+              "factor_contributions": {
+                "比分矩阵": 0.3517,
+                "模型方向": 0.18,
+                "总进球中枢": 0.14,
+                "双方进球": 0.08,
+                "市场方向": 0.1,
+                "亚洲让球": 0.0143,
+                "比赛剧本": 0.0
+              },
+              "decision": "rejected",
+              "rejection_reason": "综合情景分低于候选，不按相邻比分算命中"
+            },
+            {
+              "rank": 3,
+              "score": "2-1",
+              "matrix_probability": 0.080933,
+              "scenario_score": 0.679103,
+              "factor_contributions": {
+                "比分矩阵": 0.2677,
+                "模型方向": 0.18,
+                "总进球中枢": 0.06,
+                "双方进球": -0.04,
+                "市场方向": 0.1,
+                "亚洲让球": 0.0714,
+                "比赛剧本": 0.04
+              },
+              "decision": "rejected",
+              "rejection_reason": "综合情景分低于候选，不按相邻比分算命中"
+            },
+            {
+              "rank": 4,
+              "score": "1-1",
+              "matrix_probability": 0.126565,
+              "scenario_score": 0.420023,
+              "factor_contributions": {
+                "比分矩阵": 0.4186,
+                "模型方向": -0.12,
+                "总进球中枢": 0.14,
+                "双方进球": -0.04,
+                "市场方向": -0.05,
+                "亚洲让球": 0.0714,
+                "比赛剧本": 0.0
+              },
+              "decision": "rejected",
+              "rejection_reason": "综合情景分低于候选，不按相邻比分算命中"
+            },
+            {
+              "rank": 5,
+              "score": "0-0",
+              "matrix_probability": 0.130029,
+              "scenario_score": 0.381479,
+              "factor_contributions": {
+                "比分矩阵": 0.4301,
+                "模型方向": -0.12,
+                "总进球中枢": 0.0,
+                "双方进球": 0.08,
+                "市场方向": -0.05,
+                "亚洲让球": 0.0714,
+                "比赛剧本": -0.03
+              },
+              "decision": "rejected",
+              "rejection_reason": "综合情景分低于候选，不按相邻比分算命中"
+            },
+            {
+              "rank": 6,
+              "score": "0-1",
+              "matrix_probability": 0.098962,
+              "scenario_score": 0.281589,
+              "factor_contributions": {
+                "比分矩阵": 0.3273,
+                "模型方向": -0.12,
+                "总进球中枢": 0.06,
+                "双方进球": 0.08,
+                "市场方向": -0.05,
+                "亚洲让球": 0.0143,
+                "比赛剧本": -0.03
+              },
+              "decision": "rejected",
+              "rejection_reason": "综合情景分低于候选，不按相邻比分算命中"
+            }
+          ],
+          "rule": "比分预测与比分投注分离；只有取得可成交赔率且EV通过，才生成模拟注单。"
+        }
+      },
+      {
+        "captured_at": "2026-07-31T04:31:11.648953+08:00",
+        "headline": "核心判断维持不变",
+        "summary": "新盘口和球队信息尚不足以越过决策边界；继续维持胜平负：主胜（模型48.7%）与比分1-0。市场方向尚未拉开，不改变模型主线，只保留观察。",
+        "changed": false,
+        "score": "1-0",
+        "score_reasoning": "正式唯一比分采用比分矩阵峰值（单格概率16.6%；符合主胜主剧本、符合双方进球倾向、与多公司去水方向一致、净胜球接近亚洲让球中枢-0.5）。情景选择器建议1-0，当前仅作影子候选，待样本外验证后再决定是否覆盖。",
+        "score_selection_trace": {
+          "method": "matrix_map_with_scenario_challenger_v1",
+          "selected_score": "1-0",
+          "selected_probability": 0.166296,
+          "mathematical_first_score": "1-0",
+          "scenario_selected_score": "1-0",
+          "scenario_selected_probability": 0.166296,
+          "model_outcome_leader": "home",
+          "market_outcome_leader": "home",
+          "total_goal_centre": 2.0,
+          "asian_handicap_median": -0.5,
+          "btts_yes": false,
+          "confidence": "高",
+          "utility_gap_to_second": 0.14544,
+          "main_risk": "裁判公开样本的牌数与红牌率偏高，比分右尾和比赛状态突变风险高于基础泊松假设",
+          "selected_factors": [
+            "符合主胜主剧本",
+            "符合双方进球倾向",
+            "与多公司去水方向一致",
+            "净胜球接近亚洲让球中枢-0.5"
+          ],
+          "candidates": [
+            {
+              "rank": 1,
+              "score": "1-0",
+              "matrix_probability": 0.166296,
+              "scenario_score": 1.011429,
+              "factor_contributions": {
+                "比分矩阵": 0.55,
+                "模型方向": 0.18,
+                "总进球中枢": 0.06,
+                "双方进球": 0.08,
+                "市场方向": 0.1,
+                "亚洲让球": 0.0714,
+                "比赛剧本": -0.03
+              },
+              "decision": "challenger_selected",
+              "rejection_reason": null
+            },
+            {
+              "rank": 2,
+              "score": "2-0",
+              "matrix_probability": 0.10634,
+              "scenario_score": 0.865988,
+              "factor_contributions": {
+                "比分矩阵": 0.3517,
+                "模型方向": 0.18,
+                "总进球中枢": 0.14,
+                "双方进球": 0.08,
+                "市场方向": 0.1,
+                "亚洲让球": 0.0143,
+                "比赛剧本": 0.0
+              },
+              "decision": "rejected",
+              "rejection_reason": "综合情景分低于候选，不按相邻比分算命中"
+            },
+            {
+              "rank": 3,
+              "score": "2-1",
+              "matrix_probability": 0.080933,
+              "scenario_score": 0.679103,
+              "factor_contributions": {
+                "比分矩阵": 0.2677,
+                "模型方向": 0.18,
+                "总进球中枢": 0.06,
+                "双方进球": -0.04,
+                "市场方向": 0.1,
+                "亚洲让球": 0.0714,
+                "比赛剧本": 0.04
+              },
+              "decision": "rejected",
+              "rejection_reason": "综合情景分低于候选，不按相邻比分算命中"
+            },
+            {
+              "rank": 4,
+              "score": "1-1",
+              "matrix_probability": 0.126565,
+              "scenario_score": 0.420023,
+              "factor_contributions": {
+                "比分矩阵": 0.4186,
+                "模型方向": -0.12,
+                "总进球中枢": 0.14,
+                "双方进球": -0.04,
+                "市场方向": -0.05,
+                "亚洲让球": 0.0714,
+                "比赛剧本": 0.0
+              },
+              "decision": "rejected",
+              "rejection_reason": "综合情景分低于候选，不按相邻比分算命中"
+            },
+            {
+              "rank": 5,
+              "score": "0-0",
+              "matrix_probability": 0.130029,
+              "scenario_score": 0.381479,
+              "factor_contributions": {
+                "比分矩阵": 0.4301,
+                "模型方向": -0.12,
+                "总进球中枢": 0.0,
+                "双方进球": 0.08,
+                "市场方向": -0.05,
+                "亚洲让球": 0.0714,
+                "比赛剧本": -0.03
+              },
+              "decision": "rejected",
+              "rejection_reason": "综合情景分低于候选，不按相邻比分算命中"
+            },
+            {
+              "rank": 6,
+              "score": "0-1",
+              "matrix_probability": 0.098962,
+              "scenario_score": 0.281589,
+              "factor_contributions": {
+                "比分矩阵": 0.3273,
+                "模型方向": -0.12,
+                "总进球中枢": 0.06,
+                "双方进球": 0.08,
+                "市场方向": -0.05,
+                "亚洲让球": 0.0143,
+                "比赛剧本": -0.03
+              },
+              "decision": "rejected",
+              "rejection_reason": "综合情景分低于候选，不按相邻比分算命中"
+            }
+          ],
+          "rule": "比分预测与比分投注分离；只有取得可成交赔率且EV通过，才生成模拟注单。"
+        }
+      }
+    ],
+    "internal_checkpoints_hidden": true
+  }
+}
