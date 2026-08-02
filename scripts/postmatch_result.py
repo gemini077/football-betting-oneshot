@@ -78,11 +78,10 @@ def resolve_nowscore_id(schedule: dict[str, Any]) -> int | None:
     # A finished match may already have moved out of the workspace before the
     # verifier runs.  The successful Sporttery schedule snapshots retain the
     # verified Nowscore binding, so use them as the next authoritative source.
-    schedule_files = sorted(
-        (BASE_DIR / "data" / "schedule_updates").glob("**/*_sporttery_*.json"),
-        key=lambda path: path.stat().st_mtime,
-        reverse=True,
-    )
+    schedule_files = []
+    for root in (BASE_DIR / "data" / "schedule_updates", BASE_DIR / "data" / "fetch_runs"):
+        schedule_files.extend(root.glob("**/*_sporttery_*.json"))
+    schedule_files = sorted(schedule_files, key=lambda path: path.stat().st_mtime, reverse=True)
     for schedule_path in schedule_files:
         try:
             schedule_payload = load_json(schedule_path)
@@ -110,6 +109,17 @@ def resolve_nowscore_id(schedule: dict[str, Any]) -> int | None:
         try:
             report = load_json(source_report)
             report_match = report.get("match") or {}
+            report_shuju_id = str(
+                report_match.get("shuju_id")
+                or report_match.get("nowscore_id")
+                or report.get("shuju_id")
+                or report.get("nowscore_id")
+                or ""
+            ).strip()
+            if report_shuju_id.isdigit():
+                schedule["nowscore_id"] = int(report_shuju_id)
+                schedule["nowscore_identity_source"] = "frozen_report"
+                return schedule["nowscore_id"]
             match_id = str(report_match.get("match_id") or "").strip()
             if match_id:
                 match_filters.add(match_id)

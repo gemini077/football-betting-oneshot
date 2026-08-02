@@ -190,6 +190,15 @@ def render_review_page(signal: dict[str, Any], timeline: dict[str, Any], root: d
     score = signal.get("实际90分钟比分")
     classification = signal.get("红黑与模型逻辑分类")
     settlement = signal.get("settlement") if isinstance(signal.get("settlement"), dict) else {}
+    dimension_labels = {
+        "1x2": "胜平负", "double_chance": "双重机会", "btts": "双方进球",
+        "total": "大小球", "asian_handicap": "亚洲让球", "exact_total": "精确总进球", "exact_score": "精确比分",
+    }
+    dimension_rows = [
+        (f"玩法｜{dimension_labels.get(str(family), family)}", result.get("label"), result.get("hit"))
+        for family, result in (settlement.get("by_dimension") or {}).items()
+        if isinstance(result, dict)
+    ]
 
     audit_rows = [
         ("模型胜平负首位", (settlement.get("model_1x2") or {}).get("pick"), (settlement.get("model_1x2") or {}).get("hit")),
@@ -200,6 +209,7 @@ def render_review_page(signal: dict[str, Any], timeline: dict[str, Any], root: d
         ("双方进球", signal.get("赛前BTTS判断"), (settlement.get("btts") or {}).get("hit") if settlement else "按复盘摘要核验"),
         ("预期总进球", (settlement.get("expected_goals") or {}).get("pick"), "残差 " + text((signal.get("model_diagnostics") or {}).get("total_goals_residual"))),
     ]
+    audit_rows.extend(dimension_rows)
     audit_html = "".join(
         f'<tr><td>{esc(market)}</td><td>{esc(pick)}</td><td><span class="pill {badge_class(settlement_label(result))}">{esc(settlement_label(result))}</span></td></tr>'
         for market, pick, result in audit_rows
@@ -396,6 +406,24 @@ def render_html(workbook_path: Path, runtime: dict[str, Any], queue: dict[str, A
                 report_links: dict[str, str] | None = None) -> str:
     locks, signals, timeline, roots = review_rows or review_data(workbook_path)
     kpis = calculate_kpis(locks, signals, runtime)
+    calibration = load_json(BASE_DIR / "data" / "postmatch_reviews" / "calibration_status.json", {}) or {}
+    dimension_metrics = ((calibration.get("metrics") or {}).get("by_dimension") or {})
+    dimension_rows = [
+        {
+            "玩法": family,
+            "样本": metric.get("samples"),
+            "命中": metric.get("wins"),
+            "半赢": metric.get("half_wins"),
+            "走盘": metric.get("pushes"),
+            "半输": metric.get("half_losses"),
+            "输": metric.get("losses"),
+            "命中率": metric.get("hit_rate"),
+            "有效命中率": metric.get("effective_hit_rate"),
+            "ROI": metric.get("roi"),
+        }
+        for family, metric in dimension_metrics.items()
+        if isinstance(metric, dict)
+    ]
     display_map = {str(row.get("MatchID") or ""): str(row.get("display_id") or "") for row in signals}
     def public_value(value: Any) -> Any:
         rendered = text(value)
@@ -410,6 +438,7 @@ def render_html(workbook_path: Path, runtime: dict[str, Any], queue: dict[str, A
     hit_rate = "—" if kpis["hit_rate"] is None else f'{kpis["hit_rate"]:.1f}%'
     roi = "—" if kpis["roi"] is None else f'{kpis["roi"]:.1f}%'
     lock_table = data_table(locks, ["注单ID", "比赛ID与对阵", "主维度玩法", "投注方向", "下注赔率", "下注金额", "赛果", "注单状态", "实际回收金额", "模型逻辑分类", "备注"], "locks-table")
+    dimension_table = data_table(dimension_rows, ["玩法", "样本", "命中", "半赢", "走盘", "半输", "输", "命中率", "有效命中率", "ROI"], "dimension-table") if dimension_rows else '<div class="empty-cell">暂无分玩法结算样本</div>'
     timeline_table = data_table(timeline_display, ["记录ID", "比赛ID与对阵", "开赛倒计时", "锁单窗口合规性", "初盘定位", "终盘定位（临场15min）", "终盘对比初盘变化", "最终赛果验证", "数据完整度"], "timeline-table")
     root_table = data_table(roots_display, ["比赛场次", "决策节点审计", "反事实推演", "赛前可识别性", "是否修改模型", "具体修改建议", "收敛结论", "最大错点类型", "生效状态", "优先级"], "root-table")
     source_name = esc(workbook_path.name)
@@ -426,8 +455,9 @@ def render_html(workbook_path: Path, runtime: dict[str, Any], queue: dict[str, A
 </style></head><body><main class="shell">
 <header class="hero"><div><div class="eyebrow">FOOTBALL BETTING ONESHOT · {model_version}</div><h1>赛后复盘工作台</h1><p>按开赛时间由近到远｜90分钟赛果口径｜赛前冻结、赛后归因</p></div><div class="sync"><strong>● 自动复盘已接入</strong><span>待核验 {pending} 场 · 等待结束 {waiting} 场</span><br><small>页面生成：{updated}</small></div></header>
 <section class="kpis"><div class="kpi"><span>有效复盘</span><b>{kpis['reviews']}</b></div><div class="kpi"><span>已结注单</span><b>{kpis['locked']}</b></div><div class="kpi"><span>注单命中率</span><b>{hit_rate}</b></div><div class="kpi"><span>累计投注</span><b>¥{kpis['stake']:.2f}</b></div><div class="kpi"><span>净盈亏</span><b>¥{kpis['profit']:.2f}</b></div><div class="kpi"><span>ROI</span><b>{roi}</b></div><div class="kpi"><span>当前余额</span><b>¥{kpis['balance']:.2f}</b></div></section>
-<nav class="toolbar"><button class="tab active" data-view="signals">比赛复盘</button><button class="tab" data-view="locks">注单结算</button><button class="tab" data-view="timeline">盘口时间轴</button><button class="tab" data-view="roots">根因与修正</button><input id="search" placeholder="搜索球队、记录ID、玩法或错点…"><select id="hit-filter" class="filter"><option value="">全部命中状态</option><option>是</option><option>否</option></select></nav>
+<nav class="toolbar"><button class="tab active" data-view="signals">比赛复盘</button><button class="tab" data-view="dimensions">分玩法命中率</button><button class="tab" data-view="locks">注单结算</button><button class="tab" data-view="timeline">盘口时间轴</button><button class="tab" data-view="roots">根因与修正</button><input id="search" placeholder="搜索球队、记录ID、玩法或错点…"><select id="hit-filter" class="filter"><option value="">全部命中状态</option><option>是</option><option>否</option></select></nav>
 <section id="signals" class="view active"><div class="section-head"><h2>赛前信号与赛果归因</h2><span>{len(signals)} 场</span></div><div class="match-grid">{signal_cards(signals, report_links)}</div></section>
+<section id="dimensions" class="view"><div class="section-head"><h2>分玩法命中率（独立统计）</h2><span>{len(dimension_rows)} 个玩法</span></div>{dimension_table}</section>
 <section id="locks" class="view"><div class="section-head"><h2>锁单与结算明细</h2><span>{len(locks)} 单</span></div>{lock_table}</section>
 <section id="timeline" class="view"><div class="section-head"><h2>时间轴与盘口有效性</h2><span>{len(timeline)} 条</span></div>{timeline_table}</section>
 <section id="roots" class="view"><div class="section-head"><h2>根因决策树与修正池</h2><span>{len(roots)} 条</span></div>{root_table}</section>

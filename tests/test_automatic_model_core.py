@@ -24,6 +24,13 @@ def test_deterministic_model_generates_complete_probability_matrix():
     assert len(model["score_probabilities"]) == 10
     assert model["score_probabilities"][0]["fair_odds"] > 1
     assert any(row["market"] == "SPF主胜" for row in result["price_audit"])
+    assert {"1x2", "double_chance", "btts", "total", "exact_total", "exact_score"}.issubset(
+        set(model["dimension_predictions"])
+    )
+    assert result["decisions"]["primary_selection_rule"]["abstain_allowed"] is True
+    assert result["decisions"]["primary_contract"]["family"] in {
+        "1x2", "double_chance", "btts", "total", "asian_handicap"
+    }
     trace = result["decisions"]["score_selection_trace"]
     assert trace["selected_score"] == result["decisions"]["unique_score"]
     assert trace["method"] == "matrix_map_with_scenario_challenger_v1"

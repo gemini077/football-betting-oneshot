@@ -188,19 +188,23 @@ def latest_schedule(target_date: str) -> tuple[Path | None, dict]:
     # 重新分析一场比赛后，工作台会暂时只剩该场及其报告附带场次。
     schedule_candidates = list((DATA / "schedule_updates").glob(f"**/*{target_date}*.json"))
     fetch_candidates = list((DATA / "fetch_runs").glob(f"**/*sporttery_{target_date}.json"))
-    candidates = schedule_candidates or fetch_candidates
-    rows: list[tuple[int, float, Path, dict]] = []
+    candidates = schedule_candidates + fetch_candidates
+    rows: list[tuple[int, int, float, Path, dict]] = []
     for path in candidates:
         payload = load_json(path, {})
         if payload.get("source") not in {"sporttery.cn", "trade.500.com"} or not payload.get("success"):
             continue
-        rows.append((len(payload.get("matches") or []), path.stat().st_mtime, path, payload))
+        matches = payload.get("matches") or []
+        if not matches:
+            continue
+        unfiltered = 0 if payload.get("match_filter") or payload.get("analysis_input_only") else 1
+        rows.append((len(matches), unfiltered, path.stat().st_mtime, path, payload))
     if not rows:
         return None, {"matches": [], "date": target_date, "success": False}
     # The newest successful Sporttery response is the source of truth.  An old
     # file with more rows must not keep the workbench stuck on yesterday's
     # schedule after the official feed has changed.
-    _, _, path, payload = max(rows, key=lambda row: (row[1], row[0]))
+    _, _, _, path, payload = max(rows, key=lambda row: (row[0], row[1], row[2]))
     return path, payload
 
 
@@ -830,7 +834,12 @@ def build(
             if kickoff_at is not None
             else match.get("business_date") not in fallback_business_dates
         )
-        if outside_recent_window or key in schedule_keys:
+        # A frozen report for a future kickoff is still a pre-match artifact,
+        # never a completed row.  The official schedule loop owns its upcoming
+        # projection; letting it enter this fallback would displace real recent
+        # reviews when the completed list is capped.
+        future_report = kickoff_at is not None and kickoff_at > generated
+        if outside_recent_window or future_report or key in schedule_keys:
             continue
         if any(
             str(match.get("match_num") or "") == str(item.get("match_num") or "")
@@ -877,6 +886,9 @@ def build(
         home, away = match.get("home"), match.get("away")
         if not home or not away or not (review.get("result") or {}).get("score_90m"):
             continue
+        review_kickoff = parse_kickoff_local(match.get("kickoff_local"))
+        if review_kickoff is not None and review_kickoff > generated:
+            continue
         review_id = str(
             review.get("MatchID")
             or match.get("canonical_match_id")
@@ -897,6 +909,9 @@ def build(
         pair = re.split(r"\s+vs\s+", name, maxsplit=1, flags=re.IGNORECASE)
         home, away = (pair + [""])[:2]
         review = find_review(home, away, reviews)
+        review_kickoff = parse_kickoff_local(row.get("kickoff_local") or ((review or {}).get("match") or {}).get("kickoff_local"))
+        if review_kickoff is not None and review_kickoff > generated:
+            continue
         review_id = str((review or {}).get("MatchID") or f"review-{index}")
         if review_id in completed_ids:
             existing = next(item for item in completed if str(item.get("id")) == review_id)

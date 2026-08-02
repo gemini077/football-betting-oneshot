@@ -13,6 +13,7 @@ from statistics import mean, median
 from typing import Any
 
 from market_history import load_history
+from market_contracts import contract_profit, legacy_contract, settle_contract
 from postmatch_queue import BASE_DIR, SHANGHAI, load_json
 from match_identity import identity_aliases
 from postmatch_evidence import fetch_postmatch_evidence
@@ -568,6 +569,24 @@ def settle_real_bets(home: str, away: str, home_goals: int, away_goals: int) -> 
     return settled
 
 
+def _dimension_contracts(report: dict) -> dict[str, dict]:
+    model = report.get("model") or {}
+    raw = model.get("dimension_predictions") or {}
+    if isinstance(raw, dict):
+        return {str(key): value for key, value in raw.items() if isinstance(value, dict)}
+    return {}
+
+
+def _settle_dimension_contracts(report: dict, score: tuple[int, int]) -> dict[str, dict]:
+    settled: dict[str, dict] = {}
+    for family, contract in _dimension_contracts(report).items():
+        result = settle_contract(contract, score)
+        result["profit"] = contract_profit(contract, result.get("units"))
+        result["price_executable"] = bool(contract.get("price_executable"))
+        settled[family] = result
+    return settled
+
+
 def build_review(schedule: dict, report: dict, now: datetime) -> dict:
     actual = _score(schedule.get("result_90m"))
     if actual is None:
@@ -576,9 +595,18 @@ def build_review(schedule: dict, report: dict, now: datetime) -> dict:
     actual_score = f"{home_goals}-{away_goals}"
     actual_outcome = _actual_outcome(home_goals, away_goals)
     decisions = report.get("decisions") or {}
-    primary_pick, primary_actual, primary_hit, primary_market = _primary_settlement(
-        decisions.get("unique_primary_dimension"), home_goals, away_goals
-    )
+    primary_contract = decisions.get("primary_contract") or legacy_contract(decisions.get("unique_primary_dimension"))
+    primary_settlement = settle_contract(primary_contract, actual) if primary_contract else None
+    if primary_contract and primary_settlement:
+        primary_pick = primary_contract.get("label") or primary_contract.get("selection")
+        primary_actual = actual_outcome
+        primary_hit = primary_settlement.get("hit")
+        primary_market = str(primary_contract.get("family") or "unknown")
+    else:
+        primary_pick, primary_actual, primary_hit, primary_market = _primary_settlement(
+            decisions.get("unique_primary_dimension"), home_goals, away_goals
+        )
+    dimension_settlements = _settle_dimension_contracts(report, actual)
     score_pick = _score(decisions.get("unique_score"))
     btts_pick = _btts_pick(report)
     btts_actual = "是" if home_goals > 0 and away_goals > 0 else "否"
@@ -694,7 +722,11 @@ def build_review(schedule: dict, report: dict, now: datetime) -> dict:
                 "actual": primary_actual,
                 "hit": primary_hit,
                 "actual_probability": probability if primary_market == "胜平负" else None,
+                "contract": primary_contract,
+                "units": primary_settlement.get("units") if primary_settlement else None,
+                "profit": contract_profit(primary_contract, primary_settlement.get("units")) if primary_contract and primary_settlement else None,
             },
+            "by_dimension": dimension_settlements,
             "exact_score": {"pick": f"{score_pick[0]}-{score_pick[1]}" if score_pick else None, "actual": actual_score, "hit": score_hit, "rule": "仅精确比分命中"},
             "total_goals_mode": {"pick": total_pick, "actual": total_actual, "hit": total_hit},
             "btts": {"pick": btts_pick, "actual": btts_actual, "hit": btts_hit},
