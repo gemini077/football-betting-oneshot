@@ -55,6 +55,20 @@ def test_deterministic_model_refuses_to_invent_missing_form():
     assert build_automatic_model(context)["model"] is None
 
 
+def test_deterministic_model_handles_empty_market_baseline_without_crashing():
+    form = {
+        "home_overall": {"matches": 2, "goals_for": 2, "goals_against": 1},
+        "away_overall": {"matches": 2, "goals_for": 1, "goals_against": 2},
+        "home_home": {"matches": 1, "goals_for": 1, "goals_against": 0},
+        "away_away": {"matches": 1, "goals_for": 0, "goals_against": 1},
+    }
+    result = build_automatic_model({
+        "official_market_baseline": None,
+        "source_snapshots": {"500_deep": {"snapshots": [{"shuju": {"recent_form": form}, "ouzhi": {}}]}},
+    })
+    assert result["model"] is None
+
+
 def test_deterministic_model_labels_nowscore_form_as_primary():
     deep = {
         "source_provenance": {"form_primary": "nowscore_analysis"},
