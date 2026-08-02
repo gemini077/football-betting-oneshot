@@ -766,7 +766,7 @@ def build_automatic_model(context: dict) -> dict:
     away_general = _mean([_rate(away_overall, "goals_for"), _rate(home_overall, "goals_against")])
     home_form = _mean([home_venue, home_venue, home_general])
     away_form = _mean([away_venue, away_venue, away_general])
-    market_probabilities = _consensus_probabilities(deep) or context.get("official_market_baseline", {}).get("fair_probabilities")
+    market_probabilities = _consensus_probabilities(deep) or (context.get("official_market_baseline") or {}).get("fair_probabilities")
     market_total = _market_total(deep)
     market_handicap = _market_handicap(deep)
     if home_form is None or away_form is None or not market_probabilities:
