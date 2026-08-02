@@ -77,6 +77,40 @@ def _tags(payload: dict[str, Any]) -> list[str]:
     return list(dict.fromkeys(tags))
 
 
+def _dimension_metrics(rows: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    buckets: dict[str, list[dict[str, Any]]] = {}
+    for payload in rows:
+        dimensions = (payload.get("settlement") or {}).get("by_dimension") or {}
+        if not isinstance(dimensions, dict):
+            continue
+        for family, result in dimensions.items():
+            if isinstance(result, dict) and result.get("units") is not None:
+                buckets.setdefault(str(family), []).append(result)
+    summary: dict[str, dict[str, Any]] = {}
+    for family, values in buckets.items():
+        units = [float(value.get("units")) for value in values if value.get("units") is not None]
+        profits = [float(value.get("profit")) for value in values if value.get("profit") is not None]
+        wins = sum(value > 0 for value in units)
+        half_wins = sum(value == 0.5 for value in units)
+        pushes = sum(value == 0 for value in units)
+        half_losses = sum(value == -0.5 for value in units)
+        losses = sum(value < 0 for value in units)
+        settled = len(units)
+        effective = wins + 0.5 * half_wins
+        summary[family] = {
+            "samples": len(values),
+            "wins": wins,
+            "half_wins": half_wins,
+            "pushes": pushes,
+            "half_losses": half_losses,
+            "losses": losses,
+            "hit_rate": round(wins / settled, 6) if settled else None,
+            "effective_hit_rate": round(effective / settled, 6) if settled else None,
+            "roi": round(sum(profits) / settled, 6) if profits and settled else None,
+        }
+    return summary
+
+
 def _window_metrics(rows: list[dict[str, Any]]) -> dict[str, Any]:
     result = {}
     for label, key in (("primary", "primary"), ("model_1x2", "model_1x2"),
@@ -100,6 +134,7 @@ def _window_metrics(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "top10": round(sum(rank <= 10 for rank in ranks) / len(ranks), 6) if ranks else None,
         "mean_actual_rank": round(sum(ranks) / len(ranks), 4) if ranks else None,
     }
+    result["by_dimension"] = _dimension_metrics(rows)
     return result
 
 

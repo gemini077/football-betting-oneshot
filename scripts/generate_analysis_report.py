@@ -1103,7 +1103,20 @@ def render(payload: dict) -> str:
                 ["即时", asian.get("current_line"), asian.get("current_home_odds"), asian.get("current_away_odds"), asian.get("current_note")],
             ],
         )
-    rq_content = rq_market_content + (
+    dimension_rows = []
+    for family, item in (model.get("dimension_predictions") or {}).items():
+        if not isinstance(item, dict):
+            continue
+        dimension_rows.append([
+            family,
+            item.get("label") or item.get("selection"),
+            pct(item.get("model_probability")),
+            num(item.get("fair_odds"), 2),
+            num(item.get("reference_odds"), 2),
+            "唯一主维度" if (decisions.get("primary_contract") or {}).get("contract_id") == item.get("contract_id") else "独立跟踪",
+        ])
+    dimension_content = table(["玩法", "方向", "模型概率", "公平赔率", "参考赔率", "角色"], dimension_rows) if dimension_rows else ""
+    rq_content = rq_market_content + dimension_content + (
         '<div class="primary-with-risk">'
         f'<div class="callout"><b>唯一主维度</b><span>{e(decisions.get("unique_primary_dimension"))}</span></div>'
         f'<div class="callout warn"><b>首要错点</b><span>{e(primary_error)}</span></div>'

@@ -1,6 +1,7 @@
 import json
 from datetime import datetime, timedelta, timezone
 
+import sync_result_schedules
 from sync_result_schedules import sync_date
 
 
@@ -86,3 +87,23 @@ def test_sync_resets_future_blocked_state_even_without_last_checked_at(tmp_path)
 
     assert saved["status"] == "scheduled"
     assert saved["verification_attempts"] == 0
+
+
+def test_selected_match_queue_recovers_result_task_without_full_schedule(tmp_path, monkeypatch):
+    updates = tmp_path / "updates"
+    updates.mkdir()
+    queue_path = tmp_path / "queue.json"
+    queue_path.write_text(json.dumps({"pending": [{
+        "home": "主队", "away": "客队", "kickoff_local": "2026-07-18T18:30:00+08:00",
+        "shuju_id": 789, "source_report": "data/analysis_reports/current/report.json",
+    }]}), encoding="utf-8")
+    monkeypatch.setattr(sync_result_schedules, "POSTMATCH_QUEUE_PATH", queue_path)
+    schedules = tmp_path / "schedules"
+
+    outcome = sync_date("2026-07-18", datetime(2026, 7, 18, 20, tzinfo=SHANGHAI), schedules, updates)
+    saved = json.loads(next(schedules.glob("*.json")).read_text(encoding="utf-8"))
+
+    assert outcome["fixtures"] == 0
+    assert outcome["created"] == 1
+    assert saved["nowscore_id"] == 789
+    assert saved["analysis_available"] is True

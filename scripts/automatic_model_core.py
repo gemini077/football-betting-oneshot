@@ -8,6 +8,7 @@ import math
 from pathlib import Path
 from statistics import fmean, median
 
+from market_contracts import split_quarter_line
 from risk_engine import dixon_coles_score_matrix
 
 
@@ -381,14 +382,7 @@ def _scenario_score_pick(
 
 
 def _split_quarter(line: float) -> list[float]:
-    quarter = round((abs(line) % 1) * 100)
-    sign = -1 if line < 0 else 1
-    absolute = abs(line)
-    if quarter == 25:
-        return [sign * math.floor(absolute), sign * (math.floor(absolute) + 0.5)]
-    if quarter == 75:
-        return [sign * (math.floor(absolute) + 0.5), sign * math.ceil(absolute)]
-    return [line]
+    return list(split_quarter_line(line))
 
 
 def _settlement_probability(matrix: dict[tuple[int, int], float], *, family: str, side: str, line: float) -> dict:
@@ -471,6 +465,186 @@ def _price_audit(deep: dict, matrix: dict[tuple[int, int], float], probabilities
                 "audit_role": "市场校准模型的价格复核，非独立套利信号",
             })
     return rows
+
+
+def _median_decimal(values: list[object]) -> float | None:
+    clean = []
+    for value in values:
+        try:
+            parsed = float(value)
+        except (TypeError, ValueError):
+            continue
+        if parsed > 1:
+            clean.append(parsed)
+    return median(clean) if clean else None
+
+
+def _market_candidate(
+    contract_id: str,
+    family: str,
+    selection: str,
+    label: str,
+    probability: float,
+    *,
+    line: float | None = None,
+    fair_odds: float | None = None,
+    reference_odds: float | None = None,
+    market_probability: float | None = None,
+    price_source: str | None = None,
+    push_probability: float = 0.0,
+    loss_probability: float | None = None,
+) -> dict:
+    probability = max(0.0, min(1.0, float(probability)))
+    fair_odds = fair_odds or (1 / probability if probability > 0 else None)
+    edge = probability - market_probability if market_probability is not None else None
+    reference_ev = None
+    if reference_odds and loss_probability is not None:
+        reference_ev = probability * (reference_odds - 1) - loss_probability
+    elif reference_odds:
+        reference_ev = probability * reference_odds - 1
+    return {
+        "contract_id": contract_id,
+        "family": family,
+        "selection": selection,
+        "label": label,
+        "line": round(line, 2) if line is not None else None,
+        "model_probability": round(probability, 6),
+        "conservative_probability": round(max(0.01, probability - 0.075), 6),
+        "push_probability": round(push_probability, 6),
+        "fair_odds": round(fair_odds, 4) if fair_odds else None,
+        "odds": None,
+        "reference_odds": round(reference_odds, 3) if reference_odds else None,
+        "market_probability": round(market_probability, 6) if market_probability is not None else None,
+        "edge": round(edge, 6) if edge is not None else None,
+        "ev": None,
+        "reference_ev": round(reference_ev, 6) if reference_ev is not None else None,
+        "price_source": price_source,
+        "price_executable": False,
+        "scope": "90分钟含伤停，不含加时与点球",
+    }
+
+
+def _market_candidates(
+    deep: dict,
+    matrix: dict[tuple[int, int], float],
+    probabilities: dict,
+    market_probabilities: dict,
+    btts: dict,
+    total_rows: list[dict],
+    score_rows: list[dict],
+) -> list[dict]:
+    """Build one auditable candidate per available market direction."""
+    rows: list[dict] = []
+    labels = {"home": "主胜", "draw": "平局", "away": "客胜"}
+    bookmakers = (deep.get("ouzhi") or {}).get("bookmakers") or []
+    for selection in ("home", "draw", "away"):
+        odds = _median_decimal([(row.get("spf_current") or {}).get(selection) for row in bookmakers])
+        rows.append(_market_candidate(
+            f"1x2.{selection}", "1x2", selection, f"胜平负：{labels[selection]}", probabilities[selection],
+            reference_odds=odds, market_probability=market_probabilities.get(selection),
+            price_source="bookmaker_consensus_reference" if odds else None,
+        ))
+
+    for selection, label, probability, market_probability in (
+        ("1x", "主队不败（1X）", probabilities["home"] + probabilities["draw"], market_probabilities["home"] + market_probabilities["draw"]),
+        ("x2", "客队不败（X2）", probabilities["draw"] + probabilities["away"], market_probabilities["draw"] + market_probabilities["away"]),
+        ("12", "不平（12）", probabilities["home"] + probabilities["away"], market_probabilities["home"] + market_probabilities["away"]),
+    ):
+        reference = 1 / market_probability if market_probability > 0 else None
+        rows.append(_market_candidate(
+            f"double_chance.{selection}", "double_chance", selection, label, probability,
+            reference_odds=reference, market_probability=market_probability,
+            price_source="derived_no_vig_1x2_reference",
+        ))
+
+    for selection in ("yes", "no"):
+        rows.append(_market_candidate(
+            f"btts.{selection}", "btts", selection,
+            f"双方进球：{'是' if selection == 'yes' else '否'}", float(btts[selection]),
+        ))
+
+    total_companies = (deep.get("daxiao") or {}).get("companies") or []
+    total_lines = sorted({round(float(row.get("current_line")) * 4) / 4 for row in total_companies if row.get("current_line") is not None and 1 <= float(row.get("current_line")) <= 5}) or [2.5]
+    for line in total_lines:
+        line_rows = [row for row in total_companies if row.get("current_line") is not None and abs(float(row["current_line"]) - line) < 0.01]
+        for selection, water_key, label in (("over", "current_over_water", "大"), ("under", "current_under_water", "小")):
+            priced = _settlement_probability(matrix, family="total", side=selection, line=line)
+            odds = _median_decimal([1 + float(row[water_key]) for row in line_rows if isinstance(row.get(water_key), (int, float))])
+            effective = priced["win"] / max(1e-12, priced["win"] + priced["loss"])
+            rows.append(_market_candidate(
+                f"total.{line:g}.{selection}", "total", selection, f"大小球：{label}{line:g}", effective,
+                line=line, fair_odds=priced["fair_odds"], reference_odds=odds,
+                price_source="asian_total_consensus_reference" if odds else None,
+                push_probability=priced["push"], loss_probability=priced["loss"],
+            ))
+
+    handicap_companies = (deep.get("yazhi") or {}).get("companies") or []
+    handicap_lines = sorted({round(float(row.get("current_handicap")) * 4) / 4 for row in handicap_companies if row.get("current_handicap") is not None})
+    for line in handicap_lines:
+        line_rows = [row for row in handicap_companies if row.get("current_handicap") is not None and abs(float(row["current_handicap"]) - line) < 0.01]
+        for selection, water_key, side_label in (("home", "current_water_home", "主队"), ("away", "current_water_away", "客队")):
+            priced = _settlement_probability(matrix, family="handicap", side=selection, line=line)
+            odds = _median_decimal([1 + float(row[water_key]) for row in line_rows if isinstance(row.get(water_key), (int, float))])
+            effective = priced["win"] / max(1e-12, priced["win"] + priced["loss"])
+            displayed = line if selection == "home" else -line
+            rows.append(_market_candidate(
+                f"asian_handicap.{line:g}.{selection}", "asian_handicap", selection,
+                f"亚洲让球：{side_label}{displayed:+g}", effective, line=line,
+                fair_odds=priced["fair_odds"], reference_odds=odds,
+                price_source="asian_handicap_consensus_reference" if odds else None,
+                push_probability=priced["push"], loss_probability=priced["loss"],
+            ))
+
+    if total_rows:
+        top_total = max(total_rows, key=lambda row: float(row.get("probability") or 0))
+        rows.append(_market_candidate(
+            f"exact_total.{top_total.get('goals')}", "exact_total", str(top_total.get("goals")),
+            f"精确总进球：{top_total.get('goals')}", float(top_total.get("probability") or 0),
+        ) | {"goals": str(top_total.get("goals"))})
+    if score_rows:
+        top_score = score_rows[0]
+        rows.append(_market_candidate(
+            f"exact_score.{top_score.get('score')}", "exact_score", str(top_score.get("score")),
+            f"精确比分：{top_score.get('score')}", float(top_score.get("probability") or 0),
+        ) | {"score": str(top_score.get("score"))})
+    return rows
+
+
+def _dimension_predictions(candidates: list[dict]) -> dict[str, dict]:
+    grouped: dict[str, list[dict]] = {}
+    for row in candidates:
+        grouped.setdefault(row["family"], []).append(row)
+    selected = {}
+    for family, rows in grouped.items():
+        eligible = [row for row in rows if float(row.get("reference_odds") or row.get("fair_odds") or 0) >= 1.45]
+        pool = eligible or rows
+        selected[family] = max(
+            pool,
+            key=lambda row: (
+                float(row.get("conservative_probability") or 0) + 0.5 * float(row.get("edge") or 0),
+                float(row.get("model_probability") or 0),
+            ),
+        )
+    return selected
+
+
+def _select_primary(dimensions: dict[str, dict]) -> dict | None:
+    candidates = []
+    for row in dimensions.values():
+        anchor = row.get("reference_odds") or row.get("fair_odds") or 0
+        if float(row.get("model_probability") or 0) < 0.50 or float(anchor) < 1.45:
+            continue
+        if row.get("family") in {"exact_score", "exact_total"}:
+            continue
+        candidates.append(row)
+    return max(
+        candidates,
+        key=lambda row: (
+            float(row.get("conservative_probability") or 0) + 0.5 * float(row.get("edge") or 0),
+            float(row.get("model_probability") or 0),
+        ),
+        default=None,
+    )
 
 
 def _nowscore_context_fundamentals(deep: dict) -> dict:
@@ -632,6 +806,11 @@ def build_automatic_model(context: dict) -> dict:
     btts["judgement"] = "双方进球偏是" if btts["yes"] >= 0.55 else "双方进球偏否"
     top_result = max(probabilities, key=probabilities.get)
     labels = {"home": "主胜", "draw": "平局", "away": "客胜"}
+    market_candidates = _market_candidates(
+        deep, matrix, probabilities, market_probabilities, btts, total_rows, score_rows
+    )
+    dimension_predictions = _dimension_predictions(market_candidates)
+    primary_contract = _select_primary(dimension_predictions)
     model = {
         "status": "确定性融合模型（可核验近期攻防 + 市场校准）",
         "method": MODEL_FAMILY,
@@ -639,6 +818,8 @@ def build_automatic_model(context: dict) -> dict:
         "expected_goals": round(total, 6),
         "probabilities": {key: round(value, 6) for key, value in probabilities.items()},
         "total_goals_buckets": total_rows, "btts": btts, "score_probabilities": score_rows,
+        "market_predictions": market_candidates,
+        "dimension_predictions": dimension_predictions,
         "total_line_analysis": [
             _total_line_pricing(total, line)
             for line in (2.5, 2.75, 3.0, 3.25, 3.5)
@@ -734,7 +915,19 @@ def build_automatic_model(context: dict) -> dict:
         "临盘若出现跨公司同步升降盘，本次赛前快照的价格结构会失效",
     ])
     decisions = {
-        "unique_primary_dimension": f"胜平负：{labels[top_result]}（模型{probabilities[top_result]:.1%}）",
+        "unique_primary_dimension": (
+            f"{primary_contract['label']}（模型{primary_contract['model_probability']:.1%}）"
+            if primary_contract else "无主推：各玩法均未同时达到概率与赔率空间门槛"
+        ),
+        "primary_contract": primary_contract,
+        "primary_selection_rule": {
+            "candidate_scope": "每场各玩法先选一个最佳方向，再跨玩法选一个唯一主维度",
+            "minimum_model_probability": 0.50,
+            "minimum_decimal_odds_or_fair_odds": 1.45,
+            "ranking": "保守概率 + 0.5×模型相对市场优势；同分取模型概率更高者",
+            "abstain_allowed": True,
+        },
+        "dimension_predictions": dimension_predictions,
         "unique_score": top_score,
         "score_top3": score_rows[:3],
         "prediction_tier": "research",
@@ -758,14 +951,18 @@ def build_automatic_model(context: dict) -> dict:
     }
     request = context.get("request") or {}
     match_id = str(workspace_match.get("id") or request.get("match_id") or "")
-    selection_code = {"home": "1", "draw": "X", "away": "2"}[top_result]
-    selection_name = {"home": workspace_match.get("home") or "主队", "draw": "平局", "away": workspace_match.get("away") or "客队"}[top_result]
+    # The live bridge currently reprices 1X2.  Keep that overlay available
+    # even when another market family is the frozen primary contract.
+    live_selection = primary_contract if primary_contract and primary_contract.get("family") == "1x2" else dimension_predictions.get("1x2")
+    live_outcome = live_selection.get("selection") if live_selection else None
+    selection_code = {"home": "1", "draw": "X", "away": "2"}.get(live_outcome)
+    selection_name = {"home": workspace_match.get("home") or "主队", "draw": "平局", "away": workspace_match.get("away") or "客队"}.get(live_outcome)
     live_profile = None
-    if match_id.isdigit():
+    if match_id.isdigit() and live_selection:
         live_profile = {
-            "active": True, "overlay_primary": True,
+            "active": True, "overlay_primary": bool(primary_contract and primary_contract.get("family") == "1x2"),
             "contract": {"match_id": match_id, "market_code": "1", "market_name": "全场独赢", "handicap_line": "", "selection_code": selection_code, "selection_name": selection_name, "contract_type": "three_way_selection"},
-            "probability": {"point": round(probabilities[top_result], 6), "conservative": round(max(0.01, probabilities[top_result] - (0.10 if not deep_form else 0.075)), 6), "confirmed_model_output": True, "source": MODEL_FAMILY, "calibration_status": "walk_forward_partial" if calibration_state["compatible"] else "market_calibrated_with_uncertainty_haircut_not_holdout_calibrated"},
+            "probability": {"point": live_selection["model_probability"], "conservative": live_selection["conservative_probability"], "confirmed_model_output": True, "source": MODEL_FAMILY, "calibration_status": "walk_forward_partial" if calibration_state["compatible"] else "market_calibrated_with_uncertainty_haircut_not_holdout_calibrated"},
             "price": {"max_quote_age_ms": 15000}, "execution": {"minimum_conservative_ev": 0.08},
         }
     return {
