@@ -3,7 +3,12 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
-from automatic_model_core import _scenario_score_pick, build_automatic_model
+from automatic_model_core import (
+    _align_exact_total_candidate,
+    _dimension_predictions,
+    _scenario_score_pick,
+    build_automatic_model,
+)
 
 
 def test_deterministic_model_generates_complete_probability_matrix():
@@ -198,3 +203,53 @@ def test_validated_calibration_changes_total_and_direction_but_keeps_top3():
     assert calibrated["model"]["probabilities"]["home"] < baseline["model"]["probabilities"]["home"]
     assert calibrated["model"]["calibration"]["closed_loop"]["direction_applied"] is True
     assert len(calibrated["decisions"]["score_top3"]) == 3
+
+
+def test_dimension_direction_does_not_use_price_floor_as_direction_selector():
+    candidates = [
+        {
+            "family": "total",
+            "selection": "over",
+            "model_probability": 0.79,
+            "conservative_probability": 0.715,
+            "edge": None,
+            "fair_odds": 1.266,
+        },
+        {
+            "family": "total",
+            "selection": "under",
+            "model_probability": 0.21,
+            "conservative_probability": 0.135,
+            "edge": None,
+            "fair_odds": 4.756,
+        },
+    ]
+
+    assert _dimension_predictions(candidates)["total"]["selection"] == "over"
+
+
+def test_exact_total_is_aligned_with_selected_total_side():
+    candidates = [{
+        "family": "exact_total",
+        "selection": "6+",
+        "label": "精确总进球：6+",
+        "model_probability": 0.25,
+    }]
+    total_rows = [
+        {"goals": "0", "probability": 0.10},
+        {"goals": "1", "probability": 0.15},
+        {"goals": "2", "probability": 0.22},
+        {"goals": "3", "probability": 0.18},
+        {"goals": "4", "probability": 0.14},
+        {"goals": "5", "probability": 0.11},
+        {"goals": "6+", "probability": 0.25},
+    ]
+
+    aligned = _align_exact_total_candidate(
+        candidates,
+        total_rows,
+        {"contract_id": "total.2.5.under", "selection": "under", "line": 2.5},
+    )[0]
+
+    assert aligned["goals"] == "2"
+    assert aligned["consistency"]["status"] == "aligned_with_total_dimension"

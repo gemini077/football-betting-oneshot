@@ -610,14 +610,77 @@ def _market_candidates(
     return rows
 
 
+def _total_bucket_compatible(goals: object, *, selection: str, line: object) -> bool:
+    """Return whether an exact-total bucket agrees with an over/under line.
+
+    The exact-total dimension is derived from the same score matrix as the
+    Asian total dimension.  A bucket must not be shown on the opposite side of
+    the selected line (for example, ``小 2.5`` together with ``6+``).
+    """
+
+    try:
+        threshold = float(line)
+    except (TypeError, ValueError):
+        return True
+    text = str(goals or "").strip()
+    try:
+        values = [int(text)] if text.isdigit() else [int(text[:-1])] if text.endswith("+") and text[:-1].isdigit() else []
+    except ValueError:
+        values = []
+    if not values:
+        return True
+    if selection == "over":
+        return any(value > threshold for value in values)
+    if selection == "under":
+        return any(value < threshold for value in values)
+    return True
+
+
+def _align_exact_total_candidate(
+    candidates: list[dict],
+    total_rows: list[dict],
+    total_dimension: dict | None,
+) -> list[dict]:
+    """Keep the exact-total headline on the selected total line's side."""
+
+    if not total_rows:
+        return candidates
+    selection = str((total_dimension or {}).get("selection") or "")
+    line = (total_dimension or {}).get("line")
+    compatible = [
+        row for row in total_rows
+        if _total_bucket_compatible(row.get("goals"), selection=selection, line=line)
+    ] if selection in {"over", "under"} and line is not None else list(total_rows)
+    top_total = max(compatible or total_rows, key=lambda row: float(row.get("probability") or 0))
+    exact = _market_candidate(
+        f"exact_total.{top_total.get('goals')}",
+        "exact_total",
+        str(top_total.get("goals")),
+        f"精确总进球：{top_total.get('goals')}",
+        float(top_total.get("probability") or 0),
+    )
+    exact["goals"] = str(top_total.get("goals"))
+    exact["consistency"] = {
+        "status": "aligned_with_total_dimension" if selection in {"over", "under"} and line is not None else "matrix_mode",
+        "total_contract_id": (total_dimension or {}).get("contract_id"),
+        "total_selection": selection or None,
+        "total_line": line,
+        "compatible_bucket_count": len(compatible or total_rows),
+    }
+    return [exact if row.get("family") == "exact_total" else row for row in candidates]
+
+
 def _dimension_predictions(candidates: list[dict]) -> dict[str, dict]:
     grouped: dict[str, list[dict]] = {}
     for row in candidates:
         grouped.setdefault(row["family"], []).append(row)
     selected = {}
     for family, rows in grouped.items():
-        eligible = [row for row in rows if float(row.get("reference_odds") or row.get("fair_odds") or 0) >= 1.45]
-        pool = eligible or rows
+        # Direction selection is probability/edge based.  The 1.45 price
+        # floor belongs to primary-contract eligibility only; using it here
+        # can invert a market (e.g. discard high-probability 大2.5 at 1.26 and
+        # select low-probability 小2.5 at 4.75 merely because it is longer).
+        pool = rows
         selected[family] = max(
             pool,
             key=lambda row: (
@@ -808,6 +871,10 @@ def build_automatic_model(context: dict) -> dict:
     labels = {"home": "主胜", "draw": "平局", "away": "客胜"}
     market_candidates = _market_candidates(
         deep, matrix, probabilities, market_probabilities, btts, total_rows, score_rows
+    )
+    dimension_predictions = _dimension_predictions(market_candidates)
+    market_candidates = _align_exact_total_candidate(
+        market_candidates, total_rows, dimension_predictions.get("total")
     )
     dimension_predictions = _dimension_predictions(market_candidates)
     primary_contract = _select_primary(dimension_predictions)
