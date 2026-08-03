@@ -43,6 +43,9 @@ jobs:
       - name: Refresh due schedule, market and post-match work
         run: python scripts/automation_cycle.py --date "$FBOS_DATE"
 
+      - name: Enforce cross-market report consistency
+        run: python scripts/repair_report_consistency.py --root data/analysis_reports/current
+
       - name: Save generated public data
         shell: bash
         run: |
