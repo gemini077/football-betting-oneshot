@@ -676,11 +676,13 @@ def _dimension_predictions(candidates: list[dict]) -> dict[str, dict]:
         grouped.setdefault(row["family"], []).append(row)
     selected = {}
     for family, rows in grouped.items():
-        # Direction selection is probability/edge based.  The 1.45 price
-        # floor belongs to primary-contract eligibility only; using it here
-        # can invert a market (e.g. discard high-probability 大2.5 at 1.26 and
-        # select low-probability 小2.5 at 4.75 merely because it is longer).
-        pool = rows
+        # Keep the executable-price guard for each dimension; cross-market
+        # consistency is enforced separately and must not flip this choice.
+        eligible = [
+            row for row in rows
+            if float(row.get("reference_odds") or row.get("fair_odds") or 0) >= 1.45
+        ]
+        pool = eligible or rows
         selected[family] = max(
             pool,
             key=lambda row: (

@@ -205,7 +205,7 @@ def test_validated_calibration_changes_total_and_direction_but_keeps_top3():
     assert len(calibrated["decisions"]["score_top3"]) == 3
 
 
-def test_dimension_direction_does_not_use_price_floor_as_direction_selector():
+def test_dimension_direction_keeps_executable_price_side():
     candidates = [
         {
             "family": "total",
@@ -225,7 +225,7 @@ def test_dimension_direction_does_not_use_price_floor_as_direction_selector():
         },
     ]
 
-    assert _dimension_predictions(candidates)["total"]["selection"] == "over"
+    assert _dimension_predictions(candidates)["total"]["selection"] == "under"
 
 
 def test_exact_total_is_aligned_with_selected_total_side():

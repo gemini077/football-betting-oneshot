@@ -65,10 +65,10 @@ def test_repairs_only_a_cross_market_side_contradiction():
     before = deepcopy(payload)
 
     assert repair_report_payload(payload) is True
-    assert payload["model"]["dimension_predictions"]["total"]["selection"] == "over"
+    assert payload["model"]["dimension_predictions"]["total"]["selection"] == "under"
     assert payload["model"]["dimension_predictions"]["btts"]["contract_id"] == "btts.yes"
     repaired_exact = payload["model"]["dimension_predictions"]["exact_total"]
-    assert repaired_exact["goals"] == "6+"
+    assert repaired_exact["goals"] == "2"
     assert repaired_exact["consistency"]["status"] == "aligned_with_total_dimension"
     assert payload["decisions"]["dimension_predictions"] == payload["model"]["dimension_predictions"]
     assert payload["decisions"]["primary_contract"] == {"contract_id": "btts.yes"}
