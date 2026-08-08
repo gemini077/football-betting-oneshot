@@ -27,6 +27,7 @@ ROOT = Path(__file__).resolve().parents[1]
 API_URL = "https://api.deepseek.com/chat/completions"
 DEFAULT_MODEL = "deepseek-v4-pro"
 MODEL_VERSION = "v0.19.0"
+PROMPT_VERSION = "deepseek_system_prompt.v1"
 AUTO_INPUT_ROOT = ROOT / "data" / "analysis_inputs" / "automated"
 WORKSPACE_PATH = ROOT / "data" / "match_workspace" / "latest.json"
 DEEP_FALLBACK_ROOT = ROOT / "data" / "source_cache" / "deep_fallback"
@@ -391,7 +392,13 @@ def normalize_analysis(raw: dict, request: dict, model_name: str) -> dict:
     betting["bankroll_state_changed"] = False
     betting["price_audit"] = []
     betting.pop("open_bets", None)
-    raw["automation"] = {"provider": "DeepSeek", "model": model_name, "generated_at": now, "owner_authorized_request": True}
+    raw["automation"] = {
+        "provider": "DeepSeek",
+        "model": model_name,
+        "prompt_version": PROMPT_VERSION,
+        "generated_at": now,
+        "owner_authorized_request": True,
+    }
     return raw
 
 
@@ -558,6 +565,7 @@ def deterministic_analysis(context: dict, request: dict) -> dict:
     analysis["automation"] = {
         "provider": "fixed-python-core", "generated_at": now,
         "owner_authorized_request": True, "llm_used": False,
+        "prompt_version": "fixed-python-core.none",
     }
     analysis["decisions"]["final_state"] = "空仓｜未锁单"
     analysis["betting"].update({

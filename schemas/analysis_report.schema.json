@@ -3,6 +3,43 @@
   "title": "football-betting-oneshot analysis report overlay",
   "type": "object",
   "properties": {
+    "schema_version": {"const": "1.0"},
+    "analysis_output": {
+      "type": "object",
+      "properties": {"status": {"type": "string"}}
+    },
+    "prediction_output": {
+      "type": "object",
+      "properties": {
+        "status": {"enum": ["unavailable", "research_only", "formal"]},
+        "probabilities": {"type": ["object", "null"]},
+        "lambda_home": {"type": ["number", "null"]},
+        "lambda_away": {"type": ["number", "null"]},
+        "score_matrix": {"type": "array"},
+        "unique_score": {"type": ["string", "null"]},
+        "primary_dimension": {"type": ["string", "null"]}
+      }
+    },
+    "betting_reference_output": {
+      "type": "object",
+      "properties": {
+        "status": {"enum": ["not_evaluable", "evaluable"]},
+        "roi": {"type": ["number", "null"]},
+        "clv": {"type": ["number", "null"]}
+      }
+    },
+    "model_governance": {
+      "type": "object",
+      "properties": {
+        "prediction_id": {"type": "string"},
+        "model_role": {"enum": ["champion", "challenger", "legacy"]},
+        "data_grade": {"enum": ["A", "B", "C", "D"]},
+        "formal_eligible": {"type": "boolean"},
+        "prediction_status": {"enum": ["research_only", "formal"]},
+        "record_status": {"enum": ["created", "existing"]},
+        "record_path": {"type": "string"}
+      }
+    },
     "report": {
       "type": "object",
       "properties": {

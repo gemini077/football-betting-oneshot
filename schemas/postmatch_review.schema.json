@@ -3,9 +3,13 @@
   "$id": "postmatch_review.schema.json",
   "title": "Football Betting OneShot automatic post-match review",
   "type": "object",
-  "required": ["schema_version", "generated_at", "match", "result", "pre_match", "audit", "timeline", "root_cause"],
+  "required": ["schema_version", "generated_at", "match", "result", "settlement", "data_grade", "prediction_layer"],
   "properties": {
-    "schema_version": {"const": "1.0"},
+    "schema_version": {"const": "3.0"},
+    "analysis_output": {"type": "object"},
+    "prediction_output": {"type": "object"},
+    "betting_reference_output": {"type": "object"},
+    "model_governance": {"type": "object"},
     "generated_at": {"type": "string", "format": "date-time"},
     "source_report": {"type": "string"},
     "match": {
@@ -31,6 +35,21 @@
         "key_statistics": {"type": "array", "items": {"type": "string"}}
       }
     },
+    "settlement": {"type": "object"},
+    "data_grade": {"enum": ["A", "B", "C", "D"]},
+    "calibration_weight": {"type": ["number", "null"]},
+    "prediction_layer": {
+      "type": "object",
+      "properties": {
+        "research": {"type": "boolean"},
+        "formal_pick_eligible": {"type": "boolean"},
+        "execution_eligible": {"type": "boolean"}
+      }
+    },
+    "postmatch_evidence": {"type": "object"},
+    "model_diagnostics": {"type": "object"},
+    "score_selection_audit": {"type": "object"},
+    "data_quality_review": {"type": "object"},
     "pre_match": {"type": "object"},
     "audit": {"type": "object"},
     "timeline": {"type": "object"},

@@ -1,0 +1,48 @@
+{
+  "schema_version": "1.0",
+  "champion": {
+    "model_core_version": "recent_form_market_calibrated_poisson_v2",
+    "model_family": "recent_form_market_calibrated_poisson_v2",
+    "release_version": "v0.19.0",
+    "model_name": "Football Betting OneShot",
+    "entrypoint": "scripts/automatic_model_core.py",
+    "rho": 0.0,
+    "rho_policy": "fixed_zero_not_estimated_dixon_coles",
+    "status": "frozen_baseline"
+  },
+  "challengers": [],
+  "versions": {
+    "feature_version": "checkpoint_features.v1",
+    "data_pipeline_version": "fetch_football_data.v1",
+    "report_schema_version": "analysis_report.v1",
+    "postmatch_schema_version": "postmatch_review.v3",
+    "prompt_version": "fixed-python-core.none"
+  },
+  "quality_policy": {
+    "formal_grades": ["A", "B"],
+    "research_grades": ["C", "D"],
+    "formal_prediction_requires_model_output": true,
+    "formal_prediction_requires_primary_dimension": true,
+    "execution_requires_real_executable_odds": true,
+    "legacy_records_excluded_from_champion_metrics": true
+  },
+  "promotion_gates": {
+    "minimum_holdout_samples": 50,
+    "requires_same_match_same_snapshot": true,
+    "requires_out_of_sample_validation": true,
+    "requires_reproducible_inputs": true,
+    "requires_market_baseline": true,
+    "requires_simple_baseline": true,
+    "brier_must_improve": true,
+    "log_loss_must_not_deteriorate": true,
+    "automatic_promotion_forbidden": true
+  },
+  "correction_policy": {
+    "single_match_parameter_update_forbidden": true,
+    "minimum_holdout_samples": 50,
+    "requires_same_match_same_snapshot": true,
+    "requires_out_of_sample_validation": true,
+    "requires_reproducible_inputs": true,
+    "automatic_promotion_forbidden": true
+  }
+}
