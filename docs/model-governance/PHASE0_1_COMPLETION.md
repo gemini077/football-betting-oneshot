@@ -15,6 +15,9 @@ page, historical prediction, result, or betting record was regenerated.
   `2021c0fda35cf1f96c475ea5b4d098a9ff01f5ae`
 - Observed `origin/main`:
   `4c01a78b78a80c7e767b5960ed57b0446a923656`
+- After export, `origin/main` advanced to
+  `e2a87c6007d32a69e8f26e6cb6a5fce2550b3bbb`; the interval contained only
+  automatic data/report/workspace commits and was not merged into this branch.
 - Baseline export commit: `null`; export was performed with a dirty working
   tree because the existing untracked `artifacts/` handoff directory is kept
   intact and the export is itself a working-tree operation
@@ -44,8 +47,8 @@ page, historical prediction, result, or betting record was regenerated.
 ## Verification
 
 - Fixed fixture digest before and after: `b104c0f81c2a5c457967d9047b41e389209b99bd3cfc1613d9fb13fb0c2175df`
-- Governance tests: `43 passed`.
-- Directly related tests: `122 passed`.
+- Governance tests: `38 passed`.
+- Directly related tests: `84 passed`.
 - Full suite: `330 passed, 6 existing openpyxl warnings`.
 - JSON schema parsing and Python compilation passed.
 - `git diff --check` passed; Git only reports the repository's LF/CRLF
