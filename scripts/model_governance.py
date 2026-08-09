@@ -871,6 +871,12 @@ def _iter_json(root: Path, *, include_current: bool = True) -> list[tuple[Path, 
     return rows
 
 
+def _current_view_file_count(root: Path) -> int:
+    if not root.exists():
+        return 0
+    return sum(1 for path in root.rglob("*.json") if _is_current_view(path, root))
+
+
 def _frozen_rows(root: Path) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     if not root.exists():
@@ -1053,7 +1059,7 @@ def build_current_metrics(
         "report_record_count": historical_inventory,
         "historical_report_inventory": historical_inventory,
         "historical_report_records": historical_inventory,
-        "convenience_view_records_excluded": len(_iter_json(report_root, include_current=True)) - historical_inventory,
+        "convenience_view_records_excluded": _current_view_file_count(report_root),
         "unique_prediction_count": len(report_ids),
         "unique_match_snapshot_count": len(snapshot_keys),
         "unique_match_count": len(match_keys),
