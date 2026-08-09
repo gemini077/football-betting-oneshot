@@ -1,63 +1,125 @@
 # Model Governance
 
-Football Betting OneShot is an event analysis and probability platform. Betting
-reference is a downstream, separately gated output. An analysis may exist
-without a prediction, and a prediction may exist without an evaluable betting
-reference when no real executable price is available.
+Football Betting OneShot is an event-analysis and probability-prediction
+platform. Betting reference is a downstream output. `analysis_output` may be
+available without a prediction; `prediction_output` may be available without a
+betting reference. If there is no verified executable price,
+`betting_reference_output.status` is `not_evaluable` and the prediction is not
+deleted or converted into a bet.
 
-## Champion and Challenger
+## Frozen Champion
 
-Phase 0 freezes one Champion:
+Phase 0.1 has one registered Champion:
 
-- Core: `recent_form_market_calibrated_poisson_v2`
+- Core and family: `recent_form_market_calibrated_poisson_v2`
 - Release: `v0.19.0`
-- Family: the exact family name emitted by `scripts/automatic_model_core.py`
 - `rho`: fixed at `0.0`; this is not an estimated Dixon-Coles parameter
 - Challengers: none
+- Automatic promotion: forbidden
 
-Future changes follow this sequence:
+The governance layer does not alter the model's lambda calculation, weights,
+rho, score matrix, scenario selector, primary selector, thresholds, EV rules,
+or confidence rules.
 
-1. Freeze the current Champion.
-2. Run a Challenger in shadow mode on the same match and the same snapshot.
-3. Compare the market baseline, a simple baseline, and the Champion.
-4. Validate out of sample with reproducible inputs.
-5. Promote only after the gates pass and a human approves; otherwise keep the
-   Champion and record the rejection.
+## Prediction identity and input provenance
 
-The current Champion is never replaced by a later report or by a single match
-result. Rollback means selecting the last frozen Champion configuration and its
-recorded file hashes.
+Every new frozen record separates three identities:
 
-## Formal Samples
+1. `match_identity`: the fixture identity;
+2. `snapshot_identity`: source cutoff, odds snapshot, input hash, and snapshot
+   id;
+3. `model_run_identity`: role, core/family/release, feature and pipeline
+   versions, calibration artifact hash, prompt version, source commit, and
+   Challenger id where applicable.
 
-All matches can remain research analysis. Only grades A and B can be formal
-Champion samples. Grades C and D are `formal_eligible=false` and
-`prediction_status=research_only`. Missing critical input is recorded as
-`missing_critical_fields`; it is not guessed or backfilled.
+`prediction_id` is the hash of those three identities. Re-running the same
+match, snapshot, model run, and input is idempotent. A different release,
+feature version, code source, or Challenger gets a different id. The same id
+with changed output is an immutable-content conflict.
 
-Each new frozen prediction records the repository commit, model, feature,
-data-pipeline, report-schema, post-match-schema, and prompt versions; timestamps
-for creation, kickoff, source cutoff, and odds snapshot; data grade; override
-status; input hash; final prediction hash; lambdas; probabilities; score ranks;
-and the three output classes:
+The deterministic model input is stored once under
+`data/model_governance/input_snapshots/<sha256>.json`. The prediction record
+stores its manifest/reference/hash rather than a second copy. Narrative-only
+changes are excluded from the deterministic input projection.
 
-- `analysis_output`
-- `prediction_output`
-- `betting_reference_output`
+## Data quality and formal samples
 
-The immutable record is stored under `data/model_governance/predictions/` by
-the production report generator. Re-freezing the same content is idempotent.
-Reusing an id with different content raises a conflict. Match results,
-settlement, and post-match review are not written into that frozen record.
-The fixed-core path uses prompt version `fixed-python-core.none`; the optional
-DeepSeek path records `deepseek_system_prompt.v1`.
+Grades A and B are eligible for formal consideration only when no critical
+field is missing. C and D remain usable for research and analysis but are
+`formal_eligible=false` and `prediction_status=research_only`.
 
-## Correction Policy
+Critical fields include fixture identity, reliable timestamps, source cutoff,
+odds snapshot time, probabilities, lambdas, required market inputs, and a
+reproducible input reference. Missing lineup information is classified using
+an explicit status:
 
-No single match can update formal parameters. A promotion requires at least 50
-holdout samples, same-match same-snapshot comparison, out-of-sample validation,
-reproducible inputs, a market baseline, and a simple baseline. Brier Score must
-improve and Log Loss must not deteriorate. Automatic promotion is disabled.
+- `unavailable_by_time`: not a missing confirmation at that prediction time;
+- `projected`: allowed only under the configured policy;
+- `confirmed`: confirmed lineup;
+- `missing_unexpectedly`: critical and research-only.
 
-See `baseline-v1/manifest.json`, `baseline-v1/current-metrics.json`, and
-`baseline-v1/known-limitations.md` for the frozen Phase 0 evidence.
+`manual_override=true` produces `prediction_variant=human_assisted`,
+`prediction_status=human_assisted`, and `model_formal_eligible=false`. Such
+records are retained separately and never count as pure Champion or Challenger
+model performance.
+
+## Sample and review definitions
+
+`data/analysis_reports/current/` is a convenience view, not an independent
+sample. Historical reports without a `prediction_id` are inventory only; they
+are not renamed as frozen predictions. A checkpoint may be a legitimate
+snapshot-level observation, but independent holdout size is measured by
+`unique_match_count`, not by repeated snapshots of the same match.
+
+Formal model metrics use only this exact join:
+
+```text
+frozen prediction
+  exact prediction_id
+  exact prediction_sha256
+  exact model_run_fingerprint
+  exact source/odds/commit metadata
+      ↕
+postmatch review
+```
+
+Missing ids, missing frozen records, hash mismatches, fingerprint mismatches,
+or snapshot metadata mismatches are research-only. One prediction is counted
+once for settlement. Multiple valid checkpoints can settle against the same
+result, but match-level metrics count that match once.
+
+The exported baseline keeps both snapshot-level and match-level metrics and
+separates:
+
+- historical report inventory;
+- true governance frozen predictions;
+- formal model-only predictions;
+- exact-settled predictions;
+- unique matches at each level.
+
+## Correction and promotion policy
+
+The only valid correction sequence is:
+
+1. freeze the current Champion;
+2. run a Challenger in shadow mode on the same matches and same snapshots;
+3. compare Market Baseline, Simple Baseline, and Champion;
+4. validate out of sample using reproducible inputs and at least 50 unique
+   matches;
+5. allow human review only when every gate passes;
+6. promote or reject with an auditable decision, retaining rollback hashes.
+
+No single match may update formal parameters. `automatic_promotion` remains
+false even when all statistical gates pass; `requires_human_approval` remains
+true. Brier must improve and Log Loss must not deteriorate. Missing metrics,
+inconsistent snapshots, non-reproducible inputs, missing baselines, or
+snapshot-only sample inflation block review eligibility.
+
+## Phase route
+
+Phase 0 and 0.1 establish the trustworthy freeze, identity, provenance,
+settlement, and evaluation contracts. Phase 1 may later build the Market
+Baseline, Simple Baseline, and same-snapshot shadow framework. Only after that
+framework accumulates the required independent matches may a Challenger be
+considered for promotion. Phase 0.1 does not start model tuning or add xG,
+Elo, lineup, market, or page features.

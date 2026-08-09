@@ -8,6 +8,7 @@
     "entrypoint": "scripts/automatic_model_core.py",
     "rho": 0.0,
     "rho_policy": "fixed_zero_not_estimated_dixon_coles",
+    "calibration_artifact": "data/model_calibration/latest.json",
     "status": "frozen_baseline"
   },
   "challengers": [],
@@ -24,10 +25,27 @@
     "formal_prediction_requires_model_output": true,
     "formal_prediction_requires_primary_dimension": true,
     "execution_requires_real_executable_odds": true,
-    "legacy_records_excluded_from_champion_metrics": true
+    "legacy_records_excluded_from_champion_metrics": true,
+    "projected_lineup_formal_allowed": true,
+    "lineup_statuses": [
+      "unavailable_by_time",
+      "projected",
+      "confirmed",
+      "missing_unexpectedly"
+    ],
+    "critical_missing_field_policy": {
+      "identity": true,
+      "timestamps": true,
+      "probabilities": true,
+      "lambda": true,
+      "reproducible_input": true,
+      "required_market_input": true
+    },
+    "manual_override_model_formal_eligible": false
   },
   "promotion_gates": {
     "minimum_holdout_samples": 50,
+    "minimum_holdout_unique_matches": 50,
     "requires_same_match_same_snapshot": true,
     "requires_out_of_sample_validation": true,
     "requires_reproducible_inputs": true,
@@ -40,6 +58,7 @@
   "correction_policy": {
     "single_match_parameter_update_forbidden": true,
     "minimum_holdout_samples": 50,
+    "minimum_holdout_unique_matches": 50,
     "requires_same_match_same_snapshot": true,
     "requires_out_of_sample_validation": true,
     "requires_reproducible_inputs": true,

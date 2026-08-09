@@ -19,6 +19,7 @@ from match_identity import identity_aliases
 from postmatch_evidence import fetch_postmatch_evidence
 from paper_ledger import pair_key
 from risk_engine import dixon_coles_score_matrix
+from model_governance import DEFAULT_RECORD_ROOT, validate_postmatch_review_link
 
 
 SCHEDULE_ROOT = BASE_DIR / "data" / "postmatch_automation" / "schedules"
@@ -703,12 +704,43 @@ def build_review(schedule: dict, report: dict, now: datetime) -> dict:
         elif "赔率" in item or "价格" in item:
             error_tags.append("missing_market_price")
     error_tags = list(dict.fromkeys(error_tags))
-    formal_pick_eligible = data_grade in {"A", "B"} and primary_pick is not None
+    governance = report.get("model_governance") or {}
+    prediction_id = governance.get("prediction_id")
+    prediction_sha256 = governance.get("prediction_sha256")
+    model_run_fingerprint = governance.get("model_run_fingerprint")
+    source_cutoff_at = governance.get("source_cutoff_at")
+    odds_snapshot_at = governance.get("odds_snapshot_at")
+    repository_commit_sha = governance.get("repository_commit_sha")
+    link = validate_postmatch_review_link(
+        {
+            "prediction_id": prediction_id,
+            "prediction_sha256": prediction_sha256,
+            "model_run_fingerprint": model_run_fingerprint,
+            "source_cutoff_at": source_cutoff_at,
+            "odds_snapshot_at": odds_snapshot_at,
+            "repository_commit_sha": repository_commit_sha,
+            "prediction_layer": {"formal_pick_eligible": True},
+        },
+        DEFAULT_RECORD_ROOT,
+    )
+    formal_pick_eligible = (
+        data_grade in {"A", "B"}
+        and primary_pick is not None
+        and link["status"] == "verified"
+        and link["formal_eligible"]
+    )
     execution_eligible = formal_pick_eligible and bool((report.get("betting") or {}).get("candidates"))
     quality_payload = {**data_quality, "data_grade": data_grade, "calibration_weight": calibration_weight,
                        "missing_count": len(missing), "checkpoint_count": checkpoint_count}
     return {
         "schema_version": "3.0",
+        "prediction_id": prediction_id,
+        "prediction_sha256": prediction_sha256,
+        "model_run_fingerprint": model_run_fingerprint,
+        "source_cutoff_at": source_cutoff_at,
+        "odds_snapshot_at": odds_snapshot_at,
+        "repository_commit_sha": repository_commit_sha,
+        "prediction_link_status": link["status"],
         "model_version": (report.get("report") or {}).get("model_version"),
         "model_family": (report.get("model") or {}).get("method"),
         "generated_at": now.isoformat(),
@@ -750,7 +782,7 @@ def build_review(schedule: dict, report: dict, now: datetime) -> dict:
         "data_grade": data_grade,
         "calibration_weight": calibration_weight,
         "prediction_layer": {
-            "research": True,
+            "research": not formal_pick_eligible,
             "formal_pick_eligible": formal_pick_eligible,
             "execution_eligible": execution_eligible,
         },

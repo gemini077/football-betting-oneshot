@@ -11,7 +11,7 @@
     "prediction_output": {
       "type": "object",
       "properties": {
-        "status": {"enum": ["unavailable", "research_only", "formal"]},
+        "status": {"enum": ["unavailable", "research_only", "formal", "human_assisted"]},
         "probabilities": {"type": ["object", "null"]},
         "lambda_home": {"type": ["number", "null"]},
         "lambda_away": {"type": ["number", "null"]},
@@ -30,12 +30,41 @@
     },
     "model_governance": {
       "type": "object",
+      "required": [
+        "prediction_id",
+        "prediction_sha256",
+        "model_run_fingerprint",
+        "model_role",
+        "data_grade",
+        "formal_eligible",
+        "prediction_status",
+        "prediction_variant"
+      ],
       "properties": {
         "prediction_id": {"type": "string"},
+        "prediction_sha256": {"type": "string", "minLength": 1},
+        "model_run_fingerprint": {"type": "string", "minLength": 1},
         "model_role": {"enum": ["champion", "challenger", "legacy"]},
+        "model_core_version": {"type": ["string", "null"]},
+        "model_family": {"type": ["string", "null"]},
+        "release_version": {"type": ["string", "null"]},
+        "feature_version": {"type": ["string", "null"]},
+        "data_pipeline_version": {"type": ["string", "null"]},
+        "report_schema_version": {"type": ["string", "null"]},
+        "prompt_version": {"type": ["string", "null"]},
         "data_grade": {"enum": ["A", "B", "C", "D"]},
         "formal_eligible": {"type": "boolean"},
-        "prediction_status": {"enum": ["research_only", "formal"]},
+        "model_formal_eligible": {"type": "boolean"},
+        "prediction_variant": {"enum": ["model_only", "human_assisted"]},
+        "prediction_status": {"enum": ["research_only", "formal", "human_assisted"]},
+        "critical_missing_fields": {"type": "array", "items": {"type": "string"}},
+        "noncritical_missing_fields": {"type": "array", "items": {"type": "string"}},
+        "lineup_status": {"type": ["string", "null"]},
+        "source_cutoff_at": {"type": ["string", "null"]},
+        "odds_snapshot_at": {"type": ["string", "null"]},
+        "repository_commit_sha": {"type": ["string", "null"]},
+        "input_sha256": {"type": ["string", "null"]},
+        "input_snapshot": {"type": "object"},
         "record_status": {"enum": ["created", "existing"]},
         "record_path": {"type": "string"}
       }
@@ -211,5 +240,26 @@
       }
     },
     "evidence_chain": {"type": "array"}
-  }
+  },
+  "allOf": [
+    {
+      "if": {
+        "required": ["model"],
+        "properties": {
+          "model": {
+            "type": "object",
+            "required": ["probabilities", "lambda_home", "lambda_away"]
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "analysis_output",
+          "prediction_output",
+          "betting_reference_output",
+          "model_governance"
+        ]
+      }
+    }
+  ]
 }

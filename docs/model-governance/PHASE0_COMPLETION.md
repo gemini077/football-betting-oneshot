@@ -71,7 +71,14 @@ not reasons to change the model.
 
 ## Phase 1 Recommendation
 
-Do not enter Phase 1 yet. First obtain at least 50 reproducible out-of-sample
-same-match, same-snapshot comparisons with market and simple baselines, then
-review the formal A/B settlement set. Do not add xG, Elo, lineup models, new
-market baselines, or new pages in this Phase 0 branch.
+Phase 0.1 corrects the sample and provenance definitions used by this original
+Phase 0 record. Do not treat the historical report counts above as frozen
+prediction counts. The corrected Phase 0.1 export distinguishes historical
+report inventory from the true governance ledger and requires exact
+prediction-id settlement.
+
+Phase 0.1 may be followed by Phase 1 foundation work for Market Baseline,
+Simple Baseline, and same-snapshot shadow execution. It does not authorize
+Champion tuning or Challenger promotion. The first Challenger promotion can
+only be proposed after that framework accumulates the configured minimum of 50
+independent matches with reproducible out-of-sample comparisons.

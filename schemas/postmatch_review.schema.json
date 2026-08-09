@@ -6,6 +6,13 @@
   "required": ["schema_version", "generated_at", "match", "result", "settlement", "data_grade", "prediction_layer"],
   "properties": {
     "schema_version": {"const": "3.0"},
+    "prediction_id": {"type": ["string", "null"]},
+    "prediction_sha256": {"type": ["string", "null"]},
+    "model_run_fingerprint": {"type": ["string", "null"]},
+    "source_cutoff_at": {"type": ["string", "null"]},
+    "odds_snapshot_at": {"type": ["string", "null"]},
+    "repository_commit_sha": {"type": ["string", "null"]},
+    "prediction_link_status": {"enum": ["verified", "missing_prediction_id", "prediction_not_found", "hash_mismatch", "fingerprint_mismatch", "snapshot_metadata_mismatch", null]},
     "analysis_output": {"type": "object"},
     "prediction_output": {"type": "object"},
     "betting_reference_output": {"type": "object"},
@@ -56,5 +63,37 @@
     "root_cause": {"type": "object"},
     "nine_layers": {"type": "array", "minItems": 9, "maxItems": 9, "items": {"type": "object"}},
     "lock_settlements": {"type": "array", "default": [], "items": {"type": "object"}}
-  }
+  },
+  "allOf": [
+    {
+      "if": {
+        "required": ["prediction_layer"],
+        "properties": {
+          "prediction_layer": {
+            "type": "object",
+            "required": ["formal_pick_eligible"],
+            "properties": {"formal_pick_eligible": {"const": true}}
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "prediction_id",
+          "prediction_sha256",
+          "model_run_fingerprint",
+          "source_cutoff_at",
+          "odds_snapshot_at",
+          "repository_commit_sha"
+        ],
+        "properties": {
+          "prediction_id": {"type": "string", "minLength": 1},
+          "prediction_sha256": {"type": "string", "minLength": 1},
+          "model_run_fingerprint": {"type": "string", "minLength": 1},
+          "source_cutoff_at": {"type": "string", "minLength": 1},
+          "odds_snapshot_at": {"type": "string", "minLength": 1},
+          "repository_commit_sha": {"type": "string", "minLength": 1}
+        }
+      }
+    }
+  ]
 }
