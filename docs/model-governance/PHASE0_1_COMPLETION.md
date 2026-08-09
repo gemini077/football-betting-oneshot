@@ -30,15 +30,18 @@ page, historical prediction, result, or betting record was regenerated.
   ledger; `current/` is excluded from independent counts.
 - Snapshot-level and unique-match-level counts are exported separately.
 - Post-match formal evaluation requires exact `prediction_id`,
-  `prediction_sha256`, `model_run_fingerprint`, source cutoff, odds snapshot,
-  and repository commit metadata.
+  `prediction_sha256`, `model_run_fingerprint`, `model_source_fingerprint`,
+  canonical input hash, source cutoff, market snapshot, and repository commit
+  metadata. Phase 0.2 further hardens the source fingerprint and replay path.
 - Critical and noncritical missing fields are separated, including explicit
   lineup timing states.
 - Manual overrides are stored as `human_assisted` and excluded from model-only
   metrics and promotion.
 - Prediction identity is split into match, snapshot, and model-run identities.
 - Deterministic model inputs are saved in content-addressed input snapshots;
-  narrative-only changes do not alter that input hash.
+  narrative-only changes do not alter that input hash. Phase 0.2 removes the
+  repository HEAD from deterministic model identity and records it only as
+  provenance.
 - Promotion returns human-review eligibility separately from the permanently
   disabled automatic-promotion flag and requires unique-match gates.
 - Baseline provenance separates model source, governance implementation,

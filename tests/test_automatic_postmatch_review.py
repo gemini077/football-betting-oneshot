@@ -50,8 +50,10 @@ def test_new_review_carries_exact_frozen_prediction_join(tmp_path, monkeypatch):
     payload["model_governance"] = {
         key: record[key]
         for key in (
-            "prediction_id", "prediction_sha256", "model_run_fingerprint", "source_cutoff_at",
-            "odds_snapshot_at", "repository_commit_sha",
+            "prediction_id", "prediction_sha256", "model_run_fingerprint", "model_source_fingerprint",
+            "canonical_model_input_sha256", "model_input_snapshot_ref", "prediction_created_at",
+            "model_input_as_of_at", "source_cutoff_at", "market_snapshot_at", "odds_snapshot_at",
+            "source_time_range", "repository_commit_sha",
         )
     }
     monkeypatch.setattr(review_module, "DEFAULT_RECORD_ROOT", record_root)

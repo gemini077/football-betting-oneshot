@@ -6,7 +6,7 @@
 - Historical reports without a governance `prediction_id` remain
   `historical_report_inventory` only. They are not retroactively called frozen
   predictions.
-- The Phase 0.1 governance ledger is empty until a production run writes a
+- The Phase 0 through 0.2 governance ledger is empty until a production run writes a
   record under `data/model_governance/predictions/`. Therefore
   `true_governance_frozen_predictions`, formal model samples, and exact-settled
   formal samples may be zero even when the historical report inventory is
@@ -27,8 +27,14 @@
   They are not rewritten, guessed, or merged into Champion formal metrics.
 - Historical input snapshots do not prove that every old report can be
   re-run from the exact pre-match sources. New frozen records store a
-  content-addressed input snapshot and its source references; old records do
-  not receive a fabricated snapshot.
+  content-addressed deterministic model-input projection, source references,
+  and capture-time evidence; old records do not receive a fabricated
+  snapshot. A new record with missing source cutoff or market capture time is
+  research-only.
+- `repository_commit_sha` is retained for audit provenance, but it is not a
+  deterministic model identity. The model identity is the source-component
+  fingerprint plus calibration fingerprint; the current source-component
+  trace is conservative for mixed-responsibility files.
 - The model report may have narrative or DeepSeek content that does not alter
   deterministic probabilities. That narrative is intentionally excluded from
   the Champion deterministic input hash. A future Challenger using narrative
@@ -37,4 +43,4 @@
   isolated as `human_assisted` and cannot be used to claim pure model accuracy.
 - Current evidence does not establish that the Champion beats a market or
   simple baseline. No Challenger is registered or eligible for promotion in
-  Phase 0.1.
+  Phase 0.2.

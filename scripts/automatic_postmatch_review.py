@@ -708,15 +708,25 @@ def build_review(schedule: dict, report: dict, now: datetime) -> dict:
     prediction_id = governance.get("prediction_id")
     prediction_sha256 = governance.get("prediction_sha256")
     model_run_fingerprint = governance.get("model_run_fingerprint")
+    model_source_fingerprint = governance.get("model_source_fingerprint")
+    canonical_model_input_sha256 = governance.get("canonical_model_input_sha256")
+    model_input_snapshot_ref = governance.get("model_input_snapshot_ref")
+    prediction_created_at = governance.get("prediction_created_at")
+    model_input_as_of_at = governance.get("model_input_as_of_at")
     source_cutoff_at = governance.get("source_cutoff_at")
+    market_snapshot_at = governance.get("market_snapshot_at")
     odds_snapshot_at = governance.get("odds_snapshot_at")
+    source_time_range = governance.get("source_time_range") or {}
     repository_commit_sha = governance.get("repository_commit_sha")
     link = validate_postmatch_review_link(
         {
             "prediction_id": prediction_id,
             "prediction_sha256": prediction_sha256,
             "model_run_fingerprint": model_run_fingerprint,
+            "model_source_fingerprint": model_source_fingerprint,
+            "canonical_model_input_sha256": canonical_model_input_sha256,
             "source_cutoff_at": source_cutoff_at,
+            "market_snapshot_at": market_snapshot_at,
             "odds_snapshot_at": odds_snapshot_at,
             "repository_commit_sha": repository_commit_sha,
             "prediction_layer": {"formal_pick_eligible": True},
@@ -733,12 +743,19 @@ def build_review(schedule: dict, report: dict, now: datetime) -> dict:
     quality_payload = {**data_quality, "data_grade": data_grade, "calibration_weight": calibration_weight,
                        "missing_count": len(missing), "checkpoint_count": checkpoint_count}
     return {
-        "schema_version": "3.0",
+        "schema_version": "3.1",
         "prediction_id": prediction_id,
         "prediction_sha256": prediction_sha256,
         "model_run_fingerprint": model_run_fingerprint,
+        "model_source_fingerprint": model_source_fingerprint,
+        "canonical_model_input_sha256": canonical_model_input_sha256,
+        "model_input_snapshot_ref": model_input_snapshot_ref,
+        "prediction_created_at": prediction_created_at,
+        "model_input_as_of_at": model_input_as_of_at,
         "source_cutoff_at": source_cutoff_at,
+        "market_snapshot_at": market_snapshot_at,
         "odds_snapshot_at": odds_snapshot_at,
+        "source_time_range": source_time_range,
         "repository_commit_sha": repository_commit_sha,
         "prediction_link_status": link["status"],
         "model_version": (report.get("report") or {}).get("model_version"),

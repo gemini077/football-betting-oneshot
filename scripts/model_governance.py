@@ -4,6 +4,8 @@
 from __future__ import annotations
 
 import argparse
+import ast
+from copy import deepcopy
 import hashlib
 import json
 import os
@@ -20,10 +22,14 @@ ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CONFIG = ROOT / "config" / "model_governance.json"
 DEFAULT_RECORD_ROOT = ROOT / "data" / "model_governance" / "predictions"
 DEFAULT_INPUT_SNAPSHOT_ROOT = ROOT / "data" / "model_governance" / "input_snapshots"
+MODEL_INPUT_CONTRACT_VERSION = "deterministic_model_input.v1"
+SNAPSHOT_CONTRACT_VERSION = "governance_snapshot.v2"
 
 REQUIRED_RECORD_FIELDS = (
     "prediction_id", "match_key", "created_at", "kickoff_at", "source_cutoff_at",
-    "odds_snapshot_at", "repository_commit_sha", "model_role", "model_core_version",
+    "prediction_created_at", "model_input_as_of_at", "market_snapshot_at", "source_time_range",
+    "odds_snapshot_at", "repository_commit_sha", "model_source_fingerprint",
+    "canonical_model_input_sha256", "model_input_snapshot_ref", "model_role", "model_core_version",
     "model_family", "release_version", "feature_version", "data_pipeline_version",
     "report_schema_version", "postmatch_schema_version", "prompt_version", "data_grade",
     "formal_eligible", "model_formal_eligible", "prediction_variant", "prediction_status",
@@ -45,12 +51,28 @@ MODEL_SOURCE_FILES = (
     "scripts/automatic_model_core.py",
     "scripts/risk_engine.py",
     "scripts/market_contracts.py",
-    "scripts/fetch_football_data.py",
-    "scripts/prematch_fundamentals.py",
     "scripts/checkpoint_features.py",
-    "scripts/prediction_quality.py",
+    "scripts/prematch_fundamentals.py",
+    "scripts/match_identity.py",
     "scripts/deepseek_auto_analysis.py",
     "data/model_calibration/latest.json",
+)
+MODEL_SOURCE_COMPONENTS = (
+    ("scripts/automatic_model_core.py", None),
+    ("scripts/risk_engine.py", None),
+    ("scripts/market_contracts.py", None),
+    ("scripts/checkpoint_features.py", None),
+    ("scripts/prematch_fundamentals.py", None),
+    ("scripts/match_identity.py", "canonical_match_id"),
+    # Only the context construction symbols are model-input dependencies.
+    # The LLM prompt and HTML/report code are deliberately excluded.
+    ("scripts/deepseek_auto_analysis.py", "prune"),
+    ("scripts/deepseek_auto_analysis.py", "selected_workspace_match"),
+    ("scripts/deepseek_auto_analysis.py", "analysis_context"),
+    ("scripts/model_governance.py", "_pick"),
+    ("scripts/model_governance.py", "_project_market_snapshot"),
+    ("scripts/model_governance.py", "build_deterministic_model_input_projection"),
+    ("data/model_calibration/latest.json", None),
 )
 GOVERNANCE_FILES = (
     "scripts/model_governance.py",
@@ -68,6 +90,14 @@ _LINEUP_STATUSES = {
 _NARRATIVE_KEYS = {
     "analysis", "narrative", "explanation", "llm_response", "deepseek_response",
     "deepseek_narrative",
+}
+_AUDIT_ONLY_PREDICTION_FIELDS = {
+    "repository_commit_sha",
+    "created_at",
+    "prediction_created_at",
+    "prompt_version",
+    "report_schema_version",
+    "postmatch_schema_version",
 }
 
 
@@ -147,7 +177,11 @@ def load_config(path: Path = DEFAULT_CONFIG) -> dict[str, Any]:
         raise ValueError("configured model family does not match automatic_model_core.MODEL_FAMILY")
     if champion.get("release_version") != MODEL_VERSION:
         raise ValueError("configured release version does not match deepseek_auto_analysis.MODEL_VERSION")
-    for key in ("feature_version", "data_pipeline_version", "report_schema_version", "postmatch_schema_version", "prompt_version"):
+    for key in (
+        "feature_version", "data_pipeline_version", "report_schema_version",
+        "postmatch_schema_version", "prompt_version",
+        "canonical_model_input_contract_version", "snapshot_contract_version",
+    ):
         if not str(versions.get(key) or "").strip():
             raise ValueError(f"configured version is empty: {key}")
     return value
@@ -172,6 +206,69 @@ def hash_files(paths: list[str | Path] | tuple[str | Path, ...], root: Path = RO
             key = path.as_posix()
         files[key] = sha256_file(target) if target.is_file() else None
     return {"algorithm": "sha256", "files": files}
+
+
+def _normalise_source_components(components: Any) -> tuple[tuple[str, str | None], ...]:
+    values = components if components is not None else MODEL_SOURCE_COMPONENTS
+    normalised: list[tuple[str, str | None]] = []
+    for value in values:
+        if isinstance(value, (list, tuple)):
+            path = str(value[0])
+            symbol = str(value[1]) if len(value) > 1 and value[1] else None
+        else:
+            path, symbol = str(value), None
+        normalised.append((path, symbol))
+    return tuple(normalised)
+
+
+def _hash_source_symbol(path: Path, symbol: str) -> str | None:
+    try:
+        source = path.read_text(encoding="utf-8")
+        tree = ast.parse(source, filename=str(path))
+    except (OSError, SyntaxError, UnicodeError):
+        return None
+    for node in tree.body:
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)) and node.name == symbol:
+            segment = ast.get_source_segment(source, node)
+            return _sha256_bytes((segment or "").encode("utf-8"))
+    return None
+
+
+def model_source_fingerprint(
+    root: Path = ROOT,
+    *,
+    components: Any = None,
+) -> dict[str, Any]:
+    """Hash only deterministic model execution dependencies.
+
+    Repository data/report commits are intentionally absent.  Function-level
+    hashes keep the DeepSeek prompt and report rendering from changing the
+    deterministic Champion identity.
+    """
+    component_hashes: dict[str, str | None] = {}
+    for relative, symbol in _normalise_source_components(components):
+        target = Path(relative)
+        target = target if target.is_absolute() else root / target
+        key = f"{relative}::{symbol}" if symbol else relative
+        component_hashes[key] = _hash_source_symbol(target, symbol) if symbol else (
+            sha256_file(target) if target.is_file() else None
+        )
+    fingerprint = _sha256_value({"algorithm": "sha256", "components": component_hashes})
+    return {
+        "algorithm": "sha256",
+        "components": component_hashes,
+        "fingerprint": fingerprint,
+    }
+
+
+def governance_source_fingerprint(root: Path = ROOT) -> dict[str, Any]:
+    hashed = hash_files(GOVERNANCE_FILES, root=root)
+    fingerprint = _sha256_value(hashed)
+    return {
+        "algorithm": "sha256",
+        "components": hashed["files"],
+        "fingerprint": fingerprint,
+    }
 
 
 def _number(value: Any) -> float | None:
@@ -252,11 +349,28 @@ def _real_executable_odds(payload: dict[str, Any]) -> bool:
 
 
 def _without_prediction_hash(record: dict[str, Any]) -> dict[str, Any]:
-    return {
+    value = {
         key: value for key, value in record.items()
-        if key not in {"prediction_sha256", "_input_snapshot_content"}
+        if key not in {"prediction_sha256", "_input_snapshot_content", *_AUDIT_ONLY_PREDICTION_FIELDS}
         and not key.startswith("_")
     }
+    snapshot = value.get("input_snapshot")
+    if isinstance(snapshot, dict):
+        value["input_snapshot"] = {
+            key: snapshot.get(key)
+            for key in (
+                "snapshot_id", "contract_version", "snapshot_contract_version",
+                "canonical_model_input_sha256", "canonical_input_sha256",
+                "source_cutoff_at", "market_snapshot_at", "odds_snapshot_at",
+            )
+            if key in snapshot
+        }
+    return value
+
+
+def prediction_content_hash(record: dict[str, Any]) -> str:
+    """Hash immutable model content, excluding audit-only provenance fields."""
+    return _sha256_value(_without_prediction_hash(record))
 
 
 def _nested_postmatch_fields(value: Any) -> list[str]:
@@ -284,7 +398,264 @@ def _strip_narrative(value: Any) -> Any:
     return value
 
 
+def _pick(value: dict[str, Any], keys: tuple[str, ...]) -> dict[str, Any]:
+    return {key: deepcopy(value[key]) for key in keys if key in value}
+
+
+def _project_market_snapshot(snapshot: dict[str, Any]) -> dict[str, Any]:
+    projected: dict[str, Any] = {}
+    for key in ("fetched_at", "captured_at", "source_timestamp", "source_time"):
+        if key in snapshot:
+            projected[key] = deepcopy(snapshot[key])
+    provenance = snapshot.get("source_provenance")
+    if isinstance(provenance, dict) and "form_primary" in provenance:
+        projected["source_provenance"] = {"form_primary": provenance.get("form_primary")}
+    shuju = snapshot.get("shuju")
+    if isinstance(shuju, dict) and "recent_form" in shuju:
+        projected["shuju"] = {"recent_form": deepcopy(shuju.get("recent_form"))}
+    for market, row_key, fields in (
+        ("ouzhi", "bookmakers", ("spf_current",)),
+        ("daxiao", "companies", ("name", "current_line", "current_over_water", "current_under_water")),
+        ("yazhi", "companies", ("name", "current_handicap", "current_water_home", "current_water_away")),
+    ):
+        source = snapshot.get(market)
+        if not isinstance(source, dict):
+            continue
+        rows = source.get(row_key)
+        if not isinstance(rows, list):
+            continue
+        projected[market] = {row_key: [_pick(row, fields) for row in rows if isinstance(row, dict)]}
+    context = snapshot.get("nowscore_context") or snapshot.get("context")
+    if not isinstance(context, dict):
+        nested = snapshot.get("nowscore")
+        context = nested.get("context") if isinstance(nested, dict) else None
+    if isinstance(context, dict):
+        projected["nowscore_context"] = _pick(context, ("coach", "referee", "panlu", "source_urls"))
+    return projected
+
+
+def build_deterministic_model_input_projection(context: dict[str, Any]) -> dict[str, Any]:
+    """Project exactly the context consumed by the deterministic Champion.
+
+    The projection is deliberately built beside the real model call and then
+    passed back into that call.  This prevents the report layer from guessing
+    which raw source fields happened to be used.
+    """
+    sources = context.get("source_snapshots") or {}
+    projected_sources: dict[str, Any] = {}
+    for name in ("nowscore", "500_deep"):
+        source = sources.get(name) or {}
+        snapshots = source.get("snapshots") if isinstance(source, dict) else []
+        if isinstance(snapshots, list) and snapshots and isinstance(snapshots[0], dict):
+            projected_sources[name] = {"snapshots": [_project_market_snapshot(snapshots[0])]}
+    selected = context.get("selected_workspace_match") or {}
+    request = context.get("request") or {}
+    projection = {
+        "request": _pick(request, ("match_id",)),
+        "selected_workspace_match": _pick(selected, ("id", "home", "away")),
+        "source_snapshots": projected_sources,
+        "official_market_baseline": deepcopy(context.get("official_market_baseline") or {}),
+        "checkpoint_features": deepcopy(context.get("checkpoint_features") or {}),
+        "prematch_fundamentals": deepcopy(context.get("prematch_fundamentals") or {}),
+        "model_calibration": deepcopy(context.get("model_calibration") or {}),
+    }
+    return projection
+
+
+def _timestamp(value: Any) -> str | None:
+    if value in (None, ""):
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    try:
+        datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return text
+
+
+def _snapshot_timestamp(snapshot: dict[str, Any]) -> str | None:
+    for key in ("fetched_at", "captured_at", "source_timestamp", "source_time"):
+        value = _timestamp(snapshot.get(key))
+        if value:
+            return value
+    return None
+
+
+def _max_timestamp(values: list[str | None]) -> str | None:
+    parsed = []
+    for value in values:
+        if not value:
+            continue
+        try:
+            parsed.append((datetime.fromisoformat(value.replace("Z", "+00:00")), value))
+        except ValueError:
+            continue
+    return max(parsed, key=lambda item: item[0])[1] if parsed else None
+
+
+def _min_timestamp(values: list[str | None]) -> str | None:
+    parsed = []
+    for value in values:
+        if not value:
+            continue
+        try:
+            parsed.append((datetime.fromisoformat(value.replace("Z", "+00:00")), value))
+        except ValueError:
+            continue
+    return min(parsed, key=lambda item: item[0])[1] if parsed else None
+
+
+def _collect_source_timestamps(context: dict[str, Any]) -> tuple[dict[str, str | None], list[str]]:
+    timestamps: dict[str, str | None] = {}
+    required: list[str] = []
+    explicit = context.get("source_timestamps") or {}
+    explicit_range = context.get("source_time_range") or {}
+    if isinstance(explicit_range, dict):
+        explicit = {**(explicit_range.get("source_timestamps") or {}), **explicit}
+    # Only snapshots copied into the deterministic projection are eligible to
+    # define model-input time.  Sporttery/trade/Polymarket report evidence is
+    # deliberately excluded unless the projection explicitly consumes it.
+    for name in ("nowscore", "500_deep"):
+        source = (context.get("source_snapshots") or {}).get(name) or {}
+        snapshots = source.get("snapshots") if isinstance(source, dict) else []
+        if not isinstance(snapshots, list) or not snapshots or not isinstance(snapshots[0], dict):
+            continue
+        required.append(str(name))
+        timestamps[str(name)] = _timestamp(explicit.get(name)) or _snapshot_timestamp(snapshots[0])
+
+    def first_snapshot(name: str) -> dict[str, Any]:
+        source = (context.get("source_snapshots") or {}).get(name) or {}
+        snapshots = source.get("snapshots") if isinstance(source, dict) else []
+        return snapshots[0] if isinstance(snapshots, list) and snapshots and isinstance(snapshots[0], dict) else {}
+
+    def has_recent_form(snapshot: dict[str, Any]) -> bool:
+        return bool((snapshot.get("shuju") or {}).get("recent_form"))
+
+    def has_valid_market_consensus(snapshot: dict[str, Any]) -> bool:
+        rows = (snapshot.get("ouzhi") or {}).get("bookmakers") or []
+        for row in rows:
+            odds = row.get("spf_current") if isinstance(row, dict) else None
+            try:
+                prices = [float(odds[key]) for key in ("home", "draw", "away")]
+            except (KeyError, TypeError, ValueError):
+                continue
+            if all(price > 1 for price in prices):
+                return True
+        return False
+
+    primary = first_snapshot("nowscore")
+    fallback = first_snapshot("500_deep")
+    deep_form_available = has_recent_form(primary) if primary else has_recent_form(fallback)
+    if primary and not has_recent_form(primary):
+        deep_form_available = has_recent_form(fallback)
+    prematch = context.get("prematch_fundamentals") or {}
+    if not deep_form_available and isinstance(prematch, dict) and prematch.get("recent_form"):
+        required.append("prematch_fundamentals")
+        timestamps["prematch_fundamentals"] = _timestamp(
+            explicit.get("prematch_fundamentals")
+            or prematch.get("captured_at")
+            or prematch.get("source_captured_at")
+            or prematch.get("fetched_at")
+            or prematch.get("source_timestamp")
+        )
+
+    # The deterministic core falls back to the official three-way baseline
+    # only when the deep snapshot has no usable current SPF consensus.  The
+    # workspace odds have no implicit capture time, so absent explicit
+    # metadata this deliberately blocks formal eligibility.
+    market_available = has_valid_market_consensus(primary) if primary else has_valid_market_consensus(fallback)
+    if primary and not (primary.get("ouzhi") or {}).get("bookmakers"):
+        market_available = has_valid_market_consensus(fallback)
+    official = context.get("official_market_baseline") or {}
+    if not market_available and isinstance(official, dict) and official.get("fair_probabilities"):
+        required.append("official_market_baseline")
+        timestamps["official_market_baseline"] = _timestamp(
+            explicit.get("official_market_baseline")
+            or official.get("captured_at")
+            or official.get("market_snapshot_at")
+            or official.get("source_timestamp")
+        )
+    checkpoint = context.get("checkpoint_features") or {}
+    if int(checkpoint.get("snapshot_count") or 0) > 0:
+        required.append("checkpoint_features")
+        timestamps["checkpoint_features"] = _timestamp(
+            explicit.get("checkpoint_features") or checkpoint.get("latest_captured_at")
+        )
+    return timestamps, required
+
+
+def build_deterministic_model_input_snapshot(
+    context: dict[str, Any],
+    *,
+    manifest_ref: str | None = None,
+    prediction_created_at: str | None = None,
+    repository_root: Path = ROOT,
+) -> dict[str, Any]:
+    projection = build_deterministic_model_input_projection(context)
+    canonical_hash = _sha256_value(projection)
+    source_timestamps, required = _collect_source_timestamps(context)
+    known = [source_timestamps.get(key) for key in required]
+    complete = bool(required) and all(known)
+    source_cutoff = _max_timestamp(known) if complete else None
+    checkpoint_timestamp = source_timestamps.get("checkpoint_features")
+    market_values = [
+        source_timestamps.get(key)
+        for key in ("nowscore", "500_deep")
+        if source_timestamps.get(key)
+    ]
+    if checkpoint_timestamp:
+        market_values.append(checkpoint_timestamp)
+    market_snapshot = _max_timestamp(market_values) if market_values and all(
+        source_timestamps.get(key) for key in required if key != "checkpoint_features"
+    ) else None
+    source_time_range = {
+        "earliest_source_at": _min_timestamp(known) if complete else None,
+        "latest_source_at": _max_timestamp(known) if complete else None,
+        "market_snapshot_at": market_snapshot,
+        "source_timestamps": source_timestamps,
+    }
+    source_refs = _collect_source_refs(context.get("source_snapshots") or {})
+    source_refs.extend(str(value) for value in (context.get("model_input_source_refs") or []) if value)
+    source_refs = list(dict.fromkeys(source_refs))
+    created = _timestamp(prediction_created_at or context.get("prediction_created_at"))
+    snapshot = {
+        "contract_version": MODEL_INPUT_CONTRACT_VERSION,
+        "snapshot_contract_version": SNAPSHOT_CONTRACT_VERSION,
+        "snapshot_id": "FBOS-SNAPSHOT-" + canonical_hash[:24],
+        "manifest_ref": manifest_ref or context.get("model_input_manifest_ref"),
+        "source_refs": source_refs,
+        "source_hashes": _source_hashes(source_refs, repository_root),
+        "captured_at": source_cutoff,
+        "prediction_created_at": created,
+        "model_input_as_of_at": source_cutoff,
+        "source_cutoff_at": source_cutoff,
+        "market_snapshot_at": market_snapshot,
+        "odds_snapshot_at": market_snapshot,
+        "source_time_range": source_time_range,
+        "canonical_model_input_sha256": canonical_hash,
+        "canonical_input_sha256": canonical_hash,
+        "snapshot_ref": f"data/model_governance/input_snapshots/{canonical_hash}.json",
+        "projection": projection,
+    }
+    return snapshot
+
+
+def replay_deterministic_model_from_snapshot(snapshot: dict[str, Any]) -> dict[str, Any]:
+    """Replay the Champion using only a frozen deterministic input projection."""
+    projection = snapshot.get("projection") if isinstance(snapshot, dict) else None
+    if projection is None and isinstance(snapshot, dict):
+        projection = snapshot.get("input")
+    if not isinstance(projection, dict):
+        raise ValueError("deterministic model snapshot is missing its projection")
+    from automatic_model_core import build_automatic_model
+    return build_automatic_model(projection)
+
+
 def _deterministic_input(payload: dict[str, Any], input_payload: Any) -> Any:
+    if isinstance(input_payload, dict) and isinstance(input_payload.get("projection"), dict):
+        return _strip_narrative(input_payload["projection"])
     if input_payload is not None:
         return _strip_narrative(input_payload)
     report = payload.get("report") or {}
@@ -300,7 +671,7 @@ def _collect_source_refs(value: Any, key: str = "") -> list[str]:
     if isinstance(value, dict):
         for child_key, child in value.items():
             lowered = str(child_key).casefold()
-            if lowered in {"file", "path", "source_path", "snapshot_ref", "source_ref"} and isinstance(child, str):
+            if lowered in {"file", "path", "source_path", "snapshot_ref", "source_ref", "source_url", "url"} and isinstance(child, str):
                 refs.append(child)
             refs.extend(_collect_source_refs(child, lowered))
     elif isinstance(value, list):
@@ -346,6 +717,24 @@ def _build_input_snapshot(
 ) -> tuple[dict[str, Any], Any]:
     canonical_input = _deterministic_input(payload, input_payload)
     input_hash = _sha256_value(canonical_input)
+    if isinstance(input_payload, dict) and isinstance(input_payload.get("projection"), dict):
+        supplied = {
+            key: deepcopy(value)
+            for key, value in input_payload.items()
+            if key != "projection"
+        }
+        supplied_hash = supplied.get("canonical_model_input_sha256") or supplied.get("canonical_input_sha256")
+        if supplied_hash and supplied_hash != input_hash:
+            raise ValueError("model input snapshot hash does not match its projection")
+        supplied.update({
+            "snapshot_id": supplied.get("snapshot_id") or "FBOS-SNAPSHOT-" + input_hash[:24],
+            "canonical_model_input_sha256": input_hash,
+            "canonical_input_sha256": input_hash,
+            "snapshot_ref": supplied.get("snapshot_ref") or f"data/model_governance/input_snapshots/{input_hash}.json",
+            "source_refs": list(supplied.get("source_refs") or []),
+            "source_hashes": dict(supplied.get("source_hashes") or {}),
+        })
+        return supplied, canonical_input
     source_refs = _collect_source_refs(input_payload) if input_payload is not None else []
     snapshot_id = "FBOS-SNAPSHOT-" + input_hash[:24]
     metadata = {
@@ -353,8 +742,11 @@ def _build_input_snapshot(
         "manifest_ref": _manifest_ref(input_payload),
         "source_refs": source_refs,
         "source_hashes": _source_hashes(source_refs, repository_root),
-        "captured_at": source_cutoff_at or created_at,
+        "captured_at": source_cutoff_at,
+        "contract_version": "legacy_report_fallback",
+        "snapshot_contract_version": SNAPSHOT_CONTRACT_VERSION,
         "canonical_input_sha256": input_hash,
+        "canonical_model_input_sha256": input_hash,
         "snapshot_ref": f"data/model_governance/input_snapshots/{input_hash}.json",
     }
     return metadata, canonical_input
@@ -464,14 +856,30 @@ def build_prediction_record(
     model_core_version = config["champion"].get("model_core_version") if role == "champion" else model.get("method")
     model_family = model.get("method")
     release_version = report.get("model_version")
+    automation = payload.get("automation") or {}
+    supplied_model_snapshot = automation.get("model_input_snapshot")
+    effective_input_payload = input_payload if input_payload is not None else supplied_model_snapshot
+    has_model_snapshot = isinstance(effective_input_payload, dict) and isinstance(
+        effective_input_payload.get("projection"), dict
+    )
     input_snapshot, canonical_input = _build_input_snapshot(
         payload,
-        input_payload,
+        effective_input_payload,
         repository_root=repository_root,
-        source_cutoff_at=source_cutoff,
-        created_at=created_at,
+        source_cutoff_at=None,
+        created_at=report.get("analysis_timestamp"),
     )
     input_hash = input_snapshot["canonical_input_sha256"]
+    prediction_created_at = input_snapshot.get("prediction_created_at") if has_model_snapshot else None
+    prediction_created_at = prediction_created_at or report.get("prediction_created_at") or created_at
+    if has_model_snapshot:
+        source_cutoff = input_snapshot.get("source_cutoff_at")
+        odds_snapshot = input_snapshot.get("market_snapshot_at") or input_snapshot.get("odds_snapshot_at")
+    else:
+        # A report-only fallback cannot prove what the model actually saw.
+        source_cutoff = None
+        odds_snapshot = None
+    created_at = prediction_created_at
     lineup_status = _lineup_status(payload, [str(item) for item in (payload.get("data_quality") or {}).get("missing") or []])
     structural_missing: list[str] = []
     if not isinstance(probabilities, dict) or any(
@@ -479,10 +887,10 @@ def build_prediction_record(
     ):
         structural_missing.append("model.probabilities")
     for field, value in (
-        ("created_at", created_at),
+        ("prediction_created_at", prediction_created_at),
         ("kickoff_at", kickoff),
         ("source_cutoff_at", source_cutoff),
-        ("odds_snapshot_at", odds_snapshot),
+        ("market_snapshot_at", odds_snapshot),
         ("repository_commit_sha", commit),
         ("model_core_version", model_core_version),
         ("model_family", model_family),
@@ -497,6 +905,10 @@ def build_prediction_record(
     ):
         if value in (None, ""):
             structural_missing.append(field)
+    if not has_model_snapshot:
+        structural_missing.append("model_input_snapshot")
+    if odds_snapshot in (None, ""):
+        structural_missing.append("odds_snapshot_at")
     quality_missing = list(dict.fromkeys(
         str(item) for item in [
             *((payload.get("data_quality") or {}).get("missing") or []),
@@ -522,6 +934,13 @@ def build_prediction_record(
     prediction_status = "human_assisted" if manual_override else "formal" if model_formal else "research_only"
     prompt_version = (payload.get("automation") or {}).get("prompt_version") or versions.get("prompt_version")
     calibration = _calibration_metadata(config, repository_root)
+    source_fingerprint = model_source_fingerprint(repository_root)
+    prompt_affects_prediction = False
+    if role == "challenger":
+        for challenger in config.get("challengers") or []:
+            if isinstance(challenger, dict) and str(challenger.get("id") or challenger.get("challenger_id") or "") == str(challenger_id):
+                prompt_affects_prediction = bool(challenger.get("prompt_affects_prediction"))
+                break
     model_run_identity = {
         "model_role": role,
         "model_family": model_family,
@@ -529,11 +948,13 @@ def build_prediction_record(
         "release_version": release_version,
         "feature_version": versions.get("feature_version"),
         "data_pipeline_version": versions.get("data_pipeline_version"),
-        "calibration": calibration,
-        "prompt_version": prompt_version,
-        "repository_commit_sha": commit,
+        "calibration_fingerprint": calibration.get("sha256"),
+        "model_source_fingerprint": source_fingerprint["fingerprint"],
         "challenger_id": challenger_id,
+        "prompt_affects_prediction": prompt_affects_prediction,
     }
+    if prompt_affects_prediction:
+        model_run_identity["prompt_version"] = prompt_version
     model_run_fingerprint = _sha256_value(model_run_identity)
     match_identity = {
         "match_key": _match_key(payload),
@@ -558,9 +979,13 @@ def build_prediction_record(
         "prediction_id": "FBOS-PRED-" + _sha256_value(prediction_identity)[:24],
         "match_key": match_identity["match_key"],
         "created_at": created_at,
+        "prediction_created_at": prediction_created_at,
         "kickoff_at": kickoff,
         "source_cutoff_at": source_cutoff,
         "odds_snapshot_at": odds_snapshot,
+        "market_snapshot_at": odds_snapshot,
+        "model_input_as_of_at": input_snapshot.get("model_input_as_of_at"),
+        "source_time_range": input_snapshot.get("source_time_range") or {},
         "repository_commit_sha": commit,
         "model_role": role,
         "model_core_version": model_core_version,
@@ -583,11 +1008,14 @@ def build_prediction_record(
         "manual_override": manual_override if payload.get("manual_override") is not None else None,
         "lineup_status": lineup_status,
         "input_sha256": input_hash,
+        "canonical_model_input_sha256": input_snapshot.get("canonical_model_input_sha256") or input_hash,
+        "model_input_snapshot_ref": input_snapshot.get("snapshot_ref"),
         "input_snapshot": input_snapshot,
         "match_identity": match_identity,
         "snapshot_identity": snapshot_identity,
         "model_run_identity": model_run_identity,
         "model_run_fingerprint": model_run_fingerprint,
+        "model_source_fingerprint": source_fingerprint["fingerprint"],
         "prediction_sha256": None,
         "probabilities": probabilities,
         "lambda_home": model.get("lambda_home"),
@@ -616,7 +1044,7 @@ def build_prediction_record(
         # to the content-addressed snapshot file and removes it from the ledger.
         "_input_snapshot_content": canonical_input,
     }
-    record["prediction_sha256"] = _sha256_value(_without_prediction_hash(record))
+    record["prediction_sha256"] = prediction_content_hash(record)
     return record
 
 
@@ -627,11 +1055,15 @@ def _validate_record(record: dict[str, Any]) -> None:
     forbidden = sorted(_nested_postmatch_fields(record))
     if forbidden:
         raise ValueError("postmatch fields are not allowed in a frozen prediction: " + ", ".join(forbidden))
-    if record["prediction_sha256"] != _sha256_value(_without_prediction_hash(record)):
+    if record["prediction_sha256"] != prediction_content_hash(record):
         raise ValueError("prediction_sha256 does not match frozen content")
     snapshot = record.get("input_snapshot") or {}
     if snapshot.get("canonical_input_sha256") != record.get("input_sha256"):
         raise ValueError("input snapshot hash does not match input_sha256")
+    if snapshot.get("canonical_model_input_sha256") != record.get("canonical_model_input_sha256"):
+        raise ValueError("input snapshot hash does not match canonical_model_input_sha256")
+    if record.get("model_run_identity", {}).get("model_source_fingerprint") != record.get("model_source_fingerprint"):
+        raise ValueError("model source fingerprint does not match model run identity")
     if record.get("prediction_variant") == "human_assisted" and record.get("model_formal_eligible") is not False:
         raise ValueError("human-assisted prediction cannot be model-formal eligible")
 
@@ -652,6 +1084,8 @@ def _validate_snapshot_document(document: dict[str, Any], record: dict[str, Any]
         raise ValueError("input snapshot content hash mismatch")
     if snapshot.get("canonical_input_sha256") != record.get("input_sha256"):
         raise ValueError("input snapshot hash does not match prediction record")
+    if snapshot.get("canonical_model_input_sha256") != record.get("canonical_model_input_sha256"):
+        raise ValueError("input snapshot canonical hash does not match prediction record")
     return document
 
 
@@ -681,7 +1115,7 @@ def _write_snapshot(record: dict[str, Any], snapshot_root: Path) -> None:
         content = record.get("_input_snapshot_content")
         if content is None:
             return
-        if canonical_json(existing) != canonical_json({**record["input_snapshot"], "input": content}):
+        if existing.get("snapshot_id") != record["input_snapshot"].get("snapshot_id") or existing.get("input") != content:
             raise PredictionConflictError(f"input snapshot content conflict: {record['input_snapshot']['snapshot_id']}")
         return
     content = record.get("_input_snapshot_content")
@@ -720,7 +1154,7 @@ def freeze_prediction(
             existing = _load_json(target)
         except (OSError, json.JSONDecodeError) as error:
             raise PredictionConflictError(f"existing frozen prediction is unreadable: {target}") from error
-        if canonical_json(existing) != serialized:
+        if existing.get("prediction_sha256") != record.get("prediction_sha256"):
             raise PredictionConflictError(f"prediction id content conflict: {record['prediction_id']}")
         return {"status": "existing", "path": target, "record": existing}
 
@@ -755,7 +1189,13 @@ def validate_postmatch_review_link(
         return {"status": "hash_mismatch", "formal_eligible": False, "record": record}
     if review.get("model_run_fingerprint") != record.get("model_run_fingerprint"):
         return {"status": "fingerprint_mismatch", "formal_eligible": False, "record": record}
-    required_match_fields = ("source_cutoff_at", "odds_snapshot_at", "repository_commit_sha")
+    if review.get("model_source_fingerprint") != record.get("model_source_fingerprint"):
+        return {"status": "model_source_fingerprint_mismatch", "formal_eligible": False, "record": record}
+    if review.get("canonical_model_input_sha256") != record.get("canonical_model_input_sha256"):
+        return {"status": "input_snapshot_hash_mismatch", "formal_eligible": False, "record": record}
+    required_match_fields = (
+        "source_cutoff_at", "market_snapshot_at", "repository_commit_sha",
+    )
     if any(review.get(field) != record.get(field) for field in required_match_fields):
         return {"status": "snapshot_metadata_mismatch", "formal_eligible": False, "record": record}
     formal = bool(
@@ -1156,6 +1596,8 @@ def build_baseline_manifest(
     governance_implementation_commit_sha = governance_implementation_commit_sha or head or baseline_commit_sha
     baseline_export_commit_sha = baseline_export_commit_sha if baseline_export_commit_sha is not None else head if clean else None
     origin_main_observed_sha = origin_main_observed_sha or resolve_origin_main_sha(ROOT)
+    source_fingerprint = model_source_fingerprint(ROOT)
+    governance_fingerprint = governance_source_fingerprint(ROOT)
     return {
         "schema_version": "1.1",
         "baseline_id": "football-baseline-v1",
@@ -1169,6 +1611,10 @@ def build_baseline_manifest(
         "working_tree_clean": clean,
         "champion": {**config["champion"], "status": "frozen_baseline"},
         "versions": config["versions"],
+        "model_source_fingerprint": source_fingerprint["fingerprint"],
+        "governance_source_fingerprint": governance_fingerprint["fingerprint"],
+        "canonical_model_input_contract_version": config["versions"].get("canonical_model_input_contract_version"),
+        "snapshot_contract_version": config["versions"].get("snapshot_contract_version"),
         "evaluation_scope": metrics["scope"],
         "core_file_hashes": hash_files(MODEL_SOURCE_FILES)["files"],
         "governance_file_hashes": hash_files(GOVERNANCE_FILES)["files"],
@@ -1200,6 +1646,8 @@ def export_baseline(
     write_json(output_root / "current-metrics.json", metrics)
     write_json(output_root / "file-hashes.json", {
         "algorithm": "sha256",
+        "model_source_fingerprint": model_source_fingerprint(ROOT),
+        "governance_source_fingerprint": governance_source_fingerprint(ROOT),
         "core_files": hash_files(MODEL_SOURCE_FILES)["files"],
         "governance_files": hash_files(GOVERNANCE_FILES)["files"],
     })

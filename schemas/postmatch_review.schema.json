@@ -5,14 +5,21 @@
   "type": "object",
   "required": ["schema_version", "generated_at", "match", "result", "settlement", "data_grade", "prediction_layer"],
   "properties": {
-    "schema_version": {"const": "3.0"},
+    "schema_version": {"enum": ["3.0", "3.1"]},
     "prediction_id": {"type": ["string", "null"]},
     "prediction_sha256": {"type": ["string", "null"]},
     "model_run_fingerprint": {"type": ["string", "null"]},
+    "model_source_fingerprint": {"type": ["string", "null"]},
+    "canonical_model_input_sha256": {"type": ["string", "null"]},
+    "model_input_snapshot_ref": {"type": ["string", "null"]},
+    "prediction_created_at": {"type": ["string", "null"]},
+    "model_input_as_of_at": {"type": ["string", "null"]},
     "source_cutoff_at": {"type": ["string", "null"]},
+    "market_snapshot_at": {"type": ["string", "null"]},
     "odds_snapshot_at": {"type": ["string", "null"]},
+    "source_time_range": {"type": "object"},
     "repository_commit_sha": {"type": ["string", "null"]},
-    "prediction_link_status": {"enum": ["verified", "missing_prediction_id", "prediction_not_found", "hash_mismatch", "fingerprint_mismatch", "snapshot_metadata_mismatch", null]},
+    "prediction_link_status": {"enum": ["verified", "missing_prediction_id", "prediction_not_found", "hash_mismatch", "fingerprint_mismatch", "model_source_fingerprint_mismatch", "input_snapshot_hash_mismatch", "snapshot_metadata_mismatch", null]},
     "analysis_output": {"type": "object"},
     "prediction_output": {"type": "object"},
     "betting_reference_output": {"type": "object"},
@@ -67,8 +74,9 @@
   "allOf": [
     {
       "if": {
-        "required": ["prediction_layer"],
+        "required": ["schema_version", "prediction_layer"],
         "properties": {
+          "schema_version": {"const": "3.1"},
           "prediction_layer": {
             "type": "object",
             "required": ["formal_pick_eligible"],
@@ -81,7 +89,10 @@
           "prediction_id",
           "prediction_sha256",
           "model_run_fingerprint",
+          "model_source_fingerprint",
+          "canonical_model_input_sha256",
           "source_cutoff_at",
+          "market_snapshot_at",
           "odds_snapshot_at",
           "repository_commit_sha"
         ],
@@ -89,7 +100,10 @@
           "prediction_id": {"type": "string", "minLength": 1},
           "prediction_sha256": {"type": "string", "minLength": 1},
           "model_run_fingerprint": {"type": "string", "minLength": 1},
+          "model_source_fingerprint": {"type": "string", "minLength": 1},
+          "canonical_model_input_sha256": {"type": "string", "minLength": 1},
           "source_cutoff_at": {"type": "string", "minLength": 1},
+          "market_snapshot_at": {"type": "string", "minLength": 1},
           "odds_snapshot_at": {"type": "string", "minLength": 1},
           "repository_commit_sha": {"type": "string", "minLength": 1}
         }

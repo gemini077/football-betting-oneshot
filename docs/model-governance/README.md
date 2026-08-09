@@ -29,18 +29,39 @@ Every new frozen record separates three identities:
 2. `snapshot_identity`: source cutoff, odds snapshot, input hash, and snapshot
    id;
 3. `model_run_identity`: role, core/family/release, feature and pipeline
-   versions, calibration artifact hash, prompt version, source commit, and
-   Challenger id where applicable.
+   versions, calibration fingerprint, deterministic `model_source_fingerprint`,
+   and Challenger id where applicable. A prompt enters this identity only when
+   that Challenger explicitly declares `prompt_affects_prediction=true`.
 
 `prediction_id` is the hash of those three identities. Re-running the same
 match, snapshot, model run, and input is idempotent. A different release,
-feature version, code source, or Challenger gets a different id. The same id
-with changed output is an immutable-content conflict.
+feature version, deterministic source fingerprint, or Challenger gets a
+different id. `repository_commit_sha` remains an audit provenance field and
+does not make unrelated data/report commits a new model run. The same id with
+changed model output is an immutable-content conflict.
 
-The deterministic model input is stored once under
-`data/model_governance/input_snapshots/<sha256>.json`. The prediction record
-stores its manifest/reference/hash rather than a second copy. Narrative-only
-changes are excluded from the deterministic input projection.
+At the actual deterministic call site, the input is projected into
+`deterministic_model_input.v1` and the Champion is run using that exact
+projection. It is stored once under
+`data/model_governance/input_snapshots/<sha256>.json`; the prediction record
+stores its content hash/reference rather than a second copy. The projection
+contains the form, market rows, checkpoint features, script context, selected
+fixture identity, prematch facts, and calibration artifact needed to replay
+the current Champion. It excludes bankroll, open bets, HTML, report prose,
+LLM wording, and unused Polymarket content. Narrative-only changes therefore
+do not alter the deterministic input hash.
+
+The calibration artifact is a versioned deterministic execution dependency: its
+hash is part of `model_run_identity`, and the frozen projection retains the
+artifact payload needed for replay. A calibration change therefore creates a
+new model run even when the match snapshot is unchanged; it is not treated as
+market evidence or a report-writing change.
+
+`prediction_created_at` is the model execution time. `source_cutoff_at` and
+`market_snapshot_at` come only from source/checkpoint capture timestamps; a
+generic fetch-batch time is never substituted. Missing proof makes the record
+research-only. `model_input_as_of_at` and `source_time_range` preserve the
+known source timing evidence.
 
 ## Data quality and formal samples
 
@@ -78,6 +99,8 @@ frozen prediction
   exact prediction_id
   exact prediction_sha256
   exact model_run_fingerprint
+  exact model_source_fingerprint
+  exact canonical model input hash
   exact source/odds/commit metadata
       ↕
 postmatch review
@@ -117,9 +140,9 @@ snapshot-only sample inflation block review eligibility.
 
 ## Phase route
 
-Phase 0 and 0.1 establish the trustworthy freeze, identity, provenance,
-settlement, and evaluation contracts. Phase 1 may later build the Market
+Phase 0 through 0.2 establish the trustworthy freeze, identity, provenance,
+snapshot replay, settlement, and evaluation contracts. Phase 1 may later build the Market
 Baseline, Simple Baseline, and same-snapshot shadow framework. Only after that
 framework accumulates the required independent matches may a Challenger be
-considered for promotion. Phase 0.1 does not start model tuning or add xG,
-Elo, lineup, market, or page features.
+considered for promotion. Phase 0.2 does not start model tuning or add xG,
+Elo, lineup, market, simple-Poisson, or page features.

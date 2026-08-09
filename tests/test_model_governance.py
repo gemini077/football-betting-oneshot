@@ -12,6 +12,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 from automatic_model_core import build_automatic_model
 from model_governance import (
     PredictionConflictError,
+    build_deterministic_model_input_snapshot,
     build_current_metrics,
     build_prediction_record,
     can_update_parameters,
@@ -20,6 +21,9 @@ from model_governance import (
     hash_files,
     load_input_snapshot,
     load_config,
+    model_source_fingerprint,
+    prediction_content_hash,
+    replay_deterministic_model_from_snapshot,
     validate_postmatch_review_link,
 )
 
@@ -83,6 +87,63 @@ def prediction_payload(
         payload["manual_override"] = manual_override
     if lineup_status is not None:
         payload["data_quality"]["lineup_status"] = lineup_status
+    return attach_snapshot(payload)
+
+
+def deterministic_context():
+    deep = {
+        "fetched_at": "2026-08-04T23:58:00+08:00",
+        "source_provenance": {"form_primary": "nowscore_analysis"},
+        "shuju": {"recent_form": {
+            "home_overall": {"matches": 10, "goals_for": 12, "goals_against": 13},
+            "away_overall": {"matches": 10, "goals_for": 22, "goals_against": 9},
+            "home_home": {"matches": 10, "goals_for": 19, "goals_against": 11},
+            "away_away": {"matches": 10, "goals_for": 16, "goals_against": 13},
+        }},
+        "ouzhi": {"bookmakers": [
+            {"spf_current": {"home": 4.5, "draw": 4.0, "away": 1.7}},
+            {"spf_current": {"home": 4.2, "draw": 3.8, "away": 1.72}},
+        ]},
+        "daxiao": {"companies": [
+            {"name": "A", "current_line": 2.75, "current_over_water": 0.92, "current_under_water": 0.94},
+            {"name": "B", "current_line": 2.5, "current_over_water": 0.90, "current_under_water": 0.96},
+        ]},
+        "yazhi": {"companies": [
+            {"name": "A", "current_handicap": 0.0, "current_water_home": 0.90, "current_water_away": 0.94},
+            {"name": "B", "current_handicap": 0.0, "current_water_home": 0.92, "current_water_away": 0.92},
+        ]},
+        "nowscore_context": {
+            "coach": {"home": {}, "away": {}},
+            "referee": {},
+            "panlu": {},
+            "source_urls": {},
+        },
+    }
+    return {
+        "request": {"match_id": "2040514"},
+        "selected_workspace_match": {"id": "2040514", "home": "主队", "away": "客队"},
+        "source_snapshots": {"500_deep": {"snapshots": [deep]}},
+        "checkpoint_features": {
+            "snapshot_count": 1,
+            "state": "single_snapshot",
+            "latest_captured_at": "2026-08-04T23:58:30+08:00",
+            "first_captured_at": "2026-08-04T23:58:30+08:00",
+            "leader_reversals": 0,
+            "probability_delta": {"home": 0.0, "draw": 0.0, "away": 0.0},
+            "points": [],
+        },
+        "official_market_baseline": {
+            "fair_probabilities": {"home": 0.4, "draw": 0.3, "away": 0.3},
+        },
+        "model_calibration": {"active": False, "model_family": MODEL_FAMILY},
+        "hard_rules": {"bankroll_state_changed": False},
+    }
+
+
+def attach_snapshot(payload, context=None):
+    context = context or deterministic_context()
+    snapshot = build_deterministic_model_input_snapshot(context, manifest_ref="data/fetch_runs/test/manifest.json")
+    payload["automation"]["model_input_snapshot"] = snapshot
     return payload
 
 
@@ -122,17 +183,7 @@ def test_same_prediction_id_with_different_content_is_a_conflict(tmp_path):
     freeze_prediction(record, tmp_path)
     changed = dict(record)
     changed["lambda_home"] = 9.9
-    changed["prediction_sha256"] = hashlib.sha256(
-        json.dumps(
-            {
-                key: value for key, value in changed.items()
-                if key not in {"prediction_sha256", "_input_snapshot_content"}
-            },
-            ensure_ascii=False,
-            sort_keys=True,
-            separators=(",", ":"),
-        ).encode()
-    ).hexdigest()
+    changed["prediction_sha256"] = prediction_content_hash(changed)
     with pytest.raises(PredictionConflictError):
         freeze_prediction(changed, tmp_path)
 
@@ -173,9 +224,10 @@ def test_b_grade_minor_lineup_gap_can_remain_formal_when_unavailable_by_time():
 
 def test_critical_missing_field_forces_research_only():
     payload = prediction_payload("B")
-    payload["report"]["snapshot_timestamp"] = None
-    payload["report"]["market_checkpoint"] = {}
-    payload["report"]["odds_snapshot_at"] = None
+    snapshot = payload["automation"]["model_input_snapshot"]
+    snapshot["source_cutoff_at"] = None
+    snapshot["market_snapshot_at"] = None
+    snapshot["odds_snapshot_at"] = None
     record = build_prediction_record(payload, commit_sha="baseline-sha")
     assert record["formal_eligible"] is False
     assert record["prediction_status"] == "research_only"
@@ -242,12 +294,162 @@ def test_previous_release_is_not_current_champion():
 
 
 def test_prediction_identity_is_split_into_match_snapshot_and_model_run_layers():
-    record = build_prediction_record(prediction_payload(), commit_sha="baseline-sha")
+    record = build_prediction_record(attach_snapshot(prediction_payload()), commit_sha="baseline-sha")
     assert record["match_identity"]["match_key"] == record["match_key"]
     assert record["snapshot_identity"]["snapshot_id"] == record["input_snapshot"]["snapshot_id"]
     assert record["model_run_identity"]["release_version"] == RELEASE_VERSION
+    assert "repository_commit_sha" not in record["model_run_identity"]
+    assert record["model_source_fingerprint"]
     assert record["model_run_fingerprint"]
     assert record["prediction_id"].startswith("FBOS-PRED-")
+
+
+def test_unrelated_repository_commit_does_not_change_model_identity():
+    first = build_prediction_record(attach_snapshot(prediction_payload()), commit_sha="data-commit-a")
+    second = build_prediction_record(attach_snapshot(prediction_payload()), commit_sha="data-commit-b")
+    assert first["model_source_fingerprint"] == second["model_source_fingerprint"]
+    assert first["model_run_fingerprint"] == second["model_run_fingerprint"]
+    assert first["prediction_id"] == second["prediction_id"]
+    assert first["prediction_sha256"] == second["prediction_sha256"]
+
+
+def test_unrelated_repository_commit_remains_idempotent_when_frozen(tmp_path):
+    first = build_prediction_record(attach_snapshot(prediction_payload()), commit_sha="data-commit-a")
+    second = build_prediction_record(attach_snapshot(prediction_payload()), commit_sha="data-commit-b")
+    assert freeze_prediction(first, tmp_path)["status"] == "created"
+    assert freeze_prediction(second, tmp_path)["status"] == "existing"
+
+
+def test_prompt_metadata_does_not_change_deterministic_champion_identity():
+    first_payload = attach_snapshot(prediction_payload())
+    second_payload = attach_snapshot(prediction_payload())
+    first_payload["automation"]["prompt_version"] = "narrative-a"
+    second_payload["automation"]["prompt_version"] = "narrative-b"
+    first = build_prediction_record(first_payload, commit_sha="data-commit")
+    second = build_prediction_record(second_payload, commit_sha="data-commit")
+    assert first["model_run_fingerprint"] == second["model_run_fingerprint"]
+    assert first["prediction_id"] == second["prediction_id"]
+
+
+def test_model_source_fingerprint_changes_when_a_model_component_changes(tmp_path):
+    component = tmp_path / "core.py"
+    component.write_text("lambda_home = 1\n", encoding="utf-8")
+    first = model_source_fingerprint(tmp_path, components=("core.py",))
+    component.write_text("lambda_home = 2\n", encoding="utf-8")
+    second = model_source_fingerprint(tmp_path, components=("core.py",))
+    assert first["fingerprint"] != second["fingerprint"]
+
+
+def test_data_only_repository_file_does_not_change_model_source_fingerprint(tmp_path):
+    core = tmp_path / "core.py"
+    report = tmp_path / "data" / "report.json"
+    core.write_text("lambda_home = 1\n", encoding="utf-8")
+    report.parent.mkdir()
+    report.write_text('{"version": 1}\n', encoding="utf-8")
+    first = model_source_fingerprint(tmp_path, components=("core.py",))
+    report.write_text('{"version": 2}\n', encoding="utf-8")
+    second = model_source_fingerprint(tmp_path, components=("core.py",))
+    assert first["fingerprint"] == second["fingerprint"]
+
+
+def test_changed_model_source_identity_changes_prediction_id(monkeypatch):
+    first_fingerprint = {"fingerprint": "source-a", "components": {"fixture": "a"}, "algorithm": "sha256"}
+    second_fingerprint = {"fingerprint": "source-b", "components": {"fixture": "b"}, "algorithm": "sha256"}
+    monkeypatch.setattr("model_governance.model_source_fingerprint", lambda root: first_fingerprint)
+    first = build_prediction_record(attach_snapshot(prediction_payload()), commit_sha="same-commit")
+    monkeypatch.setattr("model_governance.model_source_fingerprint", lambda root: second_fingerprint)
+    second = build_prediction_record(attach_snapshot(prediction_payload()), commit_sha="same-commit")
+    assert first["model_run_fingerprint"] != second["model_run_fingerprint"]
+    assert first["prediction_id"] != second["prediction_id"]
+
+
+def test_model_input_snapshot_replays_champion_output_field_by_field():
+    context = deterministic_context()
+    original = build_automatic_model(context)
+    snapshot = build_deterministic_model_input_snapshot(context)
+    replayed = replay_deterministic_model_from_snapshot({"input": snapshot["projection"]})
+    for key in ("lambda_home", "lambda_away", "expected_goals", "probabilities", "btts", "total_goals_buckets", "score_probabilities"):
+        assert replayed["model"][key] == original["model"][key]
+    assert replayed["decisions"]["unique_score"] == original["decisions"]["unique_score"]
+    assert replayed["decisions"]["primary_contract"] == original["decisions"]["primary_contract"]
+
+
+def test_persisted_model_input_snapshot_replays_champion(tmp_path):
+    context = deterministic_context()
+    original = build_automatic_model(context)
+    payload = prediction_payload("A")
+    payload["model"] = original["model"]
+    payload["decisions"] = original["decisions"]
+    payload = attach_snapshot(payload, context)
+    record = build_prediction_record(payload, commit_sha="snapshot-commit")
+    freeze_prediction(
+        record,
+        tmp_path / "predictions",
+        input_snapshot_root=tmp_path / "input_snapshots",
+    )
+    persisted = load_input_snapshot(record, tmp_path / "input_snapshots")
+    replayed = replay_deterministic_model_from_snapshot(persisted)
+    assert replayed["model"]["probabilities"] == original["model"]["probabilities"]
+    assert replayed["model"]["lambda_home"] == original["model"]["lambda_home"]
+    assert replayed["model"]["lambda_away"] == original["model"]["lambda_away"]
+    assert replayed["decisions"]["unique_score"] == original["decisions"]["unique_score"]
+
+
+def test_unrelated_state_narrative_and_polymarket_do_not_change_model_snapshot():
+    first_context = deterministic_context()
+    second_context = deterministic_context()
+    second_context["hard_rules"] = {"bankroll_state_changed": True, "open_bets": ["unrelated"]}
+    second_context["analysis"] = {"narrative": "different wording"}
+    second_context["polymarket"] = {"prices": {"home": 0.99}}
+    first = build_deterministic_model_input_snapshot(first_context)
+    second = build_deterministic_model_input_snapshot(second_context)
+    assert first["canonical_model_input_sha256"] == second["canonical_model_input_sha256"]
+    assert first["snapshot_id"] == second["snapshot_id"]
+
+
+def test_real_model_input_changes_change_model_snapshot():
+    first_context = deterministic_context()
+    second_context = deterministic_context()
+    second_context["source_snapshots"]["500_deep"]["snapshots"][0]["ouzhi"]["bookmakers"][0]["spf_current"]["home"] = 2.2
+    second_context["source_snapshots"]["500_deep"]["snapshots"][0]["shuju"]["recent_form"]["home_overall"]["goals_for"] = 20
+    first = build_deterministic_model_input_snapshot(first_context)
+    second = build_deterministic_model_input_snapshot(second_context)
+    assert first["canonical_model_input_sha256"] != second["canonical_model_input_sha256"]
+    assert first["snapshot_id"] != second["snapshot_id"]
+
+
+def test_generic_fetch_time_cannot_be_used_as_real_source_or_market_timestamp():
+    context = deterministic_context()
+    context["manifest"] = {"fetch_time": "2026-08-04T23:59:59+08:00"}
+    context["source_snapshots"]["500_deep"]["snapshots"][0].pop("fetched_at")
+    context["checkpoint_features"].pop("latest_captured_at")
+    context["checkpoint_features"].pop("first_captured_at")
+    snapshot = build_deterministic_model_input_snapshot(context)
+    assert snapshot["source_cutoff_at"] is None
+    assert snapshot["market_snapshot_at"] is None
+
+
+def test_official_market_fallback_without_capture_time_is_not_formal_snapshot():
+    context = deterministic_context()
+    context["source_snapshots"]["500_deep"]["snapshots"][0]["ouzhi"]["bookmakers"] = []
+    snapshot = build_deterministic_model_input_snapshot(context)
+    assert snapshot["source_cutoff_at"] is None
+    assert snapshot["market_snapshot_at"] is None
+
+
+def test_external_form_fallback_without_capture_time_is_not_formal_snapshot():
+    context = deterministic_context()
+    deep = context["source_snapshots"]["500_deep"]["snapshots"][0]
+    deep["shuju"].pop("recent_form")
+    context["prematch_fundamentals"] = {
+        "recent_form": {
+            "home_overall": {"matches": 5, "goals_for": 6, "goals_against": 4},
+            "away_overall": {"matches": 5, "goals_for": 5, "goals_against": 5},
+        }
+    }
+    snapshot = build_deterministic_model_input_snapshot(context)
+    assert snapshot["source_cutoff_at"] is None
+    assert snapshot["market_snapshot_at"] is None
 
 
 def test_new_release_and_challenger_do_not_reuse_prediction_id():
@@ -494,6 +696,8 @@ def test_current_metrics_compute_formal_review_dimensions(tmp_path):
         "prediction_id": record["prediction_id"],
         "prediction_sha256": record["prediction_sha256"],
         "model_run_fingerprint": record["model_run_fingerprint"],
+        "model_source_fingerprint": record["model_source_fingerprint"],
+        "canonical_model_input_sha256": record["canonical_model_input_sha256"],
         "model_role": record["model_role"],
         "data_grade": record["data_grade"],
         "formal_eligible": record["formal_eligible"],
@@ -507,7 +711,10 @@ def test_current_metrics_compute_formal_review_dimensions(tmp_path):
         "prediction_id": record["prediction_id"],
         "prediction_sha256": record["prediction_sha256"],
         "model_run_fingerprint": record["model_run_fingerprint"],
+        "model_source_fingerprint": record["model_source_fingerprint"],
+        "canonical_model_input_sha256": record["canonical_model_input_sha256"],
         "source_cutoff_at": record["source_cutoff_at"],
+        "market_snapshot_at": record["market_snapshot_at"],
         "odds_snapshot_at": record["odds_snapshot_at"],
         "repository_commit_sha": record["repository_commit_sha"],
         "prediction_layer": {"formal_pick_eligible": True},
@@ -543,7 +750,10 @@ def test_postmatch_exact_prediction_join_rejects_hash_mismatch(tmp_path):
         "prediction_id": record["prediction_id"],
         "prediction_sha256": "wrong",
         "model_run_fingerprint": record["model_run_fingerprint"],
+        "model_source_fingerprint": record["model_source_fingerprint"],
+        "canonical_model_input_sha256": record["canonical_model_input_sha256"],
         "source_cutoff_at": record["source_cutoff_at"],
+        "market_snapshot_at": record["market_snapshot_at"],
         "odds_snapshot_at": record["odds_snapshot_at"],
         "repository_commit_sha": record["repository_commit_sha"],
         "prediction_layer": {"formal_pick_eligible": True},

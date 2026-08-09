@@ -631,7 +631,7 @@ def build_payload(
         "state": "空仓（未形成候选）",
     }
     base = {
-        "schema_version": "1.0",
+        "schema_version": "1.1",
         "report": {
             "model_name": state.get("model_name", "Football Betting OneShot"),
             "model_version": state.get("model_version", "v0.12.0"),
@@ -1472,15 +1472,10 @@ def main() -> int:
     payload = build_payload(manifest, official, trade, deep, state, analysis, polymarket)
     model = payload.get("model") or {}
     if isinstance(model.get("probabilities"), dict) and model.get("lambda_home") is not None and model.get("lambda_away") is not None:
-        governance_input = {
-            "manifest": manifest,
-            "official": official,
-            "trade": trade,
-            "deep": deep,
-            "state": state,
-            "analysis": analysis,
-            "polymarket": polymarket,
-        }
+        # The deterministic execution stage already persisted the exact
+        # projection consumed by the Champion.  A legacy report without it is
+        # intentionally research-only; this layer must not reconstruct input.
+        governance_input = (payload.get("automation") or {}).get("model_input_snapshot")
         governance_record = build_prediction_record(
             payload,
             repository_root=PROJECT_ROOT,
@@ -1494,6 +1489,9 @@ def main() -> int:
             "prediction_id": governance_record["prediction_id"],
             "prediction_sha256": governance_record["prediction_sha256"],
             "model_run_fingerprint": governance_record["model_run_fingerprint"],
+            "model_source_fingerprint": governance_record["model_source_fingerprint"],
+            "canonical_model_input_sha256": governance_record["canonical_model_input_sha256"],
+            "model_input_snapshot_ref": governance_record["model_input_snapshot_ref"],
             "model_role": governance_record["model_role"],
             "model_core_version": governance_record["model_core_version"],
             "model_family": governance_record["model_family"],
@@ -1510,8 +1508,12 @@ def main() -> int:
             "critical_missing_fields": governance_record["critical_missing_fields"],
             "noncritical_missing_fields": governance_record["noncritical_missing_fields"],
             "lineup_status": governance_record["lineup_status"],
+            "prediction_created_at": governance_record["prediction_created_at"],
+            "model_input_as_of_at": governance_record["model_input_as_of_at"],
             "source_cutoff_at": governance_record["source_cutoff_at"],
+            "market_snapshot_at": governance_record["market_snapshot_at"],
             "odds_snapshot_at": governance_record["odds_snapshot_at"],
+            "source_time_range": governance_record["source_time_range"],
             "repository_commit_sha": governance_record["repository_commit_sha"],
             "input_sha256": governance_record["input_sha256"],
             "input_snapshot": governance_record["input_snapshot"],
