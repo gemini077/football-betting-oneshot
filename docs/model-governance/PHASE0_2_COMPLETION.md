@@ -65,10 +65,9 @@ they are not relabeled as frozen predictions.
 - Fixed fixture digest before and after:
   `b104c0f81c2a5c457967d9047b41e389209b99bd3cfc1613d9fb13fb0c2175df`
 - Governance tests: `52 passed`.
-- Directly related tests: `105 passed` in the final focused run before the
-  schema-contract test was added; the full suite below includes the added
-  coverage.
-- Full suite: `343 passed, 6 existing openpyxl warnings`.
+- Directly related tests: `106 passed`.
+- Governance tests: `52 passed`.
+- Full suite: `344 passed, 6 existing openpyxl warnings`.
 - Python compilation passed.
 - JSON parsing passed for config and both schemas.
 - `git diff --check` passed after removing the one trailing-whitespace issue.
@@ -89,6 +88,12 @@ out-of-sample data and every human-review gate are satisfied.
 
 ## Delivery state
 
-PR #62 remains Draft and must not be automatically merged. Final push SHA and
-GitHub mergeability are recorded in the handoff package and final delivery
-report after the branch is pushed.
+- PR #62: `OPEN`, Draft, title
+  `chore(model): freeze auditable champion baseline`.
+- PR head SHA: `d6a84cda27d364c4a58539bdc27f253270689657`.
+- PR base SHA: `c2b790326be7603d215fb68fb7ad9fc24095ab21`.
+- Mergeability: `MERGEABLE`; merge state: `CLEAN`.
+- URL: https://github.com/gemini077/football-betting-oneshot/pull/62
+
+The branch is pushed but PR #62 remains Draft and was not automatically
+merged.
