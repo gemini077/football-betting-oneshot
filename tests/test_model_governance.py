@@ -169,6 +169,27 @@ def test_governance_version_fields_are_complete():
     assert prediction_payload()["automation"]["provider"] == "fixed-python-core"
 
 
+def test_governance_schemas_declare_conditional_identity_contracts():
+    analysis_schema = json.loads((ROOT / "schemas" / "analysis_report.schema.json").read_text(encoding="utf-8"))
+    analysis_branch = next(
+        branch for branch in analysis_schema["allOf"]
+        if branch.get("if", {}).get("properties", {}).get("schema_version", {}).get("const") == "1.1"
+    )
+    assert {
+        "analysis_output",
+        "prediction_output",
+        "betting_reference_output",
+        "model_governance",
+    } <= set(analysis_branch["then"]["required"])
+    assert "model_input_snapshot_ref" in analysis_branch["then"]["properties"]["model_governance"]["required"]
+
+    postmatch_schema = json.loads((ROOT / "schemas" / "postmatch_review.schema.json").read_text(encoding="utf-8"))
+    postmatch_branch = postmatch_schema["allOf"][0]
+    assert "prediction_id" in postmatch_branch["then"]["required"]
+    assert "model_source_fingerprint" in postmatch_branch["then"]["required"]
+    assert "canonical_model_input_sha256" in postmatch_branch["then"]["required"]
+
+
 def test_same_input_freeze_is_idempotent(tmp_path):
     record = build_prediction_record(prediction_payload(), commit_sha="baseline-sha")
     first = freeze_prediction(record, tmp_path)
