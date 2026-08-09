@@ -32,9 +32,16 @@
   snapshot. A new record with missing source cutoff or market capture time is
   research-only.
 - `repository_commit_sha` is retained for audit provenance, but it is not a
-  deterministic model identity. The model identity is the source-component
-  fingerprint plus calibration fingerprint; the current source-component
-  trace is conservative for mixed-responsibility files.
+  deterministic model identity. The source-component fingerprint excludes the
+  calibration artifact bytes. `calibration_artifact_sha256` is the complete
+  file's audit hash; `effective_calibration_fingerprint` is the model identity
+  for only active, compatible, approved calibration fields. The current
+  source-component trace is conservative for mixed-responsibility files.
+- The current calibration artifact is inactive (`active=false` and
+  `shadow_only`). Its samples, timestamps, validation values, and unapproved
+  candidate parameters are therefore excluded from Champion identity. If a
+  calibration section is later approved, only the parameters consumed by the
+  mathematical core are included in the effective fingerprint.
 - The model report may have narrative or DeepSeek content that does not alter
   deterministic probabilities. That narrative is intentionally excluded from
   the Champion deterministic input hash. A future Challenger using narrative
@@ -43,4 +50,4 @@
   isolated as `human_assisted` and cannot be used to claim pure model accuracy.
 - Current evidence does not establish that the Champion beats a market or
   simple baseline. No Challenger is registered or eligible for promotion in
-  Phase 0.2.
+  Phase 0.2.1.

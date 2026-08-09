@@ -9,7 +9,7 @@ deleted or converted into a bet.
 
 ## Frozen Champion
 
-Phase 0.1 has one registered Champion:
+Phase 0 through 0.2.1 has one registered Champion:
 
 - Core and family: `recent_form_market_calibrated_poisson_v2`
 - Release: `v0.19.0`
@@ -29,8 +29,9 @@ Every new frozen record separates three identities:
 2. `snapshot_identity`: source cutoff, odds snapshot, input hash, and snapshot
    id;
 3. `model_run_identity`: role, core/family/release, feature and pipeline
-   versions, calibration fingerprint, deterministic `model_source_fingerprint`,
-   and Challenger id where applicable. A prompt enters this identity only when
+   versions, effective calibration fingerprint, deterministic
+   `model_source_fingerprint`, and Challenger id where applicable. A prompt
+   enters this identity only when
    that Challenger explicitly declares `prompt_affects_prediction=true`.
 
 `prediction_id` is the hash of those three identities. Re-running the same
@@ -46,16 +47,21 @@ projection. It is stored once under
 `data/model_governance/input_snapshots/<sha256>.json`; the prediction record
 stores its content hash/reference rather than a second copy. The projection
 contains the form, market rows, checkpoint features, script context, selected
-fixture identity, prematch facts, and calibration artifact needed to replay
-the current Champion. It excludes bankroll, open bets, HTML, report prose,
+fixture identity, prematch facts, and effective calibration state needed to
+replay the current Champion. It excludes raw calibration research metadata,
+bankroll, open bets, HTML, report prose,
 LLM wording, and unused Polymarket content. Narrative-only changes therefore
 do not alter the deterministic input hash.
 
-The calibration artifact is a versioned deterministic execution dependency: its
-hash is part of `model_run_identity`, and the frozen projection retains the
-artifact payload needed for replay. A calibration change therefore creates a
-new model run even when the match snapshot is unchanged; it is not treated as
-market evidence or a report-writing change.
+Calibration provenance and identity are separate. The complete file hash is
+stored as `calibration_artifact_sha256` for audit provenance only. The
+`effective_calibration_fingerprint` hashes only the active, compatible,
+approved fields consumed by the deterministic core; the compatibility alias
+`calibration_fingerprint` points to that effective value. When the artifact is
+inactive, changes to generated timestamps, samples, validation metrics, or
+unapproved candidates do not create a new Champion run. An active approved
+parameter change does create a new model run even when the match snapshot is
+unchanged.
 
 `prediction_created_at` is the model execution time. `source_cutoff_at` and
 `market_snapshot_at` come only from source/checkpoint capture timestamps; a
@@ -140,9 +146,9 @@ snapshot-only sample inflation block review eligibility.
 
 ## Phase route
 
-Phase 0 through 0.2 establish the trustworthy freeze, identity, provenance,
+Phase 0 through 0.2.1 establish the trustworthy freeze, identity, provenance,
 snapshot replay, settlement, and evaluation contracts. Phase 1 may later build the Market
 Baseline, Simple Baseline, and same-snapshot shadow framework. Only after that
 framework accumulates the required independent matches may a Challenger be
-considered for promotion. Phase 0.2 does not start model tuning or add xG,
+considered for promotion. Phase 0.2.1 does not start model tuning or add xG,
 Elo, lineup, market, simple-Poisson, or page features.

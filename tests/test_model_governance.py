@@ -12,10 +12,12 @@ sys.path.insert(0, str(ROOT / "scripts"))
 from automatic_model_core import build_automatic_model
 from model_governance import (
     PredictionConflictError,
+    build_deterministic_model_input_projection,
     build_deterministic_model_input_snapshot,
     build_current_metrics,
     build_prediction_record,
     can_update_parameters,
+    effective_calibration_projection,
     evaluate_promotion,
     freeze_prediction,
     hash_files,
@@ -182,6 +184,10 @@ def test_governance_schemas_declare_conditional_identity_contracts():
         "model_governance",
     } <= set(analysis_branch["then"]["required"])
     assert "model_input_snapshot_ref" in analysis_branch["then"]["properties"]["model_governance"]["required"]
+    assert {
+        "calibration_artifact_sha256",
+        "effective_calibration_fingerprint",
+    } <= set(analysis_branch["then"]["properties"]["model_governance"]["required"])
 
     postmatch_schema = json.loads((ROOT / "schemas" / "postmatch_review.schema.json").read_text(encoding="utf-8"))
     postmatch_branch = postmatch_schema["allOf"][0]
@@ -350,6 +356,179 @@ def test_prompt_metadata_does_not_change_deterministic_champion_identity():
     second = build_prediction_record(second_payload, commit_sha="data-commit")
     assert first["model_run_fingerprint"] == second["model_run_fingerprint"]
     assert first["prediction_id"] == second["prediction_id"]
+
+
+def _calibration_config(path):
+    config = json.loads((ROOT / "config" / "model_governance.json").read_text(encoding="utf-8"))
+    config["champion"]["calibration_artifact"] = str(path)
+    return config
+
+
+def _inactive_calibration(**overrides):
+    value = {
+        "schema_version": "1.0",
+        "generated_at": "2026-08-01T00:00:00+00:00",
+        "status": "shadow_only",
+        "active": False,
+        "model_family": MODEL_FAMILY,
+        "sample": {"compatible": 23, "training": 16, "holdout": 7},
+        "training": {"loss": 1.2},
+        "holdout": {"loss": 1.3},
+        "validation": {"brier": 0.6},
+        "policy": {"strength": 0.3},
+        "direction": {
+            "approved": False,
+            "logit_offsets": {"home": 0.08, "draw": -0.16, "away": 0.08},
+            "validation": {"brier_before": 0.62, "brier_after": 0.63},
+        },
+        "total_goals": {
+            "approved": False,
+            "lambda_shift": 0.07,
+            "validation": {"mae_before": 1.5, "mae_after": 1.4},
+        },
+        "dispersion": {
+            "approved": False,
+            "tail_mixture_weight": 0.09,
+            "state": "shadow_until_40_samples",
+        },
+    }
+    value.update(overrides)
+    return value
+
+
+def _active_calibration():
+    return {
+        "schema_version": "1.0",
+        "status": "active",
+        "active": True,
+        "model_family": MODEL_FAMILY,
+        "policy": {"strength": 0.3},
+        "direction": {
+            "approved": True,
+            "logit_offsets": {"home": 0.12, "draw": -0.18, "away": 0.06},
+        },
+        "total_goals": {"approved": True, "lambda_shift": 0.12},
+        "dispersion": {"approved": True, "tail_mixture_weight": 0.08},
+        "sample": {"compatible": 100},
+        "validation": {"brier": 0.5},
+    }
+
+
+def _write_calibration(path, value):
+    path.write_text(json.dumps(value, ensure_ascii=False, indent=2), encoding="utf-8")
+    return path
+
+
+def test_inactive_calibration_research_updates_do_not_change_identity_or_output(tmp_path):
+    first_artifact = _inactive_calibration(generated_at="2026-08-01T00:00:00+00:00")
+    second_artifact = _inactive_calibration(
+        generated_at="2026-08-09T00:00:00+00:00",
+        sample={"compatible": 100, "training": 80, "holdout": 20},
+        validation={"brier": 0.4, "log_loss": 0.5},
+        direction={
+            "approved": False,
+            "logit_offsets": {"home": 0.4, "draw": -0.8, "away": 0.4},
+            "validation": {"brier_before": 0.4, "brier_after": 0.3},
+        },
+        total_goals={
+            "approved": False,
+            "lambda_shift": 0.9,
+            "validation": {"mae_before": 1.1, "mae_after": 0.9},
+        },
+    )
+    first_path = _write_calibration(tmp_path / "inactive-a.json", first_artifact)
+    second_path = _write_calibration(tmp_path / "inactive-b.json", second_artifact)
+
+    first_effective = effective_calibration_projection(first_artifact)
+    second_effective = effective_calibration_projection(second_artifact)
+    assert first_effective == second_effective
+    assert set(first_effective) == {"model_family", "active", "effective"}
+    first_context = deterministic_context()
+    second_context = deterministic_context()
+    first_context["model_calibration"] = first_artifact
+    second_context["model_calibration"] = second_artifact
+    first_output = build_automatic_model(build_deterministic_model_input_projection(first_context))
+    second_output = build_automatic_model(build_deterministic_model_input_projection(second_context))
+    assert first_output == second_output
+
+    first = build_prediction_record(
+        prediction_payload(), config=_calibration_config(first_path), commit_sha="same-commit"
+    )
+    second = build_prediction_record(
+        prediction_payload(), config=_calibration_config(second_path), commit_sha="same-commit"
+    )
+    assert first["calibration_artifact_sha256"] != second["calibration_artifact_sha256"]
+    assert first["effective_calibration_fingerprint"] == second["effective_calibration_fingerprint"]
+    assert first["model_source_fingerprint"] == second["model_source_fingerprint"]
+    assert first["model_run_fingerprint"] == second["model_run_fingerprint"]
+    assert first["prediction_id"] == second["prediction_id"]
+    assert first["prediction_sha256"] == second["prediction_sha256"]
+
+
+def test_inactive_to_active_calibration_changes_effective_identity_and_output(tmp_path):
+    inactive_path = _write_calibration(tmp_path / "inactive.json", _inactive_calibration())
+    active_path = _write_calibration(tmp_path / "active.json", _active_calibration())
+    inactive_context = deterministic_context()
+    active_context = deterministic_context()
+    inactive_context["model_calibration"] = _inactive_calibration()
+    active_context["model_calibration"] = _active_calibration()
+    active_projection = effective_calibration_projection(active_context["model_calibration"])
+    assert active_projection["direction"]["logit_offsets"]["home"] == 0.12
+    assert active_projection["total_goals"]["lambda_shift"] == 0.12
+    assert active_projection["dispersion"]["tail_mixture_weight"] == 0.08
+    inactive_output = build_automatic_model(build_deterministic_model_input_projection(inactive_context))
+    active_output = build_automatic_model(build_deterministic_model_input_projection(active_context))
+    assert inactive_output["model"]["lambda_home"] != active_output["model"]["lambda_home"]
+
+    inactive = build_prediction_record(
+        prediction_payload(), config=_calibration_config(inactive_path), commit_sha="same-commit"
+    )
+    active = build_prediction_record(
+        prediction_payload(), config=_calibration_config(active_path), commit_sha="same-commit"
+    )
+    assert inactive["effective_calibration_fingerprint"] != active["effective_calibration_fingerprint"]
+    assert inactive["model_run_fingerprint"] != active["model_run_fingerprint"]
+    assert inactive["prediction_id"] != active["prediction_id"]
+
+
+def test_active_effective_parameter_change_changes_prediction_identity(tmp_path):
+    first_artifact = _active_calibration()
+    second_artifact = _active_calibration()
+    second_artifact["total_goals"]["lambda_shift"] = 0.24
+    first_path = _write_calibration(tmp_path / "active-a.json", first_artifact)
+    second_path = _write_calibration(tmp_path / "active-b.json", second_artifact)
+    first = build_prediction_record(
+        prediction_payload(), config=_calibration_config(first_path), commit_sha="same-commit"
+    )
+    second = build_prediction_record(
+        prediction_payload(), config=_calibration_config(second_path), commit_sha="same-commit"
+    )
+    assert first["effective_calibration_fingerprint"] != second["effective_calibration_fingerprint"]
+    assert first["prediction_id"] != second["prediction_id"]
+
+
+def test_active_validation_only_change_does_not_change_prediction_identity(tmp_path):
+    first_artifact = _active_calibration()
+    second_artifact = _active_calibration()
+    second_artifact["validation"] = {"brier": 0.1, "log_loss": 0.2, "generated_at": "later"}
+    second_artifact["sample"] = {"compatible": 999, "holdout": 999}
+    first_path = _write_calibration(tmp_path / "active-validation-a.json", first_artifact)
+    second_path = _write_calibration(tmp_path / "active-validation-b.json", second_artifact)
+    first = build_prediction_record(
+        prediction_payload(), config=_calibration_config(first_path), commit_sha="same-commit"
+    )
+    second = build_prediction_record(
+        prediction_payload(), config=_calibration_config(second_path), commit_sha="same-commit"
+    )
+    assert first["calibration_artifact_sha256"] != second["calibration_artifact_sha256"]
+    assert first["effective_calibration_fingerprint"] == second["effective_calibration_fingerprint"]
+    assert first["model_run_fingerprint"] == second["model_run_fingerprint"]
+    assert first["prediction_id"] == second["prediction_id"]
+
+
+def test_full_calibration_artifact_is_not_a_model_source_component():
+    source = model_source_fingerprint(ROOT)
+    assert "data/model_calibration/latest.json" not in source["components"]
 
 
 def test_model_source_fingerprint_changes_when_a_model_component_changes(tmp_path):

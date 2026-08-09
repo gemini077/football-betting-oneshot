@@ -709,6 +709,8 @@ def build_review(schedule: dict, report: dict, now: datetime) -> dict:
     prediction_sha256 = governance.get("prediction_sha256")
     model_run_fingerprint = governance.get("model_run_fingerprint")
     model_source_fingerprint = governance.get("model_source_fingerprint")
+    calibration_artifact_sha256 = governance.get("calibration_artifact_sha256")
+    effective_calibration_fingerprint = governance.get("effective_calibration_fingerprint")
     canonical_model_input_sha256 = governance.get("canonical_model_input_sha256")
     model_input_snapshot_ref = governance.get("model_input_snapshot_ref")
     prediction_created_at = governance.get("prediction_created_at")
@@ -748,6 +750,8 @@ def build_review(schedule: dict, report: dict, now: datetime) -> dict:
         "prediction_sha256": prediction_sha256,
         "model_run_fingerprint": model_run_fingerprint,
         "model_source_fingerprint": model_source_fingerprint,
+        "calibration_artifact_sha256": calibration_artifact_sha256,
+        "effective_calibration_fingerprint": effective_calibration_fingerprint,
         "canonical_model_input_sha256": canonical_model_input_sha256,
         "model_input_snapshot_ref": model_input_snapshot_ref,
         "prediction_created_at": prediction_created_at,

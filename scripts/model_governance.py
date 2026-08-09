@@ -24,11 +24,13 @@ DEFAULT_RECORD_ROOT = ROOT / "data" / "model_governance" / "predictions"
 DEFAULT_INPUT_SNAPSHOT_ROOT = ROOT / "data" / "model_governance" / "input_snapshots"
 MODEL_INPUT_CONTRACT_VERSION = "deterministic_model_input.v1"
 SNAPSHOT_CONTRACT_VERSION = "governance_snapshot.v2"
+DEFAULT_CALIBRATION_ARTIFACT = "data/model_calibration/latest.json"
 
 REQUIRED_RECORD_FIELDS = (
     "prediction_id", "match_key", "created_at", "kickoff_at", "source_cutoff_at",
     "prediction_created_at", "model_input_as_of_at", "market_snapshot_at", "source_time_range",
     "odds_snapshot_at", "repository_commit_sha", "model_source_fingerprint",
+    "calibration_artifact_sha256", "effective_calibration_fingerprint",
     "canonical_model_input_sha256", "model_input_snapshot_ref", "model_role", "model_core_version",
     "model_family", "release_version", "feature_version", "data_pipeline_version",
     "report_schema_version", "postmatch_schema_version", "prompt_version", "data_grade",
@@ -55,7 +57,6 @@ MODEL_SOURCE_FILES = (
     "scripts/prematch_fundamentals.py",
     "scripts/match_identity.py",
     "scripts/deepseek_auto_analysis.py",
-    "data/model_calibration/latest.json",
 )
 MODEL_SOURCE_COMPONENTS = (
     ("scripts/automatic_model_core.py", None),
@@ -71,8 +72,9 @@ MODEL_SOURCE_COMPONENTS = (
     ("scripts/deepseek_auto_analysis.py", "analysis_context"),
     ("scripts/model_governance.py", "_pick"),
     ("scripts/model_governance.py", "_project_market_snapshot"),
+    ("scripts/model_governance.py", "_number"),
+    ("scripts/model_governance.py", "effective_calibration_projection"),
     ("scripts/model_governance.py", "build_deterministic_model_input_projection"),
-    ("data/model_calibration/latest.json", None),
 )
 GOVERNANCE_FILES = (
     "scripts/model_governance.py",
@@ -93,6 +95,7 @@ _NARRATIVE_KEYS = {
 }
 _AUDIT_ONLY_PREDICTION_FIELDS = {
     "repository_commit_sha",
+    "calibration_artifact_sha256",
     "created_at",
     "prediction_created_at",
     "prompt_version",
@@ -278,6 +281,66 @@ def _number(value: Any) -> float | None:
         return None
 
 
+def effective_calibration_projection(calibration: Any) -> dict[str, Any]:
+    """Return only calibration state consumed by the deterministic Champion.
+
+    The calibration JSON is also a research and audit artifact.  Its sample,
+    validation, timestamps, and unapproved candidate values must not become a
+    model identity input while the artifact is inactive or a section remains
+    unapproved.  The projection mirrors the gates in
+    ``automatic_model_core._calibration_state`` and the parameters read by
+    ``build_automatic_model`` without changing that mathematical core.
+    """
+    from automatic_model_core import MODEL_FAMILY
+
+    payload = calibration if isinstance(calibration, dict) else {}
+    compatible = bool(payload.get("active")) and payload.get("model_family") == MODEL_FAMILY
+    if not compatible:
+        return {
+            "model_family": MODEL_FAMILY,
+            "active": False,
+            "effective": False,
+        }
+
+    policy = payload.get("policy") if isinstance(payload.get("policy"), dict) else {}
+    strength = _number(policy.get("strength")) or 0.0
+    strength = max(0.0, min(0.6, strength))
+    projection: dict[str, Any] = {
+        "model_family": MODEL_FAMILY,
+        "active": True,
+        "effective": True,
+        "policy": {"strength": strength},
+    }
+
+    direction = payload.get("direction") if isinstance(payload.get("direction"), dict) else {}
+    direction_approved = bool(direction.get("approved"))
+    direction_projection: dict[str, Any] = {"approved": direction_approved}
+    if direction_approved:
+        offsets = direction.get("logit_offsets") if isinstance(direction.get("logit_offsets"), dict) else {}
+        direction_projection["logit_offsets"] = {
+            key: _number(offsets.get(key)) or 0.0
+            for key in ("home", "draw", "away")
+        }
+    projection["direction"] = direction_projection
+
+    total_goals = payload.get("total_goals") if isinstance(payload.get("total_goals"), dict) else {}
+    total_approved = bool(total_goals.get("approved"))
+    total_projection: dict[str, Any] = {"approved": total_approved}
+    if total_approved:
+        total_projection["lambda_shift"] = _number(total_goals.get("lambda_shift")) or 0.0
+    projection["total_goals"] = total_projection
+
+    dispersion = payload.get("dispersion") if isinstance(payload.get("dispersion"), dict) else {}
+    dispersion_approved = bool(dispersion.get("approved"))
+    dispersion_projection: dict[str, Any] = {"approved": dispersion_approved}
+    if dispersion_approved:
+        dispersion_projection["tail_mixture_weight"] = _number(
+            dispersion.get("tail_mixture_weight")
+        ) or 0.0
+    projection["dispersion"] = dispersion_projection
+    return projection
+
+
 def _match_key(payload: dict[str, Any]) -> str:
     match = payload.get("match") or {}
     for key in ("canonical_match_id", "match_id", "shuju_id"):
@@ -457,7 +520,10 @@ def build_deterministic_model_input_projection(context: dict[str, Any]) -> dict[
         "official_market_baseline": deepcopy(context.get("official_market_baseline") or {}),
         "checkpoint_features": deepcopy(context.get("checkpoint_features") or {}),
         "prematch_fundamentals": deepcopy(context.get("prematch_fundamentals") or {}),
-        "model_calibration": deepcopy(context.get("model_calibration") or {}),
+        # The raw artifact contains research metadata and unapproved
+        # candidates.  Only the effective state is a deterministic model
+        # input; the complete artifact hash is retained separately for audit.
+        "model_calibration": effective_calibration_projection(context.get("model_calibration") or {}),
     }
     return projection
 
@@ -756,21 +822,33 @@ def _calibration_metadata(config: dict[str, Any], repository_root: Path) -> dict
     reference = (
         config.get("champion", {}).get("calibration_artifact")
         or config.get("versions", {}).get("calibration_artifact")
-        or "data/model_calibration/latest.json"
+        or DEFAULT_CALIBRATION_ARTIFACT
     )
     path = Path(reference)
     if not path.is_absolute():
         path = repository_root / path
     artifact_hash = sha256_file(path) if path.is_file() else None
     version = None
+    artifact: dict[str, Any] = {}
     if path.is_file():
         try:
-            artifact = _load_json(path)
-            if isinstance(artifact, dict):
+            loaded = _load_json(path)
+            if isinstance(loaded, dict):
+                artifact = loaded
                 version = artifact.get("calibration_version") or artifact.get("schema_version") or artifact.get("generated_at")
         except (OSError, json.JSONDecodeError):
             pass
-    return {"reference": str(reference), "version": version, "sha256": artifact_hash}
+    effective = effective_calibration_projection(artifact)
+    effective_fingerprint = _sha256_value(effective)
+    return {
+        "reference": str(reference),
+        "version": version,
+        "calibration_artifact_sha256": artifact_hash,
+        "effective_calibration_projection": effective,
+        "effective_calibration_fingerprint": effective_fingerprint,
+        # Compatibility alias: this is no longer the raw artifact hash.
+        "calibration_fingerprint": effective_fingerprint,
+    }
 
 
 def _lineup_status(payload: dict[str, Any], missing: list[str]) -> str | None:
@@ -948,7 +1026,8 @@ def build_prediction_record(
         "release_version": release_version,
         "feature_version": versions.get("feature_version"),
         "data_pipeline_version": versions.get("data_pipeline_version"),
-        "calibration_fingerprint": calibration.get("sha256"),
+        "effective_calibration_fingerprint": calibration.get("effective_calibration_fingerprint"),
+        "calibration_fingerprint": calibration.get("effective_calibration_fingerprint"),
         "model_source_fingerprint": source_fingerprint["fingerprint"],
         "challenger_id": challenger_id,
         "prompt_affects_prediction": prompt_affects_prediction,
@@ -987,6 +1066,11 @@ def build_prediction_record(
         "model_input_as_of_at": input_snapshot.get("model_input_as_of_at"),
         "source_time_range": input_snapshot.get("source_time_range") or {},
         "repository_commit_sha": commit,
+        "calibration_artifact_sha256": calibration.get("calibration_artifact_sha256"),
+        "effective_calibration_fingerprint": calibration.get("effective_calibration_fingerprint"),
+        # Compatibility alias: consumers must treat this as the effective
+        # calibration identity, never as the complete artifact hash.
+        "calibration_fingerprint": calibration.get("effective_calibration_fingerprint"),
         "model_role": role,
         "model_core_version": model_core_version,
         "model_family": model_family,
@@ -1064,6 +1148,10 @@ def _validate_record(record: dict[str, Any]) -> None:
         raise ValueError("input snapshot hash does not match canonical_model_input_sha256")
     if record.get("model_run_identity", {}).get("model_source_fingerprint") != record.get("model_source_fingerprint"):
         raise ValueError("model source fingerprint does not match model run identity")
+    if record.get("model_run_identity", {}).get("effective_calibration_fingerprint") != record.get(
+        "effective_calibration_fingerprint"
+    ):
+        raise ValueError("effective calibration fingerprint does not match model run identity")
     if record.get("prediction_variant") == "human_assisted" and record.get("model_formal_eligible") is not False:
         raise ValueError("human-assisted prediction cannot be model-formal eligible")
 
@@ -1598,6 +1686,7 @@ def build_baseline_manifest(
     origin_main_observed_sha = origin_main_observed_sha or resolve_origin_main_sha(ROOT)
     source_fingerprint = model_source_fingerprint(ROOT)
     governance_fingerprint = governance_source_fingerprint(ROOT)
+    calibration = _calibration_metadata(config, ROOT)
     return {
         "schema_version": "1.1",
         "baseline_id": "football-baseline-v1",
@@ -1613,6 +1702,8 @@ def build_baseline_manifest(
         "versions": config["versions"],
         "model_source_fingerprint": source_fingerprint["fingerprint"],
         "governance_source_fingerprint": governance_fingerprint["fingerprint"],
+        "calibration_artifact_sha256": calibration.get("calibration_artifact_sha256"),
+        "effective_calibration_fingerprint": calibration.get("effective_calibration_fingerprint"),
         "canonical_model_input_contract_version": config["versions"].get("canonical_model_input_contract_version"),
         "snapshot_contract_version": config["versions"].get("snapshot_contract_version"),
         "evaluation_scope": metrics["scope"],
@@ -1648,6 +1739,8 @@ def export_baseline(
         "algorithm": "sha256",
         "model_source_fingerprint": model_source_fingerprint(ROOT),
         "governance_source_fingerprint": governance_source_fingerprint(ROOT),
+        "calibration_artifact_sha256": _calibration_metadata(config, ROOT).get("calibration_artifact_sha256"),
+        "effective_calibration_fingerprint": _calibration_metadata(config, ROOT).get("effective_calibration_fingerprint"),
         "core_files": hash_files(MODEL_SOURCE_FILES)["files"],
         "governance_files": hash_files(GOVERNANCE_FILES)["files"],
     })

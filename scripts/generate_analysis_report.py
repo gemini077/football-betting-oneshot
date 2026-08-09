@@ -1490,6 +1490,8 @@ def main() -> int:
             "prediction_sha256": governance_record["prediction_sha256"],
             "model_run_fingerprint": governance_record["model_run_fingerprint"],
             "model_source_fingerprint": governance_record["model_source_fingerprint"],
+            "calibration_artifact_sha256": governance_record["calibration_artifact_sha256"],
+            "effective_calibration_fingerprint": governance_record["effective_calibration_fingerprint"],
             "canonical_model_input_sha256": governance_record["canonical_model_input_sha256"],
             "model_input_snapshot_ref": governance_record["model_input_snapshot_ref"],
             "model_role": governance_record["model_role"],
