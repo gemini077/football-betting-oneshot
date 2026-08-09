@@ -90,10 +90,10 @@ out-of-sample data and every human-review gate are satisfied.
 
 - PR #62: `OPEN`, Draft, title
   `chore(model): freeze auditable champion baseline`.
-- PR head SHA: `d6a84cda27d364c4a58539bdc27f253270689657`.
 - PR base SHA: `c2b790326be7603d215fb68fb7ad9fc24095ab21`.
 - Mergeability: `MERGEABLE`; merge state: `CLEAN`.
 - URL: https://github.com/gemini077/football-betting-oneshot/pull/62
 
-The branch is pushed but PR #62 remains Draft and was not automatically
-merged.
+The final remote branch SHA is captured in the handoff package and delivery
+report. The branch is pushed but PR #62 remains Draft and was not
+automatically merged.
