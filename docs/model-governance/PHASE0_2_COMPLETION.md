@@ -16,10 +16,14 @@ historical reports, results, betting records, or generated site output.
 - Branch: `agent/model-governance-phase0`
 - Phase 0.2 governance implementation commit:
   `c2e4486083fcbed73b4b52de75017e93ea5ec937`
+- Phase 0.2.1 implementation commit:
+  `4e5e58ed9afcf50dad30dcfcf5018bd7e104fd91`
+- Final baseline provenance commit:
+  `5e0ed8ad65e40694ef05a169a3c2a197797d4ba6`
 - Champion model source commit:
   `037c1b72a6310c0132b6dadaf5cd18d1925c133e`
-- Observed `origin/main` at the 0.2.1 export:
-  `35817697af41fc9962ccd712f4be01ed2c08ff6f`
+- Observed `origin/main` at the final 0.2.1 export:
+  `f78de47fc07dde109d294f511148904b2c7004e9`
 - `origin/main` changes merged during this task were limited to automatic
   data/report state files; no model-math conflict occurred.
 - Baseline export commit: `null`; the existing untracked `artifacts/`
@@ -106,10 +110,9 @@ out-of-sample data and every human-review gate are satisfied.
 
 - PR #62: `OPEN`, Draft, title
   `chore(model): freeze auditable champion baseline`.
-- PR base SHA: `c2b790326be7603d215fb68fb7ad9fc24095ab21`.
+- PR base SHA: `f78de47fc07dde109d294f511148904b2c7004e9`.
 - Mergeability: `MERGEABLE`; merge state: `CLEAN`.
 - URL: https://github.com/gemini077/football-betting-oneshot/pull/62
 
-The final remote branch SHA is captured in the handoff package and delivery
-report. The branch is pushed but PR #62 remains Draft and was not
-automatically merged.
+The branch is pushed but PR #62 remains Draft and was not automatically
+merged.
