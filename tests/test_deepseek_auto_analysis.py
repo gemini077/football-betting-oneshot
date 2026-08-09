@@ -26,6 +26,7 @@ from deepseek_auto_analysis import (  # noqa: E402
     selected_workspace_match,
     validate_request,
 )
+from model_governance import replay_deterministic_model_from_snapshot
 
 
 def test_issue_request_is_parsed_and_validated(tmp_path):
@@ -227,6 +228,10 @@ def test_analysis_context_places_deterministic_core_at_top_level(tmp_path, monke
     })
     context = analysis_context(manifest, {"match_id": "123", "match": "甲 vs 乙", "business_date": "2026-07-15"})
     assert context["deterministic_core"]["model"]["probabilities"]["home"] > 0
+    snapshot = context["deterministic_model_input_snapshot"]
+    replay = replay_deterministic_model_from_snapshot(snapshot)
+    assert replay["model"]["probabilities"] == context["deterministic_core"]["model"]["probabilities"]
+    assert replay["decisions"]["unique_score"] == context["deterministic_core"]["decisions"]["unique_score"]
     output = deterministic_analysis(context, {"match_id": "123", "match": "甲 vs 乙", "business_date": "2026-07-15"})
     assert output["automation"]["llm_used"] is False
     assert output["report"]["model_version"] == "v0.19.0"

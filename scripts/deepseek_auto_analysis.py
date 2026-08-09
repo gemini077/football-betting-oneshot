@@ -27,6 +27,7 @@ ROOT = Path(__file__).resolve().parents[1]
 API_URL = "https://api.deepseek.com/chat/completions"
 DEFAULT_MODEL = "deepseek-v4-pro"
 MODEL_VERSION = "v0.19.0"
+PROMPT_VERSION = "deepseek_system_prompt.v1"
 AUTO_INPUT_ROOT = ROOT / "data" / "analysis_inputs" / "automated"
 WORKSPACE_PATH = ROOT / "data" / "match_workspace" / "latest.json"
 DEEP_FALLBACK_ROOT = ROOT / "data" / "source_cache" / "deep_fallback"
@@ -237,8 +238,30 @@ def analysis_context(manifest_path: Path, request: dict) -> dict:
         workspace_match,
         deep_source[0] if deep_source and isinstance(deep_source[0], dict) else {},
     )
+    calibration_path = ROOT / "data" / "model_calibration" / "latest.json"
+    try:
+        calibration = load_json(calibration_path) if calibration_path.is_file() else {}
+    except (OSError, json.JSONDecodeError):
+        calibration = {}
+    context["model_calibration"] = calibration if isinstance(calibration, dict) else {}
+    try:
+        context["model_input_manifest_ref"] = manifest_path.relative_to(ROOT).as_posix()
+    except ValueError:
+        context["model_input_manifest_ref"] = str(manifest_path)
+    from model_governance import build_deterministic_model_input_snapshot
+    model_input_snapshot = build_deterministic_model_input_snapshot(
+        context,
+        manifest_ref=context["model_input_manifest_ref"],
+    )
+    context["deterministic_model_input_snapshot"] = model_input_snapshot
     from automatic_model_core import build_automatic_model
-    context["deterministic_core"] = build_automatic_model(context)
+    # Use the exact projection that is persisted for replay; the report layer
+    # must never reconstruct a different model context after this point.
+    context["deterministic_core"] = build_automatic_model(model_input_snapshot["projection"])
+    # Record the execution completion time, not the earlier fetch/task start
+    # time.  This metadata is outside the canonical input hash.
+    context["prediction_created_at"] = datetime.now().astimezone().isoformat()
+    model_input_snapshot["prediction_created_at"] = context["prediction_created_at"]
     return context
 
 
@@ -391,7 +414,13 @@ def normalize_analysis(raw: dict, request: dict, model_name: str) -> dict:
     betting["bankroll_state_changed"] = False
     betting["price_audit"] = []
     betting.pop("open_bets", None)
-    raw["automation"] = {"provider": "DeepSeek", "model": model_name, "generated_at": now, "owner_authorized_request": True}
+    raw["automation"] = {
+        "provider": "DeepSeek",
+        "model": model_name,
+        "prompt_version": PROMPT_VERSION,
+        "generated_at": now,
+        "owner_authorized_request": True,
+    }
     return raw
 
 
@@ -558,6 +587,7 @@ def deterministic_analysis(context: dict, request: dict) -> dict:
     analysis["automation"] = {
         "provider": "fixed-python-core", "generated_at": now,
         "owner_authorized_request": True, "llm_used": False,
+        "prompt_version": "fixed-python-core.none",
     }
     analysis["decisions"]["final_state"] = "空仓｜未锁单"
     analysis["betting"].update({
@@ -730,6 +760,24 @@ def run_pipeline(request: dict, api_key: str = "", model_name: str = DEFAULT_MOD
     else:
         print("[phase 2/5] deterministic core (no LLM tokens)", file=sys.stderr, flush=True)
         analysis = deterministic_analysis(context, request)
+    model_input_snapshot = context.get("deterministic_model_input_snapshot") or {}
+    analysis.setdefault("automation", {}).update({
+        "model_input_snapshot": model_input_snapshot,
+        "prediction_created_at": model_input_snapshot.get("prediction_created_at"),
+        "model_input_as_of_at": model_input_snapshot.get("model_input_as_of_at"),
+        "source_cutoff_at": model_input_snapshot.get("source_cutoff_at"),
+        "market_snapshot_at": model_input_snapshot.get("market_snapshot_at"),
+        "odds_snapshot_at": model_input_snapshot.get("odds_snapshot_at"),
+        "source_time_range": model_input_snapshot.get("source_time_range") or {},
+    })
+    analysis.setdefault("report", {}).update({
+        "prediction_created_at": model_input_snapshot.get("prediction_created_at"),
+        "model_input_as_of_at": model_input_snapshot.get("model_input_as_of_at"),
+        "source_cutoff_at": model_input_snapshot.get("source_cutoff_at"),
+        "market_snapshot_at": model_input_snapshot.get("market_snapshot_at"),
+        "odds_snapshot_at": model_input_snapshot.get("odds_snapshot_at"),
+        "source_time_range": model_input_snapshot.get("source_time_range") or {},
+    })
     initial_checkpoint = mark_initial_market_checkpoint(context)
     if not initial_checkpoint:
         initial_checkpoint = {

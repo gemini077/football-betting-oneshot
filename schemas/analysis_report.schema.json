@@ -3,6 +3,80 @@
   "title": "football-betting-oneshot analysis report overlay",
   "type": "object",
   "properties": {
+    "schema_version": {"enum": ["1.0", "1.1"]},
+    "analysis_output": {
+      "type": "object",
+      "properties": {"status": {"type": "string"}}
+    },
+    "prediction_output": {
+      "type": "object",
+      "properties": {
+        "status": {"enum": ["unavailable", "research_only", "formal", "human_assisted"]},
+        "probabilities": {"type": ["object", "null"]},
+        "lambda_home": {"type": ["number", "null"]},
+        "lambda_away": {"type": ["number", "null"]},
+        "score_matrix": {"type": "array"},
+        "unique_score": {"type": ["string", "null"]},
+        "primary_dimension": {"type": ["string", "null"]}
+      }
+    },
+    "betting_reference_output": {
+      "type": "object",
+      "properties": {
+        "status": {"enum": ["not_evaluable", "evaluable"]},
+        "roi": {"type": ["number", "null"]},
+        "clv": {"type": ["number", "null"]}
+      }
+    },
+    "model_governance": {
+      "type": "object",
+      "required": [
+        "prediction_id",
+        "prediction_sha256",
+        "model_run_fingerprint",
+        "calibration_artifact_sha256",
+        "effective_calibration_fingerprint",
+        "model_role",
+        "data_grade",
+        "formal_eligible",
+        "prediction_status",
+        "prediction_variant"
+      ],
+      "properties": {
+        "prediction_id": {"type": "string"},
+        "prediction_sha256": {"type": "string", "minLength": 1},
+        "model_run_fingerprint": {"type": "string", "minLength": 1},
+        "calibration_artifact_sha256": {"type": ["string", "null"]},
+        "effective_calibration_fingerprint": {"type": "string", "minLength": 1},
+        "model_role": {"enum": ["champion", "challenger", "legacy"]},
+        "model_core_version": {"type": ["string", "null"]},
+        "model_family": {"type": ["string", "null"]},
+        "release_version": {"type": ["string", "null"]},
+        "feature_version": {"type": ["string", "null"]},
+        "data_pipeline_version": {"type": ["string", "null"]},
+        "report_schema_version": {"type": ["string", "null"]},
+        "prompt_version": {"type": ["string", "null"]},
+        "data_grade": {"enum": ["A", "B", "C", "D"]},
+        "formal_eligible": {"type": "boolean"},
+        "model_formal_eligible": {"type": "boolean"},
+        "prediction_variant": {"enum": ["model_only", "human_assisted"]},
+        "prediction_status": {"enum": ["research_only", "formal", "human_assisted"]},
+        "critical_missing_fields": {"type": "array", "items": {"type": "string"}},
+        "noncritical_missing_fields": {"type": "array", "items": {"type": "string"}},
+        "lineup_status": {"type": ["string", "null"]},
+        "prediction_created_at": {"type": ["string", "null"]},
+        "model_input_as_of_at": {"type": ["string", "null"]},
+        "source_cutoff_at": {"type": ["string", "null"]},
+        "market_snapshot_at": {"type": ["string", "null"]},
+        "odds_snapshot_at": {"type": ["string", "null"]},
+        "source_time_range": {"type": "object"},
+        "repository_commit_sha": {"type": ["string", "null"]},
+        "input_sha256": {"type": ["string", "null"]},
+        "input_snapshot": {"type": "object"},
+        "record_status": {"enum": ["created", "existing"]},
+        "record_path": {"type": "string"}
+      }
+    },
     "report": {
       "type": "object",
       "properties": {
@@ -174,5 +248,54 @@
       }
     },
     "evidence_chain": {"type": "array"}
-  }
+  },
+  "allOf": [
+    {
+      "if": {
+        "required": ["model"],
+        "properties": {
+          "model": {
+            "type": "object",
+            "required": ["probabilities", "lambda_home", "lambda_away"]
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "analysis_output",
+          "prediction_output",
+          "betting_reference_output",
+          "model_governance"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {"schema_version": {"const": "1.1"}},
+        "required": ["schema_version", "model"]
+      },
+      "then": {
+        "required": ["analysis_output", "prediction_output", "betting_reference_output", "model_governance"],
+        "properties": {
+          "model_governance": {
+            "required": [
+              "prediction_id",
+              "prediction_sha256",
+              "model_run_fingerprint",
+              "model_source_fingerprint",
+              "calibration_artifact_sha256",
+              "effective_calibration_fingerprint",
+              "canonical_model_input_sha256",
+              "model_input_snapshot_ref",
+              "prediction_created_at",
+              "model_input_as_of_at",
+              "source_cutoff_at",
+              "market_snapshot_at",
+              "source_time_range"
+            ]
+          }
+        }
+      }
+    }
+  ]
 }

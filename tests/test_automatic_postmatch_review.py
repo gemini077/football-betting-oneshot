@@ -8,7 +8,74 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
 import automatic_postmatch_review as review_module
-from automatic_postmatch_review import _primary_settlement, _rich_market_timeline, _rich_root_cause
+from automatic_postmatch_review import _primary_settlement, _rich_market_timeline, _rich_root_cause, build_review
+from model_governance import build_prediction_record, freeze_prediction
+
+
+def test_new_review_carries_exact_frozen_prediction_join(tmp_path, monkeypatch):
+    payload = {
+        "report": {
+            "model_version": "v0.19.0",
+            "analysis_timestamp": "2026-08-05T00:00:00+08:00",
+            "snapshot_timestamp": "2026-08-04T23:59:00+08:00",
+            "market_checkpoint": {"captured_at": "2026-08-04T23:59:00+08:00"},
+        },
+        "match": {
+            "canonical_match_id": "FBOS-review-001",
+            "home": "Home FC",
+            "away": "Away FC",
+            "kickoff_local": "2026-08-05T02:00:00+08:00",
+        },
+        "data_quality": {"missing": []},
+        "model": {
+            "method": "recent_form_market_calibrated_poisson_v2",
+            "lambda_home": 1.2,
+            "lambda_away": 0.9,
+            "rho": 0.0,
+            "probabilities": {"home": 0.45, "draw": 0.3, "away": 0.25},
+            "score_probabilities": [{"score": "1-0", "probability": 0.15}],
+            "dimension_predictions": {},
+        },
+        "decisions": {
+            "data_grade": "A",
+            "unique_primary_dimension": "home",
+            "unique_score": "1-0",
+        },
+        "betting": {"candidates": []},
+        "automation": {"prompt_version": "fixed-python-core.none"},
+    }
+    record_root = tmp_path / "predictions"
+    record = build_prediction_record(payload, commit_sha="review-sha")
+    freeze_prediction(record, record_root, input_snapshot_root=tmp_path / "snapshots")
+    payload["model_governance"] = {
+        key: record[key]
+        for key in (
+            "prediction_id", "prediction_sha256", "model_run_fingerprint", "model_source_fingerprint",
+            "canonical_model_input_sha256", "model_input_snapshot_ref", "prediction_created_at",
+            "model_input_as_of_at", "source_cutoff_at", "market_snapshot_at", "odds_snapshot_at",
+            "source_time_range", "repository_commit_sha",
+        )
+    }
+    monkeypatch.setattr(review_module, "DEFAULT_RECORD_ROOT", record_root)
+    monkeypatch.setattr(review_module, "_checkpoint_rows", lambda report: [
+        {"captured_at": "2026-08-04T22:00:00+08:00", "decision": {}},
+        {"captured_at": "2026-08-04T23:59:00+08:00", "decision": {}},
+    ])
+    monkeypatch.setattr(review_module, "fetch_postmatch_evidence", lambda report, schedule: {
+        "status": "verified",
+        "score_90m": "1-0",
+        "source_url": "https://example.com/result-a",
+        "sources": ["https://example.com/result-a", "https://example.com/result-b"],
+    })
+    review = build_review(
+        {"match_key": "FBOS-review-001", "home": "Home FC", "away": "Away FC", "result_90m": "1-0"},
+        payload,
+        datetime(2026, 8, 5, 12, tzinfo=ZoneInfo("Asia/Shanghai")),
+    )
+    assert review["prediction_id"] == record["prediction_id"]
+    assert review["prediction_sha256"] == record["prediction_sha256"]
+    assert review["model_run_fingerprint"] == record["model_run_fingerprint"]
+    assert review["prediction_link_status"] == "verified"
 
 
 def test_generate_does_not_rewrite_existing_reviewed_schedule(tmp_path, monkeypatch):

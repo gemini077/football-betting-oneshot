@@ -3,9 +3,29 @@
   "$id": "postmatch_review.schema.json",
   "title": "Football Betting OneShot automatic post-match review",
   "type": "object",
-  "required": ["schema_version", "generated_at", "match", "result", "pre_match", "audit", "timeline", "root_cause"],
+  "required": ["schema_version", "generated_at", "match", "result", "settlement", "data_grade", "prediction_layer"],
   "properties": {
-    "schema_version": {"const": "1.0"},
+    "schema_version": {"enum": ["3.0", "3.1"]},
+    "prediction_id": {"type": ["string", "null"]},
+    "prediction_sha256": {"type": ["string", "null"]},
+    "model_run_fingerprint": {"type": ["string", "null"]},
+    "model_source_fingerprint": {"type": ["string", "null"]},
+    "calibration_artifact_sha256": {"type": ["string", "null"]},
+    "effective_calibration_fingerprint": {"type": ["string", "null"]},
+    "canonical_model_input_sha256": {"type": ["string", "null"]},
+    "model_input_snapshot_ref": {"type": ["string", "null"]},
+    "prediction_created_at": {"type": ["string", "null"]},
+    "model_input_as_of_at": {"type": ["string", "null"]},
+    "source_cutoff_at": {"type": ["string", "null"]},
+    "market_snapshot_at": {"type": ["string", "null"]},
+    "odds_snapshot_at": {"type": ["string", "null"]},
+    "source_time_range": {"type": "object"},
+    "repository_commit_sha": {"type": ["string", "null"]},
+    "prediction_link_status": {"enum": ["verified", "missing_prediction_id", "prediction_not_found", "hash_mismatch", "fingerprint_mismatch", "model_source_fingerprint_mismatch", "input_snapshot_hash_mismatch", "snapshot_metadata_mismatch", null]},
+    "analysis_output": {"type": "object"},
+    "prediction_output": {"type": "object"},
+    "betting_reference_output": {"type": "object"},
+    "model_governance": {"type": "object"},
     "generated_at": {"type": "string", "format": "date-time"},
     "source_report": {"type": "string"},
     "match": {
@@ -31,11 +51,65 @@
         "key_statistics": {"type": "array", "items": {"type": "string"}}
       }
     },
+    "settlement": {"type": "object"},
+    "data_grade": {"enum": ["A", "B", "C", "D"]},
+    "calibration_weight": {"type": ["number", "null"]},
+    "prediction_layer": {
+      "type": "object",
+      "properties": {
+        "research": {"type": "boolean"},
+        "formal_pick_eligible": {"type": "boolean"},
+        "execution_eligible": {"type": "boolean"}
+      }
+    },
+    "postmatch_evidence": {"type": "object"},
+    "model_diagnostics": {"type": "object"},
+    "score_selection_audit": {"type": "object"},
+    "data_quality_review": {"type": "object"},
     "pre_match": {"type": "object"},
     "audit": {"type": "object"},
     "timeline": {"type": "object"},
     "root_cause": {"type": "object"},
     "nine_layers": {"type": "array", "minItems": 9, "maxItems": 9, "items": {"type": "object"}},
     "lock_settlements": {"type": "array", "default": [], "items": {"type": "object"}}
-  }
+  },
+  "allOf": [
+    {
+      "if": {
+        "required": ["schema_version", "prediction_layer"],
+        "properties": {
+          "schema_version": {"const": "3.1"},
+          "prediction_layer": {
+            "type": "object",
+            "required": ["formal_pick_eligible"],
+            "properties": {"formal_pick_eligible": {"const": true}}
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "prediction_id",
+          "prediction_sha256",
+          "model_run_fingerprint",
+          "model_source_fingerprint",
+          "canonical_model_input_sha256",
+          "source_cutoff_at",
+          "market_snapshot_at",
+          "odds_snapshot_at",
+          "repository_commit_sha"
+        ],
+        "properties": {
+          "prediction_id": {"type": "string", "minLength": 1},
+          "prediction_sha256": {"type": "string", "minLength": 1},
+          "model_run_fingerprint": {"type": "string", "minLength": 1},
+          "model_source_fingerprint": {"type": "string", "minLength": 1},
+          "canonical_model_input_sha256": {"type": "string", "minLength": 1},
+          "source_cutoff_at": {"type": "string", "minLength": 1},
+          "market_snapshot_at": {"type": "string", "minLength": 1},
+          "odds_snapshot_at": {"type": "string", "minLength": 1},
+          "repository_commit_sha": {"type": "string", "minLength": 1}
+        }
+      }
+    }
+  ]
 }

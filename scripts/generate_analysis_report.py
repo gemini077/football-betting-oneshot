@@ -21,6 +21,7 @@ from risk_engine import dixon_coles_score_matrix
 from postmatch_schedule import create_schedule
 from sync_postmatch_workflow import sync as sync_postmatch_workflow
 from postmatch_queue import SHANGHAI
+from model_governance import build_prediction_record, freeze_prediction
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -630,12 +631,15 @@ def build_payload(
         "state": "空仓（未形成候选）",
     }
     base = {
+        "schema_version": "1.1",
         "report": {
             "model_name": state.get("model_name", "Football Betting OneShot"),
             "model_version": state.get("model_version", "v0.12.0"),
             "report_type": "数据审计版",
             "analysis_timestamp": manifest.get("fetch_time"),
             "snapshot_timestamp": manifest.get("fetch_time"),
+            "source_cutoff_at": manifest.get("fetch_time"),
+            "odds_snapshot_at": manifest.get("fetch_time"),
             "final_execution_version": False,
             "data_run_id": manifest.get("run_id"),
         },
@@ -669,6 +673,9 @@ def build_payload(
         "decisions": decisions_default,
         "betting": betting_default,
         "evidence_chain": [],
+        "analysis_output": {"status": "available"},
+        "prediction_output": {"status": "unavailable"},
+        "betting_reference_output": {"status": "not_evaluable", "roi": None, "clv": None},
         "market_intelligence": market_intelligence,
         "risk_engine": risk_engine,
         "base_engine_audit": build_base_engine_audit(
@@ -1463,6 +1470,58 @@ def main() -> int:
     state = load_json(Path(args.state))
     analysis = load_json(Path(args.analysis_json)) if args.analysis_json else None
     payload = build_payload(manifest, official, trade, deep, state, analysis, polymarket)
+    model = payload.get("model") or {}
+    if isinstance(model.get("probabilities"), dict) and model.get("lambda_home") is not None and model.get("lambda_away") is not None:
+        # The deterministic execution stage already persisted the exact
+        # projection consumed by the Champion.  A legacy report without it is
+        # intentionally research-only; this layer must not reconstruct input.
+        governance_input = (payload.get("automation") or {}).get("model_input_snapshot")
+        governance_record = build_prediction_record(
+            payload,
+            repository_root=PROJECT_ROOT,
+            input_payload=governance_input,
+        )
+        frozen = freeze_prediction(governance_record)
+        payload["analysis_output"] = governance_record["analysis_output"]
+        payload["prediction_output"] = governance_record["prediction_output"]
+        payload["betting_reference_output"] = governance_record["betting_reference_output"]
+        payload["model_governance"] = {
+            "prediction_id": governance_record["prediction_id"],
+            "prediction_sha256": governance_record["prediction_sha256"],
+            "model_run_fingerprint": governance_record["model_run_fingerprint"],
+            "model_source_fingerprint": governance_record["model_source_fingerprint"],
+            "calibration_artifact_sha256": governance_record["calibration_artifact_sha256"],
+            "effective_calibration_fingerprint": governance_record["effective_calibration_fingerprint"],
+            "canonical_model_input_sha256": governance_record["canonical_model_input_sha256"],
+            "model_input_snapshot_ref": governance_record["model_input_snapshot_ref"],
+            "model_role": governance_record["model_role"],
+            "model_core_version": governance_record["model_core_version"],
+            "model_family": governance_record["model_family"],
+            "release_version": governance_record["release_version"],
+            "feature_version": governance_record["feature_version"],
+            "data_pipeline_version": governance_record["data_pipeline_version"],
+            "report_schema_version": governance_record["report_schema_version"],
+            "prompt_version": governance_record["prompt_version"],
+            "data_grade": governance_record["data_grade"],
+            "formal_eligible": governance_record["formal_eligible"],
+            "model_formal_eligible": governance_record["model_formal_eligible"],
+            "prediction_variant": governance_record["prediction_variant"],
+            "prediction_status": governance_record["prediction_status"],
+            "critical_missing_fields": governance_record["critical_missing_fields"],
+            "noncritical_missing_fields": governance_record["noncritical_missing_fields"],
+            "lineup_status": governance_record["lineup_status"],
+            "prediction_created_at": governance_record["prediction_created_at"],
+            "model_input_as_of_at": governance_record["model_input_as_of_at"],
+            "source_cutoff_at": governance_record["source_cutoff_at"],
+            "market_snapshot_at": governance_record["market_snapshot_at"],
+            "odds_snapshot_at": governance_record["odds_snapshot_at"],
+            "source_time_range": governance_record["source_time_range"],
+            "repository_commit_sha": governance_record["repository_commit_sha"],
+            "input_sha256": governance_record["input_sha256"],
+            "input_snapshot": governance_record["input_snapshot"],
+            "record_status": frozen["status"],
+            "record_path": str(Path(frozen["path"]).relative_to(PROJECT_ROOT)).replace("\\", "/"),
+        }
 
     stamp = datetime.now().astimezone().strftime("%Y%m%d_%H%M%S")
     output_dir = Path(args.output_root) / stamp
