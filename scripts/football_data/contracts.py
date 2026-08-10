@@ -93,6 +93,8 @@ class DataProvenance:
     commercial_use_review: str = "not_required"
     parser_version: str | None = None
     raw_sha256: str | None = None
+    raw_redistribution: bool | None = None
+    internal_analysis_only: bool | None = None
     synthetic: bool = False
     observation_origin: str = "provider_observation"
     provider_schema: str | None = None
@@ -110,6 +112,8 @@ class DataProvenance:
         _optional_iso_timestamp(self.source_as_of_at, "provenance.source_as_of_at")
         _require(isinstance(self.attribution_required, bool), "provenance.attribution_required must be bool")
         _require(isinstance(self.synthetic, bool), "provenance.synthetic must be bool")
+        _require(self.raw_redistribution is None or isinstance(self.raw_redistribution, bool), "provenance.raw_redistribution must be bool or null")
+        _require(self.internal_analysis_only is None or isinstance(self.internal_analysis_only, bool), "provenance.internal_analysis_only must be bool or null")
         _require(bool(self.observation_origin.strip()), "provenance.observation_origin is required")
 
     def to_dict(self) -> dict[str, Any]:
@@ -131,6 +135,8 @@ class DataProvenance:
             commercial_use_review=str(value.get("commercial_use_review", "not_required")),
             parser_version=value.get("parser_version"),
             raw_sha256=value.get("raw_sha256"),
+            raw_redistribution=value.get("raw_redistribution"),
+            internal_analysis_only=value.get("internal_analysis_only"),
             synthetic=value.get("synthetic", False),
             observation_origin=str(value.get("observation_origin", "provider_observation")),
             provider_schema=value.get("provider_schema"),

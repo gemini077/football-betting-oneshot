@@ -1,56 +1,56 @@
 # Competition coverage
 
-Generated from bounded current workspace evidence and the OpenFootball pilot manifest at `2026-08-10T11:56:08Z`.
-This is a data-layer coverage report, not a prediction-quality report. A status is never promoted by a raw league name.
+Generated from bounded project usage and source manifests at `2026-08-10T12:53:32Z`.
+Source record volume is separate from project analysis usage. It cannot raise P0/P1 priority.
 
-## Status counts
+Historical-result status counts: SUPPORTED `2`, PARTIAL `1`, MISSING `26`, UNVERIFIED `0`.
+Overall current/data-layer status counts: SUPPORTED `0`, PARTIAL `3`, MISSING `26`, UNVERIFIED `0`.
 
-`SUPPORTED` 1 · `PARTIAL` 2 · `MISSING` 26 · `UNVERIFIED` 0
+| Competition | Historical | Current season | Recency/health | Project 30d | Source records | Priority | Business status |
+| --- | --- | --- | --- | ---: | ---: | --- | --- |
+| Argentine Primera | MISSING | MISSING | unknown | 0 | 0 | P3 | MISSING |
+| A-League | MISSING | MISSING | unknown | 0 | 0 | P3 | MISSING |
+| Belgian Pro League | MISSING | MISSING | unknown | 0 | 0 | P3 | MISSING |
+| Brasileirao | MISSING | MISSING | unknown | 0 | 0 | P3 | MISSING |
+| Chinese Super League | MISSING | MISSING | unknown | 0 | 0 | P3 | MISSING |
+| Copa America | MISSING | MISSING | unknown | 0 | 0 | P3 | MISSING |
+| Copa Libertadores | MISSING | MISSING | unknown | 0 | 0 | P3 | MISSING |
+| Copa Sudamericana | MISSING | MISSING | unknown | 0 | 0 | P3 | MISSING |
+| Danish Superliga | MISSING | MISSING | unknown | 0 | 0 | P3 | MISSING |
+| Premier League | MISSING | MISSING | unknown | 0 | 0 | P3 | MISSING |
+| World Cup | MISSING | MISSING | unknown | 0 | 0 | P3 | MISSING |
+| World Cup Qualifiers | MISSING | MISSING | unknown | 0 | 0 | P3 | MISSING |
+| Ligue 1 | MISSING | MISSING | unknown | 0 | 0 | P3 | MISSING |
+| Bundesliga | MISSING | MISSING | unknown | 0 | 0 | P3 | MISSING |
+| Serie A | MISSING | MISSING | unknown | 0 | 0 | P3 | MISSING |
+| J1 League | MISSING | MISSING | unknown | 0 | 0 | P3 | MISSING |
+| Liga MX | MISSING | MISSING | unknown | 0 | 0 | P3 | MISSING |
+| Eredivisie | MISSING | MISSING | unknown | 0 | 0 | P3 | MISSING |
+| Eliteserien | MISSING | MISSING | unknown | 0 | 0 | P3 | MISSING |
+| Portuguese Primeira Liga | SUPPORTED | MISSING | stale | 1 | 306 | P0 | STALE |
+| K League 1 | MISSING | MISSING | unknown | 0 | 0 | P3 | MISSING |
+| La Liga | MISSING | MISSING | unknown | 0 | 0 | P3 | MISSING |
+| Sweden Allsvenskan | SUPPORTED | PARTIAL | current-ready | 2 | 412 | P2 | READY |
+| Sweden Superettan | PARTIAL | MISSING | unknown | 0 | 45 | P3 | PARTIAL |
+| Champions League | MISSING | MISSING | unknown | 0 | 0 | P3 | MISSING |
+| Conference League | MISSING | MISSING | unknown | 0 | 0 | P3 | MISSING |
+| Europa League | MISSING | MISSING | unknown | 0 | 0 | P3 | MISSING |
+| UEFA Euro | MISSING | MISSING | unknown | 0 | 0 | P3 | MISSING |
+| MLS | MISSING | MISSING | unknown | 0 | 0 | P3 | MISSING |
 
-## Registry
+## Source completeness evidence
 
-| Competition | Entity | Overall | Historical result | Current-season | Team identity | Sources | Priority |
-| --- | --- | --- | --- | --- | ---: | --- | --- |
-| Argentine Primera | club | MISSING | MISSING | MISSING | — | — | P3 |
-| A-League | club | MISSING | MISSING | MISSING | — | — | P3 |
-| Belgian Pro League | club | MISSING | MISSING | MISSING | — | — | P3 |
-| Brasileirão | club | MISSING | MISSING | MISSING | — | — | P3 |
-| Chinese Super League | club | MISSING | MISSING | MISSING | — | — | P3 |
-| Copa América | national_team | MISSING | MISSING | MISSING | — | — | P3 |
-| Copa Libertadores | club | MISSING | MISSING | MISSING | — | — | P3 |
-| Copa Sudamericana | club | MISSING | MISSING | MISSING | — | — | P3 |
-| Danish Superliga | club | MISSING | MISSING | MISSING | — | — | P3 |
-| Premier League | club | MISSING | MISSING | MISSING | — | — | P3 |
-| World Cup | national_team | MISSING | MISSING | MISSING | — | — | P3 |
-| World Cup Qualifiers | national_team | MISSING | MISSING | MISSING | — | — | P3 |
-| Ligue 1 | club | MISSING | MISSING | MISSING | — | — | P3 |
-| Bundesliga | club | MISSING | MISSING | MISSING | — | — | P3 |
-| Serie A | club | MISSING | MISSING | MISSING | — | — | P3 |
-| J1 League | club | MISSING | MISSING | MISSING | — | — | P3 |
-| Liga MX | club | MISSING | MISSING | MISSING | — | — | P3 |
-| Eredivisie | club | MISSING | MISSING | MISSING | — | — | P3 |
-| Eliteserien | club | MISSING | MISSING | MISSING | — | — | P3 |
-| Portuguese Primeira Liga | club | PARTIAL | SUPPORTED | PARTIAL | 1.0 | openfootball | P1 |
-| K League 1 | club | MISSING | MISSING | MISSING | — | — | P3 |
-| La Liga | club | MISSING | MISSING | MISSING | — | — | P3 |
-| Sweden Allsvenskan | club | PARTIAL | SUPPORTED | PARTIAL | 1.0 | openfootball | P1 |
-| Sweden Superettan | club | SUPPORTED | SUPPORTED | MISSING | 1.0 | openfootball | P1 |
-| Champions League | club | MISSING | MISSING | MISSING | — | — | P3 |
-| Conference League | club | MISSING | MISSING | MISSING | — | — | P3 |
-| Europa League | club | MISSING | MISSING | MISSING | — | — | P3 |
-| UEFA Euro | national_team | MISSING | MISSING | MISSING | — | — | P3 |
-| MLS | club | MISSING | MISSING | MISSING | — | — | P3 |
+| Source | Competition | Season | Completion ratio | Completeness |
+| --- | --- | --- | ---: | --- |
+| openfootball | sweden-allsvenskan | 2025 | 0.22083333333333333 | PARTIAL |
+| openfootball | sweden-superettan | 2025 | 0.1875 | PARTIAL |
+| openfootball | portugal-primeira-liga | 2025-26 | 1.0 | COMPLETE |
+| football-data.co.uk | sweden-allsvenskan | 2025 | 1.0 | COMPLETE |
+| football-data.co.uk | sweden-allsvenskan | 2026 | 0.49583333333333335 | IN_PROGRESS |
 
-## Observed competitions
+## Current health
 
-| Key | Raw names | Observed records/matches | Current matches |
-| --- | --- | ---: | ---: |
-| portugal-primeira-liga | Portuguese Primeira Liga / 葡萄牙超级联赛 | 307 | 1 |
-| sweden-allsvenskan | Sweden Allsvenskan / 瑞典超级联赛 | 55 | 2 |
-| sweden-superettan | Sweden Superettan | 45 | 0 |
+Current matches `3`; both history available `3`; both current-strength ready `2`; bridge-only `0`; stale `1`.
+P0/P1 ready coverage `0.0`; P0/P1 ready+bridge coverage `0.0`.
 
-## Current bounded health
-
-Current matches: `3`; both sides evaluable: `3`; one side: `0`; neither: `0`.
-
-Only the three observed current schedule rows are used for this health calculation. No unsupported competition is presented as covered.
+Only bounded schedule metadata is used for project demand. Historical usage before the usage registry start is incomplete.

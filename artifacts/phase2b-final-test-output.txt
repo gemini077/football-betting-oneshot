@@ -1,0 +1,70 @@
+$ python -m pytest tests/test_team_strength_history_recency.py tests/test_stale_history_not_ready.py tests/test_offseason_bridge_status.py tests/test_source_completion_ratio.py tests/test_project_usage_not_source_frequency.py tests/test_football_data_uk_adapter.py tests/test_cross_source_result_dedup.py tests/test_cross_source_result_conflict.py -q
+
+.................                                                        [100%]
+17 passed in 0.69s
+
+[exit 0]
+
+$ python -m pytest tests/test_historical_result_ledger.py tests/test_team_strength_builder.py tests/test_team_strength_no_future_leakage.py tests/test_team_strength_deduplication.py tests/test_team_strength_snapshot_immutability.py tests/test_team_strength_health.py tests/test_team_strength_champion_isolation.py -q
+
+.................                                                        [100%]
+17 passed in 2.87s
+
+[exit 0]
+
+$ python -m pytest tests/test_model_governance.py -q
+
+.........................................................                [100%]
+57 passed in 19.31s
+
+[exit 0]
+
+$ python -m pytest tests/test_baseline_production_integration.py -q
+
+.............                                                            [100%]
+13 passed in 7.99s
+
+[exit 0]
+
+$ python -m pytest -q
+
+........................................................................ [ 14%]
+........................................................................ [ 28%]
+........................................................................ [ 43%]
+........................................................................ [ 57%]
+........................................................................ [ 72%]
+........................................................................ [ 86%]
+..................................................................       [100%]
+============================== warnings summary ===============================
+tests/test_match_workspace.py::MatchWorkspacePortfolioTests::test_historical_snapshot_does_not_overwrite_stable_homepage
+tests/test_match_workspace.py::MatchWorkspacePortfolioTests::test_recent_automatic_reports_survive_daily_schedule_window
+tests/test_match_workspace.py::MatchWorkspacePortfolioTests::test_stdlib_xlsx_fallback_exposes_full_review_dimensions
+  C:\Users\Administrator\AppData\Local\Programs\Python\Python310\lib\site-packages\openpyxl\worksheet\_reader.py:329: UserWarning: Unknown extension is not supported and will be removed
+    warn(msg)
+
+tests/test_match_workspace.py::MatchWorkspacePortfolioTests::test_historical_snapshot_does_not_overwrite_stable_homepage
+tests/test_match_workspace.py::MatchWorkspacePortfolioTests::test_recent_automatic_reports_survive_daily_schedule_window
+tests/test_match_workspace.py::MatchWorkspacePortfolioTests::test_stdlib_xlsx_fallback_exposes_full_review_dimensions
+  C:\Users\Administrator\AppData\Local\Programs\Python\Python310\lib\site-packages\openpyxl\worksheet\_reader.py:329: UserWarning: Conditional Formatting extension is not supported and will be removed
+    warn(msg)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+498 passed, 6 warnings in 89.79s (0:01:29)
+
+[exit 0]
+
+$ git diff --check
+
+warning: in the working copy of 'data/football_data/competition_registry.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'data/football_data/openfootball/source_manifest.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'schemas/football_data/football_data_contract.v1.schema.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'schemas/football_data/team_strength_snapshot.schema.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'scripts/football_data/contracts.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'scripts/football_data/coverage.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'scripts/football_data/health.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'scripts/football_data/historical_results.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'scripts/football_data/populate_team_strength_coverage.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'scripts/football_data/providers/base.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'scripts/football_data/team_strength.py', LF will be replaced by CRLF the next time Git touches it
+
+[exit 0]

@@ -1,24 +1,18 @@
 # Real historical data audit
 
-Audit/capture time: `2026-08-10T11:56:08Z`. Scope is limited to the current match workspace, latest schedule metadata, existing provider capability audit, the OpenFootball manifest, and the bounded normalized pilot sample.
+Bounded audit capture: `2026-08-10T11:56:08Z`. Scope is current workspace metadata, provider snapshots, pinned source manifests and normalized samples; the full report history was not scanned.
 
-## Existing Nowscore / 500 capability
+## Existing current providers
 
-The existing scoped provider audit found 2,652 JSON snapshots: 366 Nowscore-named, 231 500 deep, 442 500 trade, 396 aggregate recent-form, and 393 with provider team IDs. It found 0 explicit match-level result records. These are snapshot-file observations, not distinct-match counts.
+The existing bounded provider audit found aggregate recent_form snapshots but zero explicit match-level result records. recent_form has aggregate overall/home/away matches, wins, draws, losses, goals for and goals against; it has no reliable per-match date, opponent ID or score. It cannot be expanded into a historical ledger without inventing history.
 
-The available `recent_form` shape is aggregate overall/home/away data with matches, wins, draws, losses, goals for and goals against. It lacks individual match dates, opponents, opponent IDs, and scores, so it cannot be expanded into a result ledger without inventing history.
+## Historical result sources
 
-## OpenFootball pilot
-
-The pinned `openfootball/europe@e27eb01726f394ddf9fa68b15d37b900487b5903` capture contains 404 parsed result rows across three source files. The bounded pilot stores 87 normalized records involving the six current pilot teams; 87 are eligible for Team Strength.
-
-Every eligible record has canonical home/away IDs from explicit source-context identity evidence, a date/time, score, competition, season, source fact time, reliable provenance, and no source conflict. OpenFootball source files do not provide provider team IDs; that absence is recorded rather than fabricated.
+OpenFootball pinned capture: `openfootball/europe@e27eb01726f394ddf9fa68b15d37b900487b5903`; listed/parsed source totals are `240/53`, `240/45`, and `306/306`, for `404` parsed rows. The two completed Swedish files are PARTIAL; Portugal is COMPLETE.
+Football-Data.co.uk capture: `https://www.football-data.co.uk/new/SWE.csv`; raw SHA256 `56b5f00a253a223f7eb546a80c4f3b3201b9a9fd976ae37e1dcee5f12a104ebf`; the normalized Sweden 2026 sample has `119` records and `119` eligible records. The CSV is not committed.
 
 ## Current buildability
 
-Current bounded schedule: 3 matches; both teams evaluable: 3; one side: 0; neither: 0. Source conflicts: 0; unresolved identity: 0.
-Immutable pre-match Team Strength snapshots persisted: 24; they remain data-layer-only.
+Current bounded schedule: `3` matches; both history available `3`; both current-strength ready `2`; bridge-only `0`; stale `1`; source conflicts `0`; identity unresolved `0`.
 
-Team Strength uses result history only. xG, lineups, injuries, Elo, odds, and Champion expected goals are not used as substitutes.
-
-The normalized sample is a shadow data layer and remains `validated_for_model=false`; the Champion does not read it.
+The ledger preserves old results as valid historical evidence. Team-strength recency is calculated from the latest match kickoff, not source capture time. The data layer remains shadow-only and `validated_for_model=false`.

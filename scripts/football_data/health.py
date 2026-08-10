@@ -39,6 +39,13 @@ def _team_details(
             "latest_historical_match_date": None,
             "oldest_used_match_date": None,
             "sources": [],
+            "history_available": False,
+            "current_strength_ready": False,
+            "history_recency_status": "unknown",
+            "history_age_days": None,
+            "bridge_status": "unknown",
+            "bridge_from_season": None,
+            "bridge_reason": None,
         }
     target = _parse_time(target_kickoff)
     eligible = []
@@ -52,6 +59,7 @@ def _team_details(
             continue
         eligible.append(record)
     eligible.sort(key=lambda row: str(row.get("kickoff_at") or ""))
+    last5 = snapshots.get("last_5") or {}
     last20 = snapshots.get("last_20") or {}
     return {
         "canonical_team_id": team_id,
@@ -63,6 +71,13 @@ def _team_details(
         "latest_historical_match_date": eligible[-1].get("kickoff_at") if eligible else None,
         "oldest_used_match_date": last20.get("oldest_used_match_at"),
         "sources": sorted({str(record.get("provider")) for record in eligible if record.get("provider")}),
+        "history_available": bool(last5.get("history_available")),
+        "current_strength_ready": bool(last5.get("current_strength_ready")),
+        "history_recency_status": last5.get("history_recency_status", "unknown"),
+        "history_age_days": last5.get("history_age_days"),
+        "bridge_status": last5.get("bridge_status", "not_applicable"),
+        "bridge_from_season": last5.get("bridge_from_season"),
+        "bridge_reason": last5.get("bridge_reason"),
     }
 
 
@@ -71,12 +86,21 @@ def build_team_strength_health(
     historical_records: Iterable[Mapping[str, Any]],
     *,
     captured_at: str | None = None,
+    snapshot_revision: str | None = None,
 ) -> dict[str, Any]:
     records = list(historical_records)
     deduplication = deduplicate_historical_results(records)
-    builder = TeamStrengthBuilder(records, captured_at=captured_at)
+    builder = TeamStrengthBuilder(records, captured_at=captured_at, snapshot_revision=snapshot_revision)
     counts = {
         "current_matches": 0,
+        "both_history_available": 0,
+        "one_history_available": 0,
+        "neither_history_available": 0,
+        "both_current_strength_ready": 0,
+        "one_ready": 0,
+        "neither_ready": 0,
+        "stale_history": 0,
+        "bridge_only": 0,
         "both_teams_evaluable": 0,
         "home_only": 0,
         "away_only": 0,
@@ -103,7 +127,18 @@ def build_team_strength_health(
         competition_key = str(competition_id or match.get("league") or "unresolved")
         competition_row = coverage_by_competition.setdefault(
             competition_key,
-            {"current_matches": 0, "both_teams_evaluable": 0, "one_team_evaluable": 0, "neither_evaluable": 0},
+            {
+                "current_matches": 0,
+                "both_history_available": 0,
+                "both_current_strength_ready": 0,
+                "one_ready": 0,
+                "neither_ready": 0,
+                "stale_history": 0,
+                "bridge_only": 0,
+                "both_teams_evaluable": 0,
+                "one_team_evaluable": 0,
+                "neither_evaluable": 0,
+            },
         )
         competition_row["current_matches"] += 1
         row = {
@@ -121,10 +156,12 @@ def build_team_strength_health(
             counts["identity_unresolved"] += 1
             counts["neither"] += 1
             counts["neither_evaluable"] += 1
+            counts["neither_ready"] += 1
+            counts["neither_history_available"] += 1
             counts["history_missing"] += 1
             counts["source_missing"] += 1 if not records else 0
             competition_row["neither_evaluable"] += 1
-            row.update({"status": "neither", "reasons": ["identity_unresolved"], "team_details": {"home": _team_details({}, team_id=home_id, records=records, target_kickoff=kickoff, entity_type=entity_type), "away": _team_details({}, team_id=away_id, records=records, target_kickoff=kickoff, entity_type=entity_type)}})
+            row.update({"status": "neither", "current_strength_status": "neither_ready", "reasons": ["identity_unresolved"], "team_details": {"home": _team_details({}, team_id=home_id, records=records, target_kickoff=kickoff, entity_type=entity_type), "away": _team_details({}, team_id=away_id, records=records, target_kickoff=kickoff, entity_type=entity_type)}})
             coverage.append(row)
             continue
         snapshots: dict[str, dict[str, Any]] = {"home": {}, "away": {}}
@@ -139,41 +176,89 @@ def build_team_strength_health(
                         season_id=season_id,
                         target_match_id=str(row["match_id"]),
                         entity_type=entity_type,
+                        bridge_context=match.get("bridge_context"),
                     )
                 except (TypeError, ValueError):
                     snapshots[side][window] = None
         home_last5 = snapshots["home"].get("last_5")
         away_last5 = snapshots["away"].get("last_5")
-        home_ok = bool(home_last5 and home_last5.get("matches", 0) > 0 and home_last5.get("quality") in {"A", "B"})
-        away_ok = bool(away_last5 and away_last5.get("matches", 0) > 0 and away_last5.get("quality") in {"A", "B"})
+        home_history = bool(home_last5 and home_last5.get("history_available"))
+        away_history = bool(away_last5 and away_last5.get("history_available"))
+        home_ok = bool(home_last5 and home_last5.get("current_strength_ready") and home_last5.get("quality") in {"A", "B"})
+        away_ok = bool(away_last5 and away_last5.get("current_strength_ready") and away_last5.get("quality") in {"A", "B"})
+        if home_history and away_history:
+            counts["both_history_available"] += 1
+            competition_row["both_history_available"] += 1
+        elif home_history or away_history:
+            counts["one_history_available"] += 1
+        else:
+            counts["neither_history_available"] += 1
+
+        home_recency = str((home_last5 or {}).get("history_recency_status") or "unknown")
+        away_recency = str((away_last5 or {}).get("history_recency_status") or "unknown")
+        bridge_only = home_history and away_history and home_recency == "offseason_bridge" and away_recency == "offseason_bridge"
         if home_ok and away_ok:
             status = "both_teams_evaluable"
+            current_strength_status = "both_current_strength_ready"
+            counts["both_current_strength_ready"] += 1
             counts["both_teams_evaluable"] += 1
+            competition_row["both_current_strength_ready"] += 1
             competition_row["both_teams_evaluable"] += 1
         elif home_ok:
             status = "home_only"
+            current_strength_status = "one_ready"
+            counts["one_ready"] += 1
             counts["home_only"] += 1
             counts["one_team_evaluable"] += 1
+            competition_row["one_ready"] += 1
             competition_row["one_team_evaluable"] += 1
         elif away_ok:
             status = "away_only"
+            current_strength_status = "one_ready"
+            counts["one_ready"] += 1
             counts["away_only"] += 1
             counts["one_team_evaluable"] += 1
+            competition_row["one_ready"] += 1
             competition_row["one_team_evaluable"] += 1
+        elif bridge_only:
+            status = "bridge_only"
+            current_strength_status = "neither_ready"
+            counts["bridge_only"] += 1
+            counts["neither_ready"] += 1
+            competition_row["bridge_only"] += 1
+            competition_row["neither_ready"] += 1
+        elif home_history and away_history and "stale" in {home_recency, away_recency}:
+            status = "stale_history"
+            current_strength_status = "neither_ready"
+            counts["stale_history"] += 1
+            counts["neither_ready"] += 1
+            competition_row["stale_history"] += 1
+            competition_row["neither_ready"] += 1
         else:
             status = "neither"
+            current_strength_status = "neither_ready"
+            counts["neither_ready"] += 1
             counts["neither"] += 1
             counts["neither_evaluable"] += 1
+            competition_row["neither_ready"] += 1
             competition_row["neither_evaluable"] += 1
-        if not home_ok or not away_ok:
+        if not home_history or not away_history:
             counts["insufficient_history"] += 1
             counts["history_missing"] += 1
         if not records:
             counts["source_missing"] += 1
-        reasons = [] if status == "both_teams_evaluable" else ["insufficient_history"]
+        if status == "both_teams_evaluable":
+            reasons = []
+        elif status == "stale_history":
+            reasons = ["stale_history"]
+        elif status == "bridge_only":
+            reasons = ["offseason_bridge"]
+        else:
+            reasons = ["insufficient_history"]
         row.update(
             {
                 "status": status,
+                "current_strength_status": current_strength_status,
                 "reasons": reasons,
                 "home_snapshot_id": home_last5.get("snapshot_id") if home_last5 else None,
                 "away_snapshot_id": away_last5.get("snapshot_id") if away_last5 else None,
