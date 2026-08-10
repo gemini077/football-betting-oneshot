@@ -66,8 +66,11 @@ def build_coverage_registry(
             "project_analysis_count": 0,
             "analysis_count_30d": 0,
             "analysis_count_90d": 0,
+            "analysis_count_all_recoverable": 0,
             "source_record_count": 0,
             "current_match_count": 0,
+            "resolved_match_count": 0,
+            "unresolved_match_count": 0,
             "provider_competition_ids": set(),
         }
     )
@@ -80,10 +83,13 @@ def build_coverage_registry(
         bucket["project_analysis_count"] += int(row.get("project_analysis_count") or 0)
         bucket["analysis_count_30d"] += int(row.get("analysis_count_30d") or 0)
         bucket["analysis_count_90d"] += int(row.get("analysis_count_90d") or 0)
+        bucket["analysis_count_all_recoverable"] += int(row.get("analysis_count_all_recoverable") or 0)
         bucket["source_record_count"] += int(row.get("source_record_count") or (row.get("observed_count") or 0))
         if not explicit_project_usage and row.get("current_match_count"):
             bucket["project_analysis_count"] += int(row.get("current_match_count") or 0)
         bucket["current_match_count"] += int(row.get("current_match_count") or 0)
+        bucket["resolved_match_count"] += int(row.get("resolved_match_count") or 0)
+        bucket["unresolved_match_count"] += int(row.get("unresolved_match_count") or 0)
         if row.get("provider_competition_id"):
             bucket["provider_competition_ids"].add(str(row["provider_competition_id"]))
 
@@ -97,8 +103,11 @@ def build_coverage_registry(
         row.setdefault("project_analysis_count", 0)
         row.setdefault("analysis_count_30d", 0)
         row.setdefault("analysis_count_90d", 0)
+        row.setdefault("analysis_count_all_recoverable", 0)
         row.setdefault("source_record_count", 0)
         row.setdefault("current_match_count", 0)
+        row.setdefault("resolved_match_count", 0)
+        row.setdefault("unresolved_match_count", 0)
         by_key[key] = row
 
     for key, bucket in grouped.items():
@@ -121,15 +130,21 @@ def build_coverage_registry(
                 "project_analysis_count": 0,
                 "analysis_count_30d": 0,
                 "analysis_count_90d": 0,
+                "analysis_count_all_recoverable": 0,
                 "source_record_count": 0,
                 "current_match_count": 0,
+                "resolved_match_count": 0,
+                "unresolved_match_count": 0,
             },
         )
         row["project_analysis_count"] = int(row.get("project_analysis_count") or 0) + bucket["project_analysis_count"]
         row["analysis_count_30d"] = int(row.get("analysis_count_30d") or 0) + bucket["analysis_count_30d"]
         row["analysis_count_90d"] = int(row.get("analysis_count_90d") or 0) + bucket["analysis_count_90d"]
+        row["analysis_count_all_recoverable"] = int(row.get("analysis_count_all_recoverable") or 0) + bucket["analysis_count_all_recoverable"]
         row["source_record_count"] = int(row.get("source_record_count") or 0) + bucket["source_record_count"]
         row["current_match_count"] = int(row.get("current_match_count") or 0) + bucket["current_match_count"]
+        row["resolved_match_count"] = int(row.get("resolved_match_count") or 0) + bucket["resolved_match_count"]
+        row["unresolved_match_count"] = int(row.get("unresolved_match_count") or 0) + bucket["unresolved_match_count"]
         # Legacy readers may expect observed_count; it is a source-only alias.
         row["observed_count"] = row["source_record_count"]
         row["observed_raw_names"] = sorted(set(row.get("observed_raw_names") or []) | bucket["raw_names"])
@@ -144,9 +159,12 @@ def build_coverage_registry(
             "project_analysis_count": bucket["project_analysis_count"],
             "analysis_count_30d": bucket["analysis_count_30d"],
             "analysis_count_90d": bucket["analysis_count_90d"],
+            "analysis_count_all_recoverable": bucket["analysis_count_all_recoverable"],
             "source_record_count": bucket["source_record_count"],
             "observed_count": bucket["source_record_count"],
             "current_match_count": bucket["current_match_count"],
+            "resolved_match_count": bucket["resolved_match_count"],
+            "unresolved_match_count": bucket["unresolved_match_count"],
             "provider_competition_ids": sorted(bucket["provider_competition_ids"]),
         }
 
@@ -179,11 +197,11 @@ def rank_coverage_gaps(rows: Iterable[Mapping[str, Any]]) -> list[dict[str, Any]
         legacy_usage = int(row.get("observed_count") or 0) if not has_usage_fields else 0
         project_usage = max(project_analysis_count, analysis_30d, analysis_90d, legacy_usage)
         current_strength_coverage = row.get("current_strength_coverage")
-        current_strength_ok = current_strength_coverage is None or float(current_strength_coverage) >= 1.0
+        current_strength_ok = (current_strength_coverage is not None and float(current_strength_coverage) >= 1.0) if current else True
         supported = _status(row.get("result_coverage")) == "SUPPORTED" and float(row.get("team_identity_coverage") or 0) >= 1.0 and current_strength_ok
         if current and not supported:
             priority = "P0"
-        elif project_usage >= 10:
+        elif project_usage >= 10 and not supported:
             priority = "P1"
         elif project_usage:
             priority = "P2"
@@ -205,10 +223,42 @@ def rank_coverage_gaps(rows: Iterable[Mapping[str, Any]]) -> list[dict[str, Any]
     )
 
 
+def analysis_weighted_coverage(
+    rows: Iterable[Mapping[str, Any]],
+    *,
+    priorities: frozenset[str] = frozenset({"P0", "P1"}),
+) -> dict[str, Any]:
+    """Weight readiness by project demand, with bridge reported separately."""
+
+    selected = [row for row in rows if str(row.get("coverage_priority")) in priorities]
+    weight = lambda row: int(row.get("project_analysis_count") or row.get("analysis_count_all_recoverable") or 0)
+    total = sum(weight(row) for row in selected)
+    strict = sum(
+        weight(row)
+        for row in selected
+        if str(row.get("business_status")) == "READY" and float(row.get("current_strength_coverage") or 0) >= 1.0
+    )
+    bridge = sum(
+        weight(row)
+        for row in selected
+        if str(row.get("business_status")) in {"READY", "BRIDGE_ONLY"}
+        or str(row.get("history_recency_status")) == "BRIDGE_ONLY"
+    )
+    return {
+        "priority_scope": sorted(priorities),
+        "analysis_weight": total,
+        "strict_ready_weight": strict,
+        "ready_plus_bridge_weight": bridge,
+        "analysis_weighted_strict_ready": round(strict / total, 6) if total else 0,
+        "analysis_weighted_ready_plus_bridge": round(bridge / total, 6) if total else 0,
+    }
+
+
 __all__ = [
     "STATUSES",
     "SOURCE_COMPLETENESS_STATUSES",
     "build_coverage_registry",
     "classify_source_completeness",
+    "analysis_weighted_coverage",
     "rank_coverage_gaps",
 ]

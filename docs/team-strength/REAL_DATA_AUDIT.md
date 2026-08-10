@@ -9,10 +9,11 @@ The existing bounded provider audit found aggregate recent_form snapshots but ze
 ## Historical result sources
 
 OpenFootball pinned capture: `openfootball/europe@e27eb01726f394ddf9fa68b15d37b900487b5903`; listed/parsed source totals are `240/53`, `240/45`, and `306/306`, for `404` parsed rows. The two completed Swedish files are PARTIAL; Portugal is COMPLETE.
-Football-Data.co.uk capture: `https://www.football-data.co.uk/new/SWE.csv`; raw SHA256 `56b5f00a253a223f7eb546a80c4f3b3201b9a9fd976ae37e1dcee5f12a104ebf`; the normalized Sweden 2026 sample has `119` records and `119` eligible records. The CSV is not committed.
+Football-Data.co.uk capture: `https://www.football-data.co.uk/new/SWE.csv`; raw SHA256 `56b5f00a253a223f7eb546a80c4f3b3201b9a9fd976ae37e1dcee5f12a104ebf`; the normalized Sweden 2026 sample has `119` records and `119` eligible records. The expanded demand manifest contains `10` season/file observations for Brazil, Norway, Finland, Japan and USA; the raw CSVs are not committed and their team identity status remains UNVERIFIED.
 
 ## Current buildability
 
 Current bounded schedule: `3` matches; both history available `3`; both current-strength ready `2`; bridge-only `0`; stale `1`; source conflicts `0`; identity unresolved `0`.
 
 The ledger preserves old results as valid historical evidence. Team-strength recency is calculated from the latest match kickoff, not source capture time. The data layer remains shadow-only and `validated_for_model=false`.
+Project demand recovery used schedule/task/job metadata only. It recovered the 25 historical analysis jobs without guessing; unresolved schedule rows remain explicitly unresolved. Source record volume is not project usage.
