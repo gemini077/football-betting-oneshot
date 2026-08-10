@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://football-betting-oneshot.local/schemas/football_data/xg_snapshot.v1.schema.json",
+  "title": "Provider-specific xG snapshot v1",
+  "allOf": [
+    {"$ref": "./football_data_contract.v1.schema.json#/$defs/commonObservation"},
+    {
+      "type": "object",
+      "required": ["contract_version", "team_id", "competition_id", "season_id", "as_of_at", "provider", "metric_definition", "includes_penalties", "post_shot_or_pre_shot", "model_version_if_known", "normalization_version"],
+      "properties": {
+        "contract_version": {"const": "xg_snapshot.v1"},
+        "team_id": {"type": "string", "minLength": 1},
+        "competition_id": {"type": ["string", "null"]},
+        "season_id": {"type": ["string", "null"]},
+        "as_of_at": {"type": "string", "format": "date-time"},
+        "provider": {"type": "string", "minLength": 1},
+        "metric_definition": {"type": "string", "minLength": 1},
+        "includes_penalties": {"type": ["boolean", "null"]},
+        "post_shot_or_pre_shot": {"enum": ["pre_shot", "post_shot", "unknown"]},
+        "model_version_if_known": {"type": ["string", "null"]},
+        "normalization_version": {"type": ["null"]}
+      }
+    }
+  ]
+}

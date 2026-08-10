@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://football-betting-oneshot.local/schemas/football_data/competition_identity.v1.schema.json",
+  "title": "Competition identity v1",
+  "allOf": [
+    {"$ref": "./football_data_contract.v1.schema.json#/$defs/commonObservation"},
+    {
+      "type": "object",
+      "required": ["canonical_name", "resolution_status", "resolution_method", "confidence"],
+      "properties": {
+        "contract_version": {"const": "competition_identity.v1"},
+        "canonical_name": {"type": "string", "minLength": 1},
+        "country": {"type": ["string", "null"]},
+        "competition_type": {"enum": ["domestic_league", "cup", "international_club", "national_team", "unknown"]},
+        "resolution_status": {"enum": ["resolved", "unresolved"]},
+        "resolution_method": {"enum": ["provider_id_exact", "existing_crosswalk", "exact_alias", "normalized_alias", "contextual_match", "manual_verified", "unresolved"]},
+        "confidence": {"type": ["number", "null"], "minimum": 0, "maximum": 1}
+      }
+    }
+  ]
+}

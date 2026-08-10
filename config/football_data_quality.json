@@ -1,0 +1,45 @@
+{
+  "contract_version": "football_data_quality.v1",
+  "grades": {
+    "A": {
+      "description": "entity confirmed, timestamp known, reliable source, complete sample coverage",
+      "requires": ["identity_confirmed", "timestamp_known", "reliable_source", "sample_complete"]
+    },
+    "B": {
+      "description": "identity/timestamp/source reliable; only optional fields or sample completeness are limited",
+      "requires": ["identity_confirmed", "timestamp_known", "reliable_source"]
+    },
+    "C": {
+      "description": "material metric missing, fallback provider, or unresolved evidence without a hard conflict",
+      "requires": [],
+      "disqualifiers": ["material_metric_missing", "fallback_provider", "source_fact_timestamp_missing", "synthetic_observation"]
+    },
+    "D": {
+      "description": "identity, source, or timestamp conflict is material",
+      "disqualifiers": ["identity_conflict", "source_conflict", "timestamp_conflict"]
+    }
+  },
+  "freshness_ttl_seconds": {
+    "slow_changing": 2592000,
+    "fast_changing": 21600,
+    "historical_immutable": null
+  },
+  "freshness_policies": {
+    "slow_changing": {
+      "requires_source_fact_time": false,
+      "allow_capture_time_fallback": true,
+      "ttl_seconds": 2592000
+    },
+    "fast_changing": {
+      "requires_source_fact_time": true,
+      "allow_capture_time_fallback": false,
+      "ttl_seconds": 21600
+    },
+    "historical_immutable": {
+      "requires_source_fact_time": true,
+      "allow_capture_time_fallback": false,
+      "ttl_seconds": null
+    }
+  },
+  "clock_skew_tolerance_seconds": 300
+}

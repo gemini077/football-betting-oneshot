@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://football-betting-oneshot.local/schemas/football_data/lineup_snapshot.v1.schema.json",
+  "title": "Lineup snapshot v1",
+  "allOf": [
+    {"$ref": "./football_data_contract.v1.schema.json#/$defs/commonObservation"},
+    {
+      "type": "object",
+      "required": ["contract_version", "match_id", "team_id", "status", "players"],
+      "properties": {
+        "contract_version": {"const": "lineup_snapshot.v1"},
+        "match_id": {"type": "string", "minLength": 1},
+        "team_id": {"type": "string", "minLength": 1},
+        "status": {"enum": ["projected", "confirmed", "unavailable"]},
+        "players": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["canonical_player_id", "provider_player_id", "name", "position", "starter", "bench", "captain", "goalkeeper"],
+            "properties": {
+              "canonical_player_id": {"type": ["string", "null"]},
+              "provider_player_id": {"type": "string"},
+              "name": {"type": "string", "minLength": 1},
+              "team_id": {"type": "string", "minLength": 1},
+              "position": {"type": ["string", "null"]},
+              "starter": {"type": ["boolean", "null"]},
+              "bench": {"type": ["boolean", "null"]},
+              "captain": {"type": ["boolean", "null"]},
+              "goalkeeper": {"type": ["boolean", "null"]},
+              "source": {"type": "string"},
+              "captured_at": {"type": "string", "format": "date-time"},
+              "status": {"enum": ["projected", "confirmed", "unavailable"]}
+            }
+          }
+        },
+        "player_identity_coverage": {
+          "type": "object",
+          "required": ["resolved_players", "total_players", "coverage_ratio"],
+          "properties": {
+            "resolved_players": {"type": "integer", "minimum": 0},
+            "total_players": {"type": "integer", "minimum": 0},
+            "coverage_ratio": {"type": "number", "minimum": 0, "maximum": 1}
+          },
+          "additionalProperties": false
+        }
+      }
+    }
+  ]
+}

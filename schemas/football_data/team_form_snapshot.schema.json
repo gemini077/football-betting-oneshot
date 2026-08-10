@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://football-betting-oneshot.local/schemas/football_data/team_form_snapshot.v1.schema.json",
+  "title": "Team form snapshot v1",
+  "allOf": [
+    {"$ref": "./football_data_contract.v1.schema.json#/$defs/commonObservation"},
+    {
+      "type": "object",
+      "required": ["contract_version", "team_id", "competition_id", "season_id", "as_of_at", "matches", "window_type", "window_start", "window_end", "minutes", "metrics"],
+      "properties": {
+        "contract_version": {"const": "team_form_snapshot.v1"},
+        "team_id": {"type": "string", "minLength": 1},
+        "competition_id": {"type": ["string", "null"]},
+        "season_id": {"type": ["string", "null"]},
+        "as_of_at": {"type": "string", "format": "date-time"},
+        "matches": {"type": "integer", "minimum": 0},
+        "window_type": {"enum": ["last_5", "last_10", "season_to_date", "rolling_365d", "single_match"]},
+        "window_start": {"type": "string"},
+        "window_end": {"type": "string"},
+        "minutes": {"type": ["integer", "null"], "minimum": 0},
+        "metrics": {"type": "object"}
+      }
+    }
+  ]
+}
