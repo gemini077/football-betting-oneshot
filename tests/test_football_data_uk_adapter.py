@@ -73,3 +73,16 @@ def test_current_football_data_results_replace_stale_status_for_target_teams():
     assert health["both_history_available"] == 1
     assert health["both_current_strength_ready"] == 1
     assert health["stale_history"] == 0
+
+
+def test_portugal_home_team_header_variant_is_supported():
+    csv_text = """Div,Date,Time,HomeTeam,AwayTeam,FTHG,FTAG,FTR
+PO1,08/08/2025,20:15,CD Santa Clara,CD Nacional,1,0,H
+"""
+    records = adapter().parse_csv_text(csv_text)
+
+    assert len(records) == 1
+    assert records[0]["raw_home_team"] == "CD Santa Clara"
+    assert records[0]["raw_away_team"] == "CD Nacional"
+    assert records[0]["home_goals"] == 1
+    assert records[0]["away_goals"] == 0

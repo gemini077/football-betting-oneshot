@@ -253,9 +253,15 @@ def _score_and_teams(record: Mapping[str, Any]) -> tuple[Any, ...]:
 
 
 def _match_facts(record: Mapping[str, Any]) -> tuple[Any, ...]:
+    # Providers frequently publish the same fixture in different timezone or
+    # precision conventions. Once a canonical match ID exists, the calendar
+    # date is the stable cross-source fact; a score/date/team disagreement is
+    # still a conflict, while a harmless clock-time disagreement is not.
+    kickoff = record.get("kickoff_at")
+    kickoff_date = str(kickoff)[:10] if kickoff not in (None, "") else kickoff
     return (
         *_score_and_teams(record),
-        record.get("kickoff_at"),
+        kickoff_date,
         record.get("entity_type"),
         record.get("match_type"),
     )

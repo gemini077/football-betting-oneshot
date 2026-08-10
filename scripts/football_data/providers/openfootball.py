@@ -222,37 +222,61 @@ class OpenFootballHistoricalAdapter:
         """Parse official Football.TXT match lines from one captured file."""
 
         if not isinstance(raw_text, str):
-            raise TypeError("OpenFootball Football.TXT input must be text")
+            raise TypeError("raw_text must be a string")
         raw_sha256 = raw_sha256 or hashlib.sha256(raw_text.encode("utf-8")).hexdigest()
-        current_date: date | None = None
-        current_year: int | None = None
         records: list[dict[str, Any]] = []
-        for line_number, line in enumerate(raw_text.replace("\r\n", "\n").splitlines(), start=1):
-            date_match = _DATE_RE.match(line)
-            if date_match:
-                current_date = self._date_from_match(date_match, current_year)
-                if date_match.group("year"):
-                    current_year = int(date_match.group("year"))
-                    current_date = self._date_from_match(date_match, current_year)
-                continue
-            match = _MATCH_RE.match(line)
-            if not match or current_date is None:
-                continue
-            time_text = match.group("time")
-            kickoff_at = f"{current_date.isoformat()}T{time_text}:00Z" if time_text else f"{current_date.isoformat()}T00:00:00Z"
+        for row in parse_football_txt_rows(raw_text):
             records.append(
                 self._record(
-                    line_number=line_number,
-                    raw_home=match.group("home").strip(),
-                    raw_away=match.group("away").strip(),
-                    kickoff_at=kickoff_at,
-                    kickoff_precision="minute" if time_text else "date",
-                    home_goals=int(match.group("home_goals")),
-                    away_goals=int(match.group("away_goals")),
+                    line_number=int(row["line_number"]),
+                    raw_home=str(row["home"]),
+                    raw_away=str(row["away"]),
+                    kickoff_at=str(row["kickoff_at"]),
+                    kickoff_precision=str(row["kickoff_precision"]),
+                    home_goals=int(row["home_goals"]),
+                    away_goals=int(row["away_goals"]),
                     raw_sha256=raw_sha256,
                 )
             )
         return records
 
 
-__all__ = ["OpenFootballHistoricalAdapter"]
+def parse_football_txt_rows(raw_text: str) -> list[dict[str, Any]]:
+    """Parse Football.TXT result rows without applying entity resolution.
+
+    This is the raw-evidence boundary used by the P0/P1 candidate builder.
+    It intentionally returns names as observed; it never creates canonical IDs.
+    """
+
+    if not isinstance(raw_text, str):
+        raise TypeError("OpenFootball Football.TXT input must be text")
+    current_date: date | None = None
+    current_year: int | None = None
+    rows: list[dict[str, Any]] = []
+    for line_number, line in enumerate(raw_text.replace("\r\n", "\n").splitlines(), start=1):
+        date_match = _DATE_RE.match(line)
+        if date_match:
+            current_date = OpenFootballHistoricalAdapter._date_from_match(date_match, current_year)
+            if date_match.group("year"):
+                current_year = int(date_match.group("year"))
+                current_date = OpenFootballHistoricalAdapter._date_from_match(date_match, current_year)
+            continue
+        match = _MATCH_RE.match(line)
+        if not match or current_date is None:
+            continue
+        time_text = match.group("time")
+        rows.append(
+            {
+                "line_number": line_number,
+                "home": match.group("home").strip(),
+                "away": match.group("away").strip(),
+                "kickoff_at": f"{current_date.isoformat()}T{time_text}:00Z" if time_text else f"{current_date.isoformat()}T00:00:00Z",
+                "kickoff_precision": "minute" if time_text else "date",
+                "home_goals": int(match.group("home_goals")),
+                "away_goals": int(match.group("away_goals")),
+            }
+        )
+    return rows
+
+
+__all__ = ["OpenFootballHistoricalAdapter", "parse_football_txt_rows"]

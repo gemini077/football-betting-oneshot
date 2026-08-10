@@ -24,6 +24,42 @@ def _slug(value: str) -> str:
     return normalized.strip("-") or "unresolved"
 
 
+def parse_football_data_result_rows(raw_text: str, *, season_filter: str | None = None) -> list[dict[str, Any]]:
+    """Read result columns from both football-data CSV header variants."""
+
+    if not isinstance(raw_text, str):
+        raise TypeError("football-data.co.uk input must be text")
+    reader = csv.DictReader(io.StringIO(raw_text.lstrip("\ufeff")))
+    rows: list[dict[str, Any]] = []
+    for line_number, row in enumerate(reader, start=2):
+        season = str(row.get("Season") or "").strip()
+        if season_filter is not None and season and season != str(season_filter):
+            continue
+        date_text = str(row.get("Date") or "").strip()
+        home = str(row.get("Home") or row.get("HomeTeam") or "").strip()
+        away = str(row.get("Away") or row.get("AwayTeam") or "").strip()
+        try:
+            home_goals = int(str(row.get("HG") or row.get("FTHG") or "").strip())
+            away_goals = int(str(row.get("AG") or row.get("FTAG") or "").strip())
+        except (TypeError, ValueError):
+            continue
+        if not date_text or not home or not away:
+            continue
+        rows.append(
+            {
+                "line_number": line_number,
+                "date": date_text,
+                "time": str(row.get("Time") or "").strip(),
+                "season": season or season_filter,
+                "home": home,
+                "away": away,
+                "home_goals": home_goals,
+                "away_goals": away_goals,
+            }
+        )
+    return rows
+
+
 class FootballDataCoUkHistoricalAdapter:
     """Normalize one captured football-data.co.uk results CSV."""
 
@@ -179,24 +215,19 @@ class FootballDataCoUkHistoricalAdapter:
         if not isinstance(raw_text, str):
             raise TypeError("football-data.co.uk input must be text")
         digest = raw_sha256 or self.raw_sha256 or hashlib.sha256(raw_text.encode("utf-8-sig")).hexdigest()
-        reader = csv.DictReader(io.StringIO(raw_text.lstrip("\ufeff")))
         records: list[dict[str, Any]] = []
-        for line_number, row in enumerate(reader, start=2):
-            season = str(row.get("Season") or "").strip()
-            if season_filter is not None and season != str(season_filter):
-                continue
-            date_text = str(row.get("Date") or "").strip()
-            home = str(row.get("Home") or "").strip()
-            away = str(row.get("Away") or "").strip()
-            if not date_text or not home or not away:
-                continue
+        for row in parse_football_data_result_rows(raw_text, season_filter=season_filter):
+            line_number = int(row["line_number"])
+            date_text = str(row["date"])
+            home = str(row["home"])
+            away = str(row["away"])
             try:
                 match_date = datetime.strptime(date_text, "%d/%m/%Y").date()
-                home_goals = int(str(row.get("HG") or "").strip())
-                away_goals = int(str(row.get("AG") or "").strip())
+                home_goals = int(row["home_goals"])
+                away_goals = int(row["away_goals"])
             except (TypeError, ValueError):
                 continue
-            time_text = str(row.get("Time") or "").strip()
+            time_text = str(row.get("time") or "").strip()
             if time_text:
                 try:
                     kickoff_at = f"{match_date.isoformat()}T{datetime.strptime(time_text, '%H:%M').strftime('%H:%M')}:00Z"
@@ -223,4 +254,4 @@ class FootballDataCoUkHistoricalAdapter:
         return records
 
 
-__all__ = ["FootballDataCoUkHistoricalAdapter"]
+__all__ = ["FootballDataCoUkHistoricalAdapter", "parse_football_data_result_rows"]
