@@ -40,6 +40,20 @@ def _snapshot_identity(snapshot: dict[str, Any]) -> dict[str, Any]:
     return {field: snapshot.get(field) for field in SNAPSHOT_FIELDS}
 
 
+def _predictor_evaluable(prediction: dict[str, Any] | None) -> bool:
+    if not isinstance(prediction, dict):
+        return False
+    if prediction.get("status") in {"not_evaluable", "unavailable"}:
+        return False
+    probabilities = prediction.get("probabilities") or prediction.get("outcome_probabilities")
+    if not isinstance(probabilities, dict):
+        return False
+    return all(
+        isinstance(probabilities.get(key), (int, float))
+        for key in ("home", "draw", "away")
+    )
+
+
 def _metadata_complete(identity: dict[str, Any]) -> bool:
     return all(identity.get(field) not in (None, "") for field in SNAPSHOT_FIELDS)
 
@@ -129,11 +143,27 @@ def _frozen_champion_output(record: dict[str, Any]) -> tuple[dict[str, Any] | No
 def primary_benchmark_eligibility(snapshot: dict[str, Any]) -> dict[str, Any]:
     stage = snapshot.get("checkpoint_stage")
     has_trusted_timestamps = bool(snapshot.get("source_cutoff_at") and snapshot.get("market_snapshot_at"))
-    if stage == PRIMARY_CHECKPOINT and has_trusted_timestamps:
+    checkpoint_metadata = snapshot.get("checkpoint_metadata") if isinstance(snapshot.get("checkpoint_metadata"), dict) else {}
+    has_trusted_checkpoint = True
+    if snapshot.get("benchmark_snapshot_version"):
+        has_trusted_checkpoint = bool(
+            snapshot.get("checkpoint_target_at")
+            and snapshot.get("checkpoint_captured_at")
+            and checkpoint_metadata.get("source") != "unclassified"
+        )
+    if stage == PRIMARY_CHECKPOINT and has_trusted_timestamps and has_trusted_checkpoint:
         return {"primary_benchmark_eligible": True, "cohort": "primary", "reason": None}
     if stage in SECONDARY_CHECKPOINTS:
         reason = "missing_trusted_snapshot_timestamps" if not has_trusted_timestamps else "checkpoint_is_secondary"
+        if not has_trusted_checkpoint:
+            reason = "missing_trusted_checkpoint_metadata"
         return {"primary_benchmark_eligible": False, "cohort": "secondary", "reason": reason}
+    if stage == PRIMARY_CHECKPOINT and not has_trusted_checkpoint:
+        return {
+            "primary_benchmark_eligible": False,
+            "cohort": "secondary",
+            "reason": "missing_trusted_checkpoint_metadata",
+        }
     return {
         "primary_benchmark_eligible": False,
         "cohort": "secondary",
@@ -201,6 +231,9 @@ def build_comparison(
         status_reason = "historical_scope_excluded_from_formal_metrics"
 
     synthetic = bool(snapshot.get("synthetic"))
+    market_evaluable = _predictor_evaluable(market)
+    simple_evaluable = _predictor_evaluable(simple)
+    champion_evaluable = _predictor_evaluable(predictors.get("champion"))
     return {
         **identity,
         "comparison_id": comparison_id_for(
@@ -215,11 +248,22 @@ def build_comparison(
         "status_reason": status_reason,
         "same_snapshot": same_snapshot,
         "snapshot_consistent": same_snapshot is True,
+        "benchmark_snapshot_version": snapshot.get("benchmark_snapshot_version"),
+        "checkpoint_target_at": snapshot.get("checkpoint_target_at"),
+        "checkpoint_captured_at": snapshot.get("checkpoint_captured_at"),
+        "minutes_to_kickoff_at_capture": snapshot.get("minutes_to_kickoff_at_capture"),
         "primary_benchmark_eligible": eligibility["primary_benchmark_eligible"],
         "cohort": eligibility["cohort"],
         "primary_eligibility_reason": eligibility["reason"],
         "synthetic": synthetic,
         "excluded_from_formal_metrics": synthetic or benchmark_scope != "prospective",
+        "market_evaluable": market_evaluable,
+        "market_missing_reason": market.get("market_missing_reason") if not market_evaluable else None,
+        "simple_evaluable": simple_evaluable,
+        "simple_missing_reason": simple.get("simple_missing_reason") if not simple_evaluable else None,
+        "champion_evaluable": champion_evaluable,
+        "champion_missing_reason": None if champion_evaluable else status_reason,
+        "benchmark_snapshot": deepcopy(snapshot),
         "champion_reference": champion_reference,
         "predictors": predictors,
         "market_reference": market,

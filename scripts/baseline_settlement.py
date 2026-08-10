@@ -124,6 +124,11 @@ def _btts_probability(prediction: dict[str, Any], score_rows: list[dict[str, Any
     return None
 
 
+def _prediction_evaluable(prediction: dict[str, Any] | None) -> bool:
+    probabilities = _probabilities(prediction or {})
+    return probabilities is not None
+
+
 def calculate_metrics(prediction: dict[str, Any], result: Any) -> dict[str, Any]:
     """Return common 1X2 metrics plus model-only score/goal diagnostics."""
     actual = _actual_result(result)
@@ -239,6 +244,17 @@ def settle_comparison(
     }
     synthetic = bool(comparison.get("synthetic") or actual.get("synthetic"))
     excluded = bool(comparison.get("excluded_from_formal_metrics") or synthetic)
+    evaluable = {
+        "market_reference": comparison.get("market_evaluable") is True
+        if "market_evaluable" in comparison
+        else _prediction_evaluable(predictors.get("market_reference")),
+        "simple_poisson": comparison.get("simple_evaluable") is True
+        if "simple_evaluable" in comparison
+        else _prediction_evaluable(predictors.get("simple_poisson")),
+        "champion": comparison.get("champion_evaluable") is True
+        if "champion_evaluable" in comparison
+        else _prediction_evaluable(predictors.get("champion")),
+    }
     return {
         "comparison_id": comparison.get("comparison_id"),
         "benchmark_contract_version": comparison.get("benchmark_contract_version", BENCHMARK_CONTRACT_VERSION),
@@ -249,9 +265,21 @@ def settle_comparison(
         "source_cutoff_at": comparison.get("source_cutoff_at"),
         "market_snapshot_at": comparison.get("market_snapshot_at"),
         "checkpoint_stage": comparison.get("checkpoint_stage"),
+        "checkpoint_target_at": comparison.get("checkpoint_target_at"),
+        "checkpoint_captured_at": comparison.get("checkpoint_captured_at"),
+        "minutes_to_kickoff_at_capture": comparison.get("minutes_to_kickoff_at_capture"),
         "cohort": comparison.get("cohort"),
         "primary_benchmark_eligible": comparison.get("primary_benchmark_eligible") is True,
         "comparison_status": comparison.get("comparison_status"),
+        "status_reason": comparison.get("status_reason"),
+        "same_snapshot": comparison.get("same_snapshot") is True,
+        "snapshot_consistent": comparison.get("snapshot_consistent") is True,
+        "market_evaluable": evaluable["market_reference"],
+        "market_missing_reason": comparison.get("market_missing_reason"),
+        "simple_evaluable": evaluable["simple_poisson"],
+        "simple_missing_reason": comparison.get("simple_missing_reason"),
+        "champion_evaluable": evaluable["champion"],
+        "champion_missing_reason": comparison.get("champion_missing_reason"),
         "synthetic": synthetic,
         "excluded_from_formal_metrics": excluded,
         "actual_result": actual,
@@ -295,40 +323,206 @@ def aggregate_settlements(
     include_excluded: bool = False,
 ) -> dict[str, Any]:
     records_seen = len(settlements)
-    eligible = [
+    scope_rows = [
         row for row in settlements
         if isinstance(row, dict)
-        and (include_excluded or row.get("excluded_from_formal_metrics") is not True)
         and row.get("benchmark_scope") == "prospective"
         and (cohort is None or row.get("cohort") == cohort)
     ]
-    by_match: dict[str, dict[str, Any]] = {}
-    duplicates = 0
-    for row in eligible:
-        key = str(row.get("match_key") or "")
-        if key in by_match:
-            duplicates += 1
-            continue
-        by_match[key] = row
-    unique_rows = list(by_match.values())
-    model_names = ("market_reference", "simple_poisson", "champion")
-    metric_names = (
-        "brier_score_1x2", "log_loss_1x2", "top1_accuracy_1x2",
-        "btts_hit", "total_goal_error", "total_goal_absolute_error",
-        "expected_goal_error", "score_top1", "score_top3", "score_top5",
-        "actual_score_rank", "actual_score_probability",
+
+    def formal_candidate(row: dict[str, Any]) -> bool:
+        return (
+            row.get("benchmark_scope") == "prospective"
+            and row.get("comparison_status") == "complete"
+            and row.get("same_snapshot") is True
+            and row.get("synthetic") is False
+            and row.get("excluded_from_formal_metrics") is False
+        )
+
+    eligible = [row for row in scope_rows if formal_candidate(row)]
+    primary_rows = [
+        row for row in eligible
+        if row.get("cohort") == "primary" and row.get("primary_benchmark_eligible") is True
+    ]
+
+    def grouped(rows: list[dict[str, Any]], key_fn) -> dict[Any, list[dict[str, Any]]]:
+        groups: dict[Any, list[dict[str, Any]]] = {}
+        for row in rows:
+            groups.setdefault(key_fn(row), []).append(row)
+        return groups
+
+    primary_groups = grouped(primary_rows, lambda row: str(row.get("match_key") or ""))
+    duplicate_primary_conflicts = sorted(
+        key for key, rows in primary_groups.items() if len(rows) > 1
     )
-    aggregate: dict[str, dict[str, Any]] = {}
-    for model_name in model_names:
-        rows = [row.get("metrics", {}).get(model_name, {}) for row in unique_rows]
-        aggregate[model_name] = {key: _mean_metric(rows, key) for key in metric_names}
+    primary_clean = [
+        row for key, rows in primary_groups.items()
+        if key not in duplicate_primary_conflicts
+        for row in rows
+    ]
+
+    secondary_rows = [row for row in eligible if row.get("cohort") == "secondary"]
+    secondary_groups = grouped(
+        secondary_rows,
+        lambda row: (str(row.get("checkpoint_stage") or "unclassified"), str(row.get("match_key") or "")),
+    )
+    duplicate_secondary_conflicts = sorted(
+        f"{stage}:{match_key}" for (stage, match_key), rows in secondary_groups.items() if len(rows) > 1
+    )
+
+    def mean_for(rows: list[dict[str, Any]], model_name: str, key: str) -> float | None:
+        return _mean_metric(
+            [row.get("metrics", {}).get(model_name, {}) for row in rows],
+            key,
+        )
+
+    def paired_3way(rows: list[dict[str, Any]]) -> dict[str, Any]:
+        paired = [
+            row for row in rows
+            if row.get("market_evaluable") is True
+            and row.get("simple_evaluable") is True
+            and row.get("champion_evaluable") is True
+        ]
+        paired = sorted(paired, key=lambda row: str(row.get("match_key") or ""))
+        return {
+            "n": len(paired),
+            "match_keys": [str(row.get("match_key") or "") for row in paired],
+            "market_reference": {
+                "brier": mean_for(paired, "market_reference", "brier_score_1x2"),
+                "log_loss": mean_for(paired, "market_reference", "log_loss_1x2"),
+                "top1": mean_for(paired, "market_reference", "top1_accuracy_1x2"),
+            },
+            "simple_poisson": {
+                "brier": mean_for(paired, "simple_poisson", "brier_score_1x2"),
+                "log_loss": mean_for(paired, "simple_poisson", "log_loss_1x2"),
+                "top1": mean_for(paired, "simple_poisson", "top1_accuracy_1x2"),
+            },
+            "champion": {
+                "brier": mean_for(paired, "champion", "brier_score_1x2"),
+                "log_loss": mean_for(paired, "champion", "log_loss_1x2"),
+                "top1": mean_for(paired, "champion", "top1_accuracy_1x2"),
+            },
+        }
+
+    def paired_model_distribution(rows: list[dict[str, Any]]) -> dict[str, Any]:
+        paired = [
+            row for row in rows
+            if row.get("simple_evaluable") is True and row.get("champion_evaluable") is True
+        ]
+        paired = sorted(paired, key=lambda row: str(row.get("match_key") or ""))
+        metric_keys = (
+            "btts_hit", "total_goal_error", "total_goal_absolute_error", "expected_goal_error",
+            "score_top1", "score_top3", "score_top5", "actual_score_rank",
+            "actual_score_probability",
+        )
+
+        def model_metrics(model_name: str) -> dict[str, Any]:
+            values = {key: mean_for(paired, model_name, key) for key in metric_keys}
+            values["btts"] = values["btts_hit"]
+            values["btts_accuracy"] = values["btts_hit"]
+            return values
+
+        return {
+            "n": len(paired),
+            "match_keys": [str(row.get("match_key") or "") for row in paired],
+            "simple_poisson": model_metrics("simple_poisson"),
+            "champion": model_metrics("champion"),
+        }
+
+    def individual_metrics(rows: list[dict[str, Any]]) -> dict[str, Any]:
+        model_names = ("market_reference", "simple_poisson", "champion")
+        metric_names = (
+            "brier_score_1x2", "log_loss_1x2", "top1_accuracy_1x2",
+            "btts_hit", "total_goal_error", "total_goal_absolute_error",
+            "expected_goal_error", "score_top1", "score_top3", "score_top5",
+            "actual_score_rank", "actual_score_probability",
+        )
+        return {
+            model_name: {
+                key: mean_for(rows, model_name, key) for key in metric_names
+            }
+            for model_name in model_names
+        }
+
+    paired_3way_result = paired_3way(primary_clean)
+    paired_model_result = paired_model_distribution(primary_clean)
+    paired_metrics = {
+        "market_reference": {
+            "brier_score_1x2": paired_3way_result["market_reference"]["brier"],
+            "log_loss_1x2": paired_3way_result["market_reference"]["log_loss"],
+            "top1_accuracy_1x2": paired_3way_result["market_reference"]["top1"],
+        },
+        "simple_poisson": {
+            "brier_score_1x2": paired_3way_result["simple_poisson"]["brier"],
+            "log_loss_1x2": paired_3way_result["simple_poisson"]["log_loss"],
+            "top1_accuracy_1x2": paired_3way_result["simple_poisson"]["top1"],
+            **paired_model_result["simple_poisson"],
+        },
+        "champion": {
+            "brier_score_1x2": paired_3way_result["champion"]["brier"],
+            "log_loss_1x2": paired_3way_result["champion"]["log_loss"],
+            "top1_accuracy_1x2": paired_3way_result["champion"]["top1"],
+            **paired_model_result["champion"],
+        },
+    }
+
+    availability = {}
+    for model_name, flag in (
+        ("market_reference", "market_evaluable"),
+        ("simple_poisson", "simple_evaluable"),
+        ("champion", "champion_evaluable"),
+    ):
+        evaluable_count = sum(row.get(flag) is True for row in eligible)
+        availability[model_name] = {
+            "evaluable": evaluable_count,
+            "unavailable": max(0, len(eligible) - evaluable_count),
+        }
+
+    secondary_summary: dict[str, Any] = {}
+    for stage in sorted({str(row.get("checkpoint_stage") or "unclassified") for row in secondary_rows}):
+        stage_rows: list[dict[str, Any]] = []
+        for (row_stage, row_match), rows in secondary_groups.items():
+            if row_stage == stage and f"{row_stage}:{row_match}" not in duplicate_secondary_conflicts:
+                stage_rows.extend(rows)
+        stage_rows = sorted(stage_rows, key=lambda row: str(row.get("match_key") or ""))
+        secondary_summary[stage] = {
+            "n": len(stage_rows),
+            "match_keys": [str(row.get("match_key") or "") for row in stage_rows],
+            "paired_3way_1x2": paired_3way(stage_rows),
+            "paired_model_distribution": paired_model_distribution(stage_rows),
+        }
+
+    prospective_match_keys = sorted({str(row.get("match_key") or "") for row in scope_rows})
+    incomplete_count = sum(row.get("comparison_status") == "incomplete" for row in scope_rows)
+    mismatch_count = sum(row.get("comparison_status") == "invalid_snapshot_mismatch" for row in scope_rows)
+    duplicate_checkpoint_excluded = max(0, len(eligible) - len(primary_clean)) if cohort != "secondary" else max(
+        0, len(secondary_rows) - sum(len(rows) == 1 for rows in secondary_groups.values())
+    )
     return {
         "benchmark_contract_version": BENCHMARK_CONTRACT_VERSION,
         "cohort": cohort,
         "records_seen": records_seen,
+        "total_prospective_matches": len(prospective_match_keys),
+        "prospective_match_keys": prospective_match_keys,
         "formal_records": len(eligible),
+        "primary_formal_records": len(primary_rows),
+        "primary_unique_match_count": len({str(row.get("match_key") or "") for row in primary_clean}),
+        "secondary_formal_records": len(secondary_rows),
         "excluded_records": records_seen - len(eligible),
-        "unique_match_count": len(unique_rows),
-        "duplicate_checkpoint_records_excluded": duplicates,
-        "metrics": aggregate,
+        "unique_match_count": len({str(row.get("match_key") or "") for row in eligible}),
+        "duplicate_checkpoint_records_excluded": duplicate_checkpoint_excluded,
+        "duplicate_primary_conflicts": duplicate_primary_conflicts,
+        "duplicate_secondary_conflicts": duplicate_secondary_conflicts,
+        "incomplete_comparison_count": incomplete_count,
+        "snapshot_mismatch_count": mismatch_count,
+        "availability": availability,
+        "market_unavailable_count": availability["market_reference"]["unavailable"],
+        "simple_unavailable_count": availability["simple_poisson"]["unavailable"],
+        "champion_unavailable_count": availability["champion"]["unavailable"],
+        "paired_3way_1x2": paired_3way_result,
+        "paired_model_distribution": paired_model_result,
+        "secondary": secondary_summary,
+        "individual_metrics": individual_metrics(eligible),
+        "metrics": paired_metrics,
+        "include_excluded_requested": bool(include_excluded),
     }

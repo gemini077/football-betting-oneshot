@@ -116,8 +116,33 @@ def test_simple_poisson_uses_overall_fallback_when_venue_rows_are_unusable():
 
     assert result["status"] == "evaluable"
     assert result["input_source"] == "overall_fallback"
+    assert result["input_sources"] == {"home": "home_overall", "away": "away_overall"}
     assert result["lambda_home"] == pytest.approx((12 / 10 + 9 / 10) / 2)
     assert result["lambda_away"] == pytest.approx((10 / 10 + 13 / 10) / 2)
+
+
+def test_simple_poisson_mixes_home_venue_with_away_overall_fallback():
+    snapshot = make_snapshot()
+    snapshot["recent_form"].pop("away_away")
+
+    result = build_simple_poisson_baseline(snapshot)
+
+    assert result["status"] == "evaluable"
+    assert result["input_sources"] == {"home": "home_home", "away": "away_overall"}
+    assert result["lambda_home"] == pytest.approx((20 / 10 + 9 / 10) / 2)
+    assert result["lambda_away"] == pytest.approx((10 / 10 + 8 / 10) / 2)
+
+
+def test_simple_poisson_mixes_home_overall_with_away_venue_fallback():
+    snapshot = make_snapshot()
+    snapshot["recent_form"].pop("home_home")
+
+    result = build_simple_poisson_baseline(snapshot)
+
+    assert result["status"] == "evaluable"
+    assert result["input_sources"] == {"home": "home_overall", "away": "away_away"}
+    assert result["lambda_home"] == pytest.approx((12 / 10 + 10 / 10) / 2)
+    assert result["lambda_away"] == pytest.approx((15 / 10 + 13 / 10) / 2)
 
 
 def test_simple_poisson_rejects_missing_form_and_lambda_outside_fixed_bounds():

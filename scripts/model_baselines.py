@@ -9,10 +9,11 @@ baseline result carrying the snapshot identity fields unchanged.
 from __future__ import annotations
 
 from copy import deepcopy
-import json
 import math
+import re
 from statistics import median
 from typing import Any
+import unicodedata
 
 
 MARKET_REFERENCE_VERSION = "market_reference.v1"
@@ -21,6 +22,7 @@ MIN_LAMBDA = 0.15
 MAX_LAMBDA = 4.0
 MAX_GOALS_PER_TEAM = 12
 OUTCOMES = ("home", "draw", "away")
+MARKET_PROVIDER_PRIORITY = {"nowscore": 0, "500_deep": 1}
 SNAPSHOT_FIELDS = (
     "match_key",
     "snapshot_id",
@@ -49,6 +51,12 @@ def _with_metadata(result: dict[str, Any], snapshot: dict[str, Any]) -> dict[str
     return {**_metadata(snapshot), **result}
 
 
+def _model_input(snapshot: dict[str, Any]) -> dict[str, Any]:
+    """Read the exact deterministic input for formal benchmark snapshots."""
+    nested = snapshot.get("model_input")
+    return nested if isinstance(nested, dict) else snapshot
+
+
 def _as_rows(value: Any) -> list[dict[str, Any]]:
     if isinstance(value, list):
         return [row for row in value if isinstance(row, dict)]
@@ -64,8 +72,9 @@ def _as_rows(value: Any) -> list[dict[str, Any]]:
 
 def _market_containers(snapshot: dict[str, Any]) -> list[dict[str, Any]]:
     containers: list[dict[str, Any]] = []
+    source = _model_input(snapshot)
     for key in ("market", "markets", "market_snapshot", "market_data"):
-        value = snapshot.get(key)
+        value = source.get(key)
         if isinstance(value, dict):
             containers.append(value)
     return containers
@@ -73,32 +82,48 @@ def _market_containers(snapshot: dict[str, Any]) -> list[dict[str, Any]]:
 
 def _one_x_two_rows(snapshot: dict[str, Any]) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
+    source = _model_input(snapshot)
     containers = _market_containers(snapshot)
     for key in ("market_1x2", "market_1X2", "one_x_two", "1x2"):
-        rows.extend(_as_rows(snapshot.get(key)))
+        rows.extend(_as_rows(source.get(key)))
     for container in containers:
         for key in ("1x2", "1X2", "one_x_two", "spf"):
             rows.extend(_as_rows(container.get(key)))
         rows.extend(_as_rows(container.get("bookmakers")))
 
-    source_snapshots = snapshot.get("source_snapshots")
+    source_snapshots = source.get("source_snapshots")
     if isinstance(source_snapshots, dict):
-        for provider in source_snapshots.values():
+        provider_names = sorted(
+            source_snapshots,
+            key=lambda name: (
+                MARKET_PROVIDER_PRIORITY.get(_canonical_provider(name), 2),
+                _canonical_provider(name),
+            ),
+        )
+        for provider_name in provider_names:
+            provider = source_snapshots.get(provider_name)
             provider_rows = provider.get("snapshots") if isinstance(provider, dict) else None
-            for source in _as_rows(provider_rows):
-                rows.extend(_as_rows((source.get("ouzhi") or {}).get("bookmakers")))
+            for snapshot_index, source_snapshot in enumerate(_as_rows(provider_rows)):
+                bookmaker_rows = _as_rows((source_snapshot.get("ouzhi") or {}).get("bookmakers"))
+                for row_index, row in enumerate(bookmaker_rows):
+                    annotated = deepcopy(row)
+                    annotated["_source_provider"] = _canonical_provider(
+                        row.get("source_provider")
+                        or row.get("source")
+                        or provider_name
+                    )
+                    annotated["_source_order"] = (snapshot_index, row_index)
+                    rows.append(annotated)
+    return rows
 
-    unique: list[dict[str, Any]] = []
-    seen: set[str] = set()
-    for row in rows:
-        try:
-            marker = json.dumps(row, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-        except (TypeError, ValueError):
-            marker = repr(row)
-        if marker not in seen:
-            seen.add(marker)
-            unique.append(row)
-    return unique
+
+def _canonical_provider(value: Any) -> str:
+    text = str(value or "").strip().casefold()
+    if "now" in text:
+        return "nowscore"
+    if "500" in text:
+        return "500_deep"
+    return text or "snapshot"
 
 
 def _quote_values(row: dict[str, Any]) -> tuple[float, float, float] | None:
@@ -125,21 +150,32 @@ def _quote_values(row: dict[str, Any]) -> tuple[float, float, float] | None:
 
 
 def _bookmaker_name(row: dict[str, Any], index: int) -> str:
-    for key in ("bookmaker", "company", "name", "title", "cid", "id"):
+    for key in ("bookmaker", "company", "name", "title", "cid", "source_company_id", "id"):
         value = row.get(key)
         if value not in (None, ""):
             return str(value)
     return f"bookmaker-{index + 1}"
 
 
+def _canonical_bookmaker_id(value: Any, index: int) -> str:
+    text = unicodedata.normalize("NFKC", str(value or "")).casefold()
+    normalized = re.sub(r"[^\w]+", "", text, flags=re.UNICODE)
+    return normalized or f"bookmaker{index + 1}"
+
+
+def _provider_priority(value: Any) -> int:
+    return MARKET_PROVIDER_PRIORITY.get(_canonical_provider(value), 2)
+
+
 def _auxiliary_market_rows(snapshot: dict[str, Any], names: tuple[str, ...]) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
+    source = _model_input(snapshot)
     for name in names:
-        rows.extend(_as_rows(snapshot.get(name)))
+        rows.extend(_as_rows(source.get(name)))
     for container in _market_containers(snapshot):
         for name in names:
             rows.extend(_as_rows(container.get(name)))
-    source_snapshots = snapshot.get("source_snapshots")
+    source_snapshots = source.get("source_snapshots")
     if isinstance(source_snapshots, dict):
         for provider in source_snapshots.values():
             provider_rows = provider.get("snapshots") if isinstance(provider, dict) else None
@@ -171,7 +207,8 @@ def build_market_reference(snapshot: dict[str, Any]) -> dict[str, Any]:
     rows = _one_x_two_rows(snapshot)
     raw_devig: dict[str, dict[str, float]] = {}
     valid_rows: list[dict[str, Any]] = []
-    used_names: dict[str, int] = {}
+    selected: dict[str, tuple[tuple[Any, ...], dict[str, Any]]] = {}
+    duplicate_bookmakers_excluded = 0
     for index, row in enumerate(rows):
         odds = _quote_values(row)
         if odds is None:
@@ -185,18 +222,35 @@ def build_market_reference(snapshot: dict[str, Any]) -> dict[str, Any]:
             "draw": raw_draw / total,
             "away": raw_away / total,
         }
-        name = _bookmaker_name(row, index)
-        count = used_names.get(name, 0)
-        used_names[name] = count + 1
-        if count:
-            name = f"{name}#{count + 1}"
-        raw_devig[name] = fair
-        valid_rows.append({
-            "bookmaker": name,
+        display_name = _bookmaker_name(row, index)
+        canonical_id = _canonical_bookmaker_id(display_name, index)
+        source_provider = _canonical_provider(
+            row.get("_source_provider") or row.get("source_provider") or row.get("source")
+        )
+        source_order = row.get("_source_order")
+        if not isinstance(source_order, (tuple, list)):
+            source_order = (index, index)
+        selection_key = (_provider_priority(source_provider), *tuple(source_order), index)
+        candidate = {
+            "bookmaker": display_name,
+            "canonical_bookmaker_id": canonical_id,
+            "source_provider": source_provider,
             "odds": {"home": odds[0], "draw": odds[1], "away": odds[2]},
             "raw_devig_probabilities": fair,
             "fair_probabilities": fair,
-        })
+        }
+        previous = selected.get(canonical_id)
+        if previous is not None:
+            duplicate_bookmakers_excluded += 1
+            if selection_key >= previous[0]:
+                continue
+        selected[canonical_id] = (selection_key, candidate)
+
+    for canonical_id, (_, row) in sorted(selected.items(), key=lambda item: item[0]):
+        # Keep the historical display-name map while exposing the stable
+        # canonical id on each auditable bookmaker row.
+        raw_devig[row["bookmaker"]] = row["raw_devig_probabilities"]
+        valid_rows.append(row)
 
     handicap_rows = _auxiliary_market_rows(snapshot, ("handicap", "asian_handicap", "yazhi"))
     total_rows = _auxiliary_market_rows(snapshot, ("total", "over_under", "daxiao"))
@@ -233,6 +287,9 @@ def build_market_reference(snapshot: dict[str, Any]) -> dict[str, Any]:
         "market_total_quotes": total_rows,
         "market_read": True,
         "champion_read": False,
+        "market_evaluable": False,
+        "market_missing_reason": "insufficient_valid_bookmakers",
+        "duplicate_bookmakers_excluded": duplicate_bookmakers_excluded,
     }
     if len(valid_rows) >= 2:
         by_outcome = {
@@ -248,6 +305,8 @@ def build_market_reference(snapshot: dict[str, Any]) -> dict[str, Any]:
         result.update({
             "status": "evaluable",
             "reason": None,
+            "market_evaluable": True,
+            "market_missing_reason": None,
             "probabilities": probabilities,
             "fair_probabilities": probabilities,
             "outcome_probabilities": probabilities,
@@ -262,20 +321,17 @@ def build_market_reference(snapshot: dict[str, Any]) -> dict[str, Any]:
 
 
 def _number_from_snapshot(snapshot: dict[str, Any], keys: tuple[str, ...]) -> float | None:
+    source = _model_input(snapshot)
     for key in keys:
-        value = _number(snapshot.get(key))
+        value = _number(source.get(key))
         if value is not None:
             return value
     return None
 
 
 def _recent_form(snapshot: dict[str, Any]) -> dict[str, Any]:
-    candidates = [snapshot]
-    for key in ("prematch_fundamentals", "input", "projection", "model_input"):
-        value = snapshot.get(key)
-        if isinstance(value, dict):
-            candidates.append(value)
-    source_snapshots = snapshot.get("source_snapshots")
+    source = _model_input(snapshot)
+    source_snapshots = source.get("source_snapshots")
     if isinstance(source_snapshots, dict):
         for provider_name in ("nowscore", "500_deep"):
             provider = source_snapshots.get(provider_name)
@@ -283,7 +339,23 @@ def _recent_form(snapshot: dict[str, Any]) -> dict[str, Any]:
                 continue
             rows = provider.get("snapshots")
             if isinstance(rows, list):
-                candidates.extend(row for row in rows if isinstance(row, dict))
+                for row in rows:
+                    if not isinstance(row, dict):
+                        continue
+                    shuju = row.get("shuju")
+                    nested = shuju.get("recent_form") if isinstance(shuju, dict) else None
+                    if isinstance(nested, dict):
+                        return nested
+    prematch = source.get("prematch_fundamentals")
+    if isinstance(prematch, dict) and isinstance(prematch.get("recent_form"), dict):
+        return prematch["recent_form"]
+
+    # Legacy flattened snapshots remain available to unit tests/research CLI.
+    candidates = [snapshot]
+    for key in ("prematch_fundamentals", "input", "projection"):
+        value = snapshot.get(key)
+        if isinstance(value, dict):
+            candidates.append(value)
     for candidate in candidates:
         direct = candidate.get("recent_form")
         if isinstance(direct, dict):
@@ -345,16 +417,30 @@ def build_simple_poisson_baseline(snapshot: dict[str, Any]) -> dict[str, Any]:
     away_venue = form.get("away_away")
     home_overall = form.get("home_overall")
     away_overall = form.get("away_overall")
-    home = home_venue if _valid_form_row(home_venue) else home_overall if _valid_form_row(home_overall) else None
-    away = away_venue if _valid_form_row(away_venue) else away_overall if _valid_form_row(away_overall) else None
-    source = "venue" if home is home_venue and away is away_venue else "overall_fallback"
+    home_venue_valid = _valid_form_row(home_venue)
+    away_venue_valid = _valid_form_row(away_venue)
+    home_overall_valid = _valid_form_row(home_overall)
+    away_overall_valid = _valid_form_row(away_overall)
+    home_source = "home_home" if home_venue_valid else "home_overall" if home_overall_valid else None
+    away_source = "away_away" if away_venue_valid else "away_overall" if away_overall_valid else None
+    home = home_venue if home_source == "home_home" else home_overall if home_source == "home_overall" else None
+    away = away_venue if away_source == "away_away" else away_overall if away_source == "away_overall" else None
+    if home_source == "home_home" and away_source == "away_away":
+        input_source = "venue"
+    elif home_source == "home_overall" and away_source == "away_overall":
+        input_source = "overall_fallback"
+    else:
+        input_source = "mixed"
 
     result: dict[str, Any] = {
         "model": "simple_poisson",
         "version": SIMPLE_POISSON_VERSION,
         "status": "not_evaluable",
         "reason": "insufficient_recent_form",
-        "input_source": source,
+        "input_source": input_source,
+        "input_sources": {"home": home_source, "away": away_source},
+        "simple_evaluable": False,
+        "simple_missing_reason": "insufficient_recent_form",
         "lambda_home": None,
         "lambda_away": None,
         "expected_goals": None,
@@ -397,6 +483,7 @@ def build_simple_poisson_baseline(snapshot: dict[str, Any]) -> dict[str, Any]:
     })
     if not all(MIN_LAMBDA <= value <= MAX_LAMBDA for value in (lambda_home, lambda_away)):
         result["reason"] = "lambda_out_of_bounds"
+        result["simple_missing_reason"] = "lambda_out_of_bounds"
         return _with_metadata(result, snapshot)
 
     matrix = _poisson_matrix(lambda_home, lambda_away)
@@ -410,6 +497,8 @@ def build_simple_poisson_baseline(snapshot: dict[str, Any]) -> dict[str, Any]:
     result.update({
         "status": "evaluable",
         "reason": None,
+        "simple_evaluable": True,
+        "simple_missing_reason": None,
         "expected_goals": {"home": lambda_home, "away": lambda_away, "total": lambda_home + lambda_away},
         "probabilities": probabilities,
         "outcome_probabilities": probabilities,

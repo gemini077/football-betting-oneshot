@@ -167,3 +167,96 @@ def test_aggregate_excludes_synthetic_and_deduplicates_same_match():
     assert summary["unique_match_count"] == 1
     assert summary["duplicate_checkpoint_records_excluded"] == 1
     assert summary["metrics"]["simple_poisson"]["score_top3"] is not None
+
+
+def test_aggregate_uses_paired_cohorts_instead_of_independent_availability_means():
+    match_a = snapshot("MATCH-A")
+    match_b = snapshot("MATCH-B")
+    match_b.pop("market")
+    match_c = snapshot("MATCH-C")
+    match_c["recent_form"] = {}
+    rows = [
+        settle_comparison(build_comparison(match_a, champion_record(match_a)), {"home_goals": 2, "away_goals": 1}),
+        settle_comparison(build_comparison(match_b, champion_record(match_b)), {"home_goals": 1, "away_goals": 1}),
+        settle_comparison(build_comparison(match_c, champion_record(match_c)), {"home_goals": 0, "away_goals": 1}),
+    ]
+
+    summary = aggregate_settlements(rows, cohort="primary")
+    paired = summary["paired_3way_1x2"]
+    model_paired = summary["paired_model_distribution"]
+
+    assert summary["total_prospective_matches"] == 3
+    assert paired["n"] == 1
+    assert paired["match_keys"] == ["MATCH-A"]
+    assert model_paired["n"] == 2
+    assert model_paired["match_keys"] == ["MATCH-A", "MATCH-B"]
+    assert paired["market_reference"]["brier"] is not None
+    assert paired["simple_poisson"]["log_loss"] is not None
+    assert paired["champion"]["top1"] is not None
+    assert summary["availability"]["market_reference"]["evaluable"] == 2
+    assert summary["availability"]["simple_poisson"]["evaluable"] == 2
+    assert summary["availability"]["champion"]["evaluable"] == 3
+
+
+def test_aggregate_excludes_incomplete_mismatch_synthetic_historical_and_secondary_from_formal():
+    complete = settle_comparison(
+        build_comparison(snapshot("COMPLETE"), champion_record(snapshot("COMPLETE"))),
+        {"home_goals": 2, "away_goals": 1},
+    )
+    incomplete = settle_comparison(
+        build_comparison(snapshot("INCOMPLETE"), None),
+        {"home_goals": 1, "away_goals": 0},
+    )
+    mismatch_snapshot = snapshot("MISMATCH")
+    mismatch_champion = champion_record(mismatch_snapshot)
+    mismatch_champion["snapshot_id"] = "OTHER-SNAPSHOT"
+    mismatch = settle_comparison(
+        build_comparison(mismatch_snapshot, mismatch_champion),
+        {"home_goals": 0, "away_goals": 0},
+    )
+    historical_snapshot = snapshot("HISTORICAL")
+    historical_snapshot["historical"] = True
+    historical = settle_comparison(
+        build_comparison(historical_snapshot, champion_record(historical_snapshot)),
+        {"home_goals": 0, "away_goals": 1},
+    )
+    secondary_snapshot = snapshot("SECONDARY", stage="T-2H")
+    secondary = settle_comparison(
+        build_comparison(secondary_snapshot, champion_record(secondary_snapshot)),
+        {"home_goals": 1, "away_goals": 1},
+    )
+    synthetic = copy.deepcopy(complete)
+    synthetic["match_key"] = "SYNTHETIC"
+    synthetic["synthetic"] = True
+    synthetic["excluded_from_formal_metrics"] = True
+
+    summary = aggregate_settlements([secondary, synthetic, mismatch, historical, incomplete, complete], cohort="primary")
+
+    assert summary["formal_records"] == 1
+    assert summary["paired_3way_1x2"]["n"] == 1
+    assert summary["paired_3way_1x2"]["match_keys"] == ["COMPLETE"]
+    assert summary["incomplete_comparison_count"] == 1
+    assert summary["snapshot_mismatch_count"] == 1
+    assert summary["excluded_records"] == 5
+
+
+def test_duplicate_primary_is_order_independent_and_excluded_conservatively():
+    first_snapshot = snapshot("DUPLICATE")
+    second_snapshot = snapshot("DUPLICATE")
+    second_snapshot["snapshot_id"] = "SNAPSHOT-DUPLICATE-OTHER"
+    first = settle_comparison(
+        build_comparison(first_snapshot, champion_record(first_snapshot)),
+        {"home_goals": 2, "away_goals": 1},
+    )
+    second = settle_comparison(
+        build_comparison(second_snapshot, champion_record(second_snapshot)),
+        {"home_goals": 1, "away_goals": 0},
+    )
+
+    forward = aggregate_settlements([first, second], cohort="primary")
+    reverse = aggregate_settlements([second, first], cohort="primary")
+
+    assert forward["paired_3way_1x2"]["n"] == 0
+    assert forward["duplicate_primary_conflicts"] == ["DUPLICATE"]
+    assert reverse["duplicate_primary_conflicts"] == ["DUPLICATE"]
+    assert forward["paired_3way_1x2"] == reverse["paired_3way_1x2"]

@@ -1,20 +1,45 @@
-# Phase 1 — Same-Snapshot Baseline Benchmark Foundation
+# Phase 1.1 — Same-Snapshot Baseline Benchmark
 
-Phase 1 is an internal, prospective-only comparison of three independent
-pre-match outputs for the same match and the same frozen snapshot:
+This is an internal, prospective-only experiment. It does not change the
+Champion mathematics, Champion weights, lambda, rho, calibration, selectors,
+confidence, public pages, betting state, or user-facing terminology.
 
-1. `Market Reference` — `market_reference.v1`
-2. `Simple Poisson` — `simple_poisson.v1`
-3. `Current Champion` — a reference to an existing formal frozen prediction
+The three independent pre-match outputs are:
 
-The benchmark contract is `benchmark_comparison.v1`. It does not change the
-Champion, the public pages, betting state, calibration, selectors, confidence,
-or any model parameter.
+1. Market Reference — `market_reference.v1`
+2. Simple Poisson — `simple_poisson.v1`
+3. Current Champion — an existing formal frozen prediction reference
 
-## Snapshot identity
+The comparison contract remains `benchmark_comparison.v1`.
 
-Every predictor output and every settlement carries these exact fields from the
-same frozen snapshot:
+## Production flow
+
+The only formal production path is:
+
+```text
+Phase 0 frozen Champion prediction
+  -> immutable governance input snapshot
+  -> benchmark_snapshot.v1 adapter
+  -> Market Reference + Simple Poisson
+  -> same-snapshot comparison freeze
+  -> verified 90-minute result
+  -> separate settlement freeze
+```
+
+`build_benchmark_snapshot_from_frozen_prediction` loads the exact
+`data/model_governance/input_snapshots/<sha256>.json` content referenced by the
+Champion record. It validates the record hash, snapshot hash, snapshot id, and
+content-addressed filename. It never fetches a provider, reparses HTML, reads
+the latest workspace, or reruns the Champion.
+
+The adapter output stores the exact `model_input` from
+`deterministic_model_input.v1`, plus `checkpoint_stage`, target/capture times,
+and the frozen Champion identity. Invalid or unavailable input is a benchmark
+error/status only; the normal match report remains successful.
+
+## Snapshot identity and checkpoint provenance
+
+All predictor outputs carry the same:
 
 ```text
 match_key
@@ -31,61 +56,90 @@ checkpoint_stage
 match_key + "|" + snapshot_id + "|" + benchmark_contract_version
 ```
 
-Any Champion identity mismatch produces `invalid_snapshot_mismatch` and is not
-compared. A missing formal frozen Champion produces `incomplete`; no Champion
-output is reconstructed for convenience.
+Checkpoint metadata comes from the production
+`prematch_market_monitor.checkpoint_meta` path and the scheduled task stage.
+The code never infers `T-30M` merely from minutes-to-kickoff. If the production
+record cannot prove a registered stage, it is `unclassified` and cannot enter
+the primary cohort. `T-30M` is primary only when the actual scheduled stage,
+target time, capture time, and trusted source/market timestamps are present.
+`T-8H`, `T-2H`, and other registered stages are secondary diagnostics.
 
 ## Market Reference v1
 
-Only real 1X2 quotes in the snapshot are read. Each bookmaker is independently
-de-vigged with reciprocal odds, and at least two bookmakers must have all three
-odds strictly greater than `1`. The de-vigged home/draw/away probabilities are
-median-aggregated by direction and normalized again. The file keeps each
-bookmaker's de-vigged probabilities, min/max values, direction-level
-dispersion, and the scalar maximum dispersion.
+Only real 1X2 quotes in the immutable model input are read. Each valid company
+is independently de-vigged using reciprocal odds. At least two unique
+companies must have three odds strictly greater than `1`. De-vigged
+home/draw/away probabilities are median-aggregated by direction and normalized
+again. Raw company de-vig probabilities, min/max, dispersion, provider, and
+canonical bookmaker id are retained.
 
-Market Reference reports 1X2 fair probabilities, bookmaker count, dispersion,
-and the common 1X2 Brier, Log Loss, and Top-1 metrics after settlement. It only
-records Asian Handicap and O/U lines and their real quotes. It does not infer a
-market lambda, expected goals, BTTS probability, or score matrix.
+The fixed provider priority is `nowscore` primary, then `500_deep` fallback.
+The same normalized bookmaker name is counted once across providers. Asian
+Handicap and O/U lines and real quotes are recorded only; no market lambda,
+expected-goal value, BTTS probability, or score matrix is invented.
+
+Market Reference supports 1X2 fair probabilities, Brier, Log Loss, Top-1,
+bookmaker count, and market dispersion. Market-only score/goal/BTTS metrics are
+`null`.
 
 ## Simple Poisson v1
 
-The baseline reads only recent actual goals from the frozen snapshot. It uses
-the venue rows first:
+The baseline reads only recent actual goals from
+`benchmark_snapshot.model_input.source_snapshots` in the fixed provider order,
+then the explicit `prematch_fundamentals.recent_form` fallback. It never reads
+1X2, Asian Handicap, O/U, BTTS markets, Champion output, LLM/news text,
+calibration, or a price timeline.
+
+The venue fallback is independent per side:
 
 ```text
-home_attack  = home_home goals_for / matches
-away_defence = away_away goals_against / matches
-away_attack  = away_away goals_for / matches
-home_defence = home_home goals_against / matches
-
-lambda_home = mean(home_attack, away_defence)
-lambda_away = mean(away_attack, home_defence)
+home row = home_home, else home_overall
+away row = away_away, else away_overall
 ```
 
-An unusable venue row falls back to its corresponding overall row. The fixed
-numeric safety range is `0.15 <= lambda <= 4.0`. The score matrix is an
-independent Poisson matrix with `rho = 0`; the baseline also emits expected
-goals, 1X2, BTTS, total-goal distribution, and Top-1/3/5 scores. It does not
-read any market, Champion, LLM, news, calibration, or checkpoint timeline
-field.
+Therefore mixed `home_home + away_overall` and
+`home_overall + away_away` are valid and explicitly recorded. The fixed safety
+range is `0.15 <= lambda <= 4.0`; the matrix is independent Poisson with
+`rho=0`. The output includes lambda, expected goals, 1X2, BTTS, total-goal
+distribution, score matrix, and score Top-1/3/5.
 
-## Prospective cohorts
+## Paired statistics and eligibility
 
-`T-30M` is the pre-registered primary checkpoint. A snapshot is primary-eligible
-only when the exact `T-30M` stage and trusted source/market timestamps both
-exist. `T-8H`, `T-2H`, and the other registered stages are secondary diagnostics
-and never replace a missing primary snapshot. Multiple checkpoints for one
-match are deduplicated to one independent match sample in aggregate summaries.
+Individual availability diagnostics are separate from head-to-head conclusions.
+For example, “Market evaluable 61/100” is not a three-way comparison result.
 
-Phase 1 records use `benchmark_scope=prospective`. Historical reports are not
-recomputed or backfilled; any later historical analysis must be explicitly
-tagged `historical_exploratory` and excluded from the formal prospective cohort.
+`paired_3way_1x2` contains only the exact same sorted `match_keys` for which
+Market Reference, Simple Poisson, and the frozen Champion all have evaluable
+1X2 probabilities. Its Brier, Log Loss, and Top-1 values use that one paired
+set.
+
+`paired_model_distribution` contains only the exact same match set where
+Simple Poisson and Champion both have the required fields. It compares BTTS,
+total-goal absolute error, expected-goal error, score Top-1/3/5, actual-score
+rank, and actual-score assigned probability.
+
+A formal record must satisfy all of:
+
+```text
+benchmark_scope == prospective
+comparison_status == complete
+same_snapshot == true
+synthetic == false
+excluded_from_formal_metrics == false
+```
+
+Primary aggregation additionally requires `cohort=primary` and
+`primary_benchmark_eligible=true`. Secondary stages remain separate. If one
+match has multiple primary records, all are marked
+`duplicate_primary_conflict` and excluded conservatively; aggregation never
+depends on file traversal order.
+
+Historical reports are not backfilled. Prototype files are research-only.
+The formal prospective start is the Phase 1.1 production-wiring merge; the
+implementation also records the minimum boundary
+`a14a654e3d80186bb8c93561939e51a4b1ec4ff4`.
 
 ## Immutable files and settlement
-
-The default file layout is:
 
 ```text
 data/model_benchmarks/
@@ -94,39 +148,32 @@ data/model_benchmarks/
   summaries/
 ```
 
-Prediction and settlement writes are create-only. Reusing an ID with identical
-content is idempotent; reusing it with different content raises
-`BenchmarkConflictError`. Settlement stores the 90-minute result and metrics
-separately, so post-match data cannot alter a frozen prediction.
+Prediction and settlement files are create-only. Identical re-writes are
+idempotent; different content for an existing id raises
+`BenchmarkConflictError`. Settlement uses the verified regulation
+90-minute result (`regulation_90m_plus_stoppage`) and excludes extra time and
+penalties. Missing comparison is a no-op. ROI and CLV remain `null` without a
+confirmed real transaction price.
 
-All three predictors share 1X2 Brier, Log Loss, and Top-1 accuracy. Simple
-Poisson and Champion additionally share BTTS, total-goal error, expected-goal
-error, exact-score Top-1/3/5, actual-score rank, and actual-score assigned
-probability. Market Reference has `null` for metrics it cannot produce. ROI
-and CLV remain `null` without a confirmed real transaction price.
+## Synthetic smoke and verification
 
-## Synthetic smoke
-
-`python scripts/run_baseline_synthetic_smoke.py` executes the complete flow with
-`Test Home vs Test Away`: snapshot → frozen Champion fixture → both baselines →
-immutable comparison → synthetic 90-minute result → separate settlement →
-metrics. Every synthetic artifact has `synthetic=true` and
-`excluded_from_formal_metrics=true`.
-
-## Observation gates
-
-The implementation contains no parameter-update path. The operating gates are
-observation-only: 10 matches for a system check, 25 for data quality, 50
-independent primary matches for the first statistical diagnosis, 100 for an
-initial stability observation, 300 before discussing structural changes, and
-500+ for league/odds/match-type slices. Results do not authorize single-match
-Champion corrections or tuning.
-
-## Verification
+`python scripts/run_baseline_synthetic_smoke.py` runs `Test Home vs Test Away`
+through real Phase 0 functions (`build_deterministic_model_input_snapshot`,
+`build_prediction_record`, `freeze_prediction`), the production adapter,
+both baselines, comparison freeze, the production settlement hook, and
+aggregation. The smoke fixture and all outputs are synthetic and have
+`excluded_from_formal_metrics=true`; formal paired `n` remains zero.
 
 ```bash
 python -m pytest tests/test_model_baselines.py -q
 python -m pytest tests/test_baseline_shadow_runner.py -q
 python -m pytest tests/test_baseline_settlement.py -q
 python -m pytest tests/test_baseline_synthetic_smoke.py -q
+python -m pytest tests/test_baseline_production_integration.py -q
 ```
+
+Observation gates are diagnostic only: 10 matches for a system check, 25 for
+data quality, 50 independent primary matches for a first statistical
+diagnostic, 100 for stability observation, 300 before discussing structural
+changes, and 500+ for slices. None authorizes single-match correction or
+Champion tuning.

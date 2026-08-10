@@ -101,6 +101,11 @@ _AUDIT_ONLY_PREDICTION_FIELDS = {
     "prompt_version",
     "report_schema_version",
     "postmatch_schema_version",
+    "checkpoint_stage",
+    "checkpoint_target_at",
+    "checkpoint_captured_at",
+    "minutes_to_kickoff_at_capture",
+    "checkpoint_metadata",
 }
 
 
@@ -390,6 +395,44 @@ def _first_checkpoint(payload: dict[str, Any]) -> str | None:
     return str(value) if value else None
 
 
+def _checkpoint_metadata(payload: dict[str, Any]) -> dict[str, Any]:
+    """Copy production checkpoint metadata as audit-only prediction fields.
+
+    ``prematch_market_monitor.checkpoint_meta`` is the authoritative producer of
+    these values.  This helper only copies the already-recorded metadata from
+    the report payload; it never infers a stage from the current clock.
+    """
+    report = payload.get("report") or {}
+    checkpoint = report.get("market_checkpoint") or {}
+    health = report.get("checkpoint_health") or {}
+    stage = checkpoint.get("stage") or health.get("stage")
+    target_at = (
+        checkpoint.get("scheduled_at")
+        or checkpoint.get("target_at")
+        or health.get("scheduled_at")
+        or health.get("target_at")
+    )
+    captured_at = checkpoint.get("captured_at") or health.get("captured_at")
+    minutes = (
+        checkpoint.get("actual_minutes_before")
+        if checkpoint.get("actual_minutes_before") is not None
+        else health.get("actual_minutes_before")
+    )
+    return {
+        "source": (
+            "prematch_market_monitor.checkpoint_meta"
+            if stage or target_at or captured_at
+            else "unclassified"
+        ),
+        "stage": str(stage) if stage not in (None, "") else "unclassified",
+        "target_at": target_at,
+        "captured_at": captured_at,
+        "minutes_to_kickoff_at_capture": minutes,
+        "capture_quality": checkpoint.get("capture_quality") or health.get("status"),
+        "scheduled_target_minutes": checkpoint.get("target_minutes_before"),
+    }
+
+
 def _score_values(model: dict[str, Any], limit: int) -> list[str]:
     values = []
     for row in model.get("score_probabilities") or []:
@@ -465,7 +508,7 @@ def _pick(value: dict[str, Any], keys: tuple[str, ...]) -> dict[str, Any]:
     return {key: deepcopy(value[key]) for key in keys if key in value}
 
 
-def _project_market_snapshot(snapshot: dict[str, Any]) -> dict[str, Any]:
+def _project_market_snapshot(snapshot: dict[str, Any], *, source_provider: str | None = None) -> dict[str, Any]:
     projected: dict[str, Any] = {}
     for key in ("fetched_at", "captured_at", "source_timestamp", "source_time"):
         if key in snapshot:
@@ -477,7 +520,14 @@ def _project_market_snapshot(snapshot: dict[str, Any]) -> dict[str, Any]:
     if isinstance(shuju, dict) and "recent_form" in shuju:
         projected["shuju"] = {"recent_form": deepcopy(shuju.get("recent_form"))}
     for market, row_key, fields in (
-        ("ouzhi", "bookmakers", ("spf_current",)),
+        (
+            "ouzhi",
+            "bookmakers",
+            (
+                "name", "bookmaker", "company", "title", "cid", "source_company_id",
+                "source", "source_provider", "spf_current",
+            ),
+        ),
         ("daxiao", "companies", ("name", "current_line", "current_over_water", "current_under_water")),
         ("yazhi", "companies", ("name", "current_handicap", "current_water_home", "current_water_away")),
     ):
@@ -487,7 +537,15 @@ def _project_market_snapshot(snapshot: dict[str, Any]) -> dict[str, Any]:
         rows = source.get(row_key)
         if not isinstance(rows, list):
             continue
-        projected[market] = {row_key: [_pick(row, fields) for row in rows if isinstance(row, dict)]}
+        projected_rows = []
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            projected_row = _pick(row, fields)
+            if source_provider and "source_provider" not in projected_row and "source" not in projected_row:
+                projected_row["source_provider"] = source_provider
+            projected_rows.append(projected_row)
+        projected[market] = {row_key: projected_rows}
     context = snapshot.get("nowscore_context") or snapshot.get("context")
     if not isinstance(context, dict):
         nested = snapshot.get("nowscore")
@@ -510,7 +568,9 @@ def build_deterministic_model_input_projection(context: dict[str, Any]) -> dict[
         source = sources.get(name) or {}
         snapshots = source.get("snapshots") if isinstance(source, dict) else []
         if isinstance(snapshots, list) and snapshots and isinstance(snapshots[0], dict):
-            projected_sources[name] = {"snapshots": [_project_market_snapshot(snapshots[0])]}
+            projected_sources[name] = {
+                "snapshots": [_project_market_snapshot(snapshots[0], source_provider=name)]
+            }
     selected = context.get("selected_workspace_match") or {}
     request = context.get("request") or {}
     projection = {
@@ -1035,6 +1095,7 @@ def build_prediction_record(
     if prompt_affects_prediction:
         model_run_identity["prompt_version"] = prompt_version
     model_run_fingerprint = _sha256_value(model_run_identity)
+    checkpoint_metadata = _checkpoint_metadata(payload)
     match_identity = {
         "match_key": _match_key(payload),
         "home": match.get("home"),
@@ -1095,6 +1156,13 @@ def build_prediction_record(
         "canonical_model_input_sha256": input_snapshot.get("canonical_model_input_sha256") or input_hash,
         "model_input_snapshot_ref": input_snapshot.get("snapshot_ref"),
         "input_snapshot": input_snapshot,
+        # These fields are benchmark/audit metadata only.  They are excluded
+        # from prediction_content_hash and do not participate in Champion math.
+        "checkpoint_stage": checkpoint_metadata["stage"],
+        "checkpoint_target_at": checkpoint_metadata["target_at"],
+        "checkpoint_captured_at": checkpoint_metadata["captured_at"],
+        "minutes_to_kickoff_at_capture": checkpoint_metadata["minutes_to_kickoff_at_capture"],
+        "checkpoint_metadata": checkpoint_metadata,
         "match_identity": match_identity,
         "snapshot_identity": snapshot_identity,
         "model_run_identity": model_run_identity,
@@ -1114,6 +1182,10 @@ def build_prediction_record(
             "probabilities": probabilities,
             "lambda_home": model.get("lambda_home"),
             "lambda_away": model.get("lambda_away"),
+            # Preserve already-computed Champion distribution outputs for
+            # post-match diagnostics; this does not feed the Champion math.
+            "expected_goals": deepcopy(model.get("expected_goals")),
+            "btts": deepcopy(model.get("btts")),
             "score_matrix": list(model.get("score_probabilities") or []),
             "unique_score": decisions.get("unique_score"),
             "primary_dimension": primary,

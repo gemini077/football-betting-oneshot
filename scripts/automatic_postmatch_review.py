@@ -20,6 +20,11 @@ from postmatch_evidence import fetch_postmatch_evidence
 from paper_ledger import pair_key
 from risk_engine import dixon_coles_score_matrix
 from model_governance import DEFAULT_RECORD_ROOT, validate_postmatch_review_link
+from baseline_production import (
+    DEFAULT_PREDICTION_ROOT as BENCHMARK_PREDICTION_ROOT,
+    DEFAULT_SETTLEMENT_ROOT as BENCHMARK_SETTLEMENT_ROOT,
+    settle_benchmark_for_verified_result,
+)
 
 
 SCHEDULE_ROOT = BASE_DIR / "data" / "postmatch_automation" / "schedules"
@@ -840,6 +845,8 @@ def generate_selected(
     now: datetime | None = None,
     *,
     regenerate: bool = False,
+    benchmark_prediction_root: Path = BENCHMARK_PREDICTION_ROOT,
+    benchmark_settlement_root: Path = BENCHMARK_SETTLEMENT_ROOT,
 ) -> list[dict]:
     now = now or datetime.now(SHANGHAI)
     review_root.mkdir(parents=True, exist_ok=True)
@@ -859,17 +866,65 @@ def generate_selected(
         if source is None or not source.is_file():
             outcomes.append({"match_key": schedule.get("match_key"), "status": "missing_source_report"})
             continue
-        review = build_review(schedule, load_json(source), now)
+        report = load_json(source)
+        review = build_review(schedule, report, now)
         actual = _score(schedule.get("result_90m"))
         if actual:
             review["real_bet_settlements"] = settle_real_bets(str(schedule.get("home") or ""), str(schedule.get("away") or ""), *actual)
+        benchmark_settlement = {
+            "status": "no_op",
+            "reason": "benchmark_not_attempted",
+            "comparison_id": None,
+            "settlement_path": None,
+            "error": None,
+        }
+        try:
+            verified_result = None
+            result_file = str(schedule.get("result_file") or "").strip()
+            result_path = BASE_DIR / result_file if result_file else None
+            if result_path is not None and result_path.is_file():
+                candidate = load_json(result_path)
+                verified_result = candidate if isinstance(candidate, dict) else None
+            if verified_result is None:
+                verified_result = {
+                    "result_90m": schedule.get("result_90m"),
+                    "scope": "regulation_90m_plus_stoppage",
+                    "verified_at": schedule.get("result_verified_at"),
+                }
+            settlement_result = settle_benchmark_for_verified_result(
+                report,
+                verified_result,
+                prediction_root=benchmark_prediction_root,
+                settlement_root=benchmark_settlement_root,
+            )
+            benchmark_settlement.update({
+                "status": settlement_result.get("status"),
+                "reason": settlement_result.get("reason"),
+                "comparison_id": settlement_result.get("comparison_id"),
+                "settlement_path": settlement_result.get("settlement_path"),
+            })
+        except Exception as error:  # benchmark is a best-effort shadow experiment
+            benchmark_settlement.update({
+                "status": "error",
+                "reason": "shadow_settlement_failed",
+                "error": f"{type(error).__name__}: {error}",
+            })
         target = review_root / (re.sub(r"[^0-9A-Za-z._-]+", "_", str(schedule.get("match_key") or "match")).strip("_") + ".json")
         target.write_text(json.dumps(review, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         try:
             review_file = target.relative_to(BASE_DIR).as_posix()
         except ValueError:
             review_file = str(target)
-        schedule.update({"status": "reviewed", "reviewed_at": now.isoformat(), "review_file": review_file})
+        schedule.update({
+            "status": "reviewed",
+            "reviewed_at": now.isoformat(),
+            "review_file": review_file,
+            "benchmark_settlement_status": benchmark_settlement["status"],
+            "benchmark_settlement_reason": benchmark_settlement["reason"],
+            "benchmark_settlement_comparison_id": benchmark_settlement["comparison_id"],
+            "benchmark_settlement_path": benchmark_settlement["settlement_path"],
+            "benchmark_settlement_error": benchmark_settlement["error"],
+        })
         path.write_text(json.dumps(schedule, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         outcomes.append({"match_key": schedule.get("match_key"), "status": "reviewed", "review_file": schedule["review_file"]})
     return outcomes

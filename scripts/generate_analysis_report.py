@@ -22,6 +22,7 @@ from postmatch_schedule import create_schedule
 from sync_postmatch_workflow import sync as sync_postmatch_workflow
 from postmatch_queue import SHANGHAI
 from model_governance import build_prediction_record, freeze_prediction
+from baseline_production import run_benchmark_for_frozen_prediction
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -1442,6 +1443,66 @@ def render(payload: dict) -> str:
 </main>{live_script}</body></html>'''
 
 
+def run_shadow_benchmark_after_freeze(
+    governance_record: dict,
+    frozen: dict,
+    *,
+    project_root: Path = PROJECT_ROOT,
+    snapshot_root: Path | None = None,
+    prediction_root: Path | None = None,
+) -> dict:
+    """Run the internal benchmark hook without becoming a report gate."""
+    result = {
+        "benchmark_status": "skipped",
+        "benchmark_error": None,
+        "benchmark_snapshot_status": None,
+        "benchmark_snapshot_reason": "champion_not_formal_model_only",
+        "benchmark_comparison_id": None,
+        "benchmark_prediction_path": None,
+    }
+    if not (
+        governance_record.get("model_role") == "champion"
+        and governance_record.get("prediction_variant") == "model_only"
+        and governance_record.get("prediction_status") == "formal"
+    ):
+        return result
+    try:
+        kwargs = {
+            "checkpoint_metadata": governance_record.get("checkpoint_metadata"),
+            "repository_root": project_root,
+        }
+        if snapshot_root is not None:
+            kwargs["snapshot_root"] = snapshot_root
+        if prediction_root is not None:
+            kwargs["prediction_root"] = prediction_root
+        frozen_record = frozen.get("record") or governance_record
+        benchmark_run = run_benchmark_for_frozen_prediction(frozen_record, **kwargs)
+        benchmark_snapshot = benchmark_run.get("benchmark_snapshot") or {}
+        comparison = benchmark_run.get("comparison") or {}
+        benchmark_path = benchmark_run.get("prediction_path")
+        if benchmark_path:
+            try:
+                benchmark_path_value = str(Path(benchmark_path).relative_to(project_root)).replace("\\", "/")
+            except ValueError:
+                benchmark_path_value = str(benchmark_path)
+        else:
+            benchmark_path_value = None
+        result.update({
+            "benchmark_status": benchmark_run.get("benchmark_status"),
+            "benchmark_snapshot_status": benchmark_snapshot.get("benchmark_snapshot_status"),
+            "benchmark_snapshot_reason": benchmark_snapshot.get("status_reason"),
+            "benchmark_comparison_id": comparison.get("comparison_id"),
+            "benchmark_prediction_path": benchmark_path_value,
+        })
+    except Exception as error:  # benchmark is a best-effort shadow experiment
+        result.update({
+            "benchmark_status": "error",
+            "benchmark_error": f"{type(error).__name__}: {error}",
+            "benchmark_snapshot_reason": "shadow_benchmark_failed",
+        })
+    return result
+
+
 def main() -> int:
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -1519,9 +1580,17 @@ def main() -> int:
             "repository_commit_sha": governance_record["repository_commit_sha"],
             "input_sha256": governance_record["input_sha256"],
             "input_snapshot": governance_record["input_snapshot"],
+            "checkpoint_stage": governance_record["checkpoint_stage"],
+            "checkpoint_target_at": governance_record["checkpoint_target_at"],
+            "checkpoint_captured_at": governance_record["checkpoint_captured_at"],
+            "minutes_to_kickoff_at_capture": governance_record["minutes_to_kickoff_at_capture"],
+            "checkpoint_metadata": governance_record["checkpoint_metadata"],
             "record_status": frozen["status"],
             "record_path": str(Path(frozen["path"]).relative_to(PROJECT_ROOT)).replace("\\", "/"),
         }
+        payload["model_governance"].update(
+            run_shadow_benchmark_after_freeze(governance_record, frozen)
+        )
 
     stamp = datetime.now().astimezone().strftime("%Y%m%d_%H%M%S")
     output_dir = Path(args.output_root) / stamp
