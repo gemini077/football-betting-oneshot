@@ -22,7 +22,13 @@
     "resolution_status",
     "resolution_method",
     "eligible_for_team_strength",
-    "duplicate_status"
+    "duplicate_status",
+    "entity_type",
+    "match_type",
+    "source_conflict",
+    "conflict_reasons",
+    "source_confirmations",
+    "verification_evidence"
   ],
   "properties": {
     "contract_version": {"const": "historical_match_result.v1"},
@@ -36,6 +42,8 @@
     "away_goals": {"type": ["integer", "null"], "minimum": 0},
     "provider": {"type": "string", "minLength": 1},
     "provider_match_id": {"type": ["string", "null"]},
+    "entity_type": {"enum": ["club", "national_team"]},
+    "match_type": {"type": "string", "minLength": 1},
     "source_as_of_at": {"type": ["string", "null"], "format": "date-time"},
     "captured_at": {"type": "string", "format": "date-time"},
     "quality": {"enum": ["A", "B", "C", "D"]},
@@ -43,6 +51,10 @@
     "resolution_method": {"enum": ["provider_id_exact", "existing_crosswalk", "exact_alias", "normalized_alias", "contextual_match", "manual_verified", "unresolved"]},
     "eligible_for_team_strength": {"type": "boolean"},
     "duplicate_status": {"enum": ["unique", "duplicate_same", "possible_duplicate", "duplicate_conflict"]},
+    "source_conflict": {"type": "boolean"},
+    "conflict_reasons": {"type": "array", "items": {"type": "string"}},
+    "source_confirmations": {"type": "array", "items": {"type": "object"}},
+    "verification_evidence": {"type": "array"},
     "provenance": {"type": "object"}
   },
   "additionalProperties": true

@@ -1,0 +1,50 @@
+from __future__ import annotations
+
+from pathlib import Path
+
+from scripts.football_data.providers.openfootball import OpenFootballHistoricalAdapter
+
+
+FIXTURE = Path(__file__).parent / "fixtures" / "football_data" / "openfootball" / "synthetic_allsvenskan.txt"
+
+
+def reviewed_identities():
+    return {
+        "IK Sirius": {"canonical_team_id": "team:ik-sirius", "verified": True, "resolution_method": "manual_verified"},
+        "IF Brommapojkarna": {"canonical_team_id": "team:if-brommapojkarna", "verified": True, "resolution_method": "manual_verified"},
+        "Djurgårdens IF": {"canonical_team_id": "team:djurgardens", "verified": True, "resolution_method": "manual_verified"},
+        "Västerås SK": {"canonical_team_id": "team:vasteras-sk", "verified": True, "resolution_method": "manual_verified"},
+    }
+
+
+def test_openfootball_native_txt_shape_is_normalized_without_network():
+    adapter = OpenFootballHistoricalAdapter(
+        competition_id="competition:sweden-allsvenskan",
+        season_id="season:sweden-allsvenskan:2025",
+        provider_competition_id="europe:sweden:se1",
+        provider_competition_name="Sweden Allsvenskan",
+        provider_season_id="2025",
+        provider_season_name="2025",
+        repository="openfootball/europe",
+        commit_sha="commit:fixture",
+        source_file="sweden/2025_se1.txt",
+        captured_at="2026-08-10T00:00:00Z",
+        team_identity_resolver=reviewed_identities(),
+        synthetic=True,
+    )
+
+    records = adapter.parse_text(FIXTURE.read_text(encoding="utf-8"))
+
+    assert len(records) == 3
+    assert records[0]["raw_home_team"] == "IK Sirius"
+    assert records[0]["home_goals"] == 1
+    assert records[0]["away_goals"] == 0
+    assert records[0]["kickoff_at"] == "2025-03-29T15:00:00Z"
+    assert records[0]["match_type"] == "league"
+    assert records[0]["provenance"]["repository"] == "openfootball/europe"
+    assert records[0]["provenance"]["commit_sha"] == "commit:fixture"
+    assert records[0]["provenance"]["source_file"] == "sweden/2025_se1.txt"
+    assert records[0]["provenance"]["raw_sha256"]
+    assert records[0]["provenance"]["synthetic"] is True
+    assert records[0]["provenance"]["source"] == "synthetic_openfootball_fixture"
+    assert records[0]["eligible_for_team_strength"] is False

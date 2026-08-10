@@ -1,90 +1,24 @@
-# Phase 2B real-data audit
+# Real historical data audit
 
-Audit date: 2026-08-10. The audit is limited to existing provider snapshots,
-the current match workspace, the latest schedule update, and the football-data
-registries. It does not scan the historical repository wholesale.
+Audit/capture time: `2026-08-10T11:56:08Z`. Scope is limited to the current match workspace, latest schedule metadata, existing provider capability audit, the OpenFootball manifest, and the bounded normalized pilot sample.
 
-## Observed evidence
+## Existing Nowscore / 500 capability
 
-`data/fetch_runs/` contains 2,652 JSON snapshot files in the scoped provider
-snapshot directory:
+The existing scoped provider audit found 2,652 JSON snapshots: 366 Nowscore-named, 231 500 deep, 442 500 trade, 396 aggregate recent-form, and 393 with provider team IDs. It found 0 explicit match-level result records. These are snapshot-file observations, not distinct-match counts.
 
-| Evidence | Snapshot files | What it proves |
-| --- | ---: | --- |
-| Nowscore-named snapshots | 366 | Captured provider evidence exists, but not match-result history |
-| 500 deep snapshots | 231 | Deep market/form evidence exists, but not match-result history |
-| 500 trade snapshots | 442 | Trade/odds schedule evidence exists, not historical results |
-| Snapshots with aggregate `recent_form` | 396 | Aggregate form is available |
-| Snapshots with provider `team_ids` | 393 | Some provider team IDs are available in captured evidence |
-| Snapshots with explicit result fields | 0 | No usable match-level score ledger was found |
+The available `recent_form` shape is aggregate overall/home/away data with matches, wins, draws, losses, goals for and goals against. It lacks individual match dates, opponents, opponent IDs, and scores, so it cannot be expanded into a result ledger without inventing history.
 
-These are file observations, not distinct-match counts. Nowscore and 500
-therefore currently provide **0 match-level historical results eligible for a
-Team Strength snapshot** in this repository.
+## OpenFootball pilot
 
-The current workspace has 3 scheduled matches. Their rows contain provider
-schedule IDs, team names, league text, dates/times, and odds. They do not carry
-canonical team IDs. The current `competition_registry.json` is empty and the
-production player registry is empty. The team alias registry currently contains
-fixture-only mappings, not reviewed Nowscore/500 mappings.
+The pinned `openfootball/europe@e27eb01726f394ddf9fa68b15d37b900487b5903` capture contains 404 parsed result rows across three source files. The bounded pilot stores 87 normalized records involving the six current pilot teams; 87 are eligible for Team Strength.
 
-## Shape of `recent_form`
+Every eligible record has canonical home/away IDs from explicit source-context identity evidence, a date/time, score, competition, season, source fact time, reliable provenance, and no source conflict. OpenFootball source files do not provide provider team IDs; that absence is recorded rather than fabricated.
 
-The captured provider payload is an aggregate object with:
+## Current buildability
 
-```text
-home_overall
-home_home
-away_overall
-away_away
-```
+Current bounded schedule: 3 matches; both teams evaluable: 3; one side: 0; neither: 0. Source conflicts: 0; unresolved identity: 0.
+Immutable pre-match Team Strength snapshots persisted: 24; they remain data-layer-only.
 
-Each aggregate has matches, wins, draws, losses, goals_for, and goals_against.
-It does not contain the individual match dates, opponents, opponent IDs, or
-individual scores needed to build a reproducible historical result ledger.
-Consequently it cannot be expanded into `last_5`, `last_10`, or
-`season_to_date` match windows without inventing lineage.
+Team Strength uses result history only. xG, lineups, injuries, Elo, odds, and Champion expected goals are not used as substitutes.
 
-## What is currently buildable
-
-The Phase 2B builder can build a transparent snapshot when a normalized result
-record has a reviewed canonical match/team identity, kickoff time, score,
-source fact time, and reliable provenance. It stores matches, goals for/against,
-home/away splits, opponents, and the effective sample window. It uses
-per-match rates only; it does not manufacture per-90 values.
-
-At this audit point, no production Nowscore or 500 record satisfies that
-match-level input boundary. Current scheduled matches therefore remain
-diagnostic-only and produce no team-strength snapshot.
-
-Post-match reports were not promoted into the ledger. They are report/narrative
-outputs rather than provider result evidence with a stable source record and
-reviewed entity lineage.
-
-StatsBomb Open Data remains an offline research/schema/history source. It is not
-a claim of current all-competition coverage or a live production feed.
-
-## External historical-source decision
-
-`external historical source = DEFER` for Phase 2B. No external dataset is
-copied into the repository and no network dependency is added to CI/runtime.
-
-The reviewed candidates were:
-
-- [openfootball/football.json](https://github.com/openfootball/football.json):
-  useful CC0 fixtures/results reference, but it does not supply this project’s
-  reviewed provider IDs or current canonical identity layer.
-- [footballcsv/cache.footballdata](https://github.com/footballcsv/cache.footballdata):
-  useful CC0 CSV reference, but its repository history is not a sufficient
-  current-match source for this phase. Its latest meaningful repository update
-  observed in this audit was June 11, 2024; see its
-  [commit history](https://github.com/footballcsv/cache.footballdata/commits/master).
-- [schochastics/football-data](https://github.com/schochastics/football-data):
-  broad historical results reference under ODC Attribution. The repository is
-  maintained, but its published result README covers results through 2023 and
-  warns about identity errors; it is not adopted as an automatic production
-  identity source.
-
-The adapter boundary remains available for a future reviewed source. External
-team names may be resolver inputs only; they may not automatically create
-`verified=true` registry mappings.
+The normalized sample is a shadow data layer and remains `validated_for_model=false`; the Champion does not read it.

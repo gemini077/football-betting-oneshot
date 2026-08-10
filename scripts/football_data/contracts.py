@@ -37,6 +37,22 @@ AVAILABILITY_STATUSES = frozenset(
 )
 WINDOW_TYPES = frozenset({"last_5", "last_10", "last_20", "season_to_date", "rolling_365d", "single_match"})
 DUPLICATE_STATUSES = frozenset({"unique", "duplicate_same", "possible_duplicate", "duplicate_conflict"})
+ENTITY_TYPES = frozenset({"club", "national_team"})
+MATCH_TYPES = frozenset(
+    {
+        "league",
+        "domestic_cup",
+        "continental_club",
+        "world_cup",
+        "world_cup_qualifier",
+        "continental_championship",
+        "continental_qualifier",
+        "nations_league",
+        "friendly",
+        "other",
+        "unknown",
+    }
+)
 
 
 def _is_number_or_none(value: Any) -> bool:
@@ -81,6 +97,9 @@ class DataProvenance:
     observation_origin: str = "provider_observation"
     provider_schema: str | None = None
     provider_schema_reference: str | None = None
+    repository: str | None = None
+    commit_sha: str | None = None
+    source_file: str | None = None
 
     def __post_init__(self) -> None:
         _require(bool(self.provider.strip()), "provenance.provider is required")
@@ -116,6 +135,9 @@ class DataProvenance:
             observation_origin=str(value.get("observation_origin", "provider_observation")),
             provider_schema=value.get("provider_schema"),
             provider_schema_reference=value.get("provider_schema_reference"),
+            repository=value.get("repository"),
+            commit_sha=value.get("commit_sha"),
+            source_file=value.get("source_file"),
         )
 
 
@@ -314,6 +336,8 @@ def validate_record(kind: str, record: Mapping[str, Any]) -> bool:
             _require(record["conflict_group_id"] is None or isinstance(record["conflict_group_id"], str), "conflict_group_id must be string or null")
     elif kind == "historical_match_result":
         _validate_version(record, "historical_match_result.v1")
+        _require(record.get("entity_type") in ENTITY_TYPES, "invalid historical result entity_type")
+        _require(record.get("match_type") in MATCH_TYPES, "invalid historical result match_type")
         for field in ("canonical_match_id", "competition_id", "season_id", "home_team_id", "away_team_id", "kickoff_at", "provider_match_id"):
             _require(record.get(field) is None or isinstance(record.get(field), str), f"{field} must be string or null")
         for field in ("raw_home_team", "raw_away_team", "raw_competition", "raw_season"):
@@ -333,6 +357,12 @@ def validate_record(kind: str, record: Mapping[str, Any]) -> bool:
             _require(record["resolution_method"] == "unresolved", "unresolved historical result requires resolution_method=unresolved")
         _require(isinstance(record.get("eligible_for_team_strength"), bool), "eligible_for_team_strength must be bool")
         _require(record.get("duplicate_status") in DUPLICATE_STATUSES, "invalid duplicate_status")
+        _require(isinstance(record.get("source_conflict"), bool), "source_conflict must be bool")
+        _require(isinstance(record.get("conflict_reasons"), list) and all(isinstance(v, str) for v in record["conflict_reasons"]), "conflict_reasons must be a string list")
+        _require(isinstance(record.get("source_confirmations"), list), "source_confirmations must be a list")
+        _require(isinstance(record.get("verification_evidence"), list), "verification_evidence must be a list")
+        if record["source_conflict"]:
+            _require(record["eligible_for_team_strength"] is False, "source-conflict result cannot be eligible")
         if record["eligible_for_team_strength"]:
             _require(record.get("resolution_status") == "resolved", "eligible historical result must be resolved")
             for field in ("canonical_match_id", "competition_id", "season_id", "home_team_id", "away_team_id", "kickoff_at", "home_goals", "away_goals", "source_as_of_at"):
@@ -340,6 +370,7 @@ def validate_record(kind: str, record: Mapping[str, Any]) -> bool:
             _require(record.get("quality") in {"A", "B"}, "eligible historical result requires A/B quality")
             _require(record.get("provenance", {}).get("source_reliable") is True, "eligible historical result requires reliable provenance")
             _require(record.get("duplicate_status") in {"unique", "duplicate_same"}, "duplicate historical result cannot be eligible")
+            _require(record.get("source_conflict") is False, "source-conflict result cannot be eligible")
     else:
         raise ContractError(f"unknown football data contract kind: {kind}")
     return True

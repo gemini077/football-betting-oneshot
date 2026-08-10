@@ -53,6 +53,8 @@ class TeamStrengthBuilder:
         *,
         competition_id: str | None,
         season_id: str | None,
+        window_type: str,
+        entity_type: str,
     ) -> list[dict[str, Any]]:
         rows: list[dict[str, Any]] = []
         for record in self.records:
@@ -60,9 +62,11 @@ class TeamStrengthBuilder:
                 continue
             if record.get("duplicate_status") not in {"unique", "duplicate_same"}:
                 continue
-            if competition_id is not None and record.get("competition_id") != competition_id:
+            if record.get("entity_type", "club") != entity_type:
                 continue
-            if season_id is not None and record.get("season_id") != season_id:
+            if window_type == "season_to_date" and (
+                record.get("competition_id") != competition_id or record.get("season_id") != season_id
+            ):
                 continue
             kickoff = _parse_time(record.get("kickoff_at"))
             if kickoff is None or kickoff >= target_kickoff:
@@ -87,13 +91,23 @@ class TeamStrengthBuilder:
         competition_id: str | None = None,
         season_id: str | None = None,
         target_match_id: str | None = None,
+        entity_type: str = "club",
     ) -> dict[str, Any]:
         if window_type not in SUPPORTED_WINDOWS:
             raise ValueError(f"unsupported team-strength window: {window_type}")
         target_time = _parse_time(target_kickoff)
         if target_time is None:
             raise ValueError("target_kickoff must be an ISO timestamp")
-        available = self._eligible_before(team_id, target_time, competition_id=competition_id, season_id=season_id)
+        if window_type == "season_to_date" and (not competition_id or not season_id):
+            raise ValueError("season_to_date requires canonical competition_id and season_id")
+        available = self._eligible_before(
+            team_id,
+            target_time,
+            competition_id=competition_id,
+            season_id=season_id,
+            window_type=window_type,
+            entity_type=entity_type,
+        )
         if window_type in WINDOW_LIMITS:
             selected = available[-WINDOW_LIMITS[window_type]:]
         else:
@@ -158,6 +172,7 @@ class TeamStrengthBuilder:
         )
         record.update({
             "team_id": team_id,
+            "entity_type": entity_type,
             "competition_id": competition_id,
             "season_id": season_id,
             "as_of_at": target_kickoff,
@@ -178,11 +193,19 @@ class TeamStrengthBuilder:
             },
             "opponents": opponents,
             "source_match_ids": source_match_ids,
+            "sources": providers,
+            "latest_historical_match_at": selected[-1].get("kickoff_at") if selected else None,
+            "oldest_used_match_at": selected[0].get("kickoff_at") if selected else None,
             "opponent_adjusted": None,
             "snapshot_id": snapshot_id,
             "validated_for_model": False,
         })
-        finalize_record_quality(record, data_class="slow_changing", record_type="team_strength_snapshot")
+        finalize_record_quality(
+            record,
+            data_class="slow_changing",
+            record_type="team_strength_snapshot",
+            now=_parse_time(self.captured_at),
+        )
         validate_record("team_strength_snapshot", record)
         return record
 
@@ -212,6 +235,7 @@ class TeamStrengthBuilder:
                     competition_id=target_match.get("competition_id"),
                     season_id=target_match.get("season_id"),
                     target_match_id=str(target_id) if target_id else None,
+                    entity_type=str(target_match.get("entity_type") or "club"),
                 )
         return output
 

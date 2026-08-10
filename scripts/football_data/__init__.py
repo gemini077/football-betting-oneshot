@@ -9,11 +9,13 @@ from .historical_results import HistoricalResultLedger, deduplicate_historical_r
 from .player_identity import PlayerIdentityResolver
 from .storage import SnapshotStore, content_sha256
 from .team_strength import PreMatchSnapshotStore, TeamStrengthBuilder
+from .providers.openfootball import OpenFootballHistoricalAdapter
 
 __all__ = [
     "CompetitionEntityResolver",
     "ContractError",
     "HistoricalResultLedger",
+    "OpenFootballHistoricalAdapter",
     "PlayerIdentityResolver",
     "PreMatchSnapshotStore",
     "SnapshotStore",

@@ -47,6 +47,9 @@ def provenance(
     observation_origin: str = "provider_observation",
     provider_schema: str | None = None,
     provider_schema_reference: str | None = None,
+    repository: str | None = None,
+    commit_sha: str | None = None,
+    source_file: str | None = None,
 ) -> dict[str, Any]:
     return DataProvenance(
         provider=provider,
@@ -65,6 +68,9 @@ def provenance(
         observation_origin=observation_origin,
         provider_schema=provider_schema,
         provider_schema_reference=provider_schema_reference,
+        repository=repository,
+        commit_sha=commit_sha,
+        source_file=source_file,
     ).to_dict()
 
 
