@@ -73,3 +73,4 @@ Phase 2A 的 `canonical_team_id` 和 alias registry 是隔离的新身份层；�
 - The production player registry no longer contains fixture people. Test-only fixture mappings use the `statsbomb_fixture` namespace. Production resolution of those IDs/names is unresolved.
 - Raw provider competition/season labels are retained as provider fields. Canonical competition/season identities require a reviewed exact mapping; raw names never enter the team resolver as canonical context.
 - Fast-changing freshness is source-time based. Missing lineup/availability fact time is `unknown`; capture time is not a fast-changing fallback. Central quality evaluation is used by provider adapters.
+- StatsBomb substitution variants are parsed semantically; unverified team/player provider mappings and crosswalk rows cannot confirm identity; source reliability requires explicit provenance evidence rather than non-empty strings.

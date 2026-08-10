@@ -68,6 +68,7 @@ class DataProvenance:
     source: str
     source_record_ref: str
     captured_at: str
+    source_reliable: bool | None = None
     source_as_of_at: str | None = None
     source_url: str | None = None
     data_license: str | None = None
@@ -83,6 +84,7 @@ class DataProvenance:
     def __post_init__(self) -> None:
         _require(bool(self.provider.strip()), "provenance.provider is required")
         _require(bool(self.source.strip()), "provenance.source is required")
+        _require(self.source_reliable is None or isinstance(self.source_reliable, bool), "provenance.source_reliable must be bool or null")
         _require(bool(self.source_record_ref.strip()), "provenance.source_record_ref is required")
         _require_iso_timestamp(self.captured_at, "provenance.captured_at")
         _optional_iso_timestamp(self.source_as_of_at, "provenance.source_as_of_at")
@@ -99,6 +101,7 @@ class DataProvenance:
         return cls(
             provider=str(value.get("provider", "")),
             source=str(value.get("source", "")),
+            source_reliable=value.get("source_reliable"),
             source_record_ref=str(value.get("source_record_ref", "")),
             captured_at=str(value.get("captured_at", "")),
             source_as_of_at=value.get("source_as_of_at"),

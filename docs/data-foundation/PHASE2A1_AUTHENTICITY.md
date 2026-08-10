@@ -56,6 +56,17 @@ both `null`. Captain is not inferred, and goalkeeper is true only when the
 source position establishes it. Each lineup records resolved-player coverage
 without imposing a future model threshold.
 
+StatsBomb substitution reasons are matched by the documented semantic prefix:
+`Substitution - On (Tactical)` and `Substitution - On (Injury)` are substitutes;
+an unrelated reason remains unknown rather than being inferred from position
+timing.
+
+Provider team/player mappings and team crosswalk rows contribute ID or alias
+evidence only when `verified=true` and their resolution method is one of the
+reviewed methods. Unverified provider names and aliases cannot confirm an
+identity. The production player registry remains empty; fixture identities are
+test-only.
+
 ## Freshness and quality
 
 `captured_at` is ingestion time. `source_as_of_at` and `source_timestamp` are
@@ -70,6 +81,11 @@ Providers initialize records through the central quality/freshness evaluator;
 they do not claim `B` or `fresh` by construction. Material completeness is
 record-type-specific, synthetic observations are never A/B, and the stored
 record quality is the same result returned by `evaluate_record`.
+
+Source reliability is an explicit provenance signal. The recognized captured
+Nowscore/500 and real StatsBomb adapter boundaries set `source_reliable=true`;
+synthetic fixtures set it to `false`. Missing or unknown provenance cannot be
+made reliable merely by supplying non-empty provider/source strings.
 
 All feature-registry entries remain `validated_for_model=false`. The Champion
 continues to read none of these new records.

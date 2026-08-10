@@ -11,6 +11,7 @@ from typing import Any, Mapping
 
 
 DEFAULT_PLAYER_REGISTRY = Path(__file__).resolve().parents[2] / "data" / "football_data" / "player_identity_registry.json"
+REVIEWED_MAPPING_METHODS = frozenset({"manual_verified", "provider_id_exact", "existing_crosswalk", "exact_alias"})
 
 
 @dataclass(frozen=True)
@@ -35,6 +36,13 @@ class PlayerIdentityResolver:
     def normalize_name(value: str) -> str:
         normalized = unicodedata.normalize("NFKC", value or "").casefold().strip()
         return re.sub(r"[^\w\u3400-\u9fff]+", "", normalized, flags=re.UNICODE)
+
+    @staticmethod
+    def _reviewed_mapping(mapping: Mapping[str, Any]) -> bool:
+        return (
+            mapping.get("verified") is True
+            and mapping.get("resolution_method") in REVIEWED_MAPPING_METHODS
+        )
 
     def _result(self, player: Mapping[str, Any] | None, method: str, confidence: float | None, reason: str) -> PlayerResolutionResult:
         return PlayerResolutionResult(
@@ -62,7 +70,8 @@ class PlayerIdentityResolver:
             player
             for player in self.players
             for mapping in player.get("provider_mappings", [])
-            if mapping.get("provider") == provider
+            if self._reviewed_mapping(mapping)
+            and mapping.get("provider") == provider
             and provider_player_id is not None
             and str(mapping.get("provider_player_id")) == str(provider_player_id)
             and self._team_compatible(player, team_id)
@@ -82,7 +91,7 @@ class PlayerIdentityResolver:
                 continue
             names = []
             for mapping in player.get("provider_mappings", []):
-                if mapping.get("provider") == provider:
+                if self._reviewed_mapping(mapping) and mapping.get("provider") == provider:
                     names.extend([mapping.get("provider_player_name", ""), *mapping.get("aliases", [])])
             if raw in {str(name).strip().casefold() for name in names if name}:
                 exact_matches.append(player)
@@ -95,11 +104,10 @@ class PlayerIdentityResolver:
         for player in self.players:
             if not self._team_compatible(player, team_id):
                 continue
-            provider_names = [
-                mapping.get("provider_player_name", "")
-                for mapping in player.get("provider_mappings", [])
-                if mapping.get("provider") == provider
-            ]
+            provider_names = []
+            for mapping in player.get("provider_mappings", []):
+                if self._reviewed_mapping(mapping) and mapping.get("provider") == provider:
+                    provider_names.extend([mapping.get("provider_player_name", ""), *mapping.get("aliases", [])])
             if normalized and normalized in {self.normalize_name(str(name)) for name in provider_names if name}:
                 normalized_matches.append(player)
         if len(normalized_matches) == 1:

@@ -140,6 +140,7 @@ class Nowscore500SnapshotProvider:
                 provenance_record=provenance(
                     provider=source,
                     source=source,
+                    source_reliable=True,
                     source_record_ref=f"snapshot:team:{provider_id or name}",
                     captured_at=self.captured_at,
                     source_as_of_at=self.source_as_of_at,
@@ -249,6 +250,7 @@ class Nowscore500SnapshotProvider:
                 provenance_record=provenance(
                     provider=source,
                     source=source,
+                    source_reliable=True,
                     source_record_ref=f"snapshot:recent_form:{key}",
                     captured_at=self.captured_at,
                     source_as_of_at=self.source_as_of_at,
@@ -307,7 +309,7 @@ class Nowscore500SnapshotProvider:
                 quality="C",
                 freshness=self._freshness(),
                 missing_reason=[] if resolved else ["identity_unresolved"],
-                provenance_record=provenance(provider=source, source=source, source_record_ref=f"snapshot:xg:{provider_id or name}", captured_at=self.captured_at, source_as_of_at=self.source_as_of_at, parser_version=self.provider_version),
+                provenance_record=provenance(provider=source, source=source, source_reliable=True, source_record_ref=f"snapshot:xg:{provider_id or name}", captured_at=self.captured_at, source_as_of_at=self.source_as_of_at, parser_version=self.provider_version),
             )
             record.update({
                 "team_id": resolved.canonical_team_id if resolved else f"unresolved:{provider_id or name}",
@@ -373,7 +375,7 @@ class Nowscore500SnapshotProvider:
                 captured_at=self.captured_at, source_as_of_at=self.source_as_of_at, competition=self.competition, season=self.season,
                 home_away_context=str(row.get("home_away_context") or "unknown"), sample_matches=1, sample_minutes=None, value=None, unit=None,
                 quality="C", freshness=self._freshness(), missing_reason=[] if resolved else ["identity_unresolved"],
-                provenance_record=provenance(provider=source, source=source, source_record_ref=f"snapshot:lineup:{provider_id or team_id or team_name}", captured_at=self.captured_at, source_as_of_at=self.source_as_of_at, parser_version=self.provider_version),
+                provenance_record=provenance(provider=source, source=source, source_reliable=True, source_record_ref=f"snapshot:lineup:{provider_id or team_id or team_name}", captured_at=self.captured_at, source_as_of_at=self.source_as_of_at, parser_version=self.provider_version),
             )
             total_players = len(players)
             record.update({
@@ -406,7 +408,7 @@ class Nowscore500SnapshotProvider:
                 captured_at=self.captured_at, source_as_of_at=self.source_as_of_at, competition=self.competition, season=self.season,
                 home_away_context=str(row.get("home_away_context") or "unknown"), sample_matches=1, sample_minutes=None, value=None, unit=None,
                 quality="C", freshness=self._freshness(), missing_reason=[] if resolved else ["identity_unresolved"],
-                provenance_record=provenance(provider=source, source=source, source_record_ref=f"snapshot:availability:{row.get('provider_player_id') or row.get('player_name')}", captured_at=self.captured_at, source_as_of_at=self.source_as_of_at, parser_version=self.provider_version),
+                provenance_record=provenance(provider=source, source=source, source_reliable=True, source_record_ref=f"snapshot:availability:{row.get('provider_player_id') or row.get('player_name')}", captured_at=self.captured_at, source_as_of_at=self.source_as_of_at, parser_version=self.provider_version),
             )
             record.update({
                 "team_id": resolved.canonical_team_id if resolved else f"unresolved:{team_id or provider_id or name}",

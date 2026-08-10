@@ -202,6 +202,7 @@ class StatsBombOpenDataProvider:
         return provenance(
             provider=self.observation_provider,
             source=self.observation_source,
+            source_reliable=not self.synthetic,
             source_record_ref=reference,
             captured_at=self.captured_at,
             source_as_of_at=self.source_as_of_at,
@@ -411,6 +412,15 @@ class StatsBombOpenDataProvider:
             return str(value.get("name")) if value.get("name") is not None else None
         return str(value) if value is not None else None
 
+    @staticmethod
+    def _is_substitution_on(reason: str) -> bool:
+        normalized = " ".join(str(reason).strip().casefold().split())
+        return (
+            normalized == "substitution on"
+            or normalized.startswith("substitution - on")
+            or normalized.startswith("substitute - on")
+        )
+
     @classmethod
     def _lineup_state(cls, positions: list[Any]) -> tuple[bool | None, bool | None, str | None]:
         names: list[str] = []
@@ -425,7 +435,7 @@ class StatsBombOpenDataProvider:
                 reasons.append(str(value["start_reason"]).strip().casefold())
         if "starting xi" in reasons:
             return True, False, names[0] if names else None
-        if any(reason in {"substitution - on", "substitution on", "substitute - on"} for reason in reasons):
+        if any(cls._is_substitution_on(reason) for reason in reasons):
             return False, True, names[0] if names else None
         return None, None, names[0] if names else None
 

@@ -100,6 +100,21 @@ def test_official_lineup_shape_preserves_unknown_semantics_and_coverage():
     }
 
 
+def test_official_substitution_start_reason_variants_are_semantic():
+    tactical = StatsBombOpenDataProvider._lineup_state([
+        {"position": "Midfielder", "start_reason": "Substitution - On (Tactical)"},
+    ])
+    injury = StatsBombOpenDataProvider._lineup_state([
+        {"position": "Midfielder", "start_reason": "Substitution - On (Injury)"},
+    ])
+    unknown = StatsBombOpenDataProvider._lineup_state([
+        {"position": "Midfielder", "start_reason": "Substitution - Off"},
+    ])
+    assert tactical[:2] == (False, True)
+    assert injury[:2] == (False, True)
+    assert unknown[:2] == (None, None)
+
+
 def test_synthetic_provenance_does_not_claim_real_open_data_observation():
     record = provider().get_xg()[0]
     assert record["source"] == "synthetic_statsbomb_schema_fixture"
@@ -109,3 +124,4 @@ def test_synthetic_provenance_does_not_claim_real_open_data_observation():
     assert record["provenance"]["provider_schema"] == "statsbomb"
     assert record["provenance"]["provider_schema_reference"] == "https://github.com/hudl/open-data"
     assert record["provenance"]["source_url"] is None
+    assert record["provenance"]["source_reliable"] is False

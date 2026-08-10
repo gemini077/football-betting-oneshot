@@ -196,7 +196,11 @@ def evaluate_record(
         "identity_confirmed": bool(record.get("canonical_entity_id")),
         "timestamp_known": freshness.get("reference") is not None and not freshness.get("timestamp_conflict"),
         "source_fact_timestamp_known": freshness.get("reference") in {"source_as_of_at", "source_timestamp"} and not freshness.get("timestamp_conflict"),
-        "reliable_source": bool(provenance.get("provider", True)) and bool(provenance.get("source", True)),
+        "reliable_source": (
+            provenance.get("source_reliable") is True
+            and bool(provenance.get("provider"))
+            and bool(provenance.get("source"))
+        ),
         "sample_complete": material["sample_complete"] and sample_size.get("matches") is not None if kind not in {"lineup_snapshot", "availability_snapshot"} else material["sample_complete"],
         "material_metric_missing": material["material_metric_missing"],
         "source_fact_timestamp_missing": freshness.get("reason") == "source_fact_time_missing",

@@ -38,5 +38,5 @@ def test_evaluate_record_reports_both_grade_and_freshness():
         data_class="slow_changing",
         now=datetime(2026, 8, 10, 12, 0, tzinfo=timezone.utc),
     )
-    assert result["data_quality_grade"] == "A"
+    assert result["data_quality_grade"] == "C"
     assert result["freshness"]["state"] == "fresh"

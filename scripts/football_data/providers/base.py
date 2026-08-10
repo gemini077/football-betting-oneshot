@@ -36,6 +36,7 @@ def provenance(
     source_record_ref: str,
     captured_at: str,
     source_as_of_at: str | None,
+    source_reliable: bool | None = None,
     source_url: str | None = None,
     data_license: str | None = None,
     attribution_required: bool = False,
@@ -49,6 +50,7 @@ def provenance(
     return DataProvenance(
         provider=provider,
         source=source,
+        source_reliable=source_reliable,
         source_record_ref=source_record_ref,
         captured_at=captured_at,
         source_as_of_at=source_as_of_at,

@@ -26,6 +26,7 @@ def test_provider_quality_is_the_central_evaluation_result():
             }],
         }
     ).get_lineup()[0]
+    assert record["provenance"]["source_reliable"] is True
     evaluated = evaluate_record(record, data_class="fast_changing", now=datetime(2026, 8, 10, 12, 0, tzinfo=timezone.utc))
     assert record["quality"] == evaluated["data_quality_grade"]
     assert record["freshness"]["state"] == "unknown"
@@ -45,6 +46,7 @@ def test_lineup_quality_exposes_unresolved_player_coverage_and_synthetic_records
     assert lineup["freshness"]["state"] in {"fresh", "stale"}
 
     xg = provider.get_xg()[0]
+    assert xg["provenance"]["source_reliable"] is False
     assert xg["quality"] == "C"
     assert evaluate_record(xg, data_class="historical_immutable", now=datetime(2026, 8, 10, 12, 0, tzinfo=timezone.utc))["data_quality_grade"] == "C"
 

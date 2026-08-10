@@ -16,6 +16,7 @@ from typing import Any, Iterable, Mapping
 
 DEFAULT_TEAM_REGISTRY = Path(__file__).resolve().parents[2] / "data" / "football_data" / "team_alias_registry.json"
 DANGEROUS_GENERIC_NAMES = frozenset({"united", "city", "racing", "sporting", "national", "central"})
+REVIEWED_MAPPING_METHODS = frozenset({"manual_verified", "provider_id_exact", "existing_crosswalk", "exact_alias"})
 
 
 @dataclass(frozen=True)
@@ -71,6 +72,13 @@ class TeamEntityResolver:
         # the gate is for an unqualified generic token such as "City".
         return normalized in DANGEROUS_GENERIC_NAMES
 
+    @staticmethod
+    def _reviewed_mapping(mapping: Mapping[str, Any]) -> bool:
+        return (
+            mapping.get("verified") is True
+            and mapping.get("resolution_method") in REVIEWED_MAPPING_METHODS
+        )
+
     @classmethod
     def _markers(cls, value: str) -> set[str]:
         lower = (value or "").casefold()
@@ -115,7 +123,12 @@ class TeamEntityResolver:
 
     @staticmethod
     def _mapping_matches(mapping: Mapping[str, Any], provider: str, provider_team_id: str | None) -> bool:
-        return mapping.get("provider") == provider and provider_team_id is not None and mapping.get("provider_team_id") == provider_team_id
+        return (
+            TeamEntityResolver._reviewed_mapping(mapping)
+            and mapping.get("provider") == provider
+            and provider_team_id is not None
+            and str(mapping.get("provider_team_id")) == str(provider_team_id)
+        )
 
     def _candidate_rows(self, query: Mapping[str, Any]) -> list[tuple[Mapping[str, Any], Mapping[str, Any] | None]]:
         provider = query["provider"]
@@ -123,6 +136,8 @@ class TeamEntityResolver:
         rows: list[tuple[Mapping[str, Any], Mapping[str, Any] | None]] = []
         for team in self.teams:
             for mapping in team.get("provider_mappings", []):
+                if not self._reviewed_mapping(mapping):
+                    continue
                 if self._mapping_matches(mapping, provider, provider_team_id) or mapping.get("provider") == provider:
                     if self._compatible(team, query):
                         rows.append((team, mapping))
@@ -195,7 +210,9 @@ class TeamEntityResolver:
 
         crosswalk_rows = [
             row for row in self.crosswalk
-            if row.get("provider") == provider and row.get("provider_team_id") == provider_team_id
+            if self._reviewed_mapping(row)
+            and row.get("provider") == provider
+            and str(row.get("provider_team_id")) == str(provider_team_id)
         ]
         if len(crosswalk_rows) == 1:
             canonical_id = crosswalk_rows[0].get("canonical_team_id")
@@ -211,7 +228,7 @@ class TeamEntityResolver:
                 continue
             names = [team.get("canonical_name", ""), *team.get("aliases", [])]
             for mapping in team.get("provider_mappings", []):
-                if mapping.get("provider") == provider:
+                if self._reviewed_mapping(mapping) and mapping.get("provider") == provider:
                     names.extend([mapping.get("provider_team_name", ""), *mapping.get("aliases", [])])
             if raw_name.casefold() in {str(name).strip().casefold() for name in names if name}:
                 candidates.append(team)
@@ -226,7 +243,7 @@ class TeamEntityResolver:
                 continue
             names = [team.get("canonical_name", ""), *team.get("aliases", [])]
             for mapping in team.get("provider_mappings", []):
-                if mapping.get("provider") == provider:
+                if self._reviewed_mapping(mapping) and mapping.get("provider") == provider:
                     names.extend([mapping.get("provider_team_name", ""), *mapping.get("aliases", [])])
             if normalized_name and normalized_name in {self.normalize_name(str(name)) for name in names if name}:
                 normalized_candidates.append(team)
