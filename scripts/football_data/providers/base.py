@@ -41,6 +41,10 @@ def provenance(
     attribution_required: bool = False,
     commercial_use_review: str = "not_required",
     parser_version: str | None = None,
+    synthetic: bool = False,
+    observation_origin: str = "provider_observation",
+    provider_schema: str | None = None,
+    provider_schema_reference: str | None = None,
 ) -> dict[str, Any]:
     return DataProvenance(
         provider=provider,
@@ -53,6 +57,10 @@ def provenance(
         attribution_required=attribution_required,
         commercial_use_review=commercial_use_review,
         parser_version=parser_version,
+        synthetic=synthetic,
+        observation_origin=observation_origin,
+        provider_schema=provider_schema,
+        provider_schema_reference=provider_schema_reference,
     ).to_dict()
 
 
@@ -75,6 +83,12 @@ def common_record(
     freshness: Mapping[str, Any],
     missing_reason: list[str],
     provenance_record: Mapping[str, Any],
+    provider_competition_id: str | None = None,
+    provider_competition_name: str | None = None,
+    provider_season_id: str | None = None,
+    provider_season_name: str | None = None,
+    canonical_competition_id: str | None = None,
+    canonical_season_id: str | None = None,
 ) -> dict[str, Any]:
     return {
         "contract_version": contract_version,
@@ -85,6 +99,12 @@ def common_record(
         "source_as_of_at": source_as_of_at,
         "competition": competition,
         "season": season,
+        "provider_competition_id": provider_competition_id,
+        "provider_competition_name": provider_competition_name,
+        "provider_season_id": provider_season_id,
+        "provider_season_name": provider_season_name,
+        "canonical_competition_id": canonical_competition_id,
+        "canonical_season_id": canonical_season_id,
         "home_away_context": home_away_context,
         "sample_size": {"matches": sample_matches, "minutes": sample_minutes},
         "value": value,

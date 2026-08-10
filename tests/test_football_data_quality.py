@@ -12,8 +12,8 @@ def test_quality_grades_are_data_quality_not_prediction_quality():
 
 def test_freshness_uses_class_specific_ttl_and_unknown_time():
     now = datetime(2026, 8, 10, 12, 0, tzinfo=timezone.utc)
-    assert freshness_status(captured_at="2026-08-10T10:00:00Z", source_as_of_at=None, data_class="fast_changing", now=now)["state"] == "fresh"
-    assert freshness_status(captured_at="2026-08-09T00:00:00Z", source_as_of_at=None, data_class="fast_changing", now=now)["state"] == "stale"
+    assert freshness_status(captured_at="2026-08-10T10:00:00Z", source_as_of_at=None, data_class="fast_changing", now=now)["state"] == "unknown"
+    assert freshness_status(captured_at="2026-08-09T00:00:00Z", source_as_of_at=None, data_class="fast_changing", now=now)["state"] == "unknown"
     assert freshness_status(captured_at=None, source_as_of_at=None, data_class="fast_changing", now=now)["state"] == "unknown"
 
 

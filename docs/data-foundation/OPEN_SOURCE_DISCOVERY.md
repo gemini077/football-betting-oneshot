@@ -79,6 +79,11 @@ Club Elo 的 [`Data`](https://clubelo.com/Data) 和 [`System`](https://clubelo.c
 
 - Production OSS dependency adopted：0。
 - In-house adaptation：1 个 StatsBomb Open Data research adapter；它只适配离线 JSON schema，不改变 Champion。
+- Phase 2A.1 hardens that decision to an official-schema-compatible offline
+  research adapter: exact match-list selection, nested team/competition/season
+  parsing, and official lineup semantics are tested without adding `statsbombpy`
+  or a network CI dependency. It is not a current all-competition production
+  feed.
 - Existing Nowscore/500 data：保留在自己的 provider boundary 内，以 normalized adapter prototype 表达，不把 scraper 依赖带入生产。
 - Raw evidence、normalized records 和 future validated features 分层保存；任何新 feature 的 `validated_for_model` 都是 `false`。
 - 所有 xG 只保存 provider-specific observation 和定义，不跨 provider 求平均；opponent adjustment 字段先保留 `null`。

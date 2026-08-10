@@ -149,6 +149,46 @@ def test_red_card_fields_are_preserved_and_availability_conflicts_are_not_overwr
     assert validate_record("availability_snapshot", availability)
 
 
+def test_lineup_contract_allows_unknown_source_semantics_and_tracks_identity_coverage():
+    lineup = common("lineup_snapshot.v1", canonical_entity_id="team:test")
+    lineup.update({
+        "match_id": "match:test",
+        "team_id": "team:test",
+        "status": "confirmed",
+        "players": [{
+            "canonical_player_id": None,
+            "provider_player_id": "provider:player:test",
+            "name": "Unresolved Player",
+            "team_id": "team:test",
+            "position": None,
+            "starter": None,
+            "bench": None,
+            "captain": None,
+            "goalkeeper": None,
+            "source": "fixture",
+            "captured_at": "2026-08-01T12:00:00Z",
+            "status": "confirmed",
+        }],
+        "player_identity_coverage": {"resolved_players": 0, "total_players": 1, "coverage_ratio": 0.0},
+    })
+    assert validate_record("lineup_snapshot", lineup)
+
+
+def test_availability_contract_allows_missing_source_fact_timestamp():
+    availability = common("availability_snapshot.v1", canonical_entity_id="team:test")
+    availability.update({
+        "team_id": "team:test",
+        "canonical_player_id": None,
+        "provider_player_id": "provider:player:test",
+        "player_name": "Unresolved Player",
+        "status": "unknown",
+        "evidence": [],
+        "source_timestamp": None,
+        "confidence": None,
+    })
+    assert validate_record("availability_snapshot", availability)
+
+
 def test_nowscore_500_adapter_does_not_infer_xg_or_injury_absence():
     provider = Nowscore500SnapshotProvider(
         {

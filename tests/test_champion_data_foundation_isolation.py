@@ -59,7 +59,10 @@ def test_new_data_foundation_files_cannot_change_champion_math_or_identity(tmp_p
     paths = [
         ROOT / "config" / "football_feature_registry.json",
         ROOT / "data" / "football_data" / "team_alias_registry.json",
-        ROOT / "tests" / "fixtures" / "football_data" / "statsbomb_open_data" / "match.json",
+        ROOT / "tests" / "fixtures" / "football_data" / "statsbomb_open_data" / "matches.json",
+        ROOT / "data" / "football_data" / "competition_registry.json",
+        ROOT / "data" / "football_data" / "player_identity_registry.json",
+        ROOT / "config" / "football_data_quality.json",
         ROOT / "data" / "football_data" / "xg_normalized_snapshot.json",
     ]
     original = {path: path.read_bytes() for path in paths}
@@ -75,13 +78,25 @@ def test_new_data_foundation_files_cannot_change_champion_math_or_identity(tmp_p
         registry["teams"].append({"canonical_team_id": "team:test-only", "canonical_name": "Test Only", "aliases": ["Test Only"], "country": "Nowhere", "competition_context": [], "gender": "unknown", "team_level": "unknown", "provider_mappings": []})
         paths[1].write_text(json.dumps(registry, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
-        match = json.loads(paths[2].read_text(encoding="utf-8"))
-        match["home_score"] = 99
-        paths[2].write_text(json.dumps(match, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        matches = json.loads(paths[2].read_text(encoding="utf-8"))
+        matches[0]["home_score"] = 99
+        paths[2].write_text(json.dumps(matches, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
-        xg = json.loads(paths[3].read_text(encoding="utf-8"))
+        competition = json.loads(paths[3].read_text(encoding="utf-8"))
+        competition["competitions"].append({"canonical_competition_id": "competition:test-only", "seasons": []})
+        paths[3].write_text(json.dumps(competition, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+        players = json.loads(paths[4].read_text(encoding="utf-8"))
+        players["players"].append({"canonical_player_id": "player:test-only"})
+        paths[4].write_text(json.dumps(players, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+        quality = json.loads(paths[5].read_text(encoding="utf-8"))
+        quality["clock_skew_tolerance_seconds"] = 1
+        paths[5].write_text(json.dumps(quality, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+        xg = json.loads(paths[6].read_text(encoding="utf-8"))
         xg["records"].append({"provider": "other-provider", "metric_definition": "other-definition", "value": 99})
-        paths[3].write_text(json.dumps(xg, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        paths[6].write_text(json.dumps(xg, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
         after = build_automatic_model(fixed_fixture_context())
         after_record = build_prediction_record(prediction_payload())

@@ -65,3 +65,11 @@ Future Model
 - 现有 `automatic_model_core.py`、benchmark 定义和固定 fixture。
 
 Phase 2A 的 `canonical_team_id` 和 alias registry 是隔离的新身份层；不能把字符串相似度结果当作已有 canonical match identity 的替代物。
+
+## Phase 2A.1 authenticity update
+
+- The StatsBomb adapter is an offline official-schema-compatible research/schema adapter. It supports exact selection from an official matches JSON list and official nested team, competition, season, event, and lineup fields. It has no production current-match or all-competition feed coverage.
+- StatsBomb schema compatibility is now tested with a synthetic fixture. The fixture is explicitly marked `synthetic_schema_fixture`; it is not a real StatsBomb observation and does not use a real-data source URL.
+- The production player registry no longer contains fixture people. Test-only fixture mappings use the `statsbomb_fixture` namespace. Production resolution of those IDs/names is unresolved.
+- Raw provider competition/season labels are retained as provider fields. Canonical competition/season identities require a reviewed exact mapping; raw names never enter the team resolver as canonical context.
+- Fast-changing freshness is source-time based. Missing lineup/availability fact time is `unknown`; capture time is not a fast-changing fallback. Central quality evaluation is used by provider adapters.

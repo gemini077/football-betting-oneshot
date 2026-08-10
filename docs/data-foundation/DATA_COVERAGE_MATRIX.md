@@ -15,7 +15,7 @@
 | 500.com deep snapshots | PARTIAL | PARTIAL | PARTIAL | MISSING | UNVERIFIED | MISSING | MISSING | MISSING |
 | ESPN scoreboard / summary | PARTIAL | PARTIAL | PARTIAL | MISSING | UNVERIFIED | PARTIAL | PARTIAL | PARTIAL |
 | `data/provider_match_crosswalk.json` | MISSING for team IDs; existing match crosswalk container is empty at baseline | MISSING | MISSING | MISSING | MISSING | MISSING | MISSING | MISSING |
-| StatsBomb Open Data selected research fixtures | PARTIAL; provider IDs preserved and resolver-gated | SUPPORTED for fixture records | SUPPORTED for fixture records | PARTIAL; provider-specific shot xG only | PARTIAL; event-derived fixture fields | PARTIAL; available post-match lineups | MISSING | PARTIAL; provider player IDs preserved |
+| StatsBomb Open Data selected research fixtures | PARTIAL; provider IDs preserved and resolver-gated | SUPPORTED for fixture records | SUPPORTED for fixture records | PARTIAL; provider-specific shot xG only | PARTIAL; event-derived fixture fields | PARTIAL; official lineup shape compatibility SUPPORTED, coverage remains fixture-only | MISSING | PARTIAL; provider player IDs preserved |
 | openfootball historical results | PARTIAL | PARTIAL | PARTIAL | MISSING | MISSING | MISSING | MISSING | MISSING |
 | `schochastics/football-data` historical research dataset | PARTIAL; project warns about identity merge/split issues | PARTIAL | PARTIAL | MISSING | MISSING | PARTIAL where files exist | MISSING | PARTIAL where files exist |
 
@@ -32,6 +32,10 @@ ESPN summary 可提供 roster/availability 相关的部分结构化事实和叙�
 ### StatsBomb Open Data
 
 StatsBomb fixture adapter 的 coverage 被明确限制为本地离线 research fixture。它可以验证 event、lineup、player 和 provider-specific xG 的 schema，但不能代表当前所有国内联赛、国际比赛或实时数据。原始公开数据的 attribution、User Agreement 和商业使用边界保存在 provenance metadata 中。
+
+Phase 2A.1 additionally verifies the official `matches` list shape, nested
+competition/season/team fields, and official lineup player/position fields.
+This is schema compatibility, not a claim of complete competition coverage.
 
 ## Gaps that remain intentionally open
 

@@ -75,6 +75,10 @@ class DataProvenance:
     commercial_use_review: str = "not_required"
     parser_version: str | None = None
     raw_sha256: str | None = None
+    synthetic: bool = False
+    observation_origin: str = "provider_observation"
+    provider_schema: str | None = None
+    provider_schema_reference: str | None = None
 
     def __post_init__(self) -> None:
         _require(bool(self.provider.strip()), "provenance.provider is required")
@@ -83,6 +87,8 @@ class DataProvenance:
         _require_iso_timestamp(self.captured_at, "provenance.captured_at")
         _optional_iso_timestamp(self.source_as_of_at, "provenance.source_as_of_at")
         _require(isinstance(self.attribution_required, bool), "provenance.attribution_required must be bool")
+        _require(isinstance(self.synthetic, bool), "provenance.synthetic must be bool")
+        _require(bool(self.observation_origin.strip()), "provenance.observation_origin is required")
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -102,6 +108,10 @@ class DataProvenance:
             commercial_use_review=str(value.get("commercial_use_review", "not_required")),
             parser_version=value.get("parser_version"),
             raw_sha256=value.get("raw_sha256"),
+            synthetic=value.get("synthetic", False),
+            observation_origin=str(value.get("observation_origin", "provider_observation")),
+            provider_schema=value.get("provider_schema"),
+            provider_schema_reference=value.get("provider_schema_reference"),
         )
 
 
@@ -138,6 +148,9 @@ def validate_common_observation(record: Mapping[str, Any]) -> None:
     _optional_iso_timestamp(record["source_as_of_at"], "source_as_of_at")
     _require(isinstance(record["competition"], str) or record["competition"] is None, "competition must be string or null")
     _require(isinstance(record["season"], str) or record["season"] is None, "season must be string or null")
+    for field in ("provider_competition_id", "provider_competition_name", "provider_season_id", "provider_season_name", "canonical_competition_id", "canonical_season_id"):
+        if field in record:
+            _require(record[field] is None or isinstance(record[field], str), f"{field} must be string or null")
     _require(record["home_away_context"] in HOME_AWAY_CONTEXTS, "invalid home_away_context")
     sample_size = record["sample_size"]
     _require(isinstance(sample_size, Mapping), "sample_size must be an object")
@@ -246,16 +259,30 @@ def validate_record(kind: str, record: Mapping[str, Any]) -> bool:
             for field in ("canonical_player_id", "provider_player_id", "name", "position", "starter", "bench", "captain", "goalkeeper"):
                 _require(field in player, f"lineup player missing {field}")
             _require(player["canonical_player_id"] is None or isinstance(player["canonical_player_id"], str), "canonical_player_id must be string or null")
-            _require(isinstance(player["starter"], bool) and isinstance(player["bench"], bool), "starter/bench must be bool")
-            _require(player["starter"] != player["bench"], "lineup player must be starter or bench")
-            _require(isinstance(player["captain"], bool) and isinstance(player["goalkeeper"], bool), "captain/goalkeeper must be bool")
+            _require(player["starter"] is None or isinstance(player["starter"], bool), "starter must be bool or null")
+            _require(player["bench"] is None or isinstance(player["bench"], bool), "bench must be bool or null")
+            _require(
+                player["starter"] is None and player["bench"] is None
+                or isinstance(player["starter"], bool) and isinstance(player["bench"], bool) and player["starter"] != player["bench"],
+                "lineup player starter/bench state must be complementary or both unknown",
+            )
+            _require(player["captain"] is None or isinstance(player["captain"], bool), "captain must be bool or null")
+            _require(player["goalkeeper"] is None or isinstance(player["goalkeeper"], bool), "goalkeeper must be bool or null")
+        if "player_identity_coverage" in record:
+            coverage = record["player_identity_coverage"]
+            _require(isinstance(coverage, Mapping), "player_identity_coverage must be an object")
+            for field in ("resolved_players", "total_players"):
+                _require(isinstance(coverage.get(field), int) and coverage[field] >= 0, f"{field} must be a non-negative integer")
+            _require(coverage["resolved_players"] <= coverage["total_players"], "resolved_players cannot exceed total_players")
+            _require(_is_number_or_none(coverage.get("coverage_ratio")), "coverage_ratio must be numeric")
+            _require(0 <= coverage["coverage_ratio"] <= 1, "coverage_ratio must be between 0 and 1")
     elif kind == "availability_snapshot":
         _validate_version(record, "availability_snapshot.v1")
         for field in ("team_id", "player_name", "status", "evidence", "source_timestamp", "confidence"):
             _require(field in record, f"availability missing {field}")
         _require(record["status"] in AVAILABILITY_STATUSES, "invalid availability status")
         _require(isinstance(record["evidence"], list) and all(isinstance(v, str) for v in record["evidence"]), "evidence must be a string list")
-        _require_iso_timestamp(record["source_timestamp"], "source_timestamp")
+        _optional_iso_timestamp(record["source_timestamp"], "source_timestamp")
         _require(_is_number_or_none(record["confidence"]), "availability confidence must be numeric or null")
         if record["confidence"] is not None:
             _require(0 <= record["confidence"] <= 1, "availability confidence must be between 0 and 1")

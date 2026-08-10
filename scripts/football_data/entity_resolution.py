@@ -167,7 +167,9 @@ class TeamEntityResolver:
             "provider_team_id": provider_team_id,
             "provider_team_name": provider_team_name,
             "country": country,
-            "competition_context": competition_context,
+            # Provider names/labels are raw evidence.  Only an explicit
+            # canonical competition identity may constrain team resolution.
+            "competition_context": competition_context if not competition_context or str(competition_context).startswith("competition:") else None,
             "gender": gender,
             "team_level": team_level,
         }

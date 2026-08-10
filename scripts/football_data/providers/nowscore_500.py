@@ -11,8 +11,10 @@ from collections.abc import Mapping
 from typing import Any
 
 from ..contracts import validate_record
+from ..competition_resolution import CompetitionEntityResolver
 from ..entity_resolution import TeamEntityResolver
 from ..player_identity import PlayerIdentityResolver
+from ..quality import finalize_record_quality
 from .base import common_record, provenance
 
 
@@ -25,18 +27,36 @@ class Nowscore500SnapshotProvider:
         snapshot: Mapping[str, Any],
         *,
         resolver: TeamEntityResolver | None = None,
+        competition_resolver: CompetitionEntityResolver | None = None,
         player_resolver: PlayerIdentityResolver | None = None,
         captured_at: str | None = None,
     ) -> None:
         self.snapshot = dict(snapshot)
         self.resolver = resolver
+        self.competition_resolver = competition_resolver
         self.player_resolver = player_resolver
         self.captured_at = captured_at or self.snapshot.get("captured_at") or self.snapshot.get("fetched_at")
         if not self.captured_at:
             raise ValueError("captured_at is required for a reproducible Nowscore/500 snapshot")
-        self.source_as_of_at = self.snapshot.get("source_as_of_at") or self.snapshot.get("as_of_at") or self.captured_at
-        self.competition = self.snapshot.get("competition_id") or self.snapshot.get("competition")
-        self.season = self.snapshot.get("season_id") or self.snapshot.get("season")
+        self.source_as_of_at = self.snapshot.get("source_as_of_at") or self.snapshot.get("as_of_at")
+        self.provider_competition_id = self.snapshot.get("competition_id")
+        self.provider_competition_name = self.snapshot.get("competition") if self.provider_competition_id is None else self.snapshot.get("competition_name")
+        self.provider_season_id = self.snapshot.get("season_id")
+        self.provider_season_name = self.snapshot.get("season") if self.provider_season_id is None else self.snapshot.get("season_name")
+        self.competition_resolution = (
+            competition_resolver.resolve(
+                provider=self._source_name(),
+                provider_competition_id=str(self.provider_competition_id) if self.provider_competition_id is not None else None,
+                provider_competition_name=str(self.provider_competition_name) if self.provider_competition_name is not None else None,
+                provider_season_id=str(self.provider_season_id) if self.provider_season_id is not None else None,
+                provider_season_name=str(self.provider_season_name) if self.provider_season_name is not None else None,
+            )
+            if competition_resolver is not None else None
+        )
+        self.canonical_competition_id = self.competition_resolution.canonical_competition_id if self.competition_resolution else None
+        self.canonical_season_id = self.competition_resolution.canonical_season_id if self.competition_resolution else None
+        self.competition = self.canonical_competition_id
+        self.season = self.canonical_season_id
 
     def _source_name(self) -> str:
         value = str(self.snapshot.get("source") or self.snapshot.get("provider") or "nowscore").casefold()
@@ -70,14 +90,27 @@ class Nowscore500SnapshotProvider:
             provider_team_name=str(name) if name is not None else None,
             provider_team_id=str(provider_id) if provider_id is not None else None,
             country=row.get("country"),
-            competition_context=self.competition,
+            competition_context=self.canonical_competition_id if self.canonical_competition_id and self.canonical_competition_id.startswith("competition:") else None,
             gender=row.get("gender"),
             team_level=row.get("team_level"),
         )
         return result, name, provider_id
 
     def _freshness(self) -> dict[str, Any]:
-        return {"state": "fresh", "age_seconds": 0, "ttl_seconds": 21600}
+        return {"state": "unknown", "age_seconds": None, "ttl_seconds": None}
+
+    def _finish(self, record: dict[str, Any], *, data_class: str, record_type: str) -> dict[str, Any]:
+        record.update({
+            "provider_competition_id": str(self.provider_competition_id) if self.provider_competition_id is not None else None,
+            "provider_competition_name": str(self.provider_competition_name) if self.provider_competition_name is not None else None,
+            "provider_season_id": str(self.provider_season_id) if self.provider_season_id is not None else None,
+            "provider_season_name": str(self.provider_season_name) if self.provider_season_name is not None else None,
+            "canonical_competition_id": self.canonical_competition_id,
+            "canonical_season_id": self.canonical_season_id,
+        })
+        finalize_record_quality(record, data_class=data_class, record_type=record_type)
+        validate_record(record_type, record)
+        return record
 
     def get_team_identity(self, payload: Mapping[str, Any] | None = None) -> list[dict[str, Any]]:
         source = self._source_name()
@@ -101,7 +134,7 @@ class Nowscore500SnapshotProvider:
                 sample_minutes=None,
                 value=None,
                 unit=None,
-                quality="B" if canonical_id else "C",
+                quality="C",
                 freshness=self._freshness(),
                 missing_reason=missing,
                 provenance_record=provenance(
@@ -124,8 +157,7 @@ class Nowscore500SnapshotProvider:
                     "confidence": resolved.confidence if resolved else None,
                 }
             )
-            validate_record("team_identity", record)
-            output.append(record)
+            output.append(self._finish(record, data_class="slow_changing", record_type="team_identity"))
         return output
 
     def _recent_form_payload(self) -> list[tuple[str, Mapping[str, Any]]]:
@@ -211,7 +243,7 @@ class Nowscore500SnapshotProvider:
                 sample_minutes=None,
                 value=None,
                 unit="goals",
-                quality="B" if canonical_id and has_goal_fields else "C",
+                quality="C",
                 freshness=self._freshness(),
                 missing_reason=missing,
                 provenance_record=provenance(
@@ -231,14 +263,13 @@ class Nowscore500SnapshotProvider:
                     "as_of_at": self.source_as_of_at,
                     "matches": sample_matches,
                     "window_type": str(first.get("window_type") or ("last_5" if sample_matches <= 5 else "last_10")),
-                    "window_start": str(rows[0].get("window_start") or rows[0].get("date") or self.source_as_of_at),
-                    "window_end": str(rows[-1].get("window_end") or rows[-1].get("date") or self.source_as_of_at),
+                    "window_start": str(rows[0].get("window_start") or rows[0].get("date") or self.source_as_of_at or "unknown"),
+                    "window_end": str(rows[-1].get("window_end") or rows[-1].get("date") or self.source_as_of_at or "unknown"),
                     "minutes": None,
                     "metrics": {"goals_for": goals_for if has_goal_fields else None, "goals_against": goals_against if has_goal_fields else None},
                 }
             )
-            validate_record("team_form_snapshot", record)
-            output.append(record)
+            output.append(self._finish(record, data_class="slow_changing", record_type="team_form_snapshot"))
         return output
 
     def get_team_stats(self, payload: Mapping[str, Any] | None = None) -> list[dict[str, Any]]:
@@ -273,7 +304,7 @@ class Nowscore500SnapshotProvider:
                 sample_minutes=row.get("minutes"),
                 value=value,
                 unit="goals",
-                quality="B" if resolved else "C",
+                quality="C",
                 freshness=self._freshness(),
                 missing_reason=[] if resolved else ["identity_unresolved"],
                 provenance_record=provenance(provider=source, source=source, source_record_ref=f"snapshot:xg:{provider_id or name}", captured_at=self.captured_at, source_as_of_at=self.source_as_of_at, parser_version=self.provider_version),
@@ -290,8 +321,7 @@ class Nowscore500SnapshotProvider:
                 "model_version_if_known": row.get("model_version_if_known"),
                 "normalization_version": None,
             })
-            validate_record("xg_snapshot", record)
-            output.append(record)
+            output.append(self._finish(record, data_class="historical_immutable", record_type="xg_snapshot"))
         return output
 
     def get_lineup(self, payload: Mapping[str, Any] | None = None) -> list[dict[str, Any]]:
@@ -308,10 +338,12 @@ class Nowscore500SnapshotProvider:
             team_name = row.get("team_name") or row.get("team")
             resolved, _, provider_id = self._resolve({"team_id": team_id, "name": team_name})
             players = []
+            resolved_players = 0
             for player in row.get("players", []):
                 if not isinstance(player, Mapping):
                     continue
-                starter = bool(player.get("starter", False))
+                starter = player.get("starter") if isinstance(player.get("starter"), bool) else None
+                bench = player.get("bench") if isinstance(player.get("bench"), bool) else (not starter if starter is not None else None)
                 player_resolution = None
                 if self.player_resolver is not None:
                     player_resolution = self.player_resolver.resolve_player(
@@ -320,6 +352,8 @@ class Nowscore500SnapshotProvider:
                         str(player.get("provider_player_id") or player.get("player_id") or "") or None,
                         team_id=resolved.canonical_team_id if resolved else None,
                     )
+                if player_resolution and player_resolution.canonical_player_id:
+                    resolved_players += 1
                 players.append({
                     "canonical_player_id": player_resolution.canonical_player_id if player_resolution else None,
                     "provider_player_id": str(player.get("provider_player_id") or player.get("player_id") or ""),
@@ -327,9 +361,9 @@ class Nowscore500SnapshotProvider:
                     "team_id": resolved.canonical_team_id if resolved else f"unresolved:{provider_id or team_id or team_name}",
                     "position": player.get("position"),
                     "starter": starter,
-                    "bench": not starter,
-                    "captain": bool(player.get("captain", False)),
-                    "goalkeeper": bool(player.get("goalkeeper", False)),
+                    "bench": bench,
+                    "captain": player.get("captain") if isinstance(player.get("captain"), bool) else None,
+                    "goalkeeper": player.get("goalkeeper") if isinstance(player.get("goalkeeper"), bool) else None,
                     "source": source,
                     "captured_at": self.captured_at,
                     "status": row.get("status") or "confirmed",
@@ -338,12 +372,22 @@ class Nowscore500SnapshotProvider:
                 contract_version="lineup_snapshot.v1", source=source, source_entity_id=str(provider_id or team_id or team_name), canonical_entity_id=resolved.canonical_team_id if resolved else None,
                 captured_at=self.captured_at, source_as_of_at=self.source_as_of_at, competition=self.competition, season=self.season,
                 home_away_context=str(row.get("home_away_context") or "unknown"), sample_matches=1, sample_minutes=None, value=None, unit=None,
-                quality="B" if resolved else "C", freshness=self._freshness(), missing_reason=[] if resolved else ["identity_unresolved"],
+                quality="C", freshness=self._freshness(), missing_reason=[] if resolved else ["identity_unresolved"],
                 provenance_record=provenance(provider=source, source=source, source_record_ref=f"snapshot:lineup:{provider_id or team_id or team_name}", captured_at=self.captured_at, source_as_of_at=self.source_as_of_at, parser_version=self.provider_version),
             )
-            record.update({"match_id": str(self.snapshot.get("match_id") or "unresolved:match"), "team_id": resolved.canonical_team_id if resolved else f"unresolved:{provider_id or team_id or team_name}", "status": row.get("status") or "confirmed", "players": players})
-            validate_record("lineup_snapshot", record)
-            output.append(record)
+            total_players = len(players)
+            record.update({
+                "match_id": str(self.snapshot.get("match_id") or "unresolved:match"),
+                "team_id": resolved.canonical_team_id if resolved else f"unresolved:{provider_id or team_id or team_name}",
+                "status": row.get("status") or "confirmed",
+                "players": players,
+                "player_identity_coverage": {
+                    "resolved_players": resolved_players,
+                    "total_players": total_players,
+                    "coverage_ratio": round(resolved_players / total_players, 6) if total_players else 0.0,
+                },
+            })
+            output.append(self._finish(record, data_class="fast_changing", record_type="lineup_snapshot"))
         return output
 
     def get_availability(self, payload: Mapping[str, Any] | None = None) -> list[dict[str, Any]]:
@@ -361,7 +405,7 @@ class Nowscore500SnapshotProvider:
                 contract_version="availability_snapshot.v1", source=source, source_entity_id=str(provider_id or name), canonical_entity_id=resolved.canonical_team_id if resolved else None,
                 captured_at=self.captured_at, source_as_of_at=self.source_as_of_at, competition=self.competition, season=self.season,
                 home_away_context=str(row.get("home_away_context") or "unknown"), sample_matches=1, sample_minutes=None, value=None, unit=None,
-                quality="B" if resolved else "C", freshness=self._freshness(), missing_reason=[] if resolved else ["identity_unresolved"],
+                quality="C", freshness=self._freshness(), missing_reason=[] if resolved else ["identity_unresolved"],
                 provenance_record=provenance(provider=source, source=source, source_record_ref=f"snapshot:availability:{row.get('provider_player_id') or row.get('player_name')}", captured_at=self.captured_at, source_as_of_at=self.source_as_of_at, parser_version=self.provider_version),
             )
             record.update({
@@ -371,9 +415,8 @@ class Nowscore500SnapshotProvider:
                 "player_name": str(row.get("player_name") or row.get("name") or "Unknown player"),
                 "status": row.get("status") or "unknown",
                 "evidence": [str(v) for v in row.get("evidence", [])] if isinstance(row.get("evidence"), list) else [],
-                "source_timestamp": str(row.get("source_timestamp") or self.source_as_of_at),
+                "source_timestamp": row.get("source_timestamp"),
                 "confidence": row.get("confidence"),
             })
-            validate_record("availability_snapshot", record)
-            output.append(record)
+            output.append(self._finish(record, data_class="fast_changing", record_type="availability_snapshot"))
         return output

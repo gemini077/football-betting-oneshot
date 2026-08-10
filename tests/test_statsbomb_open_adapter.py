@@ -1,5 +1,6 @@
 from pathlib import Path
 
+from scripts.football_data.competition_resolution import CompetitionEntityResolver
 from scripts.football_data.entity_resolution import TeamEntityResolver
 from scripts.football_data.player_identity import PlayerIdentityResolver
 from scripts.football_data.providers.statsbomb_open import StatsBombOpenDataProvider
@@ -12,8 +13,10 @@ FIXTURE = ROOT / "tests" / "fixtures" / "football_data" / "statsbomb_open_data"
 def provider():
     return StatsBombOpenDataProvider(
         FIXTURE,
-        resolver=TeamEntityResolver(ROOT / "data" / "football_data" / "team_alias_registry.json"),
-        player_resolver=PlayerIdentityResolver(ROOT / "data" / "football_data" / "player_identity_registry.json"),
+        match_id="fixture-match-001",
+        resolver=TeamEntityResolver(FIXTURE / "team_alias_registry.json"),
+        competition_resolver=CompetitionEntityResolver(FIXTURE / "competition_identity_registry.json"),
+        player_resolver=PlayerIdentityResolver(FIXTURE / "player_identity_registry.json"),
     )
 
 
@@ -31,10 +34,11 @@ def test_adapter_is_offline_and_preserves_team_and_match_provider_ids():
 def test_xg_is_provider_specific_and_not_normalized_or_mixed():
     rows = provider().get_xg()
     assert [row["value"] for row in rows] == [0.6, 0.27]
-    assert all(row["provider"] == "statsbomb" for row in rows)
+    assert all(row["provider"] == "statsbomb_fixture" for row in rows)
     assert all(row["metric_definition"] == "shot.statsbomb_xg" for row in rows)
     assert all(row["normalization_version"] is None for row in rows)
-    assert all(row["provenance"]["attribution_required"] is True for row in rows)
+    assert all(row["provenance"]["synthetic"] is True for row in rows)
+    assert all(row["provenance"]["observation_origin"] == "synthetic_schema_fixture" for row in rows)
     assert all(row["provenance"]["commercial_use_review"] == "required" for row in rows)
 
 
@@ -46,7 +50,7 @@ def test_event_stats_and_confirmed_lineups_are_fixture_scoped():
     assert len(lineups) == 2
     assert all(row["status"] == "confirmed" for row in lineups)
     assert any(player["bench"] for row in lineups for player in row["players"])
-    assert {player["canonical_player_id"] for row in lineups for player in row["players"]} == {
+    assert {player["canonical_player_id"] for row in lineups for player in row["players"] if player["canonical_player_id"]} == {
         "player:fixture-goalkeeper", "player:fixture-captain", "player:fixture-substitute",
         "player:fixture-away-keeper", "player:fixture-away-forward",
     }
