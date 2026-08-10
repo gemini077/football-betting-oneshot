@@ -165,6 +165,14 @@ always excluded from formal aggregation. The formal prospective start is the
 Phase 1.1 production-wiring merge; the implementation also records the
 minimum boundary `a14a654e3d80186bb8c93561939e51a4b1ec4ff4`.
 
+Phase 1 production activation records the actual PR #63 merge boundary in
+`data/model_benchmarks/production_state.json`. The internal health command
+`python scripts/benchmark_health.py` reads only the immutable prediction and
+settlement ledgers and writes a derived `data/model_benchmarks/health.json`.
+It reports formal prospective availability, settlement progress, paired
+primary counts, and excluded/error diagnostics. With no post-merge real
+freeze, all formal and paired counts are correctly zero.
+
 ## Immutable files and settlement
 
 ```text
