@@ -51,6 +51,7 @@ def test_all_versioned_schema_files_are_json_and_versioned():
         "availability_snapshot.schema.json": "availability_snapshot.v1",
         "data_provenance.schema.json": "data_provenance.v1",
         "player_identity.schema.json": "player_identity.v1",
+        "historical_match_result.schema.json": "historical_match_result.v1",
     }
     for name, version in expected.items():
         value = json.loads((SCHEMA_DIR / name).read_text(encoding="utf-8"))
