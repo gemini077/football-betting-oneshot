@@ -153,6 +153,8 @@ def run_synthetic_smoke(
     }
     benchmark = run_benchmark_for_frozen_prediction(
         frozen_record,
+        benchmark_scope="prospective",
+        production_new_freeze=True,
         checkpoint_metadata=frozen_record.get("checkpoint_metadata") or checkpoint,
         snapshot_root=input_root,
         prediction_root=output_root / "predictions",

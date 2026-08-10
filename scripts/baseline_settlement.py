@@ -34,6 +34,12 @@ def _number(value: Any) -> float | None:
     return number if math.isfinite(number) else None
 
 
+def _metric_number(value: Any) -> float | None:
+    if isinstance(value, bool):
+        return 1.0 if value else 0.0
+    return _number(value)
+
+
 def _actual_result(result: Any) -> dict[str, int]:
     if isinstance(result, (tuple, list)) and len(result) == 2:
         home_goals, away_goals = result
@@ -156,9 +162,11 @@ def calculate_metrics(prediction: dict[str, Any], result: Any) -> dict[str, Any]
         "score_top1": None,
         "score_top3": None,
         "score_top5": None,
+        "score_top10": None,
         "exact_score_top1": None,
         "exact_score_top3": None,
         "exact_score_top5": None,
+        "exact_score_top10": None,
         "actual_score_rank": None,
         "actual_score_probability": None,
         "actual_score_assigned_probability": None,
@@ -196,9 +204,11 @@ def calculate_metrics(prediction: dict[str, Any], result: Any) -> dict[str, Any]
         common["score_top1"] = any(_row_score(row) == actual_pair for row in score_rows[:1])
         common["score_top3"] = any(_row_score(row) == actual_pair for row in score_rows[:3])
         common["score_top5"] = any(_row_score(row) == actual_pair for row in score_rows[:5])
+        common["score_top10"] = any(_row_score(row) == actual_pair for row in score_rows[:10])
         common["exact_score_top1"] = common["score_top1"]
         common["exact_score_top3"] = common["score_top3"]
         common["exact_score_top5"] = common["score_top5"]
+        common["exact_score_top10"] = common["score_top10"]
 
     btts_probability = _btts_probability(prediction, score_rows)
     if btts_probability is not None:
@@ -259,6 +269,7 @@ def settle_comparison(
         "comparison_id": comparison.get("comparison_id"),
         "benchmark_contract_version": comparison.get("benchmark_contract_version", BENCHMARK_CONTRACT_VERSION),
         "benchmark_scope": comparison.get("benchmark_scope"),
+        "prospective_origin": comparison.get("prospective_origin"),
         "match_key": comparison.get("match_key"),
         "snapshot_id": comparison.get("snapshot_id"),
         "canonical_model_input_sha256": comparison.get("canonical_model_input_sha256"),
@@ -311,7 +322,7 @@ def freeze_settlement(settlement: dict[str, Any], settlement_root: Path = DEFAUL
 
 
 def _mean_metric(rows: list[dict[str, Any]], key: str) -> float | None:
-    values = [float(row[key]) if isinstance(row.get(key), bool) else _number(row.get(key)) for row in rows]
+    values = [_metric_number(row.get(key)) for row in rows]
     clean = [value for value in values if value is not None]
     return fmean(clean) if clean else None
 
@@ -333,6 +344,7 @@ def aggregate_settlements(
     def formal_candidate(row: dict[str, Any]) -> bool:
         return (
             row.get("benchmark_scope") == "prospective"
+            and row.get("prospective_origin") == "production_new_freeze"
             and row.get("comparison_status") == "complete"
             and row.get("same_snapshot") is True
             and row.get("synthetic") is False
@@ -405,28 +417,63 @@ def aggregate_settlements(
         }
 
     def paired_model_distribution(rows: list[dict[str, Any]]) -> dict[str, Any]:
-        paired = [
+        availability = [
             row for row in rows
             if row.get("simple_evaluable") is True and row.get("champion_evaluable") is True
         ]
-        paired = sorted(paired, key=lambda row: str(row.get("match_key") or ""))
-        metric_keys = (
-            "btts_hit", "total_goal_error", "total_goal_absolute_error", "expected_goal_error",
-            "score_top1", "score_top3", "score_top5", "actual_score_rank",
-            "actual_score_probability",
-        )
+        availability = sorted(availability, key=lambda row: str(row.get("match_key") or ""))
 
-        def model_metrics(model_name: str) -> dict[str, Any]:
-            values = {key: mean_for(paired, model_name, key) for key in metric_keys}
-            values["btts"] = values["btts_hit"]
-            values["btts_accuracy"] = values["btts_hit"]
-            return values
+        def metric_comparison(metric_key: str) -> dict[str, Any]:
+            paired: list[tuple[str, float, float]] = []
+            for row in availability:
+                metrics = row.get("metrics") or {}
+                simple_value = _metric_number((metrics.get("simple_poisson") or {}).get(metric_key))
+                champion_value = _metric_number((metrics.get("champion") or {}).get(metric_key))
+                if simple_value is not None and champion_value is not None:
+                    paired.append((str(row.get("match_key") or ""), simple_value, champion_value))
+            paired.sort(key=lambda item: item[0])
+            return {
+                "n": len(paired),
+                "match_keys": [item[0] for item in paired],
+                "simple_poisson": fmean(item[1] for item in paired) if paired else None,
+                "champion": fmean(item[2] for item in paired) if paired else None,
+            }
 
+        unsupported = {
+            "actual_score_rank": {
+                "status": "unsupported_for_champion_full_distribution",
+                "reason": "champion_frozen_distribution_is_top10_only",
+                "n": 0,
+                "match_keys": [],
+                "simple_poisson": None,
+                "champion": None,
+            },
+            "actual_score_probability": {
+                "status": "unsupported_until_full_champion_distribution_is_frozen",
+                "reason": "champion_frozen_distribution_is_top10_only",
+                "n": 0,
+                "match_keys": [],
+                "simple_poisson": None,
+                "champion": None,
+            },
+        }
+        metrics = {
+            "btts_accuracy": metric_comparison("btts_hit"),
+            "total_goal_absolute_error": metric_comparison("total_goal_absolute_error"),
+            "expected_goal_error": metric_comparison("expected_goal_error"),
+            "score_top1": metric_comparison("score_top1"),
+            "score_top3": metric_comparison("score_top3"),
+            "score_top5": metric_comparison("score_top5"),
+            "score_top10": metric_comparison("score_top10"),
+            **unsupported,
+        }
         return {
-            "n": len(paired),
-            "match_keys": [str(row.get("match_key") or "") for row in paired],
-            "simple_poisson": model_metrics("simple_poisson"),
-            "champion": model_metrics("champion"),
+            "sample_scope": "availability_diagnostic_only",
+            "availability": {
+                "n": len(availability),
+                "match_keys": [str(row.get("match_key") or "") for row in availability],
+            },
+            "metrics": metrics,
         }
 
     def individual_metrics(rows: list[dict[str, Any]]) -> dict[str, Any]:
@@ -434,7 +481,7 @@ def aggregate_settlements(
         metric_names = (
             "brier_score_1x2", "log_loss_1x2", "top1_accuracy_1x2",
             "btts_hit", "total_goal_error", "total_goal_absolute_error",
-            "expected_goal_error", "score_top1", "score_top3", "score_top5",
+            "expected_goal_error", "score_top1", "score_top3", "score_top5", "score_top10",
             "actual_score_rank", "actual_score_probability",
         )
         return {
@@ -446,6 +493,7 @@ def aggregate_settlements(
 
     paired_3way_result = paired_3way(primary_clean)
     paired_model_result = paired_model_distribution(primary_clean)
+    distribution_metric_values = paired_model_result["metrics"]
     paired_metrics = {
         "market_reference": {
             "brier_score_1x2": paired_3way_result["market_reference"]["brier"],
@@ -456,13 +504,19 @@ def aggregate_settlements(
             "brier_score_1x2": paired_3way_result["simple_poisson"]["brier"],
             "log_loss_1x2": paired_3way_result["simple_poisson"]["log_loss"],
             "top1_accuracy_1x2": paired_3way_result["simple_poisson"]["top1"],
-            **paired_model_result["simple_poisson"],
+            **{
+                metric_name: metric_result["simple_poisson"]
+                for metric_name, metric_result in distribution_metric_values.items()
+            },
         },
         "champion": {
             "brier_score_1x2": paired_3way_result["champion"]["brier"],
             "log_loss_1x2": paired_3way_result["champion"]["log_loss"],
             "top1_accuracy_1x2": paired_3way_result["champion"]["top1"],
-            **paired_model_result["champion"],
+            **{
+                metric_name: metric_result["champion"]
+                for metric_name, metric_result in distribution_metric_values.items()
+            },
         },
     }
 

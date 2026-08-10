@@ -18,6 +18,7 @@ from baseline_production import (  # noqa: E402
     run_benchmark_for_frozen_prediction,
     settle_benchmark_for_verified_result,
 )
+from baseline_settlement import settle_comparison  # noqa: E402
 from model_baselines import build_market_reference, build_simple_poisson_baseline  # noqa: E402
 import automatic_postmatch_review as postmatch_review  # noqa: E402
 import generate_analysis_report as analysis_report  # noqa: E402
@@ -28,6 +29,7 @@ from model_governance import (  # noqa: E402
     load_config,
     load_input_snapshot,
     prediction_content_hash,
+    PredictionConflictError,
 )
 
 
@@ -242,7 +244,7 @@ def test_production_freeze_hook_creates_benchmark_without_champion_rerun(tmp_pat
 
     result = analysis_report.run_shadow_benchmark_after_freeze(
         record,
-        {"record": record},
+        {"status": "created", "record": record},
         project_root=ROOT,
         snapshot_root=snapshot_root,
         prediction_root=tmp_path / "benchmark_predictions",
@@ -251,6 +253,49 @@ def test_production_freeze_hook_creates_benchmark_without_champion_rerun(tmp_pat
     assert result["benchmark_status"] == "created"
     assert result["benchmark_comparison_id"]
     assert (ROOT / result["benchmark_prediction_path"]).is_file()
+
+    comparison = json.loads(Path(result["benchmark_prediction_path"]).read_text(encoding="utf-8"))
+    assert comparison["prospective_origin"] == "production_new_freeze"
+    assert record["prediction_output"]["btts"]
+    assert comparison["champion"]["btts"] == record["prediction_output"]["btts"]
+    settlement = settle_comparison(comparison, {"home_goals": 2, "away_goals": 1})
+    assert settlement["metrics"]["champion"]["btts_hit"] is not None
+
+
+def test_existing_frozen_prediction_skips_prospective_benchmark(tmp_path, monkeypatch):
+    record, snapshot_root, _ = frozen_phase0_prediction(tmp_path)
+    monkeypatch.setattr(
+        analysis_report,
+        "run_benchmark_for_frozen_prediction",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("existing prediction must not run")),
+    )
+
+    result = analysis_report.run_shadow_benchmark_after_freeze(
+        record,
+        {"status": "existing", "record": record},
+        project_root=ROOT,
+        snapshot_root=snapshot_root,
+        prediction_root=tmp_path / "benchmark_predictions",
+    )
+
+    assert result["benchmark_status"] == "skipped_existing_prediction"
+    assert not list((tmp_path / "benchmark_predictions").glob("*.json"))
+
+
+def test_low_level_manual_run_is_historical_exploratory_by_default(tmp_path):
+    record, snapshot_root, _ = frozen_phase0_prediction(tmp_path)
+
+    result = run_benchmark_for_frozen_prediction(
+        record,
+        checkpoint_metadata=record["checkpoint_metadata"],
+        snapshot_root=snapshot_root,
+        prediction_root=tmp_path / "benchmark_predictions",
+        repository_root=ROOT,
+    )
+
+    assert result["comparison"]["benchmark_scope"] == "historical_exploratory"
+    assert result["comparison"]["prospective_origin"] == "historical_exploratory"
+    assert result["comparison"]["excluded_from_formal_metrics"] is True
 
 
 def test_benchmark_shadow_failure_is_recorded_without_raising_report_gate(tmp_path, monkeypatch):
@@ -261,7 +306,7 @@ def test_benchmark_shadow_failure_is_recorded_without_raising_report_gate(tmp_pa
         lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("adapter-corruption")),
     )
 
-    result = analysis_report.run_shadow_benchmark_after_freeze(record, {"record": record})
+    result = analysis_report.run_shadow_benchmark_after_freeze(record, {"status": "created", "record": record})
 
     assert result["benchmark_status"] == "error"
     assert "adapter-corruption" in result["benchmark_error"]
@@ -273,6 +318,8 @@ def test_verified_regulation_result_triggers_idempotent_settlement(tmp_path):
     settlement_root = tmp_path / "benchmark_settlements"
     benchmark = run_benchmark_for_frozen_prediction(
         record,
+        benchmark_scope="prospective",
+        production_new_freeze=True,
         checkpoint_metadata=record["checkpoint_metadata"],
         snapshot_root=snapshot_root,
         prediction_root=prediction_root,
@@ -305,6 +352,7 @@ def test_verified_regulation_result_triggers_idempotent_settlement(tmp_path):
     assert first["status"] == "created"
     assert second["status"] == "existing"
     assert first["settlement"]["actual_result"]["regulation_minutes"] == 90
+    assert first["settlement"]["metrics"]["champion"]["btts_hit"] is not None
     assert list(settlement_root.glob("*.json"))
 
 
@@ -313,6 +361,8 @@ def test_verified_extra_time_result_is_not_settled(tmp_path):
     prediction_root = tmp_path / "benchmark_predictions"
     benchmark = run_benchmark_for_frozen_prediction(
         record,
+        benchmark_scope="prospective",
+        production_new_freeze=True,
         checkpoint_metadata=record["checkpoint_metadata"],
         snapshot_root=snapshot_root,
         prediction_root=prediction_root,
@@ -334,6 +384,8 @@ def test_production_postmatch_hook_settles_without_rewriting_report_history(tmp_
     settlement_root = tmp_path / "benchmark_settlements"
     benchmark = run_benchmark_for_frozen_prediction(
         record,
+        benchmark_scope="prospective",
+        production_new_freeze=True,
         checkpoint_metadata=record["checkpoint_metadata"],
         snapshot_root=snapshot_root,
         prediction_root=prediction_root,
@@ -382,3 +434,32 @@ def test_production_postmatch_hook_settles_without_rewriting_report_history(tmp_
     assert outcomes[0]["status"] == "reviewed"
     assert updated_schedule["benchmark_settlement_status"] == "created"
     assert (settlement_root / f"{benchmark['comparison']['comparison_id']}.json").is_file()
+
+
+def test_legacy_frozen_record_is_not_overwritten_or_promoted(tmp_path):
+    record, snapshot_root, _ = frozen_phase0_prediction(tmp_path)
+    legacy = copy.deepcopy(record)
+    legacy["prediction_output"].pop("expected_goals", None)
+    legacy["prediction_output"].pop("btts", None)
+    legacy["prediction_sha256"] = prediction_content_hash(legacy)
+    record_root = tmp_path / "legacy_predictions"
+
+    freeze_prediction(legacy, record_root, input_snapshot_root=snapshot_root)
+    legacy_path = record_root / f"{record['prediction_id']}.json"
+    legacy_document = json.loads(legacy_path.read_text(encoding="utf-8"))
+    assert "expected_goals" not in legacy_document["prediction_output"]
+    assert "btts" not in legacy_document["prediction_output"]
+
+    with pytest.raises(PredictionConflictError):
+        freeze_prediction(record, record_root, input_snapshot_root=snapshot_root)
+    assert json.loads(legacy_path.read_text(encoding="utf-8")) == legacy_document
+
+    result = analysis_report.run_shadow_benchmark_after_freeze(
+        record,
+        {"status": "existing", "record": legacy_document},
+        project_root=ROOT,
+        snapshot_root=snapshot_root,
+        prediction_root=tmp_path / "benchmark_predictions",
+    )
+    assert result["benchmark_status"] == "skipped_existing_prediction"
+    assert not list((tmp_path / "benchmark_predictions").glob("*.json"))

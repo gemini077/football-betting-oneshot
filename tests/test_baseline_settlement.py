@@ -188,14 +188,97 @@ def test_aggregate_uses_paired_cohorts_instead_of_independent_availability_means
     assert summary["total_prospective_matches"] == 3
     assert paired["n"] == 1
     assert paired["match_keys"] == ["MATCH-A"]
-    assert model_paired["n"] == 2
-    assert model_paired["match_keys"] == ["MATCH-A", "MATCH-B"]
+    assert model_paired["availability"]["n"] == 2
+    assert model_paired["availability"]["match_keys"] == ["MATCH-A", "MATCH-B"]
     assert paired["market_reference"]["brier"] is not None
     assert paired["simple_poisson"]["log_loss"] is not None
     assert paired["champion"]["top1"] is not None
     assert summary["availability"]["market_reference"]["evaluable"] == 2
     assert summary["availability"]["simple_poisson"]["evaluable"] == 2
     assert summary["availability"]["champion"]["evaluable"] == 3
+
+
+def _distribution_settlement(
+    match_key: str,
+    result: tuple[int, int],
+    *,
+    champion_btts: bool = True,
+):
+    snap = snapshot(match_key)
+    champion = champion_record(snap)
+    if champion_btts:
+        champion["prediction_output"]["btts"] = {"yes": 0.6, "no": 0.4}
+    else:
+        champion["prediction_output"].pop("btts", None)
+    comparison = build_comparison(
+        snap,
+        champion,
+        benchmark_scope="prospective",
+        prospective_origin="production_new_freeze",
+    )
+    return settle_comparison(comparison, {"home_goals": result[0], "away_goals": result[1]})
+
+
+def test_model_distribution_uses_a_metric_specific_paired_sample():
+    rows = [
+        _distribution_settlement("METRIC-A", (2, 1)),
+        # The frozen Champion has only its stored score rows, so 9-9 is not a
+        # supported full-distribution rank/probability observation.
+        _distribution_settlement("METRIC-B", (9, 9)),
+        # Champion BTTS is unavailable while its score/goal fields remain.
+        _distribution_settlement("METRIC-C", (1, 1), champion_btts=False),
+    ]
+
+    distribution = aggregate_settlements(rows, cohort="primary")["paired_model_distribution"]
+    metrics = distribution["metrics"]
+
+    assert metrics["btts_accuracy"]["n"] == 2
+    assert metrics["btts_accuracy"]["match_keys"] == ["METRIC-A", "METRIC-B"]
+    assert metrics["score_top5"]["n"] == 3
+    assert metrics["score_top5"]["match_keys"] == ["METRIC-A", "METRIC-B", "METRIC-C"]
+    assert metrics["score_top10"]["n"] == 3
+    assert metrics["total_goal_absolute_error"]["n"] == 3
+    assert metrics["expected_goal_error"]["n"] == 3
+    assert metrics["actual_score_rank"] == {
+        "status": "unsupported_for_champion_full_distribution",
+        "reason": "champion_frozen_distribution_is_top10_only",
+        "n": 0,
+        "match_keys": [],
+        "simple_poisson": None,
+        "champion": None,
+    }
+    assert metrics["actual_score_probability"]["status"] == "unsupported_until_full_champion_distribution_is_frozen"
+
+
+def test_model_distribution_metric_values_use_the_same_match_keys():
+    rows = [
+        _distribution_settlement("KEY-A", (2, 1)),
+        _distribution_settlement("KEY-B", (9, 9)),
+    ]
+    metrics = aggregate_settlements(rows, cohort="primary")["paired_model_distribution"]["metrics"]
+
+    for metric_name in ("btts_accuracy", "total_goal_absolute_error", "expected_goal_error", "score_top1", "score_top3", "score_top5", "score_top10"):
+        metric = metrics[metric_name]
+        assert metric["n"] == len(metric["match_keys"])
+        assert metric["simple_poisson"] is not None
+        assert metric["champion"] is not None
+
+
+def test_non_production_prospective_origin_is_excluded_from_formal_aggregate():
+    snap = snapshot("MANUAL-PROSPECTIVE")
+    comparison = build_comparison(
+        snap,
+        champion_record(snap),
+        benchmark_scope="prospective",
+        prospective_origin="manual_research",
+    )
+    settlement = settle_comparison(comparison, {"home_goals": 1, "away_goals": 0})
+
+    summary = aggregate_settlements([settlement], cohort="primary")
+
+    assert comparison["excluded_from_formal_metrics"] is True
+    assert summary["formal_records"] == 0
+    assert summary["paired_model_distribution"]["metrics"]["score_top5"]["n"] == 0
 
 
 def test_aggregate_excludes_incomplete_mismatch_synthetic_historical_and_secondary_from_formal():

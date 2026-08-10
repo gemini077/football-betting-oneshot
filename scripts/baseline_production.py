@@ -209,13 +209,29 @@ def build_benchmark_snapshot_from_frozen_prediction(
 def run_benchmark_for_frozen_prediction(
     champion_prediction: dict[str, Any],
     *,
+    benchmark_scope: str = "historical_exploratory",
+    production_new_freeze: bool = False,
     checkpoint_metadata: dict[str, Any] | None = None,
     snapshot_root: Path = DEFAULT_INPUT_SNAPSHOT_ROOT,
     prediction_root: Path = DEFAULT_PREDICTION_ROOT,
     repository_root: Path = ROOT,
     synthetic: bool = False,
 ) -> dict[str, Any]:
-    """Best-effort production shadow hook after Champion freeze."""
+    """Build one benchmark from an explicitly scoped frozen prediction.
+
+    Historical/manual calls default to ``historical_exploratory``.  Only the
+    production freeze hook may opt into formal prospective scope by explicitly
+    marking a newly created frozen prediction.
+    """
+    if benchmark_scope not in {"prospective", "historical_exploratory"}:
+        raise ValueError("benchmark_scope must be prospective or historical_exploratory")
+    if production_new_freeze:
+        if benchmark_scope != "prospective":
+            raise ValueError("production_new_freeze requires prospective scope")
+        prospective_origin = "production_new_freeze"
+    else:
+        benchmark_scope = "historical_exploratory"
+        prospective_origin = "historical_exploratory"
     snapshot = build_benchmark_snapshot_from_frozen_prediction(
         champion_prediction,
         checkpoint_metadata=checkpoint_metadata,
@@ -229,7 +245,12 @@ def run_benchmark_for_frozen_prediction(
         # this explicit flag prevents smoke data from entering formal metrics.
         snapshot["synthetic"] = True
         snapshot["excluded_from_formal_metrics"] = True
-    comparison = build_comparison(snapshot, champion_prediction, benchmark_scope="prospective")
+    comparison = build_comparison(
+        snapshot,
+        champion_prediction,
+        benchmark_scope=benchmark_scope,
+        prospective_origin=prospective_origin,
+    )
     if comparison["comparison_status"] != "complete":
         return {
             "benchmark_status": comparison["comparison_status"],

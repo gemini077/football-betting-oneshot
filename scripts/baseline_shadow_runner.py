@@ -176,6 +176,7 @@ def build_comparison(
     champion_prediction: dict[str, Any] | None,
     *,
     benchmark_scope: str = "prospective",
+    prospective_origin: str | None = None,
 ) -> dict[str, Any]:
     """Build one comparison without running or reconstructing the Champion."""
     if not isinstance(snapshot, dict):
@@ -190,6 +191,10 @@ def build_comparison(
     )
     if benchmark_scope == "prospective" and historical_marker:
         benchmark_scope = "historical_exploratory"
+    if benchmark_scope == "historical_exploratory":
+        prospective_origin = "historical_exploratory"
+    else:
+        prospective_origin = prospective_origin or "production_new_freeze"
 
     identity = _snapshot_identity(snapshot)
     eligibility = primary_benchmark_eligibility(snapshot)
@@ -243,6 +248,7 @@ def build_comparison(
         ),
         "benchmark_contract_version": BENCHMARK_CONTRACT_VERSION,
         "benchmark_scope": benchmark_scope,
+        "prospective_origin": prospective_origin,
         "prospective_only": benchmark_scope == "prospective",
         "comparison_status": status,
         "status_reason": status_reason,
@@ -256,7 +262,11 @@ def build_comparison(
         "cohort": eligibility["cohort"],
         "primary_eligibility_reason": eligibility["reason"],
         "synthetic": synthetic,
-        "excluded_from_formal_metrics": synthetic or benchmark_scope != "prospective",
+        "excluded_from_formal_metrics": (
+            synthetic
+            or benchmark_scope != "prospective"
+            or prospective_origin != "production_new_freeze"
+        ),
         "market_evaluable": market_evaluable,
         "market_missing_reason": market.get("market_missing_reason") if not market_evaluable else None,
         "simple_evaluable": simple_evaluable,

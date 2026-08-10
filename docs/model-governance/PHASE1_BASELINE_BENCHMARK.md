@@ -101,7 +101,7 @@ Therefore mixed `home_home + away_overall` and
 `home_overall + away_away` are valid and explicitly recorded. The fixed safety
 range is `0.15 <= lambda <= 4.0`; the matrix is independent Poisson with
 `rho=0`. The output includes lambda, expected goals, 1X2, BTTS, total-goal
-distribution, score matrix, and score Top-1/3/5.
+distribution, score matrix, and score Top-1/3/5/10.
 
 ## Paired statistics and eligibility
 
@@ -113,10 +113,31 @@ Market Reference, Simple Poisson, and the frozen Champion all have evaluable
 1X2 probabilities. Its Brier, Log Loss, and Top-1 values use that one paired
 set.
 
-`paired_model_distribution` contains only the exact same match set where
-Simple Poisson and Champion both have the required fields. It compares BTTS,
-total-goal absolute error, expected-goal error, score Top-1/3/5, actual-score
-rank, and actual-score assigned probability.
+`paired_model_distribution` has an availability diagnostic, but it is not a
+head-to-head sample size. Every formal distribution metric has its own object:
+
+```json
+{
+  "score_top5": {
+    "n": 0,
+    "match_keys": [],
+    "simple_poisson": null,
+    "champion": null
+  }
+}
+```
+
+The supported paired metrics are BTTS accuracy, total-goal absolute error,
+expected-goal error, and score Top-1/3/5/10. Each metric includes only matches
+where both models have a non-null value, so its `n` and `match_keys` cannot be
+borrowed from another metric.
+
+The frozen Champion score output is Top-10 only. Therefore formal paired
+actual-score rank and actual-score probability are paused with explicit
+statuses (`unsupported_for_champion_full_distribution` and
+`unsupported_until_full_champion_distribution_is_frozen`). A Top-10 hit may
+remain in the individual settlement diagnostic, but it is never averaged as a
+full-distribution head-to-head result.
 
 A formal record must satisfy all of:
 
@@ -126,6 +147,7 @@ comparison_status == complete
 same_snapshot == true
 synthetic == false
 excluded_from_formal_metrics == false
+prospective_origin == production_new_freeze
 ```
 
 Primary aggregation additionally requires `cohort=primary` and
@@ -135,9 +157,13 @@ match has multiple primary records, all are marked
 depends on file traversal order.
 
 Historical reports are not backfilled. Prototype files are research-only.
-The formal prospective start is the Phase 1.1 production-wiring merge; the
-implementation also records the minimum boundary
-`a14a654e3d80186bb8c93561939e51a4b1ec4ff4`.
+The formal production path is only a newly created frozen Champion record:
+`freeze_prediction(...)["status"] == "created"`. Existing frozen records are
+reported as `skipped_existing_prediction` and cannot create a prospective
+comparison. Manual/CLI runs default to `historical_exploratory`, which is
+always excluded from formal aggregation. The formal prospective start is the
+Phase 1.1 production-wiring merge; the implementation also records the
+minimum boundary `a14a654e3d80186bb8c93561939e51a4b1ec4ff4`.
 
 ## Immutable files and settlement
 

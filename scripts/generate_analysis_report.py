@@ -1466,8 +1466,16 @@ def run_shadow_benchmark_after_freeze(
         and governance_record.get("prediction_status") == "formal"
     ):
         return result
+    if str(frozen.get("status") or "") != "created":
+        result.update({
+            "benchmark_status": "skipped_existing_prediction",
+            "benchmark_snapshot_reason": "frozen_prediction_was_not_newly_created",
+        })
+        return result
     try:
         kwargs = {
+            "benchmark_scope": "prospective",
+            "production_new_freeze": True,
             "checkpoint_metadata": governance_record.get("checkpoint_metadata"),
             "repository_root": project_root,
         }
