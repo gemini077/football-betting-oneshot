@@ -3,6 +3,7 @@
 Current matches: `3`.
 Both history available: `3`; both current-strength ready: `2`; bridge-only: `0`; stale: `1`.
 Ready rate: `0.666667`; ready+bridge rate: `0.666667`.
+Analysis-weighted STRICT READY: `0.0`; READY+verified BRIDGE: `0.0`.
 
 ## Current matches
 
@@ -14,4 +15,4 @@ Ready rate: `0.666667`; ready+bridge rate: `0.666667`.
 
 This is a shadow data-layer report. It does not create benchmark records and does not alter the Champion.
 
-Observed project competitions: `2`; source volume is not usage volume.
+Observed project competitions: `18`; source volume is not usage volume.
