@@ -35,7 +35,8 @@ LINEUP_STATUSES = frozenset({"projected", "confirmed", "unavailable"})
 AVAILABILITY_STATUSES = frozenset(
     {"confirmed_out", "suspended", "doubtful", "questionable", "returned", "unknown"}
 )
-WINDOW_TYPES = frozenset({"last_5", "last_10", "season_to_date", "rolling_365d", "single_match"})
+WINDOW_TYPES = frozenset({"last_5", "last_10", "last_20", "season_to_date", "rolling_365d", "single_match"})
+DUPLICATE_STATUSES = frozenset({"unique", "duplicate_same", "possible_duplicate", "duplicate_conflict"})
 
 
 def _is_number_or_none(value: Any) -> bool:
@@ -193,6 +194,24 @@ def _validate_metric_map(value: Any, field: str = "metrics") -> None:
         _require(_is_number_or_none(metric), f"{field}.{key} must be numeric or null")
 
 
+def _validate_team_strength_metrics(value: Any) -> None:
+    """Validate the v1 strength shape, including explicit home/away blocks."""
+
+    _require(isinstance(value, Mapping), "metrics must be an object")
+    for key, metric in value.items():
+        _require(isinstance(key, str) and bool(key), "metrics keys must be strings")
+        if key in {"home", "away"}:
+            _require(isinstance(metric, Mapping), f"metrics.{key} must be an object")
+            for venue_key in ("matches", "goals_for", "goals_against"):
+                _require(venue_key in metric, f"metrics.{key}.{venue_key} is required")
+                _require(
+                    isinstance(metric[venue_key], int) and not isinstance(metric[venue_key], bool) and metric[venue_key] >= 0,
+                    f"metrics.{key}.{venue_key} must be a non-negative integer",
+                )
+        else:
+            _require(_is_number_or_none(metric), f"metrics.{key} must be numeric or null")
+
+
 def _validate_version(record: Mapping[str, Any], expected: str) -> None:
     _require(record.get("contract_version") == expected, f"expected {expected}, got {record.get('contract_version')!r}")
 
@@ -229,7 +248,7 @@ def validate_record(kind: str, record: Mapping[str, Any]) -> bool:
         _validate_version(record, "team_strength_snapshot.v1")
         _require(isinstance(record.get("team_id"), str) and bool(record["team_id"]), "team_id is required")
         _require(isinstance(record.get("matches"), int) and record["matches"] >= 0, "matches must be non-negative integer")
-        _validate_metric_map(record.get("metrics"))
+        _validate_team_strength_metrics(record.get("metrics"))
         _validate_window_fields(record)
         for field in ("red_card_events", "minutes_10v11", "minutes_11v10"):
             if field in record:
@@ -293,6 +312,34 @@ def validate_record(kind: str, record: Mapping[str, Any]) -> bool:
             _require(record["conflict_state"] in {"none", "conflicting", "acknowledged"}, "invalid availability conflict_state")
         if "conflict_group_id" in record:
             _require(record["conflict_group_id"] is None or isinstance(record["conflict_group_id"], str), "conflict_group_id must be string or null")
+    elif kind == "historical_match_result":
+        _validate_version(record, "historical_match_result.v1")
+        for field in ("canonical_match_id", "competition_id", "season_id", "home_team_id", "away_team_id", "kickoff_at", "provider_match_id"):
+            _require(record.get(field) is None or isinstance(record.get(field), str), f"{field} must be string or null")
+        for field in ("raw_home_team", "raw_away_team", "raw_competition", "raw_season"):
+            _require(record.get(field) is None or isinstance(record.get(field), str), f"{field} must be string or null")
+        _optional_iso_timestamp(record.get("kickoff_at"), "kickoff_at")
+        for field in ("home_goals", "away_goals"):
+            value = record.get(field)
+            _require(value is None or (isinstance(value, int) and not isinstance(value, bool) and value >= 0), f"{field} must be a non-negative integer or null")
+        _require(isinstance(record.get("provider"), str) and bool(record["provider"].strip()), "provider is required")
+        _require(record.get("resolution_status") in RESOLUTION_STATUSES, "invalid historical result resolution_status")
+        _require(record.get("resolution_method") in RESOLUTION_METHODS, "invalid historical result resolution_method")
+        if record["resolution_status"] == "resolved":
+            _require(record["resolution_method"] != "unresolved", "resolved historical result requires a resolution method")
+            for field in ("canonical_match_id", "home_team_id", "away_team_id"):
+                _require(record.get(field) not in (None, ""), f"resolved historical result requires {field}")
+        else:
+            _require(record["resolution_method"] == "unresolved", "unresolved historical result requires resolution_method=unresolved")
+        _require(isinstance(record.get("eligible_for_team_strength"), bool), "eligible_for_team_strength must be bool")
+        _require(record.get("duplicate_status") in DUPLICATE_STATUSES, "invalid duplicate_status")
+        if record["eligible_for_team_strength"]:
+            _require(record.get("resolution_status") == "resolved", "eligible historical result must be resolved")
+            for field in ("canonical_match_id", "competition_id", "season_id", "home_team_id", "away_team_id", "kickoff_at", "home_goals", "away_goals", "source_as_of_at"):
+                _require(record.get(field) not in (None, ""), f"eligible historical result requires {field}")
+            _require(record.get("quality") in {"A", "B"}, "eligible historical result requires A/B quality")
+            _require(record.get("provenance", {}).get("source_reliable") is True, "eligible historical result requires reliable provenance")
+            _require(record.get("duplicate_status") in {"unique", "duplicate_same"}, "duplicate historical result cannot be eligible")
     else:
         raise ContractError(f"unknown football data contract kind: {kind}")
     return True

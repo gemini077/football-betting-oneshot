@@ -132,6 +132,8 @@ def _infer_record_type(record: Mapping[str, Any], record_type: str | None) -> st
         return "availability_snapshot"
     if "metric_definition" in record:
         return "xg_snapshot"
+    if record.get("contract_version") == "historical_match_result.v1":
+        return "historical_match_result"
     if "window_type" in record and "metrics" in record:
         return "team_form_snapshot"
     if "canonical_name" in record:
@@ -162,6 +164,22 @@ def _material_flags(record: Mapping[str, Any], record_type: str) -> dict[str, bo
         flags["sample_complete"] = not flags["material_metric_missing"]
     elif record_type == "availability_snapshot":
         flags["material_metric_missing"] = not bool(record.get("canonical_player_id")) or not record.get("source_timestamp") or not bool(record.get("evidence"))
+        flags["sample_complete"] = not flags["material_metric_missing"]
+    elif record_type == "historical_match_result":
+        flags["material_metric_missing"] = not all(
+            record.get(field) not in (None, "")
+            for field in ("kickoff_at", "home_team_id", "away_team_id", "home_goals", "away_goals")
+        )
+        flags["sample_complete"] = not flags["material_metric_missing"]
+    elif record_type == "team_strength_snapshot":
+        metrics = record.get("metrics")
+        flags["material_metric_missing"] = not (
+            isinstance(metrics, Mapping)
+            and record.get("matches", 0) > 0
+            and metrics.get("goals_for_per_match") is not None
+            and metrics.get("goals_against_per_match") is not None
+            and record.get("window_type")
+        )
         flags["sample_complete"] = not flags["material_metric_missing"]
     return flags
 
