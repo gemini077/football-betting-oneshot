@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://football-betting-oneshot.local/schemas/football_data/availability_snapshot.v1.schema.json",
+  "title": "Availability / injury snapshot v1",
+  "allOf": [
+    {"$ref": "./football_data_contract.v1.schema.json#/$defs/commonObservation"},
+    {
+      "type": "object",
+      "required": ["contract_version", "team_id", "player_name", "status", "evidence", "source_timestamp", "confidence"],
+      "properties": {
+        "contract_version": {"const": "availability_snapshot.v1"},
+        "team_id": {"type": "string", "minLength": 1},
+        "canonical_player_id": {"type": ["string", "null"]},
+        "provider_player_id": {"type": ["string", "null"]},
+        "player_name": {"type": "string", "minLength": 1},
+        "status": {"enum": ["confirmed_out", "suspended", "doubtful", "questionable", "returned", "unknown"]},
+        "evidence": {"type": "array", "items": {"type": "string"}},
+        "source_timestamp": {"type": "string", "format": "date-time"},
+        "confidence": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+        "conflict_group_id": {"type": ["string", "null"]},
+        "conflict_state": {"enum": ["none", "conflicting", "acknowledged"]}
+      }
+    }
+  ]
+}

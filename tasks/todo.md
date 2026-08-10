@@ -11,5 +11,5 @@
 - [x] Add offline StatsBomb Open Data research adapter and fixture.
 - [x] Add feature registry with zero validated model features.
 - [x] Add Champion isolation regression test.
-- [ ] Run focused tests, governance/integration tests, full suite, and diff check.
+- [x] Run focused tests, governance/integration tests, full suite, and diff check.
 - [ ] Commit, create Draft PR, and package scoped handoff ZIP.

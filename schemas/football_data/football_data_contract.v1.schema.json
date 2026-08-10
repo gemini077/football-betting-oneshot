@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://football-betting-oneshot.local/schemas/football_data/football_data_contract.v1.schema.json",
+  "title": "Football Data Contract v1 shared definitions",
+  "type": "object",
+  "$defs": {
+    "freshness": {
+      "type": "object",
+      "required": ["state", "age_seconds", "ttl_seconds"],
+      "properties": {
+        "state": {"enum": ["fresh", "stale", "unknown"]},
+        "age_seconds": {"type": ["integer", "null"], "minimum": 0},
+        "ttl_seconds": {"type": ["integer", "null"], "minimum": 0}
+      },
+      "additionalProperties": false
+    },
+    "sampleSize": {
+      "type": "object",
+      "required": ["matches", "minutes"],
+      "properties": {
+        "matches": {"type": ["integer", "null"], "minimum": 0},
+        "minutes": {"type": ["integer", "null"], "minimum": 0}
+      },
+      "additionalProperties": false
+    },
+    "provenance": {
+      "type": "object",
+      "required": ["provider", "source", "source_record_ref", "captured_at"],
+      "properties": {
+        "provider": {"type": "string", "minLength": 1},
+        "source": {"type": "string", "minLength": 1},
+        "source_record_ref": {"type": "string", "minLength": 1},
+        "captured_at": {"type": "string", "format": "date-time"},
+        "source_as_of_at": {"type": ["string", "null"], "format": "date-time"},
+        "source_url": {"type": ["string", "null"]},
+        "data_license": {"type": ["string", "null"]},
+        "attribution_required": {"type": "boolean"},
+        "commercial_use_review": {"type": "string"},
+        "parser_version": {"type": ["string", "null"]},
+        "raw_sha256": {"type": ["string", "null"]}
+      },
+      "additionalProperties": true
+    },
+    "commonObservation": {
+      "type": "object",
+      "required": [
+        "contract_version", "source", "source_entity_id", "canonical_entity_id",
+        "captured_at", "source_as_of_at", "competition", "season",
+        "home_away_context", "sample_size", "value", "unit", "quality",
+        "freshness", "missing_reason", "provenance"
+      ],
+      "properties": {
+        "contract_version": {"type": "string"},
+        "source": {"type": "string", "minLength": 1},
+        "source_entity_id": {"type": ["string", "null"]},
+        "canonical_entity_id": {"type": ["string", "null"]},
+        "captured_at": {"type": "string", "format": "date-time"},
+        "source_as_of_at": {"type": ["string", "null"], "format": "date-time"},
+        "competition": {"type": ["string", "null"]},
+        "season": {"type": ["string", "null"]},
+        "home_away_context": {"enum": ["home", "away", "overall", "neutral", "unknown"]},
+        "sample_size": {"$ref": "#/$defs/sampleSize"},
+        "value": {},
+        "unit": {"type": ["string", "null"]},
+        "quality": {"enum": ["A", "B", "C", "D"]},
+        "freshness": {"$ref": "#/$defs/freshness"},
+        "missing_reason": {"type": "array", "items": {"type": "string"}},
+        "provenance": {"$ref": "#/$defs/provenance"}
+      },
+      "additionalProperties": true
+    }
+  }
+}

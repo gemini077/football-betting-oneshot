@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://football-betting-oneshot.local/schemas/football_data/player_identity.v1.schema.json",
+  "title": "Player identity v1",
+  "allOf": [
+    {"$ref": "./football_data_contract.v1.schema.json#/$defs/commonObservation"},
+    {
+      "type": "object",
+      "required": ["contract_version", "canonical_name", "canonical_player_id", "provider_player_id", "team_id", "dob", "nationality", "resolution_status", "resolution_method", "confidence"],
+      "properties": {
+        "contract_version": {"const": "player_identity.v1"},
+        "canonical_player_id": {"type": ["string", "null"]},
+        "canonical_name": {"type": "string", "minLength": 1},
+        "provider_player_id": {"type": ["string", "null"]},
+        "team_id": {"type": ["string", "null"]},
+        "dob": {"type": ["string", "null"]},
+        "nationality": {"type": ["string", "null"]},
+        "resolution_status": {"enum": ["resolved", "unresolved"]},
+        "resolution_method": {"enum": ["provider_id_exact", "existing_crosswalk", "exact_alias", "normalized_alias", "contextual_match", "manual_verified", "unresolved"]},
+        "confidence": {"type": ["number", "null"], "minimum": 0, "maximum": 1}
+      }
+    }
+  ]
+}

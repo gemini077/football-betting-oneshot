@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://football-betting-oneshot.local/schemas/football_data/lineup_snapshot.v1.schema.json",
+  "title": "Lineup snapshot v1",
+  "allOf": [
+    {"$ref": "./football_data_contract.v1.schema.json#/$defs/commonObservation"},
+    {
+      "type": "object",
+      "required": ["contract_version", "match_id", "team_id", "status", "players"],
+      "properties": {
+        "contract_version": {"const": "lineup_snapshot.v1"},
+        "match_id": {"type": "string", "minLength": 1},
+        "team_id": {"type": "string", "minLength": 1},
+        "status": {"enum": ["projected", "confirmed", "unavailable"]},
+        "players": {"type": "array"}
+      }
+    }
+  ]
+}

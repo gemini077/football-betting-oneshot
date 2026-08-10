@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://football-betting-oneshot.local/schemas/football_data/match_identity.v1.schema.json",
+  "title": "Match identity v1",
+  "allOf": [
+    {"$ref": "./football_data_contract.v1.schema.json#/$defs/commonObservation"},
+    {
+      "type": "object",
+      "required": ["provider_match_id", "canonical_match_id", "home_team_id", "away_team_id"],
+      "properties": {
+        "contract_version": {"const": "match_identity.v1"},
+        "provider_match_id": {"type": "string", "minLength": 1},
+        "canonical_match_id": {"type": ["string", "null"]},
+        "home_team_id": {"type": "string", "minLength": 1},
+        "away_team_id": {"type": "string", "minLength": 1},
+        "kickoff_at": {"type": ["string", "null"], "format": "date-time"}
+      }
+    }
+  ]
+}

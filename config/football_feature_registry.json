@@ -1,0 +1,63 @@
+{
+  "registry_version": "football_feature_registry.v1",
+  "updated_at": "2026-08-10T00:00:00Z",
+  "validated_for_model": false,
+  "features": [
+    {
+      "feature_name": "team_strength_snapshot",
+      "contract_version": "team_strength_snapshot.v1",
+      "source_requirements": ["team_identity", "match_history", "data_provenance"],
+      "quality_requirement": "A_or_B",
+      "freshness_requirement": "slow_changing",
+      "validated_for_model": false
+    },
+    {
+      "feature_name": "team_form_snapshot",
+      "contract_version": "team_form_snapshot.v1",
+      "source_requirements": ["team_identity", "results", "window_definition", "data_provenance"],
+      "quality_requirement": "A_or_B",
+      "freshness_requirement": "fast_changing",
+      "validated_for_model": false
+    },
+    {
+      "feature_name": "provider_specific_xg_snapshot",
+      "contract_version": "xg_snapshot.v1",
+      "source_requirements": ["provider_xg_definition", "data_provenance"],
+      "quality_requirement": "A_or_B",
+      "freshness_requirement": "historical_immutable",
+      "validated_for_model": false
+    },
+    {
+      "feature_name": "lineup_snapshot",
+      "contract_version": "lineup_snapshot.v1",
+      "source_requirements": ["match_identity", "player_identity", "data_provenance"],
+      "quality_requirement": "A_or_B",
+      "freshness_requirement": "fast_changing",
+      "validated_for_model": false
+    },
+    {
+      "feature_name": "availability_snapshot",
+      "contract_version": "availability_snapshot.v1",
+      "source_requirements": ["player_identity", "evidence", "conflict_preservation", "data_provenance"],
+      "quality_requirement": "A_or_B",
+      "freshness_requirement": "fast_changing",
+      "validated_for_model": false
+    },
+    {
+      "feature_name": "opponent_adjusted_metric",
+      "contract_version": "team_strength_snapshot.v1",
+      "source_requirements": ["opponent_team_id", "opponent_strength_snapshot_ref", "adjustment_method"],
+      "quality_requirement": "A_or_B",
+      "freshness_requirement": "slow_changing",
+      "validated_for_model": false
+    },
+    {
+      "feature_name": "competition_strength_rating",
+      "contract_version": "competition_identity.v1",
+      "source_requirements": ["competition_identity", "rating_source", "rating_algorithm", "license_review"],
+      "quality_requirement": "A_or_B",
+      "freshness_requirement": "slow_changing",
+      "validated_for_model": false
+    }
+  ]
+}
