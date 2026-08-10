@@ -19,4 +19,3 @@ def test_test_only_registry_resolves_only_test_namespace():
     result = resolver.resolve_player("statsbomb_fixture", "Fixture Captain", "102", team_id="team:manchester-united")
     assert result.canonical_player_id == "player:fixture-captain"
     assert resolver.resolve_player("statsbomb", "Fixture Captain", "102", team_id="team:manchester-united").canonical_player_id is None
-

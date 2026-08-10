@@ -73,4 +73,3 @@ record quality is the same result returned by `evaluate_record`.
 
 All feature-registry entries remain `validated_for_model=false`. The Champion
 continues to read none of these new records.
-

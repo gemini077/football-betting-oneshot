@@ -155,4 +155,3 @@ class CompetitionEntityResolver:
         )
 
     resolve_competition = resolve
-
