@@ -58,3 +58,17 @@ def test_pre_match_snapshot_cannot_be_overwritten_after_target_result(tmp_path):
 
     with pytest.raises(ValueError, match="immutable"):
         store.put(changed, snapshot_id=original["snapshot_id"])
+
+
+def test_snapshot_bytes_are_stable_when_rebuilt_from_same_captured_evidence():
+    records = [make_result("past", "2026-07-01T12:00:00Z", 1)]
+    kwargs = {
+        "target_kickoff": "2026-08-02T12:00:00Z",
+        "window_type": "last_5",
+        "competition_id": "competition:test",
+        "season_id": "season:2026",
+    }
+    first = TeamStrengthBuilder(records, captured_at="2026-08-01T00:00:00Z").build("team:home", **kwargs)
+    second = TeamStrengthBuilder(records, captured_at="2026-08-01T00:00:00Z").build("team:home", **kwargs)
+
+    assert first == second

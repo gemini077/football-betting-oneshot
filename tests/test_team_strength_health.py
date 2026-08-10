@@ -39,5 +39,8 @@ def test_health_report_counts_both_one_sided_and_neither():
     assert health["home_only"] == 1
     assert health["away_only"] == 0
     assert health["neither"] == 1
+    assert health["one_team_evaluable"] == 1
+    assert health["neither_evaluable"] == 1
+    assert health["coverage_by_competition"]["unresolved"]["neither_evaluable"] == 1
     assert health["identity_unresolved"] == 1
     assert len(health["coverage_by_match"]) == 3

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
@@ -28,6 +29,14 @@ def _nonempty(value: Any) -> str | None:
 def _append_missing(missing: list[str], reason: str) -> None:
     if reason not in missing:
         missing.append(reason)
+
+
+def _captured_datetime(value: str) -> datetime | None:
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except (AttributeError, TypeError, ValueError):
+        return None
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
 
 
 def make_historical_match_result(
@@ -61,6 +70,17 @@ def make_historical_match_result(
     commercial_use_review: str = "not_required",
     parser_version: str | None = None,
     raw_sha256: str | None = None,
+    raw_redistribution: bool | None = None,
+    internal_analysis_only: bool | None = None,
+    repository: str | None = None,
+    commit_sha: str | None = None,
+    source_file: str | None = None,
+    entity_type: str = "club",
+    match_type: str = "unknown",
+    source_conflict: bool = False,
+    conflict_reasons: list[str] | None = None,
+    source_confirmations: list[Mapping[str, Any]] | None = None,
+    verification_evidence: list[Any] | None = None,
 ) -> dict[str, Any]:
     """Build and centrally grade one immutable result observation.
 
@@ -94,6 +114,8 @@ def make_historical_match_result(
         _append_missing(missing, "source_fact_time_missing")
     if source_reliable is not True:
         _append_missing(missing, "source_unreliable_or_unreviewed")
+    if source_conflict:
+        _append_missing(missing, "source_conflict")
 
     record: dict[str, Any] = {
         "contract_version": "historical_match_result.v1",
@@ -126,6 +148,11 @@ def make_historical_match_result(
             synthetic=synthetic,
             observation_origin=observation_origin,
             raw_sha256=raw_sha256,
+            raw_redistribution=raw_redistribution,
+            internal_analysis_only=internal_analysis_only,
+            repository=repository,
+            commit_sha=commit_sha,
+            source_file=source_file,
         ),
         "provider": provider_text,
         "provider_match_id": _nonempty(provider_match_id),
@@ -145,8 +172,18 @@ def make_historical_match_result(
         "resolution_method": resolution_method if resolved == "resolved" else "unresolved",
         "eligible_for_team_strength": False,
         "duplicate_status": "unique",
+        "entity_type": entity_type,
+        "match_type": match_type,
+        "source_conflict": bool(source_conflict),
+        "conflict_reasons": list(conflict_reasons or []),
+        "source_confirmations": list(source_confirmations or [{
+            "provider": provider_text,
+            "provider_match_id": _nonempty(provider_match_id),
+            "source_record_ref": source_ref,
+        }]),
+        "verification_evidence": list(verification_evidence or []),
     }
-    finalize_record_quality(record, data_class="historical_immutable", record_type="historical_match_result")
+    finalize_record_quality(record, data_class="historical_immutable", record_type="historical_match_result", now=_captured_datetime(captured))
     record["eligible_for_team_strength"] = bool(
         record["resolution_status"] == "resolved"
         and record["canonical_match_id"]
@@ -161,6 +198,7 @@ def make_historical_match_result(
         and record["quality"] in {"A", "B"}
         and record["provenance"].get("source_reliable") is True
         and not record["provenance"].get("synthetic", False)
+        and not record.get("source_conflict", False)
     )
     if not record["eligible_for_team_strength"] and "quality_gate" not in record["missing_reason"] and record["quality"] not in {"A", "B"}:
         _append_missing(record["missing_reason"], "quality_gate")
@@ -214,14 +252,41 @@ def _score_and_teams(record: Mapping[str, Any]) -> tuple[Any, ...]:
     )
 
 
+def _match_facts(record: Mapping[str, Any]) -> tuple[Any, ...]:
+    return (
+        *_score_and_teams(record),
+        record.get("kickoff_at"),
+        record.get("entity_type"),
+        record.get("match_type"),
+    )
+
+
+def _confirmation(record: Mapping[str, Any]) -> dict[str, Any]:
+    return {
+        "provider": record.get("provider"),
+        "provider_match_id": record.get("provider_match_id"),
+        "source_record_ref": record.get("provenance", {}).get("source_record_ref") or record.get("provider_match_id"),
+        "kickoff_at": record.get("kickoff_at"),
+        "home_goals": record.get("home_goals"),
+        "away_goals": record.get("away_goals"),
+    }
+
+
 def _mark(record: Mapping[str, Any], status: str) -> dict[str, Any]:
     updated = dict(record)
     updated["duplicate_status"] = status
+    if status == "duplicate_conflict":
+        updated["source_conflict"] = True
+        reasons = list(updated.get("conflict_reasons") or [])
+        _append_missing(reasons, "source_records_disagree")
+        updated["conflict_reasons"] = reasons
     updated["eligible_for_team_strength"] = False if status in {"possible_duplicate", "duplicate_conflict"} else bool(record.get("eligible_for_team_strength"))
     missing = list(updated.get("missing_reason") or [])
     if status != "unique":
         _append_missing(missing, status)
     updated["missing_reason"] = missing
+    if status == "duplicate_conflict":
+        finalize_record_quality(updated, data_class="historical_immutable", record_type="historical_match_result")
     validate_record("historical_match_result", updated)
     return updated
 
@@ -249,7 +314,7 @@ def deduplicate_historical_results(records: Iterable[Mapping[str, Any]]) -> Dedu
         if len(group) == 1:
             output.append(_mark(group[0], "unique"))
             continue
-        if len({_score_and_teams(item) for item in group}) != 1:
+        if len({_match_facts(item) for item in group}) != 1:
             conflicts += 1
             output.extend(_mark(item, "duplicate_conflict") for item in group)
             continue
@@ -267,6 +332,11 @@ def deduplicate_historical_results(records: Iterable[Mapping[str, Any]]) -> Dedu
             for item in group
             if item is not chosen
         )
+        retained["source_confirmations"] = [
+            confirmation
+            for item in group
+            for confirmation in (item.get("source_confirmations") or [_confirmation(item)])
+        ]
         output.append(retained)
         collapsed += len(group) - 1
 

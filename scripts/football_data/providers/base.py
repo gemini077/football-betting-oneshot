@@ -43,10 +43,15 @@ def provenance(
     commercial_use_review: str = "not_required",
     parser_version: str | None = None,
     raw_sha256: str | None = None,
+    raw_redistribution: bool | None = None,
+    internal_analysis_only: bool | None = None,
     synthetic: bool = False,
     observation_origin: str = "provider_observation",
     provider_schema: str | None = None,
     provider_schema_reference: str | None = None,
+    repository: str | None = None,
+    commit_sha: str | None = None,
+    source_file: str | None = None,
 ) -> dict[str, Any]:
     return DataProvenance(
         provider=provider,
@@ -61,10 +66,15 @@ def provenance(
         commercial_use_review=commercial_use_review,
         parser_version=parser_version,
         raw_sha256=raw_sha256,
+        raw_redistribution=raw_redistribution,
+        internal_analysis_only=internal_analysis_only,
         synthetic=synthetic,
         observation_origin=observation_origin,
         provider_schema=provider_schema,
         provider_schema_reference=provider_schema_reference,
+        repository=repository,
+        commit_sha=commit_sha,
+        source_file=source_file,
     ).to_dict()
 
 
