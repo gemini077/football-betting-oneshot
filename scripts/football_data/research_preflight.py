@@ -14,6 +14,7 @@ from typing import Any, Iterable, Mapping
 
 from .historical_results import deduplicate_historical_results
 from .p0_p1_coverage import audit_retrospective_availability
+from .research_sanity import compact_sanity_report, competition_season_key, filter_records_by_sanity
 from .storage import content_sha256
 
 
@@ -262,6 +263,98 @@ def _cohort_manifest(
     }
 
 
+def cohort_manifest(
+    tier: str,
+    rows: Iterable[Mapping[str, Any]],
+    *,
+    dataset_digest: str,
+) -> dict[str, Any]:
+    """Expose the deterministic cohort manifest builder for small audits/tests."""
+
+    return _cohort_manifest(tier, list(rows), dataset_digest=dataset_digest)
+
+
+def _share_value(concentration: Mapping[str, Any], nested_key: str, flat_key: str) -> float | None:
+    nested = concentration.get(nested_key)
+    if isinstance(nested, Mapping):
+        value = nested.get("share")
+    else:
+        value = concentration.get(flat_key)
+    try:
+        return float(value) if value is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _timeline_sufficient(timeline: Mapping[str, Any]) -> bool:
+    if not timeline:
+        return False
+    for value in timeline.values():
+        if isinstance(value, Mapping):
+            if value.get("sufficient_chronological_span") is not True:
+                return False
+        elif value is not True:
+            return False
+    return True
+
+
+def evaluate_readiness_gate(
+    *,
+    recommended_fixture_count: int,
+    recommended_competitions: Iterable[str],
+    recommended_team_count: int,
+    timeline: Mapping[str, Any],
+    concentration: Mapping[str, Any],
+    full_standard_competitions: Iterable[str] | None = None,
+    dataset_sanity_passed: bool = True,
+) -> dict[str, Any]:
+    """Evaluate research readiness from the recommended cohort only.
+
+    ``full_standard_competitions`` is accepted for audit visibility and API
+    compatibility, but it must never satisfy the recommended-cohort gate.
+    """
+
+    recommended = sorted({str(value) for value in recommended_competitions})
+    competition_share = _share_value(concentration, "largest_competition", "largest_competition_share")
+    season_share = _share_value(concentration, "largest_season", "largest_season_share")
+    team_share = _share_value(concentration, "largest_team_appearance", "largest_team_appearance_share")
+    criteria = {
+        "recommended_standard_fixtures_at_least_200": int(recommended_fixture_count) >= MIN_STANDARD_FIXTURES,
+        "eligible_competitions_at_least_3": len(recommended) >= MIN_STANDARD_COMPETITIONS,
+        "unique_teams_at_least_30": int(recommended_team_count) >= MIN_STANDARD_TEAMS,
+        "each_recommended_competition_has_chronological_train_validation_test": _timeline_sufficient(timeline),
+        "concentration_within_audit_caps": bool(
+            competition_share is not None
+            and season_share is not None
+            and team_share is not None
+            and competition_share <= MAX_LARGEST_COMPETITION_SHARE
+            and season_share <= MAX_LARGEST_SEASON_SHARE
+            and team_share <= MAX_LARGEST_TEAM_APPEARANCE_SHARE
+        ),
+        "recommended_cohort_dataset_sanity_passed": bool(dataset_sanity_passed),
+    }
+    blockers = [name for name, passed in criteria.items() if not passed]
+    return {
+        "phase2c_1_research_ready": not blockers,
+        "criteria": criteria,
+        "blockers": blockers,
+        "recommended_competitions": recommended,
+        "full_standard_competitions": sorted({str(value) for value in (full_standard_competitions or [])}),
+        "policy": {
+            "minimum_standard_fixtures": MIN_STANDARD_FIXTURES,
+            "minimum_standard_competitions": MIN_STANDARD_COMPETITIONS,
+            "minimum_standard_teams": MIN_STANDARD_TEAMS,
+            "minimum_competition_development_fixtures": MIN_COMPETITION_DEVELOPMENT_FIXTURES,
+            "minimum_competition_validation_fixtures": MIN_COMPETITION_VALIDATION_FIXTURES,
+            "minimum_competition_test_fixtures": MIN_COMPETITION_TEST_FIXTURES,
+            "minimum_competition_span_days": MIN_COMPETITION_SPAN_DAYS,
+            "max_largest_competition_share": MAX_LARGEST_COMPETITION_SHARE,
+            "max_largest_season_share": MAX_LARGEST_SEASON_SHARE,
+            "max_largest_team_appearance_share": MAX_LARGEST_TEAM_APPEARANCE_SHARE,
+        },
+    }
+
+
 def _competition_breakdown(
     records: list[Mapping[str, Any]],
     audits_by_id: Mapping[str, Mapping[str, Any]],
@@ -354,11 +447,16 @@ def audit_historical_eligibility(
     historical_records: Iterable[Mapping[str, Any]],
     *,
     dataset_digest: str,
+    sanity_report: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Audit every normalized fixture as a historical pre-match target."""
 
-    deduplication = deduplicate_historical_results(historical_records)
-    records = sorted(deduplication.records, key=_record_sort_key)
+    input_records = list(historical_records)
+    deduplication = deduplicate_historical_results(input_records)
+    all_records = sorted(deduplication.records, key=_record_sort_key)
+    records = all_records
+    if sanity_report is not None:
+        records = sorted(filter_records_by_sanity(all_records, sanity_report), key=_record_sort_key)
     targets: list[dict[str, Any]] = []
     for record in records:
         target = dict(record)
@@ -437,29 +535,47 @@ def audit_historical_eligibility(
         for competition_id, row in full_timeline.items()
         if competition_id not in recommended_competitions
     }
-    gate_criteria = {
-        "recommended_standard_fixtures_at_least_200": len(recommended_rows) >= MIN_STANDARD_FIXTURES,
-        "eligible_competitions_at_least_3": len(cohorts["standard"]["competitions"]) >= MIN_STANDARD_COMPETITIONS,
-        "unique_teams_at_least_30": standard_teams >= MIN_STANDARD_TEAMS,
-        "each_recommended_competition_has_chronological_train_validation_test": bool(timeline) and all(row["sufficient_chronological_span"] for row in timeline.values()),
-        "concentration_within_audit_caps": bool(
-            (recommended_concentration["largest_competition"]["share"] or 0) <= MAX_LARGEST_COMPETITION_SHARE
-            and (recommended_concentration["largest_season"]["share"] or 0) <= MAX_LARGEST_SEASON_SHARE
-            and (recommended_concentration["largest_team_appearance"]["share"] or 0) <= MAX_LARGEST_TEAM_APPEARANCE_SHARE
-        ),
+    sanity_slices = (sanity_report or {}).get("slices") or {}
+    recommended_slice_keys = {
+        competition_season_key(row.get("competition_id"), row.get("season_id"))
+        for row in recommended_rows
     }
-    blockers = [name for name, passed in gate_criteria.items() if not passed]
+    dataset_sanity_passed = all(
+        sanity_slices.get(key, {}).get("sanity_status") != "FAIL"
+        for key in recommended_slice_keys
+    )
+    gate = evaluate_readiness_gate(
+        recommended_fixture_count=len(recommended_rows),
+        recommended_competitions=recommended_competitions,
+        recommended_team_count=standard_teams,
+        timeline=timeline,
+        concentration=recommended_concentration,
+        full_standard_competitions=cohorts["standard"]["competitions"],
+        dataset_sanity_passed=dataset_sanity_passed,
+    )
+    research_population_scopes = {
+        key: value.get("research_population_scope")
+        for key, value in sanity_slices.items()
+        if isinstance(value, Mapping)
+    }
+    failed_slices = sorted(
+        key for key, value in sanity_slices.items() if isinstance(value, Mapping) and value.get("sanity_status") == "FAIL"
+    )
     return {
         "contract_version": RESEARCH_CONTRACT_VERSION,
         "research_only": True,
         "formal_benchmark_eligible": False,
         "validated_for_model": False,
         "historical_dataset_digest": dataset_digest,
-        "historical_record_count": len(historical_records) if hasattr(historical_records, "__len__") else len(records),
-        "deduplicated_fixture_count": len(records),
-        "date_range": _date_range(records),
-        "unique_competitions": sorted({str(row.get("competition_id")) for row in records if row.get("competition_id")}),
-        "unique_teams": len({team_id for row in records for team_id in (row.get("home_team_id"), row.get("away_team_id")) if team_id}),
+        "historical_record_count": len(input_records),
+        "deduplicated_fixture_count": len(all_records),
+        "date_range": _date_range(all_records),
+        "unique_competitions": sorted({str(row.get("competition_id")) for row in all_records if row.get("competition_id")}),
+        "unique_teams": len({team_id for row in all_records for team_id in (row.get("home_team_id"), row.get("away_team_id")) if team_id}),
+        "research_population_fixture_count": len(records),
+        "research_population_date_range": _date_range(records),
+        "research_population_unique_competitions": sorted({str(row.get("competition_id")) for row in records if row.get("competition_id")}),
+        "research_population_unique_teams": len({team_id for row in records for team_id in (row.get("home_team_id"), row.get("away_team_id")) if team_id}),
         "tier_counts": {
             "minimum_ge_5": len(tier_rows["minimum"]),
             "standard_ge_10": len(tier_rows["standard"]),
@@ -470,9 +586,9 @@ def audit_historical_eligibility(
             "home": _distribution(row.get("home_history_matches", 0) for row in enriched),
             "away": _distribution(row.get("away_history_matches", 0) for row in enriched),
         },
-        "competition_breakdown": _competition_breakdown(records, audits_by_id),
-        "season_breakdown": _season_breakdown(records, audits_by_id),
-        "source_breakdown": _source_breakdown(records, deduplication),
+        "competition_breakdown": _competition_breakdown(all_records, audits_by_id),
+        "season_breakdown": _season_breakdown(all_records, audits_by_id),
+        "source_breakdown": _source_breakdown(all_records, deduplication),
         "deduplication": {
             "duplicates_collapsed": int(deduplication.duplicates_collapsed),
             "possible_duplicates": int(deduplication.possible_duplicates),
@@ -488,24 +604,12 @@ def audit_historical_eligibility(
         "recommended_cohort": recommended_cohort,
         "recommended_cohort_excluded_competitions": excluded_competitions,
         "recommended_cohort_tier": "standard_recommended" if recommended_rows else ("standard" if tier_rows["standard"] else "minimum"),
-        "readiness_gate": {
-            "phase2c_1_research_ready": not blockers,
-            "criteria": gate_criteria,
-            "blockers": blockers,
-            "policy": {
-                "minimum_standard_fixtures": MIN_STANDARD_FIXTURES,
-                "minimum_standard_competitions": MIN_STANDARD_COMPETITIONS,
-                "minimum_standard_teams": MIN_STANDARD_TEAMS,
-                "minimum_competition_development_fixtures": MIN_COMPETITION_DEVELOPMENT_FIXTURES,
-                "minimum_competition_validation_fixtures": MIN_COMPETITION_VALIDATION_FIXTURES,
-                "minimum_competition_test_fixtures": MIN_COMPETITION_TEST_FIXTURES,
-                "minimum_competition_span_days": MIN_COMPETITION_SPAN_DAYS,
-                "max_largest_competition_share": MAX_LARGEST_COMPETITION_SHARE,
-                "max_largest_season_share": MAX_LARGEST_SEASON_SHARE,
-                "max_largest_team_appearance_share": MAX_LARGEST_TEAM_APPEARANCE_SHARE,
-            },
-        },
-        "research_readiness_blockers": blockers,
+        "readiness_gate": gate,
+        "research_readiness_blockers": gate["blockers"],
+        "dataset_sanity": compact_sanity_report(sanity_report) if sanity_report is not None else None,
+        "dataset_sanity_excluded_slices": failed_slices,
+        "research_population_scope": research_population_scopes,
+        "recommended_cohort_excluded_slices": failed_slices,
         "audits": enriched,
     }
 
@@ -538,6 +642,11 @@ def compact_research_manifest(report: Mapping[str, Any], *, benchmark_health: Ma
             "date_range",
             "unique_competitions",
             "unique_teams",
+            "research_population_fixture_count",
+            "research_population_date_range",
+            "research_population_unique_competitions",
+            "research_population_unique_teams",
+            "research_population_scope",
             "tier_counts",
             "prior_history_distribution",
             "competition_breakdown",
@@ -551,15 +660,21 @@ def compact_research_manifest(report: Mapping[str, Any], *, benchmark_health: Ma
             "recommended_cohort_tier",
             "recommended_cohort",
             "recommended_cohort_excluded_competitions",
+            "recommended_cohort_excluded_slices",
+            "dataset_sanity_excluded_slices",
+            "pre_sanity",
             "readiness_gate",
             "research_readiness_blockers",
         )
+        if key in report
     }
     compact = dict(compact)
     compact["cohorts"] = cohorts
     compact["recommended_cohort"] = {
         key: value for key, value in (report.get("recommended_cohort") or {}).items() if key != "match_ids"
     }
+    if report.get("dataset_sanity") is not None:
+        compact["dataset_sanity"] = compact_sanity_report(report["dataset_sanity"])
     compact["chronological_split"] = compact_split
     compact["benchmark_health"] = dict(benchmark_health or {})
     return compact
@@ -568,7 +683,9 @@ def compact_research_manifest(report: Mapping[str, Any], *, benchmark_health: Ma
 __all__ = [
     "RESEARCH_CONTRACT_VERSION",
     "audit_historical_eligibility",
+    "cohort_manifest",
     "chronological_split",
     "compact_research_manifest",
     "concentration_metrics",
+    "evaluate_readiness_gate",
 ]

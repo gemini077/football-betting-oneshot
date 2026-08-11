@@ -14,6 +14,7 @@ from zipfile import ZIP_DEFLATED, ZipFile
 
 from .data_home import resolve_football_data_home
 from .research_preflight import audit_historical_eligibility, compact_research_manifest
+from .research_sanity import audit_competition_season_sanity, compact_sanity_report, load_source_manifest_entries
 from .storage import HistoricalResultStore
 from .verify_data_home import verify_data_home
 
@@ -22,6 +23,11 @@ ROOT = Path(__file__).resolve().parents[2]
 OUTPUT_PATH = ROOT / "data" / "football_data" / "phase2c_research_readiness.json"
 DOC_PATH = ROOT / "docs" / "team-strength" / "PHASE2C_RESEARCH_READINESS.md"
 HANDOFF_PATH = ROOT / "artifacts" / "football-phase2c-preflight-handoff.zip"
+SANITY_MANIFEST_PATHS = (
+    ROOT / "data" / "football_data" / "openfootball" / "source_manifest.json",
+    ROOT / "data" / "football_data" / "football_data_uk" / "source_manifest.json",
+    ROOT / "data" / "football_data" / "p0_p1_source_manifest.json",
+)
 RESEARCH_CONTRACT_VERSION = "phase2c_research_eligibility.v1"
 EXPECTED_CORE_SHA256 = "064f9fa96e2995a66966c916dd9e9f600358b6c49b3ad9aa1efe9704cbdd1f15"
 EXPECTED_FIXED_DIGEST = "b104c0f81c2a5c457967d9047b41e389209b99bd3cfc1613d9fb13fb0c2175df"
@@ -61,6 +67,35 @@ def _champion_evidence() -> dict[str, Any]:
     }
 
 
+def _compact_baseline(report: Mapping[str, Any]) -> dict[str, Any]:
+    def compact_cohort(cohort: Mapping[str, Any]) -> dict[str, Any]:
+        return {key: value for key, value in cohort.items() if key != "match_ids"}
+
+    return {
+        "tier_counts": dict(report.get("tier_counts") or {}),
+        "standard_cohort": compact_cohort(report.get("cohorts", {}).get("standard", {})),
+        "recommended_cohort": compact_cohort(report.get("recommended_cohort") or {}),
+        "recommended_cohort_tier": report.get("recommended_cohort_tier"),
+    }
+
+
+def _portugal_sanity_root_cause(report: Mapping[str, Any]) -> str:
+    key = "competition:portugal-primeira-liga|season:portugal-primeira-liga:2025-26"
+    slice_report = (report.get("dataset_sanity") or {}).get("slices", {}).get(key, {})
+    duplicate = slice_report.get("duplicate_audit") or {}
+    overflow = int(slice_report.get("ledger_fixture_count") or 0) - int(slice_report.get("known_complete_source_fixture_count") or 0)
+    source_split_count = int(duplicate.get("source_observation_identity_split_duplicate_count") or 0)
+    exact_split_count = int(duplicate.get("exact_ledger_key_identity_split_duplicate_count") or 0)
+    return (
+        f"The complete source manifest declares 306 fixtures, while the canonical ledger has "
+        f"{slice_report.get('ledger_fixture_count')} ({overflow} over the known complete population). "
+        f"The audit flags {source_split_count} source-observation identity-split duplicate groups "
+        f"and {exact_split_count} additional exact ledger-key groups; "
+        "they are not auto-merged. The overflow is therefore excluded from research until the "
+        "canonical identity/time reconciliation is reviewed."
+    )
+
+
 def _render_doc(report: Mapping[str, Any], benchmark: Mapping[str, Any], generated_at: str) -> str:
     tier = report["tier_counts"]
     recommended = report["recommended_cohort"]
@@ -68,6 +103,8 @@ def _render_doc(report: Mapping[str, Any], benchmark: Mapping[str, Any], generat
     source = report["source_breakdown"]
     split = report["chronological_split"]
     concentration = report["recommended_concentration"]
+    sanity = report.get("dataset_sanity") or {}
+    failed_slices = report.get("dataset_sanity_excluded_slices") or []
     lines = [
         "# Phase 2C-1 Historical Research Readiness",
         "",
@@ -81,6 +118,7 @@ def _render_doc(report: Mapping[str, Any], benchmark: Mapping[str, Any], generat
         f"- Dataset digest: `{report['historical_dataset_digest']}`",
         f"- Date range: `{report['date_range']['first_fixture']}` to `{report['date_range']['last_fixture']}`",
         f"- Competitions: **{len(report['unique_competitions'])}**; unique teams: **{report['unique_teams']}**",
+        f"- Research population after sanity exclusions: **{report.get('research_population_fixture_count', report['deduplicated_fixture_count'])}** fixtures; scope is reported per competition-season.",
         "- Observed scope: all records in this dataset are `club` / `league`; this is not evidence of domestic-cup, continental, national-team, xG, lineup, or injury coverage.",
         "",
         "## Walk-forward tiers",
@@ -99,6 +137,7 @@ def _render_doc(report: Mapping[str, Any], benchmark: Mapping[str, Any], generat
         f"- Size: **{recommended['cohort_size']}**; competitions: **{len(recommended['competitions'])}**; teams: **{recommended['unique_teams']}**",
         f"- Date range: `{recommended['date_range']['first_fixture']}` to `{recommended['date_range']['last_fixture']}`",
         f"- Excluded from recommended cohort for insufficient chronological span: `{', '.join(report['recommended_cohort_excluded_competitions']) or 'none'}`",
+        f"- Excluded competition-seasons for dataset sanity: `{', '.join(failed_slices) or 'none'}`",
         "",
         "## Chronological split proposal",
         "",
@@ -120,12 +159,19 @@ def _render_doc(report: Mapping[str, Any], benchmark: Mapping[str, Any], generat
         f"- Multi-source corroborated fixtures: **{source['multi_source_corroborated_fixture_count']}**",
         f"- Source conflicts: **{source['source_conflict_count']}**; dedup conflicts: **{source['deduplication_conflicts']}**",
         "",
+        "## Competition-season sanity",
+        "",
+        f"- Audited slices: **{sanity.get('slice_count', 0)}**; failed slices: **{sanity.get('failed_slice_count', 0)}**",
+        f"- Portugal 2025/26 root cause: {_portugal_sanity_root_cause(report)}",
+        "- Complete source fixture counts are corroborating observations, never additive capacity. Detailed per-record evidence remains outside Git under `${FOOTBALL_DATA_HOME}/research/phase2c_preflight/`.",
+        "",
         "## Readiness decision",
         "",
         f"- `PHASE2C_1_RESEARCH_READY = {gate['phase2c_1_research_ready']}`",
         f"- Criteria: `{json.dumps(gate['criteria'], ensure_ascii=False, sort_keys=True)}`",
         f"- Blockers: `{', '.join(gate['blockers']) or 'none'}`",
         "- This result is offline research readiness only. It is not global model readiness, production readiness, formal benchmark evidence, or permission to create a Challenger.",
+        "- Historical results do not include the same historical-time Champion market inputs and immutable pre-match snapshots. A future offline experiment may compare Team Strength with same-information research baselines, but cannot claim it beat Champion offline.",
         "",
         "## Formal benchmark health (read-only)",
         "",
@@ -145,6 +191,7 @@ def _render_doc(report: Mapping[str, Any], benchmark: Mapping[str, Any], generat
 def _handoff_entries(pr_number: int | None = None) -> dict[str, bytes]:
     relative_files = [
         "scripts/football_data/research_preflight.py",
+        "scripts/football_data/research_sanity.py",
         "scripts/football_data/populate_phase2c_preflight.py",
         "data/football_data/phase2c_research_readiness.json",
         "data/football_data/manifests/historical_results.dataset.json",
@@ -159,6 +206,14 @@ def _handoff_entries(pr_number: int | None = None) -> dict[str, bytes]:
         "tests/test_research_readiness_concentration.py",
         "tests/test_research_not_formal_benchmark.py",
         "tests/test_research_compact_manifest.py",
+        "tests/test_complete_source_ledger_overflow_fails_sanity.py",
+        "tests/test_multi_source_counts_not_summed_as_real_fixture_capacity.py",
+        "tests/test_contaminated_competition_season_excluded_from_recommended_cohort.py",
+        "tests/test_partial_identity_subset_can_remain_research_eligible.py",
+        "tests/test_recommended_competition_gate_uses_recommended_not_full_standard.py",
+        "tests/test_identity_split_duplicate_is_flagged_not_auto_merged.py",
+        "tests/test_portugal_real_data_sanity_regression.py",
+        "tests/test_cohort_id_changes_after_sanity_exclusion.py",
     ]
     entries: dict[str, bytes] = {}
     for relative in relative_files:
@@ -202,8 +257,20 @@ def run(*, generated_at: str | None = None, pr_number: int | None = None) -> dic
     store = HistoricalResultStore()
     records = store.records()
     benchmark = _benchmark_health()
-    report = audit_historical_eligibility(records, dataset_digest=store.dataset_digest())
+    dataset_digest = store.dataset_digest()
+    baseline_report = audit_historical_eligibility(records, dataset_digest=dataset_digest)
+    source_entries = load_source_manifest_entries(SANITY_MANIFEST_PATHS)
+    sanity_report = audit_competition_season_sanity(records, source_entries)
+    report = audit_historical_eligibility(
+        records,
+        dataset_digest=dataset_digest,
+        sanity_report=sanity_report,
+    )
+    report["pre_sanity"] = _compact_baseline(baseline_report)
     compact = compact_research_manifest(report, benchmark_health=benchmark)
+    compact["source_manifest_paths"] = [str(path.relative_to(ROOT)).replace("\\", "/") for path in SANITY_MANIFEST_PATHS if path.is_file()]
+    compact["dataset_sanity"] = compact_sanity_report(sanity_report)
+    compact["portugal_sanity_root_cause"] = _portugal_sanity_root_cause(report)
     compact["generated_at"] = generated
     compact["data_home_policy"] = "${FOOTBALL_DATA_HOME}/historical_results.duckdb; detailed audit under ${FOOTBALL_DATA_HOME}/research/phase2c_preflight/"
     compact["detailed_artifact_policy"] = "bulk eligibility rows and cohort match IDs are not Git-tracked"
@@ -215,6 +282,7 @@ def run(*, generated_at: str | None = None, pr_number: int | None = None) -> dic
     detailed_root = resolve_football_data_home() / "research" / "phase2c_preflight"
     detailed_root.mkdir(parents=True, exist_ok=True)
     _write_json(detailed_root / "eligibility_audit.json", {**report, "generated_at": generated})
+    _write_json(detailed_root / "competition_season_sanity.json", {**sanity_report, "generated_at": generated})
     _write_json(
         detailed_root / "cohort_match_ids.json",
         {tier: cohort.get("match_ids", []) for tier, cohort in report.get("cohorts", {}).items()},
