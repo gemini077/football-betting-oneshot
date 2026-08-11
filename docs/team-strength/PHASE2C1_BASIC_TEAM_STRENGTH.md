@@ -1,6 +1,6 @@
 # Phase 2C-1 Basic Team Strength
 
-Generated at: `2026-08-11T11:41:39Z`
+Generated at: `2026-08-11T12:32:04Z`
 
 This is an offline research experiment. It does not register a production Challenger, alter Champion inputs, or create formal benchmark records.
 
@@ -10,8 +10,6 @@ This is an offline research experiment. It does not register a production Challe
 - Match digest: `6e7f22a3db6ba8b1ef32bb7f3601f6c59bfceb579f35c40698ab39261cccdf2a`
 - Size: **688**; development **410**, validation **134**, held-out **144**
 - Experiment ID: `phase2c1:8bbb53b2c334033e9dcbe6c110cea5b6a05f052185c0dcea85df62313d5586c5`
-- Candidate registry digest: `7d6cb986066256d64734921a910ae28d4e1c49c5f77a78da59cd13737ebf3dad`
-- Held-out prediction digest: `4c8bd22f04b1b3e51b8abfa084501191a9aeb96e0919389b2c2882b04f0e1e0d`
 
 ## Specifications
 
@@ -24,7 +22,9 @@ This is an offline research experiment. It does not register a production Challe
 - Evaluation count: **1**
 - Team Strength 1X2 log loss: **1.0056598740227563**; Baseline A: **1.024359875064467**
 - Team Strength goal NLL: **2.9803993377050335**; Baseline A: **2.9658523881160215**
-- Research Baseline B is the recommended-competition global historical independent-Poisson reference.
+- Team Strength 1X2 calibration ECE: home **0.04286638482867492**, draw **0.017717935528932173**, away **0.053256296677891515**, macro **0.0379468723451662**.
+- Exact-score rank uses one deterministic ordered score list; average rank **7.680555555555555**, Top1 **0.125**, Top10 **0.7291666666666666**.
+- Metrics were recomputed from the locked prediction digest `4c8bd22f04b1b3e51b8abfa084501191a9aeb96e0919389b2c2882b04f0e1e0d`; prediction evaluation count remains **1**.
 - Research classification: **INCONCLUSIVE**
 
 ## Boundaries

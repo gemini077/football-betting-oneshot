@@ -224,6 +224,22 @@ def _safe_log(value: float) -> float:
     return log(max(float(value), _EPSILON))
 
 
+def _ordered_score_cells(lambda_home: float, lambda_away: float) -> list[dict[str, Any]]:
+    """Return one deterministic ordering for every bounded score cell."""
+
+    cells = [
+        {
+            "home_goals": home_goals,
+            "away_goals": away_goals,
+            "probability": _score_probability(lambda_home, lambda_away, home_goals, away_goals),
+        }
+        for home_goals in range(SCORE_MATRIX_MAX_GOAL + 1)
+        for away_goals in range(SCORE_MATRIX_MAX_GOAL + 1)
+    ]
+    cells.sort(key=lambda item: (-float(item["probability"]), int(item["home_goals"]), int(item["away_goals"])))
+    return cells
+
+
 def probability_payload(lambda_home: float, lambda_away: float) -> dict[str, Any]:
     """Build one coherent independent-Poisson probability distribution."""
 
@@ -247,17 +263,14 @@ def probability_payload(lambda_home: float, lambda_away: float) -> dict[str, Any
     outcome = {key: value / outcome_total for key, value in outcome.items()}
 
     score_matrix: dict[str, dict[str, float]] = {}
-    matrix_mass = 0.0
-    score_cells: list[dict[str, Any]] = []
     for home_goals in range(SCORE_MATRIX_MAX_GOAL + 1):
         row: dict[str, float] = {}
         for away_goals in range(SCORE_MATRIX_MAX_GOAL + 1):
             probability = _poisson_pmf(home_lambda, home_goals) * _poisson_pmf(away_lambda, away_goals)
             row[str(away_goals)] = probability
-            matrix_mass += probability
-            score_cells.append({"home_goals": home_goals, "away_goals": away_goals, "probability": probability})
         score_matrix[str(home_goals)] = row
-    score_cells.sort(key=lambda item: (-float(item["probability"]), int(item["home_goals"]), int(item["away_goals"])))
+    score_cells = _ordered_score_cells(home_lambda, away_lambda)
+    matrix_mass = sum(float(item["probability"]) for item in score_cells)
     total_lambda = home_lambda + away_lambda
     under_probability = exp(-total_lambda) * (1.0 + total_lambda + (total_lambda**2) / 2.0)
     over_probability = 1.0 - under_probability
@@ -552,8 +565,14 @@ def evaluate_predictions(predictions: Iterable[Mapping[str, Any]]) -> dict[str, 
         raise ValueError("cannot evaluate an empty prediction set")
     losses = [_row_losses(row) for row in rows]
     metrics = {key: sum(item[key] for item in losses) / len(losses) for key in losses[0]}
-    one_x_two_probabilities = [float(row["probabilities"]["1x2"]["home"]) for row in rows]
-    one_x_two_outcomes = [int(row["actual"]["home_goals"]) > int(row["actual"]["away_goals"]) for row in rows]
+    one_x_two_probabilities = {
+        label: [float(row["probabilities"]["1x2"][label]) for row in rows]
+        for label in ("home", "draw", "away")
+    }
+    one_x_two_outcomes = []
+    for row in rows:
+        outcome = _outcome_label(int(row["actual"]["home_goals"]), int(row["actual"]["away_goals"]))
+        one_x_two_outcomes.append(outcome)
     over_probabilities = [float(row["probabilities"]["totals"]["over_2_5"]) for row in rows]
     over_outcomes = [int(row["actual"]["home_goals"]) + int(row["actual"]["away_goals"]) >= 3 for row in rows]
     btts_probabilities = [float(row["probabilities"]["btts"]["yes"]) for row in rows]
@@ -563,30 +582,48 @@ def evaluate_predictions(predictions: Iterable[Mapping[str, Any]]) -> dict[str, 
         home_goals = int(row["actual"]["home_goals"])
         away_goals = int(row["actual"]["away_goals"])
         actual_probability = _score_probability(row["lambda_home"], row["lambda_away"], home_goals, away_goals)
-        cells = [
-            (h, a, _score_probability(row["lambda_home"], row["lambda_away"], h, a))
-            for h in range(SCORE_MATRIX_MAX_GOAL + 1)
-            for a in range(SCORE_MATRIX_MAX_GOAL + 1)
-        ]
-        rank = 1 + sum(probability > actual_probability for _, _, probability in cells)
+        cells = _ordered_score_cells(row["lambda_home"], row["lambda_away"])
+        in_matrix = 0 <= home_goals <= SCORE_MATRIX_MAX_GOAL and 0 <= away_goals <= SCORE_MATRIX_MAX_GOAL
+        rank = next(
+            (
+                position
+                for position, cell in enumerate(cells, start=1)
+                if cell["home_goals"] == home_goals and cell["away_goals"] == away_goals
+            ),
+            None,
+        ) if in_matrix else None
         exact_rows.append({
             "actual_score_log_probability": -_safe_log(actual_probability),
+            "actual_score_in_matrix": in_matrix,
             "actual_score_rank": rank,
-            "top1": home_goals <= SCORE_MATRIX_MAX_GOAL and away_goals <= SCORE_MATRIX_MAX_GOAL and rank <= 1,
-            "top3": home_goals <= SCORE_MATRIX_MAX_GOAL and away_goals <= SCORE_MATRIX_MAX_GOAL and rank <= 3,
-            "top5": home_goals <= SCORE_MATRIX_MAX_GOAL and away_goals <= SCORE_MATRIX_MAX_GOAL and rank <= 5,
-            "top10": home_goals <= SCORE_MATRIX_MAX_GOAL and away_goals <= SCORE_MATRIX_MAX_GOAL and rank <= 10,
+            "top1": rank == 1,
+            "top3": rank is not None and rank <= 3,
+            "top5": rank is not None and rank <= 5,
+            "top10": rank is not None and rank <= 10,
         })
+    calibration_one_x_two = {
+        label: _binary_calibration(
+            one_x_two_probabilities[label],
+            [int(outcome == label) for outcome in one_x_two_outcomes],
+        )
+        for label in ("home", "draw", "away")
+    }
+    calibration_one_x_two["macro_ece"] = sum(
+        calibration_one_x_two[label]["ece"] for label in ("home", "draw", "away")
+    ) / 3.0
+    ranks = [item["actual_score_rank"] for item in exact_rows if item["actual_score_rank"] is not None]
     metrics.update({
         "sample": len(rows),
         "calibration": {
-            "one_x_two_home": _binary_calibration(one_x_two_probabilities, [int(value) for value in one_x_two_outcomes]),
+            "one_x_two": calibration_one_x_two,
             "over_2_5": _binary_calibration(over_probabilities, [int(value) for value in over_outcomes]),
             "btts": _binary_calibration(btts_probabilities, [int(value) for value in btts_outcomes]),
         },
         "exact_score": {
             "actual_score_log_probability": sum(item["actual_score_log_probability"] for item in exact_rows) / len(exact_rows),
-            "actual_score_rank": sum(item["actual_score_rank"] for item in exact_rows) / len(exact_rows),
+            "actual_score_in_matrix": all(item["actual_score_in_matrix"] for item in exact_rows),
+            "actual_score_rank": sum(ranks) / len(ranks) if len(ranks) == len(exact_rows) else None,
+            "out_of_matrix_count": sum(not item["actual_score_in_matrix"] for item in exact_rows),
             "top1": sum(bool(item["top1"]) for item in exact_rows) / len(exact_rows),
             "top3": sum(bool(item["top3"]) for item in exact_rows) / len(exact_rows),
             "top5": sum(bool(item["top5"]) for item in exact_rows) / len(exact_rows),
@@ -635,23 +672,44 @@ def paired_bootstrap_deltas(
     }
 
 
-def classification_from_deltas(deltas: Mapping[str, float]) -> str:
-    """Conservative three-way research classification."""
+CORE_CLASSIFICATION_METRICS = (
+    "one_x_two_log_loss",
+    "one_x_two_brier",
+    "goal_distribution_nll",
+    "over_2_5_log_loss",
+    "btts_log_loss",
+)
 
-    primary = [
-        deltas.get("one_x_two_log_loss", 0.0),
-        deltas.get("one_x_two_brier", 0.0),
-        deltas.get("goal_distribution_nll", 0.0),
-        deltas.get("over_2_5_log_loss", 0.0),
-        deltas.get("btts_log_loss", 0.0),
-    ]
-    improvements = sum(value < 0 for value in primary)
-    regressions = sum(value > 0 for value in primary)
-    if improvements >= 4 and regressions <= 1:
+
+def classification_from_evidence(
+    deltas: Mapping[str, float],
+    bootstrap: Mapping[str, Mapping[str, Any]],
+) -> str:
+    """Classify only when point direction and pre-registered CI agree."""
+
+    if any(metric not in deltas or metric not in bootstrap for metric in CORE_CLASSIFICATION_METRICS):
+        return "INCONCLUSIVE"
+    intervals = {
+        metric: tuple(float(value) for value in bootstrap[metric].get("ci_95", ()))
+        for metric in CORE_CLASSIFICATION_METRICS
+    }
+    if any(len(intervals[metric]) != 2 for metric in CORE_CLASSIFICATION_METRICS):
+        return "INCONCLUSIVE"
+    improvements = sum(float(deltas[metric]) < 0 for metric in CORE_CLASSIFICATION_METRICS)
+    regressions = sum(float(deltas[metric]) > 0 for metric in CORE_CLASSIFICATION_METRICS)
+    clear_improvement = any(intervals[metric][1] < 0 for metric in CORE_CLASSIFICATION_METRICS)
+    clear_regression = any(intervals[metric][0] > 0 for metric in CORE_CLASSIFICATION_METRICS)
+    if improvements > len(CORE_CLASSIFICATION_METRICS) / 2 and clear_improvement and not clear_regression:
         return "RESEARCH_PROMISING"
-    if regressions >= 4:
+    if regressions > len(CORE_CLASSIFICATION_METRICS) / 2 and clear_regression and not clear_improvement:
         return "RESEARCH_NOT_PROMISING"
     return "INCONCLUSIVE"
+
+
+def classification_from_deltas(deltas: Mapping[str, float]) -> str:
+    """Backward-compatible point-only classification, intentionally inconclusive."""
+
+    return classification_from_evidence(deltas, {})
 
 
 __all__ = [
@@ -664,6 +722,7 @@ __all__ = [
     "build_baseline_prediction",
     "build_team_strength_prediction",
     "candidate_specs_manifest",
+    "classification_from_evidence",
     "classification_from_deltas",
     "evaluate_predictions",
     "metric_loss_values",

@@ -21,7 +21,7 @@ from .phase2c1_model import (
     build_baseline_prediction,
     build_team_strength_prediction,
     candidate_specs_manifest,
-    classification_from_deltas,
+    classification_from_evidence,
     evaluate_predictions,
     metric_loss_values,
     paired_bootstrap_deltas,
@@ -38,6 +38,9 @@ EXPECTED_COHORT_MATCH_DIGEST = "6e7f22a3db6ba8b1ef32bb7f3601f6c59bfceb579f35c406
 EXPECTED_DATASET_DIGEST = "710b0fdc8046d69aa86411b748d9c1966c45fabd0ac83678f58719b1f3bbfb5e"
 EXPECTED_COHORT_SIZE = 688
 EXPECTED_SPLIT_COUNTS = {"development": 410, "validation": 134, "held_out_test": 144}
+EXPECTED_SELECTED_SPEC_ID = "basic:last_10:shrink10:venue-fallback"
+EXPECTED_EXPERIMENT_ID = "phase2c1:8bbb53b2c334033e9dcbe6c110cea5b6a05f052185c0dcea85df62313d5586c5"
+EXPECTED_HELDOUT_PREDICTION_DIGEST = "4c8bd22f04b1b3e51b8abfa084501191a9aeb96e0919389b2c2882b04f0e1e0d"
 EXPECTED_CORE_SHA256 = "064f9fa96e2995a66966c916dd9e9f600358b6c49b3ad9aa1efe9704cbdd1f15"
 EXPECTED_FIXED_DIGEST = "b104c0f81c2a5c457967d9047b41e389209b99bd3cfc1613d9fb13fb0c2175df"
 COMPACT_PREFLIGHT_PATH = ROOT / "data" / "football_data" / "phase2c_research_readiness.json"
@@ -203,6 +206,72 @@ def evaluate_heldout_once(predictions: Iterable[Mapping[str, Any]], *, heldout_e
     return {"heldout_evaluation_count": 1, "predictions": [dict(row) for row in predictions]}
 
 
+def load_locked_heldout_predictions(
+    *,
+    data_home: str | Path | None = None,
+    root: Path = ROOT,
+) -> dict[str, Any]:
+    """Load and validate frozen held-out predictions without building predictions."""
+
+    artifact_root = _data_home(data_home) / "research" / "phase2c1"
+    guard = _read_json(artifact_root / "heldout_evaluation.json")
+    team_strength = _read_json(artifact_root / "heldout_team_strength.json")
+    baseline_a = _read_json(artifact_root / "heldout_baseline_a.json")
+    baseline_b = _read_json(artifact_root / "heldout_baseline_b.json")
+    if int(guard.get("heldout_evaluation_count", 0)) != 1:
+        raise ValueError("locked held-out evaluation count must remain 1")
+    if str(guard.get("cohort_id")) != EXPECTED_COHORT_ID:
+        raise ValueError("locked held-out cohort mismatch")
+    if str(guard.get("selected_spec_id")) != EXPECTED_SELECTED_SPEC_ID:
+        raise ValueError("locked held-out selected spec mismatch")
+    if len(team_strength) != EXPECTED_SPLIT_COUNTS["held_out_test"]:
+        raise ValueError("locked held-out Team Strength count mismatch")
+    ids_by_name = {
+        "team_strength": [str(row.get("target_match_id")) for row in team_strength],
+        "baseline_a": [str(row.get("target_match_id")) for row in baseline_a],
+        "baseline_b": [str(row.get("target_match_id")) for row in baseline_b],
+    }
+    if any(len(ids) != len(set(ids)) for ids in ids_by_name.values()):
+        raise ValueError("locked held-out prediction IDs are not unique")
+    if not (ids_by_name["team_strength"] == ids_by_name["baseline_a"] == ids_by_name["baseline_b"]):
+        raise ValueError("locked held-out prediction match IDs do not align")
+    approved_cohort = load_approved_cohort(data_home=data_home, root=root)
+    approved_heldout_ids = {str(value) for value in approved_cohort["split_ids"]["held_out_test"]}
+    if set(ids_by_name["team_strength"]) != approved_heldout_ids:
+        raise ValueError("locked held-out match IDs do not match the approved cohort split")
+    for row in team_strength:
+        spec = row.get("candidate_spec") or {}
+        if str(spec.get("spec_id")) != EXPECTED_SELECTED_SPEC_ID:
+            raise ValueError("locked Team Strength row selected spec mismatch")
+    prediction_digest = content_sha256(team_strength)
+    if prediction_digest != EXPECTED_HELDOUT_PREDICTION_DIGEST:
+        raise ValueError("locked held-out prediction digest mismatch")
+    if str(guard.get("prediction_digest")) != EXPECTED_HELDOUT_PREDICTION_DIGEST:
+        raise ValueError("held-out guard prediction digest mismatch")
+    compact_manifest = _read_json(root / "data" / "football_data" / "phase2c1_experiment_manifest.json")
+    if str(compact_manifest.get("experiment_id")) != EXPECTED_EXPERIMENT_ID:
+        raise ValueError("locked experiment ID mismatch")
+    if str(compact_manifest.get("research_cohort_id")) != EXPECTED_COHORT_ID:
+        raise ValueError("locked compact cohort mismatch")
+    if str(compact_manifest.get("cohort_match_id_digest")) != EXPECTED_COHORT_MATCH_DIGEST:
+        raise ValueError("locked compact cohort digest mismatch")
+    if int(compact_manifest.get("cohort_size", 0)) != EXPECTED_COHORT_SIZE:
+        raise ValueError("locked compact cohort size mismatch")
+    if str(compact_manifest.get("selected_spec_id")) != EXPECTED_SELECTED_SPEC_ID:
+        raise ValueError("locked compact selected spec mismatch")
+    return {
+        "artifact_root": artifact_root,
+        "cohort_id": EXPECTED_COHORT_ID,
+        "cohort_match_id_digest": EXPECTED_COHORT_MATCH_DIGEST,
+        "cohort_size": EXPECTED_COHORT_SIZE,
+        "selected_spec_id": EXPECTED_SELECTED_SPEC_ID,
+        "prediction_digest": prediction_digest,
+        "team_strength": team_strength,
+        "baseline_a": baseline_a,
+        "baseline_b": baseline_b,
+    }
+
+
 def _benchmark_health(root: Path) -> dict[str, Any]:
     command = [sys.executable, str(root / "scripts" / "benchmark_health.py"), "--no-write"]
     completed = subprocess.run(command, cwd=root, capture_output=True, text=True, check=False)
@@ -294,6 +363,9 @@ def _bootstrap_summary(heldout: Mapping[str, list[dict[str, Any]]]) -> dict[str,
 
 def _render_doc(summary: Mapping[str, Any], benchmark: Mapping[str, Any], generated_at: str) -> str:
     heldout = summary["heldout_evaluation"]
+    team_metrics = heldout["team_strength"]
+    calibration = team_metrics["calibration"]
+    exact_score = team_metrics["exact_score"]
     lines = [
         "# Phase 2C-1 Basic Team Strength",
         "",
@@ -319,6 +391,9 @@ def _render_doc(summary: Mapping[str, Any], benchmark: Mapping[str, Any], genera
         f"- Evaluation count: **{heldout['heldout_evaluation_count']}**",
         f"- Team Strength 1X2 log loss: **{heldout['team_strength']['one_x_two_log_loss']}**; Baseline A: **{heldout['baseline_a']['one_x_two_log_loss']}**",
         f"- Team Strength goal NLL: **{heldout['team_strength']['goal_distribution_nll']}**; Baseline A: **{heldout['baseline_a']['goal_distribution_nll']}**",
+        f"- Team Strength 1X2 calibration ECE: home **{calibration['one_x_two']['home']['ece']}**, draw **{calibration['one_x_two']['draw']['ece']}**, away **{calibration['one_x_two']['away']['ece']}**, macro **{calibration['one_x_two']['macro_ece']}**.",
+        f"- Exact-score rank uses one deterministic ordered score list; average rank **{exact_score['actual_score_rank']}**, Top1 **{exact_score['top1']}**, Top10 **{exact_score['top10']}**.",
+        f"- Metrics were recomputed from the locked prediction digest `{summary['artifact_digests']['heldout_prediction']}`; prediction evaluation count remains **{heldout['heldout_evaluation_count']}**.",
         f"- Research classification: **{summary['research_classification']}**",
         "",
         "## Boundaries",
@@ -341,6 +416,7 @@ def _handoff_entries(root: Path, summary: Mapping[str, Any], benchmark: Mapping[
         "data/football_data/phase2c1_experiment_manifest.json",
         "data/football_data/phase2c1_results_summary.json",
         "docs/team-strength/PHASE2C1_BASIC_TEAM_STRENGTH.md",
+        "tests/phase2c1_test_support.py",
         "tests/test_phase2c1_no_future_leakage.py",
         "tests/test_phase2c1_target_result_not_input.py",
         "tests/test_basic_team_strength_formula.py",
@@ -355,6 +431,15 @@ def _handoff_entries(root: Path, summary: Mapping[str, Any], benchmark: Mapping[
         "tests/test_phase2c1_not_formal_benchmark.py",
         "tests/test_phase2c1_champion_isolation.py",
         "tests/test_phase2c1_cohort_lock.py",
+        "tests/test_phase2c1_full_1x2_calibration.py",
+        "tests/test_exact_score_top1_is_unique_deterministic.py",
+        "tests/test_exact_score_topk_uses_ordered_cells_not_tied_rank.py",
+        "tests/test_exact_score_outside_matrix.py",
+        "tests/test_research_classification_requires_bootstrap_evidence.py",
+        "tests/test_all_primary_ci_cross_zero_is_inconclusive.py",
+        "tests/test_locked_heldout_metrics_recompute_preserves_prediction_digest.py",
+        "tests/test_metrics_recompute_does_not_increment_heldout_count.py",
+        "tests/test_phase2c1_handoff_contains_test_support.py",
     ]
     entries: dict[str, bytes] = {}
     for relative in relative_files:
@@ -382,6 +467,94 @@ def _write_handoff(root: Path, summary: Mapping[str, Any], benchmark: Mapping[st
         for name in sorted(entries):
             archive.writestr(name, entries[name])
     return HANDOFF_PATH
+
+
+def recompute_locked_heldout_metrics(
+    *,
+    root: Path = ROOT,
+    data_home: str | Path | None = None,
+    generated_at: str | None = None,
+    pr_number: int | None = None,
+    write: bool = True,
+) -> dict[str, Any]:
+    """Recompute evaluation-only outputs from immutable held-out artifacts.
+
+    This path intentionally never calls the prediction builders and never
+    writes the frozen prediction or held-out guard files.
+    """
+
+    generated = generated_at or _now()
+    locked = load_locked_heldout_predictions(data_home=data_home, root=root)
+    heldout_sets = {
+        "team_strength": locked["team_strength"],
+        "baseline_a": locked["baseline_a"],
+        "baseline_b": locked["baseline_b"],
+    }
+    heldout_metrics = _metrics_for_set(heldout_sets)
+    deltas = _metric_deltas(heldout_metrics["team_strength"], heldout_metrics["baseline_a"])
+    bootstrap = _bootstrap_summary(heldout_sets)
+    per_competition = _per_competition(heldout_sets)
+    result_classification = classification_from_evidence(deltas, bootstrap)
+    benchmark = _benchmark_health(root)
+    summary = _read_json(COMPACT_RESULTS_PATH)
+    if str(summary.get("experiment_id")) != EXPECTED_EXPERIMENT_ID:
+        raise ValueError("compact result experiment ID mismatch")
+    if str(summary.get("cohort", {}).get("research_cohort_id")) != EXPECTED_COHORT_ID:
+        raise ValueError("compact result cohort mismatch")
+    if str(summary.get("selected_spec", {}).get("selected_spec_id")) != EXPECTED_SELECTED_SPEC_ID:
+        raise ValueError("compact result selected spec mismatch")
+
+    artifact_root = locked["artifact_root"]
+    registry_payload = _read_json(artifact_root / "candidate_specs.json")
+    registry = list(registry_payload.get("candidate_specs") or [])
+    if content_sha256(registry) != str(summary.get("candidate_registry_digest")):
+        raise ValueError("candidate registry digest mismatch")
+    candidate_development: list[dict[str, Any]] = []
+    candidate_validation: list[dict[str, Any]] = []
+    for spec in registry:
+        spec_id = str(spec["spec_id"])
+        development = _read_json(artifact_root / "candidates" / f"{spec_id.replace(':', '_')}.development.json")
+        validation = _read_json(artifact_root / "candidates" / f"{spec_id.replace(':', '_')}.validation.json")
+        candidate_development.append({"spec_id": spec_id, **evaluate_predictions(development)})
+        candidate_validation.append({"spec_id": spec_id, **evaluate_predictions(validation)})
+    selected_validation = next(
+        item for item in candidate_validation if item["spec_id"] == EXPECTED_SELECTED_SPEC_ID
+    )
+    summary["development_selection_metrics"] = candidate_development
+    summary["validation_selection_metrics"] = candidate_validation
+    summary["selected_spec"]["validation_metrics"] = selected_validation
+    summary["baseline_a"]["metrics"] = heldout_metrics["baseline_a"]
+    summary["baseline_b"]["metrics"] = heldout_metrics["baseline_b"]
+    summary["heldout_evaluation"] = {
+        "heldout_evaluation_count": 1,
+        "team_strength": heldout_metrics["team_strength"],
+        "baseline_a": heldout_metrics["baseline_a"],
+        "baseline_b": heldout_metrics["baseline_b"],
+        "deltas_vs_baseline_a": deltas,
+        "paired_bootstrap_vs_baseline_a": bootstrap,
+    }
+    summary["per_competition"] = per_competition
+    summary["research_classification"] = result_classification
+    summary["prospective_shadow_recommended"] = result_classification == "RESEARCH_PROMISING"
+    summary["benchmark_health"] = benchmark
+    summary["artifact_digests"]["heldout_prediction"] = EXPECTED_HELDOUT_PREDICTION_DIGEST
+    summary["validated_for_model_true_count"] = 0
+    summary["metrics_recomputed_at"] = generated
+    if write:
+        _write_json(artifact_root / "metrics_recomputed.json", {
+            "metrics_only": True,
+            "source_prediction_digest": EXPECTED_HELDOUT_PREDICTION_DIGEST,
+            "heldout_evaluation_count": 1,
+            "recomputed_at": generated,
+            "heldout_evaluation": summary["heldout_evaluation"],
+            "per_competition": per_competition,
+            "research_classification": result_classification,
+        })
+        _write_json(COMPACT_RESULTS_PATH, summary)
+        DOC_PATH.parent.mkdir(parents=True, exist_ok=True)
+        DOC_PATH.write_text(_render_doc(summary, benchmark, generated), encoding="utf-8")
+        _write_handoff(root, summary, benchmark, pr_number)
+    return summary
 
 
 def run_phase2c1(
@@ -470,7 +643,7 @@ def run_phase2c1(
     deltas = _metric_deltas(heldout_metrics["team_strength"], heldout_metrics["baseline_a"])
     bootstrap = _bootstrap_summary(heldout_sets)
     per_competition = _per_competition(heldout_sets)
-    result_classification = classification_from_deltas(deltas)
+    result_classification = classification_from_evidence(deltas, bootstrap)
     experiment_id = experiment_id_for(cohort_id=cohort["metadata"]["research_cohort_id"], dataset_digest=dataset_digest, spec=selected_spec.to_dict())
     benchmark = _benchmark_health(root)
     summary = {
@@ -555,11 +728,16 @@ __all__ = [
     "EXPECTED_COHORT_ID",
     "EXPECTED_COHORT_MATCH_DIGEST",
     "EXPECTED_DATASET_DIGEST",
+    "EXPECTED_EXPERIMENT_ID",
+    "EXPECTED_HELDOUT_PREDICTION_DIGEST",
+    "EXPECTED_SELECTED_SPEC_ID",
     "HeldoutAlreadyEvaluatedError",
     "champion_evidence",
     "evaluate_heldout_once",
     "experiment_id_for",
     "load_approved_cohort",
+    "load_locked_heldout_predictions",
+    "recompute_locked_heldout_metrics",
     "research_boundary",
     "run_phase2c1",
     "validate_cohort_lock",
