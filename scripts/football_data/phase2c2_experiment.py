@@ -497,6 +497,62 @@ def write_phase2c2_handoff(*, root: Path = ROOT, pr_number: int | None = None) -
     return HANDOFF_PATH
 
 
+def materialize_phase2c2_rolling_predictions(
+    *,
+    root: Path = ROOT,
+    data_home: str | Path | None = None,
+    pr_number: int | None = None,
+) -> dict[str, Any]:
+    """Persist development-fold predictions without touching reused validation."""
+
+    home = _data_home(data_home)
+    pool = load_phase2c2_research_pool(root=root, data_home=home)
+    development = list(pool["development"])
+    spent_ids = list(pool["spent_heldout_ids"])
+    artifact_root = home / "research" / "phase2c2"
+    registry_payload = _read_json(artifact_root / "candidate_specs.json")
+    registry = list(registry_payload.get("candidate_specs") or [])
+    folds = build_rolling_folds(development)
+    development_by_id = {_target_id(row): row for row in development}
+    pool_ids = {_target_id(row) for row in development + pool["validation"]}
+    external_history = [row for row in pool["history_records"] if _target_id(row) not in pool_ids]
+    artifacts: list[dict[str, Any]] = []
+    for registry_row in registry:
+        spec = _registered_spec(registry_row)
+        for fold in folds:
+            train_rows = [development_by_id[value] for value in fold["train_match_ids"]]
+            evaluation_rows = [development_by_id[value] for value in fold["evaluation_match_ids"]]
+            bundle = _prediction_bundle(
+                evaluation_rows,
+                list(external_history) + train_rows,
+                spec,
+                spent_heldout_ids=spent_ids,
+            )
+            artifacts.append({
+                "spec_id": spec.spec_id,
+                "fold_id": fold["fold_id"],
+                "train_count": fold["train_count"],
+                "evaluation_count": fold["evaluation_count"],
+                "predictions": bundle["predictions"],
+                "skipped": bundle["skipped"],
+            })
+    digest = content_sha256(artifacts)
+    _write_json(artifact_root / "rolling_predictions.json", artifacts)
+    full_summary = _read_json(artifact_root / "results_summary.json")
+    full_summary["artifact_digests"]["rolling_predictions"] = digest
+    _write_json(artifact_root / "results_summary.json", full_summary)
+    candidate_results = _read_json(artifact_root / "rolling_results.json")
+    compact = _compact_summary(full_summary, candidate_results)
+    _write_json(COMPACT_RESULTS_PATH, compact)
+    DOC_PATH.parent.mkdir(parents=True, exist_ok=True)
+    DOC_PATH.write_text(_render_doc(compact), encoding="utf-8")
+    manifest = _read_json(COMPACT_MANIFEST_PATH)
+    manifest["artifact_digests"]["rolling_predictions"] = digest
+    _write_json(COMPACT_MANIFEST_PATH, manifest)
+    handoff = write_phase2c2_handoff(root=root, pr_number=pr_number)
+    return {"status": "OK", "rolling_predictions_digest": digest, "handoff": str(handoff)}
+
+
 def refresh_phase2c2_compact_outputs(
     *,
     root: Path = ROOT,
@@ -728,13 +784,22 @@ def run_phase2c2(
     _write_json(COMPACT_RESULTS_PATH, compact_summary)
     DOC_PATH.parent.mkdir(parents=True, exist_ok=True)
     DOC_PATH.write_text(_render_doc(compact_summary), encoding="utf-8")
-    handoff = write_phase2c2_handoff(root=root, pr_number=pr_number)
+    materialized = materialize_phase2c2_rolling_predictions(
+        root=root,
+        data_home=home,
+        pr_number=pr_number,
+    )
     return {
         "status": "OK",
         "summary": summary,
         "artifact_root": str(artifact_root),
-        "handoff": str(handoff),
+        "handoff": str(materialized["handoff"]),
     }
 
 
-__all__ = ["refresh_phase2c2_compact_outputs", "run_phase2c2", "write_phase2c2_handoff"]
+__all__ = [
+    "materialize_phase2c2_rolling_predictions",
+    "refresh_phase2c2_compact_outputs",
+    "run_phase2c2",
+    "write_phase2c2_handoff",
+]
