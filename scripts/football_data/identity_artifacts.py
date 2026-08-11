@@ -52,7 +52,12 @@ def _supporting_fixture_count(evidence: Mapping[str, Any] | None) -> int:
     aligned = evidence.get("aligned_fixtures")
     if isinstance(aligned, list):
         return len(aligned)
-    return int(evidence.get("aligned_match_count") or evidence.get("distinct_fixture_count") or 0)
+    return int(
+        evidence.get("supporting_fixture_count")
+        or evidence.get("aligned_match_count")
+        or evidence.get("distinct_fixture_count")
+        or 0
+    )
 
 
 def _evidence_digest(candidate: Mapping[str, Any]) -> str:
