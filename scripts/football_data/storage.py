@@ -258,6 +258,7 @@ class HistoricalResultStore:
         season_id: str | None = None,
         entity_type: str | None = None,
         eligible_only: bool = False,
+        exclude_match_ids: Iterable[str] | None = None,
     ) -> Iterator[dict[str, Any]]:
         clauses: list[str] = []
         parameters: list[Any] = []
@@ -278,7 +279,21 @@ class HistoricalResultStore:
             parameters.append(entity_type)
         if eligible_only:
             clauses.append("eligible_for_team_strength = TRUE")
+        excluded = sorted({str(value) for value in (exclude_match_ids or ()) if str(value)})
+        if excluded:
+            placeholders = ", ".join("?" for _ in excluded)
+            clauses.append(f"canonical_match_id NOT IN ({placeholders})")
+            parameters.extend(excluded)
         return iter(self._query(" AND ".join(clauses), parameters))
+
+    def query_by_match_ids(self, match_ids: Iterable[str]) -> list[dict[str, Any]]:
+        """Return only the requested canonical matches in stable order."""
+
+        values = sorted({str(value) for value in match_ids if str(value)})
+        if not values:
+            return []
+        placeholders = ", ".join("?" for _ in values)
+        return self._query(f"canonical_match_id IN ({placeholders})", values)
 
     def query_by_team(self, team_id: str, **filters: Any) -> list[dict[str, Any]]:
         return list(self.iter_records(team_id=team_id, **filters))
