@@ -16,7 +16,7 @@ def build_api_football_status(
     *,
     key_present: bool,
     coverage_page_checked: bool,
-    checked_at: str,
+    evidence_observed_at: str,
     season_specific_coverage_checked: bool = False,
     real_ingestion_executed: bool = False,
     requests_used: int = 0,
@@ -45,7 +45,7 @@ def build_api_football_status(
         "season_specific_coverage_checked": bool(season_specific_coverage_checked),
         "real_ingestion_executed": bool(real_ingestion_executed),
         "requests_used": requests_used,
-        "checked_at": checked_at,
+        "evidence_observed_at": evidence_observed_at,
         "commercial_boundary": dict(COMMERCIAL_BOUNDARY),
         "notes": [
             "The API key is read only from API_FOOTBALL_KEY when an operator explicitly enables an adapter run.",

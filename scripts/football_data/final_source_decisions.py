@@ -1,63 +1,114 @@
-"""Final Phase 2B.5 source-discovery decisions."""
+"""Materialize final source decisions from frozen discovery evidence."""
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Mapping
 
 from .api_football_source import build_api_football_status
 
 
-def build_final_source_discovery(*, checked_at: str, api_key_present: bool) -> dict[str, Any]:
+def _rows_by_source(evidence: Mapping[str, Any]) -> dict[str, Mapping[str, Any]]:
+    rows = evidence.get("sources")
+    if not isinstance(rows, list):
+        raise ValueError("source discovery evidence must contain a sources list")
+    result = {str(row.get("source")): row for row in rows if isinstance(row, Mapping)}
+    required = {"openfootball/champions-league", "football-data.org", "K League official/public", "API-Football"}
+    missing = sorted(required - result.keys())
+    if missing:
+        raise ValueError(f"source discovery evidence is missing: {', '.join(missing)}")
+    return result
+
+
+def _materialize_source(row: Mapping[str, Any], *, role: str) -> dict[str, Any]:
+    return {
+        "source": row["source"],
+        "role": role,
+        "status": row.get("status_at_observation") or row.get("evidence_status"),
+        "evidence_status": row.get("evidence_status"),
+        "evidence_observed_at": row.get("observed_at"),
+        "evidence_source": row.get("evidence_source"),
+        "live_check_executed": bool(row.get("live_check_executed")),
+        "data_captured_at": row.get("data_captured_at"),
+        "source_url": row.get("source_url"),
+        "evidence_ref": row.get("evidence_ref"),
+    }
+
+
+def build_final_source_discovery(
+    *,
+    report_generated_at: str,
+    evidence: Mapping[str, Any],
+    api_key_present: bool,
+) -> dict[str, Any]:
+    """Build a report without changing or refreshing frozen source evidence."""
+
+    rows = _rows_by_source(evidence)
+    evidence_observed_at = str(evidence.get("evidence_observed_at") or "")
+    if not evidence_observed_at:
+        raise ValueError("source discovery evidence must contain evidence_observed_at")
+
+    openfootball = _materialize_source(
+        rows["openfootball/champions-league"],
+        role="offline historical/schema reference",
+    )
+    openfootball.update(
+        {
+            "license": "CC0-1.0",
+            "prior_season_status": rows["openfootball/champions-league"].get("prior_season_status"),
+            "current_2026_27_status": rows["openfootball/champions-league"].get("current_2026_27_status"),
+            "current_ingestion_executed": False,
+            "license_url": "https://raw.githubusercontent.com/openfootball/champions-league/master/LICENSE.md",
+            "season_specific_conclusion": rows["openfootball/champions-league"].get("season_specific_conclusion"),
+        }
+    )
+
+    football_data = _materialize_source(rows["football-data.org"], role="candidate historical results API")
+    football_data.update(
+        {
+            "policy_url": rows["football-data.org"].get("policy_url"),
+            "current_ingestion_executed": False,
+            "public_catalog_candidate": bool(rows["football-data.org"].get("public_catalog_candidate")),
+            "authenticated_api_check_executed": bool(rows["football-data.org"].get("authenticated_api_check_executed")),
+            "season_specific_coverage_verified": bool(rows["football-data.org"].get("season_specific_coverage_verified")),
+        }
+    )
+
+    k_league = _materialize_source(rows["K League official/public"], role="official schedule/results reference only")
+    k_league.update({"terms_url": rows["K League official/public"].get("terms_url"), "current_ingestion_executed": False})
+
+    api_evidence = rows["API-Football"]
     api_status = build_api_football_status(
         key_present=api_key_present,
-        coverage_page_checked=True,
-        checked_at=checked_at,
+        coverage_page_checked=bool(api_evidence.get("coverage_page_checked")),
+        evidence_observed_at=str(api_evidence.get("observed_at") or evidence_observed_at),
+        season_specific_coverage_checked=bool(api_evidence.get("season_specific_coverage_verified")),
+        real_ingestion_executed=bool(api_evidence.get("real_ingestion_executed")),
+        requests_used=int(api_evidence.get("requests_used") or 0),
     )
+    api_status.update(
+        {
+            "evidence_status": api_evidence.get("evidence_status"),
+            "evidence_source": api_evidence.get("evidence_source"),
+            "live_check_executed": bool(api_evidence.get("live_check_executed")),
+            "data_captured_at": api_evidence.get("data_captured_at"),
+            "source_url": api_evidence.get("source_url"),
+            "terms_url": api_evidence.get("terms_url"),
+            "evidence_ref": api_evidence.get("evidence_ref"),
+            "coverage_page_observed_in_bounded_review": bool(api_evidence.get("coverage_page_observed_in_bounded_review")),
+        }
+    )
+
     return {
-        "contract_version": "phase2b_final_source_discovery.v1",
-        "checked_at": checked_at,
+        "contract_version": "phase2b_final_source_discovery.v2",
+        "report_generated_at": report_generated_at,
+        "source_evidence_observed_at": evidence_observed_at,
+        "data_captured_at": evidence.get("data_captured_at"),
+        "evidence_source": evidence.get("evidence_source"),
+        "live_check_executed": bool(evidence.get("live_check_executed")),
         "sources": [
-            {
-                "source": "openfootball/champions-league",
-                "role": "offline historical/schema reference",
-                "license": "CC0-1.0",
-                "prior_season_status": "AVAILABLE",
-                "current_2026_27_status": "MISSING",
-                "status": "PRIOR_SEASON_ONLY",
-                "current_ingestion_executed": False,
-                "source_url": "https://github.com/openfootball/champions-league",
-                "license_url": "https://raw.githubusercontent.com/openfootball/champions-league/master/LICENSE.md",
-                "evidence": [
-                    "repository season listing reaches 2025-26 and does not show 2026-27",
-                    "current target fixtures therefore cannot be treated as covered",
-                ],
-            },
-            {
-                "source": "football-data.org",
-                "role": "candidate historical results API",
-                "status": "DEFER",
-                "current_ingestion_executed": False,
-                "source_url": "https://www.football-data.org/documentation/quickstart",
-                "policy_url": "https://docs.football-data.org/general/v4/policies.html",
-                "evidence": [
-                    "official documentation exposes competition match endpoints",
-                    "match access and rate limits require an authenticated, terms-reviewed workflow",
-                    "no project token or season-specific current coverage was available in this run",
-                ],
-            },
-            {
-                "source": "K League official/public",
-                "role": "official schedule/results reference only",
-                "status": "SOURCE_MISSING",
-                "current_ingestion_executed": False,
-                "source_url": "https://www.kleague.com/schedule.do?leagueId=2",
-                "terms_url": "https://portal.kleague.com/user/service/userTermsNice.do",
-                "evidence": [
-                    "official page exposes schedule/results navigation",
-                    "terms prohibit copying, publication, third-party provision, and commercial use without prior consent",
-                    "no compliant reusable result capture was adopted",
-                ],
-            },
+            openfootball,
+            football_data,
+            k_league,
         ],
         "api_football": api_status,
         "k_league_source_gap": True,
@@ -65,13 +116,14 @@ def build_final_source_discovery(*, checked_at: str, api_key_present: bool) -> d
             "existing OpenFootball prior-season reference remains available; no new current-season source adopted",
         ],
         "sources_rejected_or_deferred": [
-            "OpenFootball current 2026-27 UEFA: missing",
+            "OpenFootball current 2026-27 UEFA: not verified in frozen evidence",
             "football-data.org: deferred pending authenticated, terms-reviewed capture",
             "K League official/public: source missing under current redistribution/commercial boundary",
             "API-Football: deferred; no key and no live ingestion",
         ],
         "notes": [
             "No source result rows were added in Phase 2B.5.",
+            "Source evidence timestamps are frozen; report reruns must not refresh them.",
             "UEFA and K League demand remain in the fixed denominator.",
         ],
     }

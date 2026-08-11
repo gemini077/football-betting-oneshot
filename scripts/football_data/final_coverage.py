@@ -24,6 +24,13 @@ IDENTITY_BLOCKERS = (
 
 FINAL_GATE_WEIGHT = 122
 
+PHASE2B_CLOSURE_REASON = (
+    "bounded Phase 2B scope completed",
+    "remaining identity gaps require new reviewed evidence",
+    "remaining source gaps require external credentials, licensing review, or future source availability",
+    "continued global coverage expansion is deferred rather than treated as model-data success",
+)
+
 
 def _values(value: Any) -> set[str]:
     if isinstance(value, (list, tuple, set, frozenset)):
@@ -243,14 +250,39 @@ def weighted_final_coverage(
         "status_weights": dict(sorted(counts.items())),
         "gate_threshold_weight": gate_threshold_weight,
         "eighty_percent_gate_passed": passed,
-        "phase2b_coverage_limit_reached": not passed,
         "validated_for_model": False,
+    }
+
+
+def build_phase2b_closure_decision(
+    *,
+    weighted: Mapping[str, Any],
+    coverage_backlog: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Record the explicit governance closure separately from coverage math.
+
+    A failed readiness gate is a metric fact.  Closing this bounded phase with
+    a backlog is an explicit project decision and must never be inferred from
+    ``not weighted["eighty_percent_gate_passed"]``.
+    """
+
+    return {
+        "phase2b_complete": True,
+        "phase2b_closed": True,
+        "phase2b_closed_with_backlog": True,
+        "closure_reason": list(PHASE2B_CLOSURE_REASON),
+        "coverage_backlog": dict(coverage_backlog),
+        "global_80_percent_gate_passed": bool(weighted["eighty_percent_gate_passed"]),
+        "global_model_data_ready": False,
+        "eligible_subset_evaluation_required": True,
     }
 
 
 __all__ = [
     "FINAL_GATE_WEIGHT",
     "IDENTITY_BLOCKERS",
+    "PHASE2B_CLOSURE_REASON",
+    "build_phase2b_closure_decision",
     "build_final_identity_gap_summary",
     "classify_identity_side",
     "weighted_final_coverage",

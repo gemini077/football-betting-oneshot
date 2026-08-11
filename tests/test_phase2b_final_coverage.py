@@ -4,6 +4,7 @@ import pytest
 
 from scripts.football_data.final_coverage import (
     build_final_identity_gap_summary,
+    build_phase2b_closure_decision,
     weighted_final_coverage,
 )
 from scripts.football_data import populate_phase2b_final
@@ -105,7 +106,33 @@ def test_final_weighted_gate_keeps_source_missing_in_denominator():
     assert result["ready_plus_bridge_rate"] == 20 / 152
     assert result["gate_threshold_weight"] == 122
     assert result["eighty_percent_gate_passed"] is False
-    assert result["phase2b_coverage_limit_reached"] is True
+    assert "phase2b_coverage_limit_reached" not in result
+
+
+def test_phase2b_closure_is_explicit_governance_decision():
+    weighted = weighted_final_coverage(
+        [
+            {"status": "STRICT_READY", "weight": 19},
+            {"status": "VERIFIED_BRIDGE", "weight": 1},
+            {"status": "IDENTITY_MISSING", "weight": 72},
+            {"status": "SOURCE_MISSING", "weight": 60},
+        ]
+    )
+    closure = build_phase2b_closure_decision(
+        weighted=weighted,
+        coverage_backlog={
+            "identity_missing": 72,
+            "source_missing": 60,
+            "total_not_ready": 132,
+        },
+    )
+
+    assert weighted["eighty_percent_gate_passed"] is False
+    assert closure["phase2b_closed"] is True
+    assert closure["phase2b_closed_with_backlog"] is True
+    assert closure["coverage_backlog"]["total_not_ready"] == 132
+    assert closure["global_model_data_ready"] is False
+    assert closure["eligible_subset_evaluation_required"] is True
 
 
 def test_final_population_requires_verified_shared_data_home(monkeypatch):
