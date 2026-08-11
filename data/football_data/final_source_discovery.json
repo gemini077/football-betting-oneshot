@@ -1,0 +1,81 @@
+{
+  "api_football": {
+    "api_key_persisted": false,
+    "api_key_required": true,
+    "checked_at": "2026-08-11T00:00:00Z",
+    "commercial_boundary": {
+      "commercial_rights_review_required": true,
+      "internal_analysis_only": true,
+      "raw_redistribution": false
+    },
+    "coverage_page_checked": true,
+    "notes": [
+      "The API key is read only from API_FOOTBALL_KEY when an operator explicitly enables an adapter run.",
+      "No key means no live request and no synthetic response."
+    ],
+    "real_ingestion_executed": false,
+    "requests_used": 0,
+    "season_specific_coverage_checked": false,
+    "source": "API-Football",
+    "status": "NOT_EXECUTED_NO_KEY"
+  },
+  "checked_at": "2026-08-11T00:00:00Z",
+  "contract_version": "phase2b_final_source_discovery.v1",
+  "k_league_source_gap": true,
+  "notes": [
+    "No source result rows were added in Phase 2B.5.",
+    "UEFA and K League demand remain in the fixed denominator."
+  ],
+  "sources": [
+    {
+      "current_2026_27_status": "MISSING",
+      "current_ingestion_executed": false,
+      "evidence": [
+        "repository season listing reaches 2025-26 and does not show 2026-27",
+        "current target fixtures therefore cannot be treated as covered"
+      ],
+      "license": "CC0-1.0",
+      "license_url": "https://raw.githubusercontent.com/openfootball/champions-league/master/LICENSE.md",
+      "prior_season_status": "AVAILABLE",
+      "role": "offline historical/schema reference",
+      "source": "openfootball/champions-league",
+      "source_url": "https://github.com/openfootball/champions-league",
+      "status": "PRIOR_SEASON_ONLY"
+    },
+    {
+      "current_ingestion_executed": false,
+      "evidence": [
+        "official documentation exposes competition match endpoints",
+        "match access and rate limits require an authenticated, terms-reviewed workflow",
+        "no project token or season-specific current coverage was available in this run"
+      ],
+      "policy_url": "https://docs.football-data.org/general/v4/policies.html",
+      "role": "candidate historical results API",
+      "source": "football-data.org",
+      "source_url": "https://www.football-data.org/documentation/quickstart",
+      "status": "DEFER"
+    },
+    {
+      "current_ingestion_executed": false,
+      "evidence": [
+        "official page exposes schedule/results navigation",
+        "terms prohibit copying, publication, third-party provision, and commercial use without prior consent",
+        "no compliant reusable result capture was adopted"
+      ],
+      "role": "official schedule/results reference only",
+      "source": "K League official/public",
+      "source_url": "https://www.kleague.com/schedule.do?leagueId=2",
+      "status": "SOURCE_MISSING",
+      "terms_url": "https://portal.kleague.com/user/service/userTermsNice.do"
+    }
+  ],
+  "sources_adopted": [
+    "existing OpenFootball prior-season reference remains available; no new current-season source adopted"
+  ],
+  "sources_rejected_or_deferred": [
+    "OpenFootball current 2026-27 UEFA: missing",
+    "football-data.org: deferred pending authenticated, terms-reviewed capture",
+    "K League official/public: source missing under current redistribution/commercial boundary",
+    "API-Football: deferred; no key and no live ingestion"
+  ]
+}
