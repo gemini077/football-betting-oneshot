@@ -1,6 +1,6 @@
 # Phase 2B.5 Final Coverage
 
-Generated at `2026-08-11T07:44:32Z` from the existing P0/P1 demand audit and shared Football Data Home.
+Generated at `2026-08-11T07:50:37Z` from the existing P0/P1 demand audit and shared Football Data Home.
 
 This is the final Phase 2B data-layer closure report. It does not create a Challenger, change the Champion, or validate any feature for model use.
 
@@ -26,7 +26,7 @@ No new project-provider mapping is promoted without a unique reviewed ID/alias/c
 
 ## Source closure
 
-- Report generated at `2026-08-11T07:44:32Z`; frozen source evidence observed at `2026-08-11T07:36:41Z`; live check executed: `False`.
+- Report generated at `2026-08-11T07:50:37Z`; frozen source evidence observed at `2026-08-11T07:36:41Z`; live check executed: `False`.
 - OpenFootball UEFA prior season: `AVAILABLE`; current 2026/27: `NOT_VERIFIED` (not a season-unavailable claim).
 - K League official/public: `SOURCE_MISSING`; demand remains in the denominator.
 - football-data.org: `DEFER`; no authenticated capture was executed.
