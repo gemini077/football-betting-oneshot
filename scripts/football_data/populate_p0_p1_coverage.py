@@ -17,6 +17,8 @@ from pathlib import Path
 from typing import Any, Iterable, Mapping
 
 from .historical_results import HistoricalResultLedger
+from .data_home import resolve_football_data_home
+from .identity_artifacts import persist_identity_artifacts
 from .p0_p1_coverage import (
     audit_retrospective_availability,
     verified_season_bridge_context,
@@ -34,7 +36,7 @@ REGISTRY_PATH = ROOT / "data" / "football_data" / "team_alias_registry.json"
 OUTPUT_ROOT = ROOT / "data" / "football_data"
 DOC_ROOT = ROOT / "docs" / "team-strength"
 FOOTBALL_DATA_UK_MANIFEST_PATH = ROOT / "data" / "football_data" / "football_data_uk" / "demand_source_manifest.json"
-BULK_DATA_ROOT = ROOT / ".cache" / "football_data"
+BULK_DATA_ROOT = resolve_football_data_home()
 LEDGER_ROOT = BULK_DATA_ROOT / "historical_results.duckdb"
 SNAPSHOT_ROOT = BULK_DATA_ROOT / "team_strength_snapshots.duckdb"
 
@@ -487,7 +489,7 @@ def _write_docs(
             "",
             f"AUTO_VERIFIED `{candidates.get('summary', {}).get('AUTO_VERIFIED', 0)}`; REVIEW_REQUIRED `{candidates.get('summary', {}).get('REVIEW_REQUIRED', 0)}`; UNRESOLVED `{candidates.get('summary', {}).get('UNRESOLVED', 0)}`; CONFLICT `{candidates.get('summary', {}).get('CONFLICT', 0)}`.",
             "",
-            "AUTO_VERIFIED here means a shadow candidate backed by repeated cross-source fixture context. Deterministic candidate IDs may be generated for previously unseen clubs, but the production team registry is not mutated automatically; evidence remains in `p0_p1_identity_candidates.json`.",
+            "AUTO_VERIFIED here means a shadow candidate backed by repeated cross-source fixture context. Deterministic candidate IDs may be generated for previously unseen clubs, but the production team registry is not mutated automatically. Compact verified truth is retained in `data/football_data/verified_identity_crosswalk.json`; detailed candidate evidence is local-only at `${FOOTBALL_DATA_HOME}/identity/p0_p1_identity_candidates.json`.",
             "",
             f"Eligible normalized records available after this capture's deduplication: `{population.get('eligible_records_available', 0)}`; newly persisted immutable records: `{population.get('eligible_records_persisted', 0)}`. Cross-source duplicate collapse: `{population.get('duplicates_collapsed', 0)}`; conflicts: `{population.get('conflicts', 0)}`.",
             "",
@@ -653,7 +655,7 @@ def run(capture_root: Path, *, captured_at: str = "2026-08-11T00:00:00Z") -> dic
         "target_summary": target_summary,
     }
     identity_output = {**result, "reviewed_mapping_count": len(mappings), "provider_mappings": [dict(row) for row in mappings.values()]}
-    _json(OUTPUT_ROOT / "p0_p1_identity_candidates.json", identity_output)
+    persist_identity_artifacts(identity_output, generated_at=captured_at)
     _json(OUTPUT_ROOT / "p0_p1_identity_evidence.json", target_summary)
     _json(OUTPUT_ROOT / "p0_p1_source_manifest.json", manifest)
     _json(OUTPUT_ROOT / "p0_p1_population_summary.json", population)

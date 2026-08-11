@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from .contracts import validate_record
+from .data_home import resolve_football_data_home
 from .storage import (
     DatasetNotAvailableError,
     DuckDBSnapshotStore,
@@ -28,7 +29,6 @@ from .storage import (
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_LEGACY_LEDGER = ROOT / "data" / "football_data" / "historical_result_ledger"
 DEFAULT_LEGACY_SNAPSHOTS = ROOT / "data" / "football_data" / "team_strength_snapshots"
-DEFAULT_OUTPUT_ROOT = ROOT / ".cache" / "football_data"
 DEFAULT_MANIFEST_ROOT = ROOT / "data" / "football_data" / "manifests"
 SOURCE_MANIFESTS = {
     "p0_p1_source_manifest": ROOT / "data" / "football_data" / "p0_p1_source_manifest.json",
@@ -85,11 +85,12 @@ def migrate(
     *,
     legacy_ledger_root: Path = DEFAULT_LEGACY_LEDGER,
     legacy_snapshot_root: Path = DEFAULT_LEGACY_SNAPSHOTS,
-    output_root: Path = DEFAULT_OUTPUT_ROOT,
+    output_root: Path | None = None,
     manifest_root: Path = DEFAULT_MANIFEST_ROOT,
     generated_at: str | None = None,
 ) -> dict[str, Any]:
     generated = generated_at or _now()
+    output_root = Path(output_root) if output_root is not None else resolve_football_data_home()
     historical_records = _load_legacy_json_records(legacy_ledger_root, contract_kind="historical_match_result")
     snapshot_records = _load_legacy_json_records(
         legacy_snapshot_root,
@@ -122,7 +123,7 @@ def migrate(
         },
         "generated_at": generated,
         "storage_format": "duckdb",
-        "storage_location_policy": ".cache/football_data/historical_results.duckdb (gitignored local cache)",
+        "storage_location_policy": "${FOOTBALL_DATA_HOME}/historical_results.duckdb (shared local analytical store)",
         "source_location_policy": "source manifests and captured evidence references; raw third-party files are not committed",
     }
     snapshot_manifest = {
@@ -138,7 +139,7 @@ def migrate(
         "parser_versions": {"team_strength_builder": "team-strength-builder.v2-duckdb"},
         "generated_at": generated,
         "storage_format": "duckdb",
-        "storage_location_policy": ".cache/football_data/team_strength_snapshots.duckdb (gitignored local cache)",
+        "storage_location_policy": "${FOOTBALL_DATA_HOME}/team_strength_snapshots.duckdb (shared local analytical store)",
         "immutability_policy": "snapshot_id is primary key; conflicting content is rejected",
     }
     _write_json(manifest_root / "historical_results.dataset.json", historical_manifest)
@@ -155,7 +156,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--legacy-ledger-root", type=Path, default=DEFAULT_LEGACY_LEDGER)
     parser.add_argument("--legacy-snapshot-root", type=Path, default=DEFAULT_LEGACY_SNAPSHOTS)
-    parser.add_argument("--output-root", type=Path, default=DEFAULT_OUTPUT_ROOT)
+    parser.add_argument("--output-root", type=Path)
     parser.add_argument("--manifest-root", type=Path, default=DEFAULT_MANIFEST_ROOT)
     parser.add_argument("--generated-at")
     args = parser.parse_args(argv)

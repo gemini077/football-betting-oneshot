@@ -21,7 +21,7 @@ Source rows are not demand rows. Only eligible normalized results strictly befor
 
 AUTO_VERIFIED `152`; REVIEW_REQUIRED `24`; UNRESOLVED `9`; CONFLICT `16`.
 
-AUTO_VERIFIED here means a shadow candidate backed by repeated cross-source fixture context. Deterministic candidate IDs may be generated for previously unseen clubs, but the production team registry is not mutated automatically; evidence remains in `p0_p1_identity_candidates.json`.
+AUTO_VERIFIED here means a shadow candidate backed by repeated cross-source fixture context. Deterministic candidate IDs may be generated for previously unseen clubs, but the production team registry is not mutated automatically. Compact verified truth is retained in `data/football_data/verified_identity_crosswalk.json`; detailed candidate evidence is local-only at `${FOOTBALL_DATA_HOME}/identity/p0_p1_identity_candidates.json`.
 
 Eligible normalized records available after this capture's deduplication: `1348`; newly persisted immutable records: `0`. Cross-source duplicate collapse: `481`; conflicts: `2`.
 

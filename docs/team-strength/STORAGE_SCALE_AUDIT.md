@@ -50,7 +50,21 @@ two sources of truth without a current need.
 
 The repository retains code, contracts, manifests, hashes, registries,
 compact coverage summaries and small deterministic fixtures. Bulk files move
-to the ignored local paths documented in `DATA_STORAGE_POLICY.md`.
+to the shared `FOOTBALL_DATA_HOME` documented in `DATA_STORAGE_POLICY.md`, not
+to a worktree-local cache.
+
+## Storage Final boundary
+
+- `FOOTBALL_DATA_HOME` is resolved from the environment or the stable user-home
+  default, so two sibling worktrees discover the same DuckDB files.
+- The current 1554 historical records and 160 snapshots were copied from the
+  old worktree cache and verified by count and digest; the old cache remains
+  preserved for rollback/migration safety.
+- The detailed `p0_p1_identity_candidates.json` is outside Git in the shared
+  Data Home. Git retains 152 compact AUTO_VERIFIED mappings and a compact
+  49-entry review queue.
+- A fresh clone with neither shared data nor permitted captures returns
+  `DATASET_NOT_AVAILABLE`; manifests do not pretend to reconstruct bulk rows.
 
 ## Authenticity and parity constraints
 

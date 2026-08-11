@@ -14,6 +14,8 @@ import json
 from pathlib import Path
 from typing import Any, Iterable, Iterator, Mapping
 
+from .data_home import resolve_football_data_home
+
 try:
     import duckdb
 except ImportError:  # pragma: no cover - exercised by the explicit error path
@@ -85,8 +87,9 @@ class HistoricalResultStore:
 
     _table = "historical_results"
 
-    def __init__(self, path: str | Path) -> None:
-        self.path = _database_path(path, "historical_results.duckdb")
+    def __init__(self, path: str | Path | None = None) -> None:
+        resolved = resolve_football_data_home() if path is None else Path(path)
+        self.path = _database_path(resolved, "historical_results.duckdb")
 
     @property
     def root(self) -> Path:
@@ -324,8 +327,9 @@ class HistoricalResultStore:
 class DuckDBSnapshotStore:
     """Immutable snapshot table keyed by snapshot identity and content digest."""
 
-    def __init__(self, path: str | Path) -> None:
-        self.path = _database_path(path, "team_strength_snapshots.duckdb")
+    def __init__(self, path: str | Path | None = None) -> None:
+        resolved = resolve_football_data_home() if path is None else Path(path)
+        self.path = _database_path(resolved, "team_strength_snapshots.duckdb")
 
     def _connect(self, *, read_only: bool) -> Any:
         db = _require_duckdb()

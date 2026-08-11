@@ -14,6 +14,7 @@ from typing import Any, Iterable, Mapping
 
 from .competition_demand import COMPETITION_CATALOG, usage_observations
 from .coverage import analysis_weighted_coverage, build_coverage_registry, rank_coverage_gaps
+from .data_home import resolve_football_data_home
 from .health import build_team_strength_health
 from .historical_results import HistoricalResultLedger
 from .team_strength import PreMatchSnapshotStore, TeamStrengthBuilder
@@ -27,7 +28,7 @@ CURRENT_PATH = ROOT / "data" / "football_data" / "current_match_identity_evidenc
 OPENFOOTBALL_PILOT_PATH = ROOT / "data" / "football_data" / "historical_result_samples" / "openfootball_pilot.json"
 FOOTBALL_DATA_SAMPLE_PATH = ROOT / "data" / "football_data" / "historical_result_samples" / "football_data_uk_sweden_2026.json"
 USAGE_PATH = ROOT / "data" / "football_data" / "competition_usage_history.json"
-BULK_DATA_ROOT = ROOT / ".cache" / "football_data"
+BULK_DATA_ROOT = resolve_football_data_home()
 LEDGER_ROOT = BULK_DATA_ROOT / "historical_results.duckdb"
 COVERAGE_PATH = ROOT / "data" / "football_data" / "competition_coverage_registry.json"
 GAP_PATH = ROOT / "data" / "football_data" / "coverage_gap_ranking.json"
@@ -469,7 +470,7 @@ def generate() -> dict[str, Any]:
                     continue
                 snapshot_ids.add(_put_snapshot_without_rewriting(snapshot_store, snapshot))
     health["pre_match_snapshot_count"] = len(snapshot_ids)
-    health["pre_match_snapshot_root"] = ".cache/football_data/team_strength_snapshots.duckdb"
+    health["pre_match_snapshot_root"] = "${FOOTBALL_DATA_HOME}/team_strength_snapshots.duckdb"
     health["snapshot_revision"] = SNAPSHOT_REVISION
 
     source_observations = _source_observations([openfootball_manifest, football_data_manifest, demand_manifest])

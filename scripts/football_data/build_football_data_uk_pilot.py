@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from .historical_results import HistoricalResultLedger
+from .data_home import historical_results_path
 from .providers.football_data_uk import FootballDataCoUkHistoricalAdapter
 
 
@@ -15,7 +16,7 @@ ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_MANIFEST = ROOT / "data" / "football_data" / "football_data_uk" / "source_manifest.json"
 DEFAULT_IDENTITIES = ROOT / "data" / "football_data" / "football_data_uk" / "identity_evidence.json"
 DEFAULT_OUTPUT = ROOT / "data" / "football_data" / "historical_result_samples" / "football_data_uk_sweden_2026.json"
-DEFAULT_LEDGER_ROOT = ROOT / ".cache" / "football_data" / "historical_results.duckdb"
+DEFAULT_LEDGER_ROOT = historical_results_path()
 
 
 def load_records(

@@ -363,7 +363,7 @@ class TeamStrengthBuilder:
 class PreMatchSnapshotStore:
     """Persist pre-match snapshots in one immutable DuckDB table."""
 
-    def __init__(self, root: str | Path) -> None:
+    def __init__(self, root: str | Path | None = None) -> None:
         self.store = DuckDBSnapshotStore(root)
 
     def put(self, snapshot: Mapping[str, Any], *, snapshot_id: str | None = None) -> str:
