@@ -400,6 +400,8 @@ def audit_competition_season_sanity(
             status = "UNKNOWN"
         else:
             status = "PASS"
+        if status != "PASS":
+            reasons.append("dataset_sanity_not_passed")
 
         if status == "FAIL":
             population_scope = "UNKNOWN"
@@ -449,8 +451,8 @@ def audit_competition_season_sanity(
             "generalization_scope": generalization_scope,
             "sanity_status": status,
             "sanity_reasons": reasons,
-            "excluded_from_research": status == "FAIL",
-            "research_eligible": status != "FAIL",
+            "excluded_from_research": status != "PASS",
+            "research_eligible": status == "PASS",
             "duplicate_audit": duplicate_slice,
             "record_evidence": record_evidence,
         }
@@ -471,13 +473,13 @@ def filter_records_by_sanity(
     historical_records: Iterable[Mapping[str, Any]],
     sanity_report: Mapping[str, Any],
 ) -> list[Mapping[str, Any]]:
-    """Keep records whose competition-season slice is not a sanity failure."""
+    """Keep only records in explicitly PASSed competition-season slices."""
 
     slices = sanity_report.get("slices") or {}
     return [
         row
         for row in historical_records
-        if not (slices.get(competition_season_key(row.get("competition_id"), row.get("season_id")), {}).get("excluded_from_research") is True)
+        if slices.get(competition_season_key(row.get("competition_id"), row.get("season_id")), {}).get("sanity_status") == "PASS"
     ]
 
 

@@ -162,6 +162,7 @@ def _render_doc(report: Mapping[str, Any], benchmark: Mapping[str, Any], generat
         "## Competition-season sanity",
         "",
         f"- Audited slices: **{sanity.get('slice_count', 0)}**; failed slices: **{sanity.get('failed_slice_count', 0)}**",
+        "- Sanity admission policy: only explicit `PASS` slices are research-eligible; `UNKNOWN` and `FAIL` are both excluded, while retaining their distinct meanings.",
         f"- Portugal 2025/26 root cause: {_portugal_sanity_root_cause(report)}",
         "- Complete source fixture counts are corroborating observations, never additive capacity. Detailed per-record evidence remains outside Git under `${FOOTBALL_DATA_HOME}/research/phase2c_preflight/`.",
         "",
@@ -213,6 +214,9 @@ def _handoff_entries(pr_number: int | None = None) -> dict[str, bytes]:
         "tests/test_recommended_competition_gate_uses_recommended_not_full_standard.py",
         "tests/test_identity_split_duplicate_is_flagged_not_auto_merged.py",
         "tests/test_portugal_real_data_sanity_regression.py",
+        "tests/test_unknown_sanity_slice_is_not_research_eligible.py",
+        "tests/test_unknown_sanity_slice_excluded_from_recommended_cohort.py",
+        "tests/test_recommended_dataset_sanity_requires_explicit_pass.py",
         "tests/test_cohort_id_changes_after_sanity_exclusion.py",
     ]
     entries: dict[str, bytes] = {}

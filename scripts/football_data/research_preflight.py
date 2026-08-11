@@ -540,9 +540,9 @@ def audit_historical_eligibility(
         competition_season_key(row.get("competition_id"), row.get("season_id"))
         for row in recommended_rows
     }
-    dataset_sanity_passed = all(
-        sanity_slices.get(key, {}).get("sanity_status") != "FAIL"
-        for key in recommended_slice_keys
+    dataset_sanity_passed = bool(
+        sanity_report is not None
+        and all(sanity_slices.get(key, {}).get("sanity_status") == "PASS" for key in recommended_slice_keys)
     )
     gate = evaluate_readiness_gate(
         recommended_fixture_count=len(recommended_rows),

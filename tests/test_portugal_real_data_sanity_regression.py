@@ -1,10 +1,13 @@
 from pathlib import Path
 
+import pytest
+
 from scripts.football_data.research_sanity import (
     audit_competition_season_sanity,
     load_source_manifest_entries,
 )
 from scripts.football_data.storage import HistoricalResultStore
+from scripts.football_data.verify_data_home import verify_data_home
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -12,6 +15,10 @@ PORTUGAL_SLICE = "competition:portugal-primeira-liga|season:portugal-primeira-li
 
 
 def test_real_portugal_complete_source_overflow_remains_a_sanity_failure():
+    verification = verify_data_home()
+    if verification["status"] != "OK":
+        pytest.skip("shared Football Data Home unavailable; real-data regression not executed")
+
     manifest_paths = [
         ROOT / "data" / "football_data" / "openfootball" / "source_manifest.json",
         ROOT / "data" / "football_data" / "football_data_uk" / "source_manifest.json",

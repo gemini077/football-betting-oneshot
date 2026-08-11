@@ -54,6 +54,7 @@ Method: `global_date_order_60_20_20`; split boundaries use unique kickoff timest
 ## Competition-season sanity
 
 - Audited slices: **12**; failed slices: **1**
+- Sanity admission policy: only explicit `PASS` slices are research-eligible; `UNKNOWN` and `FAIL` are both excluded, while retaining their distinct meanings.
 - Portugal 2025/26 root cause: The complete source manifest declares 306 fixtures, while the canonical ledger has 370 (64 over the known complete population). The audit flags 66 source-observation identity-split duplicate groups and 0 additional exact ledger-key groups; they are not auto-merged. The overflow is therefore excluded from research until the canonical identity/time reconciliation is reviewed.
 - Complete source fixture counts are corroborating observations, never additive capacity. Detailed per-record evidence remains outside Git under `${FOOTBALL_DATA_HOME}/research/phase2c_preflight/`.
 
