@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 from datetime import datetime, timezone
 from pathlib import Path
@@ -12,7 +11,7 @@ from .contracts import validate_record
 from .historical_results import deduplicate_historical_results
 from .providers.base import common_record, provenance, utc_now
 from .quality import finalize_record_quality, load_quality_rules
-from .storage import canonical_json_bytes
+from .storage import DuckDBSnapshotStore, HistoricalResultStore, content_sha256
 
 
 WINDOW_LIMITS = {"last_5": 5, "last_10": 10, "last_20": 20}
@@ -118,16 +117,26 @@ class TeamStrengthBuilder:
 
     def __init__(
         self,
-        records: Iterable[Mapping[str, Any]],
+        records: Iterable[Mapping[str, Any]] | HistoricalResultStore,
         *,
         captured_at: str | None = None,
         snapshot_revision: str | None = None,
     ) -> None:
-        report = deduplicate_historical_results(records)
+        if hasattr(records, "iter_records"):
+            source_records = list(records.iter_records())
+            input_dataset_digest = records.dataset_digest()  # type: ignore[union-attr]
+        else:
+            source_records = [dict(record) for record in records]
+            input_dataset_digest = content_sha256(
+                sorted(content_sha256(record) for record in source_records)
+            )
+        report = deduplicate_historical_results(source_records)
         self.records = report.records
         self.deduplication = report
         self.captured_at = captured_at or utc_now()
         self.snapshot_revision = snapshot_revision
+        self.input_dataset_digest = input_dataset_digest
+        self.builder_version = "team-strength-builder.v2-duckdb"
 
     def _eligible_before(
         self,
@@ -305,6 +314,8 @@ class TeamStrengthBuilder:
             "oldest_used_match_at": selected[0].get("kickoff_at") if selected else None,
             "opponent_adjusted": None,
             "snapshot_id": snapshot_id,
+            "input_dataset_digest": self.input_dataset_digest,
+            "builder_version": self.builder_version,
             "validated_for_model": False,
         })
         finalize_record_quality(
@@ -350,32 +361,20 @@ class TeamStrengthBuilder:
 
 
 class PreMatchSnapshotStore:
-    """Persist a pre-match snapshot by stable identity without overwrite."""
+    """Persist pre-match snapshots in one immutable DuckDB table."""
 
-    def __init__(self, root: str | Path) -> None:
-        self.root = Path(root)
-
-    def _path(self, snapshot_id: str) -> Path:
-        digest = hashlib.sha256(snapshot_id.encode("utf-8")).hexdigest()
-        return self.root / f"{digest}.json"
+    def __init__(self, root: str | Path | None = None) -> None:
+        self.store = DuckDBSnapshotStore(root)
 
     def put(self, snapshot: Mapping[str, Any], *, snapshot_id: str | None = None) -> str:
         identity = snapshot_id or str(snapshot.get("snapshot_id") or "")
         if not identity:
             raise ValueError("immutable snapshot requires snapshot_id")
-        path = self._path(identity)
-        encoded = canonical_json_bytes(snapshot) + b"\n"
-        path.parent.mkdir(parents=True, exist_ok=True)
-        if path.exists() and path.read_bytes() != encoded:
-            raise ValueError(f"immutable pre-match snapshot conflict: {identity}")
-        if not path.exists():
-            path.write_bytes(encoded)
-        return identity
+        if snapshot.get("snapshot_id") not in (None, identity):
+            raise ValueError(f"snapshot identity mismatch: {identity}")
+        value = dict(snapshot)
+        value["snapshot_id"] = identity
+        return self.store.put(value)
 
     def get(self, snapshot_id: str) -> dict[str, Any]:
-        path = self._path(snapshot_id)
-        with path.open("r", encoding="utf-8") as handle:
-            value = json.load(handle)
-        if value.get("snapshot_id") != snapshot_id:
-            raise ValueError(f"snapshot identity mismatch: {path}")
-        return value
+        return self.store.get(snapshot_id)

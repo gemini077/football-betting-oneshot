@@ -29,3 +29,16 @@ def test_openfootball_and_football_data_same_result_count_once():
     assert len(report.records) == 1
     assert report.records[0]["eligible_for_team_strength"] is True
     assert {item["provider"] for item in report.records[0]["source_confirmations"]} == {"openfootball", "football-data.co.uk"}
+
+
+def test_same_canonical_result_with_provider_time_precision_difference_counts_once():
+    first = result("openfootball")
+    second = result("football-data.co.uk")
+    second["kickoff_at"] = "2026-08-03T20:00:00Z"
+    second["source_as_of_at"] = "2026-08-03T20:00:00Z"
+
+    report = deduplicate_historical_results([first, second])
+
+    assert len(report.records) == 1
+    assert report.conflicts == 0
+    assert {item["provider"] for item in report.records[0]["source_confirmations"]} == {"openfootball", "football-data.co.uk"}

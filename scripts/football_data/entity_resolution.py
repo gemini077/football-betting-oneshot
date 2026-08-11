@@ -16,7 +16,15 @@ from typing import Any, Iterable, Mapping
 
 DEFAULT_TEAM_REGISTRY = Path(__file__).resolve().parents[2] / "data" / "football_data" / "team_alias_registry.json"
 DANGEROUS_GENERIC_NAMES = frozenset({"united", "city", "racing", "sporting", "national", "central"})
-REVIEWED_MAPPING_METHODS = frozenset({"manual_verified", "provider_id_exact", "existing_crosswalk", "exact_alias"})
+REVIEWED_MAPPING_METHODS = frozenset(
+    {
+        "manual_verified",
+        "provider_id_exact",
+        "existing_crosswalk",
+        "exact_alias",
+        "cross_source_context_verified",
+    }
+)
 
 
 @dataclass(frozen=True)

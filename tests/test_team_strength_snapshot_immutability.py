@@ -38,7 +38,10 @@ def test_pre_match_snapshot_cannot_be_overwritten_after_target_result(tmp_path):
         competition_id="competition:test",
         season_id="season:2026",
     )
+    assert original["input_dataset_digest"]
+    assert original["builder_version"] == "team-strength-builder.v2-duckdb"
     store = PreMatchSnapshotStore(tmp_path / "snapshots")
+    assert store.store.path.name == "team_strength_snapshots.duckdb"
     store.put(original)
     store.put(original)
 

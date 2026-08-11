@@ -26,6 +26,7 @@ RESOLUTION_METHODS = frozenset(
         "exact_alias",
         "normalized_alias",
         "contextual_match",
+        "cross_source_context_verified",
         "manual_verified",
         "unresolved",
     }

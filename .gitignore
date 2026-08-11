@@ -8,6 +8,16 @@ site/
 .env.*
 *.log
 data/source_cache/
+.cache/football_data/
+# Legacy generated bulk JSON is retained only as a local migration/cache input.
+# Existing files already tracked on main remain tracked; newly generated bulk
+# records must not expand the repository again.
+data/football_data/historical_result_ledger/*.json
+data/football_data/team_strength_snapshots/*.json
+# Detailed identity candidate evidence is reproducible local bulk output.
+data/football_data/p0_p1_identity_candidates.json
+data/football_data/runtime/
+data/football_data/cache/
 data/live_odds_bridge/captures/
 data/live_odds_bridge/quarantine/
 data/live_odds_bridge/browser_profiles/

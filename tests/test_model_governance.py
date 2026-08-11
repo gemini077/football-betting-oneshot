@@ -868,13 +868,17 @@ def test_fixed_fixture_math_snapshot_matches_pre_change_baseline():
 def test_current_metrics_do_not_mix_legacy_with_champion(tmp_path):
     reports = tmp_path / "reports"
     reviews = tmp_path / "reviews"
+    frozen = tmp_path / "frozen"
     reports.mkdir()
     reviews.mkdir()
+    frozen.mkdir()
     for index, version in enumerate((RELEASE_VERSION, "v0.18.2")):
         payload = prediction_payload()
         payload["report"]["model_version"] = version
         (reports / f"{index}.json").write_text(json.dumps(payload), encoding="utf-8")
-    result = build_current_metrics(reports, reviews)
+    # Keep this unit test independent from the live production prediction
+    # directory, whose contents legitimately change as the scheduler runs.
+    result = build_current_metrics(reports, reviews, frozen_root=frozen)
     assert result["scope"]["report_record_count"] == 2
     assert result["scope"]["historical_report_inventory"] == 2
     assert result["scope"]["true_governance_frozen_predictions"] == 0
