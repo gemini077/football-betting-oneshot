@@ -23,6 +23,23 @@ from earlier merged work; those old-main rows are not rewritten by this
 hotfix. The 112 snapshots are Phase 2B.3 bulk artifacts and are migrated out
 of Git.
 
+## After the storage hotfix
+
+| Category | Count |
+| --- | ---: |
+| PR changed files versus `origin/main` | 50 |
+| Changed historical-result bulk JSON paths | 0 |
+| Changed Team Strength bulk JSON paths | 0 |
+| Git-tracked historical JSON files (legacy main baseline) | 206 |
+| Git-tracked Team Strength snapshot JSON files (legacy main baseline) | 48 |
+| Local DuckDB historical records | 1554 |
+| Local DuckDB Team Strength snapshots | 160 |
+
+The final changed-file count includes compact Phase 2B.3 evidence and the
+handoff archive, not the ignored DuckDB datasets. The old-main legacy JSON
+baseline is deliberately left untouched; future generated JSON in those paths
+is ignored and the formal bulk store is the local DuckDB dataset.
+
 ## Decision
 
 DuckDB single-file storage is selected for this repository. It keeps nested
@@ -48,4 +65,3 @@ to the ignored local paths documented in `DATA_STORAGE_POLICY.md`.
 - `agent-reach unavailable in current Codex environment`; official DuckDB
   documentation and the local dependency check were used for this bounded
   storage decision.
-
