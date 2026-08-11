@@ -26,6 +26,7 @@ from .p0_p1_coverage import (
 )
 from .p0_p1_population import build_identity_candidates, build_normalized_records, expand_exact_provider_mappings
 from .p0_p1_identity import normalize_source_team_name
+from .project_identity import ProjectProviderIdentityResolver, build_project_identity_output
 from .team_strength import PreMatchSnapshotStore, TeamStrengthBuilder
 
 
@@ -33,12 +34,17 @@ ROOT = Path(__file__).resolve().parents[2]
 USAGE_PATH = ROOT / "data" / "football_data" / "competition_usage_history.json"
 CURRENT_IDENTITY_PATH = ROOT / "data" / "football_data" / "current_match_identity_evidence.json"
 REGISTRY_PATH = ROOT / "data" / "football_data" / "team_alias_registry.json"
+PROJECT_ALIAS_SOURCE_PATH = ROOT / "data" / "team_aliases.json"
 OUTPUT_ROOT = ROOT / "data" / "football_data"
 DOC_ROOT = ROOT / "docs" / "team-strength"
 FOOTBALL_DATA_UK_MANIFEST_PATH = ROOT / "data" / "football_data" / "football_data_uk" / "demand_source_manifest.json"
 BULK_DATA_ROOT = resolve_football_data_home()
 LEDGER_ROOT = BULK_DATA_ROOT / "historical_results.duckdb"
 SNAPSHOT_ROOT = BULK_DATA_ROOT / "team_strength_snapshots.duckdb"
+PROJECT_CROSSWALK_PATH = OUTPUT_ROOT / "verified_project_provider_crosswalk.json"
+PROJECT_REVIEW_QUEUE_PATH = OUTPUT_ROOT / "project_identity_review_queue.json"
+PROJECT_GAP_PATH = OUTPUT_ROOT / "project_identity_gap_summary.json"
+PROJECT_BASELINE_PATH = BULK_DATA_ROOT / "identity" / "project_identity_baseline_availability.json"
 
 P01_KEYS = (
     "portugal-primeira-liga",
@@ -343,24 +349,41 @@ def _fetch_translation_index(provider_ids: set[str]) -> dict[str, dict[str, Any]
             home = container.get("home_team_en")
             away = container.get("away_team_en")
             if match_id and home and away and str(container.get("status") or "EXACT_MATCH") == "EXACT_MATCH":
+                shuju = data.get("shuju") if isinstance(data.get("shuju"), Mapping) else {}
+                team_ids = shuju.get("team_ids") if isinstance(shuju.get("team_ids"), Mapping) else {}
+                filename = path.name.casefold()
+                project_provider = "nowscore" if "_nowscore_" in filename or str(data.get("source") or "").startswith("nowscore") else "500"
                 translation = {
                     "home_team_en": str(home),
                     "away_team_en": str(away),
                     "source_file": str(path.relative_to(ROOT)),
                     "resolution_status": str(container.get("status") or "EXACT_MATCH"),
                     "match_confidence": container.get("match_confidence"),
+                    "source_match_id": match_id,
+                    "provider": project_provider,
+                    "team_id_provider": "nowscore" if team_ids else None,
+                    "home_provider_team_id": str(team_ids.get("home")) if team_ids.get("home") is not None else None,
+                    "away_provider_team_id": str(team_ids.get("away")) if team_ids.get("away") is not None else None,
                 }
                 keys = {match_id}
                 shuju_id = str(data.get("shuju_id") or "")
                 if shuju_id:
                     keys.update({shuju_id, f"500-{shuju_id}"})
                 for key in keys:
-                    output[key] = translation
+                    prior = output.get(key)
+                    # Prefer the capture that carries actual team-ID evidence;
+                    # deterministic selection prevents glob-order drift.
+                    if prior is None or (translation.get("team_id_provider") and not prior.get("team_id_provider")):
+                        output[key] = translation
                 break
     return output
 
 
-def _demand_targets(canonical_by_name: Mapping[str, str]) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+def _demand_targets(
+    canonical_by_name: Mapping[str, str],
+    *,
+    project_identity: Mapping[str, Any] | None = None,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     usage = _load(USAGE_PATH, {})
     current = _load(CURRENT_IDENTITY_PATH, {})
     current_by_provider_id: dict[str, Mapping[str, Any]] = {}
@@ -371,6 +394,10 @@ def _demand_targets(canonical_by_name: Mapping[str, str]) -> tuple[list[dict[str
     p01 = [event for event in usage.get("recovered_events", []) if (event.get("competition") or {}).get("competition_key") in P01_KEYS]
     provider_ids = {str(value) for event in p01 for value in event.get("provider_match_ids", []) if value}
     translations = _fetch_translation_index(provider_ids)
+    project_resolver = ProjectProviderIdentityResolver(
+        (project_identity or {}).get("provider_mappings", [])
+    )
+    project_target_evidence = (project_identity or {}).get("target_evidence", {})
     targets: list[dict[str, Any]] = []
     identity_rows: list[dict[str, Any]] = []
     for event in p01:
@@ -385,12 +412,49 @@ def _demand_targets(canonical_by_name: Mapping[str, str]) -> tuple[list[dict[str
         if current_match:
             identity_evidence.extend(current_match.get("verification_evidence") or [])
         translation = translations.get(provider_id.split("-")[-1]) or translations.get(provider_id)
-        if not home_id and translation:
+        provider = "500" if provider_id.startswith("500-") else "nowscore" if provider_id else "project"
+        project_evidence = project_target_evidence.get(str(event.get("canonical_match_id")), {})
+        country = str(competition.get("country") or "")
+        if not home_id and (project_evidence.get("home") or {}).get("canonical_team_id"):
+            home_id = project_evidence["home"]["canonical_team_id"]
+            identity_method = project_evidence["home"].get("resolution_method") or identity_method
+            identity_evidence.append(project_evidence["home"])
+        if not away_id and (project_evidence.get("away") or {}).get("canonical_team_id"):
+            away_id = project_evidence["away"]["canonical_team_id"]
+            identity_method = project_evidence["away"].get("resolution_method") or identity_method
+            identity_evidence.append(project_evidence["away"])
+        if not home_id:
+            home_result = project_resolver.resolve_team(
+                provider,
+                str(event.get("home") or ""),
+                competition_id=str(competition.get("canonical_competition_id") or ""),
+                country=country,
+            )
+            home_id = home_result.canonical_team_id
+            if home_id:
+                identity_method = home_result.resolution_method
+                identity_evidence.append(home_result.to_dict())
+        if not away_id:
+            away_result = project_resolver.resolve_team(
+                provider,
+                str(event.get("away") or ""),
+                competition_id=str(competition.get("canonical_competition_id") or ""),
+                country=country,
+            )
+            away_id = away_result.canonical_team_id
+            if away_id:
+                identity_method = away_result.resolution_method
+                identity_evidence.append(away_result.to_dict())
+        # Legacy callers that do not supply the project identity output retain
+        # the historical exact-translation behavior.  The Phase 2B.4 path
+        # must use the reviewed project evidence above so a single translation
+        # cannot bypass the provider-ID / repeated-fixture gate.
+        if project_identity is None and not home_id and translation:
             home_id = canonical_by_name.get(normalize_source_team_name(translation["home_team_en"]))
+        if project_identity is None and not away_id and translation:
             away_id = canonical_by_name.get(normalize_source_team_name(translation["away_team_en"]))
-            if home_id and away_id:
-                identity_method = "project_exact_match_to_cross_source_identity"
-                identity_evidence.append(translation)
+        if translation and (home_id or away_id):
+            identity_evidence.append(translation)
         season = "2026-27" if key == "portugal-primeira-liga" else "2026"
         competition_type = str(competition.get("competition_type") or "league")
         if key in {"uefa-champions-league", "uefa-europa-league"}:
@@ -441,6 +505,7 @@ def _demand_targets(canonical_by_name: Mapping[str, str]) -> tuple[list[dict[str
                 "resolution_method": identity_method or "unresolved",
                 "evidence": identity_evidence,
                 "translation": translation,
+                "project_resolution": project_evidence,
             }
         )
     return targets, {
@@ -535,12 +600,159 @@ def _write_docs(
     (DOC_ROOT / "P0_P1_SOURCE_DECISIONS.md").write_text("\n".join(source_lines) + "\n", encoding="utf-8")
 
 
+def _project_identity_gap_summary(
+    *,
+    previous_audits: Iterable[Mapping[str, Any]],
+    targets: Iterable[Mapping[str, Any]],
+    project_identity: Mapping[str, Any],
+    generated_at: str,
+) -> dict[str, Any]:
+    """Persist compact diagnostics for only the identity-missing demand rows."""
+
+    starting_ids = {
+        str(row.get("target_match_id"))
+        for row in previous_audits
+        if row.get("status") == "IDENTITY_MISSING"
+    }
+    evidence = project_identity.get("target_evidence") or {}
+    rows: list[dict[str, Any]] = []
+    target_by_id = {
+        str(target.get("canonical_match_id") or ""): target
+        for target in targets
+    }
+    for target in targets:
+        target_id = str(target.get("canonical_match_id") or "")
+        if target_id not in starting_ids:
+            continue
+        target_evidence = evidence.get(target_id) or {}
+        compact: dict[str, Any] = {
+            "target_match_id": target_id,
+            "competition": target.get("competition_key"),
+            "kickoff": target.get("kickoff_at"),
+            "provider": target_evidence.get("provider"),
+            "provider_match_id": target.get("provider_match_id"),
+            "project_home_name": target.get("home"),
+            "project_away_name": target.get("away"),
+            "home_provider_team_id": (target_evidence.get("home") or {}).get("provider_team_id"),
+            "away_provider_team_id": (target_evidence.get("away") or {}).get("provider_team_id"),
+            "translated_home_name": (target_evidence.get("home") or {}).get("translated_team_name"),
+            "translated_away_name": (target_evidence.get("away") or {}).get("translated_team_name"),
+            "home_canonical_candidate": (target_evidence.get("home") or {}).get("canonical_team_id"),
+            "away_canonical_candidate": (target_evidence.get("away") or {}).get("canonical_team_id"),
+            "home_resolution_reason": (target_evidence.get("home") or {}).get("reason") or [],
+            "away_resolution_reason": (target_evidence.get("away") or {}).get("reason") or [],
+            "home_resolution_status": (target_evidence.get("home") or {}).get("resolution_status", "unresolved"),
+            "away_resolution_status": (target_evidence.get("away") or {}).get("resolution_status", "unresolved"),
+            "source_refs": sorted({
+                ref
+                for side in ("home", "away")
+                for ref in [(target_evidence.get(side) or {}).get("source_ref")]
+                if ref
+            }),
+        }
+        side_statuses = {
+            compact["home_resolution_status"],
+            compact["away_resolution_status"],
+        }
+        if side_statuses == {"resolved"}:
+            compact["fixture_classification"] = "AUTO_RESOLVED"
+        elif "conflict" in side_statuses:
+            compact["fixture_classification"] = "CONFLICT"
+        elif "review_required" in side_statuses:
+            compact["fixture_classification"] = "REVIEW_REQUIRED"
+        else:
+            compact["fixture_classification"] = "STILL_IDENTITY_MISSING"
+        rows.append(compact)
+
+    # Keep the baseline count meaningful even if a future demand-index refresh
+    # temporarily omits one of the original target IDs.
+    missing_from_current = sorted(starting_ids - set(target_by_id))
+    rows.extend(
+        {
+            "target_match_id": target_id,
+            "competition": None,
+            "kickoff": None,
+            "provider": None,
+            "provider_match_id": None,
+            "project_home_name": None,
+            "project_away_name": None,
+            "home_provider_team_id": None,
+            "away_provider_team_id": None,
+            "translated_home_name": None,
+            "translated_away_name": None,
+            "home_canonical_candidate": None,
+            "away_canonical_candidate": None,
+            "home_resolution_reason": ["target_missing_from_current_demand_index"],
+            "away_resolution_reason": ["target_missing_from_current_demand_index"],
+            "home_resolution_status": "unresolved",
+            "away_resolution_status": "unresolved",
+            "source_refs": [],
+            "fixture_classification": "STILL_IDENTITY_MISSING",
+        }
+        for target_id in missing_from_current
+    )
+    classification_counts = {
+        status: sum(row["fixture_classification"] == status for row in rows)
+        for status in (
+            "AUTO_RESOLVED",
+            "REVIEW_REQUIRED",
+            "CONFLICT",
+            "STILL_IDENTITY_MISSING",
+        )
+    }
+    return {
+        "contract_version": "project_identity_gap_summary.v1",
+        "generated_at": generated_at,
+        "starting_identity_missing": len(starting_ids),
+        "rows": rows,
+        "row_count": len(rows),
+        "resolved_fixture_count": classification_counts["AUTO_RESOLVED"],
+        "auto_resolved_fixture_count": classification_counts["AUTO_RESOLVED"],
+        "review_required_fixture_count": classification_counts["REVIEW_REQUIRED"],
+        "conflict_fixture_count": classification_counts["CONFLICT"],
+        "still_unresolved_fixture_count": classification_counts["STILL_IDENTITY_MISSING"],
+        "notes": [
+            "Project provider identity is a shadow data-layer mapping and is not a Champion input.",
+            "Detailed candidate evidence is stored under ${FOOTBALL_DATA_HOME}/identity/.",
+            "A 500 match ID is not treated as a 500 team ID.",
+        ],
+    }
+
+
 def run(capture_root: Path, *, captured_at: str = "2026-08-11T00:00:00Z") -> dict[str, Any]:
+    previous_availability = _load(OUTPUT_ROOT / "p0_p1_demand_availability.json", {})
+    baseline_availability = _load(PROJECT_BASELINE_PATH, {})
+    if not isinstance(baseline_availability.get("audits"), list):
+        baseline_availability = {
+            "contract_version": "project_identity_baseline_availability.v1",
+            "captured_at": previous_availability.get("generated_at") or captured_at,
+            "source": "pre_project_identity_sprint_availability",
+            "audits": previous_availability.get("audits", []),
+        }
+        _json(PROJECT_BASELINE_PATH, baseline_availability)
     sources = default_sources(capture_root)
     for source in sources:
         source["captured_at"] = captured_at
     result, observations = build_identity_candidates(sources, canonical_seeds=_canonical_seeds())
     mappings = expand_exact_provider_mappings(result, sources)
+    usage = _load(USAGE_PATH, {})
+    p01_events = [
+        event
+        for event in usage.get("recovered_events", [])
+        if (event.get("competition") or {}).get("competition_key") in P01_KEYS
+    ]
+    p01_provider_ids = {
+        str(value)
+        for event in p01_events
+        for value in event.get("provider_match_ids", [])
+        if value
+    }
+    project_identity = build_project_identity_output(
+        events=p01_events,
+        translations=_fetch_translation_index(p01_provider_ids),
+        canonical_mappings=list(mappings.values()),
+        project_alias_rows=_load(PROJECT_ALIAS_SOURCE_PATH, {}).get("teams", []),
+    )
     records, parse_summary = build_normalized_records(sources, mappings)
     ledger = HistoricalResultLedger(LEDGER_ROOT)
     persisted = 0
@@ -586,7 +798,7 @@ def run(capture_root: Path, *, captured_at: str = "2026-08-11T00:00:00Z") -> dic
                 canonical_by_name[key] = team_id
     for key in ambiguous_names:
         canonical_by_name.pop(key, None)
-    targets, target_summary = _demand_targets(canonical_by_name)
+    targets, target_summary = _demand_targets(canonical_by_name, project_identity=project_identity)
     for target in targets:
         if target.get("source_available") is False and target.get("home_team_id") and target.get("away_team_id"):
             target["source_available"] = False
@@ -653,9 +865,24 @@ def run(capture_root: Path, *, captured_at: str = "2026-08-11T00:00:00Z") -> dic
         "ledger_record_count_after": len(all_records),
         "snapshot_count": snapshot_count,
         "target_summary": target_summary,
+        "project_identity_summary": project_identity.get("summary", {}),
     }
     identity_output = {**result, "reviewed_mapping_count": len(mappings), "provider_mappings": [dict(row) for row in mappings.values()]}
     persist_identity_artifacts(identity_output, generated_at=captured_at)
+    project_artifact_result = persist_identity_artifacts(
+        project_identity,
+        generated_at=captured_at,
+        detail_path=BULK_DATA_ROOT / "identity" / "project_provider_identity_candidates.json",
+        crosswalk_path=PROJECT_CROSSWALK_PATH,
+        review_queue_path=PROJECT_REVIEW_QUEUE_PATH,
+    )
+    gap_summary = _project_identity_gap_summary(
+        previous_audits=baseline_availability.get("audits", []),
+        targets=targets,
+        project_identity=project_identity,
+        generated_at=captured_at,
+    )
+    _json(PROJECT_GAP_PATH, gap_summary)
     _json(OUTPUT_ROOT / "p0_p1_identity_evidence.json", target_summary)
     _json(OUTPUT_ROOT / "p0_p1_source_manifest.json", manifest)
     _json(OUTPUT_ROOT / "p0_p1_population_summary.json", population)
@@ -674,9 +901,25 @@ def run(capture_root: Path, *, captured_at: str = "2026-08-11T00:00:00Z") -> dic
     health_path = OUTPUT_ROOT / "team_strength_health.json"
     health = _load(health_path, {})
     health["p0_p1_retrospective"] = {"demand_weight": weighted["demand_weight"], **weighted, "audited_matches": len(audits), "last_updated_at": captured_at, "validated_for_model": False}
+    health["project_identity_sprint"] = {
+        "starting_identity_missing": gap_summary["starting_identity_missing"],
+        "resolved_fixture_count": gap_summary["resolved_fixture_count"],
+        "verified_project_mapping_count": project_artifact_result["verified_mapping_count"],
+        "last_updated_at": captured_at,
+        "validated_for_model": False,
+    }
     _json(health_path, health)
     _write_docs(candidates=result, population=population, weighted=weighted, audits=audits, k_league=k_league, captured_at=captured_at)
-    return {"manifest": manifest, "population": population, "weighted": weighted, "audits": audits, "candidates": result, "k_league": k_league}
+    return {
+        "manifest": manifest,
+        "population": population,
+        "weighted": weighted,
+        "audits": audits,
+        "candidates": result,
+        "project_identity": project_identity,
+        "project_identity_gap": gap_summary,
+        "k_league": k_league,
+    }
 
 
 def main() -> None:
