@@ -472,12 +472,14 @@ def _handoff_entries(root: Path, summary: Mapping[str, Any], benchmark: Mapping[
             entries[relative] = path.read_bytes()
     entries["phase2c2_champion_evidence.json"] = (json.dumps(champion_evidence(root), ensure_ascii=False, indent=2, sort_keys=True) + "\n").encode("utf-8")
     entries["phase2c2_benchmark_health.json"] = (json.dumps(benchmark, ensure_ascii=False, indent=2, sort_keys=True) + "\n").encode("utf-8")
+    branch = subprocess.run(["git", "branch", "--show-current"], cwd=root, capture_output=True, text=True, check=False).stdout.strip()
+    head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=root, capture_output=True, text=True, check=False).stdout.strip()
     entries["phase2c2_pr_metadata.json"] = (json.dumps({
         "title": "feat(model): evaluate phase2c2 opponent strength",
         "draft": True,
         "pr_number": pr_number,
-        "branch": "agent/phase2c2-opponent-strength",
-        "head": "generated-at-handoff",
+        "branch": branch,
+        "head": head,
         "research_only": True,
     }, ensure_ascii=False, indent=2, sort_keys=True) + "\n").encode("utf-8")
     entries["phase2c2_summary.json"] = (json.dumps(summary, ensure_ascii=False, indent=2, sort_keys=True) + "\n").encode("utf-8")
