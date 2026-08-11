@@ -15,4 +15,3 @@ def test_uefa_prior_season_does_not_become_current_season_ready():
     assert by_name["K League official/public"]["status"] == "SOURCE_MISSING"
     assert report["k_league_source_gap"] is True
     assert report["api_football"]["status"] == "NOT_EXECUTED_NO_KEY"
-

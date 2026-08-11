@@ -36,4 +36,3 @@ def test_api_football_status_never_claims_ingestion_from_catalog_only():
     assert result["status"] == "COVERAGE_CATALOG_ONLY"
     assert result["real_ingestion_executed"] is False
     assert result["requests_used"] == 0
-
