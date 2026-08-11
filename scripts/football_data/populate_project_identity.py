@@ -91,6 +91,8 @@ def _write_identity_doc(*, gap: dict[str, Any], weighted: dict[str, Any], mappin
         "",
         f"Verified project mappings: `{mapping_summary.get('AUTO_VERIFIED', 0)}`; review required `{mapping_summary.get('REVIEW_REQUIRED', 0)}`; conflicts `{mapping_summary.get('CONFLICT', 0)}`; unresolved `{mapping_summary.get('UNRESOLVED', 0)}`.",
         "",
+        f"Reviewed alias groups used: `{mapping_summary.get('reviewed_alias_groups_used', 0)}`; alias-derived verified project mappings: `{mapping_summary.get('alias_derived_verified_mapping_count', 0)}`. Alias evidence is still scoped by the current competition/country context and never bypasses conflict or review gates.",
+        "",
         f"P0/P1 demand remains `{weighted.get('demand_weight', 0)}`. Strict ready `{weighted.get('strict_ready_weight', 0)}`; verified bridge `{weighted.get('verified_bridge_weight', 0)}`; identity-missing `{weighted.get('identity_missing_weight', 0)}`; source-missing `{weighted.get('source_missing_weight', 0)}`.",
         "",
         "500 match IDs are not treated as 500 team IDs. Nowscore team IDs remain in the Nowscore namespace; an exact bound capture may provide cross-provider context, but its ID is never copied into a 500 mapping.",
@@ -184,6 +186,8 @@ def run(*, captured_at: str | None = None) -> dict[str, Any]:
         "starting_identity_missing": gap["starting_identity_missing"],
         "resolved_fixture_count": gap["resolved_fixture_count"],
         "verified_project_mapping_count": project_artifacts["verified_mapping_count"],
+        "reviewed_alias_groups_used": project_identity.get("summary", {}).get("reviewed_alias_groups_used", 0),
+        "alias_derived_verified_mapping_count": project_identity.get("summary", {}).get("alias_derived_verified_mapping_count", 0),
         "last_updated_at": generated_at,
         "validated_for_model": False,
     }

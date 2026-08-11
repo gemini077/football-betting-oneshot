@@ -104,36 +104,123 @@ def _canonical_catalog(canonical_mappings: Iterable[Mapping[str, Any]]) -> dict[
 def _alias_catalog(
     project_alias_rows: Iterable[Mapping[str, Any]],
     canonical_catalog: Mapping[tuple[str, str, str], set[tuple[str, str]]],
-) -> dict[str, set[tuple[str, str]]]:
-    """Resolve only explicitly reviewed project aliases to source identities."""
+) -> dict[str, list[dict[str, Any]]]:
+    """Index reviewed alias groups against every exact source-name match.
 
-    output: dict[str, set[tuple[str, str]]] = defaultdict(set)
-    all_source_rows: list[tuple[str, str, str, tuple[str, str]]] = []
+    A project alias row is one reviewed group, not a collection of unrelated
+    one-name mappings.  Every name in a group therefore receives the complete
+    exact-match candidate set, while the source competition/country context is
+    retained for the later observation-specific safety gate.
+    """
+
+    output: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    all_source_rows: list[dict[str, Any]] = []
     for (competition_id, country, name), candidates in canonical_catalog.items():
         for candidate in candidates:
-            all_source_rows.append((competition_id, country, name, candidate))
-    for row in project_alias_rows:
+            all_source_rows.append(
+                {
+                    "competition_id": competition_id,
+                    "country": country,
+                    "source_name_key": name,
+                    "canonical_team_id": candidate[0],
+                    "canonical_name": candidate[1],
+                }
+            )
+    for row_index, row in enumerate(project_alias_rows):
         evidence = str(row.get("evidence") or "").strip()
         if not evidence:
             continue
         names = {_clean(row.get("canonical"))}
         names.update(_clean(alias) for alias in row.get("aliases") or [])
         names.discard("")
-        for alias in names:
-            alias_key = _name_key(alias)
-            if not alias_key:
-                continue
-            for _competition_id, _country, source_name, candidate in all_source_rows:
-                if alias_key == source_name:
-                    output[alias_key].add(candidate)
+        name_keys = {_name_key(name) for name in names if _name_key(name)}
+        if not name_keys:
+            continue
+
+        group_key = ":".join(
+            (
+                "reviewed_alias",
+                _name_key(row.get("canonical")) or f"row-{row_index}",
+                _name_key(evidence),
+            )
+        )
+        matched_source_rows = [
+            source_row
+            for source_row in all_source_rows
+            if source_row["source_name_key"] in name_keys
+        ]
+        matched_alias_names = sorted(
+            {
+                name
+                for name in names
+                if _name_key(name)
+                and any(
+                    source_row["source_name_key"] == _name_key(name)
+                    for source_row in matched_source_rows
+                )
+            }
+        )
+        group_records = [
+            {
+                "group_key": group_key,
+                "evidence": evidence,
+                "group_names": sorted(names),
+                "matched_alias_names": matched_alias_names,
+                **source_row,
+            }
+            for source_row in matched_source_rows
+        ]
+        if not group_records:
+            group_records = [
+                {
+                    "group_key": group_key,
+                    "evidence": evidence,
+                    "group_names": sorted(names),
+                    "matched_alias_names": [],
+                    "competition_id": "",
+                    "country": "",
+                    "source_name_key": "",
+                    "canonical_team_id": None,
+                    "canonical_name": None,
+                }
+            ]
+        # The complete group candidate set is deliberately attached to every
+        # group name.  This is what lets a reviewed Chinese/project spelling
+        # inherit the source candidate found through an English alias.
+        for alias_key in name_keys:
+            output[alias_key].extend(group_records)
     return output
 
 
-def _candidate_names(observation: ProjectFixtureObservation, aliases: Mapping[str, set[tuple[str, str]]], catalog: Mapping[tuple[str, str, str], set[tuple[str, str]]]) -> tuple[set[tuple[str, str]], list[str]]:
+def _alias_context_matches(
+    record: Mapping[str, Any],
+    context: tuple[str, str],
+) -> bool:
+    """Keep alias evidence inside the observation's competition/country."""
+
+    competition_id, country = context
+    if not competition_id or record.get("competition_id") != competition_id:
+        return False
+    record_country = _clean(record.get("country")).casefold()
+    return not country or not record_country or record_country == country
+
+
+def _candidate_names(
+    observation: ProjectFixtureObservation,
+    aliases: Mapping[str, list[dict[str, Any]]],
+    catalog: Mapping[tuple[str, str, str], set[tuple[str, str]]],
+) -> tuple[set[tuple[str, str]], list[str], dict[str, Any]]:
     """Return exact candidates plus the evidence kinds that produced them."""
 
     candidates: set[tuple[str, str]] = set()
     evidence_kinds: list[str] = []
+    alias_diagnostics: dict[str, Any] = {
+        "reviewed_alias_group_used": False,
+        "reviewed_alias_group_keys": set(),
+        "matched_alias_names": set(),
+        "candidate_canonical_team_ids_before_context": set(),
+        "candidate_canonical_team_ids_after_context": set(),
+    }
     context = _context_key(observation.competition_id, observation.country)
 
     translated = _clean(observation.translated_team_name)
@@ -143,23 +230,25 @@ def _candidate_names(observation: ProjectFixtureObservation, aliases: Mapping[st
             evidence_kinds.append("exact_translation")
 
     project_name_key = _name_key(observation.provider_team_name)
-    alias_candidates = aliases.get(project_name_key, set())
-    if alias_candidates:
-        # Alias evidence is already reviewed, but its canonical target must
-        # still be unique in this fixture's competition context.  The catalog
-        # is searched by team id rather than by the raw project spelling.
-        scoped_ids = {
-            candidate
-            for values in catalog.values()
-            for candidate in values
-            if candidate in alias_candidates
-            and any(key[:2] == context and candidate in value for key, value in catalog.items())
-        }
-        candidates.update(scoped_ids)
-        if scoped_ids:
+    alias_records = aliases.get(project_name_key, [])
+    if alias_records:
+        alias_diagnostics["reviewed_alias_group_used"] = True
+        for record in alias_records:
+            alias_diagnostics["reviewed_alias_group_keys"].add(record["group_key"])
+            alias_diagnostics["matched_alias_names"].update(record["matched_alias_names"])
+            team_id = _clean(record.get("canonical_team_id"))
+            canonical_name = _clean(record.get("canonical_name"))
+            if not team_id:
+                continue
+            candidate = (team_id, canonical_name)
+            alias_diagnostics["candidate_canonical_team_ids_before_context"].add(team_id)
+            if _alias_context_matches(record, context):
+                alias_diagnostics["candidate_canonical_team_ids_after_context"].add(team_id)
+                candidates.add(candidate)
+        if alias_diagnostics["candidate_canonical_team_ids_after_context"]:
             evidence_kinds.append("reviewed_project_alias")
 
-    return candidates, evidence_kinds
+    return candidates, evidence_kinds, alias_diagnostics
 
 
 def _mapping_key(observation: ProjectFixtureObservation) -> tuple[str, str, str, str]:
@@ -186,12 +275,17 @@ class ProjectProviderIdentityCandidateBuilder:
     def build(self, observations: Iterable[ProjectFixtureObservation]) -> dict[str, Any]:
         grouped: dict[tuple[str, str, str, str], list[dict[str, Any]]] = defaultdict(list)
         for observation in observations:
-            candidates, evidence_kinds = _candidate_names(observation, self.alias_catalog, self.canonical_catalog)
+            candidates, evidence_kinds, alias_diagnostics = _candidate_names(
+                observation,
+                self.alias_catalog,
+                self.canonical_catalog,
+            )
             grouped[_mapping_key(observation)].append(
                 {
                     "observation": observation,
                     "candidate_ids": candidates,
                     "evidence_kinds": evidence_kinds,
+                    "alias_diagnostics": alias_diagnostics,
                 }
             )
 
@@ -214,6 +308,36 @@ class ProjectProviderIdentityCandidateBuilder:
                 for entry in entries
                 if _clean(entry["observation"].opponent_name)
             })
+            alias_diagnostics = {
+                "reviewed_alias_group_used": any(
+                    entry["alias_diagnostics"]["reviewed_alias_group_used"]
+                    for entry in entries
+                ),
+                "reviewed_alias_group_keys": set().union(
+                    *(
+                        entry["alias_diagnostics"]["reviewed_alias_group_keys"]
+                        for entry in entries
+                    )
+                ),
+                "matched_alias_names": set().union(
+                    *(
+                        entry["alias_diagnostics"]["matched_alias_names"]
+                        for entry in entries
+                    )
+                ),
+                "candidate_canonical_team_ids_before_context": set().union(
+                    *(
+                        entry["alias_diagnostics"]["candidate_canonical_team_ids_before_context"]
+                        for entry in entries
+                    )
+                ),
+                "candidate_canonical_team_ids_after_context": set().union(
+                    *(
+                        entry["alias_diagnostics"]["candidate_canonical_team_ids_after_context"]
+                        for entry in entries
+                    )
+                ),
+            }
             if _is_generic(first.provider_team_name):
                 status = "UNRESOLVED"
                 reason = ["generic_provider_team_name"]
@@ -222,7 +346,13 @@ class ProjectProviderIdentityCandidateBuilder:
                 reason = ["multiple_unique_canonical_candidates"]
             elif not candidate_ids:
                 status = "UNRESOLVED"
-                reason = ["no_exact_reviewed_canonical_candidate"]
+                if alias_diagnostics["reviewed_alias_group_used"]:
+                    if alias_diagnostics["candidate_canonical_team_ids_before_context"]:
+                        reason = ["reviewed_alias_group_context_mismatch"]
+                    else:
+                        reason = ["reviewed_alias_group_source_candidate_missing"]
+                else:
+                    reason = ["no_exact_reviewed_canonical_candidate"]
             elif len(fixture_ids) < 2 and not any(
                 entry["observation"].provider_team_id for entry in entries
             ):
@@ -236,6 +366,11 @@ class ProjectProviderIdentityCandidateBuilder:
                 reason = ["exact_translation_or_reviewed_alias_with_competition_context"]
 
             selected = next(iter(candidate_ids), (None, None))
+            resolved_method = (
+                "project_alias_context_verified"
+                if "reviewed_project_alias" in evidence_kinds
+                else PROJECT_RESOLUTION_METHOD
+            )
             evidence = {
                 "evidence_kinds": evidence_kinds,
                 "fixture_ids": fixture_ids,
@@ -253,6 +388,15 @@ class ProjectProviderIdentityCandidateBuilder:
                     if _clean(entry["observation"].translated_team_name)
                 }),
                 "unique_canonical_candidate": len(candidate_ids) == 1,
+                "reviewed_alias_group_used": alias_diagnostics["reviewed_alias_group_used"],
+                "reviewed_alias_group_keys": sorted(alias_diagnostics["reviewed_alias_group_keys"]),
+                "matched_alias_names": sorted(alias_diagnostics["matched_alias_names"]),
+                "candidate_canonical_team_ids_before_context": sorted(
+                    alias_diagnostics["candidate_canonical_team_ids_before_context"]
+                ),
+                "candidate_canonical_team_ids_after_context": sorted(
+                    alias_diagnostics["candidate_canonical_team_ids_after_context"]
+                ),
             }
             row = {
                 "status": status,
@@ -265,8 +409,8 @@ class ProjectProviderIdentityCandidateBuilder:
                 "competition_id": competition_id,
                 "country": first.country,
                 "confidence": 1.0 if status == "AUTO_VERIFIED" else None,
-                "resolution_method": PROJECT_RESOLUTION_METHOD if status == "AUTO_VERIFIED" else "unresolved",
-                "verification_method": PROJECT_RESOLUTION_METHOD if status == "AUTO_VERIFIED" else status.casefold(),
+                "resolution_method": resolved_method if status == "AUTO_VERIFIED" else "unresolved",
+                "verification_method": resolved_method if status == "AUTO_VERIFIED" else status.casefold(),
                 "evidence": evidence,
                 "conflicts": reason if status == "CONFLICT" else [],
                 "reason": reason,
@@ -279,6 +423,16 @@ class ProjectProviderIdentityCandidateBuilder:
             status: sum(row["status"] == status for row in candidates_output)
             for status in ("AUTO_VERIFIED", "REVIEW_REQUIRED", "UNRESOLVED", "CONFLICT")
         }
+        summary["reviewed_alias_groups_used"] = len({
+            group_key
+            for row in candidates_output
+            for group_key in row["evidence"].get("reviewed_alias_group_keys", [])
+        })
+        summary["alias_derived_verified_mapping_count"] = sum(
+            row["status"] == "AUTO_VERIFIED"
+            and "reviewed_project_alias" in row["evidence"].get("evidence_kinds", [])
+            for row in candidates_output
+        )
         return {
             "contract_version": "project_provider_identity.v1",
             "candidates": candidates_output,
