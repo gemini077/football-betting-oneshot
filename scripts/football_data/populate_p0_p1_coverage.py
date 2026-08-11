@@ -31,11 +31,12 @@ ROOT = Path(__file__).resolve().parents[2]
 USAGE_PATH = ROOT / "data" / "football_data" / "competition_usage_history.json"
 CURRENT_IDENTITY_PATH = ROOT / "data" / "football_data" / "current_match_identity_evidence.json"
 REGISTRY_PATH = ROOT / "data" / "football_data" / "team_alias_registry.json"
-LEDGER_ROOT = ROOT / "data" / "football_data" / "historical_result_ledger"
-SNAPSHOT_ROOT = ROOT / "data" / "football_data" / "team_strength_snapshots"
 OUTPUT_ROOT = ROOT / "data" / "football_data"
 DOC_ROOT = ROOT / "docs" / "team-strength"
 FOOTBALL_DATA_UK_MANIFEST_PATH = ROOT / "data" / "football_data" / "football_data_uk" / "demand_source_manifest.json"
+BULK_DATA_ROOT = ROOT / ".cache" / "football_data"
+LEDGER_ROOT = BULK_DATA_ROOT / "historical_results.duckdb"
+SNAPSHOT_ROOT = BULK_DATA_ROOT / "team_strength_snapshots.duckdb"
 
 P01_KEYS = (
     "portugal-primeira-liga",
@@ -604,7 +605,7 @@ def run(capture_root: Path, *, captured_at: str = "2026-08-11T00:00:00Z") -> dic
                     reasons.append("identity_missing")
             audit["reason"] = reasons
     weighted = weighted_ready_coverage(audits)
-    snapshots = TeamStrengthBuilder(all_records, captured_at=captured_at, snapshot_revision="p0-p1-v3")
+    snapshots = TeamStrengthBuilder(ledger, captured_at=captured_at, snapshot_revision="p0-p1-v3")
     snapshot_store = PreMatchSnapshotStore(SNAPSHOT_ROOT)
     snapshot_count = 0
     for target, audit in zip(targets, audits):

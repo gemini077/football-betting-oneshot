@@ -20,7 +20,7 @@ from .providers.openfootball import OpenFootballHistoricalAdapter
 DEFAULT_MANIFEST = Path(__file__).resolve().parents[2] / "data" / "football_data" / "openfootball" / "source_manifest.json"
 DEFAULT_IDENTITIES = Path(__file__).resolve().parents[2] / "data" / "football_data" / "openfootball" / "identity_evidence.json"
 DEFAULT_OUTPUT = Path(__file__).resolve().parents[2] / "data" / "football_data" / "historical_result_samples" / "openfootball_pilot.json"
-DEFAULT_LEDGER_ROOT = Path(__file__).resolve().parents[2] / "data" / "football_data" / "historical_result_ledger"
+DEFAULT_LEDGER_ROOT = Path(__file__).resolve().parents[2] / ".cache" / "football_data" / "historical_results.duckdb"
 
 
 def load_openfootball_records(

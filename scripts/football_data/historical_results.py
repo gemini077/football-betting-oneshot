@@ -7,15 +7,13 @@ feeds the formal Champion.
 
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Any, Iterable, Mapping
 
 from .contracts import validate_record
 from .quality import finalize_record_quality
-from .storage import SnapshotStore
+from .storage import HistoricalResultStore
 from .providers.base import provenance, utc_now
 
 
@@ -363,25 +361,9 @@ def deduplicate_historical_results(records: Iterable[Mapping[str, Any]]) -> Dedu
     return DeduplicationReport(output, collapsed, possible, conflicts)
 
 
-class HistoricalResultLedger:
-    """Content-addressed result store; existing result bytes are never replaced."""
-
-    def __init__(self, root: str | Path) -> None:
-        self.store = SnapshotStore(root)
+class HistoricalResultLedger(HistoricalResultStore):
+    """Backward-compatible name for the compact DuckDB historical store."""
 
     def append(self, record: Mapping[str, Any]) -> str:
         validate_record("historical_match_result", record)
-        digest, _ = self.store.put(record)
-        return digest
-
-    def records(self) -> list[dict[str, Any]]:
-        if not self.store.root.exists():
-            return []
-        output: list[dict[str, Any]] = []
-        for path in sorted(self.store.root.glob("*.json")):
-            digest = path.stem
-            try:
-                output.append(self.store.get(digest))
-            except (OSError, ValueError, json.JSONDecodeError):
-                continue
-        return output
+        return super().append(record)

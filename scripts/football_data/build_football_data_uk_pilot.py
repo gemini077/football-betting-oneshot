@@ -15,7 +15,7 @@ ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_MANIFEST = ROOT / "data" / "football_data" / "football_data_uk" / "source_manifest.json"
 DEFAULT_IDENTITIES = ROOT / "data" / "football_data" / "football_data_uk" / "identity_evidence.json"
 DEFAULT_OUTPUT = ROOT / "data" / "football_data" / "historical_result_samples" / "football_data_uk_sweden_2026.json"
-DEFAULT_LEDGER_ROOT = ROOT / "data" / "football_data" / "historical_result_ledger"
+DEFAULT_LEDGER_ROOT = ROOT / ".cache" / "football_data" / "historical_results.duckdb"
 
 
 def load_records(
