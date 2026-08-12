@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+from copy import deepcopy
 import json
 import re
 from datetime import datetime
@@ -21,6 +22,11 @@ from market_history import rebuild_history
 from nowscore_markets import fetch_match_markets as fetch_nowscore_markets
 from polymarket_public import fetch_snapshot as fetch_polymarket_snapshot
 from spdex_exchange import fetch_snapshot as fetch_spdex_snapshot, merge_into as merge_spdex_exchange
+
+try:
+    from prediction_universe import update_prediction_universe
+except ImportError:  # package imports used by tests
+    from scripts.prediction_universe import update_prediction_universe
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -223,9 +229,20 @@ def main() -> int:
 
     trade_result = {"success": False, "matches": [], "status": "SKIPPED"}
     official_matches = []
+    full_schedule_mode = (
+        not args.match
+        and not args.deep
+        and not args.shuju_id
+        and not args.sid
+        and not args.polymarket_home
+        and not args.polymarket_away
+    )
+    full_schedule_attempts = []
 
     if not args.skip_sporttery:
         official = fetch_jingcai_odds(args.date, args.no_cache, SPORTTERY_CACHE_DIR)
+        if full_schedule_mode:
+            full_schedule_attempts.append(deepcopy(official))
         official_unfiltered_count = len(official.get("matches", []))
         official["matches"] = _match_filter(official.get("matches", []), args.match)
         official_matches = official["matches"]
@@ -245,6 +262,8 @@ def main() -> int:
 
     if not args.skip_trade:
         trade_result = fetch_trade_matches(args.date, args.no_cache, TRADE_CACHE_DIR)
+        if full_schedule_mode:
+            full_schedule_attempts.append(deepcopy(trade_result))
         selected_matches = _match_filter(trade_result.get("matches", []), args.match)
         trade_output = {**trade_result, "matches": selected_matches, "unfiltered_match_count": len(trade_result.get("matches", []))}
         trade_path = run_dir / f"{stamp}_500_trade_{args.date}.json"
@@ -259,6 +278,13 @@ def main() -> int:
             manifest["warnings"].append("500竞彩列表中未找到匹配筛选条件的比赛。")
     else:
         selected_matches = []
+
+    if full_schedule_mode and full_schedule_attempts:
+        full_schedule = next(
+            (payload for payload in full_schedule_attempts if payload.get("success")),
+            full_schedule_attempts[0],
+        )
+        update_prediction_universe(args.date, full_schedule)
 
     if not selected_matches and not official_matches:
         workspace_matches = _workspace_fallback(args.match)
