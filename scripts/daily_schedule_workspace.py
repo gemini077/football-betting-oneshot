@@ -18,6 +18,11 @@ try:
 except ImportError:  # package imports used by tests
     from scripts.prediction_universe import update_prediction_universe
 
+try:
+    from base_prediction_jobs import sync_base_prediction_jobs
+except ImportError:  # package imports used by tests
+    from scripts.base_prediction_jobs import sync_base_prediction_jobs
+
 
 def _kickoff(row: dict) -> str:
     match_date = str(row.get("matchDate") or row.get("businessDate") or "")[:10]
@@ -106,10 +111,12 @@ def main() -> int:
         payloads.append(payload)
     nowscore_binding = attach_nowscore_bindings(payloads)
     universe_snapshots = []
+    base_job_snapshots = []
     for offset, payload in enumerate(payloads):
         business_date = (base_date + timedelta(days=offset)).isoformat()
         payload["nowscore_binding"] = nowscore_binding
         universe = update_prediction_universe(business_date, payload)
+        base_jobs = sync_base_prediction_jobs(business_date)
         universe_snapshots.append({
             "date": business_date,
             "path": str(ROOT / "data" / "prediction_universe" / f"{business_date}.json"),
@@ -119,6 +126,14 @@ def main() -> int:
             "source_fixture_count": universe.get("source_fixture_count", 0),
             "fixture_count": universe.get("fixture_count", 0),
             "excluded_cross_date_count": universe.get("excluded_cross_date_count", 0),
+        })
+        base_job_snapshots.append({
+            "date": business_date,
+            "status": base_jobs.get("status"),
+            "fixture_count": base_jobs.get("fixture_count", 0),
+            "job_count": base_jobs.get("job_count", 0),
+            "pending_count": base_jobs.get("pending_count", 0),
+            "missed_prematch_count": base_jobs.get("missed_prematch_count", 0),
         })
         schedule_path = output_dir / f"{stamp}_sporttery_{business_date}.json"
         schedule_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -142,6 +157,7 @@ def main() -> int:
             "automatic_betting": False,
             "lock_state_changed": False,
             "prediction_universe": universe_snapshots,
+            "base_prediction_jobs": base_job_snapshots,
         }, ensure_ascii=False, indent=2))
         return 1
 
@@ -157,6 +173,7 @@ def main() -> int:
         "refresh_status": "success" if len(successful_payloads) == len(payloads) else "partial_success",
         "nowscore_binding": nowscore_binding,
         "prediction_universe": universe_snapshots,
+        "base_prediction_jobs": base_job_snapshots,
         "workspace_rebuilt": not args.fetch_only,
     }, ensure_ascii=False, indent=2))
     return 0

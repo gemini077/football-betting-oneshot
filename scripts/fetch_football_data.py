@@ -28,6 +28,11 @@ try:
 except ImportError:  # package imports used by tests
     from scripts.prediction_universe import update_prediction_universe
 
+try:
+    from base_prediction_jobs import sync_base_prediction_jobs
+except ImportError:  # package imports used by tests
+    from scripts.base_prediction_jobs import sync_base_prediction_jobs
+
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 RUNS_ROOT = PROJECT_ROOT / "data" / "fetch_runs"
@@ -284,7 +289,20 @@ def main() -> int:
             (payload for payload in full_schedule_attempts if payload.get("success")),
             full_schedule_attempts[0],
         )
-        update_prediction_universe(args.date, full_schedule)
+        universe = update_prediction_universe(args.date, full_schedule)
+        base_jobs = sync_base_prediction_jobs(args.date)
+        manifest["prediction_universe"] = {
+            "status": universe.get("status"),
+            "fixture_count": universe.get("fixture_count", 0),
+            "source_fixture_count": universe.get("source_fixture_count", 0),
+        }
+        manifest["base_prediction_jobs"] = {
+            "status": base_jobs.get("status"),
+            "fixture_count": base_jobs.get("fixture_count", 0),
+            "job_count": base_jobs.get("job_count", 0),
+            "pending_count": base_jobs.get("pending_count", 0),
+            "missed_prematch_count": base_jobs.get("missed_prematch_count", 0),
+        }
 
     if not selected_matches and not official_matches:
         workspace_matches = _workspace_fallback(args.match)
