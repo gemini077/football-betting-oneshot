@@ -1,9 +1,13 @@
 import json
+import sys
 import tempfile
 import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import patch
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "scripts"))
 
 import scripts.daily_schedule_workspace as daily_schedule_workspace
 from scripts.base_prediction_jobs import sync_base_prediction_jobs

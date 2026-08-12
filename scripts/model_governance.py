@@ -733,6 +733,12 @@ def build_deterministic_model_input_snapshot(
     ]
     if checkpoint_timestamp:
         market_values.append(checkpoint_timestamp)
+    # BASE v0 may use the explicitly captured official Sporttery SPF as its
+    # only market input.  It is a legitimate market snapshot even though it
+    # is not represented as a multi-bookmaker ``source_snapshots`` row.
+    official_market_timestamp = source_timestamps.get("official_market_baseline")
+    if not market_values and official_market_timestamp:
+        market_values.append(official_market_timestamp)
     market_snapshot = _max_timestamp(market_values) if market_values and all(
         source_timestamps.get(key) for key in required if key != "checkpoint_features"
     ) else None

@@ -111,6 +111,10 @@ def _blocked_ledger(business_date: str, generated_at: str, source_universe: str)
         "fixture_count": 0,
         "job_count": 0,
         "pending_count": 0,
+        "frozen_count": 0,
+        "predicted_count": 0,
+        "insufficient_data_count": 0,
+        "prediction_failed_count": 0,
         "missed_prematch_count": 0,
         "source_universe": source_universe,
         "jobs": [],
@@ -227,6 +231,7 @@ def sync_base_prediction_jobs(
             removed_jobs.append(removed)
 
     pending_count = sum(job.get("status") == "PENDING" for job in jobs)
+    frozen_count = sum(job.get("status") == "FROZEN" for job in jobs)
     missed_count = sum(job.get("status") == "MISSED_PREMATCH_WINDOW" for job in jobs)
     ledger = {
         "schema_version": "1.0",
@@ -236,6 +241,10 @@ def sync_base_prediction_jobs(
         "fixture_count": len(fixtures),
         "job_count": len(jobs),
         "pending_count": pending_count,
+        "frozen_count": frozen_count,
+        "predicted_count": sum(job.get("status") == "PREDICTED" for job in jobs),
+        "insufficient_data_count": sum(job.get("status") == "INSUFFICIENT_DATA" for job in jobs),
+        "prediction_failed_count": sum(job.get("status") == "PREDICTION_FAILED" for job in jobs),
         "missed_prematch_count": missed_count,
         "duplicate_job_count": duplicate_job_count,
         "source_universe": source_universe,
