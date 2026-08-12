@@ -254,3 +254,28 @@ def sync_base_prediction_jobs(
         ledger["removed_jobs"] = removed_jobs
     _write_json(ledger_path, ledger)
     return ledger
+
+
+def main() -> int:
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Synchronize one BASE job for every Prediction Universe fixture")
+    parser.add_argument("--date", required=True, help="Business date YYYY-MM-DD")
+    args = parser.parse_args()
+    ledger = sync_base_prediction_jobs(args.date)
+    print(json.dumps({
+        "business_date": args.date,
+        "status": ledger.get("status"),
+        "fixture_count": ledger.get("fixture_count", 0),
+        "job_count": ledger.get("job_count", 0),
+        "pending_count": ledger.get("pending_count", 0),
+        "frozen_count": ledger.get("frozen_count", 0),
+        "insufficient_data_count": ledger.get("insufficient_data_count", 0),
+        "prediction_failed_count": ledger.get("prediction_failed_count", 0),
+        "missed_prematch_count": ledger.get("missed_prematch_count", 0),
+    }, ensure_ascii=False))
+    return 1 if ledger.get("status") == "BLOCKED_UNIVERSE" else 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

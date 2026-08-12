@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Prediction Day · 2026-08-12</title><style>
+:root { --ink:#1f2933; --muted:#64717d; --line:#d9e0e5; --paper:#f6f8f9; --panel:#ffffff; --navy:#17324d; --teal:#1d8175; --amber:#c77a18; --red:#b84c4c; --blue:#3475a8; }
+* { box-sizing:border-box; }
+body { margin:0; background:var(--paper); color:var(--ink); font:14px/1.6 "Segoe UI","Microsoft YaHei",sans-serif; }
+a { color:var(--teal); }
+.page { max-width:1240px; margin:0 auto; padding:28px 20px 54px; }
+.hero { background:var(--navy); color:#fff; padding:30px 32px; border-radius:14px; box-shadow:0 10px 28px rgba(23,50,77,.14); }
+.eyebrow { color:#9bd6cd; letter-spacing:.15em; font-size:11px; font-weight:700; }
+h1 { margin:7px 0 3px; font-size:clamp(28px,4vw,42px); letter-spacing:-.03em; }
+.hero p { margin:0; color:#d2e0eb; }
+.health { margin-top:22px; display:flex; flex-wrap:wrap; gap:10px; align-items:center; }
+.health-badge, .status-badge { display:inline-flex; padding:4px 10px; border-radius:999px; font-weight:700; font-size:12px; }
+.health-normal { background:#d9f2e8; color:#17614f; }
+.health-degraded { background:#fff0cf; color:#825114; }
+.health-failed { background:#f9dddd; color:#8e3333; }
+.health-unknown { background:#e7edf1; color:#4e5b65; }
+.summary-grid { display:grid; grid-template-columns:repeat(8,minmax(0,1fr)); gap:10px; margin:18px 0; }
+.summary-card { background:var(--panel); border:1px solid var(--line); padding:15px 14px; min-height:84px; }
+.summary-card strong { display:block; font-size:25px; color:var(--navy); line-height:1.1; }
+.summary-card span { color:var(--muted); font-size:12px; }
+.summary-card.accent { border-top:3px solid var(--teal); }
+.filters { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin:22px 0 13px; }
+.filter { cursor:pointer; border:1px solid var(--line); background:#fff; color:var(--ink); padding:7px 13px; border-radius:7px; }
+.filter[aria-pressed="true"] { background:var(--navy); color:#fff; border-color:var(--navy); }
+.fixture-list { display:grid; gap:13px; }
+.fixture-card { background:var(--panel); border:1px solid var(--line); border-left:5px solid var(--blue); padding:20px; }
+.status-frozen { border-left-color:var(--teal); }
+.status-insufficient_data { border-left-color:var(--amber); }
+.status-prediction_failed, .status-missed_prematch_window { border-left-color:var(--red); }
+.status-pending { border-left-color:#9aa7b0; }
+.fixture-head { display:flex; justify-content:space-between; gap:18px; align-items:flex-start; }
+.fixture-kicker, .block-title { color:var(--muted); text-transform:uppercase; letter-spacing:.08em; font-size:11px; font-weight:700; }
+h2 { margin:4px 0 2px; color:var(--navy); font-size:23px; letter-spacing:-.02em; }
+h2 span { color:#9aa7b0; font-size:14px; font-weight:400; }
+.kickoff { color:var(--muted); }
+.status-badge { background:#e7edf1; color:#43515c; white-space:nowrap; }
+.status-frozen .status-badge { background:#d9f2e8; color:#17614f; }
+.status-insufficient_data .status-badge { background:#fff0cf; color:#825114; }
+.status-prediction_failed .status-badge, .status-missed_prematch_window .status-badge { background:#f9dddd; color:#8e3333; }
+.reason { display:flex; gap:9px; flex-wrap:wrap; align-items:center; margin:14px 0 0; padding:10px 12px; background:#fff8e9; border:1px solid #f0dba8; color:#76501c; }
+.reason code { color:#926527; font-size:12px; }
+.prediction-block, .evaluation-block { border-top:1px solid var(--line); margin-top:18px; padding-top:16px; }
+.model-line { color:var(--teal); font-weight:700; margin:3px 0 12px; }
+.data-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px; margin-top:10px; }
+.quality-grid { margin-top:12px; }
+.metric { border:1px solid #e5eaee; padding:9px 10px; background:#fbfcfc; min-width:0; }
+.metric span { display:block; color:var(--muted); font-size:11px; }
+.metric strong { display:block; margin-top:2px; color:var(--ink); overflow-wrap:anywhere; }
+.metric.wide { grid-column:span 2; }
+.limited-note { color:#8a5a16; background:#fff8e9; padding:7px 9px; margin:10px 0 0; }
+.result-line { display:flex; align-items:center; gap:15px; flex-wrap:wrap; margin-top:15px; padding:11px 13px; background:#eef8f5; color:#17614f; }
+.pending-result { background:#f2f5f7; color:var(--muted); }
+.result-line span { font-size:12px; }
+.page-error { border:1px solid #efc7c7; background:#fff1f1; color:#8e3333; padding:12px 14px; margin:16px 0; }
+.empty { padding:32px; text-align:center; color:var(--muted); border:1px dashed var(--line); }
+@media (max-width:900px) { .summary-grid { grid-template-columns:repeat(4,minmax(0,1fr)); } .data-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+@media (max-width:520px) { .page { padding:14px 10px 36px; } .hero { padding:22px 18px; } .summary-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } .fixture-head { display:block; } .status-badge { margin-top:12px; } .data-grid { grid-template-columns:1fr; } .metric.wide { grid-column:span 1; } h2 { font-size:20px; } }
+</style></head>
+<body><main class="page">
+<header class="hero"><div class="eyebrow">PRE-MATCH FOOTBALL INTELLIGENCE</div>
+<h1>Prediction Day · 2026-08-12</h1>
+<p>完整 Prediction Universe · 所有比赛保留 · 概率预测与赛果状态</p>
+<div class="health"><span class="health-badge health-normal">系统状态：正常</span>
+<span>系统更新时间：2026-08-12T19:53:32.240463+08:00</span>
+<span>页面生成：2026-08-12T19:58:41.736265+08:00</span></div></header>
+<section class="summary-grid"><div class="summary-card "><strong>3</strong><span>今日比赛</span></div><div class="summary-card accent"><strong>3</strong><span>预测已冻结</span></div><div class="summary-card "><strong>0</strong><span>等待预测</span></div><div class="summary-card "><strong>0</strong><span>数据不足</span></div><div class="summary-card "><strong>0</strong><span>预测失败</span></div><div class="summary-card "><strong>0</strong><span>错过窗口</span></div><div class="summary-card "><strong>0</strong><span>已验证赛果</span></div><div class="summary-card accent"><strong>0</strong><span>正式 Prospective Samples</span></div><div class="summary-card "><strong>0</strong><span>本日新增正式样本</span></div><div class="summary-card "><strong>5</strong><span>Pilot excluded</span></div></section>
+<section class="filters" aria-label="比赛筛选"><span>显示：</span>
+<button class="filter" type="button" data-filter="ALL" aria-pressed="true">全部</button>
+<button class="filter" type="button" data-filter="FROZEN" aria-pressed="false">已预测</button>
+<button class="filter" type="button" data-filter="INSUFFICIENT_DATA" aria-pressed="false">数据不足</button>
+<button class="filter" type="button" data-filter="RESULT" aria-pressed="false">已完赛</button>
+<a href="../match_workspace/latest.html">打开旧比赛工作台</a></section>
+<section id="fixture-list" class="fixture-list" aria-label="Prediction Universe 比赛列表"><article class="fixture-card status-frozen" data-status="FROZEN" data-result="no"><div class="fixture-head"><div><div class="fixture-kicker">欧超杯 · 周三001</div><h2>巴黎圣曼 <span>vs</span> 维拉</h2><div class="kickoff">开球：2026-08-13T03:00:00+08:00</div></div><span class="status-badge">预测已冻结</span></div><section class="prediction-block"><div class="block-title">BASE 概率预测</div><div class="model-line">FUSION_BASELINE_V0 · 当前 Champion 融合基线</div><div class="data-grid"><div class="metric "><span>λ 主队</span><strong>1.688</strong></div><div class="metric "><span>λ 客队</span><strong>1.432</strong></div><div class="metric "><span>主胜概率</span><strong>43.7%</strong></div><div class="metric "><span>平局概率</span><strong>23.6%</strong></div><div class="metric "><span>客胜概率</span><strong>32.7%</strong></div><div class="metric "><span>BTTS Yes</span><strong>62.0%</strong></div><div class="metric "><span>BTTS No</span><strong>38.0%</strong></div><div class="metric "><span>唯一比分</span><strong>1-1</strong></div><div class="metric wide"><span>Top3 比分</span><strong>1-1、2-1、1-2</strong></div><div class="metric wide"><span>总进球概率</span><strong>0（4.4%）、1（13.8%）、2（21.5%）</strong></div></div><div class="data-grid quality-grid"><div class="metric "><span>市场情报质量</span><strong>FULL</strong></div><div class="metric "><span>数据等级</span><strong>B</strong></div><div class="metric "><span>BASE输入质量</span><strong>—</strong></div><div class="metric "><span>冻结时距开赛（分钟）</span><strong>680.199</strong></div></div></section><div class="result-line pending-result">等待赛果</div></article><article class="fixture-card status-frozen" data-status="FROZEN" data-result="no"><div class="fixture-head"><div><div class="fixture-kicker">解放者杯 · 周三002</div><h2>普拉滕斯 <span>vs</span> 科金博联</h2><div class="kickoff">开球：2026-08-13T06:00:00+08:00</div></div><span class="status-badge">预测已冻结</span></div><section class="prediction-block"><div class="block-title">BASE 概率预测</div><div class="model-line">FUSION_BASELINE_V0 · 当前 Champion 融合基线</div><div class="data-grid"><div class="metric "><span>λ 主队</span><strong>1.061</strong></div><div class="metric "><span>λ 客队</span><strong>1.049</strong></div><div class="metric "><span>主胜概率</span><strong>35.4%</strong></div><div class="metric "><span>平局概率</span><strong>29.9%</strong></div><div class="metric "><span>客胜概率</span><strong>34.8%</strong></div><div class="metric "><span>BTTS Yes</span><strong>42.5%</strong></div><div class="metric "><span>BTTS No</span><strong>57.5%</strong></div><div class="metric "><span>唯一比分</span><strong>1-1</strong></div><div class="metric wide"><span>Top3 比分</span><strong>1-1、1-0、0-1</strong></div><div class="metric wide"><span>总进球概率</span><strong>0（12.1%）、1（25.6%）、2（27.0%）</strong></div></div><div class="data-grid quality-grid"><div class="metric "><span>市场情报质量</span><strong>FULL</strong></div><div class="metric "><span>数据等级</span><strong>B</strong></div><div class="metric "><span>BASE输入质量</span><strong>—</strong></div><div class="metric "><span>冻结时距开赛（分钟）</span><strong>860.185</strong></div></div></section><div class="result-line pending-result">等待赛果</div></article><article class="fixture-card status-frozen" data-status="FROZEN" data-result="no"><div class="fixture-head"><div><div class="fixture-kicker">解放者杯 · 周三003</div><h2>帕梅拉斯 <span>vs</span> 波特诺</h2><div class="kickoff">开球：2026-08-13T06:00:00+08:00</div></div><span class="status-badge">预测已冻结</span></div><section class="prediction-block"><div class="block-title">BASE 概率预测</div><div class="model-line">FUSION_BASELINE_V0 · 当前 Champion 融合基线</div><div class="data-grid"><div class="metric "><span>λ 主队</span><strong>1.626</strong></div><div class="metric "><span>λ 客队</span><strong>0.724</strong></div><div class="metric "><span>主胜概率</span><strong>59.0%</strong></div><div class="metric "><span>平局概率</span><strong>24.5%</strong></div><div class="metric "><span>客胜概率</span><strong>16.5%</strong></div><div class="metric "><span>BTTS Yes</span><strong>41.4%</strong></div><div class="metric "><span>BTTS No</span><strong>58.6%</strong></div><div class="metric "><span>唯一比分</span><strong>1-0</strong></div><div class="metric wide"><span>Top3 比分</span><strong>1-0、2-0、1-1</strong></div><div class="metric wide"><span>总进球概率</span><strong>0（9.5%）、1（22.4%）、2（26.3%）</strong></div></div><div class="data-grid quality-grid"><div class="metric "><span>市场情报质量</span><strong>FULL</strong></div><div class="metric "><span>数据等级</span><strong>B</strong></div><div class="metric "><span>BASE输入质量</span><strong>—</strong></div><div class="metric "><span>冻结时距开赛（分钟）</span><strong>860.163</strong></div></div></section><div class="result-line pending-result">等待赛果</div></article></section>
+<footer style="margin-top:26px;color:#64717d;font-size:12px">Universe 3 场 · 页面卡片 3 张 · silent_missing_fixture = 0 · 今日新增正式样本 0 · pilot excluded 5</footer>
+</main><script>
+const buttons = Array.from(document.querySelectorAll('[data-filter]'));
+const cards = Array.from(document.querySelectorAll('.fixture-card'));
+buttons.forEach(button => button.addEventListener('click', () => {
+  const filter = button.dataset.filter;
+  buttons.forEach(item => item.setAttribute('aria-pressed', String(item === button)));
+  cards.forEach(card => {
+    const match = filter === 'ALL' || card.dataset.status === filter || (filter === 'RESULT' && card.dataset.result === 'yes');
+    card.hidden = !match;
+  });
+}));
+</script></body></html>

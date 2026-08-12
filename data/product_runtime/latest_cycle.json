@@ -1,0 +1,150 @@
+{
+  "schema_version": "1.0",
+  "started_at": "2026-08-12T19:53:07.441630+08:00",
+  "finished_at": "2026-08-12T19:53:32.240463+08:00",
+  "business_date": "2026-08-12",
+  "steps": {
+    "universe": {
+      "status": "SUCCESS",
+      "returncode": 0,
+      "summary": {
+        "match_count": 7,
+        "refresh_status": "success"
+      },
+      "command": [
+        "C:\\Users\\Administrator\\AppData\\Local\\Programs\\Python\\Python310\\python.exe",
+        "scripts/daily_schedule_workspace.py",
+        "--date",
+        "2026-08-12",
+        "--no-cache",
+        "--fetch-only"
+      ]
+    },
+    "base_jobs": {
+      "status": "SUCCESS",
+      "returncode": 0,
+      "summary": {
+        "status": "READY",
+        "fixture_count": 3,
+        "job_count": 3
+      },
+      "command": [
+        "C:\\Users\\Administrator\\AppData\\Local\\Programs\\Python\\Python310\\python.exe",
+        "scripts/base_prediction_jobs.py",
+        "--date",
+        "2026-08-12"
+      ]
+    },
+    "base_prediction": {
+      "status": "SUCCESS",
+      "returncode": 0,
+      "summary": {
+        "frozen": 3,
+        "insufficient_data": 0,
+        "prediction_failed": 0,
+        "missed_prematch": 0,
+        "pending": 0,
+        "failure_reasons": {}
+      },
+      "command": [
+        "C:\\Users\\Administrator\\AppData\\Local\\Programs\\Python\\Python310\\python.exe",
+        "scripts/base_prediction_runner.py",
+        "--date",
+        "2026-08-12"
+      ]
+    },
+    "postmatch": {
+      "status": "SUCCESS",
+      "returncode": 0,
+      "summary": [
+        {
+          "step": 1,
+          "status": "SUCCESS"
+        },
+        {
+          "step": 2,
+          "status": "SUCCESS"
+        },
+        {
+          "step": 3,
+          "status": "SUCCESS"
+        },
+        {
+          "step": 4,
+          "status": "SUCCESS"
+        }
+      ],
+      "command": [
+        "C:\\Users\\Administrator\\AppData\\Local\\Programs\\Python\\Python310\\python.exe",
+        "scripts/sync_result_schedules.py",
+        "--date",
+        "2026-08-12",
+        "C:\\Users\\Administrator\\AppData\\Local\\Programs\\Python\\Python310\\python.exe",
+        "scripts/postmatch_result.py",
+        "C:\\Users\\Administrator\\AppData\\Local\\Programs\\Python\\Python310\\python.exe",
+        "scripts/automatic_postmatch_review.py",
+        "C:\\Users\\Administrator\\AppData\\Local\\Programs\\Python\\Python310\\python.exe",
+        "scripts/postmatch_dashboard.py"
+      ]
+    },
+    "prospective": {
+      "status": "SUCCESS",
+      "returncode": 0,
+      "summary": {
+        "failure_reasons": {},
+        "formal_prospective_total": 0,
+        "formal_samples_added": 0,
+        "pending_results": 3,
+        "pilot_excluded_settled": 0,
+        "results_found": 0
+      },
+      "command": [
+        "C:\\Users\\Administrator\\AppData\\Local\\Programs\\Python\\Python310\\python.exe",
+        "scripts/prospective_settlement.py",
+        "--date",
+        "2026-08-12"
+      ]
+    },
+    "dashboard": {
+      "status": "SUCCESS",
+      "returncode": 0,
+      "summary": {
+        "fixture_count": 3,
+        "frozen": 3,
+        "pending": 0,
+        "insufficient_data": 0,
+        "formal_prospective_total": 0
+      },
+      "command": [
+        "C:\\Users\\Administrator\\AppData\\Local\\Programs\\Python\\Python310\\python.exe",
+        "scripts/prediction_dashboard.py",
+        "--date",
+        "2026-08-12"
+      ]
+    },
+    "workspace": {
+      "status": "SUCCESS",
+      "returncode": 0,
+      "summary": {},
+      "command": [
+        "C:\\Users\\Administrator\\AppData\\Local\\Programs\\Python\\Python310\\python.exe",
+        "scripts/match_workspace.py",
+        "--date",
+        "2026-08-12"
+      ]
+    },
+    "site": {
+      "status": "SUCCESS",
+      "returncode": 0,
+      "summary": {
+        "output": "D:\\MyProject\\football-betting-oneshot-main\\site\\index.html"
+      },
+      "command": [
+        "C:\\Users\\Administrator\\AppData\\Local\\Programs\\Python\\Python310\\python.exe",
+        "scripts/build_public_site.py"
+      ]
+    }
+  },
+  "overall_status": "HEALTHY",
+  "failed_steps": []
+}
