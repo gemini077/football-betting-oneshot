@@ -16,6 +16,7 @@ PUBLIC_DATA_DIRS = (
     "match_workspace",
     "postmatch_dashboard",
     "postmatch_reports",
+    "prediction_dashboard",
 )
 
 
@@ -50,11 +51,11 @@ def build(output: Path) -> Path:
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta http-equiv="refresh" content="0;url=match_workspace/latest.html">
-  <title>Football Betting OneShot</title>
+  <meta http-equiv="refresh" content="0;url=prediction_dashboard/latest.html">
+  <title>Football Prediction Day</title>
 </head>
 <body>
-  <p><a href="match_workspace/latest.html">进入 Football Betting OneShot 比赛工作台</a></p>
+  <p><a href="prediction_dashboard/latest.html">进入 Football Prediction Day</a></p>
 </body>
 </html>
 """,

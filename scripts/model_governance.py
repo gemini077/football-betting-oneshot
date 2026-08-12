@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from prediction_quality import classify_prediction
+from prediction_quality import BASE_PREDICTION_POLICY, classify_base_prediction, classify_prediction
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -733,6 +733,12 @@ def build_deterministic_model_input_snapshot(
     ]
     if checkpoint_timestamp:
         market_values.append(checkpoint_timestamp)
+    # BASE v0 may use the explicitly captured official Sporttery SPF as its
+    # only market input.  It is a legitimate market snapshot even though it
+    # is not represented as a multi-bookmaker ``source_snapshots`` row.
+    official_market_timestamp = source_timestamps.get("official_market_baseline")
+    if not market_values and official_market_timestamp:
+        market_values.append(official_market_timestamp)
     market_snapshot = _max_timestamp(market_values) if market_values and all(
         source_timestamps.get(key) for key in required if key != "checkpoint_features"
     ) else None
@@ -1061,18 +1067,50 @@ def build_prediction_record(
     )
     primary = decisions.get("unique_primary_dimension")
     manual_override = payload.get("manual_override") if isinstance(payload.get("manual_override"), bool) else False
-    model_formal = (
-        role == "champion"
-        and grade in set(config["quality_policy"].get("formal_grades") or ["A", "B"])
-        and bool(primary)
-        and not critical_missing
-        and not manual_override
-    )
     prediction_variant = "human_assisted" if manual_override else "model_only"
+    source_fingerprint = model_source_fingerprint(repository_root)
+    base_policy_result: dict[str, Any] | None = None
+    if str(report.get("report_type") or "") == "base_prediction_minimal":
+        input_hash_valid = bool(
+            has_model_snapshot
+            and input_snapshot.get("canonical_input_sha256") == input_hash
+            and input_snapshot.get("canonical_model_input_sha256") == input_hash
+            and _sha256_value(canonical_input) == input_hash
+        )
+        base_policy_result = classify_base_prediction(
+            payload,
+            context={
+                "model_role": role,
+                "prediction_variant": prediction_variant,
+                "manual_override": manual_override,
+                "has_model_snapshot": has_model_snapshot,
+                "input_hash_valid": input_hash_valid,
+                "model_source_fingerprint": source_fingerprint.get("fingerprint"),
+                "match_key": _match_key(payload),
+                "kickoff_at": kickoff,
+                "source_cutoff_at": source_cutoff,
+                "prediction_created_at": prediction_created_at,
+                "freeze_created_at": report.get("freeze_created_at"),
+                "input_projection": canonical_input,
+                "market_intelligence_quality": (payload.get("data_quality") or {}).get(
+                    "market_intelligence_quality"
+                ),
+                "critical_missing_fields": critical_missing,
+                "generic_data_grade": grade,
+            },
+        )
+        model_formal = bool(base_policy_result["formal_eligible"])
+    else:
+        model_formal = (
+            role == "champion"
+            and grade in set(config["quality_policy"].get("formal_grades") or ["A", "B"])
+            and bool(primary)
+            and not critical_missing
+            and not manual_override
+        )
     prediction_status = "human_assisted" if manual_override else "formal" if model_formal else "research_only"
     prompt_version = (payload.get("automation") or {}).get("prompt_version") or versions.get("prompt_version")
     calibration = _calibration_metadata(config, repository_root)
-    source_fingerprint = model_source_fingerprint(repository_root)
     prompt_affects_prediction = False
     if role == "challenger":
         for challenger in config.get("challengers") or []:
@@ -1200,6 +1238,14 @@ def build_prediction_record(
         # to the content-addressed snapshot file and removes it from the ledger.
         "_input_snapshot_content": canonical_input,
     }
+    if base_policy_result is not None:
+        record.update({
+            "formal_eligibility_policy": base_policy_result["formal_eligibility_policy"],
+            "base_input_quality": base_policy_result["base_input_quality"],
+            "base_quality_reasons": base_policy_result["base_quality_reasons"],
+            "generic_data_grade": base_policy_result["generic_data_grade"],
+            "freeze_created_at": report.get("freeze_created_at"),
+        })
     record["prediction_sha256"] = prediction_content_hash(record)
     return record
 
@@ -1224,6 +1270,19 @@ def _validate_record(record: dict[str, Any]) -> None:
         "effective_calibration_fingerprint"
     ):
         raise ValueError("effective calibration fingerprint does not match model run identity")
+    if record.get("formal_eligibility_policy") == BASE_PREDICTION_POLICY:
+        required_base_fields = (
+            "base_input_quality", "generic_data_grade", "base_quality_reasons", "freeze_created_at",
+        )
+        missing_base_fields = [field for field in required_base_fields if field not in record]
+        if missing_base_fields:
+            raise ValueError("BASE governance fields are missing: " + ", ".join(missing_base_fields))
+        if record.get("generic_data_grade") != record.get("data_grade"):
+            raise ValueError("generic_data_grade does not match data_grade")
+        if record.get("formal_eligible") is True and record.get("base_input_quality") != "VERIFIED_MINIMUM":
+            raise ValueError("BASE formal prediction is not minimum-input verified")
+        if record.get("model_formal_eligible") is not record.get("formal_eligible"):
+            raise ValueError("BASE formal flags are inconsistent")
     if record.get("prediction_variant") == "human_assisted" and record.get("model_formal_eligible") is not False:
         raise ValueError("human-assisted prediction cannot be model-formal eligible")
 

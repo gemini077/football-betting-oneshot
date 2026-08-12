@@ -20,10 +20,12 @@ try:
     from paper_ledger import build_paper_ledger, pair_key, parse_score
     from paper_channel_prices import sync_channel_price_overrides
     from match_identity import canonical_match_id
+    from prediction_universe import load_prediction_universe
 except ImportError:  # package import used by tests
     from scripts.paper_ledger import build_paper_ledger, pair_key, parse_score
     from scripts.paper_channel_prices import sync_channel_price_overrides
     from scripts.match_identity import canonical_match_id
+    from scripts.prediction_universe import load_prediction_universe
 
 try:
     from openpyxl import load_workbook
@@ -184,6 +186,24 @@ def esc(value: Any) -> str:
 
 
 def latest_schedule(target_date: str) -> tuple[Path | None, dict]:
+    universe_path = DATA / "prediction_universe" / f"{target_date}.json"
+    if universe_path.exists():
+        universe = load_prediction_universe(target_date, universe_path.parent)
+        if universe and universe.get("status") in {"READY", "EMPTY_CONFIRMED"}:
+            return universe_path, {
+                **universe,
+                "matches": list(universe.get("fixtures") or []),
+                "success": True,
+                "universe_source": "PREDICTION_UNIVERSE",
+            }
+        return None, {
+            "matches": [],
+            "date": target_date,
+            "success": False,
+            "universe_source": "PREDICTION_UNIVERSE",
+            "universe_status": (universe or {}).get("status", "INVALID"),
+        }
+
     # 单场深度抓取也会落到 fetch_runs，但不能覆盖全量体彩赛程；否则
     # 重新分析一场比赛后，工作台会暂时只剩该场及其报告附带场次。
     schedule_candidates = list((DATA / "schedule_updates").glob(f"**/*{target_date}*.json"))
@@ -200,12 +220,17 @@ def latest_schedule(target_date: str) -> tuple[Path | None, dict]:
         unfiltered = 0 if payload.get("match_filter") or payload.get("analysis_input_only") else 1
         rows.append((len(matches), unfiltered, path.stat().st_mtime, path, payload))
     if not rows:
-        return None, {"matches": [], "date": target_date, "success": False}
+        return None, {
+            "matches": [],
+            "date": target_date,
+            "success": False,
+            "universe_source": "LEGACY_FALLBACK",
+        }
     # The newest successful Sporttery response is the source of truth.  An old
     # file with more rows must not keep the workbench stuck on yesterday's
     # schedule after the official feed has changed.
     _, _, _, path, payload = max(rows, key=lambda row: (row[0], row[1], row[2]))
-    return path, payload
+    return path, {**payload, "universe_source": "LEGACY_FALLBACK"}
 
 
 def latest_reports() -> dict[str, dict]:
