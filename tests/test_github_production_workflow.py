@@ -51,7 +51,7 @@ def test_production_entry_imports_without_football_data_home():
     code = (
         "import sys; "
         "sys.path.insert(0, 'scripts'); "
-        "import automation_cycle, base_prediction_jobs, prediction_dashboard"
+        "import automation_cycle, base_prediction_jobs, prediction_dashboard, production_health_watch"
     )
     result = subprocess.run(
         [sys.executable, "-c", code],
@@ -73,3 +73,29 @@ def test_durable_state_sync_happens_before_cycle_and_not_after_generated_commit(
     assert sync_step < cycle_step
     assert text.index("git pull --rebase origin main", sync_step) < cycle_step
     assert "git pull --rebase origin main" not in text[save_step:]
+
+
+def test_workflow_has_exception_only_health_alerting_and_minimum_issue_permission():
+    text = _workflow_text()
+
+    assert "issues: write" in text
+    assert "actions: write" not in text
+    assert "pull-requests: write" not in text
+    assert "administration: write" not in text
+    assert "python scripts/production_health_watch.py" in text
+    assert "if: ${{ failure() }}" in text
+    assert "[PRODUCTION] Football MVP health alert" in text
+    assert "gh issue" in text
+    assert "gh issue close" in text
+    assert "Production health recovered automatically." in text
+
+
+def test_health_alert_does_not_block_durable_save_or_pages_deploy():
+    text = _workflow_text()
+    health_step = text.index("Evaluate production health")
+    save_step = text.index("Save generated public data")
+    deploy_step = text.index("Deploy Pages")
+
+    assert health_step < save_step < deploy_step
+    assert "if: ${{ steps.health.outputs.status != 'ALERT' }}" not in text
+    assert "if: ${{ steps.health.outputs.notify == 'true' }}" not in text
