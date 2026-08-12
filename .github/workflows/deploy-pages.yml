@@ -10,6 +10,7 @@ on:
 
 permissions:
   contents: write
+  issues: write
   pages: write
   id-token: write
 
@@ -45,6 +46,11 @@ jobs:
       - name: Enforce cross-market report consistency
         run: python scripts/repair_report_consistency.py --root data/analysis_reports/current
 
+      - name: Evaluate production health
+        id: health
+        run: |
+          python scripts/production_health_watch.py | tee health_watch_result.json
+
       - name: Save generated public data
         shell: bash
         run: |
@@ -77,3 +83,95 @@ jobs:
       - name: Deploy Pages
         id: deployment
         uses: actions/deploy-pages@v4
+
+      - name: Notify production health issue
+        if: ${{ success() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEALTH_RESULT: health_watch_result.json
+        shell: bash
+        run: |
+          set -euo pipefail
+          title='[PRODUCTION] Football MVP health alert'
+          issue_number="$(gh issue list --state open --search 'production health alert in:title' --json number,title --jq '.[] | select(.title == "[PRODUCTION] Football MVP health alert") | .number' | head -n 1)"
+          status="$(python -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["status"])' "$HEALTH_RESULT")"
+          notify="$(python -c 'import json,sys; print(str(json.load(open(sys.argv[1], encoding="utf-8"))["notify"]).lower())' "$HEALTH_RESULT")"
+          if [[ "$notify" == "true" ]]; then
+            business_date="$(python -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8")).get("business_date") or "unknown")' "$HEALTH_RESULT")"
+            reasons="$(python -c 'import json,sys; print("\\n".join("- " + str(x) for x in json.load(open(sys.argv[1], encoding="utf-8")).get("reasons", [])))' "$HEALTH_RESULT")"
+            detected_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            body=$(cat <<EOF
+          Production health alert
+
+          Status:
+          $status
+
+          Detected at:
+          $detected_at
+
+          Business date:
+          $business_date
+
+          Reasons:
+          $reasons
+
+          Workflow:
+          ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+          Main SHA:
+          ${{ github.sha }}
+
+          Developer action:
+          Inspect production runtime and the named failing subsystem.
+          EOF
+          )
+            if [[ -n "$issue_number" ]]; then
+              gh issue edit "$issue_number" --body "$body"
+            else
+              gh issue create --title "$title" --body "$body"
+            fi
+          elif [[ "$status" == "HEALTHY" && -n "$issue_number" ]]; then
+            gh issue comment "$issue_number" --body 'Production health recovered automatically.'
+            gh issue close "$issue_number"
+          fi
+
+      - name: Notify workflow failure
+        if: ${{ failure() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          title='[PRODUCTION] Football MVP health alert'
+          issue_number="$(gh issue list --state open --search 'production health alert in:title' --json number,title --jq '.[] | select(.title == "[PRODUCTION] Football MVP health alert") | .number' | head -n 1)"
+          detected_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          body=$(cat <<EOF
+          Production health alert
+
+          Status:
+          ALERT
+
+          Detected at:
+          $detected_at
+
+          Business date:
+          unknown
+
+          Reasons:
+          - WORKFLOW_HARD_FAILURE
+
+          Workflow:
+          ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+          Commit SHA:
+          ${{ github.sha }}
+
+          Developer action:
+          Inspect the failed GitHub Actions run and the named failing subsystem.
+          EOF
+          )
+          if [[ -n "$issue_number" ]]; then
+            gh issue edit "$issue_number" --body "$body"
+          else
+            gh issue create --title "$title" --body "$body"
+          fi
