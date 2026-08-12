@@ -62,7 +62,22 @@ def parsed_source(index: int = 1, *, captured_at: str = "2026-08-12T12:30:00+08:
                 {"name": "Book B", "spf_current": {"home": 1.9, "draw": 3.4, "away": 4.4}},
             ]
         }
-        value["daxiao"] = {"companies": [{"name": "Book A", "current_line": 2.5}]}
+        value["daxiao"] = {
+            "companies": [{
+                "name": "Book A",
+                "current_line": 2.5,
+                "current_over_water": 0.90,
+                "current_under_water": 0.96,
+            }]
+        }
+        value["yazhi"] = {
+            "companies": [{
+                "name": "Book A",
+                "current_handicap": 0.0,
+                "current_water_home": 0.91,
+                "current_water_away": 0.93,
+            }]
+        }
     return value
 
 
@@ -237,6 +252,24 @@ def test_tier_a_market_snapshot_is_full():
     assert summary["frozen"] == 1
     assert record["market_intelligence_quality"] == "FULL"
     assert record["market_sources"] == ["500.com"]
+    assert record["market_data_providers"] == ["500.com"]
+    assert record["market_bookmakers"] == ["Book A", "Book B"]
+    assert record["market_families"] == ["1x2", "asian_handicap", "totals"]
+
+
+def test_two_bookmakers_without_handicap_or_totals_are_limited():
+    with tempfile.TemporaryDirectory() as temp:
+        root = Path(temp)
+        write_case(root, [fixture(1, spf=limited_spf())])
+        parsed = parsed_source(full_market=True)
+        parsed.pop("yazhi")
+        parsed.pop("daxiao")
+        summary, _ = run_case(root, parsed=parsed)
+        record = records(root)[0]
+
+    assert summary["frozen"] == 1
+    assert record["market_intelligence_quality"] == "LIMITED"
+    assert record["market_families"] == ["1x2"]
 
 
 def test_tier_b_sporttery_spf_is_limited_and_saved_as_market_baseline():
@@ -249,6 +282,9 @@ def test_tier_b_sporttery_spf_is_limited_and_saved_as_market_baseline():
     baseline = record["market_only_baseline"]
     assert summary["frozen"] == 1
     assert record["market_intelligence_quality"] == "LIMITED"
+    assert record["market_data_providers"] == ["sporttery"]
+    assert record["market_bookmakers"] == []
+    assert record["market_families"] == ["1x2"]
     assert baseline["method"] == "sporttery_spf_devig"
     assert sum(baseline[key] for key in ("home", "draw", "away")) == pytest.approx(1.0, abs=1e-8)
 
@@ -364,6 +400,11 @@ def test_governance_record_contains_minimum_prediction_contract():
     assert record["model_input_snapshot_ref"].endswith(".json")
     assert record["minutes_to_kickoff_at_freeze"] > 0
     assert record["freeze_created_at"]
+    assert record["data_grade"] == "C"
+    assert record["generic_data_grade"] == "C"
+    assert record["base_input_quality"] == "VERIFIED_MINIMUM"
+    assert record["formal_eligibility_policy"] == "base_prediction_minimum.v1"
+    assert record["formal_eligible"] is True
 
 
 def test_repeat_freeze_with_same_prediction_id_different_content_keeps_conflict_guard():

@@ -43,6 +43,7 @@ from model_governance import (  # noqa: E402
 )
 from nowscore_markets import fetch_match_markets  # noqa: E402
 from prediction_universe import load_prediction_universe  # noqa: E402
+from prediction_quality import recent_form_is_usable  # noqa: E402
 
 
 JOBS_ROOT = PROJECT_ROOT / "data" / "base_prediction_jobs"
@@ -141,21 +142,7 @@ def _job_fixture(universe: dict[str, Any], job: dict[str, Any]) -> dict[str, Any
 
 
 def _form_is_usable(form: Any) -> bool:
-    if not isinstance(form, dict):
-        return False
-    for key in ("home_overall", "home_home", "away_overall", "away_away"):
-        row = form.get(key)
-        if not isinstance(row, dict):
-            return False
-        try:
-            matches = float(row.get("matches") or 0)
-            goals_for = float(row.get("goals_for"))
-            goals_against = float(row.get("goals_against"))
-        except (TypeError, ValueError):
-            return False
-        if matches <= 0 or not math.isfinite(goals_for) or not math.isfinite(goals_against):
-            return False
-    return True
+    return recent_form_is_usable(form)
 
 
 def _valid_spf(odds: Any) -> dict[str, float] | None:
@@ -213,6 +200,86 @@ def _valid_bookmakers(snapshot: dict[str, Any]) -> list[dict[str, Any]]:
             continue
         valid.append(row)
     return valid
+
+
+def _company_name(row: dict[str, Any]) -> str | None:
+    for key in ("name", "company", "company_name"):
+        value = str(row.get(key) or "").strip()
+        if value:
+            return value
+    value = str(row.get("cid") or "").strip()
+    return f"cid:{value}" if value else None
+
+
+def _valid_handicap_rows(snapshot: dict[str, Any]) -> list[dict[str, Any]]:
+    rows = ((snapshot.get("yazhi") or {}).get("companies") or [])
+    valid: list[dict[str, Any]] = []
+    for row in rows:
+        if not isinstance(row, dict) or not _company_name(row):
+            continue
+        line_present = row.get("current_handicap") not in (None, "") or row.get("current_handicap_str") not in (None, "")
+        if not line_present:
+            continue
+        try:
+            waters = [float(row[key]) for key in ("current_water_home", "current_water_away")]
+        except (KeyError, TypeError, ValueError):
+            continue
+        if all(math.isfinite(value) for value in waters):
+            valid.append(row)
+    return valid
+
+
+def _valid_total_rows(snapshot: dict[str, Any]) -> list[dict[str, Any]]:
+    rows = ((snapshot.get("daxiao") or {}).get("companies") or [])
+    valid: list[dict[str, Any]] = []
+    for row in rows:
+        if not isinstance(row, dict) or not _company_name(row):
+            continue
+        line_present = row.get("current_line") not in (None, "") or row.get("current_line_str") not in (None, "")
+        if not line_present:
+            continue
+        try:
+            waters = [float(row[key]) for key in ("current_over_water", "current_under_water")]
+        except (KeyError, TypeError, ValueError):
+            continue
+        if all(math.isfinite(value) for value in waters):
+            valid.append(row)
+    return valid
+
+
+def _market_families(snapshot: dict[str, Any]) -> list[str]:
+    families: list[str] = []
+    if _valid_bookmakers(snapshot):
+        families.append("1x2")
+    if _valid_handicap_rows(snapshot):
+        families.append("asian_handicap")
+    if _valid_total_rows(snapshot):
+        families.append("totals")
+    return families
+
+
+def _market_bookmakers(snapshot: dict[str, Any]) -> list[str]:
+    names: list[str] = []
+    rows = [
+        *_valid_bookmakers(snapshot),
+        *_valid_handicap_rows(snapshot),
+        *_valid_total_rows(snapshot),
+    ]
+    for row in rows:
+        name = _company_name(row)
+        if name and name not in names:
+            names.append(name)
+    return names
+
+
+def _market_provider(name: str) -> str:
+    return {"500_deep": "500.com", "nowscore": "nowscore"}.get(name, name)
+
+
+def _has_full_market(snapshot: dict[str, Any]) -> bool:
+    return len(_valid_bookmakers(snapshot)) >= 2 and set(("1x2", "asian_handicap", "totals")) <= set(
+        _market_families(snapshot)
+    )
 
 
 def _market_only_baseline(
@@ -402,7 +469,7 @@ def _assemble_context(
         source_infos.append(nowscore)
 
     def has_full_market() -> bool:
-        return any(len(_valid_bookmakers(info["snapshot"])) >= 2 for info in source_infos)
+        return any(_has_full_market(info["snapshot"]) for info in source_infos)
 
     def has_form() -> bool:
         return bool(existing_form) or any(_form_is_usable(_source_form(info)) for info in source_infos)
@@ -456,31 +523,56 @@ def _assemble_context(
     if not form or not _form_is_usable(form.get("recent_form")):
         return None, None, "INPUT_TIMESTAMP_UNVERIFIED" if unverified_source else "MISSING_RECENT_FORM"
 
-    full_source = next(
-        (info for info in source_infos if len(_valid_bookmakers(info["snapshot"])) >= 2),
+    full_source = next((info for info in source_infos if _has_full_market(info["snapshot"])), None)
+    market_source = next(
+        (info for info in source_infos if "1x2" in _market_families(info["snapshot"])),
         None,
     )
     market_quality = "FULL" if full_source else "LIMITED"
     market_sources: list[str]
+    market_data_providers: list[str]
+    market_bookmakers: list[str]
+    market_families: list[str]
     market_only: dict[str, Any] | None
     if full_source:
-        market_label = "500.com" if full_source["name"] == "500_deep" else full_source["name"]
+        market_label = _market_provider(full_source["name"])
         market_sources = [market_label]
+        market_data_providers = [market_label]
+        market_bookmakers = _market_bookmakers(full_source["snapshot"])
+        market_families = _market_families(full_source["snapshot"])
         market_only = _market_only_baseline(full_source["snapshot"], market_label, full_source["references"])
         if market_only is None:
             full_source = None
             market_quality = "LIMITED"
     if not full_source:
-        if official is None:
-            return None, None, official_error or "MISSING_MARKET_INTELLIGENCE"
-        market_sources = ["sporttery_spf"]
-        market_only = {
-            "home": official["fair_probabilities"]["home"],
-            "draw": official["fair_probabilities"]["draw"],
-            "away": official["fair_probabilities"]["away"],
-            "method": "sporttery_spf_devig",
-            "sources": ["sporttery_spf", _relative_ref(UNIVERSE_ROOT / f"{business_date}.json")],
-        }
+        market_data_providers = []
+        market_bookmakers = []
+        market_families = []
+        market_only = None
+        if market_source:
+            market_label = _market_provider(market_source["name"])
+            market_only = _market_only_baseline(
+                market_source["snapshot"], market_label, market_source["references"]
+            )
+            if market_only is not None:
+                market_sources = [market_label]
+                market_data_providers = [market_label]
+                market_bookmakers = _market_bookmakers(market_source["snapshot"])
+                market_families = _market_families(market_source["snapshot"])
+        if market_only is None:
+            if official is None:
+                return None, None, official_error or "MISSING_MARKET_INTELLIGENCE"
+            market_sources = ["sporttery_spf"]
+            market_data_providers = ["sporttery"]
+            market_bookmakers = []
+            market_families = ["1x2"]
+            market_only = {
+                "home": official["fair_probabilities"]["home"],
+                "draw": official["fair_probabilities"]["draw"],
+                "away": official["fair_probabilities"]["away"],
+                "method": "sporttery_spf_devig",
+                "sources": ["sporttery_spf", _relative_ref(UNIVERSE_ROOT / f"{business_date}.json")],
+            }
 
     prediction_time = _as_now(None) if real_time else now
     context: dict[str, Any] = {
@@ -537,6 +629,9 @@ def _assemble_context(
         "input_snapshot": input_snapshot,
         "market_intelligence_quality": market_quality,
         "market_sources": market_sources,
+        "market_data_providers": market_data_providers,
+        "market_bookmakers": market_bookmakers,
+        "market_families": market_families,
         "market_source_references": source_refs,
         "market_only_baseline": market_only,
         "form_source": form_source,
@@ -562,6 +657,8 @@ def _build_payload(
     result: dict[str, Any],
     input_snapshot: dict[str, Any],
     now: datetime,
+    freeze_created_at: datetime,
+    metadata: dict[str, Any],
 ) -> dict[str, Any]:
     config = load_config()
     model = result.get("model") if isinstance(result, dict) else None
@@ -574,6 +671,7 @@ def _build_payload(
             "model_version": config["champion"]["release_version"],
             "analysis_timestamp": now.isoformat(),
             "snapshot_timestamp": input_snapshot.get("source_cutoff_at"),
+            "freeze_created_at": freeze_created_at.isoformat(),
         },
         "match": {
             "canonical_match_id": canonical_match_id({
@@ -586,9 +684,12 @@ def _build_payload(
             "away": job.get("away"),
             "kickoff_local": job.get("kickoff"),
         },
-        "data_quality": {"missing": [], "data_grade": "B"},
+        "data_quality": {
+            "missing": [],
+            "market_intelligence_quality": metadata["market_intelligence_quality"],
+        },
         "model": model,
-        "decisions": {**decisions, "data_grade": "B"},
+        "decisions": decisions,
         "fundamentals": {
             "lineup_status": "unavailable_by_time",
         },
@@ -624,9 +725,17 @@ def _decorate_record(
         "input_snapshot_ref": record.get("model_input_snapshot_ref"),
         "market_intelligence_quality": metadata["market_intelligence_quality"],
         "market_sources": metadata["market_sources"],
+        "market_data_providers": metadata["market_data_providers"],
+        "market_bookmakers": metadata["market_bookmakers"],
+        "market_families": metadata["market_families"],
         "market_source_references": metadata["market_source_references"],
         "market_only_baseline": metadata["market_only_baseline"],
-        "data_quality": metadata["data_quality"],
+        "data_quality": {
+            **metadata["data_quality"],
+            "data_grade": record.get("data_grade"),
+            "generic_data_grade": record.get("generic_data_grade"),
+            "base_input_quality": record.get("base_input_quality"),
+        },
         "source_references": metadata["source_references"],
         "fusion_1X2": model.get("probabilities"),
         "totals": model.get("total_goals_buckets"),
@@ -790,7 +899,23 @@ def run_base_prediction_jobs(
             job["updated_at"] = current_time.isoformat()
             continue
         try:
-            payload = _build_payload(business_date, job, result, input_snapshot, prediction_time)
+            freeze_time = _as_now(None) if real_time else current_time
+            kickoff_at = _parse_timestamp(_kickoff(job))
+            assert kickoff_at is not None
+            if freeze_time >= kickoff_at:
+                job["status"] = "MISSED_PREMATCH_WINDOW"
+                job["last_error"] = "MISSED_PREMATCH_WINDOW"
+                job["updated_at"] = freeze_time.isoformat()
+                continue
+            payload = _build_payload(
+                business_date,
+                job,
+                result,
+                input_snapshot,
+                prediction_time,
+                freeze_time,
+                metadata,
+            )
             record = build_prediction_record(
                 payload,
                 input_payload=input_snapshot,
@@ -801,14 +926,6 @@ def run_base_prediction_jobs(
                     "governance rejected BASE payload as non-formal: "
                     + ",".join(record.get("missing_critical_fields") or [])
                 )
-            freeze_time = _as_now(None) if real_time else current_time
-            kickoff_at = _parse_timestamp(_kickoff(job))
-            assert kickoff_at is not None
-            if freeze_time >= kickoff_at:
-                job["status"] = "MISSED_PREMATCH_WINDOW"
-                job["last_error"] = "MISSED_PREMATCH_WINDOW"
-                job["updated_at"] = freeze_time.isoformat()
-                continue
             record = _decorate_record(record, business_date, job, result, metadata, freeze_time, kickoff_at)
             frozen = freeze_prediction(
                 record,

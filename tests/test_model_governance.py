@@ -149,6 +149,23 @@ def attach_snapshot(payload, context=None):
     return payload
 
 
+def base_prediction_payload(context=None):
+    payload = prediction_payload("C")
+    payload["report"]["report_type"] = "base_prediction_minimal"
+    payload["report"]["freeze_created_at"] = "2026-08-05T00:01:00+08:00"
+    payload["data_quality"]["market_intelligence_quality"] = "LIMITED"
+    payload["model"]["total_goals_buckets"] = [{"goals": "2", "probability": 0.22}]
+    payload["model"]["btts"] = {"yes": 0.54, "no": 0.46}
+    context = context or deterministic_context()
+    context["checkpoint_features"]["snapshot_count"] = 0
+    context["checkpoint_features"]["state"] = "no_usable_market_snapshots"
+    payload["automation"]["model_input_snapshot"] = build_deterministic_model_input_snapshot(
+        context,
+        manifest_ref="data/fetch_runs/test/manifest.json",
+    )
+    return payload
+
+
 def test_champion_configuration_loads_and_matches_actual_model():
     config = load_config()
     assert config["champion"]["model_core_version"] == MODEL_FAMILY
@@ -234,6 +251,70 @@ def test_quality_grade_controls_formal_eligibility(grade, formal):
     record = build_prediction_record(prediction_payload(grade), commit_sha="baseline-sha")
     assert record["formal_eligible"] is formal
     assert record["prediction_output"]["status"] == ("formal" if formal else "research_only")
+
+
+def test_base_minimum_policy_allows_grade_c_without_deep_checkpoints():
+    record = build_prediction_record(base_prediction_payload(), commit_sha="baseline-sha")
+    assert record["data_grade"] == "C"
+    assert record["generic_data_grade"] == "C"
+    assert record["base_input_quality"] == "VERIFIED_MINIMUM"
+    assert record["formal_eligibility_policy"] == "base_prediction_minimum.v1"
+    assert record["formal_eligible"] is True
+    assert record["model_formal_eligible"] is True
+    assert record["prediction_status"] == "formal"
+
+
+def test_base_policy_rejects_missing_recent_form():
+    context = deterministic_context()
+    context["source_snapshots"]["500_deep"]["snapshots"][0]["shuju"]["recent_form"] = {}
+    payload = base_prediction_payload(context)
+    record = build_prediction_record(payload, commit_sha="baseline-sha")
+    assert record["formal_eligible"] is False
+    assert record["base_input_quality"] == "INSUFFICIENT"
+    assert "MISSING_RECENT_FORM" in record["base_quality_reasons"]
+
+
+def test_base_policy_rejects_missing_market_intelligence():
+    payload = base_prediction_payload()
+    payload["data_quality"]["market_intelligence_quality"] = "NONE"
+    record = build_prediction_record(payload, commit_sha="baseline-sha")
+    assert record["formal_eligible"] is False
+    assert "MISSING_MARKET_INTELLIGENCE" in record["base_quality_reasons"]
+
+
+def test_base_policy_rejects_invalid_timestamp():
+    payload = base_prediction_payload()
+    payload["report"]["freeze_created_at"] = payload["match"]["kickoff_local"]
+    record = build_prediction_record(payload, commit_sha="baseline-sha")
+    assert record["formal_eligible"] is False
+    assert record["base_input_quality"] == "INVALID_TIMESTAMP"
+    assert "INVALID_PREMATCH_TIMESTAMP_ORDER" in record["base_quality_reasons"]
+
+
+def test_base_policy_rejects_incomplete_model_output():
+    payload = base_prediction_payload()
+    payload["model"].pop("btts")
+    record = build_prediction_record(payload, commit_sha="baseline-sha")
+    assert record["formal_eligible"] is False
+    assert "INCOMPLETE_MODEL_OUTPUT" in record["base_quality_reasons"]
+
+
+def test_deep_report_does_not_use_base_policy():
+    record = build_prediction_record(prediction_payload("C"), commit_sha="baseline-sha")
+    assert record["data_grade"] == "C"
+    assert record["formal_eligible"] is False
+    assert "formal_eligibility_policy" not in record
+
+
+def test_pilot_quality_gate_exclusion_artifact_is_explicit():
+    path = ROOT / "data" / "model_governance" / "prediction_exclusions" / "20260812_base_quality_gate_bypass.json"
+    artifact = json.loads(path.read_text(encoding="utf-8"))
+    assert artifact["schema_version"] == "1.0"
+    assert artifact["reason_code"] == "BASE_QUALITY_GATE_BYPASS"
+    assert artifact["source_checkpoint"] == "151d248996efadd2b5b384955a5019c0cd0eb334"
+    assert artifact["formal_prospective_eligible"] is False
+    assert artifact["exploratory_review_eligible"] is True
+    assert len(artifact["prediction_ids"]) == 5
 
 
 def test_b_grade_minor_lineup_gap_can_remain_formal_when_unavailable_by_time():
