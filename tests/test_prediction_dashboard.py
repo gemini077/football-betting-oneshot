@@ -35,6 +35,7 @@ def make_roots(tmp_path: Path, fixtures: list[dict], jobs: list[dict], predictio
     prediction_root = tmp_path / "predictions"
     exclusion_root = tmp_path / "exclusions"
     result_root = tmp_path / "results"
+    input_snapshot_root = tmp_path / "input_snapshots"
     prospective_root = tmp_path / "prospective"
     write_json(universe_root / f"{DATE}.json", {
         "schema_version": "1.0",
@@ -67,6 +68,7 @@ def make_roots(tmp_path: Path, fixtures: list[dict], jobs: list[dict], predictio
         "prediction_root": prediction_root,
         "exclusion_root": exclusion_root,
         "result_root": result_root,
+        "input_snapshot_root": input_snapshot_root,
         "prospective_root": prospective_root,
         "output_root": tmp_path / "dashboard",
     }
@@ -135,8 +137,8 @@ def test_universe_three_produces_three_accountable_cards_and_frozen_fields(tmp_p
     assert card["prediction"]["score_top3"] == ["1-0", "1-1", "2-0"]
     html = (roots["output_root"] / "latest.html").read_text(encoding="utf-8")
     assert "预测已冻结" in html
-    assert "本日新增正式样本" in html
-    assert "Pilot excluded" in html
+    assert "今日新增正式样本" in html
+    assert "试运行样本" in html
 
 
 def test_universe_fourteen_keeps_every_fixture_without_prediction_artifact(tmp_path):
@@ -204,3 +206,49 @@ def test_dashboard_is_read_only_projection_without_model_or_network_imports():
     assert "automatic_model_core" not in source
     assert "urllib" not in source
     assert "requests" not in source
+
+
+def test_frozen_snapshot_projects_market_lines_and_score_focus(tmp_path):
+    prediction_id = "FBOS-PRED-market-view"
+    roots = make_roots(tmp_path, [fixture(1)], [frozen_job("1001", prediction_id)], [
+        {**frozen_prediction(prediction_id),
+         "input_snapshot_ref": "data/model_governance/input_snapshots/view.json",
+         "score_top3": [],
+         "score_distribution": [
+             {"score": "1-0", "probability": 0.20},
+             {"score": "1-1", "probability": 0.16},
+             {"score": "2-0", "probability": 0.12},
+             {"score": "0-0", "probability": 0.08},
+         ]}
+    ])
+    write_json(roots["input_snapshot_root"] / "view.json", {
+        "input": {
+            "source_snapshots": {
+                "500_deep": {"snapshots": [{
+                    "yazhi": {"companies": [
+                        {"current_handicap": -0.75, "open_handicap": -0.5},
+                        {"current_handicap": -0.75, "open_handicap": -0.75},
+                    ]},
+                    "daxiao": {"companies": [
+                        {"current_line": 2.25, "open_line": 2.0},
+                        {"current_line": 2.25, "open_line": 2.25},
+                    ]},
+                }]}
+            }
+        }
+    })
+
+    payload = build_dashboard(DATE, **roots)
+    prediction = payload["fixtures"][0]["prediction"]
+
+    assert prediction["primary_score"] == "1-0"
+    assert prediction["neighbor_scores"] == ["1-1", "2-0"]
+    assert prediction["score_concentration"] == "集中"
+    assert prediction["market_summary"]["asian_handicap"]["line"] == "-0.75"
+    assert prediction["market_summary"]["asian_handicap"]["movement"] == "-0.5 → -0.75"
+    assert prediction["market_summary"]["total_line"]["line"] == "2.25"
+    assert prediction["market_summary"]["total_line"]["movement"] == "2 → 2.25"
+    assert prediction["market_summary"]["model_total_direction"] == "接近盘口"
+    html = (roots["output_root"] / "latest.html").read_text(encoding="utf-8")
+    assert "1–0" in html
+    assert "Top5" not in html

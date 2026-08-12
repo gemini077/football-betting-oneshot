@@ -17,6 +17,7 @@ BASE_DIR = Path(__file__).resolve().parents[1]
 UNIVERSE_ROOT = BASE_DIR / "data" / "prediction_universe"
 JOBS_ROOT = BASE_DIR / "data" / "base_prediction_jobs"
 PREDICTION_ROOT = BASE_DIR / "data" / "model_governance" / "predictions"
+INPUT_SNAPSHOT_ROOT = BASE_DIR / "data" / "model_governance" / "input_snapshots"
 EXCLUSION_ROOT = BASE_DIR / "data" / "model_governance" / "prediction_exclusions"
 RESULT_ROOT = BASE_DIR / "data" / "postmatch_automation" / "results"
 PROSPECTIVE_ROOT = BASE_DIR / "data" / "prospective"
@@ -142,26 +143,186 @@ def _job_index(jobs: list[dict[str, Any]], business_date: str) -> dict[str, dict
     return index
 
 
-def _prediction_projection(record: dict[str, Any]) -> dict[str, Any]:
+def _load_input_snapshot(
+    record: dict[str, Any],
+    snapshot_root: Path,
+    errors: list[str],
+) -> dict[str, Any]:
+    reference = record.get("input_snapshot_ref") or record.get("model_input_snapshot_ref")
+    if not reference:
+        return {}
+    reference_path = Path(str(reference))
+    candidates = []
+    if reference_path.is_absolute():
+        candidates.append(reference_path)
+    else:
+        candidates.extend((BASE_DIR / reference_path, Path(snapshot_root) / reference_path.name))
+    snapshot_path = next((path for path in candidates if path.is_file()), None)
+    if snapshot_path is None:
+        errors.append(f"input_snapshot:{reference_path.name}:MISSING")
+        return {}
+    value = _read_optional_json(snapshot_path, errors, f"input_snapshot:{snapshot_path.name}", {})
+    return value if isinstance(value, dict) else {}
+
+
+def _walk_dicts(value: Any):
+    if isinstance(value, dict):
+        yield value
+        for child in value.values():
+            yield from _walk_dicts(child)
+    elif isinstance(value, list):
+        for child in value:
+            yield from _walk_dicts(child)
+
+
+def _mode_number(rows: list[dict[str, Any]], key: str) -> float | None:
+    values: list[float] = []
+    for row in rows:
+        number = _number(row.get(key))
+        if number is not None:
+            values.append(round(number, 4))
+    if not values:
+        return None
+    counts = Counter(values)
+    return max(counts, key=lambda value: (counts[value], -abs(value)))
+
+
+def _line_text(value: float | None, *, signed: bool = False) -> str | None:
+    if value is None:
+        return None
+    if abs(value) < 0.005:
+        return "0"
+    if signed:
+        return f"{value:+.2f}".rstrip("0").rstrip(".")
+    return f"{value:.2f}".rstrip("0").rstrip(".")
+
+
+def _market_line(rows: list[dict[str, Any]], current_key: str, open_key: str, *, signed: bool) -> dict[str, str] | None:
+    current = _mode_number(rows, current_key)
+    if current is None:
+        return None
+    opening = _mode_number(rows, open_key)
+    line = _line_text(current, signed=signed)
+    movement = None
+    if opening is not None and abs(current - opening) >= 0.25:
+        movement = f"{_line_text(opening, signed=signed)} → {line}"
+    result = {"line": line}
+    if movement:
+        result["movement"] = movement
+    return result
+
+
+def _market_summary(snapshot: dict[str, Any], record: dict[str, Any]) -> dict[str, Any]:
+    if not snapshot:
+        return {}
+    input_payload = snapshot.get("input") if isinstance(snapshot.get("input"), dict) else snapshot
+    sections: list[dict[str, Any]] = []
+    for value in _walk_dicts(input_payload.get("source_snapshots", input_payload)):
+        if isinstance(value.get("yazhi"), dict) or isinstance(value.get("daxiao"), dict):
+            sections.append(value)
+    asian_rows: list[dict[str, Any]] = []
+    total_rows: list[dict[str, Any]] = []
+    for section in sections:
+        yazhi = section.get("yazhi") or {}
+        daxiao = section.get("daxiao") or {}
+        asian_rows.extend(row for row in yazhi.get("companies", []) if isinstance(row, dict))
+        total_rows.extend(row for row in daxiao.get("companies", []) if isinstance(row, dict))
+    result: dict[str, Any] = {}
+    asian = _market_line(asian_rows, "current_handicap", "open_handicap", signed=True)
+    total = _market_line(total_rows, "current_line", "open_line", signed=False)
+    if asian:
+        result["asian_handicap"] = asian
+    if total:
+        result["total_line"] = total
+        lambda_total = _number(record.get("lambda_home"))
+        lambda_away = _number(record.get("lambda_away"))
+        if lambda_total is not None and lambda_away is not None:
+            expected_total = lambda_total + lambda_away
+            market_line = _number(total.get("line"))
+            if market_line is not None:
+                difference = expected_total - market_line
+                result["model_total_direction"] = (
+                    "模型偏大" if difference > 0.10 else "模型偏小" if difference < -0.10 else "接近盘口"
+                )
+    if asian:
+        result["market_families"] = ["AH"]
+    if total:
+        result.setdefault("market_families", []).append("Totals")
+    return result
+
+
+def _score_focus(record: dict[str, Any]) -> tuple[str | None, list[str], str | None]:
+    primary = str(record.get("unique_score") or record.get("score_top1") or "").strip() or None
+    source = record.get("score_top3") or record.get("top_scores") or record.get("score_distribution") or []
+    probability_source = record.get("score_distribution") or record.get("top_scores") or []
+    names: list[str] = []
+    probabilities: list[float] = []
+    if isinstance(source, list):
+        for row in source:
+            if isinstance(row, dict):
+                score = str(row.get("score") or "").strip()
+                probability = _number(row.get("probability"))
+                if probability is not None and len(probabilities) < 3:
+                    probabilities.append(probability)
+            else:
+                score = str(row).strip()
+            if score and score not in names:
+                names.append(score)
+    if isinstance(probability_source, list):
+        probabilities = [
+            probability
+            for row in probability_source[:3]
+            if isinstance(row, dict)
+            for probability in [_number(row.get("probability"))]
+            if probability is not None
+        ]
+    if not primary and names:
+        primary = names[0]
+    neighbors = [score for score in names if score != primary][:2]
+    concentration = None
+    if len(probabilities) >= 3:
+        top3_mass = sum(probabilities[:3])
+        concentration = "集中" if top3_mass >= 0.42 else "中等" if top3_mass >= 0.30 else "分散"
+    return primary, neighbors, concentration
+
+
+def _one_x_two_direction(probabilities: dict[str, Any]) -> str | None:
+    values = {key: _number(probabilities.get(key)) for key in ("home", "draw", "away")}
+    if any(value is None for value in values.values()):
+        return None
+    direction = max(values, key=lambda key: values[key] or 0)
+    return {"home": "主胜倾向", "draw": "平局倾向", "away": "客胜倾向"}[direction]
+
+
+def _prediction_projection(
+    record: dict[str, Any],
+    *,
+    snapshot_root: Path = INPUT_SNAPSHOT_ROOT,
+    errors: list[str] | None = None,
+) -> dict[str, Any]:
     probabilities = record.get("fusion_1X2") or record.get("probabilities") or {}
+    probabilities = probabilities if isinstance(probabilities, dict) else {}
     btts = record.get("btts") or {}
-    top_scores = record.get("score_distribution") or record.get("top_scores") or []
-    score_top3 = record.get("score_top3")
-    if not score_top3 and isinstance(top_scores, list):
-        score_top3 = [row.get("score") for row in top_scores[:3] if isinstance(row, dict)]
+    primary, neighbors, concentration = _score_focus(record)
+    snapshot = _load_input_snapshot(record, Path(snapshot_root), errors if errors is not None else [])
     return {
         "product_role": record.get("product_role"),
         "model_family": record.get("model_family"),
         "release_version": record.get("release_version"),
         "lambda_home": record.get("lambda_home"),
         "lambda_away": record.get("lambda_away"),
-        "probabilities": probabilities if isinstance(probabilities, dict) else {},
+        "probabilities": probabilities,
+        "one_x_two_direction": _one_x_two_direction(probabilities),
         "btts": btts if isinstance(btts, dict) else {},
         "totals": record.get("totals") if isinstance(record.get("totals"), list) else [],
-        "unique_score": record.get("unique_score") or record.get("score_top1"),
-        "score_top3": score_top3 or [],
+        "unique_score": primary,
+        "primary_score": primary,
+        "score_top3": record.get("score_top3") or [],
+        "neighbor_scores": neighbors,
+        "score_concentration": concentration,
+        "market_summary": _market_summary(snapshot, record),
         "market_intelligence_quality": record.get("market_intelligence_quality"),
-        "market_data_providers": record.get("market_data_providers") or [],
+        "market_data_providers": record.get("market_data_providers") or record.get("market_sources") or [],
         "market_bookmakers": record.get("market_bookmakers") or [],
         "market_families": record.get("market_families") or [],
         "data_grade": record.get("data_grade"),
@@ -273,6 +434,8 @@ def _card(
     exclusions: dict[str, dict[str, Any]],
     formal_samples: dict[str, dict[str, Any]],
     exploratory_samples: dict[str, dict[str, Any]],
+    input_snapshot_root: Path = INPUT_SNAPSHOT_ROOT,
+    errors: list[str] | None = None,
 ) -> dict[str, Any]:
     card = _fixture_projection(fixture)
     status = str((job or {}).get("status") or "PENDING")
@@ -287,7 +450,7 @@ def _card(
         "reason_text": reason_text,
         "job_id": (job or {}).get("job_id"),
         "prediction_id": prediction_id,
-        "prediction": _prediction_projection(record) if record else None,
+        "prediction": _prediction_projection(record, snapshot_root=input_snapshot_root, errors=errors) if record else None,
         "result": {
             "score_90m": (result or {}).get("result_90m") or (result or {}).get("score_90m"),
             "verified_at": (result or {}).get("result_verified_at") or (result or {}).get("verified_at"),
@@ -322,221 +485,303 @@ def _field(label: str, value: Any, *, css: str = "") -> str:
     return f'<div class="metric {css}"><span>{html.escape(label)}</span><strong>{html.escape(_text(value))}</strong></div>'
 
 
-def _prediction_html(prediction: dict[str, Any]) -> str:
+MODERN_CSS = r"""
+:root {
+  --bg: #0b1118;
+  --surface: #121b25;
+  --surface-2: #172331;
+  --line: #263646;
+  --text: #f3f7fa;
+  --muted: #91a2b3;
+  --quiet: #6f8192;
+  --accent: #43d3a5;
+  --accent-soft: rgba(67, 211, 165, .13);
+  --warning: #f0b86a;
+  --warning-soft: rgba(240, 184, 106, .14);
+  --danger: #f17b85;
+  --danger-soft: rgba(241, 123, 133, .14);
+  --blue: #79a8ff;
+}
+* { box-sizing: border-box; }
+html { background: var(--bg); }
+body {
+  margin: 0;
+  color: var(--text);
+  background:
+    radial-gradient(circle at 12% -10%, rgba(67, 211, 165, .11), transparent 32rem),
+    var(--bg);
+  font: 14px/1.5 "Segoe UI", "Microsoft YaHei", sans-serif;
+}
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+button { font: inherit; }
+.shell { max-width: 1440px; margin: 0 auto; padding: 28px 28px 52px; }
+.topbar { display: flex; justify-content: space-between; gap: 24px; align-items: flex-start; }
+.brand-kicker { color: var(--accent); font-size: 11px; font-weight: 700; letter-spacing: .18em; text-transform: uppercase; }
+h1 { margin: 8px 0 4px; font-size: clamp(32px, 5vw, 54px); line-height: 1.02; letter-spacing: -.045em; }
+.date-line { color: var(--muted); font-size: 15px; }
+.refresh-line { color: var(--quiet); font-size: 12px; text-align: right; }
+.health-alert { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; margin: 20px 0 0; padding: 11px 14px; border: 1px solid rgba(240, 184, 106, .35); background: var(--warning-soft); color: #f7d49d; }
+.health-alert.alert { border-color: rgba(241, 123, 133, .4); background: var(--danger-soft); color: #ffc1c6; }
+.health-alert strong { color: inherit; }
+.overview { display: flex; flex-wrap: wrap; gap: 10px; margin: 28px 0 20px; }
+.overview-item { min-width: 112px; padding: 13px 15px; border: 1px solid var(--line); background: var(--surface); }
+.overview-item strong { display: block; font-size: 25px; line-height: 1; color: var(--text); }
+.overview-item span { display: block; margin-top: 6px; color: var(--muted); font-size: 12px; }
+.overview-item.primary { border-color: rgba(67, 211, 165, .42); background: var(--accent-soft); }
+.overview-item.primary strong { color: var(--accent); }
+.toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 24px 0 15px; }
+.toolbar-label { margin-right: 4px; color: var(--muted); font-size: 12px; }
+.filter { border: 1px solid var(--line); border-radius: 999px; padding: 7px 13px; color: var(--muted); background: transparent; cursor: pointer; }
+.filter:hover, .filter[aria-pressed="true"] { border-color: var(--accent); color: var(--bg); background: var(--accent); }
+.legacy-link { margin-left: auto; color: var(--quiet); font-size: 12px; }
+.fixture-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.fixture-card { min-width: 0; overflow: hidden; border: 1px solid var(--line); border-left: 3px solid var(--quiet); background: var(--surface); }
+.fixture-card.status-frozen { border-left-color: var(--accent); }
+.fixture-card.status-insufficient_data { border-left-color: var(--warning); }
+.fixture-card.status-prediction_failed, .fixture-card.status-missed_prematch_window { border-left-color: var(--danger); }
+.fixture-card.status-pending { border-left-color: var(--blue); }
+.fixture-main { padding: 18px 19px 15px; }
+.fixture-meta { display: flex; justify-content: space-between; gap: 12px; align-items: center; color: var(--muted); font-size: 12px; }
+.fixture-meta .competition { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.match-number { color: var(--quiet); white-space: nowrap; }
+.teams { margin: 12px 0 5px; font-size: clamp(20px, 2.3vw, 28px); font-weight: 650; line-height: 1.18; letter-spacing: -.035em; overflow-wrap: anywhere; }
+.teams .versus { display: inline-block; margin: 0 6px; color: var(--quiet); font-size: .48em; font-weight: 500; letter-spacing: 0; vertical-align: middle; }
+.kickoff { color: var(--muted); font-size: 12px; }
+.status-badge { display: inline-flex; align-items: center; border-radius: 999px; padding: 4px 9px; color: var(--muted); background: var(--surface-2); font-size: 11px; font-weight: 700; white-space: nowrap; }
+.status-frozen .status-badge { color: var(--accent); background: var(--accent-soft); }
+.status-insufficient_data .status-badge { color: var(--warning); background: var(--warning-soft); }
+.status-prediction_failed .status-badge, .status-missed_prematch_window .status-badge { color: var(--danger); background: var(--danger-soft); }
+.reason { display: flex; flex-wrap: wrap; gap: 5px 10px; align-items: baseline; margin-top: 14px; padding: 10px 12px; border: 1px solid rgba(240, 184, 106, .25); background: var(--warning-soft); color: #f6d29a; }
+.reason strong { font-size: 13px; }
+.reason code { color: #cda66c; font-size: 11px; }
+.prediction-panel { margin-top: 18px; padding: 16px 0 0; border-top: 1px solid var(--line); }
+.prediction-topline { display: flex; justify-content: space-between; gap: 15px; align-items: flex-end; }
+.prediction-label { color: var(--muted); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; }
+.prediction-role { margin-top: 3px; color: var(--quiet); font-size: 11px; }
+.score-focus { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: flex-end; gap: 7px; text-align: right; }
+.score-focus strong { color: var(--accent); font-size: 36px; line-height: .95; letter-spacing: -.06em; }
+.score-focus .neighbors { color: var(--muted); font-size: 12px; }
+.signal-row { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 15px; }
+.signal { display: inline-flex; align-items: center; min-height: 27px; padding: 4px 8px; border: 1px solid var(--line); color: var(--muted); background: var(--surface-2); font-size: 12px; }
+.signal.accent { border-color: rgba(67, 211, 165, .35); color: var(--accent); background: var(--accent-soft); }
+.signal.warning { border-color: rgba(240, 184, 106, .35); color: var(--warning); background: var(--warning-soft); }
+.prediction-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 14px; }
+.mini-metric { min-width: 0; padding: 9px 10px; border: 1px solid rgba(38, 54, 70, .95); background: rgba(23, 35, 49, .55); }
+.mini-metric span { display: block; color: var(--quiet); font-size: 10px; }
+.mini-metric strong { display: block; margin-top: 2px; color: var(--text); font-size: 14px; overflow-wrap: anywhere; }
+.mini-metric.wide { grid-column: span 2; }
+.market-strip { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.market-item { min-width: 0; padding: 8px 10px; border: 1px solid var(--line); color: var(--muted); background: rgba(11, 17, 24, .48); font-size: 12px; }
+.market-item strong { color: var(--text); font-weight: 600; }
+.market-item small { display: block; margin-top: 2px; color: var(--quiet); }
+.market-item .movement { color: var(--warning); }
+.result-line { display: flex; flex-wrap: wrap; gap: 8px 13px; align-items: baseline; margin: 16px -1px -1px; padding: 11px 12px; border: 1px solid rgba(67, 211, 165, .24); background: var(--accent-soft); color: var(--accent); }
+.pending-result { border-color: var(--line); background: var(--surface-2); color: var(--muted); }
+.result-line span { color: var(--muted); font-size: 12px; }
+.evaluation { display: flex; flex-wrap: wrap; gap: 6px 12px; margin-top: 12px; color: var(--muted); font-size: 11px; }
+.evaluation strong { color: var(--text); font-weight: 600; }
+.card-foot { display: flex; flex-wrap: wrap; gap: 8px 14px; padding: 10px 19px 12px; border-top: 1px solid rgba(38, 54, 70, .75); color: var(--quiet); font-size: 11px; }
+.card-foot code { overflow-wrap: anywhere; }
+.card-foot code { color: var(--muted); }
+.empty { grid-column: 1 / -1; padding: 44px 20px; border: 1px dashed var(--line); color: var(--muted); text-align: center; }
+.data-warning { margin: 18px 0 0; padding: 10px 13px; border: 1px solid rgba(241, 123, 133, .32); background: var(--danger-soft); color: #ffc1c6; font-size: 12px; }
+.accountability { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 9px 20px; margin-top: 22px; color: var(--quiet); font-size: 12px; }
+@media (max-width: 880px) { .fixture-list { grid-template-columns: 1fr; } .prediction-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+@media (max-width: 560px) { .shell { padding: 20px 12px 38px; } .topbar { display: block; } .refresh-line { margin-top: 10px; text-align: left; } .overview { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); } .overview-item { min-width: 0; } .fixture-main { padding: 15px 14px 13px; } .card-foot { padding-left: 14px; padding-right: 14px; } .fixture-meta { align-items: flex-start; } .teams { font-size: 22px; } .prediction-topline { display: block; } .score-focus { justify-content: flex-start; margin-top: 14px; text-align: left; } .prediction-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .mini-metric.wide { grid-column: span 2; } .legacy-link { margin-left: 0; width: 100%; } }
+"""
+
+
+def _format_kickoff(value: Any) -> str:
+    text = str(value or "").replace("T", " ")
+    if "+08:00" in text:
+        text = text.replace("+08:00", "")
+    return text[:16] if text else "时间待补"
+
+
+def _score_label(value: Any) -> str:
+    return str(value or "").replace("-", "–")
+
+
+def _signal(label: str, value: Any, css: str = "") -> str:
+    if value in (None, "", []):
+        return ""
+    return f'<span class="signal {css}">{html.escape(label)} · {html.escape(_text(value))}</span>'
+
+
+def _mini_metric(label: str, value: Any, css: str = "") -> str:
+    if value in (None, "", []):
+        return ""
+    return f'<div class="mini-metric {css}"><span>{html.escape(label)}</span><strong>{html.escape(_text(value))}</strong></div>'
+
+
+def _modern_prediction_html(prediction: dict[str, Any]) -> str:
     probabilities = prediction.get("probabilities") or {}
     btts = prediction.get("btts") or {}
-    score_top3 = prediction.get("score_top3") or []
-    totals = prediction.get("totals") or []
-    total_text = "、".join(
-        f"{row.get('goals')}（{_probability(row.get('probability'))}）"
-        for row in totals[:3] if isinstance(row, dict)
-    ) or "—"
+    primary = prediction.get("primary_score") or prediction.get("unique_score")
+    neighbors = prediction.get("neighbor_scores") or []
+    market = prediction.get("market_summary") or {}
     market_quality = prediction.get("market_intelligence_quality")
-    market_note = "市场情报有限" if market_quality == "LIMITED" else None
-    market_fields = [
-        _field("市场情报质量", market_quality),
-        _field("数据等级", prediction.get("data_grade")),
-        _field("BASE输入质量", prediction.get("base_input_quality")),
-        _field("冻结时距开赛（分钟）", prediction.get("minutes_to_kickoff_at_freeze")),
-    ]
-    if prediction.get("market_bookmakers"):
-        market_fields.append(_field("实际公司", "、".join(map(str, prediction["market_bookmakers"]))))
-    if prediction.get("market_data_providers"):
-        market_fields.append(_field("数据提供方", "、".join(map(str, prediction["market_data_providers"]))))
-    if prediction.get("market_families"):
-        market_fields.append(_field("市场类别", "、".join(map(str, prediction["market_families"]))))
+    signal_html = "".join([
+        _signal("1X2", prediction.get("one_x_two_direction"), "accent"),
+        _signal("比分分布", prediction.get("score_concentration")),
+        _signal("市场情报", "有限" if market_quality == "LIMITED" else market_quality, "warning" if market_quality == "LIMITED" else ""),
+        _signal("市场来源", " / ".join(map(str, prediction.get("market_data_providers") or []))),
+    ])
+    probability_text = " / ".join(
+        f"{label} {_probability(probabilities.get(key))}"
+        for label, key in (("主", "home"), ("平", "draw"), ("客", "away"))
+        if _number(probabilities.get(key)) is not None
+    )
+    btts_text = " / ".join(
+        f"{label} {_probability(btts.get(key))}"
+        for label, key in (("Yes", "yes"), ("No", "no"))
+        if _number(btts.get(key)) is not None
+    )
+    metric_html = "".join([
+        _mini_metric("λ 主队", prediction.get("lambda_home")),
+        _mini_metric("λ 客队", prediction.get("lambda_away")),
+        _mini_metric("1X2 概率", probability_text, "wide"),
+        _mini_metric("BTTS", btts_text, "wide"),
+        _mini_metric("数据等级", prediction.get("data_grade")),
+        _mini_metric("BASE 输入", prediction.get("base_input_quality")),
+        _mini_metric("冻结时距开赛", prediction.get("minutes_to_kickoff_at_freeze")),
+    ])
+    market_html = ""
+    asian = market.get("asian_handicap")
+    total = market.get("total_line")
+    if asian or total:
+        items = []
+        if asian:
+            movement = f'<small class="movement">{html.escape(str(asian.get("movement")))}</small>' if asian.get("movement") else ""
+            items.append(f'<div class="market-item"><strong>AH · 主 {html.escape(str(asian.get("line")))}</strong>{movement}</div>')
+        if total:
+            direction = market.get("model_total_direction")
+            direction_text = f" · {html.escape(str(direction))}" if direction else ""
+            movement = f'<small class="movement">{html.escape(str(total.get("movement")))}</small>' if total.get("movement") else ""
+            items.append(f'<div class="market-item"><strong>O/U · {html.escape(str(total.get("line")))}{direction_text}</strong>{movement}</div>')
+        market_html = f'<div class="market-strip">{"".join(items)}</div>'
+    neighbor_text = " · ".join(_score_label(score) for score in neighbors)
     return (
-        '<section class="prediction-block"><div class="block-title">BASE 概率预测</div>'
-        '<div class="model-line">FUSION_BASELINE_V0 · 当前 Champion 融合基线</div>'
-        '<div class="data-grid">'
-        + _field("λ 主队", prediction.get("lambda_home"))
-        + _field("λ 客队", prediction.get("lambda_away"))
-        + _field("主胜概率", _probability(probabilities.get("home")))
-        + _field("平局概率", _probability(probabilities.get("draw")))
-        + _field("客胜概率", _probability(probabilities.get("away")))
-        + _field("BTTS Yes", _probability(btts.get("yes")))
-        + _field("BTTS No", _probability(btts.get("no")))
-        + _field("唯一比分", prediction.get("unique_score"))
-        + _field("Top3 比分", "、".join(map(str, score_top3)) or "—", css="wide")
-        + _field("总进球概率", total_text, css="wide")
-        + "</div><div class=\"data-grid quality-grid\">"
-        + "".join(market_fields)
-        + "</div>"
-        + (f'<p class="limited-note">{html.escape(market_note)}</p>' if market_note else "")
-        + "</section>"
+        '<section class="prediction-panel">'
+        '<div class="prediction-topline">'
+        '<div><div class="prediction-label">BASE 概率预测</div>'
+        f'<div class="prediction-role">{html.escape(str(prediction.get("product_role") or "FUSION_BASELINE_V0"))}</div></div>'
+        '<div class="score-focus"><span class="prediction-label">模型首选比分</span>'
+        f'<strong>{html.escape(_score_label(primary) if primary else "—")}</strong>'
+        f'<span class="neighbors">{html.escape(neighbor_text) if neighbor_text else ""}</span></div></div>'
+        f'<div class="signal-row">{signal_html}</div>'
+        f'<div class="prediction-grid">{metric_html}</div>'
+        f'{market_html}'
+        '</section>'
     )
 
 
-def _result_html(card: dict[str, Any]) -> str:
+def _modern_result_html(card: dict[str, Any]) -> str:
     result = card.get("result") or {}
     score = result.get("score_90m")
     if not score:
         return '<div class="result-line pending-result">等待赛果</div>'
-    sample = card.get("evaluation")
-    if sample and sample.get("kind") == "formal":
+    if card.get("formal_prospective"):
         label = "已进入正式评估样本"
     elif card.get("pilot_excluded"):
         label = "试运行样本 · 不计入正式评估"
     else:
         label = "已取得验证赛果"
-    return f'<div class="result-line"><strong>90分钟赛果：{html.escape(str(score))}</strong><span>{html.escape(label)}</span></div>'
+    return f'<div class="result-line"><strong>90分钟赛果 · {html.escape(str(score))}</strong><span>{html.escape(label)}</span></div>'
 
 
-def _evaluation_html(evaluation: dict[str, Any] | None) -> str:
+def _modern_evaluation_html(evaluation: dict[str, Any] | None) -> str:
     if not evaluation:
         return ""
     metrics = evaluation.get("metrics") or {}
-    labels = {
-        "top1_accuracy": "1X2 命中",
-        "exact_score_top1_hit": "Exact Score Top1",
-        "exact_score_top3_hit": "Exact Score Top3",
-        "brier_1x2": "1X2 Brier",
-        "log_loss_1x2": "1X2 LogLoss",
-        "1x2_brier": "1X2 Brier",
-        "1x2_log_loss": "1X2 LogLoss",
-    }
-    fields = []
-    for key, label in labels.items():
-        if key in metrics:
-            fields.append(_field(label, _metric_value(metrics[key])))
-    if not fields:
-        return ""
-    prefix = "正式评估" if evaluation.get("kind") == "formal" else "试运行评价（不计入正式样本）"
-    return f'<section class="evaluation-block"><div class="block-title">{html.escape(prefix)}</div><div class="data-grid">{"".join(fields)}</div></section>'
+    labels = (
+        ("top1_accuracy", "1X2"),
+        ("exact_score_top1_hit", "Exact Top1"),
+        ("exact_score_top3_hit", "Top3"),
+        ("1x2_brier", "Brier"),
+        ("1x2_log_loss", "LogLoss"),
+    )
+    fields = [f'<span>{html.escape(label)} <strong>{html.escape(_metric_value(metrics[key]))}</strong></span>' for key, label in labels if key in metrics]
+    return f'<div class="evaluation">{"".join(fields)}</div>' if fields else ""
 
 
-def _card_html(card: dict[str, Any]) -> str:
+def _modern_card_html(card: dict[str, Any]) -> str:
     status = str(card.get("status") or "PENDING")
-    reason = ""
+    reason_html = ""
     if card.get("reason_code"):
-        reason = (
+        reason_html = (
             f'<div class="reason"><strong>{html.escape(str(card.get("reason_text") or card["reason_code"]))}</strong>'
             f'<code>{html.escape(str(card["reason_code"]))}</code></div>'
         )
-    prediction = _prediction_html(card["prediction"]) if card.get("prediction") else ""
+    prediction_html = _modern_prediction_html(card["prediction"]) if card.get("prediction") else ""
+    prediction_id = card.get("prediction_id")
+    foot_parts = []
+    if prediction_id:
+        foot_parts.append(f"prediction <code>{html.escape(str(prediction_id))}</code>")
+    if card.get("pilot_excluded"):
+        foot_parts.append("试运行样本")
+    if card.get("formal_prospective"):
+        foot_parts.append("正式评估")
     return (
-        f'<article class="fixture-card status-{html.escape(status.lower())}" data-status="{html.escape(status)}" '
-        f'data-result="{"yes" if card.get("result") else "no"}">'
-        '<div class="fixture-head">'
-        f'<div><div class="fixture-kicker">{_esc(card.get("competition"))} · {_esc(card.get("match_num"))}</div>'
-        f'<h2>{_esc(card.get("home"))} <span>vs</span> {_esc(card.get("away"))}</h2>'
-        f'<div class="kickoff">开球：{_esc(card.get("kickoff"))}</div></div>'
+        f'<article class="fixture-card status-{html.escape(status.lower())}" data-status="{html.escape(status)}" data-result="{"yes" if card.get("result") else "no"}">'
+        '<div class="fixture-main">'
+        '<div class="fixture-meta">'
+        f'<span class="competition">{_esc(card.get("competition"))}</span>'
+        f'<span class="match-number">{_esc(card.get("match_num"))}</span>'
+        '</div>'
+        f'<div class="teams">{_esc(card.get("home"))}<span class="versus">vs</span>{_esc(card.get("away"))}</div>'
+        f'<div class="fixture-meta"><span class="kickoff">开球 · {html.escape(_format_kickoff(card.get("kickoff")))}</span>'
         f'<span class="status-badge">{html.escape(str(card.get("status_label") or status))}</span></div>'
-        + reason + prediction + _result_html(card) + _evaluation_html(card.get("evaluation"))
-        + "</article>"
+        f'{reason_html}{prediction_html}{_modern_result_html(card)}{_modern_evaluation_html(card.get("evaluation"))}'
+        '</div>'
+        f'<div class="card-foot">{" · ".join(foot_parts) if foot_parts else "基础赛程已纳入今日 Universe"}</div>'
+        '</article>'
     )
-
-
-CSS = r"""
-:root { --ink:#1f2933; --muted:#64717d; --line:#d9e0e5; --paper:#f6f8f9; --panel:#ffffff; --navy:#17324d; --teal:#1d8175; --amber:#c77a18; --red:#b84c4c; --blue:#3475a8; }
-* { box-sizing:border-box; }
-body { margin:0; background:var(--paper); color:var(--ink); font:14px/1.6 "Segoe UI","Microsoft YaHei",sans-serif; }
-a { color:var(--teal); }
-.page { max-width:1240px; margin:0 auto; padding:28px 20px 54px; }
-.hero { background:var(--navy); color:#fff; padding:30px 32px; border-radius:14px; box-shadow:0 10px 28px rgba(23,50,77,.14); }
-.eyebrow { color:#9bd6cd; letter-spacing:.15em; font-size:11px; font-weight:700; }
-h1 { margin:7px 0 3px; font-size:clamp(28px,4vw,42px); letter-spacing:-.03em; }
-.hero p { margin:0; color:#d2e0eb; }
-.health { margin-top:22px; display:flex; flex-wrap:wrap; gap:10px; align-items:center; }
-.health-badge, .status-badge { display:inline-flex; padding:4px 10px; border-radius:999px; font-weight:700; font-size:12px; }
-.health-normal { background:#d9f2e8; color:#17614f; }
-.health-degraded { background:#fff0cf; color:#825114; }
-.health-failed { background:#f9dddd; color:#8e3333; }
-.health-unknown { background:#e7edf1; color:#4e5b65; }
-.summary-grid { display:grid; grid-template-columns:repeat(8,minmax(0,1fr)); gap:10px; margin:18px 0; }
-.summary-card { background:var(--panel); border:1px solid var(--line); padding:15px 14px; min-height:84px; }
-.summary-card strong { display:block; font-size:25px; color:var(--navy); line-height:1.1; }
-.summary-card span { color:var(--muted); font-size:12px; }
-.summary-card.accent { border-top:3px solid var(--teal); }
-.filters { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin:22px 0 13px; }
-.filter { cursor:pointer; border:1px solid var(--line); background:#fff; color:var(--ink); padding:7px 13px; border-radius:7px; }
-.filter[aria-pressed="true"] { background:var(--navy); color:#fff; border-color:var(--navy); }
-.fixture-list { display:grid; gap:13px; }
-.fixture-card { background:var(--panel); border:1px solid var(--line); border-left:5px solid var(--blue); padding:20px; }
-.status-frozen { border-left-color:var(--teal); }
-.status-insufficient_data { border-left-color:var(--amber); }
-.status-prediction_failed, .status-missed_prematch_window { border-left-color:var(--red); }
-.status-pending { border-left-color:#9aa7b0; }
-.fixture-head { display:flex; justify-content:space-between; gap:18px; align-items:flex-start; }
-.fixture-kicker, .block-title { color:var(--muted); text-transform:uppercase; letter-spacing:.08em; font-size:11px; font-weight:700; }
-h2 { margin:4px 0 2px; color:var(--navy); font-size:23px; letter-spacing:-.02em; }
-h2 span { color:#9aa7b0; font-size:14px; font-weight:400; }
-.kickoff { color:var(--muted); }
-.status-badge { background:#e7edf1; color:#43515c; white-space:nowrap; }
-.status-frozen .status-badge { background:#d9f2e8; color:#17614f; }
-.status-insufficient_data .status-badge { background:#fff0cf; color:#825114; }
-.status-prediction_failed .status-badge, .status-missed_prematch_window .status-badge { background:#f9dddd; color:#8e3333; }
-.reason { display:flex; gap:9px; flex-wrap:wrap; align-items:center; margin:14px 0 0; padding:10px 12px; background:#fff8e9; border:1px solid #f0dba8; color:#76501c; }
-.reason code { color:#926527; font-size:12px; }
-.prediction-block, .evaluation-block { border-top:1px solid var(--line); margin-top:18px; padding-top:16px; }
-.model-line { color:var(--teal); font-weight:700; margin:3px 0 12px; }
-.data-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px; margin-top:10px; }
-.quality-grid { margin-top:12px; }
-.metric { border:1px solid #e5eaee; padding:9px 10px; background:#fbfcfc; min-width:0; }
-.metric span { display:block; color:var(--muted); font-size:11px; }
-.metric strong { display:block; margin-top:2px; color:var(--ink); overflow-wrap:anywhere; }
-.metric.wide { grid-column:span 2; }
-.limited-note { color:#8a5a16; background:#fff8e9; padding:7px 9px; margin:10px 0 0; }
-.result-line { display:flex; align-items:center; gap:15px; flex-wrap:wrap; margin-top:15px; padding:11px 13px; background:#eef8f5; color:#17614f; }
-.pending-result { background:#f2f5f7; color:var(--muted); }
-.result-line span { font-size:12px; }
-.page-error { border:1px solid #efc7c7; background:#fff1f1; color:#8e3333; padding:12px 14px; margin:16px 0; }
-.empty { padding:32px; text-align:center; color:var(--muted); border:1px dashed var(--line); }
-@media (max-width:900px) { .summary-grid { grid-template-columns:repeat(4,minmax(0,1fr)); } .data-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
-@media (max-width:520px) { .page { padding:14px 10px 36px; } .hero { padding:22px 18px; } .summary-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } .fixture-head { display:block; } .status-badge { margin-top:12px; } .data-grid { grid-template-columns:1fr; } .metric.wide { grid-column:span 1; } h2 { font-size:20px; } }
-"""
 
 
 def render_dashboard(payload: dict[str, Any]) -> str:
     summary = payload["summary"]
     health = payload.get("health") or {}
-    health_status = str(health.get("display_status") or "待更新")
-    health_class = str(health.get("css_class") or "unknown")
+    health_overall = str(health.get("overall_status") or "UNKNOWN")
     health_errors = payload.get("data_errors") or []
-    summary_cards = [
-        ("今日比赛", summary.get("fixture_count"), ""),
-        ("预测已冻结", summary.get("frozen"), "accent"),
-        ("等待预测", summary.get("pending"), ""),
-        ("数据不足", summary.get("insufficient_data"), ""),
-        ("预测失败", summary.get("prediction_failed"), ""),
-        ("错过窗口", summary.get("missed"), ""),
-        ("已验证赛果", summary.get("verified_results"), ""),
-        ("正式 Prospective Samples", summary.get("formal_prospective_total"), "accent"),
-        ("本日新增正式样本", summary.get("samples_added_today"), ""),
-        ("Pilot excluded", summary.get("pilot_excluded_count"), ""),
-    ]
-    summary_html = "".join(
-        f'<div class="summary-card {css}"><strong>{html.escape(_text(value, "0"))}</strong><span>{html.escape(label)}</span></div>'
-        for label, value, css in summary_cards
-    )
-    cards_html = "".join(_card_html(card) for card in payload.get("fixtures") or [])
-    cards_html = cards_html or '<div class="empty">该业务日没有可展示的 Prediction Universe 赛事。</div>'
-    error_html = (
-        '<div class="page-error"><strong>数据完整性提示：</strong>'
-        + html.escape("、".join(map(str, health_errors)))
-        + "</div>"
-        if health_errors else ""
-    )
+    health_html = ""
+    if health_overall != "HEALTHY" or health_errors:
+        css = "alert" if health_overall in {"FAILED", "ALERT"} else ""
+        reasons = ", ".join(str(value) for value in health_errors) or ", ".join(health.get("failed_steps") or []) or "待检查"
+        health_html = f'<div class="health-alert {css}"><strong>系统状态 · {html.escape(health_overall)}</strong><span>{html.escape(reasons)}</span></div>'
+    overview = "".join([
+        f'<div class="overview-item primary"><strong>{html.escape(_text(summary.get("fixture_count"), "0"))}</strong><span>今日比赛</span></div>',
+        f'<div class="overview-item"><strong>{html.escape(_text(summary.get("frozen"), "0"))}</strong><span>预测已冻结</span></div>',
+        f'<div class="overview-item"><strong>{html.escape(_text(summary.get("pending"), "0"))}</strong><span>等待预测</span></div>',
+        f'<div class="overview-item"><strong>{html.escape(_text(summary.get("insufficient_data"), "0"))}</strong><span>数据不足</span></div>',
+        f'<div class="overview-item"><strong>{html.escape(_text(summary.get("verified_results"), "0"))}</strong><span>已验证赛果</span></div>',
+        f'<div class="overview-item"><strong>{html.escape(_text(summary.get("formal_prospective_total"), "0"))}</strong><span>正式评估样本</span></div>',
+        f'<div class="overview-item"><strong>{html.escape(_text(summary.get("samples_added_today"), "0"))}</strong><span>今日新增正式样本</span></div>',
+        f'<div class="overview-item"><strong>{html.escape(_text(summary.get("pilot_excluded_count"), "0"))}</strong><span>试运行样本</span></div>',
+    ])
+    cards_html = "".join(_modern_card_html(card) for card in payload.get("fixtures") or [])
+    if not cards_html:
+        cards_html = '<div class="empty">今天没有可展示的 Prediction Universe 比赛。</div>'
+    data_warning = ""
+    if summary.get("silent_missing_fixture"):
+        data_warning = f'<div class="data-warning">数据完整性提醒：Universe {html.escape(str(summary.get("fixture_count")))} 场，页面仅生成 {html.escape(str(summary.get("card_count")))} 张卡片。</div>'
     return f"""<!doctype html>
 <html lang="zh-CN">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Prediction Day · {html.escape(str(payload.get('business_date')))}</title><style>{CSS}</style></head>
-<body><main class="page">
-<header class="hero"><div class="eyebrow">PRE-MATCH FOOTBALL INTELLIGENCE</div>
-<h1>Prediction Day · {html.escape(str(payload.get('business_date')))}</h1>
-<p>完整 Prediction Universe · 所有比赛保留 · 概率预测与赛果状态</p>
-<div class="health"><span class="health-badge health-{html.escape(health_class)}">系统状态：{html.escape(health_status)}</span>
-<span>系统更新时间：{html.escape(_text(health.get('updated_at') or payload.get('generated_at')))}</span>
-<span>页面生成：{html.escape(_text(payload.get('generated_at')))}</span></div></header>
-{error_html}<section class="summary-grid">{summary_html}</section>
-<section class="filters" aria-label="比赛筛选"><span>显示：</span>
+<title>今日比赛 · {html.escape(str(payload.get('business_date')))}</title><style>{MODERN_CSS}</style></head>
+<body><main class="shell">
+<header class="topbar"><div><div class="brand-kicker">PRE-MATCH FOOTBALL INTELLIGENCE</div><h1>今日比赛</h1><div class="date-line">{html.escape(str(payload.get('business_date')))} · 全部 Prediction Universe 赛事</div></div>
+<div class="refresh-line">数据更新时间<br><strong>{html.escape(_text(health.get('updated_at') or payload.get('generated_at')))}</strong></div></header>
+{health_html}<section class="overview" aria-label="今日比赛摘要">{overview}</section>
+<nav class="toolbar" aria-label="比赛筛选"><span class="toolbar-label">查看</span>
 <button class="filter" type="button" data-filter="ALL" aria-pressed="true">全部</button>
 <button class="filter" type="button" data-filter="FROZEN" aria-pressed="false">已预测</button>
 <button class="filter" type="button" data-filter="INSUFFICIENT_DATA" aria-pressed="false">数据不足</button>
 <button class="filter" type="button" data-filter="RESULT" aria-pressed="false">已完赛</button>
-<a href="../match_workspace/latest.html">打开旧比赛工作台</a></section>
-<section id="fixture-list" class="fixture-list" aria-label="Prediction Universe 比赛列表">{cards_html}</section>
-<footer style="margin-top:26px;color:#64717d;font-size:12px">Universe {html.escape(str(summary.get('fixture_count', 0)))} 场 · 页面卡片 {html.escape(str(summary.get('card_count', 0)))} 张 · silent_missing_fixture = {html.escape(str(summary.get('silent_missing_fixture', 0)))} · 今日新增正式样本 {html.escape(str(summary.get('samples_added_today', 0)))} · pilot excluded {html.escape(str(summary.get('pilot_excluded_count', 0)))}</footer>
+<a class="legacy-link" href="../match_workspace/latest.html">Legacy 比赛工作台</a></nav>
+{data_warning}<section id="fixture-list" class="fixture-list" aria-label="今日比赛列表">{cards_html}</section>
+<footer class="accountability"><span>Universe {html.escape(str(summary.get('fixture_count', 0)))} 场 · 页面卡片 {html.escape(str(summary.get('card_count', 0)))} 张 · silent_missing_fixture = {html.escape(str(summary.get('silent_missing_fixture', 0)))}</span><span>正式样本累计 {html.escape(str(summary.get('formal_prospective_total', 0)))} · 试运行样本 {html.escape(str(summary.get('pilot_excluded_count', 0)))}</span></footer>
 </main><script>
 const buttons = Array.from(document.querySelectorAll('[data-filter]'));
 const cards = Array.from(document.querySelectorAll('.fixture-card'));
@@ -557,6 +802,7 @@ def build_dashboard(
     universe_root: Path = UNIVERSE_ROOT,
     jobs_root: Path = JOBS_ROOT,
     prediction_root: Path = PREDICTION_ROOT,
+    input_snapshot_root: Path = INPUT_SNAPSHOT_ROOT,
     exclusion_root: Path = EXCLUSION_ROOT,
     result_root: Path = RESULT_ROOT,
     prospective_root: Path = PROSPECTIVE_ROOT,
@@ -595,7 +841,17 @@ def build_dashboard(
         match_id = projected["match_id"]
         job = job_lookup.get(f"match_id:{match_id}") or job_lookup.get(f"job_id:BASE-{business_date}-{match_id}")
         record = records.get(str((job or {}).get("prediction_id") or "")) if job else None
-        cards.append(_card(fixture, job, record, result_index, exclusions, formal_samples, exploratory_samples))
+        cards.append(_card(
+            fixture,
+            job,
+            record,
+            result_index,
+            exclusions,
+            formal_samples,
+            exploratory_samples,
+            input_snapshot_root=input_snapshot_root,
+            errors=errors,
+        ))
     cards.sort(key=lambda item: (_iso_sort(item.get("kickoff")), _text(item.get("match_num"))))
     counts = Counter(card.get("status") for card in cards)
     verified_results = sum(1 for card in cards if card.get("result"))
