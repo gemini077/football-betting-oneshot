@@ -62,3 +62,14 @@ def test_production_entry_imports_without_football_data_home():
         encoding="utf-8",
     )
     assert result.returncode == 0, result.stderr
+
+
+def test_durable_state_sync_happens_before_cycle_and_not_after_generated_commit():
+    text = _workflow_text()
+    sync_step = text.index("Sync latest durable state")
+    cycle_step = text.index("Run production cycle")
+    save_step = text.index("Save generated public data")
+
+    assert sync_step < cycle_step
+    assert text.index("git pull --rebase origin main", sync_step) < cycle_step
+    assert "git pull --rebase origin main" not in text[save_step:]
