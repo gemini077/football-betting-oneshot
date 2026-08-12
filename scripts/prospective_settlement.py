@@ -147,6 +147,14 @@ def normalize_result(result: dict[str, Any]) -> dict[str, Any]:
     """Normalize an existing postmatch artifact/provider result to 90m."""
     if not isinstance(result, dict):
         raise ValueError("result must be an object")
+    status = str(result.get("status") or "").strip().lower()
+    if status in {"live", "in_progress", "scheduled", "pending", "result_pending"}:
+        raise ValueError("result is not final")
+    if status and status not in {"result_verified", "verified", "reviewed"}:
+        raise ValueError("result verification status is not final")
+    scope = str(result.get("scope") or "regulation_90m_plus_stoppage").strip()
+    if scope not in {"regulation_90m_plus_stoppage", "90m", "regulation_90m"}:
+        raise ValueError("result scope is not regulation-only")
     score = result.get("score_90m") or result.get("result_90m")
     if score is None:
         score = (result.get("home_score_90m"), result.get("away_score_90m"))
@@ -155,9 +163,6 @@ def normalize_result(result: dict[str, Any]) -> dict[str, Any]:
     pair = _score_pair(score)
     if pair is None:
         raise ValueError("result has no valid 90-minute score")
-    scope = str(result.get("scope") or "regulation_90m_plus_stoppage")
-    if scope not in {"regulation_90m_plus_stoppage", "90m", "regulation_90m"}:
-        raise ValueError("result scope is not regulation-only")
     home, away = pair
     return {
         **result,
@@ -169,6 +174,27 @@ def normalize_result(result: dict[str, Any]) -> dict[str, Any]:
         "scope": scope,
         "result_verified_at": result.get("result_verified_at") or result.get("verified_at"),
     }
+
+
+def _is_verified_result_artifact(result: dict[str, Any]) -> bool:
+    """Require a provider-verified final artifact before settlement."""
+    if not isinstance(result, dict):
+        return False
+    status = str(result.get("status") or "").strip().lower()
+    if status in {"live", "in_progress", "scheduled", "pending", "result_pending"}:
+        return False
+    if status and status not in {"result_verified", "verified", "reviewed"}:
+        return False
+    scope = str(result.get("scope") or "").strip()
+    if scope not in {"regulation_90m_plus_stoppage", "90m", "regulation_90m"}:
+        return False
+    verified_at = result.get("result_verified_at") or result.get("verified_at")
+    if not verified_at:
+        return False
+    return any(
+        result.get(field) not in (None, "")
+        for field in ("score_90m", "result_90m", "home_score_90m", "home_score")
+    )
 
 
 def _probabilities(record: dict[str, Any]) -> dict[str, float] | None:
@@ -603,6 +629,10 @@ def settle_records(
         fetched = fetch(record, now)
         if str(fetched.get("status") or "").upper() in {"RESULT_PENDING", "PENDING", "RETRY_SCHEDULED"}:
             result["pending_results"] += 1
+            continue
+        if not _is_verified_result_artifact(fetched):
+            result["result_failures"] += 1
+            result["failure_reasons"]["RESULT_NOT_FINAL"] = result["failure_reasons"].get("RESULT_NOT_FINAL", 0) + 1
             continue
         try:
             actual = normalize_result(fetched)

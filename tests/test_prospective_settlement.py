@@ -300,6 +300,39 @@ def test_result_after_extra_time_still_uses_saved_90m_score():
     assert normalized["away_score_90m"] == 0
 
 
+def test_live_result_payload_cannot_create_prospective_sample(tmp_path):
+    live = {
+        "status": "live",
+        "match_key": "FBOS-P-1",
+        "home_score": 1,
+        "away_score": 0,
+        "scope": "regulation_90m_plus_stoppage",
+    }
+    result_root = tmp_path / "results"
+    out = settle_records(
+        [record()],
+        now=datetime(2026, 8, 14, 12, 0, tzinfo=TZ),
+        result_fetcher=lambda *_: live,
+        prospective_root=tmp_path / "prospective",
+        result_root=result_root,
+    )
+    assert out["formal_samples_added"] == 0
+    assert out["result_failures"] == 1
+    assert not result_root.exists()
+
+
+def test_verified_regulation_result_can_continue_to_evaluation(tmp_path):
+    verified = result(home=1, away=0)
+    out = settle_records(
+        [record()],
+        now=datetime(2026, 8, 14, 12, 0, tzinfo=TZ),
+        result_fetcher=lambda *_: verified,
+        prospective_root=tmp_path,
+    )
+    assert out["results_found"] == 1
+    assert out["formal_samples_added"] == 1
+
+
 def test_result_verified_before_kickoff_is_rejected(tmp_path):
     current = result()
     current["verified_at"] = "2026-08-13T02:59:00+08:00"

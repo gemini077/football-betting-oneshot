@@ -32,6 +32,7 @@ SCORE_PATTERN = re.compile(
     r'<p\s+class=["\']odds_hd_bf["\'][^>]*>\s*<strong>\s*(\d+)\s*[:：]\s*(\d+)\s*</strong>',
     re.IGNORECASE,
 )
+STATE_PATTERN = re.compile(r"\bvar\s+state\s*=\s*(-?\d+)\b", re.IGNORECASE)
 
 
 def safe_key(value: Any) -> str:
@@ -43,6 +44,12 @@ def parse_header_score(page: str) -> tuple[int, int] | None:
     if not match:
         return None
     return int(match.group(1)), int(match.group(2))
+
+
+def parse_nowscore_state(page: str) -> int | None:
+    """Return Nowscore's explicit match state, or None when it is unproven."""
+    match = STATE_PATTERN.search(page or "")
+    return int(match.group(1)) if match else None
 
 
 def resolve_nowscore_id(schedule: dict[str, Any]) -> int | None:
@@ -176,10 +183,10 @@ def parse_nowscore_detail(page: str) -> dict[str, Any] | None:
     column position is therefore the authoritative scoring side; data-kind 8
     must not be inverted a second time.
     """
-    state = re.search(r"var\s+state\s*=\s*(-?\d+)", page or "")
-    if not state or int(state.group(1)) != -1:
+    if parse_nowscore_state(page) != -1:
         return None
     home = away = extra_home = extra_away = 0
+    parsed_events = 0
     for event in re.finditer(r'<tr[^>]*data-kind=["\'](1|7|8)["\'][^>]*>(.*?)</tr>', page, re.I | re.S):
         cells = re.findall(r"<td[^>]*>(.*?)</td>", event.group(2), re.I | re.S)
         if len(cells) < 5:
@@ -191,6 +198,7 @@ def parse_nowscore_detail(page: str) -> dict[str, Any] | None:
         right = html_lib.unescape(re.sub(r"<[^>]+>", "", cells[-1])).strip()
         if not left and not right:
             continue
+        parsed_events += 1
         scoring_home = bool(left)
         if minute <= 90:
             if scoring_home:
@@ -202,6 +210,8 @@ def parse_nowscore_detail(page: str) -> dict[str, Any] | None:
                 extra_home += 1
             else:
                 extra_away += 1
+    if not parsed_events:
+        return None
     after_extra_time = None
     if extra_home or extra_away:
         after_extra_time = f"{home + extra_home}-{away + extra_away}"
@@ -227,6 +237,9 @@ def fetch_nowscore_result(match_id: int) -> tuple[dict[str, Any] | None, str, st
                     continue
             else:
                 page = raw.decode("utf-8", errors="replace")
+            if parse_nowscore_state(page) != -1:
+                errors.append(f"{url}: result_not_final")
+                continue
             result = parse_nowscore_detail(page)
             if result is None:
                 header_score = parse_header_score(page)
