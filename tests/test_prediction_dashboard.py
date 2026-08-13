@@ -1,4 +1,5 @@
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -141,11 +142,19 @@ def test_universe_three_produces_three_accountable_cards_and_frozen_fields(tmp_p
     assert card["prediction"]["btts"]["yes"] == 0.45
     assert card["prediction"]["score_top3"] == ["1-0", "1-1", "2-0"]
     html = (roots["output_root"] / "latest.html").read_text(encoding="utf-8")
-    assert "预测已冻结" in html
+    assert "已预测" in html
+    assert "预测已冻结" not in html
     assert "系统首推比分" in html
     assert "1X2 · 主胜倾向" in html
     assert "1–0" in html
     assert "1–1 · 2–0" in html
+    assert "今日全部赛事" in html
+    assert "Prediction Universe" not in html
+    assert "MISSING_RECENT_FORM" not in html
+    assert "近期比赛数据不足" in html
+    assert "2026-08-12 12:05" in html
+    assert "Legacy 工作台" in html
+    assert html.index('data-prediction-kind="formal"') < html.index("Legacy 工作台")
     for forbidden in (
         "今日新增正式样本",
         "试运行样本",
@@ -194,6 +203,10 @@ def test_dashboard_preserves_data_shortage_pending_and_missed_reasons(tmp_path):
     assert by_id["1002"]["status"] == "PENDING"
     assert by_id["1003"]["status"] == "MISSED_PREMATCH_WINDOW"
     assert payload["summary"]["missed"] == 1
+    html = (roots["output_root"] / "latest.html").read_text(encoding="utf-8")
+    assert "近期比赛数据不足" in html
+    assert "MISSING_RECENT_FORM" not in html
+    assert "错过赛前窗口" in html
 
 
 def test_pilot_exclusion_and_formal_sample_are_distinguished(tmp_path):
@@ -224,6 +237,25 @@ def test_pilot_exclusion_and_formal_sample_are_distinguished(tmp_path):
     assert cards[excluded_id]["formal_prospective"] is False
     assert cards[formal_id]["formal_prospective"] is True
     assert cards[formal_id]["evaluation"]["metrics"]["1x2_brier"] == 0.2
+    assert cards[excluded_id]["status_label"] == "试运行预测"
+    assert cards[formal_id]["status_label"] == "已预测"
+
+    html = (roots["output_root"] / "latest.html").read_text(encoding="utf-8")
+    pilot_match = re.search(r'<article[^>]*data-prediction-kind="pilot"[^>]*>.*?</article>', html, re.S)
+    formal_match = re.search(r'<article[^>]*data-prediction-kind="formal"[^>]*>.*?</article>', html, re.S)
+    assert pilot_match is not None
+    assert formal_match is not None
+    pilot_html = pilot_match.group(0)
+    formal_html = formal_match.group(0)
+    assert "试运行预测" in pilot_html
+    assert "不纳入正式验证" in pilot_html
+    assert "已预测" not in pilot_html
+    assert "预测已冻结" not in pilot_html
+    assert "已预测" in formal_html
+    assert "预测已冻结" not in formal_html
+    assert "1–0" in formal_html
+    assert "1–1 · 2–0" in formal_html
+    assert "1X2 · 主胜倾向" in formal_html
 
 
 def test_dashboard_is_read_only_projection_without_model_or_network_imports():

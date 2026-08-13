@@ -25,7 +25,7 @@ DASHBOARD_ROOT = BASE_DIR / "data" / "prediction_dashboard"
 SHANGHAI = timezone(timedelta(hours=8))
 
 STATUS_LABELS = {
-    "FROZEN": "预测已冻结",
+    "FROZEN": "已预测",
     "PENDING": "等待预测",
     "INSUFFICIENT_DATA": "数据不足",
     "PREDICTION_FAILED": "预测失败",
@@ -322,9 +322,11 @@ def _card(
     reason_code, reason_text = _status_reason(status, job, record)
     result = _find_result(card, record, result_index)
     sample = formal_samples.get(prediction_id or "") or exploratory_samples.get(prediction_id or "")
+    pilot_excluded = bool(prediction_id and prediction_id in exclusions)
+    formal_prospective = bool(prediction_id and prediction_id in formal_samples)
     card.update({
         "status": status,
-        "status_label": STATUS_LABELS.get(status, status),
+        "status_label": "试运行预测" if pilot_excluded and record else STATUS_LABELS.get(status, status),
         "reason_code": reason_code,
         "reason_text": reason_text,
         "job_id": (job or {}).get("job_id"),
@@ -335,10 +337,10 @@ def _card(
             "verified_at": (result or {}).get("result_verified_at") or (result or {}).get("verified_at"),
             "source": (result or {}).get("source"),
         } if result else None,
-        "pilot_excluded": bool(prediction_id and prediction_id in exclusions),
-        "formal_prospective": bool(prediction_id and prediction_id in formal_samples),
+        "pilot_excluded": pilot_excluded,
+        "formal_prospective": formal_prospective,
         "evaluation": {
-            "kind": "formal" if prediction_id in formal_samples else "pilot_excluded" if prediction_id in exploratory_samples else None,
+            "kind": "formal" if formal_prospective else "pilot_excluded" if prediction_id in exploratory_samples else None,
             "metrics": sample.get("metrics") if isinstance(sample, dict) else {},
         } if sample else None,
     })
@@ -395,7 +397,8 @@ h1 { margin: 8px 0 4px; font-size: clamp(32px, 5vw, 54px); line-height: 1.02; le
 .toolbar-label { margin-right: 4px; color: var(--muted); font-size: 12px; }
 .filter { border: 1px solid var(--line); border-radius: 999px; padding: 7px 13px; color: var(--muted); background: transparent; cursor: pointer; }
 .filter:hover, .filter[aria-pressed="true"] { border-color: var(--accent); color: var(--bg); background: var(--accent); }
-.legacy-link { margin-left: auto; color: var(--quiet); font-size: 12px; }
+.page-footer { margin-top: 28px; padding-top: 14px; border-top: 1px solid var(--line); }
+.legacy-link { color: var(--quiet); font-size: 11px; }
 .fixture-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
 .fixture-card { min-width: 0; overflow: hidden; border: 1px solid var(--line); border-left: 3px solid var(--quiet); background: var(--surface); }
 .fixture-card.status-frozen { border-left-color: var(--accent); }
@@ -411,11 +414,16 @@ h1 { margin: 8px 0 4px; font-size: clamp(32px, 5vw, 54px); line-height: 1.02; le
 .kickoff { color: var(--muted); font-size: 12px; }
 .status-badge { display: inline-flex; align-items: center; border-radius: 999px; padding: 4px 9px; color: var(--muted); background: var(--surface-2); font-size: 11px; font-weight: 700; white-space: nowrap; }
 .status-frozen .status-badge { color: var(--accent); background: var(--accent-soft); }
+.fixture-card.prediction-pilot { border-left-color: var(--warning); }
+.prediction-pilot .status-badge { color: var(--warning); background: var(--warning-soft); }
+.prediction-pilot .score-focus strong { color: var(--warning); }
+.prediction-pilot .signal.accent { border-color: rgba(240, 184, 106, .35); color: var(--warning); background: var(--warning-soft); }
 .status-insufficient_data .status-badge { color: var(--warning); background: var(--warning-soft); }
 .status-prediction_failed .status-badge, .status-missed_prematch_window .status-badge { color: var(--danger); background: var(--danger-soft); }
 .reason { display: flex; flex-wrap: wrap; gap: 5px 10px; align-items: baseline; margin-top: 14px; padding: 10px 12px; border: 1px solid rgba(240, 184, 106, .25); background: var(--warning-soft); color: #f6d29a; }
 .reason strong { font-size: 13px; }
-.reason code { color: #cda66c; font-size: 11px; }
+.pilot-note { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: baseline; margin-top: 12px; color: var(--warning); font-size: 12px; }
+.pilot-note span { color: var(--muted); font-size: 11px; }
 .prediction-panel { margin-top: 16px; padding: 15px 0 0; border-top: 1px solid var(--line); }
 .prediction-topline { display: flex; justify-content: space-between; gap: 15px; align-items: flex-end; }
 .prediction-label { color: var(--muted); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; }
@@ -434,7 +442,7 @@ h1 { margin: 8px 0 4px; font-size: clamp(32px, 5vw, 54px); line-height: 1.02; le
 .empty { grid-column: 1 / -1; padding: 44px 20px; border: 1px dashed var(--line); color: var(--muted); text-align: center; }
 .data-warning { margin: 18px 0 0; padding: 10px 13px; border: 1px solid rgba(241, 123, 133, .32); background: var(--danger-soft); color: #ffc1c6; font-size: 12px; }
 @media (max-width: 880px) { .fixture-list { grid-template-columns: 1fr; } }
-@media (max-width: 560px) { .shell { padding: 20px 12px 38px; } .topbar { display: block; } .refresh-line { margin-top: 10px; text-align: left; } .day-summary { margin-top: 22px; } .fixture-main { padding: 15px 14px 13px; } .fixture-meta { align-items: flex-start; } .teams { font-size: 22px; } .prediction-topline { display: block; } .score-focus { margin-top: 11px; } .legacy-link { margin-left: 0; width: 100%; } }
+@media (max-width: 560px) { .shell { padding: 20px 12px 38px; } .topbar { display: block; } .refresh-line { margin-top: 10px; text-align: left; } .day-summary { margin-top: 22px; } .fixture-main { padding: 15px 14px 13px; } .fixture-meta { align-items: flex-start; } .teams { font-size: 22px; } .prediction-topline { display: block; } .score-focus { margin-top: 11px; } }
 """
 
 
@@ -443,6 +451,19 @@ def _format_kickoff(value: Any) -> str:
     if "+08:00" in text:
         text = text.replace("+08:00", "")
     return text[:16] if text else "时间待补"
+
+
+def _format_updated_at(value: Any) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return "时间待补"
+    try:
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+        if parsed.tzinfo:
+            parsed = parsed.astimezone(SHANGHAI)
+        return parsed.strftime("%Y-%m-%d %H:%M")
+    except ValueError:
+        return text[:16].replace("T", " ")
 
 
 def _score_label(value: Any) -> str:
@@ -455,7 +476,7 @@ def _signal(label: str, value: Any, css: str = "") -> str:
     return f'<span class="signal {css}">{html.escape(label)} · {html.escape(_text(value))}</span>'
 
 
-def _modern_prediction_html(prediction: dict[str, Any]) -> str:
+def _modern_prediction_html(prediction: dict[str, Any], *, pilot_excluded: bool = False) -> str:
     primary = prediction.get("primary_score") or prediction.get("unique_score")
     neighbors = prediction.get("neighbor_scores") or []
     market = prediction.get("market_summary") or {}
@@ -478,6 +499,7 @@ def _modern_prediction_html(prediction: dict[str, Any]) -> str:
             items.append(f'<div class="market-item"><strong>O/U · {html.escape(str(total.get("line")))}{direction_text}</strong>{movement}</div>')
         market_html = f'<div class="market-strip">{"".join(items)}</div>'
     neighbor_text = " · ".join(_score_label(score) for score in neighbors)
+    pilot_note = '<div class="pilot-note"><strong>试运行预测</strong><span>不纳入正式验证</span></div>' if pilot_excluded else ""
     return (
         '<section class="prediction-panel">'
         '<div class="prediction-topline">'
@@ -485,6 +507,7 @@ def _modern_prediction_html(prediction: dict[str, Any]) -> str:
         '<div class="score-focus">'
         f'<strong>{html.escape(_score_label(primary) if primary else "—")}</strong>'
         f'<span class="neighbors">{html.escape(neighbor_text) if neighbor_text else ""}</span></div></div></div>'
+        f'{pilot_note}'
         f'<div class="signal-row">{signal_html}</div>'
         f'{market_html}'
         '</section>'
@@ -501,15 +524,14 @@ def _modern_result_html(card: dict[str, Any]) -> str:
 
 def _modern_card_html(card: dict[str, Any]) -> str:
     status = str(card.get("status") or "PENDING")
+    pilot_excluded = bool(card.get("pilot_excluded") and card.get("prediction"))
+    prediction_kind = "pilot" if pilot_excluded else "formal" if card.get("prediction") else "none"
     reason_html = ""
     if card.get("reason_code"):
-        reason_html = (
-            f'<div class="reason"><strong>{html.escape(str(card.get("reason_text") or card["reason_code"]))}</strong>'
-            f'<code>{html.escape(str(card["reason_code"]))}</code></div>'
-        )
-    prediction_html = _modern_prediction_html(card["prediction"]) if card.get("prediction") else ""
+        reason_html = f'<div class="reason"><strong>{html.escape(str(card.get("reason_text") or "数据暂不可用"))}</strong></div>'
+    prediction_html = _modern_prediction_html(card["prediction"], pilot_excluded=pilot_excluded) if card.get("prediction") else ""
     return (
-        f'<article class="fixture-card status-{html.escape(status.lower())}" data-status="{html.escape(status)}" data-result="{"yes" if card.get("result") else "no"}">'
+        f'<article class="fixture-card status-{html.escape(status.lower())} prediction-{prediction_kind}" data-status="{html.escape(status)}" data-result="{"yes" if card.get("result") else "no"}" data-prediction-kind="{prediction_kind}">'
         '<div class="fixture-main">'
         '<div class="fixture-meta">'
         f'<span class="competition">{_esc(card.get("competition"))}</span>'
@@ -545,25 +567,26 @@ def render_dashboard(payload: dict[str, Any]) -> str:
     )
     cards_html = "".join(_modern_card_html(card) for card in payload.get("fixtures") or [])
     if not cards_html:
-        cards_html = '<div class="empty">今天没有可展示的 Prediction Universe 比赛。</div>'
+        cards_html = '<div class="empty">今天没有可展示的比赛。</div>'
     data_warning = ""
     if summary.get("silent_missing_fixture"):
-        data_warning = f'<div class="data-warning">数据完整性提醒：Universe {html.escape(str(summary.get("fixture_count")))} 场，页面仅生成 {html.escape(str(summary.get("card_count")))} 张卡片。</div>'
+        data_warning = f'<div class="data-warning">数据完整性提醒：当天 {html.escape(str(summary.get("fixture_count")))} 场，页面仅生成 {html.escape(str(summary.get("card_count")))} 张卡片。</div>'
     return f"""<!doctype html>
 <html lang="zh-CN">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>今日比赛 · {html.escape(str(payload.get('business_date')))}</title><style>{MODERN_CSS}</style></head>
 <body><main class="shell">
-<header class="topbar"><div><div class="brand-kicker">PRE-MATCH FOOTBALL INTELLIGENCE</div><h1>今日比赛</h1><div class="date-line">{html.escape(str(payload.get('business_date')))} · 全部 Prediction Universe 赛事</div></div>
-<div class="refresh-line">数据更新时间<br><strong>{html.escape(_text(health.get('updated_at') or payload.get('generated_at')))}</strong></div></header>
+<header class="topbar"><div><div class="brand-kicker">PRE-MATCH FOOTBALL INTELLIGENCE</div><h1>今日比赛</h1><div class="date-line">{html.escape(str(payload.get('business_date')))} · 今日全部赛事</div></div>
+<div class="refresh-line">数据更新时间<br><strong>{html.escape(_format_updated_at(health.get('updated_at') or payload.get('generated_at')))}</strong></div></header>
 {health_html}<section class="day-summary" aria-label="今日比赛摘要">{overview}</section>
 <nav class="toolbar" aria-label="比赛筛选"><span class="toolbar-label">查看</span>
 <button class="filter" type="button" data-filter="ALL" aria-pressed="true">全部</button>
 <button class="filter" type="button" data-filter="FROZEN" aria-pressed="false">已预测</button>
 <button class="filter" type="button" data-filter="INSUFFICIENT_DATA" aria-pressed="false">数据不足</button>
 <button class="filter" type="button" data-filter="RESULT" aria-pressed="false">已完赛</button>
-<a class="legacy-link" href="../match_workspace/latest.html">Legacy 比赛工作台</a></nav>
+ </nav>
 {data_warning}<section id="fixture-list" class="fixture-list" aria-label="今日比赛列表">{cards_html}</section>
+<footer class="page-footer"><a class="legacy-link" href="../match_workspace/latest.html">Legacy 工作台</a></footer>
 </main><script>
 const buttons = Array.from(document.querySelectorAll('[data-filter]'));
 const cards = Array.from(document.querySelectorAll('.fixture-card'));
