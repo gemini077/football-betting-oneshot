@@ -413,6 +413,8 @@ h1 { margin: 8px 0 4px; font-size: clamp(32px, 5vw, 54px); line-height: 1.02; le
 .teams .versus { display: inline-block; margin: 0 6px; color: var(--quiet); font-size: .48em; font-weight: 500; letter-spacing: 0; vertical-align: middle; }
 .kickoff { color: var(--muted); font-size: 12px; }
 .status-badge { display: inline-flex; align-items: center; border-radius: 999px; padding: 4px 9px; color: var(--muted); background: var(--surface-2); font-size: 11px; font-weight: 700; white-space: nowrap; }
+.detail-link { color: var(--muted); font-size: 11px; text-decoration: none; white-space: nowrap; }
+.detail-link:hover { color: var(--accent); }
 .status-frozen .status-badge { color: var(--accent); background: var(--accent-soft); }
 .fixture-card.prediction-pilot { border-left-color: var(--warning); }
 .prediction-pilot .status-badge { color: var(--warning); background: var(--warning-soft); }
@@ -524,6 +526,7 @@ def _modern_result_html(card: dict[str, Any]) -> str:
 
 def _modern_card_html(card: dict[str, Any]) -> str:
     status = str(card.get("status") or "PENDING")
+    match_id = str(card.get("match_id") or "")
     pilot_excluded = bool(card.get("pilot_excluded") and card.get("prediction"))
     prediction_kind = "pilot" if pilot_excluded else "formal" if card.get("prediction") else "none"
     reason_html = ""
@@ -539,7 +542,8 @@ def _modern_card_html(card: dict[str, Any]) -> str:
         '</div>'
         f'<div class="teams">{_esc(card.get("home"))}<span class="versus">vs</span>{_esc(card.get("away"))}</div>'
         f'<div class="fixture-meta"><span class="kickoff">开球 · {html.escape(_format_kickoff(card.get("kickoff")))}</span>'
-        f'<span class="status-badge">{html.escape(str(card.get("status_label") or status))}</span></div>'
+        f'<span><span class="status-badge">{html.escape(str(card.get("status_label") or status))}</span>'
+        f'<a class="detail-link" href="../matches/{html.escape(match_id)}/">查看详情</a></span></div>'
         f'{reason_html}{prediction_html}{_modern_result_html(card)}'
         '</div>'
         '</article>'

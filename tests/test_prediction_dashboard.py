@@ -149,6 +149,7 @@ def test_universe_three_produces_three_accountable_cards_and_frozen_fields(tmp_p
     assert "1–0" in html
     assert "1–1 · 2–0" in html
     assert "今日全部赛事" in html
+    assert 'href="../matches/1001/"' in html
     assert "Prediction Universe" not in html
     assert "MISSING_RECENT_FORM" not in html
     assert "近期比赛数据不足" in html
