@@ -17,6 +17,11 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Iterable
 
+try:  # Keep direct ``python scripts/match_analysis.py`` execution working.
+    from .legacy_analysis_mapper import LegacyStructuredAnalysisMapper
+except ImportError:  # pragma: no cover - exercised by the direct CLI path.
+    from legacy_analysis_mapper import LegacyStructuredAnalysisMapper
+
 
 ROOT = Path(__file__).resolve().parents[1]
 DATA_ROOT = ROOT / "data"
@@ -60,6 +65,8 @@ SECTION_TITLES = (
     ("fork", "关键分叉 / 最大不确定性"),
     ("convergence", "最终收敛"),
 )
+
+_LEGACY_MAPPER = LegacyStructuredAnalysisMapper()
 
 
 def match_url(match_id: Any) -> str:
@@ -736,99 +743,7 @@ def _legacy_record_material(
     *,
     kind: str,
 ) -> dict[str, Any] | None:
-    candidate = _legacy_identity(record)
-    matches, _ = _legacy_identity_matches(target, candidate)
-    if not matches:
-        return None
-    report = record.get("report") if isinstance(record.get("report"), dict) else {}
-    report_type = _string(_first(report, "report_type", "type", default=record.get("report_type"))).lower()
-    if "postmatch" in report_type or "赛后" in report_type:
-        return {
-            "status": "CONFLICTED",
-            "path": path.as_posix(),
-            "reasons": ["POSTMATCH_MATERIAL_NOT_ALLOWED"],
-            "match_identity": candidate,
-        }
-    if kind == "postmatch_reports":
-        prematch = next(
-            (
-                record.get(key)
-                for key in ("prematch", "prematch_analysis", "prematch_report", "pre_match")
-                if isinstance(record.get(key), dict)
-            ),
-            None,
-        )
-        if prematch is None and "prematch" not in report_type and "pre-match" not in report_type:
-            return {
-                "status": "CONFLICTED",
-                "path": path.as_posix(),
-                "reasons": ["POSTMATCH_MATERIAL_NOT_ALLOWED"],
-                "match_identity": candidate,
-            }
-        if prematch is not None:
-            record = {**record, **prematch}
-            record.setdefault("match", candidate)
-            report = record.get("report") if isinstance(record.get("report"), dict) else {}
-    timestamps = [
-        _first(report, "analysis_timestamp", "generated_at", "created_at", "timestamp"),
-        _first(report, "snapshot_timestamp"),
-        _first(record, "analysis_timestamp", "generated_at", "created_at"),
-    ]
-    material_dt = _parse_dt(next((value for value in timestamps if value), None))
-    kickoff_dt = _parse_dt(target.get("kickoff_at"))
-    reasons: list[str] = []
-    if not material_dt:
-        reasons.append("MATERIAL_TIMESTAMP_UNVERIFIED")
-    elif kickoff_dt and material_dt >= kickoff_dt:
-        reasons.append("MATERIAL_AFTER_KICKOFF")
-    for value in timestamps[1:]:
-        timestamp = _parse_dt(value)
-        if timestamp and kickoff_dt and timestamp >= kickoff_dt:
-            reasons.append("SOURCE_TIMESTAMP_AFTER_KICKOFF")
-    decisions = record.get("decisions") if isinstance(record.get("decisions"), dict) else {}
-    stored_score = _legacy_score(_first(record, "unique_score", "score_top1", default=decisions.get("unique_score")))
-    frozen_score = _legacy_score(_first(frozen_prediction or {}, "unique_score", "score_top1"))
-    if stored_score and frozen_score and stored_score != frozen_score:
-        reasons.append("FROZEN_SCORE_CONFLICT")
-    sections, candidate_labels, interpretations = _legacy_explicit_sections(record)
-    material_payload = record.get("analysis_material")
-    if not isinstance(material_payload, dict):
-        material_payload = record.get("analysis") if isinstance(record.get("analysis"), dict) else {}
-    hero_material = material_payload.get("hero") if isinstance(material_payload.get("hero"), dict) else {}
-    has_interpretation = bool(sections or interpretations)
-    if not has_interpretation:
-        reasons.append("NO_EXPLICIT_ANALYTICAL_INTERPRETATION")
-    status = "USABLE" if len({section.get("id") for section in sections}) >= 4 else "PARTIALLY_USABLE"
-    if not has_interpretation:
-        status = "CONFLICTED" if any(reason != "NO_EXPLICIT_ANALYTICAL_INTERPRETATION" for reason in reasons) else "NOT_FOUND"
-    if reasons:
-        if has_interpretation:
-            status = "CONFLICTED"
-    source_refs = _unique([
-        path.as_posix(),
-        *_as_list(record.get("source_references")),
-        *_as_list(report.get("source_references")),
-    ])
-    return {
-        "status": status,
-        "path": path.as_posix(),
-        "kind": kind,
-        "match_identity": candidate,
-        "material_timestamp": material_dt.isoformat() if material_dt else None,
-        "report_type": report.get("report_type") or record.get("report_type"),
-        "consistency_checks": {
-            "identity": not any(reason.endswith("_mismatch") or reason == "identity_incomplete" for reason in reasons),
-            "prematch_timestamp": "MATERIAL_AFTER_KICKOFF" not in reasons and "MATERIAL_TIMESTAMP_UNVERIFIED" not in reasons,
-            "frozen_score": "FROZEN_SCORE_CONFLICT" not in reasons,
-        },
-        "reasons": _unique(reasons),
-        "sections": sections if status not in {"CONFLICTED", "NOT_FOUND"} else [],
-        "interpretations": interpretations if status not in {"CONFLICTED", "NOT_FOUND"} else [],
-        "candidate_labels": candidate_labels if status not in {"CONFLICTED", "NOT_FOUND"} else {},
-        "hero_script": hero_material.get("script") if status not in {"CONFLICTED", "NOT_FOUND"} else None,
-        "attention_tag": hero_material.get("attention_tag") if status not in {"CONFLICTED", "NOT_FOUND"} else None,
-        "source_refs": source_refs,
-    }
+    return _LEGACY_MAPPER.map_record(path, record, target, frozen_prediction, kind=kind)
 
 
 def discover_legacy_analysis_material(
@@ -862,10 +777,9 @@ def discover_legacy_analysis_material(
                 continue
             for record in _legacy_records(payload):
                 material = _legacy_record_material(path, record, target, frozen_prediction, kind=kind)
-                if material:
+                if material and material.get("status") != "FIXTURE_MISMATCH":
                     found.append(material)
     usable = [item for item in found if item["status"] in {"USABLE", "PARTIALLY_USABLE"}]
-    conflicts = [item for item in found if item["status"] == "CONFLICTED"]
     if usable:
         best_status = "USABLE" if any(item["status"] == "USABLE" for item in usable) else "PARTIALLY_USABLE"
         selected = sorted(usable, key=lambda item: (item["status"] != "USABLE", item["path"]))[0]
@@ -878,20 +792,38 @@ def discover_legacy_analysis_material(
             "interpretations": selected.get("interpretations", []),
             "sections": selected.get("sections", []),
             "candidate_labels": selected.get("candidate_labels", {}),
+            "candidate_reasoning": selected.get("candidate_reasoning", {}),
             "hero_script": selected.get("hero_script"),
+            "biggest_failure_point": selected.get("biggest_failure_point"),
             "attention_tag": selected.get("attention_tag"),
+            "market_interpretation": selected.get("market_interpretation"),
+            "risk_evidence": selected.get("risk_evidence", []),
+            "decision_evolution": selected.get("decision_evolution"),
+            "analysis_origin": selected.get("analysis_origin"),
+            "lineage": selected.get("lineage", []),
+            "source_keys": selected.get("source_keys", []),
+            "trace_coverage": selected.get("trace_coverage", 0),
+            "convergence_complete": selected.get("convergence_complete", False),
             "source_refs": selected.get("source_refs", []),
         }
-    if conflicts:
+    blocked = [item for item in found if item.get("status") not in {"NOT_FOUND", "FIXTURE_MISMATCH"}]
+    if blocked:
+        priority = ("PREDICTION_MISMATCH", "TIME_UNVERIFIED", "CONFLICTED")
+        blocked_status = next((status for status in priority if any(item.get("status") == status for item in blocked)), blocked[0].get("status", "CONFLICTED"))
+        selected = next(item for item in blocked if item.get("status") == blocked_status)
         return {
-            "status": "CONFLICTED",
+            "status": blocked_status,
             "consistency_checked": True,
             "candidate_files_checked": candidate_files_checked,
             "checked_paths": checked_paths,
             "items": found,
+            "reasons": selected.get("reasons", []),
             "interpretations": [],
             "sections": [],
             "candidate_labels": {},
+            "candidate_reasoning": {},
+            "analysis_origin": selected.get("analysis_origin"),
+            "lineage": selected.get("lineage", []),
             "source_refs": [],
         }
     return {
@@ -903,6 +835,8 @@ def discover_legacy_analysis_material(
         "interpretations": [],
         "sections": [],
         "candidate_labels": {},
+        "candidate_reasoning": {},
+        "lineage": [],
         "source_refs": [],
     }
 
@@ -926,6 +860,7 @@ def _supports_and_conflicts(
             "type": item.get("type") or "分析",
             "text": item.get("text"),
             "source_ref": item.get("source_ref") or "legacy_analysis_material",
+            "lineage": copy.deepcopy(item.get("lineage") or []),
         }
         if relation == "support":
             supports.append(projected)
@@ -993,6 +928,7 @@ def _section_payloads(
             "conflicts": [item for item in _as_list(source.get("conflicts")) if isinstance(item, dict) and item.get("text")],
             "explanation": source.get("explanation") or "该段没有足够的现成解释素材，暂不扩展判断。",
             "score_impact": source.get("score_impact") or None,
+            "lineage": copy.deepcopy(source.get("lineage") or []),
         })
     return sections
 
@@ -1071,6 +1007,16 @@ def assemble_match_analysis(
         "sections": copy.deepcopy(legacy_report_material.get("sections") or []),
         "interpretations": copy.deepcopy(legacy_report_material.get("interpretations") or []),
         "candidate_labels": copy.deepcopy(legacy_report_material.get("candidate_labels") or {}),
+        "candidate_reasoning": copy.deepcopy(legacy_report_material.get("candidate_reasoning") or {}),
+        "biggest_failure_point": legacy_report_material.get("biggest_failure_point"),
+        "market_interpretation": copy.deepcopy(legacy_report_material.get("market_interpretation")),
+        "risk_evidence": copy.deepcopy(legacy_report_material.get("risk_evidence") or []),
+        "decision_evolution": copy.deepcopy(legacy_report_material.get("decision_evolution")),
+        "analysis_origin": copy.deepcopy(legacy_report_material.get("analysis_origin")),
+        "lineage": copy.deepcopy(legacy_report_material.get("lineage") or []),
+        "source_keys": copy.deepcopy(legacy_report_material.get("source_keys") or []),
+        "trace_coverage": legacy_report_material.get("trace_coverage", 0),
+        "convergence_complete": legacy_report_material.get("convergence_complete", False),
         "source_refs": copy.deepcopy(legacy_report_material.get("source_refs") or []),
     }
     candidate_labels = analysis_material.get("candidate_labels") or {}
@@ -1156,7 +1102,7 @@ def assemble_match_analysis(
             "attention_tag": (prediction or {}).get("attention_tag") or legacy_report_material.get("attention_tag"),
             "supports": supports,
             "conflicts": conflicts,
-            "biggest_failure_point": model.get("uncertainty", {}).get("main_risk"),
+            "biggest_failure_point": legacy_report_material.get("biggest_failure_point") or model.get("uncertainty", {}).get("main_risk"),
             "probabilities": copy.deepcopy(model.get("probabilities") or {}),
         },
         "candidate_scores": copy.deepcopy(model.get("top_scores", [])[:3]),
@@ -1260,7 +1206,9 @@ def select_best_real_match(
             score += 3 if market.get("facts", {}).get("bookmaker_count") else 0
             score += min(3, len(_source_refs(prediction, snapshot)))
             score += {"USABLE": 12, "PARTIALLY_USABLE": 6}.get(legacy_report_material.get("status"), 0)
-            score -= 10 if legacy_report_material.get("status") == "CONFLICTED" else 0
+            score += min(10, int(legacy_report_material.get("trace_coverage", 0) or 0) * 2)
+            score += 4 if legacy_report_material.get("convergence_complete") else 0
+            score -= 10 if legacy_report_material.get("status") in {"CONFLICTED", "PREDICTION_MISMATCH", "TIME_UNVERIFIED"} else 0
             pilot_excluded = _string(prediction.get("prediction_id")) in excluded_ids
             score -= 1 if pilot_excluded else 0
             candidates.append({
@@ -1274,6 +1222,8 @@ def select_best_real_match(
                 "pilot_excluded": pilot_excluded,
                 "legacy_report_material_status": legacy_report_material.get("status"),
                 "legacy_report_material_checked": legacy_report_material.get("consistency_checked") is True,
+                "legacy_trace_coverage": legacy_report_material.get("trace_coverage", 0),
+                "legacy_convergence_complete": legacy_report_material.get("convergence_complete", False),
             })
     if not candidates:
         raise LookupError("No frozen prediction with a stable universe identity was found")

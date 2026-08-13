@@ -130,7 +130,29 @@ def _render_model(model: dict[str, Any]) -> str:
     ])
 
 
-def _render_sources(source_quality: dict[str, Any]) -> str:
+def _render_legacy_lineage(material: dict[str, Any]) -> str:
+    if not isinstance(material, dict) or material.get("status") in {None, "NOT_FOUND"}:
+        return '<p class="muted">未发现可映射的历史结构化分析资产。</p>'
+    origin = material.get("analysis_origin") or {}
+    refs = material.get("lineage") or []
+    rows = [
+        f'<div class="fact-row"><span>映射状态</span><strong>{_esc(material.get("status"), "未记录")}</strong></div>',
+        f'<div class="fact-row"><span>分析来源</span><strong>历史结构化分析资产</strong></div>',
+        f'<div class="fact-row"><span>映射版本</span><strong>{_esc(origin.get("mapping_version"), "未记录")}</strong></div>',
+        f'<div class="fact-row"><span>旧分析时间</span><strong>{_esc(origin.get("source_timestamp"), "未记录")}</strong></div>',
+        f'<div class="fact-row"><span>旧模型族</span><strong>{_esc(origin.get("source_model_family"), "UNKNOWN")}</strong></div>',
+    ]
+    if material.get("source_keys"):
+        rows.append(f'<div class="fact-row fact-row-stack"><span>映射字段</span><strong>{_esc("、".join(map(str, material.get("source_keys"))))}</strong></div>')
+    if refs:
+        rows.append('<div class="source-label">可追溯来源</div><ul class="source-list">' + "".join(
+            f'<li>{_esc(Path(str(item.get("source_artifact") or "")).name or "未记录")} · {_esc(item.get("source_key"), "record")}</li>'
+            for item in refs if isinstance(item, dict)
+        ) + '</ul>')
+    return "".join(rows)
+
+
+def _render_sources(source_quality: dict[str, Any], legacy_material: dict[str, Any] | None = None) -> str:
     refs = source_quality.get("source_references") or []
     rendered = []
     for ref in refs:
@@ -141,6 +163,7 @@ def _render_sources(source_quality: dict[str, Any]) -> str:
         rendered.append(f"<li>{_esc(value)}</li>")
     list_html = f'<ul class="source-list">{"".join(rendered)}</ul>' if rendered else '<p class="muted">当前没有可展示的来源引用。</p>'
     missing = source_quality.get("missing") or []
+    legacy_html = _render_legacy_lineage(legacy_material or {})
     return "".join([
         f'<div class="fact-row"><span>数据等级</span><strong>{_esc(source_quality.get("data_grade"), "未记录")}</strong></div>',
         f'<div class="fact-row"><span>市场情报质量</span><strong>{_esc(source_quality.get("market_intelligence_quality"), "未记录")}</strong></div>',
@@ -148,6 +171,8 @@ def _render_sources(source_quality: dict[str, Any]) -> str:
         f'<div class="fact-row"><span>缺失项</span><strong>{_esc("、".join(map(str, missing)), "无")}</strong></div>',
         '<div class="source-label">来源引用</div>',
         list_html,
+        '<div class="source-label">Legacy 分析 lineage</div>',
+        legacy_html,
     ])
 
 
@@ -231,6 +256,7 @@ def render_match_detail(contract: dict[str, Any]) -> str:
     route = match_url(identity.get("match_id"))
     page_title = f'{_esc(identity.get("home"), "比赛")} vs {_esc(identity.get("away"), "")} · 详情'
     sections_html = "".join(_render_section(section) for section in contract.get("analysis_sections") or [])
+    legacy_material = evidence.get("legacy_report_material") or {}
     return f'''<!doctype html>
 <html lang="zh-CN">
 <head>
@@ -362,7 +388,7 @@ def render_match_detail(contract: dict[str, Any]) -> str:
     </section>
     {post_html}
     <section class="layer" id="analysis"><div class="layer-heading"><div><div class="eyebrow">Layer 2</div><h2>核心候选比分与比赛分析</h2></div><p>候选池只来自已保存的冻结分布。</p></div>{_render_candidates(contract)}<div class="analysis-list">{sections_html}</div></section>
-    <section class="layer" id="evidence"><div class="layer-heading"><div><div class="eyebrow">Layer 3</div><h2>完整证据审计</h2></div><p>事实、模型与来源分开呈现。</p></div><div class="evidence-columns"><details open><summary id="fundamentals">基本面</summary>{_render_form((evidence.get("fundamentals") or {}).get("recent_form") or {})}</details><details><summary id="market">市场事实</summary>{_render_market(contract.get("market") or {})}</details><details><summary id="model">模型证据</summary>{_render_model(model)}</details><details><summary id="sources">来源 / 数据质量</summary>{_render_sources(source_quality)}</details></div></section>
+    <section class="layer" id="evidence"><div class="layer-heading"><div><div class="eyebrow">Layer 3</div><h2>完整证据审计</h2></div><p>事实、模型与来源分开呈现。</p></div><div class="evidence-columns"><details open><summary id="fundamentals">基本面</summary>{_render_form((evidence.get("fundamentals") or {}).get("recent_form") or {})}</details><details><summary id="market">市场事实</summary>{_render_market(contract.get("market") or {})}</details><details><summary id="model">模型证据</summary>{_render_model(model)}</details><details><summary id="sources">来源 / 数据质量</summary>{_render_sources(source_quality, legacy_material)}</details></div></section>
     <footer><span>稳定地址：{_esc(route)}</span><span>冻结预测与冻结前证据保持不变；新增事实若存在，将单独列为冻结后更新。</span></footer>
   </main>
 </body>

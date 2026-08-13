@@ -343,6 +343,8 @@ def test_legacy_material_is_really_discovered_and_consistency_checked(tmp_path):
     assert contract["evidence"]["legacy_report_material"]["status"] == "USABLE"
     assert contract["hero"]["supports"]
     assert contract["analysis_material"]["status"] == "USABLE"
+    assert contract["analysis_material"]["analysis_origin"]["type"] == "LEGACY_STRUCTURED_ANALYSIS"
+    assert contract["analysis_material"]["lineage"]
     assert contract["candidate_scores"][0]["script_label"] == "主队优势兑现，客队得分路径受限"
     assert "主队优势兑现，客队得分路径受限" in render_match_detail(contract)
 
@@ -354,7 +356,7 @@ def test_legacy_conflict_is_excluded_from_analysis(tmp_path):
 
     contract = assemble(payload)
 
-    assert contract["evidence"]["legacy_report_material"]["status"] == "CONFLICTED"
+    assert contract["evidence"]["legacy_report_material"]["status"] == "PREDICTION_MISMATCH"
     assert contract["analysis_material"]["interpretations"] == []
     assert contract["hero"]["supports"] == []
 
@@ -472,6 +474,7 @@ def test_detail_renderer_has_three_layers_and_uses_same_contract_for_statuses(tm
     assert "关键分叉" in html
     assert "最终收敛" in html
     assert "当前没有可追溯的正式比赛剧本字段" in html
+    assert "未发现可映射的历史结构化分析资产" in html
 
     pending = assemble(roots(tmp_path / "pending", status="PENDING", with_prediction=False))
     pending_html = render_match_detail(pending)
