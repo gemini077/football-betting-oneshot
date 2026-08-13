@@ -1,9 +1,12 @@
 import hashlib
 import json
 import sys
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
+
+import scripts.legacy_analysis_mapper as legacy_mapper_module
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
@@ -20,6 +23,23 @@ from scripts.match_detail import render_match_detail, write_match_detail_page  #
 
 
 DATE = "2026-08-12"
+
+
+def _host_datetime(host_timezone):
+    """Provide a datetime class whose local clock simulates a host timezone."""
+
+    class HostDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            value = cls(2026, 8, 13, 12, 0, tzinfo=host_timezone)
+            return value.astimezone(tz) if tz else value
+
+        def astimezone(self, tz=None):
+            if tz is None:
+                return self
+            return super().astimezone(tz)
+
+    return HostDateTime
 
 
 def write_json(path: Path, payload: dict) -> None:
@@ -319,7 +339,9 @@ def legacy_report(*, score: str = "1-0", sections: list[dict] | None = None) -> 
     }
 
 
-def test_legacy_material_is_really_discovered_and_consistency_checked(tmp_path):
+@pytest.mark.parametrize("host_timezone", [timezone.utc, timezone(timedelta(hours=8))])
+def test_legacy_material_is_really_discovered_and_consistency_checked(tmp_path, monkeypatch, host_timezone):
+    monkeypatch.setattr(legacy_mapper_module, "datetime", _host_datetime(host_timezone))
     legacy_root = tmp_path / "analysis_reports"
     write_json(legacy_root / "legacy.json", legacy_report())
 
@@ -349,7 +371,9 @@ def test_legacy_material_is_really_discovered_and_consistency_checked(tmp_path):
     assert "主队优势兑现，客队得分路径受限" in render_match_detail(contract)
 
 
-def test_legacy_conflict_is_excluded_from_analysis(tmp_path):
+@pytest.mark.parametrize("host_timezone", [timezone.utc, timezone(timedelta(hours=8))])
+def test_legacy_conflict_is_excluded_from_analysis(tmp_path, monkeypatch, host_timezone):
+    monkeypatch.setattr(legacy_mapper_module, "datetime", _host_datetime(host_timezone))
     legacy_root = tmp_path / "analysis_reports"
     write_json(legacy_root / "conflict.json", legacy_report(score="2-1"))
     payload = roots(tmp_path / "assembled", legacy_root=legacy_root)
@@ -386,7 +410,9 @@ def test_convergence_does_not_use_rank_as_fake_analysis(tmp_path):
     assert "候选顺序沿用冻结记录的rank" not in json.dumps(convergence, ensure_ascii=False)
 
 
-def test_selector_rewards_usable_legacy_material(tmp_path):
+@pytest.mark.parametrize("host_timezone", [timezone.utc, timezone(timedelta(hours=8))])
+def test_selector_rewards_usable_legacy_material(tmp_path, monkeypatch, host_timezone):
+    monkeypatch.setattr(legacy_mapper_module, "datetime", _host_datetime(host_timezone))
     legacy_root = tmp_path / "analysis_reports"
     write_json(legacy_root / "legacy.json", legacy_report())
     payload = roots(tmp_path, legacy_root=legacy_root)
@@ -473,18 +499,72 @@ def test_detail_renderer_has_three_layers_and_uses_same_contract_for_statuses(tm
     assert "得分路径" in html
     assert "关键分叉" in html
     assert "最终收敛" in html
-    assert "当前没有可追溯的正式比赛剧本字段" in html
-    assert "未发现可映射的历史结构化分析资产" in html
+    assert "当前没有可追溯的比赛剧本" in html
+    assert "当前没有可追溯的历史分析来源" in html
 
     pending = assemble(roots(tmp_path / "pending", status="PENDING", with_prediction=False))
     pending_html = render_match_detail(pending)
-    assert "预测尚未冻结" in pending_html
+    assert "预测尚未记录" in pending_html
     assert "1–0" not in pending_html
 
     insufficient = assemble(roots(tmp_path / "insufficient", status="INSUFFICIENT_DATA", with_prediction=False))
     insufficient_html = render_match_detail(insufficient)
     assert "当前数据不足" in insufficient_html
     assert "当前证据不足，暂不扩展判断" in insufficient_html
+
+
+def test_detail_renderer_uses_user_facing_terms_and_hides_internal_metadata(tmp_path):
+    html = render_match_detail(assemble(roots(tmp_path, pilot=True)))
+
+    for forbidden in (
+        "Analysis Contract",
+        "analysis_contract_version",
+        "FUSION_BASELINE_V0",
+        "recent_form_market_calibrated_poisson_v2",
+        "Legacy Structured Analysis",
+        "lineage",
+        "governance",
+        "Frozen Top-K",
+        "Frozen Prediction",
+        "pilot_excluded",
+        "BASE_QUALITY_GATE_BYPASS",
+        "prediction_id",
+        "job_id",
+        "模型版本",
+        "λ",
+        "冻结时间",
+        "冻结后更新",
+        "冻结前",
+        "市场事实",
+        "模型证据",
+        "完整证据审计",
+        "Layer 1",
+        "Layer 2",
+        "Layer 3",
+    ):
+        assert forbidden not in html
+
+    for required in (
+        "预测依据",
+        "预测概率",
+        "候选比分",
+        "预测记录时间",
+        "试运行预测",
+        "不纳入正式验证",
+        "数据来源",
+    ):
+        assert required in html
+
+
+def test_technical_details_are_closed_and_user_safe_when_legacy_source_exists(tmp_path):
+    legacy_root = tmp_path / "analysis_reports"
+    write_json(legacy_root / "legacy.json", legacy_report())
+    html = render_match_detail(assemble(roots(tmp_path, legacy_root=legacy_root)))
+
+    assert '<details class="technical-details"><summary>技术详情</summary>' in html
+    assert '<details open class="technical-details">' not in html
+    for forbidden in ("legacy_mapper.v1", "LEGACY_STRUCTURED_ANALYSIS", "mapping_status", "source_artifact"):
+        assert forbidden not in html
 
 
 def test_detail_writer_uses_stable_static_match_route(tmp_path):

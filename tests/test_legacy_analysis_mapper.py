@@ -1,10 +1,12 @@
 import hashlib
 import inspect
 import json
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
 
+import scripts.legacy_analysis_mapper as legacy_mapper_module
 from scripts.legacy_analysis_mapper import LegacyStructuredAnalysisMapper
 
 
@@ -27,6 +29,23 @@ FROZEN = {
         {"score": "1-1", "probability": 0.112, "rank": 3},
     ],
 }
+
+
+def _host_datetime(host_timezone):
+    """Provide a datetime class whose local clock simulates a host timezone."""
+
+    class HostDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            value = cls(2026, 8, 13, 12, 0, tzinfo=host_timezone)
+            return value.astimezone(tz) if tz else value
+
+        def astimezone(self, tz=None):
+            if tz is None:
+                return self
+            return super().astimezone(tz)
+
+    return HostDateTime
 
 
 def _record(*, score: str = "1-0", timestamp: str | None = "2026-08-12T15:00:00+08:00", trace=None):
@@ -71,6 +90,25 @@ def _trace(*scores: str):
             for index, score in enumerate(scores, 1)
         ],
     }
+
+
+def test_naive_legacy_datetime_is_independent_of_host_timezone(monkeypatch):
+    expected = datetime(2026, 8, 12, 22, 0, tzinfo=timezone.utc)
+    for host_timezone in (timezone.utc, timezone(timedelta(hours=8))):
+        monkeypatch.setattr(legacy_mapper_module, "datetime", _host_datetime(host_timezone))
+
+        naive = legacy_mapper_module._parse_dt("2026-08-13 06:00")
+        explicit_offset = legacy_mapper_module._parse_dt("2026-08-13T06:00:00+08:00")
+        utc_z = legacy_mapper_module._parse_dt("2026-08-12T22:00:00Z")
+
+        assert naive is not None
+        assert explicit_offset is not None
+        assert utc_z is not None
+        assert naive.astimezone(timezone.utc) == expected
+        assert explicit_offset.astimezone(timezone.utc) == expected
+        assert utc_z.astimezone(timezone.utc) == expected
+        assert explicit_offset.utcoffset() == timedelta(hours=8)
+        assert utc_z.utcoffset() == timedelta(0)
 
 
 def test_mapper_maps_only_existing_structured_interpretation_with_lineage(tmp_path: Path):

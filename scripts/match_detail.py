@@ -43,18 +43,129 @@ def _status_class(contract: dict[str, Any]) -> str:
     status = str((contract.get("status") or {}).get("code") or "PENDING").lower()
     if (contract.get("governance") or {}).get("pilot_excluded"):
         return "pilot"
-    return status
+    return {
+        "frozen": "recorded",
+        "insufficient_data": "insufficient",
+        "prediction_failed": "failed",
+        "missed_prematch_window": "missed",
+    }.get(status, status)
+
+
+_USER_STATUS_LABELS = {
+    "FROZEN": "已预测",
+    "PENDING": "预测尚未记录",
+    "INSUFFICIENT_DATA": "数据不足",
+    "PREDICTION_FAILED": "预测失败",
+    "MISSED_PREMATCH_WINDOW": "错过赛前窗口",
+}
+
+_MISSING_LABELS = {
+    "MISSING_RECENT_FORM": "近期比赛数据",
+    "MISSING_MARKET_INTELLIGENCE": "市场信息",
+    "INPUT_TIMESTAMP_UNVERIFIED": "赛前时间",
+    "IDENTITY_UNRESOLVED": "比赛身份",
+}
+
+
+def _user_status_label(status: dict[str, Any]) -> str:
+    code = str(status.get("code") or "")
+    return _USER_STATUS_LABELS.get(code, "状态待确认")
+
+
+def _quality_label(value: Any, *, fallback: str = "未记录") -> str:
+    labels = {
+        "FULL": "较完整",
+        "LIMITED": "有限",
+        "VERIFIED": "已核验",
+        "VERIFIED_MINIMUM": "已核验最低要求",
+    }
+    text = str(value or "").strip()
+    return labels.get(text, fallback if not text else "已记录")
+
+
+def _data_completeness_label(source_quality: dict[str, Any]) -> str:
+    grade = str(source_quality.get("data_grade") or "").strip().upper()
+    if grade == "A":
+        return "较完整"
+    if grade == "B":
+        return "已记录"
+    if grade == "C":
+        return "有限"
+    return "有限" if source_quality.get("missing") else "已记录"
+
+
+def _friendly_missing(value: Any) -> str:
+    text = str(value or "").strip()
+    return _MISSING_LABELS.get(text, "部分比赛信息")
+
+
+def _source_display(value: Any) -> str:
+    if isinstance(value, dict):
+        value = value.get("url") or value.get("path") or value.get("source")
+    text = str(value or "").strip()
+    if not text:
+        return "未记录"
+    return Path(text).name or "已记录来源"
+
+
+def _legacy_key_label(value: Any) -> str:
+    key = str(value or "")
+    if "match_story" in key:
+        return "比赛剧本"
+    if "score_reasoning" in key:
+        return "比分依据"
+    if "score_selection_trace" in key:
+        return "候选比分比较"
+    if "maximum_error_points" in key:
+        return "最大不确定性"
+    if "market.interpretation" in key:
+        return "市场解读"
+    if "risk_engine" in key:
+        return "风险记录"
+    if "structured_form" in key:
+        return "比赛数据"
+    if "decision_evolution" in key:
+        return "判断变化记录"
+    return "分析记录"
+
+
+def _result_scope_label(value: Any) -> str:
+    return "90分钟（含伤停补时）" if value else "90分钟赛果"
 
 
 def _status_explanation(status: dict[str, Any]) -> str:
     code = str(status.get("code") or "")
     fallback = {
-        "PENDING": "预测尚未冻结，当前不显示正式比分。",
+        "PENDING": "预测尚未记录，当前不显示正式比分。",
         "INSUFFICIENT_DATA": "当前数据不足，暂不形成正式预测。",
         "PREDICTION_FAILED": "预测未成功，当前不显示正式比分。",
         "MISSED_PREMATCH_WINDOW": "已错过赛前窗口，当前不补写预测。",
     }.get(code)
-    return str(status.get("reason_text") or fallback or "")
+    reason = str(status.get("reason_text") or "")
+    if code in {"PENDING", "PREDICTION_FAILED"}:
+        return fallback or ""
+    if reason and not reason.isupper() and "_" not in reason:
+        return reason
+    return fallback or ""
+
+
+def _evidence_type_label(value: Any) -> str:
+    return {
+        "模型": "预测依据",
+        "model": "预测依据",
+        "分析": "分析依据",
+        "analysis": "分析依据",
+        "基本面": "比赛数据",
+        "fundamentals": "比赛数据",
+    }.get(str(value or ""), str(value or "证据"))
+
+
+def _user_copy(value: Any) -> str:
+    text = str(value or "")
+    return text.replace(
+        "原始基本面、市场和模型字段保留在证据审计层",
+        "原始比赛数据、市场和预测字段保留在分析依据区",
+    ).replace("冻结前", "赛前").replace("冻结预测", "原预测记录").replace("冻结分布", "赛前比分分布").replace("冻结记录", "赛前记录").replace("rank 之外", "候选比分之外")
 
 
 def _render_support_list(items: list[dict[str, Any]], *, css: str = "evidence-list") -> str:
@@ -62,7 +173,7 @@ def _render_support_list(items: list[dict[str, Any]], *, css: str = "evidence-li
         return ""
     rows = []
     for item in items:
-        label = _esc(item.get("type"), "证据")
+        label = _esc(_evidence_type_label(item.get("type")), "证据")
         text = _esc(item.get("text"))
         rows.append(f'<li><span class="evidence-type">[{label}]</span>{text}</li>')
     return f'<ul class="{css}">{"".join(rows)}</ul>'
@@ -104,13 +215,13 @@ def _render_market(market: dict[str, Any]) -> str:
     totals_lines = market.get("observed_totals_lines") or []
     timeline = market.get("timeline") or []
     rows = [
-        f'<div class="fact-row"><span>数据平台</span><strong>{_esc(facts.get("provider"), "未记录")}</strong></div>',
-        f'<div class="fact-row"><span>1X2 公司数</span><strong>{_esc(facts.get("bookmaker_count"), "0")}</strong></div>',
-        f'<div class="fact-row"><span>AH 观测线</span><strong>{_esc("、".join(map(str, ah_lines)), "未记录")}</strong></div>',
-        f'<div class="fact-row"><span>总进球观测线</span><strong>{_esc("、".join(map(str, totals_lines)), "未记录")}</strong></div>',
+        f'<div class="fact-row"><span>市场来源</span><strong>{_esc(facts.get("provider"), "未记录")}</strong></div>',
+        f'<div class="fact-row"><span>市场覆盖</span><strong>{_esc(facts.get("bookmaker_count"), "0")}</strong></div>',
+        f'<div class="fact-row"><span>亚洲让球</span><strong>{_esc("、".join(map(str, ah_lines)), "未记录")}</strong></div>',
+        f'<div class="fact-row"><span>大小球</span><strong>{_esc("、".join(map(str, totals_lines)), "未记录")}</strong></div>',
     ]
     if bookmakers:
-        rows.append(f'<div class="fact-row fact-row-stack"><span>实际公司</span><strong>{_esc("、".join(map(str, bookmakers)))}</strong></div>')
+        rows.append(f'<div class="fact-row fact-row-stack"><span>主要公司</span><strong>{_esc("、".join(map(str, bookmakers)))}</strong></div>')
     if timeline:
         rows.append('<div class="timeline">' + "".join(
             f'<div class="timeline-row"><time>{_esc(item.get("at"))}</time><span>{_esc(item.get("label"))}</span><strong>{_esc(item.get("value"))}</strong></div>'
@@ -123,55 +234,53 @@ def _render_model(model: dict[str, Any]) -> str:
     probabilities = model.get("probabilities") or {}
     btts = model.get("btts") or {}
     return "".join([
-        f'<div class="fact-row"><span>模型版本</span><strong>{_esc(model.get("model_family"), "未记录")} · {_esc(model.get("release_version"), "未记录")}</strong></div>',
-        f'<div class="fact-row"><span>λ</span><strong>{_esc(model.get("lambda_home"), "—")} / {_esc(model.get("lambda_away"), "—")}</strong></div>',
-        f'<div class="fact-row"><span>1X2</span><strong>主 {_probability(probabilities.get("home"))} · 平 {_probability(probabilities.get("draw"))} · 客 {_probability(probabilities.get("away"))}</strong></div>',
-        f'<div class="fact-row"><span>BTTS</span><strong>Yes {_probability(btts.get("yes"))} · No {_probability(btts.get("no"))}</strong></div>',
+        f'<div class="fact-row"><span>进球预期</span><strong>主队 {_esc(model.get("lambda_home"), "—")} · 客队 {_esc(model.get("lambda_away"), "—")}</strong></div>',
+        f'<div class="fact-row"><span>预测概率</span><strong>主胜 {_probability(probabilities.get("home"))} · 平 {_probability(probabilities.get("draw"))} · 客胜 {_probability(probabilities.get("away"))}</strong></div>',
+        f'<div class="fact-row"><span>双方进球概率</span><strong>是 {_probability(btts.get("yes"))} · 否 {_probability(btts.get("no"))}</strong></div>',
     ])
 
 
 def _render_legacy_lineage(material: dict[str, Any]) -> str:
     if not isinstance(material, dict) or material.get("status") in {None, "NOT_FOUND"}:
-        return '<p class="muted">未发现可映射的历史结构化分析资产。</p>'
+        return '<p class="muted">当前没有可追溯的历史分析来源。</p>'
     origin = material.get("analysis_origin") or {}
     refs = material.get("lineage") or []
+    status_labels = {
+        "USABLE": "已核对",
+        "PARTIALLY_USABLE": "部分可用",
+        "PREDICTION_MISMATCH": "与本次预测不一致",
+        "TIME_UNVERIFIED": "时间未核实",
+        "CONFLICTED": "存在矛盾",
+    }
     rows = [
-        f'<div class="fact-row"><span>映射状态</span><strong>{_esc(material.get("status"), "未记录")}</strong></div>',
-        f'<div class="fact-row"><span>分析来源</span><strong>历史结构化分析资产</strong></div>',
-        f'<div class="fact-row"><span>映射版本</span><strong>{_esc(origin.get("mapping_version"), "未记录")}</strong></div>',
-        f'<div class="fact-row"><span>旧分析时间</span><strong>{_esc(origin.get("source_timestamp"), "未记录")}</strong></div>',
-        f'<div class="fact-row"><span>旧模型族</span><strong>{_esc(origin.get("source_model_family"), "UNKNOWN")}</strong></div>',
+        f'<div class="fact-row"><span>来源状态</span><strong>{_esc(status_labels.get(material.get("status")), "已记录")}</strong></div>',
+        f'<div class="fact-row"><span>分析记录时间</span><strong>{_esc(origin.get("source_timestamp"), "未记录")}</strong></div>',
     ]
     if material.get("source_keys"):
-        rows.append(f'<div class="fact-row fact-row-stack"><span>映射字段</span><strong>{_esc("、".join(map(str, material.get("source_keys"))))}</strong></div>')
+        rows.append(f'<div class="fact-row fact-row-stack"><span>分析依据</span><strong>{_esc("、".join(_legacy_key_label(value) for value in material.get("source_keys")))}</strong></div>')
     if refs:
-        rows.append('<div class="source-label">可追溯来源</div><ul class="source-list">' + "".join(
-            f'<li>{_esc(Path(str(item.get("source_artifact") or "")).name or "未记录")} · {_esc(item.get("source_key"), "record")}</li>'
+        rows.append('<div class="source-label">来源记录</div><ul class="source-list">' + "".join(
+            f'<li>{_esc(_source_display(item.get("source_artifact")), "未记录")}</li>'
             for item in refs if isinstance(item, dict)
         ) + '</ul>')
-    return "".join(rows)
+    return '<details class="technical-details"><summary>技术详情</summary>' + "".join(rows) + '</details>'
 
 
 def _render_sources(source_quality: dict[str, Any], legacy_material: dict[str, Any] | None = None) -> str:
     refs = source_quality.get("source_references") or []
     rendered = []
     for ref in refs:
-        if isinstance(ref, dict):
-            value = ref.get("url") or ref.get("path") or json.dumps(ref, ensure_ascii=False)
-        else:
-            value = ref
-        rendered.append(f"<li>{_esc(value)}</li>")
+        rendered.append(f"<li>{_esc(_source_display(ref))}</li>")
     list_html = f'<ul class="source-list">{"".join(rendered)}</ul>' if rendered else '<p class="muted">当前没有可展示的来源引用。</p>'
     missing = source_quality.get("missing") or []
     legacy_html = _render_legacy_lineage(legacy_material or {})
     return "".join([
-        f'<div class="fact-row"><span>数据等级</span><strong>{_esc(source_quality.get("data_grade"), "未记录")}</strong></div>',
-        f'<div class="fact-row"><span>市场情报质量</span><strong>{_esc(source_quality.get("market_intelligence_quality"), "未记录")}</strong></div>',
-        f'<div class="fact-row"><span>输入快照</span><strong>{_esc(source_quality.get("input_snapshot_ref"), "未记录")}</strong></div>',
-        f'<div class="fact-row"><span>缺失项</span><strong>{_esc("、".join(map(str, missing)), "无")}</strong></div>',
-        '<div class="source-label">来源引用</div>',
+        f'<div class="fact-row"><span>数据完整度</span><strong>{_esc(_data_completeness_label(source_quality))}</strong></div>',
+        f'<div class="fact-row"><span>市场信息质量</span><strong>{_esc(_quality_label(source_quality.get("market_intelligence_quality")))}</strong></div>',
+        (f'<div class="fact-row"><span>缺少信息</span><strong>{_esc("、".join(_friendly_missing(value) for value in missing))}</strong></div>' if missing else ""),
+        '<div class="source-label">数据来源</div>',
         list_html,
-        '<div class="source-label">Legacy 分析 lineage</div>',
+        '<div class="source-label">分析来源</div>',
         legacy_html,
     ])
 
@@ -198,12 +307,12 @@ def _render_section(section: dict[str, Any]) -> str:
     conflicts = _render_support_list(section.get("conflicts") or [], css="evidence-list conflict-list")
     impact = f'<p class="score-impact"><span>比分影响</span>{_esc(section.get("score_impact"))}</p>' if section.get("score_impact") else ""
     return (
-        f'<article class="analysis-section"><div class="section-kicker">{_esc(section.get("id"))}</div>'
+        '<article class="analysis-section">'
         f'<h3>{_esc(section.get("title"))}</h3>'
-        f'<p class="section-conclusion">{_esc(section.get("conclusion"))}</p>'
+        f'<p class="section-conclusion">{_esc(_user_copy(section.get("conclusion")))}</p>'
         f'{supports}'
         f'{conflicts}'
-        f'<p class="section-explanation">{_esc(section.get("explanation"))}</p>'
+        f'<p class="section-explanation">{_esc(_user_copy(section.get("explanation")))}</p>'
         f'{impact}</article>'
     )
 
@@ -221,37 +330,37 @@ def render_match_detail(contract: dict[str, Any]) -> str:
     pilot = bool(governance.get("pilot_excluded"))
     primary = hero.get("primary_score")
     status_class = _status_class(contract)
-    status_note = '<span class="pilot-note">试运行预测 · 不纳入正式验证</span>' if pilot else f'<span class="status-badge">{_esc(status.get("label"), "状态未知")}</span>'
+    status_note = '<span class="pilot-note">试运行预测 · 不纳入正式验证</span>' if pilot else f'<span class="status-badge">{_esc(_user_status_label(status), "状态待确认")}</span>'
     status_explanation = _status_explanation(status)
     status_explanation_html = f'<div class="status-explanation"><strong>{_esc(status_explanation)}</strong><span>当前证据不足，暂不扩展判断。</span></div>' if status_explanation and not primary else ""
     hero_score = f'<div class="hero-score">{_display_score(primary)}</div>' if primary else '<div class="hero-score empty-score">—</div>'
     neighbors = hero.get("neighbor_scores") or []
-    neighbor_html = f'<div class="hero-neighbors">邻近候选 · {" · ".join(_display_score(value) for value in neighbors)}</div>' if neighbors else ""
+    neighbor_html = f'<div class="hero-neighbors">候选比分 · {" · ".join(_display_score(value) for value in neighbors)}</div>' if neighbors else ""
     probabilities = hero.get("probabilities") or {}
     one_x_two = ""
     if primary and probabilities:
         one_x_two = (
-            '<div class="hero-probabilities"><span>主胜 <strong>' + _probability(probabilities.get("home")) +
+            '<div class="hero-probabilities"><span class="probability-label">预测概率</span><span>主胜 <strong>' + _probability(probabilities.get("home")) +
             '</strong></span><span>平 <strong>' + _probability(probabilities.get("draw")) +
             '</strong></span><span>客胜 <strong>' + _probability(probabilities.get("away")) + '</strong></span></div>'
         )
     script = hero.get("script")
-    script_html = f'<p class="script">{_esc(script)}</p>' if script else '<p class="muted">当前没有可追溯的正式比赛剧本字段，暂不扩展判断。</p>'
+    script_html = f'<p class="script">{_esc(script)}</p>' if script else '<p class="muted">当前没有可追溯的比赛剧本，暂不扩展判断。</p>'
     supports_html = _render_support_list(hero.get("supports") or [])
     conflicts_html = _render_support_list(hero.get("conflicts") or [], css="evidence-list conflict-list")
     risk_html = f'<div class="risk"><span>最大不确定性</span><strong>{_esc(hero.get("biggest_failure_point"))}</strong></div>' if hero.get("biggest_failure_point") else ""
-    result_html = f'<div class="result-banner"><span>90分钟赛果</span><strong>{_esc(result.get("score_90m"))}</strong><small>{_esc(result.get("scope"))} · {_esc(result.get("verified_at"))}</small></div>' if result.get("score_90m") else ""
+    result_html = f'<div class="result-banner"><span>90分钟赛果</span><strong>{_esc(result.get("score_90m"))}</strong><small>{_esc(_result_scope_label(result.get("scope")))} · {_esc(result.get("verified_at"))}</small></div>' if result.get("score_90m") else ""
     post_updates = contract.get("post_freeze_updates") or {}
     update_items = post_updates.get("items") or []
     post_html = ""
     if update_items:
-        post_html = '<section class="post-freeze" id="post-freeze"><h2>冻结后更新</h2>' + "".join(
+        post_html = '<section class="post-freeze" id="post-freeze"><h2>赛前后新增信息</h2>' + "".join(
             f'<div class="update-item"><time>{_esc(item.get("at"))}</time><strong>{_esc(item.get("label"))}</strong><span>{_esc(item.get("text"))}</span></div>'
             for item in update_items if isinstance(item, dict)
-        ) + '<p class="muted">以上信息不参与原冻结预测。</p></section>'
+        ) + '<p class="muted">以上信息不参与原预测记录。</p></section>'
     freeze_html = "".join([
-        f'<span>冻结时间 {_esc(timestamps.get("prediction_frozen_at"), "未记录")}</span>',
-        f'<span>证据更新时间 {_esc(timestamps.get("evidence_updated_at"), "未记录")}</span>',
+        f'<span>预测记录时间 {_esc(timestamps.get("prediction_frozen_at"), "未记录")}</span>',
+        f'<span>依据更新时间 {_esc(timestamps.get("evidence_updated_at"), "未记录")}</span>',
     ])
     route = match_url(identity.get("match_id"))
     page_title = f'{_esc(identity.get("home"), "比赛")} vs {_esc(identity.get("away"), "")} · 详情'
@@ -310,7 +419,7 @@ def render_match_detail(contract: dict[str, Any]) -> str:
     .evidence-list li {{ color:#c7d8d5; }}
     .evidence-type {{ color:var(--muted); margin-right:6px; font-size:12px; }}
     .conflict-list li {{ color:#e4c79f; }}
-    .governance-line {{ display:flex; flex-wrap:wrap; gap:6px 14px; margin-top:20px; color:var(--muted); font-size:12px; }}
+    .record-line {{ display:flex; flex-wrap:wrap; gap:6px 14px; margin-top:20px; color:var(--muted); font-size:12px; }}
     .layer {{ margin-top:20px; padding:24px; }}
     .layer-heading {{ display:flex; align-items:end; justify-content:space-between; gap:16px; margin-bottom:18px; }}
     .layer h2 {{ margin:0; font-size:24px; letter-spacing:-.02em; }}
@@ -374,22 +483,22 @@ def render_match_detail(contract: dict[str, Any]) -> str:
 </head>
 <body class="detail-page status-{html.escape(status_class)}">
   <main class="page">
-    <header class="topbar"><a class="back" href="../../prediction_dashboard/latest.html">← 今日比赛</a><span class="eyebrow">Match detail · {_esc(contract.get("analysis_contract_version"))}</span></header>
-    <nav class="detail-nav" aria-label="页面导航"><a href="#conclusion">结论</a><a href="#analysis">比赛分析</a><a href="#evidence">市场证据</a><a href="#model">模型证据</a><a href="#sources">数据来源</a></nav>
+    <header class="topbar"><a class="back" href="../../prediction_dashboard/latest.html">← 今日比赛</a><span class="eyebrow">比赛详情</span></header>
+    <nav class="detail-nav" aria-label="页面导航"><a href="#conclusion">结论</a><a href="#analysis">比赛分析</a><a href="#evidence">市场变化</a><a href="#forecast">预测依据</a><a href="#sources">数据来源</a></nav>
     <section class="hero" id="conclusion">
       <div class="hero-head"><div><div class="match-meta"><span>{_esc(identity.get("competition"), "赛事未记录")}</span><span>{_esc(identity.get("match_num"), "")}</span><span>开球 · {_esc(identity.get("kickoff_at"), "时间未记录")}</span></div><h1>{_esc(identity.get("home"), "主队未记录")} <span>vs</span> {_esc(identity.get("away"), "客队未记录")}</h1></div><div>{status_note}</div></div>
       {status_explanation_html}
-      <div class="hero-score-wrap"><div><div class="eyebrow">Layer 1 · 30秒结论</div><div class="eyebrow">唯一首推比分</div>{hero_score}{neighbor_html}</div><div class="hero-score-label">{_esc(hero.get("summary"))}</div></div>
+      <div class="hero-score-wrap"><div><div class="eyebrow">30秒结论</div><div class="eyebrow">首推比分</div>{hero_score}{neighbor_html}</div><div class="hero-score-label">{_esc(_user_copy(hero.get("summary")))}</div></div>
       {one_x_two}
       {result_html}
       {script_html}
       <div class="hero-grid"><div class="hero-evidence"><h3>支持</h3>{supports_html or '<p class="muted">当前没有可单独列出的支持证据。</p>'}<h3 style="margin-top:16px">冲突</h3>{conflicts_html or '<p class="muted">当前没有可单独列出的冲突证据。</p>'}</div>{risk_html}</div>
-      <div class="governance-line">{freeze_html}<span>业务日 {_esc(identity.get("business_date"), "未记录")}</span></div>
+      <div class="record-line">{freeze_html}<span>业务日 {_esc(identity.get("business_date"), "未记录")}</span></div>
     </section>
     {post_html}
-    <section class="layer" id="analysis"><div class="layer-heading"><div><div class="eyebrow">Layer 2</div><h2>核心候选比分与比赛分析</h2></div><p>候选池只来自已保存的冻结分布。</p></div>{_render_candidates(contract)}<div class="analysis-list">{sections_html}</div></section>
-    <section class="layer" id="evidence"><div class="layer-heading"><div><div class="eyebrow">Layer 3</div><h2>完整证据审计</h2></div><p>事实、模型与来源分开呈现。</p></div><div class="evidence-columns"><details open><summary id="fundamentals">基本面</summary>{_render_form((evidence.get("fundamentals") or {}).get("recent_form") or {})}</details><details><summary id="market">市场事实</summary>{_render_market(contract.get("market") or {})}</details><details><summary id="model">模型证据</summary>{_render_model(model)}</details><details><summary id="sources">来源 / 数据质量</summary>{_render_sources(source_quality, legacy_material)}</details></div></section>
-    <footer><span>稳定地址：{_esc(route)}</span><span>冻结预测与冻结前证据保持不变；新增事实若存在，将单独列为冻结后更新。</span></footer>
+    <section class="layer" id="analysis"><div class="layer-heading"><div><div class="eyebrow">核心分析</div><h2>候选比分与比赛分析</h2></div><p>候选比分来自赛前预测记录。</p></div>{_render_candidates(contract)}<div class="analysis-list">{sections_html}</div></section>
+    <section class="layer" id="evidence"><div class="layer-heading"><div><div class="eyebrow">分析依据</div><h2>比赛数据与分析依据</h2></div><p>比赛数据、预测依据与来源分开呈现。</p></div><div class="evidence-columns"><details open><summary id="fundamentals">比赛数据</summary>{_render_form((evidence.get("fundamentals") or {}).get("recent_form") or {})}</details><details><summary id="market">市场变化</summary>{_render_market(contract.get("market") or {})}</details><details><summary id="forecast">预测依据</summary>{_render_model(model)}</details><details><summary id="sources">数据来源</summary>{_render_sources(source_quality, legacy_material)}</details></div></section>
+    <footer><span>稳定地址：{_esc(route)}</span><span>赛前预测记录与当时依据保持不变；新增事实若存在，将单独列为赛前后更新。</span></footer>
   </main>
 </body>
 </html>

@@ -15,6 +15,11 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+try:  # Keep both package imports and direct script execution working.
+    from .postmatch_queue import SHANGHAI, parse_datetime as _parse_project_datetime
+except ImportError:  # pragma: no cover - exercised by the direct CLI path.
+    from postmatch_queue import SHANGHAI, parse_datetime as _parse_project_datetime
+
 
 MAPPING_VERSION = "legacy_mapper.v1"
 _USABLE = {"USABLE", "PARTIALLY_USABLE"}
@@ -44,6 +49,7 @@ def _parse_dt(value: Any) -> datetime | None:
     raw = _text(value)
     if not raw:
         return None
+
     raw = raw.replace("Z", "+00:00")
     try:
         parsed = datetime.fromisoformat(raw)
@@ -57,7 +63,11 @@ def _parse_dt(value: Any) -> datetime | None:
         else:
             return None
     if parsed.tzinfo is None:
-        return parsed.replace(tzinfo=datetime.now().astimezone().tzinfo)
+        # Legacy timestamps without an offset use the project's business
+        # timezone.  Reuse the existing project parser so the host machine's
+        # local timezone cannot affect fixture identity or prematch checks.
+        return _parse_project_datetime(raw) or parsed.replace(tzinfo=SHANGHAI)
+    # Explicit offsets and UTC Z retain their original timezone semantics.
     return parsed
 
 
