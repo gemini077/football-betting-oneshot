@@ -28,6 +28,9 @@ EXCLUSION_ROOT = DATA_ROOT / "model_governance" / "prediction_exclusions"
 PROSPECTIVE_ROOT = DATA_ROOT / "prospective"
 RESULT_ROOT = DATA_ROOT / "postmatch_automation" / "results"
 MATCH_ANALYSIS_ROOT = DATA_ROOT / "match_analysis"
+LEGACY_WORKSPACE_ROOT = DATA_ROOT / "match_workspace"
+LEGACY_ANALYSIS_ROOT = DATA_ROOT / "analysis_reports"
+LEGACY_POSTMATCH_ROOT = DATA_ROOT / "postmatch_reports"
 
 ANALYSIS_CONTRACT_VERSION = "1.0"
 SHANGHAI = timezone(timedelta(hours=8))
@@ -332,6 +335,17 @@ def _market_facts(snapshot_input: dict[str, Any], prediction: dict[str, Any]) ->
         nowscore = raw_snapshot.get("nowscore") if isinstance(raw_snapshot, dict) else None
         if isinstance(nowscore, dict):
             snapshot_sources.extend(nowscore.get("source_refs") or [])
+    probabilities = _prediction_model(prediction).get("probabilities") or {}
+    fair = snapshot_input.get("official_market_baseline") or {}
+    fair_probabilities = fair.get("fair_probabilities") if isinstance(fair, dict) else {}
+    fair_probabilities = fair_probabilities if isinstance(fair_probabilities, dict) else {}
+    model_comparison = {
+        "market_home_probability": fair_probabilities.get("home"),
+        "model_home_probability": probabilities.get("home"),
+        "classification": None,
+        "interpretation": None,
+        "source_refs": ["official_market_baseline", "prediction_record"],
+    }
     return {
         "facts": {
             "provider": "nowscore" if source_snapshot else None,
@@ -342,6 +356,7 @@ def _market_facts(snapshot_input: dict[str, Any], prediction: dict[str, Any]) ->
             "totals_company_count": len(totals_companies),
         },
         "interpretation": None,
+        "model_comparison": model_comparison,
         "observed_1x2_bookmakers": bookmaker_names,
         "observed_ah_lines": ah_lines,
         "observed_totals_lines": total_lines,
@@ -490,39 +505,432 @@ def _form_sentence(label: str, form: dict[str, Any]) -> str:
     return "，".join(parts) if parts else f"{label}近期数据字段不完整"
 
 
+def _normalise_identity_text(value: Any) -> str:
+    return re.sub(r"\s+", "", _string(value)).casefold()
+
+
+def _legacy_candidate_paths(root: Path, fixture: dict[str, Any], *, kind: str) -> list[Path]:
+    """Return a bounded set of old-analysis candidates from one known asset root.
+
+    The production repository contains many historical workspace snapshots.  This
+    deliberately does not crawl arbitrary repository paths: analysis reports are
+    limited to their JSON sidecars, workspace is limited to known aggregate/current
+    snapshots and the target business-date snapshots, and postmatch reports are
+    considered only when their filename carries the stable fixture identity.
+    """
+    if not root.exists():
+        return []
+    match_id = _string(fixture.get("match_id"))
+    match_key = _string(fixture.get("match_key"))
+    nowscore_id = _string(fixture.get("nowscore_id"))
+    shuju_id = _string(fixture.get("shuju_id"))
+    tokens = {value.casefold() for value in (match_id, match_key, nowscore_id, shuju_id) if value}
+    paths: set[Path] = set()
+
+    if kind == "analysis_reports":
+        paths.update(root.rglob("*.json"))
+        paths.update(root.rglob("*.html"))
+    elif kind == "workspace":
+        for name in ("latest.json", "latest.html"):
+            candidate = root / name
+            if candidate.exists():
+                paths.add(candidate)
+        current = root / "current"
+        if current.exists():
+            paths.update(path for path in current.iterdir() if path.is_file() and path.suffix.lower() in {".json", ".html"})
+        compact_date = _string(fixture.get("business_date")).replace("-", "")
+        for child in root.iterdir():
+            if not child.is_dir():
+                continue
+            if compact_date and child.name.startswith(compact_date):
+                paths.update(
+                    path for path in child.iterdir()
+                    if path.is_file() and path.name in {"workspace.json", "index.json", "index.html"}
+                )
+            if tokens and any(token in child.name.casefold() for token in tokens):
+                paths.update(path for path in child.iterdir() if path.is_file() and path.suffix.lower() in {".json", ".html"})
+    elif kind == "postmatch_reports":
+        for path in root.iterdir():
+            if path.is_file() and path.suffix.lower() in {".json", ".html"}:
+                if tokens and any(token in path.name.casefold() for token in tokens):
+                    paths.add(path)
+    return sorted(paths)
+
+
+def _legacy_records(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
+    for key in ("match", "fixture", "identity"):
+        if isinstance(payload.get(key), dict):
+            records.append(payload)
+            break
+    for key in ("matches", "fixtures", "items"):
+        values = payload.get(key)
+        if isinstance(values, list):
+            for value in values:
+                if isinstance(value, dict):
+                    records.append({**payload, "match": value})
+    if not records and any(key in payload for key in ("match_id", "matchId", "home", "home_team")):
+        records.append(payload)
+    return records
+
+
+def _read_legacy_payload(path: Path) -> dict[str, Any] | None:
+    """Read only structured JSON sidecars or explicit JSON script payloads."""
+    if path.suffix.lower() == ".json":
+        return _read_json(path)
+    try:
+        text = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeError):
+        return None
+    for match in re.finditer(
+        r"<script[^>]*type=[\"']application/json[\"'][^>]*>(.*?)</script>",
+        text,
+        flags=re.IGNORECASE | re.DOTALL,
+    ):
+        try:
+            payload = json.loads(html.unescape(match.group(1).strip()))
+        except (TypeError, json.JSONDecodeError):
+            continue
+        if isinstance(payload, dict):
+            return payload
+    return None
+
+
+def _legacy_identity(record: dict[str, Any]) -> dict[str, Any]:
+    identity = record.get("match") or record.get("fixture") or record.get("identity") or record
+    if not isinstance(identity, dict):
+        identity = record
+    kickoff = _first(identity, "kickoff_at", "kickoff", "kickoff_local", "kickoffAt")
+    return {
+        "match_id": _first(identity, "match_id", "matchId", "matchID", "id"),
+        "match_key": _first(identity, "match_key", "matchKey"),
+        "business_date": _first(identity, "business_date", "businessDate"),
+        "competition": _first(identity, "competition", "league", "leagueName"),
+        "home": _first(identity, "home", "homeTeam", "home_team"),
+        "away": _first(identity, "away", "awayTeam", "away_team"),
+        "kickoff_at": kickoff,
+    }
+
+
+def _legacy_identity_matches(target: dict[str, Any], candidate: dict[str, Any]) -> tuple[bool, str | None]:
+    for key in ("match_id", "match_key", "nowscore_id", "shuju_id"):
+        candidate_value = candidate.get(key)
+        target_value = target.get(key)
+        if candidate_value not in (None, "") and target_value not in (None, ""):
+            if _normalise_identity_text(candidate_value) != _normalise_identity_text(target_value):
+                return False, f"{key}_mismatch"
+    for key in ("home", "away"):
+        if candidate.get(key) not in (None, "") and target.get(key) not in (None, ""):
+            if _normalise_identity_text(candidate[key]) != _normalise_identity_text(target[key]):
+                return False, f"{key}_mismatch"
+    if candidate.get("business_date") not in (None, "") and target.get("business_date") not in (None, ""):
+        if _normalise_identity_text(candidate["business_date"]) != _normalise_identity_text(target["business_date"]):
+            return False, "business_date_mismatch"
+    if candidate.get("competition") not in (None, "") and target.get("competition") not in (None, ""):
+        if _normalise_identity_text(candidate["competition"]) != _normalise_identity_text(target["competition"]):
+            return False, "competition_mismatch"
+    target_kickoff = _parse_dt(target.get("kickoff_at"))
+    candidate_kickoff = _parse_dt(candidate.get("kickoff_at"))
+    if candidate_kickoff and target_kickoff and abs((candidate_kickoff - target_kickoff).total_seconds()) > 60:
+        return False, "kickoff_mismatch"
+    if not candidate.get("home") or not candidate.get("away") or not candidate_kickoff:
+        return False, "identity_incomplete"
+    return True, None
+
+
+def _legacy_score(value: Any) -> str | None:
+    if isinstance(value, dict):
+        value = _first(value, "score", "value")
+    text = _string(value)
+    match = re.search(r"(?<!\d)(\d+)\s*[-:：]\s*(\d+)(?!\d)", text)
+    return f"{match.group(1)}-{match.group(2)}" if match else None
+
+
+def _legacy_explicit_sections(record: dict[str, Any]) -> tuple[list[dict[str, Any]], dict[str, str], list[dict[str, Any]]]:
+    """Extract existing interpretations only from explicit structured fields."""
+    material = record.get("analysis_material")
+    if not isinstance(material, dict):
+        material = record.get("analysis") if isinstance(record.get("analysis"), dict) else {}
+    sections_value = material.get("sections")
+    if isinstance(sections_value, dict):
+        sections_value = [dict(value, id=key) for key, value in sections_value.items() if isinstance(value, dict)]
+    sections: list[dict[str, Any]] = []
+    interpretations: list[dict[str, Any]] = []
+    for value in _as_list(sections_value):
+        if not isinstance(value, dict):
+            continue
+        section_id = _string(_first(value, "id", "section_id", "key"))
+        if not section_id:
+            continue
+        supports = [item for item in _as_list(value.get("supports")) if isinstance(item, dict) and item.get("text")]
+        conflicts = [item for item in _as_list(value.get("conflicts")) if isinstance(item, dict) and item.get("text")]
+        section = {
+            "id": section_id,
+            "title": _first(value, "title", "heading"),
+            "conclusion": _first(value, "conclusion", "judgement", "interpretation"),
+            "supports": copy.deepcopy(supports),
+            "conflicts": copy.deepcopy(conflicts),
+            "explanation": _first(value, "explanation", "reason"),
+            "score_impact": value.get("score_impact"),
+        }
+        if any(section.get(key) or section[key] for key in ("conclusion", "supports", "conflicts", "explanation", "score_impact")):
+            sections.append(section)
+        for relation, values in (("support", supports), ("conflict", conflicts)):
+            for item in values:
+                interpretations.append({
+                    "section_id": section_id,
+                    "relation": relation,
+                    "type": item.get("type") or "分析",
+                    "text": item.get("text"),
+                    "source_ref": item.get("source_ref") or "legacy_analysis_material",
+                })
+    explicit = material.get("interpretations")
+    for item in _as_list(explicit):
+        if not isinstance(item, dict) or not item.get("text"):
+            continue
+        relation = _string(_first(item, "relation", "kind", "role")).lower()
+        if relation not in {"support", "conflict", "neutral"}:
+            relation = "neutral"
+        interpretations.append({
+            "section_id": _first(item, "section_id", "section"),
+            "relation": relation,
+            "type": item.get("type") or "分析",
+            "text": item.get("text"),
+            "source_ref": item.get("source_ref") or "legacy_analysis_material",
+        })
+
+    # Older reports have explicit decisions and risk points.  These are
+    # analytical interpretations; fundamentals.items and evidence_chain remain
+    # raw/neutral evidence and are intentionally not promoted to support.
+    decisions = record.get("decisions") if isinstance(record.get("decisions"), dict) else {}
+    primary_dimension = _string(decisions.get("unique_primary_dimension"))
+    if primary_dimension and primary_dimension not in {"待完整模型", "未形成候选"}:
+        sections.append({
+            "id": "strength",
+            "title": None,
+            "conclusion": primary_dimension,
+            "supports": [],
+            "conflicts": [],
+            "explanation": "该判断来自旧赛前报告的明确决策字段。",
+            "score_impact": None,
+        })
+    for point in _as_list(decisions.get("maximum_error_points")):
+        if point:
+            interpretations.append({
+                "section_id": "fork",
+                "relation": "conflict",
+                "type": "分析",
+                "text": _string(point),
+                "source_ref": "legacy_report.decisions.maximum_error_points",
+            })
+    candidate_labels = material.get("candidate_scores") if isinstance(material, dict) else None
+    candidate_labels = candidate_labels if isinstance(candidate_labels, dict) else {}
+    return sections, {str(key): _string(value.get("script_label")) for key, value in candidate_labels.items() if isinstance(value, dict) and value.get("script_label")}, interpretations
+
+
+def _legacy_record_material(
+    path: Path,
+    record: dict[str, Any],
+    target: dict[str, Any],
+    frozen_prediction: dict[str, Any] | None,
+    *,
+    kind: str,
+) -> dict[str, Any] | None:
+    candidate = _legacy_identity(record)
+    matches, _ = _legacy_identity_matches(target, candidate)
+    if not matches:
+        return None
+    report = record.get("report") if isinstance(record.get("report"), dict) else {}
+    report_type = _string(_first(report, "report_type", "type", default=record.get("report_type"))).lower()
+    if "postmatch" in report_type or "赛后" in report_type:
+        return {
+            "status": "CONFLICTED",
+            "path": path.as_posix(),
+            "reasons": ["POSTMATCH_MATERIAL_NOT_ALLOWED"],
+            "match_identity": candidate,
+        }
+    if kind == "postmatch_reports":
+        prematch = next(
+            (
+                record.get(key)
+                for key in ("prematch", "prematch_analysis", "prematch_report", "pre_match")
+                if isinstance(record.get(key), dict)
+            ),
+            None,
+        )
+        if prematch is None and "prematch" not in report_type and "pre-match" not in report_type:
+            return {
+                "status": "CONFLICTED",
+                "path": path.as_posix(),
+                "reasons": ["POSTMATCH_MATERIAL_NOT_ALLOWED"],
+                "match_identity": candidate,
+            }
+        if prematch is not None:
+            record = {**record, **prematch}
+            record.setdefault("match", candidate)
+            report = record.get("report") if isinstance(record.get("report"), dict) else {}
+    timestamps = [
+        _first(report, "analysis_timestamp", "generated_at", "created_at", "timestamp"),
+        _first(report, "snapshot_timestamp"),
+        _first(record, "analysis_timestamp", "generated_at", "created_at"),
+    ]
+    material_dt = _parse_dt(next((value for value in timestamps if value), None))
+    kickoff_dt = _parse_dt(target.get("kickoff_at"))
+    reasons: list[str] = []
+    if not material_dt:
+        reasons.append("MATERIAL_TIMESTAMP_UNVERIFIED")
+    elif kickoff_dt and material_dt >= kickoff_dt:
+        reasons.append("MATERIAL_AFTER_KICKOFF")
+    for value in timestamps[1:]:
+        timestamp = _parse_dt(value)
+        if timestamp and kickoff_dt and timestamp >= kickoff_dt:
+            reasons.append("SOURCE_TIMESTAMP_AFTER_KICKOFF")
+    decisions = record.get("decisions") if isinstance(record.get("decisions"), dict) else {}
+    stored_score = _legacy_score(_first(record, "unique_score", "score_top1", default=decisions.get("unique_score")))
+    frozen_score = _legacy_score(_first(frozen_prediction or {}, "unique_score", "score_top1"))
+    if stored_score and frozen_score and stored_score != frozen_score:
+        reasons.append("FROZEN_SCORE_CONFLICT")
+    sections, candidate_labels, interpretations = _legacy_explicit_sections(record)
+    material_payload = record.get("analysis_material")
+    if not isinstance(material_payload, dict):
+        material_payload = record.get("analysis") if isinstance(record.get("analysis"), dict) else {}
+    hero_material = material_payload.get("hero") if isinstance(material_payload.get("hero"), dict) else {}
+    has_interpretation = bool(sections or interpretations)
+    if not has_interpretation:
+        reasons.append("NO_EXPLICIT_ANALYTICAL_INTERPRETATION")
+    status = "USABLE" if len({section.get("id") for section in sections}) >= 4 else "PARTIALLY_USABLE"
+    if not has_interpretation:
+        status = "CONFLICTED" if any(reason != "NO_EXPLICIT_ANALYTICAL_INTERPRETATION" for reason in reasons) else "NOT_FOUND"
+    if reasons:
+        if has_interpretation:
+            status = "CONFLICTED"
+    source_refs = _unique([
+        path.as_posix(),
+        *_as_list(record.get("source_references")),
+        *_as_list(report.get("source_references")),
+    ])
+    return {
+        "status": status,
+        "path": path.as_posix(),
+        "kind": kind,
+        "match_identity": candidate,
+        "material_timestamp": material_dt.isoformat() if material_dt else None,
+        "report_type": report.get("report_type") or record.get("report_type"),
+        "consistency_checks": {
+            "identity": not any(reason.endswith("_mismatch") or reason == "identity_incomplete" for reason in reasons),
+            "prematch_timestamp": "MATERIAL_AFTER_KICKOFF" not in reasons and "MATERIAL_TIMESTAMP_UNVERIFIED" not in reasons,
+            "frozen_score": "FROZEN_SCORE_CONFLICT" not in reasons,
+        },
+        "reasons": _unique(reasons),
+        "sections": sections if status not in {"CONFLICTED", "NOT_FOUND"} else [],
+        "interpretations": interpretations if status not in {"CONFLICTED", "NOT_FOUND"} else [],
+        "candidate_labels": candidate_labels if status not in {"CONFLICTED", "NOT_FOUND"} else {},
+        "hero_script": hero_material.get("script") if status not in {"CONFLICTED", "NOT_FOUND"} else None,
+        "attention_tag": hero_material.get("attention_tag") if status not in {"CONFLICTED", "NOT_FOUND"} else None,
+        "source_refs": source_refs,
+    }
+
+
+def discover_legacy_analysis_material(
+    business_date: str,
+    fixture: dict[str, Any],
+    *,
+    frozen_prediction: dict[str, Any] | None = None,
+    workspace_root: Path = LEGACY_WORKSPACE_ROOT,
+    analysis_reports_root: Path = LEGACY_ANALYSIS_ROOT,
+    postmatch_reports_root: Path = LEGACY_POSTMATCH_ROOT,
+) -> dict[str, Any]:
+    target = _fixture_projection(fixture, business_date) if fixture.get("business_date") != business_date or "match_id" not in fixture else copy.deepcopy(fixture)
+    if not target.get("match_id"):
+        target = _fixture_projection(fixture, business_date)
+    checked_paths = [
+        "data/match_workspace",
+        "data/analysis_reports",
+        "data/postmatch_reports",
+    ]
+    found: list[dict[str, Any]] = []
+    candidate_files_checked = 0
+    for kind, root in (
+        ("workspace", Path(workspace_root)),
+        ("analysis_reports", Path(analysis_reports_root)),
+        ("postmatch_reports", Path(postmatch_reports_root)),
+    ):
+        for path in _legacy_candidate_paths(root, target, kind=kind):
+            candidate_files_checked += 1
+            payload = _read_legacy_payload(path)
+            if not payload:
+                continue
+            for record in _legacy_records(payload):
+                material = _legacy_record_material(path, record, target, frozen_prediction, kind=kind)
+                if material:
+                    found.append(material)
+    usable = [item for item in found if item["status"] in {"USABLE", "PARTIALLY_USABLE"}]
+    conflicts = [item for item in found if item["status"] == "CONFLICTED"]
+    if usable:
+        best_status = "USABLE" if any(item["status"] == "USABLE" for item in usable) else "PARTIALLY_USABLE"
+        selected = sorted(usable, key=lambda item: (item["status"] != "USABLE", item["path"]))[0]
+        return {
+            "status": best_status,
+            "consistency_checked": True,
+            "candidate_files_checked": candidate_files_checked,
+            "checked_paths": checked_paths,
+            "items": found,
+            "interpretations": selected.get("interpretations", []),
+            "sections": selected.get("sections", []),
+            "candidate_labels": selected.get("candidate_labels", {}),
+            "hero_script": selected.get("hero_script"),
+            "attention_tag": selected.get("attention_tag"),
+            "source_refs": selected.get("source_refs", []),
+        }
+    if conflicts:
+        return {
+            "status": "CONFLICTED",
+            "consistency_checked": True,
+            "candidate_files_checked": candidate_files_checked,
+            "checked_paths": checked_paths,
+            "items": found,
+            "interpretations": [],
+            "sections": [],
+            "candidate_labels": {},
+            "source_refs": [],
+        }
+    return {
+        "status": "NOT_FOUND",
+        "consistency_checked": True,
+        "candidate_files_checked": candidate_files_checked,
+        "checked_paths": checked_paths,
+        "items": [],
+        "interpretations": [],
+        "sections": [],
+        "candidate_labels": {},
+        "source_refs": [],
+    }
+
+
 def _supports_and_conflicts(
     fixture: dict[str, Any],
     model: dict[str, Any],
     market: dict[str, Any],
     recent_form: dict[str, Any],
     snapshot_input: dict[str, Any],
+    analysis_material: dict[str, Any] | None = None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    del fixture, model, market, recent_form, snapshot_input
     supports: list[dict[str, Any]] = []
     conflicts: list[dict[str, Any]] = []
-    home_form = recent_form.get("home_overall")
-    away_form = recent_form.get("away_overall")
-    if isinstance(home_form, dict):
-        supports.append({"type": "基本面", "text": _form_sentence(fixture["home"], home_form), "source_ref": "recent_form"})
-    if isinstance(away_form, dict):
-        supports.append({"type": "基本面", "text": _form_sentence(fixture["away"], away_form), "source_ref": "recent_form"})
-    primary = model.get("unique_score")
-    if primary:
-        supports.append({"type": "模型", "text": f"冻结模型首选比分为 {primary}，来自已保存的候选分布。", "source_ref": "prediction_record"})
-    probabilities = model.get("probabilities") or {}
-    market_baseline = snapshot_input.get("official_market_baseline") or {}
-    fair = market_baseline.get("fair_probabilities") if isinstance(market_baseline, dict) else None
-    if isinstance(fair, dict) and probabilities.get("home") is not None and fair.get("home") is not None:
-        conflicts.append({
-            "type": "市场",
-            "text": f"体彩SPF基准主胜 {_format_percent(fair.get('home'))}，冻结1X2主胜 {_format_percent(probabilities.get('home'))}；方向一致但强度不同。",
-            "source_ref": "official_market_baseline",
-        })
-    if market.get("facts", {}).get("bookmaker_count"):
-        supports.append({
-            "type": "市场",
-            "text": f"冻结前快照记录了 {market['facts']['bookmaker_count']} 家1X2公司及AH/总进球市场事实。",
-            "source_ref": "market_snapshot",
-        })
+    for item in (analysis_material or {}).get("interpretations", []):
+        if not isinstance(item, dict) or not item.get("text"):
+            continue
+        relation = _string(item.get("relation")).lower()
+        projected = {
+            "type": item.get("type") or "分析",
+            "text": item.get("text"),
+            "source_ref": item.get("source_ref") or "legacy_analysis_material",
+        }
+        if relation == "support":
+            supports.append(projected)
+        elif relation == "conflict":
+            conflicts.append(projected)
     return supports[:3], conflicts[:2]
 
 
@@ -533,10 +941,11 @@ def _section_payloads(
     recent_form: dict[str, Any],
     supports: list[dict[str, Any]],
     conflicts: list[dict[str, Any]],
+    analysis_material: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
+    del market, recent_form, supports, conflicts
     primary = model.get("unique_score")
     scores = model.get("top_scores") or []
-    first_three = scores[:3]
     if not primary:
         return [
             {
@@ -550,61 +959,42 @@ def _section_payloads(
             }
             for section_id, title in SECTION_TITLES
         ]
-    home_form = recent_form.get("home_overall") or {}
-    away_form = recent_form.get("away_overall") or {}
-    total_peak = max(model.get("totals") or [], key=lambda item: item.get("probability", -1), default=None)
-    total_text = ""
-    if isinstance(total_peak, dict) and total_peak.get("goals") is not None and total_peak.get("probability") is not None:
-        total_text = f"冻结总进球分布中，{total_peak['goals']}球单项概率最高（{_format_percent(total_peak['probability'])}）。"
-    primary_item = first_three[0] if first_three else {"score": primary}
-    neighbor_text = "、".join(_string(item.get("score")) for item in first_three[1:])
-    return [
-        {
-            "id": "strength",
-            "title": "强弱与主动权",
-            "conclusion": f"冻结前基本面记录了{fixture['home']} {_form_sentence('', home_form)}；{fixture['away']} {_form_sentence('', away_form)}。",
-            "supports": supports[:2],
-            "conflicts": conflicts[:1],
-            "explanation": "本段只整理冻结前的近期表现与已保存的1X2输出，不新增强弱评级。",
-            "score_impact": f"保留已冻结候选 {primary}。",
-        },
-        {
-            "id": "tempo",
-            "title": "节奏与进球环境",
-            "conclusion": total_text or "冻结记录保存了总进球分布，但没有可直接展示的单一节奏结论。",
-            "supports": [{"type": "模型", "text": total_text or "总进球分布已保存。", "source_ref": "prediction_record"}] if total_text else [],
-            "conflicts": [],
-            "explanation": "市场部分只显示实际快照中的观测线，不把盘口线改写成模型方向。",
-            "score_impact": None,
-        },
-        {
-            "id": "scoring",
-            "title": "得分路径",
-            "conclusion": f"冻结候选池记录为 {primary}、{neighbor_text or '暂无邻近候选'}；双方进球字段按原记录展示。",
-            "supports": [{"type": "模型", "text": f"冻结模型保存的首选比分为 {primary}。", "source_ref": "prediction_record"}],
-            "conflicts": [],
-            "explanation": "候选比分和概率均来自冻结记录，页面不重新计算比分矩阵。",
-            "score_impact": f"只在已保存的候选中比较 {primary} 与 {neighbor_text or '其他候选'}。",
-        },
-        {
-            "id": "fork",
-            "title": "关键分叉 / 最大不确定性",
-            "conclusion": model.get("uncertainty", {}).get("main_risk") or "当前没有可追溯的结构化最大风险字段。",
-            "supports": [{"type": "模型", "text": "详情保留冻结记录中的定性风险字段。", "source_ref": "prediction_record"}] if model.get("uncertainty", {}).get("main_risk") else [],
-            "conflicts": conflicts[:1],
-            "explanation": "没有额外可靠证据时，不把风险扩展成新的事件或时间点判断。",
-            "score_impact": None,
-        },
-        {
-            "id": "convergence",
-            "title": "最终收敛",
-            "conclusion": f"{primary} 是冻结候选中的首位；相邻候选为 {neighbor_text or '无'}。",
-            "supports": [{"type": "模型", "text": "候选顺序沿用冻结记录的rank。", "source_ref": "prediction_record"}],
-            "conflicts": [],
-            "explanation": "首推与邻近比分的比较只使用保存的概率/rank；不创建新的比分候选。",
-            "score_impact": f"保留 {primary}，并将 {neighbor_text or '已有邻近候选'} 作为原记录中的替代路径。",
-        },
-    ]
+    empty_conclusion = "当前证据可以核查，但没有可追溯的正式分析结论，暂不扩展判断。"
+    material = analysis_material or {}
+    source_sections = {
+        _string(section.get("id")): section
+        for section in material.get("sections", [])
+        if isinstance(section, dict) and section.get("id")
+    }
+    if material.get("status") not in {"USABLE", "PARTIALLY_USABLE"} or not source_sections:
+        return [
+            {
+                "id": section_id,
+                "title": title,
+                "conclusion": (
+                    "当前没有足够可追溯的分析素材解释 rank 之外的比分收敛。"
+                    if section_id == "convergence" else empty_conclusion
+                ),
+                "supports": [],
+                "conflicts": [],
+                "explanation": "原始基本面、市场和模型字段保留在证据审计层；没有对应的现成解释，不把字段复述成分析判断。",
+                "score_impact": None,
+            }
+            for section_id, title in SECTION_TITLES
+        ]
+    sections: list[dict[str, Any]] = []
+    for section_id, title in SECTION_TITLES:
+        source = source_sections.get(section_id) or {}
+        sections.append({
+            "id": section_id,
+            "title": source.get("title") or title,
+            "conclusion": source.get("conclusion") or empty_conclusion,
+            "supports": [item for item in _as_list(source.get("supports")) if isinstance(item, dict) and item.get("text")],
+            "conflicts": [item for item in _as_list(source.get("conflicts")) if isinstance(item, dict) and item.get("text")],
+            "explanation": source.get("explanation") or "该段没有足够的现成解释素材，暂不扩展判断。",
+            "score_impact": source.get("score_impact") or None,
+        })
+    return sections
 
 
 def assemble_match_analysis(
@@ -618,6 +1008,9 @@ def assemble_match_analysis(
     exclusion_root: Path = EXCLUSION_ROOT,
     prospective_root: Path = PROSPECTIVE_ROOT,
     result_root: Path = RESULT_ROOT,
+    workspace_root: Path = LEGACY_WORKSPACE_ROOT,
+    analysis_reports_root: Path = LEGACY_ANALYSIS_ROOT,
+    postmatch_reports_root: Path = LEGACY_POSTMATCH_ROOT,
     **_: Any,
 ) -> dict[str, Any]:
     del prospective_root
@@ -661,8 +1054,32 @@ def assemble_match_analysis(
     model = _prediction_model(prediction or {}) if prediction and status == "FROZEN" else _prediction_model({})
     market = _market_facts(snapshot_input, prediction or {})
     result = _find_verified_result(Path(result_root), fixture, prediction)
-    supports, conflicts = _supports_and_conflicts(fixture, model, market, recent_form, snapshot_input)
-    sections = _section_payloads(fixture, model, market, recent_form, supports, conflicts)
+    legacy_report_material = discover_legacy_analysis_material(
+        business_date,
+        fixture,
+        frozen_prediction=prediction,
+        workspace_root=Path(workspace_root),
+        analysis_reports_root=Path(analysis_reports_root),
+        postmatch_reports_root=Path(postmatch_reports_root),
+    )
+    analysis_material = {
+        "status": legacy_report_material.get("status"),
+        "consistency_checked": legacy_report_material.get("consistency_checked"),
+        "candidate_files_checked": legacy_report_material.get("candidate_files_checked", 0),
+        "checked_paths": copy.deepcopy(legacy_report_material.get("checked_paths") or []),
+        "items": copy.deepcopy(legacy_report_material.get("items") or []),
+        "sections": copy.deepcopy(legacy_report_material.get("sections") or []),
+        "interpretations": copy.deepcopy(legacy_report_material.get("interpretations") or []),
+        "candidate_labels": copy.deepcopy(legacy_report_material.get("candidate_labels") or {}),
+        "source_refs": copy.deepcopy(legacy_report_material.get("source_refs") or []),
+    }
+    candidate_labels = analysis_material.get("candidate_labels") or {}
+    for item in model.get("top_scores", []):
+        label = candidate_labels.get(_string(item.get("score")))
+        if label:
+            item["script_label"] = label
+    supports, conflicts = _supports_and_conflicts(fixture, model, market, recent_form, snapshot_input, analysis_material)
+    sections = _section_payloads(fixture, model, market, recent_form, supports, conflicts, analysis_material)
     sources = _source_refs(prediction or {}, snapshot)
     reason_code = _reason_code(job, prediction)
     formal_eligible = _formal_eligible(prediction, pilot_excluded)
@@ -735,8 +1152,8 @@ def assemble_match_analysis(
             "primary_score": model.get("unique_score"),
             "neighbor_scores": [item.get("score") for item in model.get("top_scores", [])[1:3]],
             "summary": hero_summary,
-            "script": (prediction or {}).get("short_match_script"),
-            "attention_tag": (prediction or {}).get("attention_tag"),
+            "script": (prediction or {}).get("short_match_script") or legacy_report_material.get("hero_script"),
+            "attention_tag": (prediction or {}).get("attention_tag") or legacy_report_material.get("attention_tag"),
             "supports": supports,
             "conflicts": conflicts,
             "biggest_failure_point": model.get("uncertainty", {}).get("main_risk"),
@@ -753,12 +1170,9 @@ def assemble_match_analysis(
             "market": market,
             "model": model,
             "source_quality": source_quality,
-            "legacy_report_material": {
-                "status": "NOT_AVAILABLE",
-                "consistency_checked": True,
-                "items": [],
-            },
+            "legacy_report_material": copy.deepcopy(legacy_report_material),
         },
+        "analysis_material": analysis_material,
         "market": market,
         "model": model,
         "post_freeze_updates": {
@@ -807,10 +1221,14 @@ def select_best_real_match(
     exclusion_root: Path = EXCLUSION_ROOT,
     prospective_root: Path = PROSPECTIVE_ROOT,
     result_root: Path = RESULT_ROOT,
+    workspace_root: Path = LEGACY_WORKSPACE_ROOT,
+    analysis_reports_root: Path = LEGACY_ANALYSIS_ROOT,
+    postmatch_reports_root: Path = LEGACY_POSTMATCH_ROOT,
     **_: Any,
 ) -> dict[str, Any]:
     dates = [business_date] if business_date else _dates_in_universe(Path(universe_root))
     candidates: list[dict[str, Any]] = []
+    excluded_ids = _load_excluded_ids(Path(exclusion_root))
     for date in dates:
         _, fixtures = _load_universe(Path(universe_root), date)
         jobs = _job_items(Path(jobs_root), date)
@@ -825,6 +1243,14 @@ def select_best_real_match(
             recent, _, _ = _recent_form(snapshot_input)
             market = _market_facts(snapshot_input, prediction)
             model = _prediction_model(prediction)
+            legacy_report_material = discover_legacy_analysis_material(
+                date,
+                fixture,
+                frozen_prediction=prediction,
+                workspace_root=Path(workspace_root),
+                analysis_reports_root=Path(analysis_reports_root),
+                postmatch_reports_root=Path(postmatch_reports_root),
+            )
             score = 0
             score += 5 if fixture.get("match_id") else 0
             score += 5 if model.get("unique_score") else 0
@@ -833,7 +1259,10 @@ def select_best_real_match(
             score += 3 if recent else 0
             score += 3 if market.get("facts", {}).get("bookmaker_count") else 0
             score += min(3, len(_source_refs(prediction, snapshot)))
-            score -= 1 if _string(prediction.get("prediction_id")) in _load_excluded_ids(Path(exclusion_root)) else 0
+            score += {"USABLE": 12, "PARTIALLY_USABLE": 6}.get(legacy_report_material.get("status"), 0)
+            score -= 10 if legacy_report_material.get("status") == "CONFLICTED" else 0
+            pilot_excluded = _string(prediction.get("prediction_id")) in excluded_ids
+            score -= 1 if pilot_excluded else 0
             candidates.append({
                 "match_id": fixture["match_id"],
                 "prediction_id": prediction.get("prediction_id"),
@@ -842,7 +1271,9 @@ def select_best_real_match(
                 "home": fixture.get("home"),
                 "away": fixture.get("away"),
                 "evidence_score": score,
-                "pilot_excluded": _string(prediction.get("prediction_id")) in _load_excluded_ids(Path(exclusion_root)),
+                "pilot_excluded": pilot_excluded,
+                "legacy_report_material_status": legacy_report_material.get("status"),
+                "legacy_report_material_checked": legacy_report_material.get("consistency_checked") is True,
             })
     if not candidates:
         raise LookupError("No frozen prediction with a stable universe identity was found")

@@ -160,8 +160,10 @@ def _render_candidates(contract: dict[str, Any]) -> str:
         probability = item.get("probability")
         probability_html = f' · {_probability(probability)}' if probability is not None else ""
         rank = item.get("rank") or index
+        script_label = item.get("script_label")
+        script_html = f'<span class="candidate-label">{_esc(script_label)}</span>' if script_label else ""
         cards.append(
-            f'<div class="candidate"><span class="candidate-rank">{_esc(rank)}</span><strong>{_display_score(item.get("score"))}{probability_html}</strong></div>'
+            f'<div class="candidate"><span class="candidate-rank">{_esc(rank)}</span><strong>{_display_score(item.get("score"))}{probability_html}</strong>{script_html}</div>'
         )
     return f'<div class="candidate-grid">{"".join(cards)}</div>'
 
@@ -291,8 +293,9 @@ def render_match_detail(contract: dict[str, Any]) -> str:
     .candidate {{ display:flex; align-items:baseline; gap:10px; min-width:0; padding:14px 15px; background:rgba(255,255,255,.045); border-radius:14px; }}
     .candidate:first-child {{ background:rgba(112,214,176,.12); }}
     .candidate strong {{ font-size:26px; letter-spacing:-.04em; }}
-    .candidate-rank,.candidate-prob {{ color:var(--muted); font-size:12px; }}
-    .candidate-prob {{ margin-left:auto; }}
+     .candidate-rank,.candidate-prob {{ color:var(--muted); font-size:12px; }}
+     .candidate-prob {{ margin-left:auto; }}
+     .candidate-label {{ grid-column:2/-1; color:var(--muted); font-size:12px; overflow-wrap:anywhere; }}
     .analysis-list {{ display:grid; gap:12px; }}
     .analysis-section {{ padding:19px 20px; border:1px solid rgba(145,165,173,.16); border-radius:16px; background:rgba(0,0,0,.10); }}
     .analysis-section h3 {{ margin:2px 0 7px; font-size:19px; }}

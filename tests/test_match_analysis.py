@@ -11,6 +11,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 from scripts.match_analysis import (  # noqa: E402
     ANALYSIS_CONTRACT_VERSION,
     assemble_match_analysis,
+    discover_legacy_analysis_material,
     match_url,
     select_best_real_match,
     write_analysis_contract,
@@ -150,7 +151,14 @@ def snapshot() -> dict:
     }
 
 
-def roots(tmp_path: Path, *, status: str = "FROZEN", with_prediction: bool = True, pilot: bool = False):
+def roots(
+    tmp_path: Path,
+    *,
+    status: str = "FROZEN",
+    with_prediction: bool = True,
+    pilot: bool = False,
+    legacy_root: Path | None = None,
+):
     universe_root = tmp_path / "universe"
     jobs_root = tmp_path / "jobs"
     prediction_root = tmp_path / "predictions"
@@ -179,6 +187,9 @@ def roots(tmp_path: Path, *, status: str = "FROZEN", with_prediction: bool = Tru
         "snapshot_root": snapshot_root,
         "exclusion_root": exclusion_root,
         "output_root": output_root,
+        "analysis_reports_root": legacy_root or (tmp_path / "analysis_reports"),
+        "workspace_root": tmp_path / "match_workspace",
+        "postmatch_reports_root": tmp_path / "postmatch_reports",
     }
 
 
@@ -224,7 +235,176 @@ def test_assembler_does_not_fabricate_market_direction_or_script(tmp_path):
     assert contract["hero"]["attention_tag"] is None
     assert contract["market"]["interpretation"] is None
     assert contract["market"]["observed_totals_lines"] == [2.5]
+    assert contract["market"]["model_comparison"]["classification"] is None
     assert "score_concentration" not in contract["model"]
+
+
+def test_raw_evidence_does_not_become_hero_support_or_conflict(tmp_path):
+    contract = assemble(roots(tmp_path))
+
+    assert contract["evidence"]["legacy_report_material"]["status"] == "NOT_FOUND"
+    assert contract["evidence"]["legacy_report_material"]["consistency_checked"] is True
+    assert contract["hero"]["supports"] == []
+    assert contract["hero"]["conflicts"] == []
+    assert all(section["supports"] == [] for section in contract["analysis_sections"])
+    assert all(section["conflicts"] == [] for section in contract["analysis_sections"])
+
+
+def legacy_report(*, score: str = "1-0", sections: list[dict] | None = None) -> dict:
+    return {
+        "report": {
+            "report_type": "完整分析版",
+            "analysis_timestamp": "2026-08-12T15:00:00+08:00",
+            "snapshot_timestamp": "2026-08-12T14:59:00+08:00",
+        },
+        "match": {
+            "match_id": "2040820",
+            "match_key": "FBOS-202608130600-test",
+            "business_date": DATE,
+            "competition": "解放者杯",
+            "home": "帕梅拉斯",
+            "away": "波特诺",
+            "kickoff_local": "2026-08-13 06:00",
+        },
+        "decisions": {"unique_score": score},
+        "analysis_material": {
+            "sections": sections or [
+                {
+                    "id": "strength",
+                    "conclusion": "已有分析判断认为主队更可能掌握主动权。",
+                    "supports": [{"type": "基本面", "text": "主队的主动权判断来自旧报告明确结论。", "source_ref": "legacy-report"}],
+                    "conflicts": [],
+                    "explanation": "该结论来自可追溯的赛前分析素材。",
+                    "score_impact": "更支持1-0而不是1-1。",
+                },
+                {
+                    "id": "tempo",
+                    "conclusion": "旧报告把比赛节奏判断为相对受控。",
+                    "supports": [{"type": "市场", "text": "旧报告明确写出总进球环境偏受控。", "source_ref": "legacy-report"}],
+                    "conflicts": [],
+                    "explanation": "这是旧报告的解释性结论，不是盘口数值复述。",
+                    "score_impact": "降低高比分邻近候选。",
+                },
+                {
+                    "id": "scoring",
+                    "conclusion": "旧报告保留主队一球领先的得分路径。",
+                    "supports": [{"type": "模型", "text": "旧报告将主队一球领先列为主要得分路径。", "source_ref": "legacy-report"}],
+                    "conflicts": [],
+                    "explanation": "结论与冻结候选池能够直接对应。",
+                    "score_impact": "支持1-0而不是2-0。",
+                },
+                {
+                    "id": "fork",
+                    "conclusion": "客队反击效率是旧报告指出的关键分叉。",
+                    "supports": [],
+                    "conflicts": [{"type": "基本面", "text": "客队仍有明确进球路径。", "source_ref": "legacy-report"}],
+                    "explanation": "该风险来自旧报告，而非自动阈值。",
+                    "score_impact": "保留1-1作为邻近迁移路径。",
+                },
+                {
+                    "id": "convergence",
+                    "conclusion": "旧报告比较了1-0、2-0与1-1，最终认为1-0最符合证据组合。",
+                    "supports": [{"type": "分析", "text": "1-0同时保留主队优势与受控节奏。", "source_ref": "legacy-report"}],
+                    "conflicts": [],
+                    "explanation": "首推与两个邻近候选均有明确条件比较。",
+                    "score_impact": "1-0胜过2-0与1-1。",
+                },
+            ],
+            "candidate_scores": {
+                "1-0": {"script_label": "主队优势兑现，客队得分路径受限"},
+                "2-0": {"script_label": "需要主队控制并完成零封"},
+            },
+        },
+        "source_references": [{"path": "data/analysis_reports/legacy.json"}],
+    }
+
+
+def test_legacy_material_is_really_discovered_and_consistency_checked(tmp_path):
+    legacy_root = tmp_path / "analysis_reports"
+    write_json(legacy_root / "legacy.json", legacy_report())
+
+    material = discover_legacy_analysis_material(
+        DATE,
+        fixture("2040820"),
+        frozen_prediction=prediction("FBOS-PRED-test"),
+        analysis_reports_root=legacy_root,
+        workspace_root=tmp_path / "missing-workspace",
+        postmatch_reports_root=tmp_path / "missing-postmatch",
+    )
+
+    assert material["status"] == "USABLE"
+    assert material["consistency_checked"] is True
+    assert material["items"][0]["status"] == "USABLE"
+    assert material["interpretations"]
+    assert material["interpretations"][0]["section_id"] == "strength"
+
+    payload = roots(tmp_path / "assembled", legacy_root=legacy_root)
+    contract = assemble(payload)
+    assert contract["evidence"]["legacy_report_material"]["status"] == "USABLE"
+    assert contract["hero"]["supports"]
+    assert contract["analysis_material"]["status"] == "USABLE"
+    assert contract["candidate_scores"][0]["script_label"] == "主队优势兑现，客队得分路径受限"
+    assert "主队优势兑现，客队得分路径受限" in render_match_detail(contract)
+
+
+def test_legacy_conflict_is_excluded_from_analysis(tmp_path):
+    legacy_root = tmp_path / "analysis_reports"
+    write_json(legacy_root / "conflict.json", legacy_report(score="2-1"))
+    payload = roots(tmp_path / "assembled", legacy_root=legacy_root)
+
+    contract = assemble(payload)
+
+    assert contract["evidence"]["legacy_report_material"]["status"] == "CONFLICTED"
+    assert contract["analysis_material"]["interpretations"] == []
+    assert contract["hero"]["supports"] == []
+
+
+def test_missing_legacy_material_is_not_reported_as_not_available(tmp_path):
+    material = discover_legacy_analysis_material(
+        DATE,
+        fixture("2040820"),
+        frozen_prediction=prediction("FBOS-PRED-test"),
+        analysis_reports_root=tmp_path / "missing-analysis",
+        workspace_root=tmp_path / "missing-workspace",
+        postmatch_reports_root=tmp_path / "missing-postmatch",
+    )
+
+    assert material["status"] == "NOT_FOUND"
+    assert material["consistency_checked"] is True
+    assert "NOT_AVAILABLE" not in json.dumps(material, ensure_ascii=False)
+
+
+def test_convergence_does_not_use_rank_as_fake_analysis(tmp_path):
+    contract = assemble(roots(tmp_path))
+    convergence = next(item for item in contract["analysis_sections"] if item["id"] == "convergence")
+
+    assert "没有足够可追溯的分析素材" in convergence["conclusion"]
+    assert convergence["supports"] == []
+    assert convergence["score_impact"] is None
+    assert "候选顺序沿用冻结记录的rank" not in json.dumps(convergence, ensure_ascii=False)
+
+
+def test_selector_rewards_usable_legacy_material(tmp_path):
+    legacy_root = tmp_path / "analysis_reports"
+    write_json(legacy_root / "legacy.json", legacy_report())
+    payload = roots(tmp_path, legacy_root=legacy_root)
+
+    second = fixture("2040821", match_num="周三004")
+    universe = json.loads((payload["universe_root"] / f"{DATE}.json").read_text(encoding="utf-8"))
+    universe["fixtures"].append(second)
+    universe["fixture_count"] = 2
+    write_json(payload["universe_root"] / f"{DATE}.json", universe)
+    write_json(payload["jobs_root"] / f"{DATE}.json", {"business_date": DATE, "jobs": [job("2040820", "FBOS-PRED-test"), job("2040821", "FBOS-PRED-incomplete")]})
+    richer = prediction("FBOS-PRED-incomplete", match_id="2040821")
+    richer["match_key"] = "FBOS-202608130600-second"
+    richer["match_identity"]["match_key"] = richer["match_key"]
+    richer["top_scores"] = [{"score": f"{i}-0", "probability": 0.1, "rank": i + 1} for i in range(10)]
+    write_json(payload["prediction_root"] / "FBOS-PRED-incomplete.json", richer)
+
+    selected = select_best_real_match(**payload)
+
+    assert selected["match_id"] == "2040820"
+    assert selected["legacy_report_material_status"] == "USABLE"
 
 
 def test_frozen_prediction_file_is_not_modified_by_assembly(tmp_path):
