@@ -553,8 +553,9 @@ def _modern_card_html(card: dict[str, Any]) -> str:
 STATIC_REFRESH_SCRIPT = """<script>
 (() => {
   const latestJson = "./latest.json";
-  let currentVersion = null;
-  const versionOf = payload => `${payload?.business_date || ""}|${payload?.generated_at || ""}`;
+  const pageVersion = __PAGE_VERSION__;
+  let currentVersion = pageVersion;
+  const versionOf = payload => `${payload?.business_date || payload?.target_date || ""}|${payload?.generated_at || ""}`;
   async function checkForUpdate() {
     if (document.visibilityState !== "visible") return;
     try {
@@ -562,10 +563,6 @@ STATIC_REFRESH_SCRIPT = """<script>
       if (!response.ok) return;
       const version = versionOf(await response.json());
       if (version === "|") return;
-      if (currentVersion === null) {
-        currentVersion = version;
-        return;
-      }
       if (version !== currentVersion) {
         const url = new URL(window.location.href);
         url.searchParams.set("v", version);
@@ -636,7 +633,13 @@ buttons.forEach(button => button.addEventListener('click', () => {{
   }});
 }}));
 </script></body></html>"""
-    return page.replace("</body>", STATIC_REFRESH_SCRIPT + "</body>", 1)
+    page_version = "|".join(
+        str(payload.get(key) or "") for key in ("business_date", "generated_at")
+    )
+    refresh_script = STATIC_REFRESH_SCRIPT.replace(
+        "__PAGE_VERSION__", json.dumps(page_version, ensure_ascii=False)
+    )
+    return page.replace("</body>", refresh_script + "</body>", 1)
 
 
 def build_dashboard(

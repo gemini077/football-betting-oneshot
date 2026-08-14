@@ -1,5 +1,8 @@
 import json
+import re
+import shutil
 import sys
+import subprocess
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
@@ -213,6 +216,7 @@ def test_core_current_workspace_selector_still_runs(tmp_path, monkeypatch, capsy
 
 
 def test_dashboard_and_legacy_workspace_contain_safe_static_refresh_logic():
+    page_version = "2026-08-15|2026-08-15T00:30:00+08:00"
     dashboard = prediction_dashboard.render_dashboard({
         "business_date": "2026-08-15",
         "generated_at": "2026-08-15T00:30:00+08:00",
@@ -220,7 +224,7 @@ def test_dashboard_and_legacy_workspace_contain_safe_static_refresh_logic():
         "health": {"overall_status": "HEALTHY"},
         "fixtures": [],
     })
-    workspace = match_workspace.render("{}")
+    workspace = match_workspace.render("{}", page_version=page_version)
 
     for page in (dashboard, workspace):
         assert "./latest.json" in page
@@ -230,4 +234,79 @@ def test_dashboard_and_legacy_workspace_contain_safe_static_refresh_logic():
         assert "addEventListener(\"focus\"" in page
         assert "60000" in page
         assert "currentVersion" in page
+        assert f'const pageVersion = "{page_version}";' in page
+        assert "let currentVersion = pageVersion;" in page
+        assert "currentVersion === null" not in page
+        assert "if (version !== currentVersion)" in page
         assert "window.location.replace" in page
+
+
+def test_static_refresh_first_successful_check_compares_server_version_to_html_version():
+    html_version = "2026-08-15|2026-08-15T00:30:00+08:00"
+    dashboard = prediction_dashboard.render_dashboard({
+        "business_date": "2026-08-15",
+        "generated_at": "2026-08-15T00:30:00+08:00",
+        "summary": {"fixture_count": 0, "card_count": 0},
+        "health": {"overall_status": "HEALTHY"},
+        "fixtures": [],
+    })
+    workspace = match_workspace.render("{}", page_version=html_version)
+
+    for page in (dashboard, workspace):
+        assert f'const pageVersion = "{html_version}";' in page
+        assert "let currentVersion = pageVersion;" in page
+        assert "if (version !== currentVersion)" in page
+        # The first successful fetch compares against the embedded HTML version:
+        # a changed server snapshot reloads, while the same snapshot does not.
+        assert f'url.searchParams.set("v", version)' in page
+
+
+@pytest.mark.skipif(not shutil.which("node"), reason="Node.js is required for refresh behavior validation")
+def test_static_refresh_first_check_reloads_only_when_server_version_changes():
+    page_version = "2026-08-15|2026-08-15T00:30:00+08:00"
+    dashboard = prediction_dashboard.render_dashboard({
+        "business_date": "2026-08-15",
+        "generated_at": "2026-08-15T00:30:00+08:00",
+        "summary": {"fixture_count": 0, "card_count": 0},
+        "health": {"overall_status": "HEALTHY"},
+        "fixtures": [],
+    })
+    workspace = match_workspace.render("{}", page_version=page_version)
+
+    node_runner = r'''
+const fs = require("fs");
+const vm = require("vm");
+const input = JSON.parse(fs.readFileSync(0, "utf8"));
+const [businessDate, generatedAt] = input.serverVersion.split("|");
+let reloads = 0;
+const context = {
+  document: { visibilityState: "visible", addEventListener() {} },
+  window: {
+    setInterval() {},
+    addEventListener() {},
+    location: { href: "https://example.test/latest.html", replace() { reloads += 1; } },
+  },
+  fetch: async () => ({ ok: true, json: async () => ({ business_date: businessDate, target_date: businessDate, generated_at: generatedAt }) }),
+  URL,
+  Date,
+};
+vm.runInNewContext(input.script, context);
+setTimeout(() => process.stdout.write(String(reloads)), 0);
+'''
+
+    def reload_count(page: str, server_version: str) -> int:
+        script = re.search(r"<script>\s*\(\(\) => \{[\s\S]*?</script>", page)
+        assert script is not None
+        result = subprocess.run(
+            ["node", "-e", node_runner],
+            input=json.dumps({"script": script.group(0)[8:-9], "serverVersion": server_version}),
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        assert result.returncode == 0, result.stderr
+        return int(result.stdout)
+
+    for page in (dashboard, workspace):
+        assert reload_count(page, page_version) == 0
+        assert reload_count(page, "2026-08-15|2026-08-15T01:00:00+08:00") == 1
