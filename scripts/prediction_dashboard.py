@@ -550,6 +550,39 @@ def _modern_card_html(card: dict[str, Any]) -> str:
     )
 
 
+STATIC_REFRESH_SCRIPT = """<script>
+(() => {
+  const latestJson = "./latest.json";
+  let currentVersion = null;
+  const versionOf = payload => `${payload?.business_date || ""}|${payload?.generated_at || ""}`;
+  async function checkForUpdate() {
+    if (document.visibilityState !== "visible") return;
+    try {
+      const response = await fetch(`${latestJson}?t=${Date.now()}`, { cache: "no-store" });
+      if (!response.ok) return;
+      const version = versionOf(await response.json());
+      if (version === "|") return;
+      if (currentVersion === null) {
+        currentVersion = version;
+        return;
+      }
+      if (version !== currentVersion) {
+        const url = new URL(window.location.href);
+        url.searchParams.set("v", version);
+        window.location.replace(url.toString());
+      }
+    } catch (_) {}
+  }
+  window.setInterval(checkForUpdate, 60000);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") checkForUpdate();
+  });
+  window.addEventListener("focus", checkForUpdate);
+  checkForUpdate();
+})();
+</script>"""
+
+
 def render_dashboard(payload: dict[str, Any]) -> str:
     summary = payload["summary"]
     health = payload.get("health") or {}
@@ -575,7 +608,7 @@ def render_dashboard(payload: dict[str, Any]) -> str:
     data_warning = ""
     if summary.get("silent_missing_fixture"):
         data_warning = f'<div class="data-warning">数据完整性提醒：当天 {html.escape(str(summary.get("fixture_count")))} 场，页面仅生成 {html.escape(str(summary.get("card_count")))} 张卡片。</div>'
-    return f"""<!doctype html>
+    page = f"""<!doctype html>
 <html lang="zh-CN">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>今日比赛 · {html.escape(str(payload.get('business_date')))}</title><style>{MODERN_CSS}</style></head>
@@ -603,6 +636,7 @@ buttons.forEach(button => button.addEventListener('click', () => {{
   }});
 }}));
 </script></body></html>"""
+    return page.replace("</body>", STATIC_REFRESH_SCRIPT + "</body>", 1)
 
 
 def build_dashboard(

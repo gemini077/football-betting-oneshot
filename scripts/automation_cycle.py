@@ -57,6 +57,7 @@ def _summary(payload: dict) -> dict:
         "frozen", "pending", "insufficient_data", "prediction_failed", "missed_prematch",
         "formal_samples_added", "formal_prospective_total", "results_found", "pending_results",
         "pilot_excluded_settled", "failure_reasons", "error", "output",
+        "target_date", "completed_count", "published_as_latest", "latest_only",
     }
     return {key: value for key, value in payload.items() if key in allowed}
 
@@ -300,6 +301,10 @@ def production_cycle(
             "CARRYOVER_NOT_READY",
         )
     started = current_payload["started_at"]
+    steps["workspace"] = _step("workspace", [
+        sys.executable, "scripts/match_workspace.py", "--date", current_date,
+        "--latest-only",
+    ], optional=True)
     _write_runtime(
         Path(runtime_path),
         business_date=current_date,

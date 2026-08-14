@@ -6,11 +6,14 @@ import argparse
 import json
 import subprocess
 import sys
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from core_match_selector import ROOT, select
+try:
+    from core_match_selector import ROOT, select
+except ImportError:  # package import used by focused tests
+    from scripts.core_match_selector import ROOT, select
 
 SHANGHAI = ZoneInfo("Asia/Shanghai")
 STATE_PATH = ROOT / "data" / "analysis_jobs" / "core_auto_state.json"
@@ -31,12 +34,79 @@ def save(path: Path, value: dict) -> None:
     temporary.replace(path)
 
 
+def _business_date_now(now: datetime | None = None) -> date:
+    current = now or datetime.now(SHANGHAI)
+    if current.tzinfo is None:
+        current = current.replace(tzinfo=SHANGHAI)
+    return current.astimezone(SHANGHAI).date()
+
+
+def _parse_generated_at(value) -> datetime | None:
+    if value in (None, ""):
+        return None
+    try:
+        parsed = datetime.fromisoformat(str(value).strip().replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=SHANGHAI)
+    return parsed.astimezone(SHANGHAI)
+
+
+def validate_workspace(workspace: dict | None, *, now: datetime | None = None) -> dict:
+    """Validate the workspace snapshot before allowing core selection."""
+    if not isinstance(workspace, dict) or not workspace:
+        return {"status": "INVALID_WORKSPACE", "reason": "WORKSPACE_MISSING_OR_INVALID"}
+    target_date = str(workspace.get("target_date") or "").strip()
+    generated_at = _parse_generated_at(workspace.get("generated_at"))
+    if not target_date or generated_at is None:
+        return {"status": "INVALID_WORKSPACE", "reason": "WORKSPACE_SCHEMA_OR_TIMESTAMP_INVALID"}
+    try:
+        parsed_target = date.fromisoformat(target_date)
+    except ValueError:
+        return {"status": "INVALID_WORKSPACE", "reason": "WORKSPACE_TARGET_DATE_INVALID"}
+    current_date = _business_date_now(now)
+    if parsed_target != current_date or generated_at.date() != parsed_target:
+        return {
+            "status": "STALE_WORKSPACE",
+            "reason": "WORKSPACE_BUSINESS_DATE_STALE",
+            "target_date": target_date,
+            "current_business_date": current_date.isoformat(),
+            "generated_at": generated_at.isoformat(),
+        }
+    return {
+        "status": "CURRENT",
+        "target_date": target_date,
+        "current_business_date": current_date.isoformat(),
+        "generated_at": generated_at.isoformat(),
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--max-jobs", type=int, default=2)
     args = parser.parse_args()
-    workspace = load(WORKSPACE, {})
+    workspace = load(WORKSPACE, None)
     state = load(STATE_PATH, {"schema_version": "1.0", "jobs": {}})
+    if not isinstance(state, dict):
+        state = {"schema_version": "1.0", "jobs": {}}
+    state.setdefault("schema_version", "1.0")
+    state.setdefault("jobs", {})
+    validation = validate_workspace(workspace)
+    if validation["status"] != "CURRENT":
+        state["updated_at"] = datetime.now(SHANGHAI).isoformat()
+        state["selected_today"] = []
+        state["last_status"] = validation["status"]
+        state["last_error"] = validation["reason"]
+        save(STATE_PATH, state)
+        print(json.dumps({
+            "status": validation["status"],
+            "reason": validation["reason"],
+            "selected": 0,
+            "completed": 0,
+            "failed": 0,
+        }, ensure_ascii=False))
+        return 1
     chosen = select(workspace.get("matches") or [])
     completed = failed = 0
     for row in chosen:
@@ -71,10 +141,15 @@ def main() -> int:
         state["jobs"][job_key] = record
         save(STATE_PATH, state)
     state["updated_at"] = datetime.now(SHANGHAI).isoformat()
+    state["last_status"] = "SUCCESS" if chosen else "NO_ELIGIBLE_CORE_MATCH"
+    state["last_error"] = None
     state["selected_today"] = [{"id": row.get("id"), "match": f"{row.get('home')} vs {row.get('away')}",
                                  "tier": row.get("core_tier"), "score": row.get("core_score")} for row in chosen]
     save(STATE_PATH, state)
-    print(json.dumps({"selected": len(chosen), "completed": completed, "failed": failed}, ensure_ascii=False))
+    print(json.dumps({
+        "status": "SUCCESS" if chosen else "NO_ELIGIBLE_CORE_MATCH",
+        "selected": len(chosen), "completed": completed, "failed": failed,
+    }, ensure_ascii=False))
     return 0
 
 

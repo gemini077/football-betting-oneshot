@@ -30,6 +30,16 @@ def _kickoff(row: dict) -> str:
     return f"{match_date}T{match_time}:00+08:00" if match_date and match_time else ""
 
 
+def _payload_is_successful(payload: dict) -> bool:
+    """Accept both provider payloads and already-normalized READY snapshots."""
+    if payload.get("success") is True:
+        return True
+    rows = payload.get("matches") or payload.get("fixtures")
+    return bool(rows) and str(payload.get("status") or "").upper() in {
+        "READY", "OK", "OK_API", "OK_FALLBACK_500",
+    }
+
+
 def attach_nowscore_bindings(payloads: list[dict]) -> dict:
     """Resolve every fixture once during schedule intake, before analysis is requested."""
     try:
@@ -143,7 +153,7 @@ def main() -> int:
         for payload in payloads
         for row in payload.get("matches") or []
     }
-    successful_payloads = [payload for payload in payloads if payload.get("success")]
+    successful_payloads = [payload for payload in payloads if _payload_is_successful(payload)]
     # 抓取全部失败时保留旧工作台。失败诊断文件可以落盘，但绝不能用新的页面
     # 生成时间伪装成赛程已更新。
     if not successful_payloads:

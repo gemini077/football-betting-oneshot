@@ -39,9 +39,53 @@ OUTPUT = DATA / "match_workspace"
 RUNTIME = ROOT / "05_RUNTIME_STATE.json"
 SHANGHAI = ZoneInfo("Asia/Shanghai")
 
+STATIC_REFRESH_SCRIPT = """<script>
+(() => {
+  const latestJson = "./latest.json";
+  let currentVersion = null;
+  const versionOf = payload => `${payload?.business_date || ""}|${payload?.generated_at || ""}`;
+  async function checkForUpdate() {
+    if (document.visibilityState !== "visible") return;
+    try {
+      const response = await fetch(`${latestJson}?t=${Date.now()}`, { cache: "no-store" });
+      if (!response.ok) return;
+      const version = versionOf(await response.json());
+      if (version === "|") return;
+      if (currentVersion === null) {
+        currentVersion = version;
+        return;
+      }
+      if (version !== currentVersion) {
+        const url = new URL(window.location.href);
+        url.searchParams.set("v", version);
+        window.location.replace(url.toString());
+      }
+    } catch (_) {}
+  }
+  window.setInterval(checkForUpdate, 60000);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") checkForUpdate();
+  });
+  window.addEventListener("focus", checkForUpdate);
+  checkForUpdate();
+})();
+</script>"""
+
 
 def workspace_now() -> datetime:
     return datetime.now(SHANGHAI)
+
+
+def workspace_business_date(value: datetime | None = None) -> date:
+    current = value or workspace_now()
+    if current.tzinfo is None:
+        current = current.replace(tzinfo=SHANGHAI)
+    return current.astimezone(SHANGHAI).date()
+
+
+def should_publish_latest(target_date: str, generated: datetime | None = None) -> bool:
+    """Use the project business timezone, never the host machine date."""
+    return date.fromisoformat(target_date) >= workspace_business_date(generated)
 
 
 def parse_kickoff_local(value: Any) -> datetime | None:
@@ -765,6 +809,7 @@ def build(
     output_root: Path = OUTPUT,
     *,
     persist_runtime_data: bool = True,
+    latest_only: bool = False,
 ) -> tuple[Path, Path]:
     runtime = load_json(RUNTIME, {})
     base_date = date.fromisoformat(target_date)
@@ -798,8 +843,12 @@ def build(
     reports = latest_reports()
     reviews = review_rows(runtime)
     generated = workspace_now()
-    stamp = generated.strftime("%Y%m%d_%H%M%S")
-    output_dir = create_unique_output_dir(output_root, stamp)
+    if latest_only:
+        output_root.mkdir(parents=True, exist_ok=True)
+        output_dir = output_root
+    else:
+        stamp = generated.strftime("%Y%m%d_%H%M%S")
+        output_dir = create_unique_output_dir(output_root, stamp)
     matches = []
     completed = []
     completed_ids: set[str] = set()
@@ -978,7 +1027,8 @@ def build(
             frozen_tickets = (json.loads(frozen_path.read_text(encoding="utf-8")) or {}).get("tickets") or []
         except (OSError, json.JSONDecodeError, AttributeError):
             frozen_tickets = []
-    sync_channel_price_overrides(frozen_tickets)
+    if persist_runtime_data:
+        sync_channel_price_overrides(frozen_tickets)
     price_overrides_payload = load_json(paper_root / "initial_price_overrides.json", {}) or {}
     initial_price_overrides = price_overrides_payload.get("tickets") or {}
     paper_ledger = build_paper_ledger(
@@ -1023,7 +1073,8 @@ def build(
             ),
             default="",
         ) or None,
-        "published_as_latest": base_date >= date.today(),
+        "published_as_latest": latest_only or should_publish_latest(target_date, generated),
+        "latest_only": latest_only,
         "automatic_analysis": "owner_selected_fifo_plus_bounded_core_events", "automatic_betting": False,
         "requires_explicit_lock_confirmation": True, "lock_state_changed": False,
         "schedule_source": [str(path.relative_to(ROOT)).replace("\\", "/") for path in schedule_sources],
@@ -1038,9 +1089,10 @@ def build(
     }
     embedded = json.dumps(payload, ensure_ascii=False).replace("</", "<\\/")
     html_text = render(embedded)
-    index = output_dir / "index.html"
+    index = output_root / "latest.html" if latest_only else output_dir / "index.html"
     index.write_text(html_text, encoding="utf-8")
-    (output_dir / "workspace.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    workspace_json = output_root / "latest.json" if latest_only else output_dir / "workspace.json"
+    workspace_json.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     if persist_runtime_data:
         (paper_root / "latest.json").write_text(json.dumps(paper_ledger, ensure_ascii=False, indent=2), encoding="utf-8")
         frozen_path.write_text(
@@ -1048,10 +1100,12 @@ def build(
             encoding="utf-8",
         )
     latest = output_root / "latest.html"
-    publish_latest = base_date >= date.today()
-    if publish_latest:
+    publish_latest = should_publish_latest(target_date, generated)
+    if not latest_only and publish_latest:
         shutil.copy2(index, latest)
         (output_root / "latest.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    if latest_only:
+        latest = index
     return index, latest
 
 
@@ -1197,18 +1251,34 @@ $('#tabPrematch').onclick=()=>current?showPrematch():showEmpty('请先选择比�
         "$('#closeDialog').onclick=()=>$('#reportDialog').close();",
         "$('#openAllReviews').onclick=openAllReviews;",
     )
-    return html_page
+    return html_page.replace("</body>", STATIC_REFRESH_SCRIPT + "</body>", 1)
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="生成统一赛程、赛前分析和赛后复盘工作台")
-    parser.add_argument("--date", default=date.today().isoformat())
+    parser.add_argument("--date", default=workspace_business_date().isoformat())
     parser.add_argument("--output-root", default=str(OUTPUT))
+    parser.add_argument("--latest-only", action="store_true")
     args = parser.parse_args()
-    index, latest = build(args.date, Path(args.output_root))
+    index, latest = build(
+        args.date,
+        Path(args.output_root),
+        persist_runtime_data=not args.latest_only,
+        latest_only=args.latest_only,
+    )
+    workspace_path = Path(args.output_root) / "latest.json" if args.latest_only else index.parent / "workspace.json"
+    try:
+        payload = json.loads(workspace_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        payload = {}
+    match_count = len(payload.get("matches") or []) + len(payload.get("completed") or [])
     print(json.dumps({
         "index": str(index), "latest": str(latest),
-        "published_as_latest": date.fromisoformat(args.date) >= date.today(),
+        "target_date": args.date,
+        "match_count": match_count,
+        "completed_count": len(payload.get("completed") or []),
+        "published_as_latest": args.latest_only or should_publish_latest(args.date, workspace_now()),
+        "latest_only": args.latest_only,
         "automatic_analysis": "owner_selected_fifo_plus_bounded_core_events", "lock_state_changed": False,
     }, ensure_ascii=False, indent=2))
     return 0

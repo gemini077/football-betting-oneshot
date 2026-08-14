@@ -48,6 +48,13 @@ def _healthy_tree(tmp_path, *, universe_status="READY", fixture_count=1, jobs=No
         "status": "PENDING",
     }]
     _write_json(data / "product_runtime" / "latest_cycle.json", _base_cycle())
+    _write_json(data / "match_workspace" / "latest.json", {
+        "schema_version": "1.0",
+        "target_date": "2026-08-12",
+        "generated_at": "2026-08-12T10:01:00+08:00",
+        "matches": [fixture],
+        "completed": [],
+    })
     _write_json(data / "prediction_universe" / "2026-08-12.json", {
         "schema_version": "1.0",
         "business_date": "2026-08-12",
@@ -95,6 +102,41 @@ def test_healthy_cycle_is_silent(tmp_path):
     assert result["status"] == "HEALTHY"
     assert result["notify"] is False
     assert result["reasons"] == []
+
+
+def test_current_workspace_has_no_freshness_reason(tmp_path):
+    result = evaluate_health(root=_healthy_tree(tmp_path))
+
+    assert "MATCH_WORKSPACE_STALE" not in result["reasons"]
+    assert "MATCH_WORKSPACE_INVALID" not in result["reasons"]
+
+
+def test_stale_workspace_is_detected(tmp_path):
+    root = _healthy_tree(tmp_path)
+    _write_json(root / "data" / "match_workspace" / "latest.json", {
+        "schema_version": "1.0",
+        "target_date": "2026-08-11",
+        "generated_at": "2026-08-11T10:01:00+08:00",
+        "matches": [],
+        "completed": [],
+    })
+
+    result = evaluate_health(root=root)
+
+    assert result["status"] == "ALERT"
+    assert result["notify"] is True
+    assert "MATCH_WORKSPACE_STALE" in result["reasons"]
+
+
+def test_missing_workspace_is_not_healthy(tmp_path):
+    root = _healthy_tree(tmp_path)
+    (root / "data" / "match_workspace" / "latest.json").unlink()
+
+    result = evaluate_health(root=root)
+
+    assert result["status"] == "ALERT"
+    assert result["notify"] is True
+    assert "MATCH_WORKSPACE_INVALID" in result["reasons"]
 
 
 def test_normal_business_states_do_not_alert(tmp_path):
