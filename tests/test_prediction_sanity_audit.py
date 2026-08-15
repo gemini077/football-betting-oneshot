@@ -1,16 +1,25 @@
 import hashlib
 import json
+import math
+import subprocess
 from pathlib import Path
+
+import pytest
 
 from scripts.prediction_sanity_audit import (
     classify_sample_tier,
+    _REPLAY_CHILD,
+    _commit_model_source_fingerprint,
     goal_error_metrics,
     matrix_map,
     outcome_conditioned_map,
     outcome_consistency,
+    paired_method_metrics,
+    replay_result_against_frozen,
     run_audit,
     scenario_score_from_record,
     score_margin,
+    score_nll_for_record,
     select_score_methods,
     verified_result_from_ledger_entry,
 )
@@ -144,3 +153,122 @@ def test_goal_and_outcome_methods_report_insufficient_dixon_coles_sample():
     assert methods["matrix_map"] == "1-1"
     assert methods["outcome_conditioned_map"] == "1-0"
     assert methods["dixon_coles_shadow"] is None
+
+
+def test_score_nll_missing_frozen_actual_probability_is_unavailable_without_epsilon():
+    record = {"score_distribution": [{"score": "1-1", "probability": 0.25, "rank": 1}]}
+    result = score_nll_for_record(record, "2-0", {})
+    assert result["status"] == "UNAVAILABLE"
+    assert result["value"] is None
+    assert result["reason"] == "MISSING_FROZEN_ACTUAL_SCORE_PROBABILITY"
+
+
+def test_score_nll_reconstructs_from_explicit_frozen_probability():
+    record = {"score_distribution": [{"score": "2-0", "probability": 0.25, "rank": 1}]}
+    result = score_nll_for_record(record, "2-0", {})
+    assert result["status"] == "AVAILABLE"
+    assert result["source"] == "FROZEN_SCORE_DISTRIBUTION"
+    assert result["value"] == pytest.approx(-math.log(0.25))
+
+
+def test_score_nll_ledger_value_is_cross_checked_and_mismatch_is_reported():
+    record = {"score_distribution": [{"score": "2-0", "probability": 0.25, "rank": 1}]}
+    matching = score_nll_for_record(record, "2-0", {"actual_score_nll": -math.log(0.25), "actual_score_nll_status": None})
+    mismatching = score_nll_for_record(record, "2-0", {"actual_score_nll": 9.0, "actual_score_nll_status": None})
+    assert matching["status"] == "AVAILABLE"
+    assert matching["reconstruction_match"] is True
+    assert mismatching["status"] == "MISMATCH"
+    assert mismatching["reason"] == "NLL_RECONSTRUCTION_MISMATCH"
+    assert mismatching["value"] is None
+
+
+def test_score_nll_unavailable_ledger_status_is_not_replaced_by_epsilon():
+    record = {"score_distribution": [{"score": "1-1", "probability": 0.25, "rank": 1}]}
+    result = score_nll_for_record(
+        record,
+        "2-0",
+        {"actual_score_nll": None, "actual_score_nll_status": "UNAVAILABLE_IN_FROZEN_RECORD"},
+    )
+    assert result["status"] == "UNAVAILABLE"
+    assert result["reason"] == "UNAVAILABLE_IN_FROZEN_RECORD"
+    assert result["value"] is None
+
+
+def _replay_record():
+    return {
+        "prediction_id": "p-replay",
+        "match_id": "m-replay",
+        "repository_commit_sha": "abc123",
+        "model_source_fingerprint": "source-fp",
+        "model_family": "test-model",
+        "release_version": "v-test",
+        "input_snapshot_ref": "data/model_governance/input_snapshots/frozen.json",
+        "unique_score": "1-1",
+        "score_distribution": [
+            {"score": "1-1", "probability": 0.40, "rank": 1},
+            {"score": "2-0", "probability": 0.30, "rank": 2},
+            {"score": "0-1", "probability": 0.20, "rank": 3},
+        ],
+        "postmatch": {"actual_score": "9-9"},
+    }
+
+
+def _replay_result(*, scenario="2-0", top1="1-1"):
+    rows = [
+        {"score": top1, "probability": 0.40, "rank": 1},
+        {"score": "2-0", "probability": 0.30, "rank": 2},
+        {"score": "0-1", "probability": 0.20, "rank": 3},
+    ]
+    return {
+        "model": {"method": "test-model", "score_probabilities": rows},
+        "decisions": {"score_selection_trace": {"scenario_selected_score": scenario}},
+    }
+
+
+def test_replay_matrix_match_allows_freeze_time_scenario_challenger_without_using_actual_result():
+    comparison = replay_result_against_frozen(_replay_record(), _replay_result())
+    assert comparison["replay_status"] == "REPLAY_VALID"
+    assert comparison["matrix_match"] is True
+    assert comparison["frozen_matrix_map"] == "1-1"
+    assert comparison["replayed_matrix_map"] == "1-1"
+    assert comparison["scenario_challenger"] == "2-0"
+    assert comparison["actual_score"] is None
+
+
+def test_replay_matrix_mismatch_excludes_scenario_challenger():
+    comparison = replay_result_against_frozen(_replay_record(), _replay_result(top1="3-0"))
+    assert comparison["replay_status"] == "REPLAY_MISMATCH"
+    assert comparison["matrix_match"] is False
+    assert comparison["scenario_challenger"] is None
+
+
+def test_replay_does_not_extend_official_frozen_candidate_pool():
+    comparison = replay_result_against_frozen(_replay_record(), _replay_result(scenario="3-1"))
+    assert comparison["replay_status"] == "REPLAY_VALID"
+    assert comparison["scenario_challenger"] == "3-1"
+    assert comparison["frozen_top3"] == ["1-1", "2-0", "0-1"]
+    assert "3-1" not in comparison["frozen_top3"]
+
+
+def test_paired_method_metrics_use_identical_replay_valid_sample():
+    evaluated = [
+        {"methods": {"matrix_map": "1-0", "scenario_challenger": "1-1"}, "actual_score": "1-0", "actual_outcome": "home", "stored_scores": ["1-0"]},
+        {"methods": {"matrix_map": "1-1", "scenario_challenger": None}, "actual_score": "0-0", "actual_outcome": "draw", "stored_scores": ["1-1"]},
+    ]
+    result = paired_method_metrics(evaluated, "matrix_map", "scenario_challenger")
+    assert result["paired_sample_count"] == 1
+    assert result["matrix_map"]["available"] == 1
+    assert result["scenario_challenger"]["available"] == 1
+
+
+def test_replay_child_is_network_blocked_and_receives_only_frozen_projection():
+    assert "network disabled for freeze-time audit replay" in _REPLAY_CHILD
+    assert "request[\"projection\"]" in _REPLAY_CHILD
+    assert "postmatch" not in _REPLAY_CHILD
+    assert "actual_score" not in _REPLAY_CHILD
+
+
+def test_replay_source_identity_is_derived_from_committed_git_blobs():
+    root = Path(__file__).resolve().parents[1]
+    commit = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()
+    assert _commit_model_source_fingerprint(root, commit)

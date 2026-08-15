@@ -10,11 +10,16 @@ shadow-audit tooling without coupling the audit to the production runner.
 from __future__ import annotations
 
 import argparse
+import ast
 import csv
 import hashlib
 import json
 import math
+import os
+import shutil
 import re
+import subprocess
+import sys
 import tempfile
 from collections import Counter
 from datetime import date, datetime
@@ -30,6 +35,24 @@ except ImportError:  # pragma: no cover - Python 3.8 fallback
 
 AUDIT_SCHEMA_VERSION = "1.0"
 DEFAULT_CALIBRATION_REVIEW_SAMPLES = 40
+SCORE_NLL_TOLERANCE = 1e-6
+REPLAY_PROBABILITY_TOLERANCE = 1e-6
+REPLAY_SOURCE_COMPONENTS = (
+    ("scripts/automatic_model_core.py", None),
+    ("scripts/risk_engine.py", None),
+    ("scripts/market_contracts.py", None),
+    ("scripts/checkpoint_features.py", None),
+    ("scripts/prematch_fundamentals.py", None),
+    ("scripts/match_identity.py", "canonical_match_id"),
+    ("scripts/deepseek_auto_analysis.py", "prune"),
+    ("scripts/deepseek_auto_analysis.py", "selected_workspace_match"),
+    ("scripts/deepseek_auto_analysis.py", "analysis_context"),
+    ("scripts/model_governance.py", "_pick"),
+    ("scripts/model_governance.py", "_project_market_snapshot"),
+    ("scripts/model_governance.py", "_number"),
+    ("scripts/model_governance.py", "effective_calibration_projection"),
+    ("scripts/model_governance.py", "build_deterministic_model_input_projection"),
+)
 SCORE_RE = re.compile(r"^\s*(\d+)\s*[-–—:]\s*(\d+)\s*$")
 EXTRA_TIME_TOKENS = ("extra_time", "extratime", "penalty", "shootout", "after_extra")
 
@@ -154,6 +177,88 @@ def _score_rows(record: dict) -> list[dict]:
         if rows:
             return rows
     return []
+
+
+def score_nll_for_record(
+    record: dict,
+    actual_score: str | None,
+    ledger_metrics: dict | None = None,
+    *,
+    tolerance: float = SCORE_NLL_TOLERANCE,
+) -> dict[str, Any]:
+    """Return a truthful frozen exact-score NLL result.
+
+    A score outside the frozen candidate distribution is *unavailable*, not a
+    probability of zero approximated with an epsilon.  When the settlement
+    ledger carries an NLL and the frozen row is present, the two values are
+    cross-checked before either is used.
+    """
+    metrics = ledger_metrics if isinstance(ledger_metrics, dict) else {}
+    status = str(metrics.get("actual_score_nll_status") or "").strip()
+    ledger_value = _as_float(metrics.get("actual_score_nll"))
+    base = {
+        "status": "UNAVAILABLE",
+        "value": None,
+        "reason": None,
+        "source": None,
+        "frozen_probability": None,
+        "ledger_value": ledger_value,
+        "reconstructed_value": None,
+        "reconstruction_match": None,
+        "tolerance": tolerance,
+    }
+
+    if status == "UNAVAILABLE_IN_FROZEN_RECORD":
+        base["reason"] = status
+        return base
+    if status and ledger_value is None:
+        base["reason"] = status
+        return base
+
+    score = _score_string(actual_score)
+    frozen_probability = None
+    if score:
+        frozen_probability = next(
+            (
+                _as_float(row.get("probability"))
+                for row in _score_rows(record)
+                if row.get("score") == score and _as_float(row.get("probability")) is not None
+            ),
+            None,
+        )
+    base["frozen_probability"] = frozen_probability
+
+    if frozen_probability is not None and frozen_probability > 0:
+        reconstructed = -math.log(frozen_probability)
+        base["reconstructed_value"] = reconstructed
+        if ledger_value is not None:
+            matches = abs(ledger_value - reconstructed) <= tolerance
+            base["reconstruction_match"] = matches
+            if not matches:
+                base["status"] = "MISMATCH"
+                base["reason"] = "NLL_RECONSTRUCTION_MISMATCH"
+                return base
+            base["status"] = "AVAILABLE"
+            base["value"] = reconstructed
+            base["source"] = "LEDGER_CROSS_CHECKED_FROZEN_SCORE_DISTRIBUTION"
+            return base
+        base["status"] = "AVAILABLE"
+        base["value"] = reconstructed
+        base["source"] = "FROZEN_SCORE_DISTRIBUTION"
+        return base
+
+    # A valid ledger metric is an allowed frozen metric source even when the
+    # actual score row was not retained in the frozen top-k projection.  It is
+    # never replaced with a fabricated near-zero probability.
+    if ledger_value is not None:
+        base["status"] = "AVAILABLE"
+        base["value"] = ledger_value
+        base["source"] = "LEDGER_METRICS"
+        base["reason"] = "FROZEN_PROBABILITY_NOT_RECONSTRUCTABLE"
+        return base
+
+    base["reason"] = "MISSING_FROZEN_ACTUAL_SCORE_PROBABILITY"
+    return base
 
 
 def _outcome(score: Any) -> str | None:
@@ -349,6 +454,414 @@ def select_score_methods(record: dict, dixon_coles_available: bool = True) -> di
     if not dixon_coles_available:
         methods["dixon_coles_shadow"] = None
     return methods
+
+
+def _canonical_sha256(value: Any) -> str:
+    payload = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False)
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _commit_model_source_fingerprint(root: Path, commit_sha: str) -> str | None:
+    """Hash the committed source bytes, avoiding host checkout line endings."""
+    component_hashes: dict[str, str | None] = {}
+    for relative, symbol in REPLAY_SOURCE_COMPONENTS:
+        try:
+            source_bytes = subprocess.check_output(
+                ["git", "show", f"{commit_sha}:{relative}"],
+                cwd=root,
+                stderr=subprocess.DEVNULL,
+            )
+        except (OSError, subprocess.CalledProcessError):
+            component_hashes[f"{relative}::{symbol}" if symbol else relative] = None
+            continue
+        key = f"{relative}::{symbol}" if symbol else relative
+        if symbol:
+            try:
+                source = source_bytes.decode("utf-8")
+                tree = ast.parse(source, filename=relative)
+                segment = next(
+                    (
+                        ast.get_source_segment(source, node)
+                        for node in tree.body
+                        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
+                        and node.name == symbol
+                    ),
+                    None,
+                )
+                component_hashes[key] = hashlib.sha256((segment or "").encode("utf-8")).hexdigest() if segment is not None else None
+            except (UnicodeError, SyntaxError):
+                component_hashes[key] = None
+        else:
+            component_hashes[key] = hashlib.sha256(source_bytes).hexdigest()
+    if any(value is None for value in component_hashes.values()):
+        return None
+    return _canonical_sha256({"algorithm": "sha256", "components": component_hashes})
+
+
+def _replay_score_rows(replay_result: dict) -> list[dict]:
+    model = replay_result.get("model") if isinstance(replay_result, dict) else None
+    if not isinstance(model, dict):
+        return []
+    for key in ("score_probabilities", "score_distribution", "score_matrix", "top_scores"):
+        rows = _score_rows_from_candidate(model.get(key))
+        if rows:
+            return rows
+    return []
+
+
+def _top_score_rows(rows: list[dict], limit: int = 3) -> list[dict]:
+    ordered = sorted(rows, key=lambda row: (_as_int(row.get("rank")) or 10**9, -(float(row.get("probability")) if _as_float(row.get("probability")) is not None else -1.0)))
+    return ordered[:limit]
+
+
+def replay_result_against_frozen(
+    record: dict,
+    replay_result: dict,
+    *,
+    tolerance: float = REPLAY_PROBABILITY_TOLERANCE,
+    actual_score: str | None = None,
+) -> dict[str, Any]:
+    """Apply the replay sanity gate without using any postmatch data.
+
+    The frozen score rows remain the official candidate set.  A replayed
+    scenario score is only exposed when the replay reproduces the frozen
+    matrix MAP and frozen Top-3 probabilities within ``tolerance``.
+    ``actual_score`` is an explicit post-selection evaluation argument and is
+    never read from ``record``.
+    """
+    model = replay_result.get("model") if isinstance(replay_result, dict) else {}
+    model = model if isinstance(model, dict) else {}
+    expected_family = str(record.get("model_family") or "").strip()
+    replayed_family = str(model.get("method") or "").strip()
+    result: dict[str, Any] = {
+        "prediction_id": _record_id(record),
+        "match_id": _record_match_id(record),
+        "repository_commit_sha": record.get("repository_commit_sha"),
+        "input_snapshot_ref": record.get("input_snapshot_ref") or record.get("model_input_snapshot_ref") or _nested_dict(record, "input_snapshot").get("snapshot_ref"),
+        "model_family": expected_family,
+        "replayed_model_family": replayed_family or None,
+        "release_version": record.get("release_version"),
+        "replay_status": "REPLAY_MISMATCH",
+        "replay_reason": None,
+        "frozen_matrix_map": None,
+        "replayed_matrix_map": None,
+        "matrix_match": False,
+        "frozen_top3": [],
+        "replayed_top3": [],
+        "frozen_top3_probabilities": {},
+        "replayed_top3_probabilities": {},
+        "probability_tolerance": tolerance,
+        "scenario_challenger": None,
+        "scenario_same_as_matrix": None,
+        "scenario_different_from_matrix": None,
+        "scenario_in_frozen_top3": None,
+        "actual_score": actual_score,
+    }
+    if expected_family and replayed_family and expected_family != replayed_family:
+        result["replay_status"] = "REPLAY_UNAVAILABLE"
+        result["replay_reason"] = "MODEL_FAMILY_MISMATCH"
+        return result
+
+    frozen_rows = _score_rows(record)
+    replayed_rows = _replay_score_rows(replay_result)
+    frozen_top3_rows = _top_score_rows(frozen_rows)
+    replayed_top3_rows = _top_score_rows(replayed_rows)
+    result["frozen_top3"] = [row["score"] for row in frozen_top3_rows]
+    result["replayed_top3"] = [row["score"] for row in replayed_top3_rows]
+    result["frozen_top3_probabilities"] = {
+        row["score"]: _as_float(row.get("probability")) for row in frozen_top3_rows if _as_float(row.get("probability")) is not None
+    }
+    result["replayed_top3_probabilities"] = {
+        row["score"]: _as_float(row.get("probability")) for row in replayed_top3_rows if _as_float(row.get("probability")) is not None
+    }
+    result["frozen_matrix_map"] = matrix_map(frozen_rows)
+    result["replayed_matrix_map"] = matrix_map(replayed_rows)
+    if not frozen_top3_rows or not replayed_top3_rows:
+        result["replay_reason"] = "REPLAY_SCORE_DISTRIBUTION_MISSING"
+        return result
+
+    scores_match = result["frozen_top3"] == result["replayed_top3"]
+    probabilities_match = scores_match and all(
+        frozen_row.get("probability") is not None
+        and replayed_row.get("probability") is not None
+        and abs(float(frozen_row["probability"]) - float(replayed_row["probability"])) <= tolerance
+        for frozen_row, replayed_row in zip(frozen_top3_rows, replayed_top3_rows)
+    )
+    matrix_match = bool(
+        result["frozen_matrix_map"]
+        and result["frozen_matrix_map"] == result["replayed_matrix_map"]
+        and scores_match
+        and probabilities_match
+    )
+    result["matrix_match"] = matrix_match
+    if not matrix_match:
+        result["replay_reason"] = "REPLAY_MATRIX_MAP_OR_TOP3_MISMATCH"
+        return result
+
+    scenario = scenario_score_from_record(replay_result)
+    result["replay_status"] = "REPLAY_VALID"
+    result["scenario_challenger"] = scenario
+    if scenario:
+        result["scenario_same_as_matrix"] = scenario == result["replayed_matrix_map"]
+        result["scenario_different_from_matrix"] = scenario != result["replayed_matrix_map"]
+        result["scenario_in_frozen_top3"] = scenario in result["frozen_top3"]
+    return result
+
+
+def _safe_replay_path(root: Path, relative_ref: str) -> Path | None:
+    candidate = Path(str(relative_ref))
+    if candidate.is_absolute() or ".." in candidate.parts:
+        return None
+    resolved_root = root.resolve()
+    resolved = (root / candidate).resolve()
+    try:
+        resolved.relative_to(resolved_root)
+    except ValueError:
+        return None
+    return resolved
+
+
+def _load_replay_snapshot(record: dict, root: Path) -> tuple[dict, dict, str] | tuple[None, None, str]:
+    metadata = record.get("input_snapshot") if isinstance(record.get("input_snapshot"), dict) else {}
+    reference = record.get("input_snapshot_ref") or record.get("model_input_snapshot_ref") or metadata.get("snapshot_ref")
+    expected_hash = str(record.get("canonical_model_input_sha256") or record.get("input_sha256") or metadata.get("canonical_input_sha256") or "")
+    snapshot_path = _safe_replay_path(root, str(reference)) if reference else None
+    if snapshot_path is None and expected_hash:
+        snapshot_path = root / "data" / "model_governance" / "input_snapshots" / f"{expected_hash}.json"
+    if snapshot_path is None or not snapshot_path.is_file():
+        return None, None, "INPUT_SNAPSHOT_UNAVAILABLE"
+    try:
+        document = json.loads(snapshot_path.read_text(encoding="utf-8-sig"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        return None, None, "INPUT_SNAPSHOT_INVALID"
+    if not isinstance(document, dict):
+        return None, None, "INPUT_SNAPSHOT_INVALID"
+    if metadata.get("snapshot_id") and document.get("snapshot_id") != metadata.get("snapshot_id"):
+        return None, None, "INPUT_SNAPSHOT_ID_MISMATCH"
+    input_payload = document.get("input")
+    if not isinstance(input_payload, dict):
+        input_payload = document.get("projection")
+    if not isinstance(input_payload, dict):
+        return None, None, "INPUT_SNAPSHOT_PROJECTION_MISSING"
+    document_hash = document.get("canonical_input_sha256") or document.get("canonical_model_input_sha256")
+    calculated_hash = _canonical_sha256(input_payload)
+    if document_hash and document_hash != calculated_hash:
+        return None, None, "INPUT_SNAPSHOT_HASH_MISMATCH"
+    if expected_hash and calculated_hash != expected_hash:
+        return None, None, "INPUT_SNAPSHOT_RECORD_HASH_MISMATCH"
+    return document, input_payload, str(snapshot_path.relative_to(root))
+
+
+def _git_commit_exists(root: Path, commit_sha: str) -> bool:
+    if not re.fullmatch(r"[0-9a-fA-F]{7,40}", commit_sha):
+        return False
+    try:
+        completed = subprocess.run(
+            ["git", "cat-file", "-e", f"{commit_sha}^{{commit}}"],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except OSError:
+        return False
+    return completed.returncode == 0
+
+
+def _create_replay_worktree(root: Path, commit_sha: str, parent: Path) -> Path | None:
+    for attempt in range(3):
+        suffix = "" if attempt == 0 else f"-{attempt}"
+        path = parent / f"commit-{commit_sha[:12]}{suffix}"
+        if path.exists():
+            try:
+                existing = subprocess.run(
+                    ["git", "-C", str(path), "rev-parse", "HEAD"],
+                    cwd=root,
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                if existing.returncode == 0 and existing.stdout.strip().startswith(commit_sha):
+                    return path
+            except OSError:
+                pass
+            shutil.rmtree(path, ignore_errors=True)
+        try:
+            completed = subprocess.run(
+                ["git", "worktree", "add", "--detach", str(path), commit_sha],
+                cwd=root,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+        except OSError:
+            continue
+        if completed.returncode == 0 and path.is_dir():
+            return path
+    return None
+
+
+_REPLAY_CHILD = r'''import json, socket, sys
+
+class _NetworkBlockedSocket:
+    def __init__(self, *args, **kwargs):
+        raise RuntimeError("network disabled for freeze-time audit replay")
+
+socket.socket = _NetworkBlockedSocket
+request = json.load(sys.stdin)
+from automatic_model_core import MODEL_FAMILY, build_automatic_model
+from deepseek_auto_analysis import MODEL_VERSION
+from model_governance import load_config, model_source_fingerprint
+
+config = load_config()
+champion = config.get("champion") or {}
+identity = {
+    "model_family": MODEL_FAMILY,
+    "release_version": MODEL_VERSION,
+    "configured_model_family": champion.get("model_family"),
+    "configured_release_version": champion.get("release_version"),
+    "model_source_fingerprint": model_source_fingerprint().get("fingerprint"),
+}
+if request.get("expected_model_family") and identity["model_family"] != request["expected_model_family"]:
+    raise RuntimeError("freeze-time model family identity mismatch")
+if request.get("expected_release_version") and identity["release_version"] != request["expected_release_version"]:
+    raise RuntimeError("freeze-time release identity mismatch")
+result = build_automatic_model(request["projection"])
+print(json.dumps({"model": result.get("model"), "decisions": result.get("decisions"), "identity": identity}, ensure_ascii=False, separators=(",", ":")))
+'''
+
+
+def replay_frozen_prediction(
+    record: dict,
+    root: Path | str,
+    worktree_parent: Path,
+    worktree_cache: dict[str, Path],
+    *,
+    tolerance: float = REPLAY_PROBABILITY_TOLERANCE,
+) -> dict[str, Any]:
+    """Replay one record in an isolated checkout of its freeze-time commit."""
+    root = Path(root).resolve()
+    commit_sha = str(record.get("repository_commit_sha") or "").strip()
+    base = {
+        "prediction_id": _record_id(record),
+        "match_id": _record_match_id(record),
+        "repository_commit_sha": commit_sha or None,
+        "input_snapshot_ref": record.get("input_snapshot_ref") or record.get("model_input_snapshot_ref") or _nested_dict(record, "input_snapshot").get("snapshot_ref"),
+        "model_family": record.get("model_family"),
+        "release_version": record.get("release_version"),
+        "replay_status": "REPLAY_UNAVAILABLE",
+        "replay_reason": None,
+        "matrix_match": None,
+        "frozen_matrix_map": None,
+        "replayed_matrix_map": None,
+        "frozen_top3": [],
+        "replayed_top3": [],
+        "scenario_challenger": None,
+        "scenario_same_as_matrix": None,
+        "scenario_different_from_matrix": None,
+        "scenario_in_frozen_top3": None,
+        "actual_score": None,
+        "probability_tolerance": tolerance,
+    }
+    if not commit_sha or not _git_commit_exists(root, commit_sha):
+        base["replay_reason"] = "REPOSITORY_COMMIT_UNAVAILABLE"
+        return base
+    committed_fingerprint = _commit_model_source_fingerprint(root, commit_sha)
+    if not committed_fingerprint:
+        base["replay_reason"] = "MODEL_SOURCE_FINGERPRINT_UNAVAILABLE"
+        return base
+    if committed_fingerprint != str(record.get("model_source_fingerprint") or ""):
+        base["replay_reason"] = "MODEL_SOURCE_FINGERPRINT_MISMATCH"
+        base["freeze_time_model_source_fingerprint"] = committed_fingerprint
+        return base
+    if not record.get("model_family") or not record.get("release_version") or not record.get("model_source_fingerprint"):
+        base["replay_reason"] = "MODEL_IDENTITY_INCOMPLETE"
+        return base
+    _, projection, snapshot_reason = _load_replay_snapshot(record, root)
+    if projection is None:
+        base["replay_reason"] = snapshot_reason
+        return base
+    worktree = worktree_cache.get(commit_sha)
+    if worktree is None or not worktree.is_dir():
+        worktree = _create_replay_worktree(root, commit_sha, worktree_parent)
+        if worktree is None:
+            base["replay_reason"] = "FREEZE_TIME_WORKTREE_UNAVAILABLE"
+            return base
+        worktree_cache[commit_sha] = worktree
+    request = {
+        "projection": projection,
+        "expected_model_family": record.get("model_family"),
+        "expected_release_version": record.get("release_version"),
+    }
+    try:
+        completed = subprocess.run(
+            [sys.executable, "-c", _REPLAY_CHILD],
+            cwd=worktree,
+            input=json.dumps(request, ensure_ascii=False, allow_nan=False),
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=120,
+            env={**os.environ, "PYTHONPATH": str(worktree / "scripts")},
+        )
+    except (OSError, subprocess.SubprocessError) as error:
+        base["replay_reason"] = f"REPLAY_PROCESS_ERROR:{type(error).__name__}"
+        return base
+    if completed.returncode != 0:
+        base["replay_reason"] = "REPLAY_PROCESS_FAILED"
+        base["replay_error"] = (completed.stderr or "").strip()[-500:]
+        return base
+    try:
+        payload = json.loads((completed.stdout or "").strip().splitlines()[-1])
+    except (IndexError, json.JSONDecodeError):
+        base["replay_reason"] = "REPLAY_OUTPUT_INVALID"
+        return base
+    comparison = replay_result_against_frozen(record, payload, tolerance=tolerance)
+    comparison["freeze_time_identity"] = payload.get("identity") if isinstance(payload, dict) else None
+    comparison["freeze_time_model_source_fingerprint"] = committed_fingerprint
+    return comparison
+
+
+def replay_frozen_records(
+    records: list[dict],
+    root: Path | str,
+    *,
+    tolerance: float = REPLAY_PROBABILITY_TOLERANCE,
+) -> list[dict[str, Any]]:
+    """Replay records with one temporary worktree per unique freeze commit."""
+    root = Path(root).resolve()
+    parent = Path(tempfile.mkdtemp(prefix="football-pa1-r1-replay-"))
+    grouped: dict[str, list[tuple[int, dict]]] = {}
+    for index, record in enumerate(records):
+        grouped.setdefault(str(record.get("repository_commit_sha") or ""), []).append((index, record))
+    indexed_results: list[dict[str, Any] | None] = [None] * len(records)
+    try:
+        # Keep only one full checkout alive at a time.  Besides reducing
+        # temporary disk pressure, this avoids Windows Git worktree locks when
+        # several historical commits are replayed in one audit.
+        for group in grouped.values():
+            cache: dict[str, Path] = {}
+            try:
+                for index, record in group:
+                    indexed_results[index] = replay_frozen_prediction(
+                        record, root, parent, cache, tolerance=tolerance
+                    )
+            finally:
+                for worktree in list(cache.values()):
+                    subprocess.run(
+                        ["git", "worktree", "remove", "--force", str(worktree)],
+                        cwd=root,
+                        capture_output=True,
+                        text=True,
+                        check=False,
+                    )
+    finally:
+        shutil.rmtree(parent, ignore_errors=True)
+    return [result or {
+        "prediction_id": _record_id(records[index]),
+        "replay_status": "REPLAY_UNAVAILABLE",
+        "replay_reason": "REPLAY_RESULT_MISSING",
+    } for index, result in enumerate(indexed_results)]
 
 
 def _iter_json_files(directory: Path) -> Iterable[tuple[Path, dict]]:
@@ -595,6 +1108,9 @@ def _metric_for_method(name: str, evaluated: list[dict]) -> dict:
             "outcome_consistency_rate": None,
             "goal_mae": None,
             "goal_difference_mae": None,
+            "selection_outcome_accuracy": None,
+            "selected_goal_mae": None,
+            "selected_goal_difference_mae": None,
         }
     hits = [row["methods"][name] == row["actual_score"] for row in available]
     top3 = [row["actual_score"] in row.get("stored_scores", [])[:3] for row in available]
@@ -617,7 +1133,7 @@ def _metric_for_method(name: str, evaluated: list[dict]) -> dict:
     method_goal_errors = [goal_error_metrics(row["methods"][name], row.get("actual") or {}) for row in available]
     goal_errors = [item["total_goal_absolute_error"] for item in method_goal_errors if item]
     difference_errors = [item["goal_difference_absolute_error"] for item in method_goal_errors if item]
-    return {
+    metric = {
         "available": len(available),
         "exact_score_top1_accuracy": round(sum(hits) / len(hits), 6),
         "stored_top3_coverage": round(sum(top3) / len(top3), 6),
@@ -631,6 +1147,24 @@ def _metric_for_method(name: str, evaluated: list[dict]) -> dict:
         "away_leader_count": len(away_leader),
         "goal_mae": round(fmean(goal_errors), 6) if goal_errors else None,
         "goal_difference_mae": round(fmean(difference_errors), 6) if difference_errors else None,
+    }
+    metric["selection_outcome_accuracy"] = metric["outcome_accuracy"]
+    metric["selected_goal_mae"] = metric["goal_mae"]
+    metric["selected_goal_difference_mae"] = metric["goal_difference_mae"]
+    return metric
+
+
+def paired_method_metrics(evaluated: list[dict], first_method: str, second_method: str) -> dict[str, Any]:
+    """Compare two methods on exactly the rows where both are available."""
+    paired = [
+        row for row in evaluated
+        if row.get("methods", {}).get(first_method)
+        and row.get("methods", {}).get(second_method)
+    ]
+    return {
+        "paired_sample_count": len(paired),
+        first_method: _metric_for_method(first_method, paired),
+        second_method: _metric_for_method(second_method, paired),
     }
 
 
@@ -711,23 +1245,27 @@ def _model_method_comparison(evaluated: list[dict]) -> list[dict]:
 def _summarise_method_rows(evaluated: list[dict]) -> dict:
     names = ("matrix_map", "outcome_conditioned_map", "scenario_challenger", "dixon_coles_shadow")
     result = {name: _metric_for_method(name, evaluated) for name in names}
-    score_nll_values = []
-    for row in evaluated:
-        probability = next(
-            (
-                _as_float(raw.get("probability"))
-                for raw in _score_rows(row["record"])
-                if raw["score"] == row["actual_score"] and raw.get("probability") is not None
-            ),
-            None,
-        )
-        score_nll_values.append(-math.log(max(probability or 1e-12, 1e-12)))
+    nll_results = [
+        score_nll_for_record(row["record"], row["actual_score"], row.get("ledger_metrics"))
+        for row in evaluated
+    ]
+    score_nll_values = [item["value"] for item in nll_results if item.get("status") == "AVAILABLE"]
+    unavailable_reason_counts = Counter(
+        str(item.get("reason"))
+        for item in nll_results
+        if item.get("status") == "UNAVAILABLE" and item.get("reason")
+    )
     result["underlying_frozen_distribution"] = {
         "available": len(evaluated),
         "top3_coverage": _mean_or_none(float(row["actual_score"] in row.get("stored_scores", [])[:3]) for row in evaluated),
         "top5_coverage": _mean_or_none(float(row["actual_score"] in row.get("stored_scores", [])[:5]) for row in evaluated),
         "top10_coverage": _mean_or_none(float(row["actual_score"] in row.get("stored_scores", [])[:10]) for row in evaluated),
-        "score_nll": _mean_or_none(score_nll_values),
+        "score_nll_available_count": len(score_nll_values),
+        "score_nll_unavailable_count": sum(item.get("status") == "UNAVAILABLE" for item in nll_results),
+        "score_nll_mismatch_count": sum(item.get("status") == "MISMATCH" for item in nll_results),
+        "mean_score_nll_available_only": _mean_or_none(score_nll_values),
+        "score_nll_unavailable_reason_counts": dict(sorted(unavailable_reason_counts.items())),
+        "score_nll_tolerance": SCORE_NLL_TOLERANCE,
     }
     brier = [
         _as_float(row.get("ledger_metrics", {}).get("brier_score_1x2"))
@@ -743,7 +1281,7 @@ def _summarise_method_rows(evaluated: list[dict]) -> dict:
         {
             "mean_ledger_1x2_brier": _mean_or_none(value for value in brier if value is not None),
             "mean_ledger_1x2_logloss": _mean_or_none(value for value in logloss if value is not None),
-            "note": "Top-K and NLL use the stored frozen distribution; they are not recalculated by this audit.",
+            "note": "Top-K and score NLL use only stored frozen probabilities or an explicitly valid ledger NLL; unavailable actual-score probabilities are not replaced with epsilon.",
         }
     )
     return result
@@ -1067,6 +1605,55 @@ def _current_census(root: Path, business_date: str, current_records: list[dict],
     }
 
 
+def _replay_summary(current_results: list[dict], formal_results: list[dict], formal_rows: list[dict]) -> dict[str, Any]:
+    def status_counts(rows: list[dict]) -> dict[str, int]:
+        return dict(Counter(str(row.get("replay_status") or "REPLAY_UNAVAILABLE") for row in rows))
+
+    def scenario_counts(rows: list[dict]) -> dict[str, int]:
+        valid = [row for row in rows if row.get("replay_status") == "REPLAY_VALID" and row.get("scenario_challenger")]
+        return {
+            "scenario_same_as_matrix": sum(bool(row.get("scenario_same_as_matrix")) for row in valid),
+            "scenario_different_from_matrix": sum(bool(row.get("scenario_different_from_matrix")) for row in valid),
+            "matrix_one_one_scenario_not_one_one": sum(
+                row.get("frozen_matrix_map") == "1-1" and row.get("scenario_different_from_matrix") is True
+                for row in valid
+            ),
+        }
+
+    paired = paired_method_metrics(formal_rows, "matrix_map", "scenario_challenger")
+    paired["outcome_conditioned_map"] = _metric_for_method(
+        "outcome_conditioned_map",
+        [
+            row for row in formal_rows
+            if row.get("methods", {}).get("matrix_map") and row.get("methods", {}).get("scenario_challenger")
+        ],
+    )
+    current_scenario = scenario_counts(current_results)
+    formal_scenario = scenario_counts(formal_results)
+    return {
+        "probability_tolerance": REPLAY_PROBABILITY_TOLERANCE,
+        "current": {
+            "current_total": len(current_results),
+            "status_counts": status_counts(current_results),
+            "replay_valid": sum(row.get("replay_status") == "REPLAY_VALID" for row in current_results),
+            "replay_unavailable": sum(row.get("replay_status") == "REPLAY_UNAVAILABLE" for row in current_results),
+            "replay_mismatch": sum(row.get("replay_status") == "REPLAY_MISMATCH" for row in current_results),
+            **current_scenario,
+        },
+        "formal": {
+            "formal_total": len(formal_results),
+            "status_counts": status_counts(formal_results),
+            "replay_valid": sum(row.get("replay_status") == "REPLAY_VALID" for row in formal_results),
+            "replay_unavailable": sum(row.get("replay_status") == "REPLAY_UNAVAILABLE" for row in formal_results),
+            "replay_mismatch": sum(row.get("replay_status") == "REPLAY_MISMATCH" for row in formal_results),
+            **formal_scenario,
+            "paired_metrics_same_sample": paired,
+        },
+        "selection_rule": "Scenario challenger is evaluated only after freeze-time code, frozen input, model identity, and matrix Top-1/Top-3 replay gates pass.",
+        "actual_result_used_after_replay_gate": True,
+    }
+
+
 def run_audit(root: Path | str, business_date: str, output_dir: Path | str | None = None) -> dict:
     """Run the PA-1 audit and write only the two requested output artifacts."""
     root = Path(root).resolve()
@@ -1080,6 +1667,39 @@ def run_audit(root: Path | str, business_date: str, output_dir: Path | str | Non
     current_scored = [record for record in current_records if _record_score(record)]
     all_scored = [record for record in predictions if _record_score(record)]
     formal_rows = _verified_formal_rows(records_by_id, ledger, exclusions)
+    replay_targets: list[dict] = []
+    seen_replay_ids: set[str] = set()
+    for record in [*current_scored, *(row["record"] for row in formal_rows)]:
+        prediction_id = _record_id(record)
+        if prediction_id and prediction_id not in seen_replay_ids:
+            replay_targets.append(record)
+            seen_replay_ids.add(prediction_id)
+    replay_results = replay_frozen_records(replay_targets, root) if replay_targets else []
+    replay_by_id = {str(row.get("prediction_id")): row for row in replay_results if row.get("prediction_id")}
+    formal_replay_results: list[dict] = []
+    for row in formal_rows:
+        replay = replay_by_id.get(row["prediction_id"])
+        if replay:
+            formal_replay = dict(replay)
+            formal_replay["actual_score"] = row.get("actual_score")
+            formal_replay_results.append(formal_replay)
+            if replay.get("replay_status") == "REPLAY_VALID":
+                row["methods"]["scenario_challenger"] = replay.get("scenario_challenger")
+        else:
+            formal_replay_results.append(
+                {
+                    "prediction_id": row["prediction_id"],
+                    "replay_status": "REPLAY_UNAVAILABLE",
+                    "replay_reason": "REPLAY_RESULT_MISSING",
+                    "actual_score": row.get("actual_score"),
+                }
+            )
+    current_replay_ids = {_record_id(record) for record in current_scored}
+    replay_summary = _replay_summary(
+        [row for row in replay_results if row.get("prediction_id") in current_replay_ids],
+        formal_replay_results,
+        formal_rows,
+    )
     production_versions = {str(record.get("release_version")) for record in predictions if record.get("release_version")}
     calibration = _calibration_audit(root, production_versions)
     dixon = _dixon_coles_audit(current_scored, len(formal_rows), calibration)
@@ -1091,7 +1711,8 @@ def run_audit(root: Path | str, business_date: str, output_dir: Path | str | Non
         record for record in current_scored
         if outcome_consistency(_record_score(record), _probabilities(record)) is False
     ]
-    scenario_available = sum(1 for record in current_scored if scenario_score_from_record(record))
+    persisted_scenario_available = sum(1 for record in current_scored if scenario_score_from_record(record))
+    scenario_replay_current = replay_summary["current"]
     current_margins = _margin_audit(current_scored)
     current_margins["all_prediction_records"] = _margin_audit(all_scored)
     lambda_audit = _lambda_audit(current_scored)
@@ -1099,12 +1720,11 @@ def run_audit(root: Path | str, business_date: str, output_dir: Path | str | Non
     selector = _selector_audit(root)
     distribution_comparison = _production_distribution_comparison(current_scored, formal_rows)
     formal_threshold = _as_int((calibration.get("policy") or {}).get("full_review_samples")) or DEFAULT_CALIBRATION_REVIEW_SAMPLES
-    scenario_pairs = []
-    for record in current_scored:
-        scenario = scenario_score_from_record(record)
-        official = _record_score(record)
-        if scenario and official:
-            scenario_pairs.append((official, scenario))
+    scenario_pairs = [
+        (row.get("frozen_matrix_map"), row.get("scenario_challenger"))
+        for row in replay_results
+        if row.get("replay_status") == "REPLAY_VALID" and row.get("scenario_challenger") and row.get("prediction_id") in current_replay_ids
+    ]
 
     findings: list[dict] = []
     if score_distribution.get("count", 0) >= 10 and (score_distribution.get("mode_share") or 0) >= 0.8 and score_distribution.get("distinct_scores", 0) <= 5:
@@ -1118,6 +1738,7 @@ def run_audit(root: Path | str, business_date: str, output_dir: Path | str | Non
                     "sample_count": score_distribution.get("count"),
                     "mode_share": score_distribution.get("mode_share"),
                     "distinct_scores": score_distribution.get("distinct_scores"),
+                    "classification": "AUDIT_HEURISTIC_ONLY",
                 },
                 "interpretation": "Descriptive concentration flag; it is not a newly introduced production acceptance threshold.",
             }
@@ -1135,8 +1756,18 @@ def run_audit(root: Path | str, business_date: str, output_dir: Path | str | Non
                 "interpretation": "The frozen exact-score outcome is not the same as the frozen 1X2 leader for these records; this audit does not rewrite the official score.",
             }
         )
-    if current_scored and scenario_available == 0:
-        findings.append({"code": "SCENARIO_TRACE_NOT_PERSISTED", "severity": "AUDIT_LIMITATION", "evidence": {"current_records": len(current_scored), "trace_records": 0}})
+    if current_scored and persisted_scenario_available == 0:
+        findings.append({
+            "code": "SCENARIO_TRACE_NOT_PERSISTED",
+            "severity": "AUDIT_LIMITATION",
+            "evidence": {
+                "current_records": len(current_scored),
+                "trace_records": 0,
+                "freeze_time_replay_valid": scenario_replay_current.get("replay_valid", 0),
+                "freeze_time_replay_unavailable": scenario_replay_current.get("replay_unavailable", 0),
+                "freeze_time_replay_mismatch": scenario_replay_current.get("replay_mismatch", 0),
+            },
+        })
     if calibration.get("active") is False and "calibrated" in str(calibration.get("model_family") or "").lower():
         findings.append({"code": "CALIBRATION_INACTIVE_MODEL_NAME_MISLEADING", "severity": "GOVERNANCE_NAMING", "evidence": {"model_family": calibration.get("model_family"), "status": calibration.get("status")}})
     if any(not value for value in (calibration.get("production_versions_in_compatible") or {}).values()):
@@ -1152,8 +1783,10 @@ def run_audit(root: Path | str, business_date: str, output_dir: Path | str | Non
     ]
     if outcome_inconsistency_rows:
         recommendations.append("SHADOW_OUTCOME_CONDITIONED_SELECTOR_FOR_EVALUATION_ONLY")
-    if scenario_available == 0:
+    if scenario_replay_current.get("replay_valid", 0) == 0:
         recommendations.append("PERSIST_SCENARIO_TRACE_BEFORE_ANY_SCENARIO_PROMOTION")
+    else:
+        recommendations.append("PERSIST_SCENARIO_TRACE_FOR_FUTURE_AUDIT_REPRODUCTION")
     recommendations.append("MORE_FORMAL_VERIFIED_SAMPLES_REQUIRED_BEFORE_CALIBRATION_OR_DIXON_COLES_PROMOTION")
 
     result: dict[str, Any] = {
@@ -1186,14 +1819,18 @@ def run_audit(root: Path | str, business_date: str, output_dir: Path | str | Non
             "rate": round((len(current_scored) - len(outcome_inconsistency_rows)) / len(current_scored), 6) if current_scored else None,
         },
         "scenario_challenger_audit": {
-            "current_trace_available": scenario_available,
-            "current_trace_missing": max(0, len(current_scored) - scenario_available),
+            "current_trace_available": persisted_scenario_available,
+            "current_trace_missing": max(0, len(current_scored) - persisted_scenario_available),
             "trace_same_as_official": sum(official == scenario for official, scenario in scenario_pairs),
             "trace_different_from_official": sum(official != scenario for official, scenario in scenario_pairs),
+            "freeze_time_replay": replay_summary["current"],
             "selector_code": selector,
             "official_score_unchanged": True,
-            "note": "No scenario score is promoted or newly calculated by this audit.",
+            "note": "Scenario challengers are read from the freeze-time model result only after an isolated replay reproduces the frozen matrix Top-1/Top-3; no scenario score is promoted or written to production.",
         },
+        "scenario_replay_summary": replay_summary,
+        "scenario_replay_evidence": replay_results,
+        "formal_scenario_replay_evidence": formal_replay_results,
         "dixon_coles_audit": dixon,
         "calibration_audit": calibration,
         "formal_sample": {
@@ -1219,7 +1856,8 @@ def run_audit(root: Path | str, business_date: str, output_dir: Path | str | Non
         "selector_vs_underlying_model": {
             "selector": selector,
             "underlying_distribution_is_shared": True,
-            "interpretation": "Matrix MAP and outcome-conditioned MAP use the same stored frozen score distribution; this is a shadow comparison, not a production selector change.",
+            "outcome_conditioned_scope": "OUTCOME_CONDITIONED_STORED_TOPK_MAP",
+            "interpretation": "Matrix MAP and outcome-conditioned MAP use the same stored frozen candidate set; the outcome-conditioned result is not a full 8x8 matrix branch MAP and this audit does not change the production selector.",
         },
         "findings": findings,
         "recommendations": recommendations,
