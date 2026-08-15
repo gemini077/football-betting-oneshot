@@ -1,4 +1,5 @@
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -36,6 +37,7 @@ def make_roots(tmp_path: Path, fixtures: list[dict], jobs: list[dict], predictio
     exclusion_root = tmp_path / "exclusions"
     result_root = tmp_path / "results"
     prospective_root = tmp_path / "prospective"
+    runtime_path = tmp_path / "runtime" / "latest_cycle.json"
     write_json(universe_root / f"{DATE}.json", {
         "schema_version": "1.0",
         "business_date": DATE,
@@ -61,6 +63,11 @@ def make_roots(tmp_path: Path, fixtures: list[dict], jobs: list[dict], predictio
         "excluded_prediction_count": 1,
         "pilot_excluded_settled": 1,
     })
+    write_json(runtime_path, {
+        "overall_status": "HEALTHY",
+        "finished_at": "2026-08-12T12:05:00+08:00",
+        "steps": {},
+    })
     return {
         "universe_root": universe_root,
         "jobs_root": jobs_root,
@@ -68,6 +75,7 @@ def make_roots(tmp_path: Path, fixtures: list[dict], jobs: list[dict], predictio
         "exclusion_root": exclusion_root,
         "result_root": result_root,
         "prospective_root": prospective_root,
+        "runtime_path": runtime_path,
         "output_root": tmp_path / "dashboard",
     }
 
@@ -134,9 +142,38 @@ def test_universe_three_produces_three_accountable_cards_and_frozen_fields(tmp_p
     assert card["prediction"]["btts"]["yes"] == 0.45
     assert card["prediction"]["score_top3"] == ["1-0", "1-1", "2-0"]
     html = (roots["output_root"] / "latest.html").read_text(encoding="utf-8")
-    assert "预测已冻结" in html
-    assert "本日新增正式样本" in html
-    assert "Pilot excluded" in html
+    assert "已预测" in html
+    assert "预测已冻结" not in html
+    assert "系统首推比分" in html
+    assert "1X2 · 主胜倾向" in html
+    assert "1–0" in html
+    assert "1–1 · 2–0" in html
+    assert "今日全部赛事" in html
+    assert 'href="../matches/1001/"' in html
+    assert "Prediction Universe" not in html
+    assert "MISSING_RECENT_FORM" not in html
+    assert "近期比赛数据不足" in html
+    assert "2026-08-12 12:05" in html
+    assert "Legacy 工作台" in html
+    assert html.index('data-prediction-kind="formal"') < html.index("Legacy 工作台")
+    for forbidden in (
+        "今日新增正式样本",
+        "试运行样本",
+        "silent_missing_fixture = 0",
+        "λ 主队",
+        "λ 客队",
+        "1X2 概率",
+        "BTTS",
+        "BASE 输入",
+        "冻结时距开赛",
+        "等待赛果",
+        "模型偏大",
+        "模型偏小",
+        "集中",
+        "中等",
+        "分散",
+    ):
+        assert forbidden not in html
 
 
 def test_universe_fourteen_keeps_every_fixture_without_prediction_artifact(tmp_path):
@@ -167,6 +204,10 @@ def test_dashboard_preserves_data_shortage_pending_and_missed_reasons(tmp_path):
     assert by_id["1002"]["status"] == "PENDING"
     assert by_id["1003"]["status"] == "MISSED_PREMATCH_WINDOW"
     assert payload["summary"]["missed"] == 1
+    html = (roots["output_root"] / "latest.html").read_text(encoding="utf-8")
+    assert "近期比赛数据不足" in html
+    assert "MISSING_RECENT_FORM" not in html
+    assert "错过赛前窗口" in html
 
 
 def test_pilot_exclusion_and_formal_sample_are_distinguished(tmp_path):
@@ -197,6 +238,25 @@ def test_pilot_exclusion_and_formal_sample_are_distinguished(tmp_path):
     assert cards[excluded_id]["formal_prospective"] is False
     assert cards[formal_id]["formal_prospective"] is True
     assert cards[formal_id]["evaluation"]["metrics"]["1x2_brier"] == 0.2
+    assert cards[excluded_id]["status_label"] == "试运行预测"
+    assert cards[formal_id]["status_label"] == "已预测"
+
+    html = (roots["output_root"] / "latest.html").read_text(encoding="utf-8")
+    pilot_match = re.search(r'<article[^>]*data-prediction-kind="pilot"[^>]*>.*?</article>', html, re.S)
+    formal_match = re.search(r'<article[^>]*data-prediction-kind="formal"[^>]*>.*?</article>', html, re.S)
+    assert pilot_match is not None
+    assert formal_match is not None
+    pilot_html = pilot_match.group(0)
+    formal_html = formal_match.group(0)
+    assert "试运行预测" in pilot_html
+    assert "不纳入正式验证" in pilot_html
+    assert "已预测" not in pilot_html
+    assert "预测已冻结" not in pilot_html
+    assert "已预测" in formal_html
+    assert "预测已冻结" not in formal_html
+    assert "1–0" in formal_html
+    assert "1–1 · 2–0" in formal_html
+    assert "1X2 · 主胜倾向" in formal_html
 
 
 def test_dashboard_is_read_only_projection_without_model_or_network_imports():
@@ -204,3 +264,77 @@ def test_dashboard_is_read_only_projection_without_model_or_network_imports():
     assert "automatic_model_core" not in source
     assert "urllib" not in source
     assert "requests" not in source
+
+
+def test_noncanonical_snapshot_fields_do_not_become_market_lines(tmp_path):
+    prediction_id = "FBOS-PRED-market-view"
+    roots = make_roots(tmp_path, [fixture(1)], [frozen_job("1001", prediction_id)], [
+        {**frozen_prediction(prediction_id),
+         "input_snapshot": {
+             "source_snapshots": {
+                 "500_deep": {"snapshots": [{
+                     "yazhi": {"companies": [{"current_handicap": -0.75}]},
+                     "daxiao": {"companies": [{"current_line": 2.25}]},
+                 }]}
+             }
+         },
+         "score_top3": [],
+         "score_distribution": [
+             {"score": "1-0", "probability": 0.20},
+             {"score": "1-1", "probability": 0.16},
+             {"score": "2-0", "probability": 0.12},
+             {"score": "0-0", "probability": 0.08},
+         ]}
+    ])
+    payload = build_dashboard(DATE, **roots)
+    prediction = payload["fixtures"][0]["prediction"]
+
+    assert prediction["primary_score"] == "1-0"
+    assert prediction["neighbor_scores"] == ["1-1", "2-0"]
+    assert prediction["score_distribution"][0]["score"] == "1-0"
+    assert prediction["score_concentration"] is None
+    assert prediction["market_summary"] == {}
+    html = (roots["output_root"] / "latest.html").read_text(encoding="utf-8")
+    assert "1–0" in html
+    assert "Top5" not in html
+    assert "AH ·" not in html
+    assert "O/U ·" not in html
+
+
+def test_canonical_market_summary_and_score_concentration_are_display_only(tmp_path):
+    prediction_id = "FBOS-PRED-canonical-view"
+    record = {
+        **frozen_prediction(prediction_id),
+        "score_concentration": "集中度高",
+        "market_summary": {
+            "asian_handicap": {"line": "-0.75"},
+            "total_line": {"line": "2.25"},
+        },
+    }
+    roots = make_roots(tmp_path, [fixture(1)], [frozen_job("1001", prediction_id)], [record])
+
+    payload = build_dashboard(DATE, **roots)
+    prediction = payload["fixtures"][0]["prediction"]
+    html = (roots["output_root"] / "latest.html").read_text(encoding="utf-8")
+
+    assert prediction["score_concentration"] == "集中度高"
+    assert prediction["market_summary"]["asian_handicap"]["line"] == "-0.75"
+    assert prediction["market_summary"]["total_line"]["line"] == "2.25"
+    assert "AH · 主 -0.75" in html
+    assert "O/U · 2.25" in html
+
+
+def test_abnormal_runtime_shows_warning_without_normal_kpi_grid(tmp_path):
+    roots = make_roots(tmp_path, [fixture(1)], [{"match_id": "1001", "status": "PENDING"}])
+    write_json(roots["runtime_path"], {
+        "overall_status": "FAILED",
+        "finished_at": "2026-08-12T12:05:00+08:00",
+        "steps": {"base_prediction": {"status": "FAILED"}},
+    })
+
+    build_dashboard(DATE, **roots)
+    html = (roots["output_root"] / "latest.html").read_text(encoding="utf-8")
+
+    assert "系统状态 · FAILED" in html
+    assert "base_prediction" in html
+    assert "预测已冻结" not in html

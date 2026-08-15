@@ -7,6 +7,11 @@ import argparse
 import shutil
 from pathlib import Path
 
+try:
+    from scripts.match_detail import build_static_match_pages
+except ModuleNotFoundError:  # pragma: no cover - direct script execution path.
+    from match_detail import build_static_match_pages
+
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_OUTPUT = ROOT / "site"
@@ -43,6 +48,8 @@ def build(output: Path) -> Path:
     )
     if workbooks:
         shutil.copy2(workbooks[0], downloads / workbooks[0].name)
+
+    build_static_match_pages(site_matches_root=output / "matches")
 
     (output / ".nojekyll").write_text("", encoding="utf-8")
     (output / "index.html").write_text(

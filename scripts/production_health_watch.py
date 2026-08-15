@@ -287,6 +287,41 @@ def _check_universe_and_jobs(root: Path, runtime: dict[str, Any], reasons: list[
                 details["silent_missing_fixtures"] += max(len(missing), fixture_count - len(job_rows), 0)
 
 
+def _check_workspace_freshness(
+    root: Path,
+    runtime: dict[str, Any],
+    reasons: list[str],
+    details: dict[str, Any],
+) -> None:
+    """Ensure the legacy workspace projection follows the current cycle date."""
+    workspace_path = root / "data" / "match_workspace" / "latest.json"
+    workspace, workspace_error = _json(
+        workspace_path,
+        required=("target_date", "generated_at"),
+    )
+    if workspace_error or workspace is None:
+        details.setdefault("artifact_errors", []).append(f"match_workspace/latest.json:{workspace_error}")
+        _reason_once(reasons, "MATCH_WORKSPACE_INVALID")
+        return
+    target_date = str(workspace.get("target_date") or "").strip()
+    generated_at = _parse_at(workspace.get("generated_at"))
+    runtime_date = str(runtime.get("business_date") or "").strip()
+    try:
+        target = datetime.fromisoformat(f"{target_date}T00:00:00").date()
+    except ValueError:
+        target = None
+    details["workspace"] = {
+        "target_date": target_date,
+        "generated_at": generated_at.isoformat() if generated_at else None,
+        "match_count": len(workspace.get("matches") or []) + len(workspace.get("completed") or []),
+    }
+    if target is None or generated_at is None:
+        _reason_once(reasons, "MATCH_WORKSPACE_INVALID")
+        return
+    if runtime_date != target_date or generated_at.date() != target:
+        _reason_once(reasons, "MATCH_WORKSPACE_STALE")
+
+
 def _load_durable_assets(root: Path, reasons: list[str], details: dict[str, Any]):
     data = root / "data"
     prediction_rows, prediction_valid = _json_files(data / "model_governance" / "predictions")
@@ -458,6 +493,7 @@ def evaluate_health(
         elif overall != HEALTHY:
             _reason_once(reasons, "DURABLE_ARTIFACT_INVALID")
 
+    _check_workspace_freshness(root, runtime, reasons, details)
     _check_universe_and_jobs(root, runtime, reasons, details)
     predictions, exclusions, results, ledger, summary = _load_durable_assets(root, reasons, details)
     for integrity_reason in _recursive_integrity_reasons(summary):
@@ -475,6 +511,8 @@ def evaluate_health(
             "PILOT_EXCLUSION_VIOLATION",
             "PROSPECTIVE_ORPHAN",
             "HEALTH_STATE_CORRUPTED",
+            "MATCH_WORKSPACE_STALE",
+            "MATCH_WORKSPACE_INVALID",
         }
     ]
     engineering_reasons = [reason for reason in reasons if reason not in immediate_reasons]

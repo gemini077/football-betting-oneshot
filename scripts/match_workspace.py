@@ -39,9 +39,50 @@ OUTPUT = DATA / "match_workspace"
 RUNTIME = ROOT / "05_RUNTIME_STATE.json"
 SHANGHAI = ZoneInfo("Asia/Shanghai")
 
+STATIC_REFRESH_SCRIPT = """<script>
+(() => {
+  const latestJson = "./latest.json";
+  const pageVersion = __PAGE_VERSION__;
+  let currentVersion = pageVersion;
+  const versionOf = payload => `${payload?.business_date || payload?.target_date || ""}|${payload?.generated_at || ""}`;
+  async function checkForUpdate() {
+    if (document.visibilityState !== "visible") return;
+    try {
+      const response = await fetch(`${latestJson}?t=${Date.now()}`, { cache: "no-store" });
+      if (!response.ok) return;
+      const version = versionOf(await response.json());
+      if (version === "|") return;
+      if (version !== currentVersion) {
+        const url = new URL(window.location.href);
+        url.searchParams.set("v", version);
+        window.location.replace(url.toString());
+      }
+    } catch (_) {}
+  }
+  window.setInterval(checkForUpdate, 60000);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") checkForUpdate();
+  });
+  window.addEventListener("focus", checkForUpdate);
+  checkForUpdate();
+})();
+</script>"""
+
 
 def workspace_now() -> datetime:
     return datetime.now(SHANGHAI)
+
+
+def workspace_business_date(value: datetime | None = None) -> date:
+    current = value or workspace_now()
+    if current.tzinfo is None:
+        current = current.replace(tzinfo=SHANGHAI)
+    return current.astimezone(SHANGHAI).date()
+
+
+def should_publish_latest(target_date: str, generated: datetime | None = None) -> bool:
+    """Use the project business timezone, never the host machine date."""
+    return date.fromisoformat(target_date) >= workspace_business_date(generated)
 
 
 def parse_kickoff_local(value: Any) -> datetime | None:
@@ -765,6 +806,7 @@ def build(
     output_root: Path = OUTPUT,
     *,
     persist_runtime_data: bool = True,
+    latest_only: bool = False,
 ) -> tuple[Path, Path]:
     runtime = load_json(RUNTIME, {})
     base_date = date.fromisoformat(target_date)
@@ -798,8 +840,12 @@ def build(
     reports = latest_reports()
     reviews = review_rows(runtime)
     generated = workspace_now()
-    stamp = generated.strftime("%Y%m%d_%H%M%S")
-    output_dir = create_unique_output_dir(output_root, stamp)
+    if latest_only:
+        output_root.mkdir(parents=True, exist_ok=True)
+        output_dir = output_root
+    else:
+        stamp = generated.strftime("%Y%m%d_%H%M%S")
+        output_dir = create_unique_output_dir(output_root, stamp)
     matches = []
     completed = []
     completed_ids: set[str] = set()
@@ -978,7 +1024,8 @@ def build(
             frozen_tickets = (json.loads(frozen_path.read_text(encoding="utf-8")) or {}).get("tickets") or []
         except (OSError, json.JSONDecodeError, AttributeError):
             frozen_tickets = []
-    sync_channel_price_overrides(frozen_tickets)
+    if persist_runtime_data:
+        sync_channel_price_overrides(frozen_tickets)
     price_overrides_payload = load_json(paper_root / "initial_price_overrides.json", {}) or {}
     initial_price_overrides = price_overrides_payload.get("tickets") or {}
     paper_ledger = build_paper_ledger(
@@ -1023,7 +1070,8 @@ def build(
             ),
             default="",
         ) or None,
-        "published_as_latest": base_date >= date.today(),
+        "published_as_latest": latest_only or should_publish_latest(target_date, generated),
+        "latest_only": latest_only,
         "automatic_analysis": "owner_selected_fifo_plus_bounded_core_events", "automatic_betting": False,
         "requires_explicit_lock_confirmation": True, "lock_state_changed": False,
         "schedule_source": [str(path.relative_to(ROOT)).replace("\\", "/") for path in schedule_sources],
@@ -1037,10 +1085,12 @@ def build(
         "postmatch_dashboard_url": relative_uri(DATA / "postmatch_dashboard" / "latest.html", output_dir),
     }
     embedded = json.dumps(payload, ensure_ascii=False).replace("</", "<\\/")
-    html_text = render(embedded)
-    index = output_dir / "index.html"
+    page_version = "|".join(str(payload.get(key) or "") for key in ("target_date", "generated_at"))
+    html_text = render(embedded, page_version=page_version)
+    index = output_root / "latest.html" if latest_only else output_dir / "index.html"
     index.write_text(html_text, encoding="utf-8")
-    (output_dir / "workspace.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    workspace_json = output_root / "latest.json" if latest_only else output_dir / "workspace.json"
+    workspace_json.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     if persist_runtime_data:
         (paper_root / "latest.json").write_text(json.dumps(paper_ledger, ensure_ascii=False, indent=2), encoding="utf-8")
         frozen_path.write_text(
@@ -1048,14 +1098,16 @@ def build(
             encoding="utf-8",
         )
     latest = output_root / "latest.html"
-    publish_latest = base_date >= date.today()
-    if publish_latest:
+    publish_latest = should_publish_latest(target_date, generated)
+    if not latest_only and publish_latest:
         shutil.copy2(index, latest)
         (output_root / "latest.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    if latest_only:
+        latest = index
     return index, latest
 
 
-def render(embedded: str) -> str:
+def render(embedded: str, page_version: str = "") -> str:
     html_page = '''<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Football Betting OneShot｜盘口情报总览</title><style>
 :root{--bg:#07111d;--panel:#0d1b2b;--panel2:#102238;--line:#263c56;--text:#edf7ff;--muted:#8ea4ba;--cyan:#39d7c2;--blue:#62a8ff;--gold:#f2c261;--good:#50d99a;--red:#ff7382}*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 8% 0,#133c50 0,transparent 30%),radial-gradient(circle at 91% 3%,#1f2955 0,transparent 28%),var(--bg);color:var(--text);font:14px/1.55 "Microsoft YaHei",system-ui,sans-serif}.shell{max-width:1500px;margin:auto;padding:28px}.hero{display:flex;justify-content:space-between;gap:24px;align-items:flex-end;padding:10px 2px 24px}.eyebrow{color:var(--cyan);font-size:12px;font-weight:900;letter-spacing:.13em}.hero h1{font-size:36px;margin:5px 0}.hero p{margin:0;color:var(--muted)}.sync{min-width:290px;background:#0b1827;border:1px solid var(--line);border-radius:16px;padding:15px}.sync strong{display:block;color:var(--good);font-size:16px}.sync span{color:var(--muted)}.kpis{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:18px}.kpi{background:linear-gradient(145deg,var(--panel2),var(--panel));border:1px solid var(--line);border-radius:15px;padding:15px}.kpi b{display:block;font-size:24px;margin-bottom:2px}.kpi span{color:var(--muted);font-size:12px}.controls{position:sticky;top:0;z-index:5;display:flex;gap:9px;padding:11px 0;background:#07111ddd;backdrop-filter:blur(12px)}button,input{font:inherit}.controls button,.controls input,.action{border:1px solid var(--line);background:#0d1c2e;color:var(--text);border-radius:10px;padding:9px 12px}.controls button,.action{cursor:pointer}.controls button.active{border-color:var(--cyan);color:var(--cyan)}.controls input{flex:1}.card{background:linear-gradient(150deg,#0e1d30,#0a1726);border:1px solid var(--line);border-radius:18px;margin:14px 0;overflow:hidden}.card-title{display:flex;justify-content:space-between;align-items:center;padding:17px 19px;border-bottom:1px solid var(--line)}.card-title h2{font-size:18px;margin:0}.card-title span{color:var(--muted)}.table-wrap{overflow:auto}table{width:100%;border-collapse:collapse;min-width:960px}th{color:var(--muted);font-size:11px;text-align:left;padding:11px 15px;border-bottom:1px solid var(--line);letter-spacing:.04em}td{padding:14px 15px;border-bottom:1px solid #1e3047;vertical-align:middle}tbody tr:hover{background:#102239}tbody tr:last-child td{border-bottom:0}.match-name{font-weight:800;font-size:15px}.muted{color:var(--muted);font-size:12px}.badge{display:inline-flex;padding:3px 8px;border-radius:999px;font-size:11px;background:#24374d;color:#c7d8e9}.badge.good{background:#164637;color:#79efbd}.badge.gold{background:#473719;color:#ffd674}.badge.blue{background:#183d67;color:#93c8ff}.odds-inline{display:flex;gap:5px}.odd{min-width:46px;text-align:center;background:#091522;border:1px solid #1d324b;border-radius:7px;padding:4px 6px}.actions{display:flex;gap:7px;justify-content:flex-end}.action.primary{background:linear-gradient(105deg,#14877d,#2f67a7);border:0}.action.selected{background:#164637;color:#79efbd}.empty-row{text-align:center;color:var(--muted);padding:32px}.rules{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:14px 0}.rule{background:#0a1726;border:1px solid var(--line);border-radius:14px;padding:13px}.rule b{display:block;margin-bottom:3px}.rule span{color:var(--muted);font-size:12px}footer{color:var(--muted);border-top:1px solid var(--line);padding:18px 2px;margin-top:18px}dialog{width:min(1380px,96vw);height:92vh;padding:0;border:1px solid var(--line);border-radius:18px;background:#091522;color:var(--text);box-shadow:0 30px 100px #000a}dialog::backdrop{background:#02060db8;backdrop-filter:blur(7px)}.dialog-head{display:flex;justify-content:space-between;align-items:center;padding:13px 16px;border-bottom:1px solid var(--line)}.dialog-head h3{margin:0}.dialog-tabs{display:flex;gap:7px}.dialog-tabs button,.close{border:1px solid var(--line);background:#11233a;color:var(--text);border-radius:9px;padding:8px 11px;cursor:pointer}.dialog-tabs button.active{color:var(--cyan);border-color:var(--cyan)}.dialog-body{height:calc(92vh - 65px);overflow:auto}.dialog-body iframe{width:100%;height:100%;border:0;background:#fff}.review{padding:28px}.review h2{margin:0 0 4px}.review-section{margin-top:18px}.review-section h3{margin:0 0 10px;color:var(--gold);font-size:15px}.review-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.review-grid div{background:#0d1d30;border:1px solid var(--line);border-radius:12px;padding:13px}.review-grid label{display:block;color:var(--muted);font-size:11px}.review-grid p{margin:5px 0 0}.review-summary{background:#151225;border-left:3px solid var(--gold);border-radius:10px;padding:14px;margin-top:18px}.notice{color:var(--gold)}@media(max-width:900px){.shell{padding:15px}.hero{display:block}.sync{margin-top:15px}.kpis{grid-template-columns:repeat(2,1fr)}.rules{grid-template-columns:1fr}.hero h1{font-size:28px}.controls{flex-wrap:wrap}.controls input{min-width:100%}.dialog-tabs{overflow:auto}.dialog-head{align-items:flex-start}.review-grid{grid-template-columns:1fr}}
@@ -1197,18 +1249,37 @@ $('#tabPrematch').onclick=()=>current?showPrematch():showEmpty('请先选择比�
         "$('#closeDialog').onclick=()=>$('#reportDialog').close();",
         "$('#openAllReviews').onclick=openAllReviews;",
     )
-    return html_page
+    refresh_script = STATIC_REFRESH_SCRIPT.replace(
+        "__PAGE_VERSION__", json.dumps(page_version, ensure_ascii=False)
+    )
+    return html_page.replace("</body>", refresh_script + "</body>", 1)
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="生成统一赛程、赛前分析和赛后复盘工作台")
-    parser.add_argument("--date", default=date.today().isoformat())
+    parser.add_argument("--date", default=workspace_business_date().isoformat())
     parser.add_argument("--output-root", default=str(OUTPUT))
+    parser.add_argument("--latest-only", action="store_true")
     args = parser.parse_args()
-    index, latest = build(args.date, Path(args.output_root))
+    index, latest = build(
+        args.date,
+        Path(args.output_root),
+        persist_runtime_data=not args.latest_only,
+        latest_only=args.latest_only,
+    )
+    workspace_path = Path(args.output_root) / "latest.json" if args.latest_only else index.parent / "workspace.json"
+    try:
+        payload = json.loads(workspace_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        payload = {}
+    match_count = len(payload.get("matches") or []) + len(payload.get("completed") or [])
     print(json.dumps({
         "index": str(index), "latest": str(latest),
-        "published_as_latest": date.fromisoformat(args.date) >= date.today(),
+        "target_date": args.date,
+        "match_count": match_count,
+        "completed_count": len(payload.get("completed") or []),
+        "published_as_latest": args.latest_only or should_publish_latest(args.date, workspace_now()),
+        "latest_only": args.latest_only,
         "automatic_analysis": "owner_selected_fifo_plus_bounded_core_events", "lock_state_changed": False,
     }, ensure_ascii=False, indent=2))
     return 0
