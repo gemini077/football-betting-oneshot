@@ -206,6 +206,28 @@ def test_dashboard_publishes_workspace_completed_history_when_current_cards_have
     assert "3-0" in html
 
 
+def test_completed_filter_controls_historical_rows_and_real_count(tmp_path):
+    roots = make_roots(tmp_path, [fixture(1)], [{"match_id": "1001", "status": "PENDING"}])
+    workspace_path = tmp_path / "workspace" / "latest.json"
+    write_json(workspace_path, {
+        "completed": [
+            {"id": "H-1", "home": "Lyon", "away": "Sparta", "kickoff": "2026-08-12T03:00+08:00", "result_90m": "3-0", "review_available": True},
+            {"id": "H-2", "home": "Graz", "away": "Fenerbahce", "kickoff": "2026-08-12T02:30+08:00", "result_90m": "0-1", "review_available": True},
+        ],
+        "history": [],
+    })
+
+    payload = build_dashboard(DATE, workspace_path=workspace_path, **roots)
+    html = (roots["output_root"] / "latest.html").read_text(encoding="utf-8")
+
+    assert payload["summary"]["completed_count"] == 2
+    assert 'data-filter="RESULT"' in html
+    assert 'data-result-count="2"' in html
+    assert "historicalResults" in html
+    assert "filter !== 'ALL' && filter !== 'RESULT'" in html
+    assert html.count('class="historical-result"') == 2
+
+
 def test_universe_fourteen_keeps_every_fixture_without_prediction_artifact(tmp_path):
     fixtures = [fixture(index) for index in range(1, 15)]
     roots = make_roots(tmp_path, fixtures, [])
