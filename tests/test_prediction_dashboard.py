@@ -176,6 +176,36 @@ def test_universe_three_produces_three_accountable_cards_and_frozen_fields(tmp_p
         assert forbidden not in html
 
 
+def test_dashboard_publishes_workspace_completed_history_when_current_cards_have_no_results(tmp_path):
+    roots = make_roots(tmp_path, [fixture(1)], [{"match_id": "1001", "status": "PENDING"}])
+    workspace_path = tmp_path / "workspace" / "latest.json"
+    write_json(workspace_path, {
+        "completed": [],
+        "history": [{
+            "id": "FBOS-HISTORY-1",
+            "home": "Lyon",
+            "away": "Sparta Prague",
+            "kickoff": "2026-08-12T03:00+08:00",
+            "result_90m": "3-0",
+            "prediction_frozen": True,
+            "review_available": True,
+            "historical_status": "FROZEN_PREMATCH_AND_REVIEW",
+            "prematch_report_url": "../analysis_reports/prematch.html",
+            "postmatch_report_url": "../postmatch_reports/review.html",
+        }],
+    })
+
+    payload = build_dashboard(DATE, workspace_path=workspace_path, **roots)
+
+    assert payload["summary"]["completed_count"] == 1
+    assert payload["summary"]["history_count"] == 1
+    assert payload["completed"][0]["result_90m"] == "3-0"
+    html = (roots["output_root"] / "latest.html").read_text(encoding="utf-8")
+    assert "historical-results" in html
+    assert "Lyon" in html
+    assert "3-0" in html
+
+
 def test_universe_fourteen_keeps_every_fixture_without_prediction_artifact(tmp_path):
     fixtures = [fixture(index) for index in range(1, 15)]
     roots = make_roots(tmp_path, fixtures, [])

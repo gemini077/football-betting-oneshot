@@ -22,6 +22,7 @@ RESULT_ROOT = BASE_DIR / "data" / "postmatch_automation" / "results"
 PROSPECTIVE_ROOT = BASE_DIR / "data" / "prospective"
 RUNTIME_PATH = BASE_DIR / "data" / "product_runtime" / "latest_cycle.json"
 DASHBOARD_ROOT = BASE_DIR / "data" / "prediction_dashboard"
+WORKSPACE_LATEST = BASE_DIR / "data" / "match_workspace" / "latest.json"
 SHANGHAI = timezone(timedelta(hours=8))
 
 STATUS_LABELS = {
@@ -240,6 +241,24 @@ def _result_index(result_root: Path, errors: list[str]) -> dict[str, dict[str, A
     return index
 
 
+def _workspace_history(workspace_path: Path, errors: list[str]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Project the published workspace's immutable completed/history rows."""
+
+    if not workspace_path.is_file():
+        return [], []
+    workspace = _read_json(workspace_path, errors, "workspace", {})
+    if not isinstance(workspace, dict):
+        return [], []
+    history = [row for row in workspace.get("history") or [] if isinstance(row, dict)]
+    completed = [row for row in workspace.get("completed") or [] if isinstance(row, dict)]
+    if not completed:
+        completed = [
+            row for row in history
+            if row.get("review_available") is True and row.get("result_90m")
+        ]
+    return completed, history
+
+
 def _exclusion_index(exclusion_root: Path, errors: list[str]) -> dict[str, dict[str, Any]]:
     index: dict[str, dict[str, Any]] = {}
     if not exclusion_root.is_dir():
@@ -441,6 +460,15 @@ h1 { margin: 8px 0 4px; font-size: clamp(32px, 5vw, 54px); line-height: 1.02; le
 .market-item small { display: block; margin-top: 2px; color: var(--quiet); }
 .market-item .movement { color: var(--warning); }
 .result-line { display: flex; flex-wrap: wrap; gap: 8px 13px; align-items: baseline; margin: 16px -1px -1px; padding: 11px 12px; border: 1px solid rgba(67, 211, 165, .24); background: var(--accent-soft); color: var(--accent); }
+.historical-results { margin: 24px 0 16px; padding: 18px; border: 1px solid var(--line); background: var(--surface); }
+.historical-results h2 { margin: 0 0 14px; font-size: 18px; }
+.historical-result { display: grid; grid-template-columns: 190px minmax(180px, 1fr) 70px minmax(150px, auto); gap: 12px; align-items: center; padding: 10px 0; border-top: 1px solid var(--line); }
+.historical-meta { color: var(--muted); font-size: 12px; }
+.historical-teams { font-weight: 600; }
+.historical-teams span { color: var(--quiet); font-weight: 400; }
+.historical-score { color: var(--accent); font-size: 20px; }
+.historical-links { display: flex; gap: 10px; flex-wrap: wrap; font-size: 12px; }
+@media (max-width: 760px) { .historical-result { grid-template-columns: 1fr auto; } .historical-meta, .historical-links { grid-column: 1 / -1; } }
 .empty { grid-column: 1 / -1; padding: 44px 20px; border: 1px dashed var(--line); color: var(--muted); text-align: center; }
 .data-warning { margin: 18px 0 0; padding: 10px 13px; border: 1px solid rgba(241, 123, 133, .32); background: var(--danger-soft); color: #ffc1c6; font-size: 12px; }
 @media (max-width: 880px) { .fixture-list { grid-template-columns: 1fr; } }
@@ -524,6 +552,29 @@ def _modern_result_html(card: dict[str, Any]) -> str:
     return f'<div class="result-line"><strong>90分钟赛果 · {html.escape(str(score))}</strong></div>'
 
 
+def _historical_results_html(rows: list[dict[str, Any]]) -> str:
+    title = "\u5df2\u5b8c\u8d5b / \u5386\u53f2\u590d\u76d8"
+    if not rows:
+        return f'<section id="historical-results" class="historical-results"><h2>{title}</h2><div class="empty">\u6682\u65e0\u5df2\u5b8c\u8d5b\u8bb0\u5f55</div></section>'
+    cards = []
+    for row in rows:
+        status = row.get("historical_status") or ("\u5df2\u5b8c\u8d5b" if row.get("result_90m") else "\u5f85\u590d\u76d8")
+        links = []
+        if row.get("prematch_report_url"):
+            links.append(f'<a href="{html.escape(str(row["prematch_report_url"]), quote=True)}">\u8d5b\u524d\u5feb\u7167</a>')
+        if row.get("postmatch_report_url"):
+            links.append(f'<a href="{html.escape(str(row["postmatch_report_url"]), quote=True)}">\u8d5b\u540e\u590d\u76d8</a>')
+        cards.append(
+            '<article class="historical-result" data-result="yes">'
+            f'<div class="historical-meta">{_esc(row.get("kickoff"))} · {html.escape(str(status))}</div>'
+            f'<div class="historical-teams">{_esc(row.get("home"))}<span> vs </span>{_esc(row.get("away"))}</div>'
+            f'<strong class="historical-score">{_esc(row.get("result_90m"))}</strong>'
+            f'<div class="historical-links">{" · ".join(links) if links else ""}</div>'
+            '</article>'
+        )
+    return f'<section id="historical-results" class="historical-results"><h2>{title}</h2>{"".join(cards)}</section>'
+
+
 def _modern_card_html(card: dict[str, Any]) -> str:
     status = str(card.get("status") or "PENDING")
     match_id = str(card.get("match_id") or "")
@@ -605,6 +656,7 @@ def render_dashboard(payload: dict[str, Any]) -> str:
     data_warning = ""
     if summary.get("silent_missing_fixture"):
         data_warning = f'<div class="data-warning">数据完整性提醒：当天 {html.escape(str(summary.get("fixture_count")))} 场，页面仅生成 {html.escape(str(summary.get("card_count")))} 张卡片。</div>'
+    historical_html = _historical_results_html(payload.get("completed") or [])
     page = f"""<!doctype html>
 <html lang="zh-CN">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -633,6 +685,7 @@ buttons.forEach(button => button.addEventListener('click', () => {{
   }});
 }}));
 </script></body></html>"""
+    page = page.replace('<section id="fixture-list"', historical_html + '<section id="fixture-list"', 1)
     page_version = "|".join(
         str(payload.get(key) or "") for key in ("business_date", "generated_at")
     )
@@ -652,6 +705,7 @@ def build_dashboard(
     result_root: Path = RESULT_ROOT,
     prospective_root: Path = PROSPECTIVE_ROOT,
     runtime_path: Path = RUNTIME_PATH,
+    workspace_path: Path = WORKSPACE_LATEST,
     output_root: Path = DASHBOARD_ROOT,
     now: datetime | None = None,
 ) -> dict[str, Any]:
@@ -679,6 +733,7 @@ def build_dashboard(
     runtime = _read_optional_json(Path(runtime_path), errors, "runtime", {})
     if not isinstance(runtime, dict):
         runtime = {}
+    completed, history = _workspace_history(Path(workspace_path), errors)
     job_lookup = _job_index(jobs, business_date)
     cards: list[dict[str, Any]] = []
     for fixture in fixtures:
@@ -737,6 +792,8 @@ def build_dashboard(
             "prediction_failed": counts.get("PREDICTION_FAILED", 0),
             "missed": counts.get("MISSED_PREMATCH_WINDOW", 0),
             "verified_results": verified_results,
+            "completed_count": len(completed),
+            "history_count": len(history),
             "formal_prospective_total": int(formal_total or 0),
             "samples_added_today": int(samples_added or 0),
             "pilot_excluded_count": int(excluded_count or 0),
@@ -744,6 +801,8 @@ def build_dashboard(
         },
         "data_errors": errors,
         "fixtures": cards,
+        "completed": completed,
+        "history": history,
     }
     output_root = Path(output_root)
     output_root.mkdir(parents=True, exist_ok=True)
