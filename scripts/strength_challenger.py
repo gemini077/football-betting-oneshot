@@ -350,6 +350,8 @@ def build_identity_bridge_index(
     verified_crosswalk: Mapping[str, Any] | None = None,
     project_crosswalk: Mapping[str, Any] | None = None,
     competition_registry: Mapping[str, Any] | None = None,
+    canonical_competition_registry: Mapping[str, Any] | None = None,
+    official_fixture_evidence: Mapping[str, Any] | None = None,
     minimum_history: int = 5,
 ) -> dict[str, Any]:
     """Build a deterministic, research-only identity index.
@@ -367,6 +369,7 @@ def build_identity_bridge_index(
         "historical_records": [dict(row) for row in historical_records],
         "minimum_history": int(minimum_history),
         "source_files": [],
+        "official_fixture_index": {},
     }
     for row in historical_records:
         if row.get("home_team_id"):
@@ -394,16 +397,20 @@ def build_identity_bridge_index(
             else:
                 _register_identity_item(index, item, source_key=source_key)
 
-    for item in _identity_source_items(competition_registry):
+    def register_competition_identity(item: Mapping[str, Any], *, source_key: str) -> None:
         key = item.get("competition_key")
         canonical = item.get("canonical_competition_id")
         if not canonical and key and f"competition:{key}" in index["historical_competition_ids"]:
             canonical = f"competition:{key}"
         canonical = str(canonical) if canonical else None
-        aliases = [item.get("name"), key, item.get("canonical_competition_id")]
+        aliases = [item.get("name"), item.get("canonical_name"), key, item.get("canonical_competition_id")]
         observed = item.get("observed_raw_names")
         if isinstance(observed, list):
             aliases.extend(observed)
+        for season in item.get("seasons") or []:
+            if not isinstance(season, Mapping):
+                continue
+            aliases.extend([season.get("provider_competition_name"), season.get("provider_competition_id")])
         if canonical:
             for alias in aliases:
                 if alias not in (None, ""):
@@ -414,6 +421,25 @@ def build_identity_bridge_index(
             for alias in aliases:
                 if alias not in (None, ""):
                     index["competition_aliases"][_identity_alias(alias)].add(f"UNSUPPORTED:{key}")
+
+    # Coverage registry answers whether history is usable; canonical registry
+    # answers what an exact provider/competition identity means.  Keep these
+    # sources separate so stale coverage metadata cannot erase a verified ID.
+    for item in _identity_source_items(competition_registry):
+        register_competition_identity(item, source_key="competition_coverage_registry")
+    for item in _identity_source_items(canonical_competition_registry):
+        register_competition_identity(item, source_key="competition_registry")
+
+    for item in (official_fixture_evidence or {}).get("fixtures", []) if isinstance(official_fixture_evidence, Mapping) else []:
+        if isinstance(item, Mapping) and item.get("bridge_status") == "VERIFIED_CROSS_SOURCE_FIXTURE" and item.get("production_match_id"):
+            index["official_fixture_index"][str(item["production_match_id"])] = dict(item)
+
+    # A stale coverage row may mark the same exact alias unsupported while the
+    # canonical registry has a verified identity.  This is not ambiguity:
+    # canonical identity wins, while coverage remains a separate gate later.
+    for aliases in index["competition_aliases"].values():
+        if any(not str(value).startswith("UNSUPPORTED:") for value in aliases):
+            aliases.difference_update([value for value in aliases if str(value).startswith("UNSUPPORTED:")])
 
     # Make every historical canonical ID directly resolvable when a fixture
     # carries an explicit canonical competition_id.
@@ -435,12 +461,31 @@ def _fixture_provider_signals(fixture: Mapping[str, Any]) -> Mapping[str, Any]:
     return signals if isinstance(signals, Mapping) else {}
 
 
+def _official_fixture_evidence(fixture: Mapping[str, Any], index: Mapping[str, Any]) -> Mapping[str, Any] | None:
+    match_id = _fixture_identity_value(fixture, "match_id") or _fixture_identity_value(fixture, "match_key")
+    evidence = (index.get("official_fixture_index") or {}).get(str(match_id))
+    if not isinstance(evidence, Mapping):
+        return None
+    if str(_fixture_identity_value(fixture, "competition") or _fixture_identity_value(fixture, "league") or "") != str(evidence.get("production_competition_label") or ""):
+        return None
+    if str(_fixture_identity_value(fixture, "home") or "") != str(evidence.get("production_home") or "") or str(_fixture_identity_value(fixture, "away") or "") != str(evidence.get("production_away") or ""):
+        return None
+    if _iso(_parse_time(_fixture_identity_value(fixture, "kickoff"))) != _iso(_parse_time(evidence.get("production_kickoff_at"))):
+        return None
+    return evidence
+
+
 def _candidate_for_competition(candidate: Mapping[str, Any], competition_id: str | None) -> bool:
     contexts = [str(value) for value in candidate.get("competition_ids") or []]
     return not competition_id or not contexts or competition_id in contexts
 
 
 def _resolve_team_identity(fixture: Mapping[str, Any], index: Mapping[str, Any], side: str, competition_id: str | None) -> dict[str, Any]:
+    evidence = _official_fixture_evidence(fixture, index)
+    if evidence:
+        canonical = evidence.get(f"canonical_{side}_team_id")
+        if canonical:
+            return {"status": "MAPPED", "canonical_team_id": str(canonical), "method": "official_fixture_kickoff_unique", "source_key": "uefa_fixture_identity_evidence", "evidence": {"uefa_match_id": evidence.get("uefa_match_id"), "official_team_name": evidence.get(f"official_{side}"), "source_refs": evidence.get("source_refs") or []}}
     signals = _fixture_provider_signals(fixture)
     explicit = signals.get(f"{side}_canonical_team_id") or fixture.get(f"{side}_team_id")
     if explicit and str(explicit) in index["historical_team_ids"]:
@@ -511,6 +556,9 @@ def resolve_fixture_identity(fixture: Mapping[str, Any], *, index: Mapping[str, 
         competition_candidates = {str(explicit_competition)}
     else:
         competition_candidates = set(index["competition_aliases"].get(_identity_alias(competition_name), set()))
+        evidence = _official_fixture_evidence(fixture, index)
+        if evidence:
+            competition_candidates.add(str(evidence.get("competition_id") or "competition:uefa-europa-league"))
     competition_ids = {value for value in competition_candidates if not str(value).startswith("UNSUPPORTED:")}
     unsupported = {value for value in competition_candidates if str(value).startswith("UNSUPPORTED:")}
     if len(competition_ids) > 1:
@@ -1491,6 +1539,8 @@ def run_research(*, root: Path, data_home: Path, business_date: str, output_dir:
         "verified_crosswalk": _json_load(root / "data" / "football_data" / "verified_identity_crosswalk.json"),
         "project_crosswalk": _json_load(root / "data" / "football_data" / "verified_project_provider_crosswalk.json"),
         "competition_registry": _json_load(root / "data" / "football_data" / "competition_coverage_registry.json"),
+        "canonical_competition_registry": _json_load(root / "data" / "football_data" / "competition_registry.json"),
+        "official_fixture_evidence": _json_load(root / "data" / "football_data" / "uefa_europa_2026_27_fixture_identity_evidence.json"),
     }
     identity_index = build_identity_bridge_index(records, **identity_sources, minimum_history=selected_spec.minimum_history)
     current_bridge = _bridge_records(current, index=identity_index)
@@ -1642,6 +1692,8 @@ def run_research(*, root: Path, data_home: Path, business_date: str, output_dir:
             "data/football_data/verified_identity_crosswalk.json",
             "data/football_data/verified_project_provider_crosswalk.json",
             "data/football_data/competition_coverage_registry.json",
+            "data/football_data/competition_registry.json",
+            "data/football_data/uefa_europa_2026_27_fixture_identity_evidence.json",
             "HistoricalResultStore",
         ],
         "current_business_date": dict(current_metadata, identity=current_identity),

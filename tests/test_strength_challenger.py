@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+from collections import Counter
 from math import isclose, log
 import sys
 from pathlib import Path
@@ -274,6 +276,88 @@ def test_identity_bridge_accepts_exact_registry_alias_only_when_history_is_eligi
     assert mapped["final_status"] == "MAPPED"
     assert mapped["home_mapping"]["method"] == "registry_exact_alias"
     assert mapped["historical_coverage"]["eligible"] is True
+
+
+def test_canonical_competition_identity_is_not_unsupported_when_coverage_metadata_is_stale():
+    sources = _identity_sources()
+    sources["competition_registry"] = {
+        "competitions": [{
+            "competition_key": "stale-test",
+            "canonical_competition_id": None,
+            "name": "Test League",
+            "result_coverage": "MISSING",
+        }]
+    }
+    sources["canonical_competition_registry"] = {
+        "competitions": [{
+            "canonical_competition_id": "competition:test",
+            "canonical_name": "Test League",
+            "seasons": [{
+                "provider": "openfootball",
+                "provider_competition_id": "provider:test",
+                "provider_competition_name": "Test League",
+                "verified": True,
+            }],
+        }]
+    }
+    index = build_identity_bridge_index(_identity_history(), **sources)
+    mapped = resolve_fixture_identity(_identity_fixture(), index=index)
+    assert mapped["competition_mapping"]["status"] == "MAPPED"
+    assert mapped["competition_mapping"]["canonical_competition_id"] == "competition:test"
+
+
+def test_verified_canonical_competition_wins_coverage_unsupported_alias_conflict():
+    sources = _identity_sources()
+    sources["competition_registry"]["competitions"][0]["competition_key"] = "stale-test"
+    sources["competition_registry"]["competitions"][0]["canonical_competition_id"] = None
+    sources["canonical_competition_registry"] = {
+        "competitions": [{
+            "canonical_competition_id": "competition:test",
+            "canonical_name": "Test League",
+        }]
+    }
+    index = build_identity_bridge_index(_identity_history(), **sources)
+    mapped = resolve_fixture_identity(_identity_fixture(), index=index)
+    assert mapped["competition_mapping"]["status"] == "MAPPED"
+    assert mapped["competition_mapping"]["canonical_competition_id"] == "competition:test"
+
+
+def test_uefa_fixture_evidence_only_maps_the_unique_hearts_fixture_and_not_swaps():
+    evidence = json.loads(Path("data/football_data/uefa_europa_2026_27_fixture_identity_evidence.json").read_text(encoding="utf-8"))
+    slate = evidence["full_slate"]
+    counts = Counter(row["kickoff_utc"] for row in slate)
+    target = next(row for row in evidence["fixtures"] if row["production_match_id"] == "500-1460786")
+    assert counts[target["production_kickoff_utc"]] == 1
+    assert target["bridge_status"] == "VERIFIED_CROSS_SOURCE_FIXTURE"
+
+    history = _identity_history()
+    for i in range(5):
+        history.append(result(f"hearts-{i}", f"2026-01-{i + 1:02d}T12:00:00Z", "team:scotland:heart-of-midlothian-fc", f"team:opp-h-{i}"))
+        history.append(result(f"benfica-{i}", f"2026-02-{i + 1:02d}T12:00:00Z", f"team:opp-b-{i}", "team:portugal:sport-lisboa-e-benfica"))
+    index = build_identity_bridge_index(history, official_fixture_evidence=evidence, **_identity_sources())
+    fixture = {"match_id": "500-1460786", "competition": "欧罗巴联赛", "home": "哈茨", "away": "本菲卡", "kickoff": "2026-08-14T02:45:00+08:00"}
+    mapped = resolve_fixture_identity(fixture, index=index)
+    assert mapped["competition_mapping"]["canonical_competition_id"] == "competition:uefa-europa-league"
+    assert mapped["home_mapping"]["canonical_team_id"] == "team:scotland:heart-of-midlothian-fc"
+    assert mapped["away_mapping"]["canonical_team_id"] == "team:portugal:sport-lisboa-e-benfica"
+    assert mapped["final_status"] == "MAPPED"
+
+    for changed in (
+        {"away": "哈茨", "home": "本菲卡"},
+        {"kickoff": "2026-08-14T03:45:00+08:00"},
+        {"match_id": "500-1460787"},
+    ):
+        altered = dict(fixture)
+        altered.update(changed)
+        assert resolve_fixture_identity(altered, index=index)["final_status"] != "MAPPED"
+
+
+def test_uefa_fixture_evidence_does_not_create_generic_chinese_aliases():
+    evidence = json.loads(Path("data/football_data/uefa_europa_2026_27_fixture_identity_evidence.json").read_text(encoding="utf-8"))
+    history = _identity_history()
+    index = build_identity_bridge_index(history, official_fixture_evidence=evidence, **_identity_sources())
+    generic = {"competition": "欧罗巴联赛", "home": "哈茨", "away": "本菲卡", "kickoff": "2026-08-14T02:45:00+08:00", "match_id": "unbound"}
+    assert resolve_fixture_identity(generic, index=index)["final_status"] == "COMPETITION_UNSUPPORTED"
 
 
 def test_identity_bridge_accepts_provider_id_exact_and_rejects_fuzzy_names():
