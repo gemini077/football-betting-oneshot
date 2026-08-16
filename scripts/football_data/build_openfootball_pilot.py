@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -30,20 +31,32 @@ def load_openfootball_records(
     manifest_path: str | Path = DEFAULT_MANIFEST,
     identity_path: str | Path = DEFAULT_IDENTITIES,
     include_team_ids: Iterable[str] | None = None,
+    cutoff_at: str | None = None,
+    include_ambiguous_scores: bool = False,
 ) -> list[dict[str, Any]]:
     raw_root = Path(raw_root)
     manifest = json.loads(Path(manifest_path).read_text(encoding="utf-8"))
     identity_rows = json.loads(Path(identity_path).read_text(encoding="utf-8")).get("teams", [])
     identity_map = {str(row["provider_team_name"]): row for row in identity_rows}
     selected_ids = set(include_team_ids or ())
+    cutoff = None
+    if cutoff_at is not None:
+        cutoff = datetime.fromisoformat(cutoff_at.replace("Z", "+00:00"))
+        if cutoff.tzinfo is None:
+            raise ValueError("cutoff_at must include a timezone")
+        cutoff = cutoff.astimezone(timezone.utc)
     records: list[dict[str, Any]] = []
     for source in manifest.get("sources", []):
         source_path = raw_root / str(source["source_file"])
         raw_bytes = source_path.read_bytes()
-        raw_text = raw_bytes.decode("utf-8")
+        actual_raw_sha256 = hashlib.sha256(raw_bytes).hexdigest()
+        expected_raw_sha256 = source.get("raw_sha256")
+        if expected_raw_sha256 and str(expected_raw_sha256).lower() != actual_raw_sha256:
+            raise ValueError(f"raw SHA256 mismatch for {source['source_file']}")
+        raw_text = raw_bytes.decode("utf-8-sig")
         adapter = OpenFootballHistoricalAdapter(
-            competition_id=f"competition:{source['competition_key']}",
-            season_id=f"season:{source['competition_key']}:{source['provider_season_id']}",
+            competition_id=str(source.get("canonical_competition_id") or f"competition:{source['competition_key']}"),
+            season_id=str(source.get("canonical_season_id") or f"season:{source['competition_key']}:{source['provider_season_id']}"),
             provider_competition_id=str(source["provider_competition_id"]),
             provider_competition_name=str(source["provider_competition_name"]),
             provider_season_id=str(source["provider_season_id"]),
@@ -52,10 +65,20 @@ def load_openfootball_records(
             commit_sha=str(manifest["commit_sha"]),
             source_file=str(source["source_file"]),
             captured_at=str(manifest["captured_at"]),
-            country="Sweden" if str(source["competition_key"]).startswith("sweden") else "Portugal",
+            source_as_of_at=str(source.get("source_as_of_at") or manifest["captured_at"]),
+            country=source.get("country") or ("Sweden" if str(source["competition_key"]).startswith("sweden") else "Portugal"),
+            entity_type=str(source.get("entity_type", "club")),
+            match_type=str(source.get("match_type", "league")),
             team_identity_resolver=identity_map,
         )
-        parsed = adapter.parse_text(raw_text, raw_sha256=hashlib.sha256(raw_bytes).hexdigest())
+        parsed = adapter.parse_text(raw_text, raw_sha256=actual_raw_sha256)
+        if cutoff is not None:
+            parsed = [
+                record for record in parsed
+                if datetime.fromisoformat(str(record["kickoff_at"]).replace("Z", "+00:00")).astimezone(timezone.utc) < cutoff
+            ]
+        if not include_ambiguous_scores:
+            parsed = [record for record in parsed if record.get("score_semantics") == "90_minute_unambiguous"]
         if selected_ids:
             parsed = [
                 record
@@ -72,8 +95,15 @@ def main() -> int:
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--ledger-root", type=Path, default=DEFAULT_LEDGER_ROOT)
     parser.add_argument("--team-id", action="append", dest="team_ids")
+    parser.add_argument("--cutoff-at")
+    parser.add_argument("--include-ambiguous-scores", action="store_true")
     args = parser.parse_args()
-    records = load_openfootball_records(args.raw_root, include_team_ids=args.team_ids)
+    records = load_openfootball_records(
+        args.raw_root,
+        include_team_ids=args.team_ids,
+        cutoff_at=args.cutoff_at,
+        include_ambiguous_scores=args.include_ambiguous_scores,
+    )
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps({
         "contract_version": "historical_result_sample.v1",

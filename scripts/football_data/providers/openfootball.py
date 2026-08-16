@@ -137,8 +137,10 @@ class OpenFootballHistoricalAdapter:
         raw_away: str,
         kickoff_at: str,
         kickoff_precision: str,
-        home_goals: int,
-        away_goals: int,
+        home_goals: int | None,
+        away_goals: int | None,
+        score_semantics: str,
+        raw_score: str,
         raw_sha256: str,
     ) -> dict[str, Any]:
         home_resolution = self._resolve_team(raw_home)
@@ -202,6 +204,8 @@ class OpenFootballHistoricalAdapter:
                 "provider_season_id": self.provider_season_id,
                 "provider_season_name": self.provider_season_name,
                 "kickoff_precision": kickoff_precision,
+                "score_semantics": score_semantics,
+                "raw_score": raw_score,
             }
         )
         return record
@@ -233,8 +237,10 @@ class OpenFootballHistoricalAdapter:
                     raw_away=str(row["away"]),
                     kickoff_at=str(row["kickoff_at"]),
                     kickoff_precision=str(row["kickoff_precision"]),
-                    home_goals=int(row["home_goals"]),
-                    away_goals=int(row["away_goals"]),
+                    home_goals=row["home_goals"],
+                    away_goals=row["away_goals"],
+                    score_semantics=str(row["score_semantics"]),
+                    raw_score=str(row["raw_score"]),
                     raw_sha256=raw_sha256,
                 )
             )
@@ -265,6 +271,9 @@ def parse_football_txt_rows(raw_text: str) -> list[dict[str, Any]]:
         if not match or current_date is None:
             continue
         time_text = match.group("time")
+        score_line = line.casefold()
+        score_is_ambiguous = "a.e.t." in score_line or "pen." in score_line
+        raw_score = f"{match.group('home_goals')}-{match.group('away_goals')}"
         rows.append(
             {
                 "line_number": line_number,
@@ -272,8 +281,10 @@ def parse_football_txt_rows(raw_text: str) -> list[dict[str, Any]]:
                 "away": match.group("away").strip(),
                 "kickoff_at": f"{current_date.isoformat()}T{time_text}:00Z" if time_text else f"{current_date.isoformat()}T00:00:00Z",
                 "kickoff_precision": "minute" if time_text else "date",
-                "home_goals": int(match.group("home_goals")),
-                "away_goals": int(match.group("away_goals")),
+                "home_goals": None if score_is_ambiguous else int(match.group("home_goals")),
+                "away_goals": None if score_is_ambiguous else int(match.group("away_goals")),
+                "score_semantics": "ambiguous_extra_time_or_shootout" if score_is_ambiguous else "90_minute_unambiguous",
+                "raw_score": raw_score,
             }
         )
     return rows
