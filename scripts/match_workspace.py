@@ -303,6 +303,131 @@ def all_reports() -> list[dict]:
     return rows
 
 
+def historical_history_rows(
+    reports: list[dict],
+    reviews: list[dict],
+    output_dir: Path,
+    generated: datetime,
+) -> list[dict]:
+    """Build an immutable history index without recomputing old predictions.
+
+    A report is labelled as a frozen pre-match prediction only when its own
+    persisted snapshot timestamp is no later than kickoff.  A later report
+    cannot replace that snapshot, even if it is newer on disk.
+    """
+
+    report_by_identity: dict[str, dict] = {}
+    for report in reports:
+        payload = report.get("payload") if isinstance(report.get("payload"), dict) else {}
+        match = payload.get("match") if isinstance(payload.get("match"), dict) else {}
+        home, away = match.get("home"), match.get("away")
+        kickoff = parse_kickoff_local(match.get("kickoff_local"))
+        snapshot_value = (payload.get("report") or {}).get("snapshot_timestamp")
+        snapshot = parse_kickoff_local(snapshot_value)
+        if not home or not away or kickoff is None or kickoff >= generated or snapshot is None or snapshot > kickoff:
+            continue
+        identity = history_match_identity(payload)
+        key = identity["fallback_key"]
+        report = {**report, "_history_identity": identity}
+        previous = report_by_identity.get(key)
+        previous_snapshot = parse_kickoff_local(
+            ((previous or {}).get("payload") or {}).get("report", {}).get("snapshot_timestamp")
+        ) if previous else None
+        if previous is None or (previous_snapshot is not None and snapshot > previous_snapshot):
+            report_by_identity[key] = report
+
+    review_by_identity: dict[str, dict] = {}
+    for review in reviews:
+        match = review.get("match") if isinstance(review.get("match"), dict) else {}
+        result = review.get("result") if isinstance(review.get("result"), dict) else {}
+        home, away = match.get("home"), match.get("away")
+        kickoff = parse_kickoff_local(match.get("kickoff_local"))
+        if not home or not away or kickoff is None or kickoff >= generated or not result.get("score_90m"):
+            continue
+        identity = history_match_identity(review)
+        key = identity["fallback_key"]
+        review = {**review, "_history_identity": identity}
+        previous = review_by_identity.get(key)
+        previous_id = str((previous or {}).get("MatchID") or "")
+        review_id = str(review.get("MatchID") or "")
+        if previous is None or review_id > previous_id:
+            review_by_identity[key] = review
+
+    rows: list[dict] = []
+    for key in sorted(set(report_by_identity) | set(review_by_identity)):
+        report = report_by_identity.get(key)
+        review = review_by_identity.get(key)
+        report_match = ((report or {}).get("payload") or {}).get("match") or {}
+        review_match = (review or {}).get("match") or {}
+        match = {**review_match, **report_match}
+        result = (review or {}).get("result") or {}
+        home, away = match.get("home"), match.get("away")
+        kickoff = match.get("kickoff_local")
+        if not home or not away or not kickoff:
+            continue
+        review_id = str((review or {}).get("MatchID") or match.get("shuju_id") or "")
+        postmatch_candidates = []
+        if match.get("shuju_id"):
+            postmatch_candidates.append(DATA / "postmatch_reports" / f"shuju_{match['shuju_id']}.html")
+        if review_id:
+            postmatch_candidates.append(DATA / "postmatch_reports" / f"{safe_report_id(review_id)}.html")
+        postmatch_path = next((path for path in postmatch_candidates if path.exists()), None)
+        prediction_frozen = report is not None
+        review_available = review is not None
+        identity = (report or {}).get("_history_identity") or (review or {}).get("_history_identity") or {}
+        rows.append({
+            "id": str(identity.get("preferred_value") or key),
+            "home": home,
+            "away": away,
+            "kickoff": kickoff,
+            "result_90m": result.get("score_90m"),
+            "prediction_frozen": prediction_frozen,
+            "prediction_source": "IMMUTABLE_PREMATCH_REPORT" if prediction_frozen else "NOT_AVAILABLE",
+            "review_available": review_available,
+            "historical_status": (
+                "FROZEN_PREMATCH_AND_REVIEW" if prediction_frozen and review_available
+                else "FROZEN_PREMATCH_ONLY" if prediction_frozen
+                else "REVIEW_ONLY_NO_FROZEN_PREDICTION"
+            ),
+            "prematch_report_url": relative_uri(report.get("html") if report else None, output_dir),
+            "postmatch_report_url": relative_uri(postmatch_path, output_dir),
+        })
+    return sorted(rows, key=lambda row: str(row.get("kickoff") or ""), reverse=True)
+
+
+def history_match_identity(payload: dict) -> dict[str, str]:
+    """Return exact identity candidates for one persisted match payload.
+
+    The fallback is an exact fixture key, not fuzzy matching: it includes both
+    normalized teams and the parsed kickoff timestamp.  It bridges a report
+    with a canonical/provider ID to a review where that ID is absent.
+    """
+
+    match = payload.get("match") if isinstance(payload.get("match"), dict) else {}
+    kickoff = parse_kickoff_local(match.get("kickoff_local"))
+    home, away = match.get("home"), match.get("away")
+    fallback_key = "fixture:" + "|".join((
+        norm(home),
+        norm(away),
+        kickoff.isoformat() if kickoff is not None else "",
+    ))
+    stable_ids = (
+        ("canonical", match.get("canonical_match_id") or payload.get("canonical_match_id")),
+        ("provider", match.get("provider_match_id") or payload.get("provider_match_id")),
+        ("shuju", match.get("shuju_id") or payload.get("shuju_id")),
+        ("match", match.get("match_id") or payload.get("MatchID") or payload.get("match_id")),
+    )
+    for kind, value in stable_ids:
+        if value is not None and str(value).strip():
+            normalized = str(value).strip()
+            return {
+                "preferred_key": f"{kind}:{normalized}",
+                "preferred_value": normalized,
+                "fallback_key": fallback_key,
+            }
+    return {"preferred_key": fallback_key, "preferred_value": fallback_key, "fallback_key": fallback_key}
+
+
 def report_html_path(json_path: Path) -> Path | None:
     """Return only the HTML generated from the same frozen JSON report.
 
@@ -1013,6 +1138,7 @@ def build(
         completed_ids.add(review_id)
     completed.sort(key=lambda item: str(item.get("kickoff") or ""), reverse=True)
     completed = completed[:20]
+    history = historical_history_rows(all_reports(), reviews, output_dir, generated)
     portfolio = build_daily_portfolio(matches, runtime)
     paper_root = DATA / "paper_ledger"
     if persist_runtime_data:
@@ -1077,7 +1203,12 @@ def build(
         "schedule_source": [str(path.relative_to(ROOT)).replace("\\", "/") for path in schedule_sources],
         "available_cash": max(0.0, float((runtime.get("bankroll") or {}).get("current_balance") or 0) - (sum(float(row.get("stake") or 0) for row in real_open) or portfolio["locked_exposure"])),
         "real_exposure": sum(float(row.get("stake") or 0) for row in real_open) or portfolio["locked_exposure"],
-        "matches": matches, "completed": completed, "portfolio": portfolio,
+        "matches": matches, "completed": completed, "history": history,
+        "history_summary": {
+            "total": len(history),
+            "with_frozen_prematch": sum(row.get("prediction_frozen") is True for row in history),
+            "with_verified_review": sum(row.get("review_available") is True for row in history),
+        }, "portfolio": portfolio,
         "prematch_monitor": prematch_monitor,
         "paper_ledger": paper_ledger,
         "calibration_status": calibration_status,
@@ -1249,10 +1380,27 @@ $('#tabPrematch').onclick=()=>current?showPrematch():showEmpty('请先选择比�
         "$('#closeDialog').onclick=()=>$('#reportDialog').close();",
         "$('#openAllReviews').onclick=openAllReviews;",
     )
+    history_script = """<script>
+(() => {
+  const rows = Array.isArray(DATA.history) ? DATA.history : [];
+  const section = document.createElement('section');
+  section.className = 'card historical-card';
+  const esc = value => String(value ?? '—').replace(/[&<>\"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[char]));
+  const link = (url, label, primary = false) => url
+    ? `<a class="action ${primary ? 'primary' : ''}" href="${esc(url)}">${label}</a>`
+    : '<span class="muted">未归档</span>';
+  section.innerHTML = `<div class="card-title"><h2>历史比赛档案</h2><span>${rows.length} 场 · 只读快照</span></div>
+    <p class="muted" style="padding:0 19px">历史赛前预测仅指向开赛前已经冻结的报告；没有冻结快照的比赛不会用当前模型补算冒充。</p>
+    <div class="table-wrap"><table><thead><tr><th>开赛</th><th>比赛</th><th>历史状态</th><th>实际90分钟</th><th>档案</th></tr></thead>
+    <tbody>${rows.map(row => `<tr><td>${esc(row.kickoff)}</td><td><div class="match-name">${esc(row.home)} <span class="muted">vs</span> ${esc(row.away)}</div></td><td><span class="badge ${row.prediction_frozen ? 'good' : 'gold'}">${esc(row.historical_status)}</span></td><td><b>${esc(row.result_90m || '待核验')}</b></td><td><div class="actions">${link(row.prematch_report_url, '赛前快照', row.prediction_frozen)}${link(row.postmatch_report_url, '赛后复盘')}</div></td></tr>`).join('') || '<tr><td colspan="5" class="empty-row">暂无可证明的历史档案</td></tr>'}</tbody></table></div>`;
+  const footer = document.querySelector('footer');
+  if (footer) footer.parentNode.insertBefore(section, footer);
+})();
+</script>"""
     refresh_script = STATIC_REFRESH_SCRIPT.replace(
         "__PAGE_VERSION__", json.dumps(page_version, ensure_ascii=False)
     )
-    return html_page.replace("</body>", refresh_script + "</body>", 1)
+    return html_page.replace("</body>", refresh_script + history_script + "</body>", 1)
 
 
 def main() -> int:
