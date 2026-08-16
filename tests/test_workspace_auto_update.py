@@ -14,6 +14,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
 from scripts import automation_cycle, core_auto_reports, match_workspace, prediction_dashboard
+from scripts.match_workspace import historical_history_rows
 
 
 def _has_script(command, script_name):
@@ -142,6 +143,51 @@ def test_latest_publish_decision_is_independent_of_host_timezone():
     assert match_workspace.should_publish_latest("2026-08-15", instant_shanghai)
     assert not match_workspace.should_publish_latest("2026-08-14", instant_utc)
     assert not match_workspace.should_publish_latest("2026-08-14", instant_shanghai)
+
+
+def test_historical_history_links_pre_kickoff_snapshot_and_verified_review(tmp_path, monkeypatch):
+    data_root = tmp_path / "data"
+    monkeypatch.setattr(match_workspace, "DATA", data_root)
+    report_path = data_root / "analysis_reports" / "20260714" / "prematch.json"
+    report_html = report_path.with_suffix(".html")
+    postmatch_html = data_root / "postmatch_reports" / "shuju_1359162.html"
+    for path in (report_path, report_html, postmatch_html):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("snapshot", encoding="utf-8")
+
+    match = {
+        "home": "France",
+        "away": "Spain",
+        "kickoff_local": "2026-07-15 03:00",
+        "shuju_id": 1359162,
+    }
+    reports = [
+        {
+            "path": report_path,
+            "html": report_html,
+            "payload": {"match": match, "report": {"snapshot_timestamp": "2026-07-15T02:00:00+08:00"}},
+        },
+        {
+            "path": data_root / "analysis_reports" / "postmatch.json",
+            "html": None,
+            "payload": {"match": match, "report": {"snapshot_timestamp": "2026-07-15T04:00:00+08:00"}},
+        },
+    ]
+    reviews = [{"match": match, "result": {"score_90m": "0-2"}}]
+
+    rows = historical_history_rows(
+        reports,
+        reviews,
+        data_root / "match_workspace" / "20260816",
+        datetime.fromisoformat("2026-08-16T00:00:00+08:00"),
+    )
+
+    assert len(rows) == 1
+    assert rows[0]["prediction_frozen"] is True
+    assert rows[0]["prematch_report_url"] == "../analysis_reports/20260714/prematch.html"
+    assert rows[0]["postmatch_report_url"] == "../postmatch_reports/shuju_1359162.html"
+    assert rows[0]["result_90m"] == "0-2"
+    assert rows[0]["historical_status"] == "FROZEN_PREMATCH_AND_REVIEW"
 
 
 def _write_workspace(path: Path, target_date: str, generated_at: str, matches=None):
