@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from math import isclose, log
 import sys
+from pathlib import Path
 
 import pytest
 
@@ -23,6 +24,7 @@ from scripts.strength_challenger import (
     strong_favourite_diagnostics,
     uniform_one_x_two,
     validation_row_counts,
+    _cohort_metadata,
 )
 from scripts.football_data.storage import DatasetNotAvailableError
 from tests.phase2c2_test_support import paired_history, result, target
@@ -103,6 +105,30 @@ def test_prediction_record_without_canonical_identity_is_not_fuzzy_resolved():
     )
     assert target_info["status"] == "IDENTITY_UNAVAILABLE"
     assert target_info["target"] is None
+
+
+def test_cohort_metadata_totals_come_from_rows_not_legacy_label_numerals():
+    current = [{"prediction_id": "c-1"}, {"prediction_id": "c-2"}]
+    formal = [{"prediction_id": f"f-{index}"} for index in range(9)]
+    current_metadata = _cohort_metadata(scope="current_business_date", business_date="2026-08-16", total=len(current), eligible_count=0, legacy_label="current_23")
+    formal_metadata = _cohort_metadata(scope="formal_eligible", total=len(formal), eligible_count=len(formal), excluded_pilot_count=5, legacy_label="formal_14")
+    assert current_metadata["total"] == len(current)
+    assert current_metadata["total"] != 23
+    assert formal_metadata["eligible_count"] == len(formal)
+    assert formal_metadata["eligible_count"] != 14
+    assert formal_metadata["excluded_pilot_count"] == 5
+
+
+def test_authoritative_pa2_cohorts_have_current_zero_formal_nine_and_five_excluded_pilots():
+    root = Path(__file__).resolve().parents[1]
+    records = strength_challenger._load_prediction_records(root)
+    current = strength_challenger._current_records(records, "2026-08-16", root=root)
+    formal = strength_challenger._formal_rows(root, records)
+    assert len(current) == 0
+    assert len(formal) == 9
+    assert len(strength_challenger._load_exclusion_ids(root)) == 5
+    formal_metadata = _cohort_metadata(scope="formal_eligible", business_date="2026-08-16", total=len(formal), eligible_count=len(formal), excluded_pilot_count=5, legacy_label="formal_14")
+    assert formal_metadata["business_date"] == "2026-08-16"
 
 
 def test_formal_evaluation_ids_are_excluded_from_training_history():

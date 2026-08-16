@@ -1459,6 +1459,19 @@ def _dataset_summary(records: Sequence[Mapping[str, Any]], gate: Mapping[str, An
     return {"record_count": len(records), "eligible_count": gate["eligible_count"], "excluded_count": gate["excluded_count"], "excluded_by_reason": gate["excluded_by_reason"], "date_range": {"start": _iso(min(kickoff_values)) if kickoff_values else None, "end": _iso(max(kickoff_values)) if kickoff_values else None}, "competitions": dict(sorted(competitions.items())), "quality": dict(sorted(qualities.items())), "duplicates": dict(sorted(duplicates.items())), "dataset_digest": store.dataset_digest()}
 
 
+def _cohort_metadata(*, scope: str, total: int, eligible_count: int, business_date: str | None = None, excluded_pilot_count: int = 0, legacy_label: str | None = None) -> dict[str, Any]:
+    metadata = {
+        "scope": scope,
+        "business_date": business_date,
+        "total": total,
+        "eligible_count": eligible_count,
+        "excluded_pilot_count": excluded_pilot_count,
+    }
+    if legacy_label:
+        metadata["legacy_label_name"] = legacy_label
+    return metadata
+
+
 def run_research(*, root: Path, data_home: Path, business_date: str, output_dir: Path) -> dict[str, Any]:
     """Run the complete shadow study and write only to ``output_dir``."""
 
@@ -1527,6 +1540,23 @@ def run_research(*, root: Path, data_home: Path, business_date: str, output_dir:
             current_row = {"status": "AVAILABLE", "prediction_id": record.get("prediction_id"), "match_id": record.get("match_id"), "prediction": prediction}
             current_shadow_rows.append(current_row)
             current_eligible_rows.append({"record": record, "shadow": current_row})
+
+    excluded_pilot_count = len(_load_exclusion_ids(root))
+    current_metadata = _cohort_metadata(
+        scope="current_business_date",
+        business_date=business_date,
+        total=len(current),
+        eligible_count=len(current_eligible_rows),
+        legacy_label="current_23",
+    )
+    formal_metadata = _cohort_metadata(
+        scope="formal_eligible",
+        business_date=business_date,
+        total=len(formal),
+        eligible_count=len(formal),
+        excluded_pilot_count=excluded_pilot_count,
+        legacy_label="formal_14",
+    )
 
     current_comparison_rows = []
     for item in current_eligible_rows:
@@ -1614,9 +1644,11 @@ def run_research(*, root: Path, data_home: Path, business_date: str, output_dir:
             "data/football_data/competition_coverage_registry.json",
             "HistoricalResultStore",
         ],
-        "current_23": current_identity,
-        "formal_14": formal_identity,
-        "rows": ([dict(row, scope="current_23") for row in current_bridge] + [dict(row, scope="formal_14") for row in formal_bridge]),
+        "current_business_date": dict(current_metadata, identity=current_identity),
+        "formal_eligible": dict(formal_metadata, identity=formal_identity),
+        "current_23": dict(current_metadata, legacy_label=True, identity=current_identity),
+        "formal_14": dict(formal_metadata, legacy_label=True, identity=formal_identity),
+        "rows": ([dict(row, scope="current_business_date") for row in current_bridge] + [dict(row, scope="formal_eligible") for row in formal_bridge]),
     }
     paired_evaluation = {
         "schema_version": "pa2_r1_paired_evaluation.v1",
@@ -1626,13 +1658,16 @@ def run_research(*, root: Path, data_home: Path, business_date: str, output_dir:
         "paired_match_ids": formal_paired_ids,
         "same_match_ids_for_all_methods": True,
         "verdict": paired_verdict,
-        "current_23": {
-            "total": len(current),
+        "current_business_date": {
+            **current_metadata,
             "eligible": len(current_eligible_rows),
             "current_top1_one_one": f"{_one_one_count(current)}/{len(current)}" if current else None,
             "challenger_top1_one_one": f"{current_challenger_one_one}/{len(current_shadow_rows)}" if current_shadow_rows else None,
             "rows": current_comparison_rows,
         },
+        "formal_eligible": formal_metadata,
+        "current_23": {**current_metadata, "legacy_label": True},
+        "formal_14": {**formal_metadata, "legacy_label": True},
         "formal_paired_methods": paired_methods,
         "fusion_status": "NOT_YET_EVALUATED",
         "formal_replay_status": dict(formal_replay_status),
@@ -1659,7 +1694,7 @@ def run_research(*, root: Path, data_home: Path, business_date: str, output_dir:
         "historical_split": historical["split"],
         "parameters": {"selected": asdict(selected_spec), "candidate_regularizations": [5, 10, 20], "market_fusion": "not evaluated without current canonical target identity", "rho": 0.0, "randomness": "none"},
         "leakage_audit": historical["leakage_audit"],
-        "identity_bridge": {"current_23": current_identity, "formal_14": formal_identity, "deterministic_only": True, "fuzzy_resolution_used": False},
+        "identity_bridge": {"current_business_date": dict(current_metadata, identity=current_identity), "formal_eligible": dict(formal_metadata, identity=formal_identity), "current_23": {**current_metadata, "legacy_label": True, "identity": current_identity}, "formal_14": {**formal_metadata, "legacy_label": True, "identity": formal_identity}, "deterministic_only": True, "fuzzy_resolution_used": False},
         "identity_bridge_audit_file": "identity_bridge_audit.json",
         "paired_evaluation_file": "paired_challenger_evaluation.json",
         "validation_reconciliation": historical.get("validation_reconciliation"),
@@ -1687,12 +1722,12 @@ def run_research(*, root: Path, data_home: Path, business_date: str, output_dir:
         prediction = row.get("prediction") if isinstance(row.get("prediction"), Mapping) else {}
         prediction_rows.append({"scope": "historical_holdout", "match_id": row.get("match_id"), "actual_score": row.get("actual_score"), "status": row.get("status"), "lambda_home": prediction.get("lambda_home"), "lambda_away": prediction.get("lambda_away"), "top1": (_prediction_top_scores(prediction) or [None])[0], "top3": "|".join(_prediction_top_scores(prediction)[:3])})
     for row in current_comparison_rows:
-        prediction_rows.append({"scope": "current_23_shadow", "match_id": row.get("match_id"), "actual_score": None, "status": "AVAILABLE", "lambda_home": row.get("challenger_lambda", [None, None])[0], "lambda_away": row.get("challenger_lambda", [None, None])[1], "top1": row.get("challenger_top1"), "top3": "|".join(row.get("challenger_top3") or [])})
+        prediction_rows.append({"scope": "current_business_date_shadow", "business_date": business_date, "eligible_count": len(current_eligible_rows), "excluded_pilot_count": 0, "legacy_label": "current_23", "match_id": row.get("match_id"), "actual_score": None, "status": "AVAILABLE", "lambda_home": row.get("challenger_lambda", [None, None])[0], "lambda_away": row.get("challenger_lambda", [None, None])[1], "top1": row.get("challenger_top1"), "top3": "|".join(row.get("challenger_top3") or [])})
     for row in formal_challenger_rows:
         prediction = row.get("prediction") if isinstance(row.get("prediction"), Mapping) else {}
-        prediction_rows.append({"scope": "formal_14_challenger", "match_id": row.get("match_id"), "actual_score": row.get("actual_score"), "status": row.get("status"), "lambda_home": prediction.get("lambda_home"), "lambda_away": prediction.get("lambda_away"), "top1": (_prediction_top_scores(prediction) or [None])[0], "top3": "|".join(_prediction_top_scores(prediction)[:3])})
+        prediction_rows.append({"scope": "formal_eligible_challenger", "business_date": business_date, "eligible_count": len(formal), "excluded_pilot_count": excluded_pilot_count, "legacy_label": "formal_14", "match_id": row.get("match_id"), "actual_score": row.get("actual_score"), "status": row.get("status"), "lambda_home": prediction.get("lambda_home"), "lambda_away": prediction.get("lambda_away"), "top1": (_prediction_top_scores(prediction) or [None])[0], "top3": "|".join(_prediction_top_scores(prediction)[:3])})
     with (output_dir / "challenger_predictions.csv").open("w", newline="", encoding="utf-8") as handle:
-        writer = csv.DictWriter(handle, fieldnames=["scope", "match_id", "actual_score", "status", "lambda_home", "lambda_away", "top1", "top3"])
+        writer = csv.DictWriter(handle, fieldnames=["scope", "business_date", "eligible_count", "excluded_pilot_count", "legacy_label", "match_id", "actual_score", "status", "lambda_home", "lambda_away", "top1", "top3"])
         writer.writeheader()
         writer.writerows(prediction_rows)
     return summary
