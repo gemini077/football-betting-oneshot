@@ -1,21 +1,30 @@
 from __future__ import annotations
 
 from math import isclose, log
+import sys
 
 import pytest
 
+import scripts.strength_challenger as strength_challenger
 from scripts.strength_challenger import (
     ChallengerSpec,
     assert_evaluation_ids_not_in_history,
     blend_one_x_two,
+    build_identity_bridge_index,
     build_opponent_adjusted_shadow,
     chronological_split,
     dataset_gate,
+    paired_subset,
     market_only_from_record,
     prediction_record_target,
+    reliability_bucket,
+    resolve_fixture_identity,
     summarise_prediction_rows,
+    strong_favourite_diagnostics,
     uniform_one_x_two,
+    validation_row_counts,
 )
+from scripts.football_data.storage import DatasetNotAvailableError
 from tests.phase2c2_test_support import paired_history, result, target
 
 
@@ -163,3 +172,203 @@ def test_valid_stored_nll_is_used_but_unavailable_status_is_not():
     unavailable = summarise_prediction_rows([{"status": "AVAILABLE", "actual_score": "1-0", "prediction": {"probabilities": {"1x2": {"home": 0.6, "draw": 0.2, "away": 0.2}}, "actual_score_nll": 2.5, "actual_score_nll_status": "UNAVAILABLE_IN_FROZEN_RECORD"}}])
     assert available["mean_score_nll_available_only"] == 2.5
     assert unavailable["mean_score_nll_available_only"] is None
+
+
+def test_stored_nll_mismatch_with_frozen_probability_is_reported_not_silently_selected():
+    metrics = summarise_prediction_rows([
+        {
+            "status": "AVAILABLE",
+            "match_id": "mismatch-1",
+            "actual_score": "1-0",
+            "prediction": {
+                "probabilities": {"1x2": {"home": 0.6, "draw": 0.2, "away": 0.2}},
+                "actual_score_probability": 0.25,
+                "actual_score_nll": 1.0,
+            },
+        }
+    ])
+    assert metrics["score_nll_available_count"] == 0
+    assert metrics["score_nll_unavailable_reasons"] == {"NLL_RECONSTRUCTION_MISMATCH": 1}
+    assert metrics["nll_reconstruction_mismatch_count"] == 1
+
+
+def _identity_fixture(*, home="Alpha", away="Beta", competition="Test League"):
+    return {
+        "match_id": "production-match-1",
+        "competition": competition,
+        "home": home,
+        "away": away,
+        "kickoff": "2026-03-01T12:00:00Z",
+    }
+
+
+def _identity_sources():
+    return {
+        "team_alias_registry": {
+            "teams": [
+                {
+                    "canonical_team_id": "team:alpha",
+                    "canonical_name": "Alpha",
+                    "aliases": ["Alpha"],
+                    "competition_context": ["competition:test"],
+                },
+                {
+                    "canonical_team_id": "team:beta",
+                    "canonical_name": "Beta",
+                    "aliases": ["Beta"],
+                    "competition_context": ["competition:test"],
+                },
+            ]
+        },
+        "competition_registry": {
+            "competitions": [
+                {
+                    "competition_key": "test",
+                    "canonical_competition_id": "competition:test",
+                    "name": "Test League",
+                    "observed_raw_names": ["Test League"],
+                    "result_coverage": "SUPPORTED",
+                }
+            ]
+        },
+    }
+
+
+def _identity_history(count=5):
+    rows = []
+    for index in range(count):
+        rows.append(result(f"alpha-{index}", f"2026-01-{index + 1:02d}T12:00:00Z", "team:alpha", f"team:opp-a-{index}", competition="competition:test"))
+        rows.append(result(f"beta-{index}", f"2026-01-{index + 1:02d}T13:00:00Z", f"team:opp-b-{index}", "team:beta", competition="competition:test"))
+    return rows
+
+
+def test_identity_bridge_accepts_exact_registry_alias_only_when_history_is_eligible():
+    index = build_identity_bridge_index(_identity_history(), **_identity_sources())
+    mapped = resolve_fixture_identity(_identity_fixture(), index=index)
+    assert mapped["final_status"] == "MAPPED"
+    assert mapped["home_mapping"]["method"] == "registry_exact_alias"
+    assert mapped["historical_coverage"]["eligible"] is True
+
+
+def test_identity_bridge_accepts_provider_id_exact_and_rejects_fuzzy_names():
+    sources = _identity_sources()
+    sources["project_crosswalk"] = {
+        "mappings": [
+            {
+                "canonical_team_id": "team:alpha",
+                "canonical_name": "Alpha",
+                "competition": "competition:test",
+                "provider": "nowscore",
+                "provider_team_id": "101",
+                "provider_team_name": "Alpha provider",
+                "verified": True,
+            },
+            {
+                "canonical_team_id": "team:beta",
+                "canonical_name": "Beta",
+                "competition": "competition:test",
+                "provider": "nowscore",
+                "provider_team_id": "202",
+                "provider_team_name": "Beta provider",
+                "verified": True,
+            },
+        ]
+    }
+    index = build_identity_bridge_index(_identity_history(), **sources)
+    provider_fixture = _identity_fixture(home="Unknown Alpha", away="Unknown Beta")
+    provider_fixture["production_identity_signals"] = {
+        "provider": "nowscore",
+        "home_provider_team_id": "101",
+        "away_provider_team_id": "202",
+    }
+    assert resolve_fixture_identity(provider_fixture, index=index)["final_status"] == "MAPPED"
+    fuzzy = resolve_fixture_identity(_identity_fixture(home="Alph"), index=index)
+    assert fuzzy["final_status"] == "IDENTITY_UNAVAILABLE"
+
+
+def test_identity_bridge_rejects_ambiguous_alias_and_separates_history_or_competition_gaps():
+    sources = _identity_sources()
+    sources["team_alias_registry"]["teams"].append(
+        {
+            "canonical_team_id": "team:alpha-2",
+            "canonical_name": "Alpha Two",
+            "aliases": ["Alpha"],
+            "competition_context": ["competition:test"],
+        }
+    )
+    index = build_identity_bridge_index(_identity_history(), **sources)
+    ambiguous = resolve_fixture_identity(_identity_fixture(), index=index)
+    assert ambiguous["final_status"] == "AMBIGUOUS_IDENTITY"
+
+    short_index = build_identity_bridge_index(_identity_history(1), **_identity_sources())
+    short = resolve_fixture_identity(_identity_fixture(), index=short_index)
+    assert short["final_status"] == "HISTORY_UNAVAILABLE"
+
+    unsupported = resolve_fixture_identity(
+        _identity_fixture(competition="Unsupported League"),
+        index=index,
+    )
+    assert unsupported["final_status"] == "COMPETITION_UNSUPPORTED"
+
+
+def test_paired_subset_uses_identical_match_ids_for_all_methods():
+    formal = [
+        {"prediction_id": "p-1", "actual_score": "1-0"},
+        {"prediction_id": "p-2", "actual_score": "0-0"},
+    ]
+    challenger = [
+        {"prediction_id": "p-1", "status": "AVAILABLE"},
+        {"prediction_id": "p-2", "status": "INSUFFICIENT_HISTORY"},
+    ]
+    paired = paired_subset(formal, challenger)
+    assert paired == ["p-1"]
+
+
+def test_reliability_bins_are_non_overlapping_and_favourite_thresholds_are_cumulative():
+    assert reliability_bucket(0.57) == "0.55-<0.60"
+    assert reliability_bucket(0.62) == "0.60-<0.65"
+    rows = [
+        {"actual_score": "1-0", "prediction": {"probabilities": {"1x2": {"home": 0.56, "draw": 0.22, "away": 0.22}}}},
+        {"actual_score": "0-1", "prediction": {"probabilities": {"1x2": {"home": 0.66, "draw": 0.20, "away": 0.14}}}},
+    ]
+    diag = strong_favourite_diagnostics(rows)
+    assert diag[">=0.55"]["count"] == 2
+    assert diag[">=0.60"]["count"] == 1
+    assert diag[">=0.65"]["count"] == 1
+
+
+def test_validation_counts_reconcile_total_available_metric_and_insufficient_rows():
+    counts = validation_row_counts([
+        {"status": "AVAILABLE", "actual_score": "1-0", "prediction": {"probabilities": {"1x2": {"home": 0.5, "draw": 0.25, "away": 0.25}}}},
+        {"status": "AVAILABLE", "actual_score": "1-0", "prediction": {"probabilities": {}}},
+        {"status": "INSUFFICIENT_HISTORY", "actual_score": None, "prediction": {}},
+    ])
+    assert counts["validation_total"] == 3
+    assert counts["available"] == 2
+    assert counts["metric_eligible"] == 1
+    assert counts["insufficient"] == 1
+
+
+def test_cli_fails_fast_with_diagnostic_when_historical_dataset_is_missing(monkeypatch, tmp_path, capsys):
+    missing_path = tmp_path / "historical_results.duckdb"
+
+    def fail_fast(**_kwargs):
+        raise DatasetNotAvailableError(missing_path)
+
+    monkeypatch.setattr(strength_challenger, "run_research", fail_fast)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "strength_challenger",
+            "--business-date",
+            "2026-08-16",
+            "--output-dir",
+            str(tmp_path / "evidence"),
+        ],
+    )
+
+    assert strength_challenger._cli() == 2
+    captured = capsys.readouterr()
+    assert "DATASET_NOT_AVAILABLE" in captured.err
+    assert str(missing_path) in captured.err
