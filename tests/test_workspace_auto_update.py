@@ -190,6 +190,55 @@ def test_historical_history_links_pre_kickoff_snapshot_and_verified_review(tmp_p
     assert rows[0]["historical_status"] == "FROZEN_PREMATCH_AND_REVIEW"
 
 
+def test_historical_history_keeps_same_teams_on_distinct_kickoffs(tmp_path, monkeypatch):
+    data_root = tmp_path / "data"
+    monkeypatch.setattr(match_workspace, "DATA", data_root)
+    reports = []
+    reviews = []
+    cases = (("2026-07-15T03:00+08:00", "CAN-1", "REVIEW-1", "0-2"), ("2026-07-22T03:00+08:00", "CAN-2", "REVIEW-2", "2-1"))
+    for index, (kickoff, canonical_id, review_id, score) in enumerate(cases, start=1):
+        report_path = data_root / "analysis_reports" / f"202607{14 + index}" / f"prematch-{index}.json"
+        report_html = report_path.with_suffix(".html")
+        postmatch_html = data_root / "postmatch_reports" / f"{review_id}.html"
+        for path in (report_path, report_html, postmatch_html):
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("snapshot", encoding="utf-8")
+        match = {
+            "home": "France", "away": "Spain", "kickoff_local": kickoff,
+            "canonical_match_id": canonical_id, "provider_match_id": f"provider-{index}",
+        }
+        reports.append({
+            "path": report_path, "html": report_html,
+            "payload": {"match": match, "report": {"snapshot_timestamp": kickoff.replace("03:00", "02:00")}},
+        })
+        reviews.append({
+            "MatchID": review_id,
+            "match": {"home": "France", "away": "Spain", "kickoff_local": kickoff},
+            "result": {"score_90m": score},
+        })
+
+    rows = historical_history_rows(
+        reports, reviews, data_root / "match_workspace" / "20260816",
+        datetime.fromisoformat("2026-08-16T00:00:00+08:00"),
+    )
+
+    assert len(rows) == 2
+    by_kickoff = {row["kickoff"]: row for row in rows}
+    assert by_kickoff["2026-07-15T03:00+08:00"]["id"] == "CAN-1"
+    assert by_kickoff["2026-07-15T03:00+08:00"]["result_90m"] == "0-2"
+    assert by_kickoff["2026-07-22T03:00+08:00"]["id"] == "CAN-2"
+    assert by_kickoff["2026-07-22T03:00+08:00"]["result_90m"] == "2-1"
+    assert all(row["prediction_frozen"] and row["review_available"] for row in rows)
+    assert {row["prematch_report_url"] for row in rows} == {
+        "../analysis_reports/20260715/prematch-1.html",
+        "../analysis_reports/20260716/prematch-2.html",
+    }
+    assert {row["postmatch_report_url"] for row in rows} == {
+        "../postmatch_reports/REVIEW-1.html",
+        "../postmatch_reports/REVIEW-2.html",
+    }
+
+
 def _write_workspace(path: Path, target_date: str, generated_at: str, matches=None):
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps({

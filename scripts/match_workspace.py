@@ -316,7 +316,7 @@ def historical_history_rows(
     cannot replace that snapshot, even if it is newer on disk.
     """
 
-    report_by_pair: dict[str, dict] = {}
+    report_by_identity: dict[str, dict] = {}
     for report in reports:
         payload = report.get("payload") if isinstance(report.get("payload"), dict) else {}
         match = payload.get("match") if isinstance(payload.get("match"), dict) else {}
@@ -326,15 +326,17 @@ def historical_history_rows(
         snapshot = parse_kickoff_local(snapshot_value)
         if not home or not away or kickoff is None or kickoff >= generated or snapshot is None or snapshot > kickoff:
             continue
-        key = f"{norm(home)}|{norm(away)}"
-        previous = report_by_pair.get(key)
+        identity = history_match_identity(payload)
+        key = identity["fallback_key"]
+        report = {**report, "_history_identity": identity}
+        previous = report_by_identity.get(key)
         previous_snapshot = parse_kickoff_local(
             ((previous or {}).get("payload") or {}).get("report", {}).get("snapshot_timestamp")
         ) if previous else None
         if previous is None or (previous_snapshot is not None and snapshot > previous_snapshot):
-            report_by_pair[key] = report
+            report_by_identity[key] = report
 
-    review_by_pair: dict[str, dict] = {}
+    review_by_identity: dict[str, dict] = {}
     for review in reviews:
         match = review.get("match") if isinstance(review.get("match"), dict) else {}
         result = review.get("result") if isinstance(review.get("result"), dict) else {}
@@ -342,16 +344,22 @@ def historical_history_rows(
         kickoff = parse_kickoff_local(match.get("kickoff_local"))
         if not home or not away or kickoff is None or kickoff >= generated or not result.get("score_90m"):
             continue
-        key = f"{norm(home)}|{norm(away)}"
-        review_by_pair[key] = review
+        identity = history_match_identity(review)
+        key = identity["fallback_key"]
+        review = {**review, "_history_identity": identity}
+        previous = review_by_identity.get(key)
+        previous_id = str((previous or {}).get("MatchID") or "")
+        review_id = str(review.get("MatchID") or "")
+        if previous is None or review_id > previous_id:
+            review_by_identity[key] = review
 
     rows: list[dict] = []
-    for key in sorted(set(report_by_pair) | set(review_by_pair)):
-        report = report_by_pair.get(key)
-        review = review_by_pair.get(key)
+    for key in sorted(set(report_by_identity) | set(review_by_identity)):
+        report = report_by_identity.get(key)
+        review = review_by_identity.get(key)
         report_match = ((report or {}).get("payload") or {}).get("match") or {}
         review_match = (review or {}).get("match") or {}
-        match = report_match or review_match
+        match = {**review_match, **report_match}
         result = (review or {}).get("result") or {}
         home, away = match.get("home"), match.get("away")
         kickoff = match.get("kickoff_local")
@@ -366,8 +374,9 @@ def historical_history_rows(
         postmatch_path = next((path for path in postmatch_candidates if path.exists()), None)
         prediction_frozen = report is not None
         review_available = review is not None
+        identity = (report or {}).get("_history_identity") or (review or {}).get("_history_identity") or {}
         rows.append({
-            "id": str(match.get("canonical_match_id") or match.get("shuju_id") or key),
+            "id": str(identity.get("preferred_value") or key),
             "home": home,
             "away": away,
             "kickoff": kickoff,
@@ -384,6 +393,39 @@ def historical_history_rows(
             "postmatch_report_url": relative_uri(postmatch_path, output_dir),
         })
     return sorted(rows, key=lambda row: str(row.get("kickoff") or ""), reverse=True)
+
+
+def history_match_identity(payload: dict) -> dict[str, str]:
+    """Return exact identity candidates for one persisted match payload.
+
+    The fallback is an exact fixture key, not fuzzy matching: it includes both
+    normalized teams and the parsed kickoff timestamp.  It bridges a report
+    with a canonical/provider ID to a review where that ID is absent.
+    """
+
+    match = payload.get("match") if isinstance(payload.get("match"), dict) else {}
+    kickoff = parse_kickoff_local(match.get("kickoff_local"))
+    home, away = match.get("home"), match.get("away")
+    fallback_key = "fixture:" + "|".join((
+        norm(home),
+        norm(away),
+        kickoff.isoformat() if kickoff is not None else "",
+    ))
+    stable_ids = (
+        ("canonical", match.get("canonical_match_id") or payload.get("canonical_match_id")),
+        ("provider", match.get("provider_match_id") or payload.get("provider_match_id")),
+        ("shuju", match.get("shuju_id") or payload.get("shuju_id")),
+        ("match", match.get("match_id") or payload.get("MatchID") or payload.get("match_id")),
+    )
+    for kind, value in stable_ids:
+        if value is not None and str(value).strip():
+            normalized = str(value).strip()
+            return {
+                "preferred_key": f"{kind}:{normalized}",
+                "preferred_value": normalized,
+                "fallback_key": fallback_key,
+            }
+    return {"preferred_key": fallback_key, "preferred_value": fallback_key, "fallback_key": fallback_key}
 
 
 def report_html_path(json_path: Path) -> Path | None:
