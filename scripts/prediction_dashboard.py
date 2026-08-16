@@ -676,6 +676,7 @@ def render_dashboard(payload: dict[str, Any]) -> str:
 </main><script>
 const buttons = Array.from(document.querySelectorAll('[data-filter]'));
 const cards = Array.from(document.querySelectorAll('.fixture-card'));
+const historicalResults = document.querySelector('#historical-results');
 buttons.forEach(button => button.addEventListener('click', () => {{
   const filter = button.dataset.filter;
   buttons.forEach(item => item.setAttribute('aria-pressed', String(item === button)));
@@ -683,9 +684,17 @@ buttons.forEach(button => button.addEventListener('click', () => {{
     const match = filter === 'ALL' || card.dataset.status === filter || (filter === 'RESULT' && card.dataset.result === 'yes');
     card.hidden = !match;
   }});
+  if (historicalResults) historicalResults.hidden = filter !== 'ALL' && filter !== 'RESULT';
 }}));
 </script></body></html>"""
+    result_count = int(summary.get("completed_count") or 0)
     page = page.replace('<section id="fixture-list"', historical_html + '<section id="fixture-list"', 1)
+    page = page.replace(
+        'data-filter="RESULT" aria-pressed="false"',
+        f'data-filter="RESULT" data-result-count="{result_count}" aria-pressed="false"',
+        1,
+    )
+    page = page.replace('>已完赛</button>', f'>已完赛 ({result_count})</button>', 1)
     page_version = "|".join(
         str(payload.get(key) or "") for key in ("business_date", "generated_at")
     )
