@@ -115,6 +115,10 @@ Codex / 开发代理不得自行宣布某阶段 `SEALED`。
 
 优先后台脚本、CLI、headless、独立工作目录、临时 worktree、CI。
 
+### 工具与市场发现
+
+凡涉及重大模块或 build-vs-buy，执行顺序必须是 `landscape → shortlist → compare → bounded validation → build/adopt`。用户提供的工具或仓库只是搜索种子，不是完整候选空间；必须主动扩展到竞品、替代方案、相邻类别、开源项目、国内外商业工具/API、上下游组件、近期更新和低成本组合，并以 D-023 的比较与门禁规则为准。发现结果不得绕过现有 Champion、生产、验收或 promotion 门禁，也不得仅因出现新选项就无界限地 churn 架构。
+
 ## 9. Git 与交付
 
 项目正式验收/交付目录位于仓库外：
