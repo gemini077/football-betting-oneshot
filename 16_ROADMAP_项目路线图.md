@@ -9,6 +9,10 @@ CURRENT PHASE：
 
 `PA-2-R1 — Canonical Identity & Paired Challenger Evaluation`
 
+当前子状态：`ID2 VERIFIED / READY_FOR_ACCEPTANCE / INDEPENDENT ACCEPTANCE PENDING`
+
+下一执行指针：`PA-2-R1-ID3 — Targeted Identity Persistence, Bounded History Closure & Prospective Pair Capture`
+
 NEXT GATE：
 
 > 能否让 Challenger 在与 production Current 完全相同的正式比赛子集上被公平评价？
@@ -95,22 +99,30 @@ NOT ACTIVE：
 - deterministic bridge；
 - 区分 identity coverage 与 history coverage；
 - current 23 coverage；
-- formal 14 coverage；
+- formal eligible coverage（旧 `Formal 14` 为历史 label，当前为 eligible=9 + excluded pilot=5）；
 - same-subset paired metrics。
+
+ID2 已验证：AVAILABLE=1、COMPETITION_UNSUPPORTED=6、HISTORY_UNAVAILABLE=1、IDENTITY_UNAVAILABLE=1，paired=1；结果为 `PARTIAL_PAIRED_EVALUATION / TOO_SMALL_FOR_DECISION`。Hearts–Benfica identity solved 但 Europa history 为 2/5，Elfsborg 仍 unresolved。
+
+shared authoritative baseline 仍是 1,554 historical results / 160 team-strength snapshots；Europa v3 summary 为 `record_count=2,153`、`eligible_count=1,559`、`excluded_count=594`，仅为 staging，不是 shared DB migration evidence。
 
 ### Gate A — Paired signal promising
 
 → `PA-3 — Prospective Shadow Challenger`
 
-### Gate B — History coverage 是主 blocker
+### Gate B — History / identity coverage 是主 blocker
 
-→ `PA-2-R2 — Targeted Historical Coverage Expansion`
+→ `PA-2-R1-ID3 — Bounded targeted closure, then prospective pair capture`
 
-只扩高价值、真实阻塞赛事，不全世界一起抓。
+只扩高价值、真实阻塞赛事，不全世界一起抓；不为凑满 5 场引入统计上无意义的十年前数据。bounded closure 没有新 eligible 时停止历史扩展。
 
 ### Gate C — Challenger paired 明显弱
 
 → `PA-2-RX — Model Rethink`
+
+### Gate D — Paired sample too small
+
+ID2 的 paired=1 只能保持 `TOO_SMALL_FOR_DECISION`，不得自动进入 PA-3、不得改变 Champion。先执行 ID3；只有新的真实 prospective paired evidence 具备后，才单独评估是否启动 PA-3。
 
 # Phase 3 — Prospective Challenger Validation
 
