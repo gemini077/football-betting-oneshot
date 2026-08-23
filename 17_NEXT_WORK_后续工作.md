@@ -9,7 +9,9 @@
 
 状态：`CURRENT`
 
-ID3 slice status: the prospective pair-capture contract is `READY_FOR_ACCEPTANCE` only. ID3 overall remains `CURRENT` and is not closable because no runnable Challenger producer is registered, current real data has `TRUE_PAIRED=0`, and independent forward-pair acceptance is still pending.
+ID3 slice status: the prospective pair-capture contract and the bounded real Challenger freeze path are `READY_FOR_ACCEPTANCE` only. The registered producer is `phase2c2_opponent_strength_prior20` (`shadow_only`, `formal_benchmark_eligible=false`), but current real data has no reviewed canonical research competition/team IDs for its 12 future formal Champion rows; the dry-run therefore freezes 0 Challenger records and `TRUE_PAIRED=0`. ID3 overall remains `CURRENT` and is not closable pending the canonical identity bridge, a genuine forward pair, and independent acceptance.
+
+Checkpoint 2026-08-23: focused Challenger/pair/governance/automation tests pass; broader relevant regression passes; the real dry-run is read-only with `future_formal_champion_count=12` and `CANONICAL_RESEARCH_IDENTITY_MISSING=12`; no Challenger or pair artifacts were created. Governance counts remain `RAW_FROZEN_TICKETS=278`, `FORMAL_FROZEN=127`, `FORMAL_PROSPECTIVE=108`, `SETTLED=108`, `RESULT_UNRESOLVED=7`, `FUTURE_SCHEDULED_FORMAL=12`, `TRUE_PAIRED=0`.
 
 本指针在本次 Governance Current-State Sync 提交后生效。ID2 evidence package/status 是 `READY_FOR_ACCEPTANCE / INDEPENDENT ACCEPTANCE PENDING`；PA-2-R1 model program overall 仍为 `OVERALL INCOMPLETE / TOO_SMALL_FOR_DECISION`，不是整体已验收。
 

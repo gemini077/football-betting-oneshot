@@ -58,7 +58,9 @@ def _summary(payload: dict) -> dict:
         "formal_samples_added", "formal_prospective_total", "results_found", "pending_results",
         "future_scheduled_formal_this_run", "result_unresolved_this_run", "settled_total",
         "pilot_excluded_settled", "failure_reasons", "result_exception_reasons",
-        "governance_counts", "governance_count_scope", "readiness", "challenger_producer", "pairs_captured_this_run",
+        "governance_counts", "governance_count_scope", "readiness", "challenger_producer", "challenger_id",
+        "selected_spec_id", "future_formal_champion_count", "challenger_frozen_this_run", "challenger_would_freeze",
+        "rejections", "pairs_captured_this_run",
         "pairs_would_capture", "pair_rejections", "RAW_FROZEN_TICKETS", "FORMAL_FROZEN",
         "FORMAL_PROSPECTIVE", "SETTLED", "RESULT_UNRESOLVED", "FUTURE_SCHEDULED_FORMAL",
         "CHAMPION_EVALUABLE", "CHALLENGER_EVALUABLE", "TRUE_PAIRED", "CHAMPION_EVALUABLE_PAIR_CONTRACT",
@@ -229,6 +231,9 @@ def cycle(
     ], optional=True)
     steps["prospective"] = _step("prospective", [
         python, "scripts/prospective_settlement.py", "--date", business_date,
+    ], optional=True)
+    steps["challenger_shadow_freeze"] = _step("challenger_shadow_freeze", [
+        python, "scripts/prospective_challenger_runner.py", "--date", business_date,
     ], optional=True)
     steps["pair_capture"] = _step("pair_capture", [
         python, "scripts/prospective_pair_capture.py", "--date", business_date,

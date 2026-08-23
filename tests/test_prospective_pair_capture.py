@@ -153,6 +153,18 @@ def test_pair_rejects_same_model_and_fake_challenger():
         build_pair_capture(champion, fake, now=NOW)
 
 
+def test_challenger_must_be_frozen_but_remains_nonformal():
+    champion = prediction()
+    shadow = challenger(status="research_only")
+
+    with pytest.raises(PairValidationError, match="CHALLENGER_NOT_FROZEN"):
+        build_pair_capture(champion, shadow, now=NOW)
+
+    shadow["prediction_status"] = "frozen"
+    event = build_pair_capture(champion, shadow, now=NOW)
+    assert event["research_only"] is True
+
+
 def test_shared_verified_90m_result_is_one_true_pair(tmp_path):
     ledger = PairLedger(tmp_path / "pairs")
     captured = ledger.capture(prediction(), challenger(), now=NOW)
@@ -189,6 +201,18 @@ def test_forward_capture_refuses_past_rows_and_reports_missing_challenger(tmp_pa
     assert result["CHAMPION_EVALUABLE"] == 0
     assert result["TRUE_PAIRED"] == 0
     assert ledger_path.read_bytes() == before
+
+    available = capture_forward_pairs(
+        [prediction()],
+        [],
+        now=NOW,
+        pair_root=tmp_path / "available-pairs",
+        raw_frozen_path=tmp_path / "raw.json",
+        challenger_source_exists=True,
+    )
+    assert available["challenger_producer"] == "AVAILABLE"
+    assert available["CHALLENGER_EVALUABLE"] == 0
+    assert available["TRUE_PAIRED"] == 0
 
     past = prediction(kickoff="2026-08-12T11:00:00+08:00")
     past_shadow = challenger(kickoff="2026-08-12T11:00:00+08:00")

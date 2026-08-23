@@ -171,8 +171,20 @@ def load_config(path: Path = DEFAULT_CONFIG) -> dict[str, Any]:
     missing = [key for key in required if key not in value]
     if missing:
         raise ValueError(f"model governance config missing: {', '.join(missing)}")
-    if not isinstance(value["challengers"], list) or value["challengers"]:
-        raise ValueError("Phase 0 requires an empty challenger list")
+    if not isinstance(value["challengers"], list):
+        raise ValueError("challengers must be a list")
+    for challenger in value["challengers"]:
+        if not isinstance(challenger, dict):
+            raise ValueError("challenger registrations must be objects")
+        for key in ("id", "model_core_version", "model_family", "release_version", "entrypoint"):
+            if not str(challenger.get(key) or "").strip():
+                raise ValueError(f"challenger registration is missing: {key}")
+        if (
+            challenger.get("research_only") is not True
+            or challenger.get("status") != "shadow_only"
+            or challenger.get("formal_benchmark_eligible") is not False
+        ):
+            raise ValueError("challenger registrations must remain research-only shadow_only and non-formal")
     champion = value["champion"]
     versions = value["versions"]
     if not isinstance(champion, dict) or not isinstance(versions, dict):

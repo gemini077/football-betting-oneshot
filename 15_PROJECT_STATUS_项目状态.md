@@ -168,7 +168,7 @@ ID2 evidence package/status：`READY_FOR_ACCEPTANCE / INDEPENDENT ACCEPTANCE PEN
 
 把能安全 deterministic mapping 的 production / formal fixtures 接到 historical strength challenger，在完全相同比赛子集上公平比较 Current、Challenger、Market-only、Uniform。
 
-Champion 保持不变：`recent_form_market_calibrated_poisson_v2`。Challenger 仍为 shadow-only；CA-1 保持 paused；PA-3 尚未开始。
+Champion 保持不变：`recent_form_market_calibrated_poisson_v2`。The bounded research producer `phase2c2_opponent_strength_prior20` is registered as shadow-only with the frozen Phase2C2 prior20 spec and Champion-cutoff-bounded history, but the current 12 future formal rows lack reviewed canonical research competition/team IDs; real dry-run capture is therefore 0 and `TRUE_PAIRED=0`. This slice is `READY_FOR_ACCEPTANCE` only; ID3 remains `CURRENT` until the identity bridge and a genuine forward pair exist. CA-1 remains paused; PA-3 has not started.
 
 # 7. 当前暂停
 

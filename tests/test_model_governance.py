@@ -172,7 +172,23 @@ def test_champion_configuration_loads_and_matches_actual_model():
     assert config["champion"]["model_family"] == MODEL_FAMILY
     assert config["champion"]["release_version"] == RELEASE_VERSION
     assert config["champion"]["rho"] == 0.0
-    assert config["challengers"] == []
+    assert [row["id"] for row in config["challengers"]] == ["phase2c2_opponent_strength_prior20"]
+    assert config["challengers"][0]["research_only"] is True
+    assert config["challengers"][0]["formal_benchmark_eligible"] is False
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [("research_only", False), ("status", "promotable"), ("formal_benchmark_eligible", True)],
+)
+def test_non_shadow_challenger_registration_is_rejected(tmp_path, field, value):
+    config = json.loads((ROOT / "config" / "model_governance.json").read_text(encoding="utf-8"))
+    config["challengers"][0][field] = value
+    path = tmp_path / "model_governance.json"
+    path.write_text(json.dumps(config), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="research-only shadow_only"):
+        load_config(path)
 
 
 def test_governance_version_fields_are_complete():

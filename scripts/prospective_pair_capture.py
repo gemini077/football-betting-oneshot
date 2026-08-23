@@ -20,6 +20,7 @@ from typing import Any, Iterable
 
 from postmatch_queue import parse_datetime
 from prospective_settlement import FROZEN_STATUSES, is_formally_eligible, normalize_result
+from model_governance import DEFAULT_CONFIG, load_config
 
 
 BASE_DIR = Path(__file__).resolve().parents[1]
@@ -414,6 +415,20 @@ def _json_records(root: Path, business_date: str | None = None) -> list[dict[str
     return records
 
 
+def _challenger_producer_registered() -> bool:
+    try:
+        config = load_config(DEFAULT_CONFIG)
+    except (OSError, ValueError, json.JSONDecodeError):
+        return False
+    return any(
+        isinstance(row, dict)
+        and row.get("research_only") is True
+        and row.get("status") == "shadow_only"
+        and str(row.get("entrypoint") or "") == "scripts/prospective_challenger_runner.py"
+        for row in config.get("challengers") or []
+    )
+
+
 def _raw_frozen_rows(path: Path) -> tuple[list[Any], str]:
     if not Path(path).is_file():
         return [], "MISSING"
@@ -605,7 +620,7 @@ def main() -> int:
         pair_root=args.pair_root,
         business_date=args.date,
         dry_run=args.dry_run,
-        challenger_source_exists=bool(challenger),
+        challenger_source_exists=bool(challenger) or _challenger_producer_registered(),
         prospective_root=args.prospective_root,
         formal_rows=formal_rows,
     )
