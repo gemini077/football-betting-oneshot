@@ -56,7 +56,12 @@ def _summary(payload: dict) -> dict:
         "status", "refresh_status", "fixture_count", "match_count", "job_count",
         "frozen", "pending", "insufficient_data", "prediction_failed", "missed_prematch",
         "formal_samples_added", "formal_prospective_total", "results_found", "pending_results",
-        "pilot_excluded_settled", "failure_reasons", "error", "output",
+        "future_scheduled_formal_this_run", "result_unresolved_this_run", "settled_total",
+        "pilot_excluded_settled", "failure_reasons", "result_exception_reasons",
+        "governance_counts", "governance_count_scope", "readiness", "challenger_producer", "pairs_captured_this_run",
+        "pairs_would_capture", "pair_rejections", "RAW_FROZEN_TICKETS", "FORMAL_FROZEN",
+        "FORMAL_PROSPECTIVE", "SETTLED", "RESULT_UNRESOLVED", "FUTURE_SCHEDULED_FORMAL",
+        "CHAMPION_EVALUABLE", "CHALLENGER_EVALUABLE", "TRUE_PAIRED", "CHAMPION_EVALUABLE_PAIR_CONTRACT",
         "target_date", "completed_count", "published_as_latest", "latest_only",
     }
     return {key: value for key, value in payload.items() if key in allowed}
@@ -224,6 +229,9 @@ def cycle(
     ], optional=True)
     steps["prospective"] = _step("prospective", [
         python, "scripts/prospective_settlement.py", "--date", business_date,
+    ], optional=True)
+    steps["pair_capture"] = _step("pair_capture", [
+        python, "scripts/prospective_pair_capture.py", "--date", business_date,
     ], optional=True)
     if persist_runtime:
         _write_runtime(Path(runtime_path), business_date=business_date, started_at=started, finished_at=None, steps=steps)

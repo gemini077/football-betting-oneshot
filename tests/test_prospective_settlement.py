@@ -344,3 +344,29 @@ def test_result_verified_before_kickoff_is_rejected(tmp_path):
     )
     assert out["formal_samples_added"] == 0
     assert out["failure_reasons"]["RESULT_TIME_UNVERIFIED"] == 1
+
+
+def test_past_unresolved_and_future_scheduled_are_separate_counts(tmp_path):
+    future = record(prediction_id="P-FUTURE", kickoff="2026-08-15T03:00:00+08:00")
+    past = record(prediction_id="P-UNRESOLVED", kickoff="2026-08-13T03:00:00+08:00")
+    fetched = []
+
+    def unresolved(record_value, _now):
+        fetched.append(record_value["prediction_id"])
+        return {"status": "RESULT_PENDING", "reason": "provider_timeout"}
+
+    out = settle_records(
+        [future, past],
+        now=datetime(2026, 8, 14, 12, 0, tzinfo=TZ),
+        result_fetcher=unresolved,
+        prospective_root=tmp_path,
+    )
+
+    assert fetched == ["P-UNRESOLVED"]
+    assert out["future_scheduled_formal_this_run"] == 1
+    assert out["result_unresolved_this_run"] == 1
+    assert out["pending_results"] == 2
+    summary = json.loads((tmp_path / "summary.json").read_text(encoding="utf-8"))
+    assert summary["future_scheduled_formal_this_run"] == 1
+    assert summary["result_unresolved_this_run"] == 1
+    assert summary["settled_total"] == 0

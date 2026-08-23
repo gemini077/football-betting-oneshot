@@ -390,3 +390,17 @@ def test_abnormal_runtime_shows_warning_without_normal_kpi_grid(tmp_path):
     assert "系统状态 · FAILED" in html
     assert "base_prediction" in html
     assert "预测已冻结" not in html
+
+
+def test_dashboard_exposes_explicit_pair_governance_counts(tmp_path):
+    roots = make_roots(tmp_path, [fixture(1)], [{"match_id": "1001", "status": "PENDING"}])
+    raw_path = tmp_path / "paper_ledger" / "frozen.json"
+    write_json(raw_path, {"tickets": [{"id": "R-1"}, {"id": "R-2"}]})
+
+    payload = build_dashboard(DATE, raw_frozen_path=raw_path, **roots)
+
+    assert payload["governance"]["RAW_FROZEN_TICKETS"] == 2
+    assert payload["governance"]["FORMAL_PROSPECTIVE"] == 0
+    assert payload["governance"]["TRUE_PAIRED"] == 0
+    assert payload["governance"]["governance_count_scope"] == "TOTAL_SNAPSHOT_AS_OF"
+    assert payload["summary"]["governance"]["RESULT_UNRESOLVED"] == 0

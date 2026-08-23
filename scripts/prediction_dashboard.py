@@ -12,6 +12,8 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
+from prospective_pair_capture import build_governance_counts
+
 
 BASE_DIR = Path(__file__).resolve().parents[1]
 UNIVERSE_ROOT = BASE_DIR / "data" / "prediction_universe"
@@ -20,6 +22,8 @@ PREDICTION_ROOT = BASE_DIR / "data" / "model_governance" / "predictions"
 EXCLUSION_ROOT = BASE_DIR / "data" / "model_governance" / "prediction_exclusions"
 RESULT_ROOT = BASE_DIR / "data" / "postmatch_automation" / "results"
 PROSPECTIVE_ROOT = BASE_DIR / "data" / "prospective"
+PAIR_ROOT = PROSPECTIVE_ROOT / "pairs"
+RAW_FROZEN_PATH = BASE_DIR / "data" / "paper_ledger" / "frozen.json"
 RUNTIME_PATH = BASE_DIR / "data" / "product_runtime" / "latest_cycle.json"
 DASHBOARD_ROOT = BASE_DIR / "data" / "prediction_dashboard"
 WORKSPACE_LATEST = BASE_DIR / "data" / "match_workspace" / "latest.json"
@@ -713,6 +717,8 @@ def build_dashboard(
     exclusion_root: Path = EXCLUSION_ROOT,
     result_root: Path = RESULT_ROOT,
     prospective_root: Path = PROSPECTIVE_ROOT,
+    pair_root: Path = PAIR_ROOT,
+    raw_frozen_path: Path = RAW_FROZEN_PATH,
     runtime_path: Path = RUNTIME_PATH,
     workspace_path: Path = WORKSPACE_LATEST,
     output_root: Path = DASHBOARD_ROOT,
@@ -739,6 +745,13 @@ def build_dashboard(
     summary_payload = _read_optional_json(Path(prospective_root) / "summary.json", errors, "prospective:summary", {})
     if not isinstance(summary_payload, dict):
         summary_payload = {}
+    governance_counts = build_governance_counts(
+        records.values(),
+        formal_rows,
+        now=now,
+        raw_frozen_path=Path(raw_frozen_path),
+        pair_root=Path(pair_root),
+    )
     runtime = _read_optional_json(Path(runtime_path), errors, "runtime", {})
     if not isinstance(runtime, dict):
         runtime = {}
@@ -807,7 +820,9 @@ def build_dashboard(
             "samples_added_today": int(samples_added or 0),
             "pilot_excluded_count": int(excluded_count or 0),
             "silent_missing_fixture": max(0, int(universe.get("fixture_count") or len(fixtures)) - len(cards)),
+            "governance": governance_counts,
         },
+        "governance": governance_counts,
         "data_errors": errors,
         "fixtures": cards,
         "completed": completed,

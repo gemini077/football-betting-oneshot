@@ -9,6 +9,8 @@
 
 状态：`CURRENT`
 
+ID3 slice status: the prospective pair-capture contract is `READY_FOR_ACCEPTANCE` only. ID3 overall remains `CURRENT` and is not closable because no runnable Challenger producer is registered, current real data has `TRUE_PAIRED=0`, and independent forward-pair acceptance is still pending.
+
 本指针在本次 Governance Current-State Sync 提交后生效。ID2 evidence package/status 是 `READY_FOR_ACCEPTANCE / INDEPENDENT ACCEPTANCE PENDING`；PA-2-R1 model program overall 仍为 `OVERALL INCOMPLETE / TOO_SMALL_FOR_DECISION`，不是整体已验收。
 
 # 1. 已完成，不再重跑

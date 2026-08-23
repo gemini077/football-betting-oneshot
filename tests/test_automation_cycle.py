@@ -23,9 +23,11 @@ def test_cycle_calls_base_runner_and_prospective_settlement_and_writes_health(tm
 
     assert any("base_prediction_runner.py" in part for command in calls for part in command)
     assert any("prospective_settlement.py" in part for command in calls for part in command)
+    assert any("prospective_pair_capture.py" in part for command in calls for part in command)
     assert payload["overall_status"] == "HEALTHY"
     assert payload["steps"]["base_prediction"]["status"] == "SUCCESS"
     assert payload["steps"]["prospective"]["status"] == "SUCCESS"
+    assert payload["steps"]["pair_capture"]["status"] == "SUCCESS"
     saved = json.loads(runtime_path.read_text(encoding="utf-8"))
     assert saved["business_date"] == "2026-08-12"
     assert saved["carryover_business_dates"] == []

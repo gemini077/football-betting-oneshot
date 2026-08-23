@@ -563,6 +563,11 @@ def _write_summary(
         "formal_sample_count_total": len(formal_rows),
         "samples_added_this_run": result.get("formal_samples_added", 0),
         "pending_results": result.get("pending_results", 0),
+        "settled_total": len(formal_rows),
+        "settled_this_run": result.get("settled_this_run", 0),
+        "result_unresolved_this_run": result.get("result_unresolved_this_run", 0),
+        "future_scheduled_formal_this_run": result.get("future_scheduled_formal_this_run", 0),
+        "result_exception_reasons": result.get("result_exception_reasons", {}),
         "excluded_prediction_count": len(excluded_prediction_ids(exclusion_root)),
         "pilot_excluded_settled": len(exploratory_rows),
         "result_failures": result.get("result_failures", 0),
@@ -601,12 +606,16 @@ def settle_records(
         "frozen_predictions": 0,
         "results_found": 0,
         "pending_results": 0,
+        "future_scheduled_formal_this_run": 0,
+        "result_unresolved_this_run": 0,
+        "settled_this_run": 0,
         "pilot_excluded_settled": 0,
         "formal_samples_added": 0,
         "result_failures": 0,
         "result_conflicts": 0,
         "duplicate_prospective_samples": max(0, len(formal_rows) - len(formal_by_id)),
         "failure_reasons": {},
+        "result_exception_reasons": {},
         "settled_at": now.isoformat(),
     }
     fetch = result_fetcher or (
@@ -614,40 +623,56 @@ def settle_records(
             record, current, universe_root=universe_root, result_root=result_root
         )
     )
+    def mark_unresolved(reason: str, *, formal_candidate: bool) -> None:
+        if not formal_candidate:
+            return
+        result["result_unresolved_this_run"] += 1
+        result["result_exception_reasons"][reason] = (
+            result["result_exception_reasons"].get(reason, 0) + 1
+        )
+
     for record in records:
         prediction_id = str(record.get("prediction_id") or "").strip()
         if not prediction_id or record.get("prediction_status") not in FROZEN_STATUSES:
             continue
         result["frozen_predictions"] += 1
         excluded = exclusion_for(prediction_id, exclusion_root)
-        if excluded is None and not is_formally_eligible(record):
+        formal_candidate = excluded is None
+        if formal_candidate and not is_formally_eligible(record):
             continue
         kickoff = parse_datetime(record.get("kickoff_at"))
         if kickoff is not None and now < kickoff:
+            if formal_candidate:
+                result["future_scheduled_formal_this_run"] += 1
             result["pending_results"] += 1
             continue
         fetched = fetch(record, now)
         if str(fetched.get("status") or "").upper() in {"RESULT_PENDING", "PENDING", "RETRY_SCHEDULED"}:
             result["pending_results"] += 1
+            mark_unresolved(str(fetched.get("reason") or "RESULT_PENDING"), formal_candidate=formal_candidate)
             continue
         if not _is_verified_result_artifact(fetched):
             result["result_failures"] += 1
             result["failure_reasons"]["RESULT_NOT_FINAL"] = result["failure_reasons"].get("RESULT_NOT_FINAL", 0) + 1
+            mark_unresolved("RESULT_NOT_FINAL", formal_candidate=formal_candidate)
             continue
         try:
             actual = normalize_result(fetched)
         except ValueError:
             result["result_failures"] += 1
             result["failure_reasons"]["RESULT_NOT_FINAL"] = result["failure_reasons"].get("RESULT_NOT_FINAL", 0) + 1
+            mark_unresolved("RESULT_NOT_FINAL", formal_candidate=formal_candidate)
             continue
         verified_at = parse_datetime(actual.get("result_verified_at"))
         if kickoff is not None and verified_at is not None and verified_at < kickoff:
             result["result_failures"] += 1
             result["failure_reasons"]["RESULT_TIME_UNVERIFIED"] = result["failure_reasons"].get("RESULT_TIME_UNVERIFIED", 0) + 1
+            mark_unresolved("RESULT_TIME_UNVERIFIED", formal_candidate=formal_candidate)
             continue
         if not _identity_matches(record, actual):
             result["result_failures"] += 1
             result["failure_reasons"]["RESULT_IDENTITY_UNRESOLVED"] = result["failure_reasons"].get("RESULT_IDENTITY_UNRESOLVED", 0) + 1
+            mark_unresolved("RESULT_IDENTITY_UNRESOLVED", formal_candidate=formal_candidate)
             continue
         result["results_found"] += 1
         existing = exploratory_by_id.get(prediction_id) if excluded is not None else formal_by_id.get(prediction_id)
@@ -682,6 +707,8 @@ def settle_records(
             formal_by_id[prediction_id] = sample
             formal_rows.append(sample)
             result["formal_samples_added"] += 1
+            result["settled_this_run"] += 1
+    result["settled_total"] = len(formal_by_id)
     _write_summary(
         prospective_root,
         date=date,
