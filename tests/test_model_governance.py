@@ -423,6 +423,45 @@ def test_prediction_identity_is_split_into_match_snapshot_and_model_run_layers()
     assert record["snapshot_identity"]["snapshot_id"] == record["input_snapshot"]["snapshot_id"]
     assert record["model_run_identity"]["release_version"] == RELEASE_VERSION
     assert "repository_commit_sha" not in record["model_run_identity"]
+
+
+def test_identity_bridge_fields_are_immutable_content_not_model_input():
+    payload = prediction_payload()
+    payload["canonical_team_identity"] = {
+        "contract_version": "canonical_team_identity.v1",
+        "competition_id": "competition:test",
+        "season_id": "season:test:2026",
+        "home_team_id": "team:test:home",
+        "away_team_id": "team:test:away",
+    }
+    payload["target_team_identity_evidence"] = {
+        "contract_version": "target_team_identity_bridge.v1",
+        "status": "RESOLVED",
+        "source": {"provider": "nowscore", "panlu_used": False},
+    }
+    record = build_prediction_record(payload, commit_sha="identity-test")
+    original_hash = prediction_content_hash(record)
+
+    assert record["prediction_sha256"] == original_hash
+    assert "canonical_team_identity" not in record["_input_snapshot_content"]
+    assert "target_team_identity_evidence" not in record["_input_snapshot_content"]
+    assert "canonical_team_identity" not in record["match_identity"]
+    assert "target_team_identity_evidence" not in record["match_identity"]
+
+    tampered = json.loads(json.dumps(record))
+    tampered["canonical_team_identity"]["home_team_id"] = "team:test:tampered"
+    assert prediction_content_hash(tampered) != original_hash
+    tampered["prediction_sha256"] = original_hash
+    with pytest.raises(ValueError, match="prediction_sha256 does not match frozen content"):
+        from model_governance import _validate_record
+        _validate_record(tampered)
+
+    tampered_evidence = json.loads(json.dumps(record))
+    tampered_evidence["target_team_identity_evidence"]["status"] = "TAMPERED"
+    assert prediction_content_hash(tampered_evidence) != original_hash
+    tampered_evidence["prediction_sha256"] = original_hash
+    with pytest.raises(ValueError, match="prediction_sha256 does not match frozen content"):
+        _validate_record(tampered_evidence)
     assert record["model_source_fingerprint"]
     assert record["model_run_fingerprint"]
     assert record["prediction_id"].startswith("FBOS-PRED-")

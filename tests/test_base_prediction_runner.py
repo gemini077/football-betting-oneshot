@@ -182,6 +182,7 @@ def run_case(
     model_side_effect=None,
     now: datetime = NOW,
     nowscore_result: dict | None = None,
+    competition_registry_path: Path | None = None,
 ) -> tuple[dict, Mock]:
     parsed = parsed if parsed is not None else parsed_source()
     with ExitStack() as stack:
@@ -199,6 +200,7 @@ def run_case(
             now=now,
             record_root=root / "model_governance" / "predictions",
             input_snapshot_root=root / "model_governance" / "input_snapshots",
+            competition_registry_path=competition_registry_path,
         )
     return summary, build
 
@@ -405,6 +407,111 @@ def test_governance_record_contains_minimum_prediction_contract():
     assert record["base_input_quality"] == "VERIFIED_MINIMUM"
     assert record["formal_eligibility_policy"] == "base_prediction_minimum.v1"
     assert record["formal_eligible"] is True
+
+
+def test_reviewed_target_ids_flow_through_champion_challenger_pair_freeze():
+    from model_governance import load_input_snapshot
+    from prospective_challenger_runner import build_challenger_record
+    from prospective_pair_capture import capture_forward_pairs
+
+    with tempfile.TemporaryDirectory() as temp:
+        root = Path(temp)
+        row = fixture(1, spf=limited_spf(), nowscore=True)
+        row.update({
+            "homeTeam": "博德闪耀",
+            "awayTeam": "腓特烈斯塔",
+            "league": "挪威超级联赛",
+            "canonical_competition_id": "competition:norway-eliteserien",
+        })
+        nowscore = {
+            "status": "OK",
+            "fetched_at": "2026-08-12T12:30:00+08:00",
+            "nowscore_id": row["nowscoreId"],
+            "target": {"home": row["homeTeam"], "away": row["awayTeam"], "kickoff": KICKOFF},
+            "identity": {"home_team": "博德闪耀(主)", "away_team": "腓特烈斯塔"},
+            "analysis_source_url": "https://live.nowscore.com/analysis/test.js",
+            "provider_competition_id": "nowscore:norway-eliteserien",
+            "provider_season_id": "2026",
+            "shuju": {"recent_form": recent_form(), "team_ids": {"home": 472, "away": 478}},
+            "context": {"panlu": {"matches": [{"home_team_id": 999, "away_team_id": 998}]}},
+            "ouzhi": {"bookmakers": []},
+            "yazhi": {"companies": []},
+            "daxiao": {"companies": []},
+        }
+        registry_path = root / "competition_registry.json"
+        registry_path.write_text(json.dumps({
+            "contract_version": "competition_registry.v1",
+            "competitions": [{
+                "canonical_competition_id": "competition:norway-eliteserien",
+                "seasons": [{
+                    "canonical_season_id": "season:norway-eliteserien:2026",
+                    "provider": "nowscore",
+                    "provider_competition_id": "nowscore:norway-eliteserien",
+                    "provider_season_id": "2026",
+                    "verified": True,
+                    "resolution_method": "manual_verified",
+                }],
+            }],
+        }), encoding="utf-8")
+        write_case(root, [row])
+        summary, _ = run_case(
+            root,
+            nowscore_result=nowscore,
+            competition_registry_path=registry_path,
+        )
+        champion = records(root)[0]
+
+        assert summary["frozen"] == 1
+        assert champion["canonical_team_identity"]["home_team_id"] == "team:norway:bod-glimt"
+        assert champion["canonical_team_identity"]["away_team_id"] == "team:norway:fredrikstad"
+        assert champion["target_team_identity_evidence"]["source"]["panlu_used"] is False
+
+        snapshot = load_input_snapshot(champion, root / "model_governance" / "input_snapshots")
+        history = [
+            {
+                "canonical_match_id": f"history:{index}",
+                "competition_id": "competition:norway-eliteserien",
+                "season_id": "2026",
+                "home_team_id": "team:norway:bod-glimt" if index % 2 == 0 else f"team:norway:other-{index}",
+                "away_team_id": "team:norway:fredrikstad" if index % 2 else f"team:norway:other-{index}",
+                "kickoff_at": f"2026-08-{index:02d}T10:00:00+08:00",
+                "home_goals": index % 3,
+                "away_goals": (index + 1) % 2,
+                "eligible_for_team_strength": True,
+                "duplicate_status": "unique",
+                "source_conflict": False,
+                "entity_type": "club",
+                "source_as_of_at": "2026-08-12T10:00:00+08:00",
+                "captured_at": "2026-08-12T10:00:00+08:00",
+            }
+            for index in range(1, 11)
+        ]
+        challenger = build_challenger_record(
+            champion,
+            history_records=history,
+            input_snapshot_document=snapshot,
+            now=datetime(2026, 8, 12, 15, 0, tzinfo=TZ),
+            historical_dataset_digest="synthetic-history",
+            historical_dataset_path="synthetic.duckdb",
+        )
+        challenger_result = freeze_prediction(
+            challenger,
+            root / "model_governance" / "challenger_predictions",
+            input_snapshot_root=root / "model_governance" / "challenger_input_snapshots",
+        )
+        challenger = json.loads(challenger_result["path"].read_text(encoding="utf-8"))
+        assert challenger["canonical_team_identity"] == champion["canonical_team_identity"]
+        captured = capture_forward_pairs(
+            [champion],
+            [challenger],
+            now=datetime(2026, 8, 12, 16, 0, tzinfo=TZ),
+            business_date=DATE,
+            pair_root=root / "prospective" / "pairs",
+            raw_frozen_path=root / "paper_ledger" / "frozen.json",
+        )
+
+    assert captured["pairs_captured_this_run"] == 1
+    assert captured["TRUE_PAIRED"] == 0
 
 
 def test_repeat_freeze_with_same_prediction_id_different_content_keeps_conflict_guard():

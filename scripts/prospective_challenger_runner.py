@@ -355,6 +355,10 @@ def build_challenger_record(
         },
         "business_date": champion.get("business_date"),
     }
+    if isinstance(champion.get("canonical_team_identity"), dict):
+        payload["canonical_team_identity"] = deepcopy(champion["canonical_team_identity"])
+    if isinstance(champion.get("target_team_identity_evidence"), dict):
+        payload["target_team_identity_evidence"] = deepcopy(champion["target_team_identity_evidence"])
     record = build_prediction_record(
         payload,
         config=config,

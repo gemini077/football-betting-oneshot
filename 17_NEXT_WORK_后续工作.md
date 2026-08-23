@@ -15,6 +15,7 @@ Checkpoint 2026-08-23: focused Challenger/pair/governance/automation tests pass;
 
 本指针在本次 Governance Current-State Sync 提交后生效。ID2 evidence package/status 是 `READY_FOR_ACCEPTANCE / INDEPENDENT ACCEPTANCE PENDING`；PA-2-R1 model program overall 仍为 `OVERALL INCOMPLETE / TOO_SMALL_FOR_DECISION`，不是整体已验收。
 
+Checkpoint 2026-08-23: Target Team Identity Persistence Bridge integrity checkpoint: focused tests=123 and broader relevant regression=50 pass; current read-only bridge audit covered 12 formal Champion rows with canonical identity present=0 and TARGET_PROVIDER_TEAM_IDS_MISSING=12; current-time Challenger dry-run had future_formal_champion_count=9, CANONICAL_RESEARCH_IDENTITY_MISSING=9, Challenger/pair artifacts created=0. The target source parser is retained as the only provider-team-ID source; current frozen rows are not enriched; current source snapshots also lack deterministic provider competition/season IDs, and no date/text inference is used. Current ID3 remains CURRENT; this bridge slice is READY_FOR_ACCEPTANCE only.
 # 1. 已完成，不再重跑
 
 以下 DATA / ID / COV-SRC / ID2 工作已有真实 evidence，不得重新按陈旧 Formal 14 / pre-ID2 状态施工：

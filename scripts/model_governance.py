@@ -1013,6 +1013,12 @@ def build_prediction_record(
     model_family = model.get("method")
     release_version = report.get("model_version")
     automation = payload.get("automation") or {}
+    canonical_team_identity = payload.get("canonical_team_identity")
+    if not isinstance(canonical_team_identity, dict):
+        canonical_team_identity = None
+    target_team_identity_evidence = payload.get("target_team_identity_evidence")
+    if not isinstance(target_team_identity_evidence, dict):
+        target_team_identity_evidence = None
     supplied_model_snapshot = automation.get("model_input_snapshot")
     effective_input_payload = input_payload if input_payload is not None else supplied_model_snapshot
     has_model_snapshot = isinstance(effective_input_payload, dict) and isinstance(
@@ -1163,6 +1169,10 @@ def build_prediction_record(
         "snapshot_identity": snapshot_identity,
         "model_run_identity": model_run_identity,
     }
+    if canonical_team_identity is not None:
+        prediction_identity["canonical_team_identity"] = deepcopy(canonical_team_identity)
+    if target_team_identity_evidence is not None:
+        prediction_identity["target_team_identity_evidence"] = deepcopy(target_team_identity_evidence)
     scores = _score_values(model, 5)
     record = {
         "schema_version": "1.1",
@@ -1250,6 +1260,10 @@ def build_prediction_record(
         # to the content-addressed snapshot file and removes it from the ledger.
         "_input_snapshot_content": canonical_input,
     }
+    if canonical_team_identity is not None:
+        record["canonical_team_identity"] = deepcopy(canonical_team_identity)
+    if target_team_identity_evidence is not None:
+        record["target_team_identity_evidence"] = deepcopy(target_team_identity_evidence)
     if base_policy_result is not None:
         record.update({
             "formal_eligibility_policy": base_policy_result["formal_eligibility_policy"],

@@ -44,6 +44,7 @@ from model_governance import (  # noqa: E402
 from nowscore_markets import fetch_match_markets  # noqa: E402
 from prediction_universe import load_prediction_universe  # noqa: E402
 from prediction_quality import recent_form_is_usable  # noqa: E402
+from target_team_identity_bridge import resolve_target_team_identity  # noqa: E402
 
 
 JOBS_ROOT = PROJECT_ROOT / "data" / "base_prediction_jobs"
@@ -447,6 +448,7 @@ def _assemble_context(
     trade_payload: dict[str, Any] | None,
     *,
     real_time: bool = False,
+    competition_registry_path: Path | None = None,
 ) -> tuple[dict[str, Any] | None, dict[str, Any] | None, str | None]:
     kickoff = _parse_timestamp(_kickoff(job))
     if kickoff is None:
@@ -648,6 +650,16 @@ def _assemble_context(
             "missing": [],
         },
     }
+    target_identity = resolve_target_team_identity(
+        job=job,
+        fixture=fixture,
+        context=context,
+        input_snapshot=input_snapshot,
+        repository_root=PROJECT_ROOT,
+        competition_registry_path=competition_registry_path,
+    )
+    metadata["canonical_team_identity"] = target_identity.get("canonical_team_identity")
+    metadata["target_team_identity_evidence"] = target_identity.get("evidence")
     return context, metadata, None
 
 
@@ -665,7 +677,7 @@ def _build_payload(
     if not isinstance(model, dict):
         raise ValueError("MODEL_RETURNED_NO_PREDICTION")
     decisions = result.get("decisions") or {}
-    return {
+    payload = {
         "report": {
             "report_type": "base_prediction_minimal",
             "model_version": config["champion"]["release_version"],
@@ -701,6 +713,11 @@ def _build_payload(
         },
         "business_date": business_date,
     }
+    if metadata.get("canonical_team_identity") is not None:
+        payload["canonical_team_identity"] = copy.deepcopy(metadata["canonical_team_identity"])
+    if metadata.get("target_team_identity_evidence") is not None:
+        payload["target_team_identity_evidence"] = copy.deepcopy(metadata["target_team_identity_evidence"])
+    return payload
 
 
 def _decorate_record(
@@ -805,6 +822,7 @@ def run_base_prediction_jobs(
     record_root: Path = DEFAULT_RECORD_ROOT,
     input_snapshot_root: Path = DEFAULT_INPUT_SNAPSHOT_ROOT,
     job_id: str | None = None,
+    competition_registry_path: Path | None = None,
 ) -> dict[str, Any]:
     """Attempt all retryable pre-kickoff BASE jobs for one business date."""
     current_time = _as_now(now)
@@ -864,6 +882,7 @@ def run_base_prediction_jobs(
             current_time,
             trade_payload,
             real_time=real_time,
+            competition_registry_path=competition_registry_path,
         )
         if assembly_error:
             job["status"] = "INSUFFICIENT_DATA"

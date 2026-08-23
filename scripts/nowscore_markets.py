@@ -486,6 +486,7 @@ def parse_analysis_data(text: str) -> dict:
         "recent_form": recent_form,
         "source_note": "Nowscore analysis recent results; actual goals, not xG",
         "team_ids": {"home": home_id, "away": away_id},
+        "team_ids_source": "nowscore_analysis_h_data_a_data",
     }
 
 
