@@ -9,6 +9,7 @@ from __future__ import annotations
 from copy import deepcopy
 import hashlib
 import json
+import re
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Mapping
@@ -73,6 +74,56 @@ def _provider_competition_season(source: Mapping[str, Any]) -> tuple[str | None,
         _text(source.get("provider_competition_id")) or None,
         _text(source.get("provider_season_id")) or None,
     )
+
+
+def _provider_identity_evidence_failure(
+    source: Mapping[str, Any],
+    provider_match_id: str | None,
+    provider_competition_id: str | None,
+    provider_season_id: str | None,
+    cutoff_time: datetime | None,
+    kickoff_time: datetime | None,
+) -> str | None:
+    evidence = source.get("provider_identity_evidence")
+    if evidence is None:
+        return None
+    if not isinstance(evidence, Mapping) or evidence.get("status") != "OK":
+        return "TARGET_PROVIDER_IDENTITY_EVIDENCE_NOT_VERIFIED"
+    if _text(evidence.get("provider_match_id")) != _text(provider_match_id):
+        return "TARGET_PROVIDER_IDENTITY_MATCH_ID_MISMATCH"
+    for section_name in ("schedule", "season"):
+        section = evidence.get(section_name)
+        if not isinstance(section, Mapping) or section.get("status") != "OK":
+            return "TARGET_PROVIDER_IDENTITY_EVIDENCE_NOT_VERIFIED"
+        if not _text(section.get("source_ref")):
+            return "TARGET_PROVIDER_IDENTITY_EVIDENCE_NOT_VERIFIED"
+        raw_sha256 = _text(section.get("raw_sha256"))
+        if not re.fullmatch(r"[0-9a-fA-F]{64}", raw_sha256):
+            return "TARGET_PROVIDER_IDENTITY_EVIDENCE_NOT_VERIFIED"
+        if section_name == "season":
+            if not _text(section.get("season_list_source_ref")):
+                return "TARGET_PROVIDER_IDENTITY_EVIDENCE_NOT_VERIFIED"
+            season_list_sha256 = _text(section.get("season_list_raw_sha256"))
+            if not re.fullmatch(r"[0-9a-fA-F]{64}", season_list_sha256):
+                return "TARGET_PROVIDER_IDENTITY_EVIDENCE_NOT_VERIFIED"
+        section_time = _time(section.get("fetched_at"))
+        if section_time is None:
+            return "TARGET_IDENTITY_PROVIDER_EVIDENCE_TIME_INVALID"
+        if cutoff_time is not None and section_time > cutoff_time:
+            return "TARGET_IDENTITY_PROVIDER_EVIDENCE_AFTER_CUTOFF"
+        if kickoff_time is not None and section_time >= kickoff_time:
+            return "TARGET_IDENTITY_PROVIDER_EVIDENCE_POST_KICKOFF"
+        if section_name == "schedule":
+            if _text(section.get("provider_match_id")) != _text(provider_match_id):
+                return "TARGET_PROVIDER_IDENTITY_MATCH_ID_MISMATCH"
+            if _text(section.get("provider_competition_id")) != _text(provider_competition_id):
+                return "TARGET_PROVIDER_IDENTITY_COMPETITION_ID_MISMATCH"
+        else:
+            if _text(section.get("provider_competition_id")) != _text(provider_competition_id):
+                return "TARGET_PROVIDER_IDENTITY_COMPETITION_ID_MISMATCH"
+            if _text(section.get("provider_season_id")) != _text(provider_season_id):
+                return "TARGET_PROVIDER_IDENTITY_SEASON_ID_MISMATCH"
+    return None
 
 
 def _competition_registry(
@@ -170,6 +221,7 @@ def resolve_target_team_identity(
         "source_cutoff_at": cutoff,
         "provider_competition_id": provider_competition_id,
         "provider_season_id": provider_season_id,
+        "provider_identity_evidence": deepcopy((source or {}).get("provider_identity_evidence")),
         "crosswalk_ref": CROSSWALK_RELATIVE_PATH,
         "panlu_used": False,
     }
@@ -224,6 +276,18 @@ def resolve_target_team_identity(
     if not provider_competition_id or not provider_season_id:
         evidence["status"] = "TARGET_IDENTITY_SEASON_CONTEXT_MISSING"
         evidence["source"]["season_context"] = "provider_competition_id_and_provider_season_id_required"
+        return {"canonical_team_identity": None, "evidence": evidence}
+
+    identity_evidence_status = _provider_identity_evidence_failure(
+        source or {},
+        provider_match_id,
+        provider_competition_id,
+        provider_season_id,
+        cutoff_time,
+        kickoff_time,
+    )
+    if identity_evidence_status:
+        evidence["status"] = identity_evidence_status
         return {"canonical_team_identity": None, "evidence": evidence}
 
     competition_resolver, competition_registry_digest = _competition_registry(

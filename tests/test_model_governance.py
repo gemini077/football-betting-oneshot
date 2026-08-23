@@ -456,6 +456,13 @@ def test_identity_bridge_fields_are_immutable_content_not_model_input():
         from model_governance import _validate_record
         _validate_record(tampered)
 
+    tampered_season = json.loads(json.dumps(record))
+    tampered_season["canonical_team_identity"]["season_id"] = "season:test:tampered"
+    assert prediction_content_hash(tampered_season) != original_hash
+    tampered_season["prediction_sha256"] = original_hash
+    with pytest.raises(ValueError, match="prediction_sha256 does not match frozen content"):
+        _validate_record(tampered_season)
+
     tampered_evidence = json.loads(json.dumps(record))
     tampered_evidence["target_team_identity_evidence"]["status"] = "TAMPERED"
     assert prediction_content_hash(tampered_evidence) != original_hash

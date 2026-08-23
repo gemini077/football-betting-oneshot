@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import ast
+import hashlib
 import html as html_lib
 import json
 import re
@@ -33,6 +34,8 @@ CACHE_ROOT = ROOT / "data" / "source_cache" / "nowscore"
 SCHEDULE_URL = "https://live.nowscore.com/data/bf1.js"
 MARKET_URL = "https://live.nowscore.com/odds/match/{match_id}.htm"
 ANALYSIS_DATA_URL = "https://live.nowscore.com/analysisJs/data{match_id}.js"
+INFO_LEAGUE_URL = "https://info.nowscore.com/cn/League/{sclass_id}.html"
+LEAGUE_SEASON_JS_URL = "https://info.nowscore.com/jsData/LeagueSeason/sea{sclass_id}.js"
 COACH_URL = "https://live.nowscore.com/info/coach/{match_id}.htm?l=1"
 REFEREE_URL = "https://live.nowscore.com/info/referee/{match_id}.htm?l=1"
 PANLU_URL = "https://live.nowscore.com/panlu/{match_id}.html"
@@ -137,10 +140,31 @@ def _split_js_values(raw: str) -> list[object]:
     return parsed
 
 
+def _positive_provider_id(value: object) -> str | None:
+    if isinstance(value, bool) or value in (None, ""):
+        return None
+    text = str(value).strip()
+    if not text.isdigit() or int(text) <= 0:
+        return None
+    return str(int(text))
+
+
+def _js_array_records(text: str, symbol: str) -> dict[int, list[object]]:
+    records: dict[int, list[object]] = {}
+    pattern = rf"(?m)^{symbol}\[(\d+)\]=\[(.*?)\];\s*$"
+    for found in re.finditer(pattern, text):
+        try:
+            records[int(found.group(1))] = _split_js_values(found.group(2))
+        except (TypeError, ValueError):
+            continue
+    return records
+
+
 def parse_schedule_js(text: str) -> list[dict]:
     matches = []
-    for found in re.finditer(r"(?m)^A\[\d+\]=\[(.*?)\];\s*$", text):
-        row = _split_js_values(found.group(1))
+    sclass_records = _js_array_records(text, "B")
+    for found in re.finditer(r"(?m)^A\[(\d+)\]=\[(.*?)\];\s*$", text):
+        row = _split_js_values(found.group(2))
         if len(row) < 12:
             continue
         try:
@@ -152,8 +176,16 @@ def parse_schedule_js(text: str) -> list[dict]:
             match_id = int(row[0])
         except (TypeError, ValueError, IndexError):
             continue
+        sclass_record_index = (
+            int(str(row[1]))
+            if len(row) > 1 and str(row[1]).isdigit()
+            else None
+        )
+        sclass_record = sclass_records.get(sclass_record_index) if sclass_record_index is not None else None
+        provider_competition_id = _positive_provider_id(sclass_record[0]) if sclass_record else None
         matches.append({
             "nowscore_id": match_id,
+            "provider_match_id": str(match_id),
             "home_team": clean_display_name(row[4]),
             "home_team_en": clean_display_name(row[6]),
             "away_team": clean_display_name(row[7]),
@@ -161,8 +193,79 @@ def parse_schedule_js(text: str) -> list[dict]:
             "kickoff_local": kickoff.isoformat(timespec="minutes"),
             "schedule_open_handicap": row[25] if len(row) > 25 else None,
             "schedule_total_line": row[29] if len(row) > 29 else None,
+            "provider_competition_id": provider_competition_id,
+            "provider_competition_evidence": {
+                "status": "OK" if provider_competition_id else "TARGET_PROVIDER_COMPETITION_ID_MISSING",
+                "provider": "nowscore",
+                "provider_match_id": str(match_id),
+                "field": "B[A[i][1]][0]",
+                "sclass_record_index": sclass_record_index,
+                "provider_competition_id": provider_competition_id,
+                "source": "bf1.js",
+            },
         })
     return matches
+
+
+def schedule_identity_for_match(schedule: list[dict], provider_match_id: object) -> dict:
+    expected = _positive_provider_id(provider_match_id)
+    if expected is None:
+        return {"status": "TARGET_PROVIDER_MATCH_ID_INVALID"}
+    for row in schedule:
+        observed = _positive_provider_id(row.get("provider_match_id") or row.get("nowscore_id"))
+        if observed != expected:
+            continue
+        evidence = dict(row.get("provider_competition_evidence") or {})
+        status = "OK" if row.get("provider_competition_id") else "TARGET_PROVIDER_COMPETITION_ID_MISSING"
+        return {
+            "status": status,
+            "provider_match_id": expected,
+            "provider_competition_id": row.get("provider_competition_id"),
+            "provider_competition_evidence": evidence,
+        }
+    return {
+        "status": "TARGET_PROVIDER_MATCH_NOT_IN_SCHEDULE",
+        "provider_match_id": expected,
+    }
+
+
+def parse_league_season_response(
+    text: str,
+    requested_sclass_id: object,
+    season_script_text: str | None = None,
+) -> dict:
+    requested = _positive_provider_id(requested_sclass_id)
+    result = {
+        "status": "TARGET_PROVIDER_SCLASS_ID_INVALID" if requested is None else "TARGET_PROVIDER_SEASON_KEY_MISSING",
+        "provider": "nowscore",
+        "requested_sclass_id": requested,
+    }
+    if requested is None:
+        return result
+    returned_match = re.search(r"\bvar\s+SclassID\s*=\s*([0-9]+)", text, re.I)
+    returned = _positive_provider_id(returned_match.group(1)) if returned_match else None
+    result["returned_sclass_id"] = returned
+    if returned is None:
+        result["status"] = "TARGET_PROVIDER_SCLASS_ID_MISSING"
+        return result
+    if returned != requested:
+        result["status"] = "TARGET_PROVIDER_SCLASS_ID_MISMATCH"
+        return result
+    season_match = re.search(r"\bvar\s+selectSeason\s*=\s*(['\"])(.*?)\1", text, re.I | re.S)
+    season = season_match.group(2).strip() if season_match else ""
+    if not season:
+        return result
+    result["provider_competition_id"] = requested
+    result["provider_season_id"] = season
+    if season_script_text is not None:
+        array_match = re.search(r"\bvar\s+arrSeason\s*=\s*\[(.*?)\]", season_script_text, re.I | re.S)
+        season_values = _split_js_values(array_match.group(1)) if array_match else []
+        result["season_keys"] = [str(value) for value in season_values if value not in (None, "")]
+        if season not in result["season_keys"]:
+            result["status"] = "TARGET_PROVIDER_SEASON_KEY_NOT_LISTED"
+            return result
+    result["status"] = "OK"
+    return result
 
 
 def _parse_kickoff(value: object) -> datetime | None:
@@ -670,6 +773,50 @@ def _fetch_cached_page(url: str, cache_path: Path, no_cache: bool, maximum_age: 
     return raw
 
 
+def fetch_nowscore_season_context(provider_competition_id: object, no_cache: bool = False) -> dict:
+    """Capture the provider season key for an already-proven SclassID."""
+
+    sclass_id = _positive_provider_id(provider_competition_id)
+    fetched_at = datetime.now(SHANGHAI).isoformat(timespec="seconds")
+    page_url = INFO_LEAGUE_URL.format(sclass_id=sclass_id or "")
+    season_url = LEAGUE_SEASON_JS_URL.format(sclass_id=sclass_id or "")
+    result: dict[str, object] = {
+        "status": "TARGET_PROVIDER_SCLASS_ID_INVALID" if sclass_id is None else "FETCH_ERROR",
+        "provider": "nowscore",
+        "requested_sclass_id": sclass_id,
+        "source_ref": page_url,
+        "season_list_source_ref": season_url,
+        "fetched_at": fetched_at,
+    }
+    if sclass_id is None:
+        return result
+    try:
+        page_raw = _fetch_cached_page(
+            page_url,
+            CACHE_ROOT / "raw" / f"league_{sclass_id}.html",
+            no_cache,
+        )
+        season_raw = _fetch_cached_page(
+            season_url,
+            CACHE_ROOT / "raw" / f"league_seasons_{sclass_id}.js",
+            no_cache,
+        )
+    except (urllib.error.URLError, TimeoutError, OSError) as error:
+        result["error"] = f"{type(error).__name__}: {error}"
+        return result
+    page_text = _decode(page_raw)
+    season_text = _decode(season_raw)
+    result.update(parse_league_season_response(page_text, sclass_id, season_text))
+    result.update({
+        "source_ref": page_url,
+        "season_list_source_ref": season_url,
+        "raw_sha256": hashlib.sha256(page_raw).hexdigest(),
+        "season_list_raw_sha256": hashlib.sha256(season_raw).hexdigest(),
+        "fetched_at": fetched_at,
+    })
+    return result
+
+
 def fetch_context_bundle(match_id: int, kickoff: object, parsed_markets: dict, no_cache: bool = False) -> dict:
     """Fetch optional same-match context; individual failures never discard core odds."""
     raw_root = CACHE_ROOT / "raw"
@@ -728,15 +875,17 @@ def fetch_context_bundle(match_id: int, kickoff: object, parsed_markets: dict, n
 
 def fetch_match_markets(home: str, away: str, kickoff: object, explicit_id: int | None = None, no_cache: bool = False) -> dict:
     fetched_at = datetime.now(SHANGHAI).isoformat(timespec="seconds")
+    schedule_source_url = f"{SCHEDULE_URL}?_={int(time.time())}"
     try:
-        schedule_raw = _fetch_bytes(f"{SCHEDULE_URL}?_={int(time.time())}")
+        schedule_raw = _fetch_bytes(schedule_source_url)
         schedule_text = _decode(schedule_raw)
         schedule = parse_schedule_js(schedule_text)
     except Exception as error:
-        schedule, schedule_text = [], ""
+        schedule, schedule_text, schedule_raw = [], "", None
         schedule_error = f"{type(error).__name__}: {error}"
     else:
         schedule_error = None
+    schedule_fetched_at = datetime.now(SHANGHAI).isoformat(timespec="seconds")
 
     if explicit_id:
         resolved = {"status": "EXPLICIT_ID", "nowscore_id": int(explicit_id)}
@@ -761,6 +910,23 @@ def fetch_match_markets(home: str, away: str, kickoff: object, explicit_id: int 
         }
 
     match_id = int(resolved["nowscore_id"])
+    schedule_identity = schedule_identity_for_match(schedule, match_id)
+    schedule_evidence = dict(schedule_identity.get("provider_competition_evidence") or {})
+    schedule_evidence.update({
+        "status": schedule_identity.get("status"),
+        "provider_match_id": str(match_id),
+        "provider_competition_id": schedule_identity.get("provider_competition_id"),
+        "source_ref": schedule_source_url,
+        "raw_sha256": hashlib.sha256(schedule_raw).hexdigest() if schedule_raw is not None else None,
+        "fetched_at": schedule_fetched_at,
+    })
+    provider_identity_evidence = {
+        "contract_version": "nowscore_target_identity_evidence.v1",
+        "status": schedule_identity.get("status"),
+        "provider": "nowscore",
+        "provider_match_id": str(match_id),
+        "schedule": schedule_evidence,
+    }
     cache_path = CACHE_ROOT / "raw" / f"{match_id}_3in1.html"
     raw = None
     if not no_cache and cache_path.exists() and time.time() - cache_path.stat().st_mtime < 3600:
@@ -792,6 +958,19 @@ def fetch_match_markets(home: str, away: str, kickoff: object, explicit_id: int 
         provider_away=parsed["identity"].get("away_team", ""),
         provider_kickoff=parsed["identity"].get("kickoff_local", ""),
     )
+    if schedule_identity.get("status") == "OK":
+        season_context = fetch_nowscore_season_context(
+            schedule_identity.get("provider_competition_id"), no_cache=no_cache
+        )
+    else:
+        season_context = {
+            "status": "NOT_ATTEMPTED",
+            "reason": schedule_identity.get("status"),
+            "fetched_at": schedule_fetched_at,
+        }
+    provider_identity_evidence["season"] = season_context
+    if schedule_identity.get("status") == "OK" and season_context.get("status") == "OK":
+        provider_identity_evidence["status"] = "OK"
     analysis_error = None
     shuju = {}
     analysis_cache = CACHE_ROOT / "raw" / f"{match_id}_analysis.js"
@@ -810,9 +989,17 @@ def fetch_match_markets(home: str, away: str, kickoff: object, explicit_id: int 
         if not shuju:
             analysis_error = "RECENT_FORM_PARSE_EMPTY"
     context = fetch_context_bundle(match_id, kickoff, parsed, no_cache=no_cache)
+    captured_at = datetime.now(SHANGHAI).isoformat(timespec="seconds")
     return {
-        "source": "nowscore_public_3in1", "status": "OK", "fetched_at": fetched_at,
-        "nowscore_id": match_id, "target": target, "resolution": resolved,
+        "source": "nowscore_public_3in1", "status": "OK", "fetched_at": captured_at,
+        "nowscore_id": match_id, "provider_match_id": str(match_id), "target": target, "resolution": resolved,
+        "provider_competition_id": schedule_identity.get("provider_competition_id"),
+        "provider_season_id": season_context.get("provider_season_id"),
+        "provider_identity_evidence": provider_identity_evidence,
+        "schedule_source_url": schedule_source_url,
+        "schedule_raw_sha256": schedule_evidence.get("raw_sha256"),
+        "provider_season_source_url": season_context.get("source_ref"),
+        "provider_season_list_source_url": season_context.get("season_list_source_ref"),
         "identity": parsed["identity"], "source_url": MARKET_URL.format(match_id=match_id),
         "ouzhi": parsed["ouzhi"], "yazhi": parsed["yazhi"], "daxiao": parsed["daxiao"],
         "shuju": shuju,

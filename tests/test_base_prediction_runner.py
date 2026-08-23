@@ -430,8 +430,33 @@ def test_reviewed_target_ids_flow_through_champion_challenger_pair_freeze():
             "target": {"home": row["homeTeam"], "away": row["awayTeam"], "kickoff": KICKOFF},
             "identity": {"home_team": "博德闪耀(主)", "away_team": "腓特烈斯塔"},
             "analysis_source_url": "https://live.nowscore.com/analysis/test.js",
-            "provider_competition_id": "nowscore:norway-eliteserien",
-            "provider_season_id": "2026",
+            "provider_competition_id": "fixture:sclass-36",
+            "provider_season_id": "fixture:2026-2027",
+            "provider_identity_evidence": {
+                "contract_version": "nowscore_target_identity_evidence.v1",
+                "status": "OK",
+                "provider": "nowscore",
+                "provider_match_id": str(row["nowscoreId"]),
+                "schedule": {
+                    "status": "OK",
+                    "provider_match_id": str(row["nowscoreId"]),
+                    "provider_competition_id": "fixture:sclass-36",
+                    "fetched_at": "2026-08-12T12:00:00+08:00",
+                    "source_ref": "https://live.nowscore.com/data/bf1.js",
+                    "raw_sha256": "a" * 64,
+                },
+                "season": {
+                    "status": "OK",
+                    "provider_competition_id": "fixture:sclass-36",
+                    "provider_season_id": "fixture:2026-2027",
+                    "returned_sclass_id": "36",
+                    "fetched_at": "2026-08-12T12:00:00+08:00",
+                    "source_ref": "https://info.nowscore.com/cn/League/36.html",
+                    "raw_sha256": "b" * 64,
+                    "season_list_source_ref": "https://info.nowscore.com/jsData/LeagueSeason/sea36.js",
+                    "season_list_raw_sha256": "c" * 64,
+                },
+            },
             "shuju": {"recent_form": recent_form(), "team_ids": {"home": 472, "away": 478}},
             "context": {"panlu": {"matches": [{"home_team_id": 999, "away_team_id": 998}]}},
             "ouzhi": {"bookmakers": []},
@@ -444,10 +469,10 @@ def test_reviewed_target_ids_flow_through_champion_challenger_pair_freeze():
             "competitions": [{
                 "canonical_competition_id": "competition:norway-eliteserien",
                 "seasons": [{
-                    "canonical_season_id": "season:norway-eliteserien:2026",
+                    "canonical_season_id": "season:norway-eliteserien:2026-2027",
                     "provider": "nowscore",
-                    "provider_competition_id": "nowscore:norway-eliteserien",
-                    "provider_season_id": "2026",
+                    "provider_competition_id": "fixture:sclass-36",
+                    "provider_season_id": "fixture:2026-2027",
                     "verified": True,
                     "resolution_method": "manual_verified",
                 }],
@@ -464,7 +489,9 @@ def test_reviewed_target_ids_flow_through_champion_challenger_pair_freeze():
         assert summary["frozen"] == 1
         assert champion["canonical_team_identity"]["home_team_id"] == "team:norway:bod-glimt"
         assert champion["canonical_team_identity"]["away_team_id"] == "team:norway:fredrikstad"
+        assert champion["canonical_team_identity"]["season_id"] == "season:norway-eliteserien:2026-2027"
         assert champion["target_team_identity_evidence"]["source"]["panlu_used"] is False
+        assert champion["target_team_identity_evidence"]["source"]["provider_identity_evidence"]["season"]["raw_sha256"] == "b" * 64
 
         snapshot = load_input_snapshot(champion, root / "model_governance" / "input_snapshots")
         history = [
