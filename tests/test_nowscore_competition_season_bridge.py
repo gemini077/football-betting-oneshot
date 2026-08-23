@@ -220,6 +220,17 @@ def test_reviewed_string_season_key_resolves_before_freeze(tmp_path):
     assert result["canonical_team_identity"]["season_id"] == "season:norway-eliteserien:2026-2027"
 
 
+def test_provider_ids_without_verified_identity_evidence_fail_closed(tmp_path):
+    registry = _registry(tmp_path / "competition_registry.json")
+    source = _identity_source()
+    source.pop("provider_identity_evidence")
+
+    result = resolve_target_team_identity(**_identity_request(source, registry))
+
+    assert result["canonical_team_identity"] is None
+    assert result["evidence"]["status"] == "TARGET_PROVIDER_IDENTITY_EVIDENCE_NOT_VERIFIED"
+
+
 def test_identity_evidence_must_be_aware_and_before_cutoff(tmp_path):
     registry = _registry(tmp_path / "competition_registry.json")
     future = _identity_source()

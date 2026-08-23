@@ -86,7 +86,7 @@ def _provider_identity_evidence_failure(
 ) -> str | None:
     evidence = source.get("provider_identity_evidence")
     if evidence is None:
-        return None
+        return "TARGET_PROVIDER_IDENTITY_EVIDENCE_NOT_VERIFIED"
     if not isinstance(evidence, Mapping) or evidence.get("status") != "OK":
         return "TARGET_PROVIDER_IDENTITY_EVIDENCE_NOT_VERIFIED"
     if _text(evidence.get("provider_match_id")) != _text(provider_match_id):

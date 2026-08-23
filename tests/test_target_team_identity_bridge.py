@@ -43,6 +43,28 @@ def _source(*, team_ids=None, panlu_ids=(999, 998), provider_context=False):
         source.update({
             "provider_competition_id": "nowscore:norway-eliteserien",
             "provider_season_id": "2026",
+            "provider_identity_evidence": {
+                "status": "OK",
+                "provider_match_id": "123456",
+                "schedule": {
+                    "status": "OK",
+                    "provider_match_id": "123456",
+                    "provider_competition_id": "nowscore:norway-eliteserien",
+                    "fetched_at": CUTOFF,
+                    "source_ref": "https://example.test/bf1.js",
+                    "raw_sha256": "a" * 64,
+                },
+                "season": {
+                    "status": "OK",
+                    "provider_competition_id": "nowscore:norway-eliteserien",
+                    "provider_season_id": "2026",
+                    "fetched_at": CUTOFF,
+                    "source_ref": "https://example.test/league.html",
+                    "raw_sha256": "b" * 64,
+                    "season_list_source_ref": "https://example.test/season.js",
+                    "season_list_raw_sha256": "c" * 64,
+                },
+            },
         })
     return source
 
