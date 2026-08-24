@@ -579,6 +579,75 @@ def _historical_results_html(rows: list[dict[str, Any]]) -> str:
     return f'<section id="historical-results" class="historical-results"><h2>{title}</h2>{"".join(cards)}</section>'
 
 
+def _history_status_label(row: dict[str, Any]) -> str:
+    labels = {
+        "FROZEN_PREMATCH_AND_REVIEW": "\u6709\u8d5b\u524d\u9884\u6d4b + \u8d5b\u540e\u590d\u76d8",
+        "FROZEN_PREMATCH_ONLY": "\u6709\u8d5b\u524d\u9884\u6d4b\uff0c\u6682\u672a\u590d\u76d8",
+        "REVIEW_ONLY_NO_FROZEN_PREDICTION": "\u4ec5\u6709\u8d5b\u540e\u8bb0\u5f55",
+    }
+    status = str(row.get("historical_status") or "").strip()
+    if status in labels:
+        return labels[status]
+    if row.get("result_90m"):
+        return "\u5df2\u5b8c\u8d5b"
+    if row.get("prediction_frozen"):
+        return "\u6709\u8d5b\u524d\u9884\u6d4b\uff0c\u6682\u672a\u590d\u76d8"
+    return "\u5386\u53f2\u8bb0\u5f55"
+
+
+def _history_links_html(row: dict[str, Any]) -> str:
+    links = []
+    if row.get("prematch_report_url"):
+        links.append(f'<a href="{html.escape(str(row["prematch_report_url"]), quote=True)}">\u8d5b\u524d\u5feb\u7167</a>')
+    if row.get("postmatch_report_url"):
+        links.append(f'<a href="{html.escape(str(row["postmatch_report_url"]), quote=True)}">\u8d5b\u540e\u590d\u76d8</a>')
+    return " \u00b7 ".join(links)
+
+
+def _history_identity_keys(row: dict[str, Any]) -> set[str]:
+    """Return exact display-dedup keys; this is not a new match identity system."""
+    keys = set()
+    for field in ("id", "match_id", "canonical_match_id", "provider_match_id"):
+        value = row.get(field)
+        if value not in (None, ""):
+            keys.add(f"{field}:{value}")
+    home, away, kickoff = row.get("home"), row.get("away"), row.get("kickoff")
+    if home not in (None, "") and away not in (None, "") and kickoff not in (None, ""):
+        keys.add(f"fixture:{home}|{away}|{kickoff}")
+    return keys
+
+
+def _history_schedule_rows(
+    history: list[dict[str, Any]],
+    completed: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    completed_keys = set()
+    for row in completed:
+        completed_keys.update(_history_identity_keys(row))
+    return [
+        row for row in history
+        if not (_history_identity_keys(row) & completed_keys)
+    ]
+
+
+def _historical_schedule_html(rows: list[dict[str, Any]]) -> str:
+    title = "\u5386\u53f2\u8d5b\u7a0b\u6863\u6848"
+    if not rows:
+        return f'<section id="historical-schedule" class="historical-results"><h2>{title}</h2><div class="empty">\u6682\u65e0\u53ef\u5c55\u793a\u7684\u5386\u53f2\u8d5b\u7a0b</div></section>'
+    cards = []
+    for row in rows:
+        row_id = html.escape(str(row.get("id") or ""), quote=True)
+        score = row.get("result_90m") or "\u6682\u65e0\u5df2\u6838\u9a8c\u6bd4\u5206"
+        cards.append(
+            f'<article class="historical-result historical-schedule-row" data-history-row="{row_id}" data-result="{"yes" if row.get("result_90m") else "no"}">'
+            f'<div class="historical-meta">{_esc(row.get("kickoff"))} \u00b7 {html.escape(_history_status_label(row))}</div>'
+            f'<div class="historical-teams">{_esc(row.get("home"))}<span> vs </span>{_esc(row.get("away"))}</div>'
+            f'<strong class="historical-score">{_esc(score)}</strong>'
+            f'<div class="historical-links">{_history_links_html(row)}</div>'
+            '</article>'
+        )
+    return f'<section id="historical-schedule" class="historical-results"><h2>{title}</h2>{"".join(cards)}</section>'
+
 def _modern_card_html(card: dict[str, Any]) -> str:
     status = str(card.get("status") or "PENDING")
     match_id = str(card.get("match_id") or "")
@@ -660,7 +729,12 @@ def render_dashboard(payload: dict[str, Any]) -> str:
     data_warning = ""
     if summary.get("silent_missing_fixture"):
         data_warning = f'<div class="data-warning">数据完整性提醒：当天 {html.escape(str(summary.get("fixture_count")))} 场，页面仅生成 {html.escape(str(summary.get("card_count")))} 张卡片。</div>'
-    historical_html = _historical_results_html(payload.get("completed") or [])
+    completed_rows = [row for row in payload.get("completed") or [] if isinstance(row, dict)]
+    history_rows = [row for row in payload.get("history") or [] if isinstance(row, dict)]
+    historical_html = _historical_results_html(completed_rows)
+    historical_schedule_html = _historical_schedule_html(
+        _history_schedule_rows(history_rows, completed_rows)
+    )
     page = f"""<!doctype html>
 <html lang="zh-CN">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -676,11 +750,13 @@ def render_dashboard(payload: dict[str, Any]) -> str:
 <button class="filter" type="button" data-filter="RESULT" aria-pressed="false">已完赛</button>
  </nav>
 {data_warning}<section id="fixture-list" class="fixture-list" aria-label="今日比赛列表">{cards_html}</section>
+{historical_html}{historical_schedule_html}
 <footer class="page-footer"><a class="legacy-link" href="../match_workspace/latest.html">Legacy 工作台</a></footer>
 </main><script>
 const buttons = Array.from(document.querySelectorAll('[data-filter]'));
 const cards = Array.from(document.querySelectorAll('.fixture-card'));
 const historicalResults = document.querySelector('#historical-results');
+const historicalSchedule = document.querySelector('#historical-schedule');
 buttons.forEach(button => button.addEventListener('click', () => {{
   const filter = button.dataset.filter;
   buttons.forEach(item => item.setAttribute('aria-pressed', String(item === button)));
@@ -689,10 +765,10 @@ buttons.forEach(button => button.addEventListener('click', () => {{
     card.hidden = !match;
   }});
   if (historicalResults) historicalResults.hidden = filter !== 'ALL' && filter !== 'RESULT';
+  if (historicalSchedule) historicalSchedule.hidden = filter !== 'ALL';
 }}));
 </script></body></html>"""
     result_count = int(summary.get("completed_count") or 0)
-    page = page.replace('<section id="fixture-list"', historical_html + '<section id="fixture-list"', 1)
     page = page.replace(
         'data-filter="RESULT" aria-pressed="false"',
         f'data-filter="RESULT" data-result-count="{result_count}" aria-pressed="false"',

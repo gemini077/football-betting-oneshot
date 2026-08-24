@@ -228,6 +228,54 @@ def test_completed_filter_controls_historical_rows_and_real_count(tmp_path):
     assert html.count('class="historical-result"') == 2
 
 
+def test_dashboard_projects_full_history_as_a_separate_schedule_section(tmp_path):
+    roots = make_roots(tmp_path, [fixture(1)], [{"match_id": "1001", "status": "PENDING"}])
+    workspace_path = tmp_path / "workspace" / "latest.json"
+    write_json(workspace_path, {
+        "completed": [{
+            "id": "H-1",
+            "home": "Lyon",
+            "away": "Sparta",
+            "kickoff": "2026-08-12T03:00+08:00",
+            "result_90m": "3-0",
+            "review_available": True,
+        }],
+        "history": [
+            {
+                "id": "H-1",
+                "home": "Lyon",
+                "away": "Sparta",
+                "kickoff": "2026-08-12T03:00+08:00",
+                "result_90m": "3-0",
+                "prediction_frozen": True,
+                "review_available": True,
+                "historical_status": "FROZEN_PREMATCH_AND_REVIEW",
+            },
+            {
+                "id": "H-2",
+                "home": "Graz",
+                "away": "Fenerbahce",
+                "kickoff": "2026-08-11T02:30+08:00",
+                "result_90m": None,
+                "prediction_frozen": True,
+                "review_available": False,
+                "historical_status": "FROZEN_PREMATCH_ONLY",
+            },
+        ],
+    })
+
+    payload = build_dashboard(DATE, workspace_path=workspace_path, **roots)
+
+    assert payload["summary"]["history_count"] == 2
+    html = (roots["output_root"] / "latest.html").read_text(encoding="utf-8")
+    assert 'id="historical-schedule"' in html
+    assert "\u5386\u53f2\u8d5b\u7a0b\u6863\u6848" in html
+    assert "Graz" in html
+    assert "Fenerbahce" in html
+    assert "\u6709\u8d5b\u524d\u9884\u6d4b\uff0c\u6682\u672a\u590d\u76d8" in html
+    assert html.count('data-history-row="H-1"') == 0
+
+
 def test_universe_fourteen_keeps_every_fixture_without_prediction_artifact(tmp_path):
     fixtures = [fixture(index) for index in range(1, 15)]
     roots = make_roots(tmp_path, fixtures, [])

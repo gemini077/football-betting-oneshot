@@ -10,6 +10,7 @@
 状态：`CURRENT`
 
 ID3 slice status: the prospective pair-capture contract and the bounded real Challenger freeze path are `READY_FOR_ACCEPTANCE` only. The registered producer is `phase2c2_opponent_strength_prior20` (`shadow_only`, `formal_benchmark_eligible=false`), but current real data has no reviewed canonical research competition/team IDs for its 12 future formal Champion rows; the dry-run therefore freezes 0 Challenger records and `TRUE_PAIRED=0`. ID3 overall remains `CURRENT` and is not closable pending the canonical identity bridge, a genuine forward pair, and independent acceptance.
+Checkpoint 2026-08-25: independent product slice: the read-only dashboard now renders history-only fixtures in a separate historical schedule archive with explicit prematch-only status; completed 90-minute reviews remain in the completed section. No model, identity registry, frozen history, ledger, result or production data changes. Slice status is READY_FOR_ACCEPTANCE; ID3 remains CURRENT.
 
 Checkpoint 2026-08-23: focused Challenger/pair/governance/automation tests pass; broader relevant regression passes; the real dry-run is read-only with `future_formal_champion_count=12` and `CANONICAL_RESEARCH_IDENTITY_MISSING=12`; no Challenger or pair artifacts were created. Governance counts remain `RAW_FROZEN_TICKETS=278`, `FORMAL_FROZEN=127`, `FORMAL_PROSPECTIVE=108`, `SETTLED=108`, `RESULT_UNRESOLVED=7`, `FUTURE_SCHEDULED_FORMAL=12`, `TRUE_PAIRED=0`.
 
