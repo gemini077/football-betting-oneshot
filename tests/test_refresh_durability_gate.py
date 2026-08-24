@@ -1,0 +1,159 @@
+import json
+from pathlib import Path
+
+from scripts import automation_cycle
+from scripts.refresh_durability_gate import classify
+
+
+DATE = "2026-08-25"
+
+
+def write_json(path: Path, payload: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+
+def cycle_payload(*, site_status: str, generation_status: dict[str, str] | None = None) -> dict:
+    statuses = {
+        "universe": "SUCCESS",
+        "base_jobs": "SUCCESS",
+        "base_prediction": "SUCCESS",
+        "dashboard": "SUCCESS",
+    }
+    statuses.update(generation_status or {})
+    steps = {name: {"status": status} for name, status in statuses.items()}
+    steps["site"] = {"status": site_status}
+    return {"business_date": DATE, "steps": steps}
+
+
+def write_generated_artifacts(tmp_path: Path) -> Path:
+    data_root = tmp_path / "data"
+    write_json(data_root / "prediction_universe" / f"{DATE}.json", {
+        "business_date": DATE,
+        "status": "READY",
+    })
+    write_json(data_root / "base_prediction_jobs" / f"{DATE}.json", {
+        "business_date": DATE,
+        "status": "READY",
+    })
+    write_json(data_root / "prediction_dashboard" / "latest.json", {
+        "business_date": DATE,
+    })
+    dashboard_html = data_root / "prediction_dashboard" / "latest.html"
+    dashboard_html.write_text("dashboard", encoding="utf-8")
+    return data_root
+
+
+def test_gate_accepts_automation_cycle_runtime_contract(tmp_path):
+    data_root = write_generated_artifacts(tmp_path)
+    runtime_path = tmp_path / "product_runtime" / "latest_cycle.json"
+    steps = {
+        "universe": {"status": "SUCCESS"},
+        "base_jobs": {"status": "SUCCESS"},
+        "base_prediction": {"status": "SUCCESS"},
+        "dashboard": {"status": "SUCCESS"},
+        "site": {"status": "FAILED"},
+    }
+
+    automation_cycle._write_runtime(
+        runtime_path,
+        business_date=DATE,
+        started_at="2026-08-25T10:00:00+08:00",
+        finished_at="2026-08-25T10:01:00+08:00",
+        steps=steps,
+    )
+
+    cycle_result = json.loads(runtime_path.read_text(encoding="utf-8"))
+    result = classify(
+        cycle_result,
+        data_root=data_root,
+        cycle_outcome="failure",
+    )
+
+    assert cycle_result["schema_version"] == "1.0"
+    assert result["ready"] is True
+    assert result["reason"] == "SITE_FAILURE_AFTER_COMPLETE_GENERATION"
+
+def test_gate_allows_site_failure_after_complete_generation(tmp_path):
+    data_root = write_generated_artifacts(tmp_path)
+
+    result = classify(
+        cycle_payload(site_status="FAILED"),
+        data_root=data_root,
+        cycle_outcome="failure",
+    )
+
+    assert result["ready"] is True
+    assert result["reason"] == "SITE_FAILURE_AFTER_COMPLETE_GENERATION"
+
+
+def test_gate_rejects_upstream_generation_failure_even_when_site_fails(tmp_path):
+    data_root = write_generated_artifacts(tmp_path)
+
+    result = classify(
+        cycle_payload(
+            site_status="FAILED",
+            generation_status={"base_prediction": "DEGRADED"},
+        ),
+        data_root=data_root,
+        cycle_outcome="failure",
+    )
+
+    assert result["ready"] is False
+    assert result["reason"] == "UPSTREAM_GENERATION_NOT_COMPLETE"
+
+
+def test_gate_rejects_missing_generated_artifact(tmp_path):
+    data_root = write_generated_artifacts(tmp_path)
+    (data_root / "prediction_dashboard" / "latest.json").unlink()
+
+    result = classify(
+        cycle_payload(site_status="FAILED"),
+        data_root=data_root,
+        cycle_outcome="failure",
+    )
+
+    assert result["ready"] is False
+    assert result["reason"] == "GENERATED_ARTIFACT_MISSING_OR_STALE"
+
+
+def test_gate_rejects_stale_generated_artifact(tmp_path):
+    data_root = write_generated_artifacts(tmp_path)
+    write_json(data_root / "prediction_dashboard" / "latest.json", {
+        "business_date": "2026-08-24",
+    })
+
+    result = classify(
+        cycle_payload(site_status="FAILED"),
+        data_root=data_root,
+        cycle_outcome="failure",
+    )
+
+    assert result["ready"] is False
+    assert result["reason"] == "GENERATED_ARTIFACT_MISSING_OR_STALE"
+
+
+def test_gate_rejects_empty_dashboard_html(tmp_path):
+    data_root = write_generated_artifacts(tmp_path)
+    (data_root / "prediction_dashboard" / "latest.html").write_text("", encoding="utf-8")
+
+    result = classify(
+        cycle_payload(site_status="FAILED"),
+        data_root=data_root,
+        cycle_outcome="failure",
+    )
+
+    assert result["ready"] is False
+    assert result["reason"] == "GENERATED_ARTIFACT_MISSING_OR_STALE"
+
+def test_gate_allows_normal_complete_cycle(tmp_path):
+    data_root = write_generated_artifacts(tmp_path)
+
+    result = classify(
+        cycle_payload(site_status="SUCCESS"),
+        data_root=data_root,
+        cycle_outcome="success",
+    )
+
+    assert result["ready"] is True
+    assert result["reason"] == "COMPLETE_GENERATION"

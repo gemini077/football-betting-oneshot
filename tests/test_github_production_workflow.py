@@ -17,7 +17,7 @@ def test_deploy_pages_keeps_half_hour_schedule_and_uses_production_cycle():
     text = _workflow_text()
 
     assert 'cron: "*/30 * * * *"' in text
-    assert "run: python scripts/automation_cycle.py\n" in text
+    assert "python scripts/automation_cycle.py" in text
     assert "automation_cycle.py --date" not in text
     assert "FBOS_DATE" not in text
     assert "Resolve China business date" not in text
@@ -99,3 +99,23 @@ def test_health_alert_does_not_block_durable_save_or_pages_deploy():
     assert health_step < save_step < deploy_step
     assert "if: ${{ steps.health.outputs.status != 'ALERT' }}" not in text
     assert "if: ${{ steps.health.outputs.notify == 'true' }}" not in text
+
+
+def test_generated_data_save_uses_narrow_durability_gate():
+    text = _workflow_text()
+    cycle_index = text.index("- name: Run production cycle")
+    gate_index = text.index("- name: Classify generated data durability")
+    save_index = text.index("- name: Save generated public data")
+    rebuild_index = text.index("- name: Rebuild Pages artifact after data save")
+    cycle_block = text[cycle_index:gate_index]
+    gate_block = text[gate_index:save_index]
+    save_block = text[save_index:rebuild_index]
+
+    assert "id: production_cycle" in cycle_block
+    assert "python scripts/automation_cycle.py" in cycle_block
+    assert "tee cycle_result.json" not in cycle_block
+    assert "id: generated_data_gate" in gate_block
+    assert "if: ${{ always() }}" in gate_block
+    assert "--cycle-result data/product_runtime/latest_cycle.json" in gate_block
+    assert "if: ${{ !cancelled() && steps.generated_data_gate.outputs.ready == 'true' }}" in save_block
+    assert "always()" not in save_block
