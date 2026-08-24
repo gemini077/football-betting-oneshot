@@ -176,6 +176,66 @@ def test_universe_three_produces_three_accountable_cards_and_frozen_fields(tmp_p
         assert forbidden not in html
 
 
+def test_frozen_champion_keeps_prediction_visible_when_research_identity_is_pending(tmp_path):
+    prediction_id = "FBOS-PRED-research-status-1"
+    roots = make_roots(
+        tmp_path,
+        [fixture(1)],
+        [frozen_job("1001", prediction_id)],
+        [frozen_prediction(prediction_id)],
+    )
+
+    payload = build_dashboard(DATE, **roots)
+
+    card = payload["fixtures"][0]
+    assert card["status"] == "FROZEN"
+    assert card["prediction"]["model_family"] == "recent_form_market_calibrated_poisson_v2"
+    assert card["research_status"] == {
+        "code": "IDENTITY_PENDING",
+        "label": "研究身份待确认",
+        "detail": "当前预测照常展示；研究用身份仍在审核，暂不用于 Challenger 对照。",
+    }
+    html = (roots["output_root"] / "latest.html").read_text(encoding="utf-8")
+    assert "已预测" in html
+    assert "研究身份待确认" in html
+    assert "当前预测照常展示" in html
+    assert "1–0" in html
+
+
+def test_research_identity_confirmation_requires_resolved_bridge_evidence(tmp_path):
+    prediction_id = "FBOS-PRED-research-status-2"
+    prediction = frozen_prediction(prediction_id)
+    prediction["canonical_team_identity"] = {
+        "competition_id": "canonical-competition",
+        "season_id": "canonical-season",
+        "home_team_id": "canonical-home",
+        "away_team_id": "canonical-away",
+    }
+
+    pending_roots = make_roots(
+        tmp_path / "pending",
+        [fixture(1)],
+        [frozen_job("1001", prediction_id)],
+        [prediction],
+    )
+    pending = build_dashboard(DATE, **pending_roots)
+    assert pending["fixtures"][0]["research_status"]["code"] == "IDENTITY_PENDING"
+
+    prediction["target_team_identity_evidence"] = {"status": "RESOLVED"}
+    resolved_roots = make_roots(
+        tmp_path / "resolved",
+        [fixture(1)],
+        [frozen_job("1001", prediction_id)],
+        [prediction],
+    )
+    resolved = build_dashboard(DATE, **resolved_roots)
+    assert resolved["fixtures"][0]["research_status"] == {
+        "code": "IDENTITY_CONFIRMED",
+        "label": "研究身份已确认",
+        "detail": "身份已审核；历史样本仍需单独核验。",
+    }
+
+
 def test_dashboard_publishes_workspace_completed_history_when_current_cards_have_no_results(tmp_path):
     roots = make_roots(tmp_path, [fixture(1)], [{"match_id": "1001", "status": "PENDING"}])
     workspace_path = tmp_path / "workspace" / "latest.json"

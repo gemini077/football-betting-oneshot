@@ -47,6 +47,12 @@ REASON_LABELS = {
     "BASE_JOB_MISSING": "基础预测任务尚未生成",
     "PREDICTION_ARTIFACT_MISSING": "预测任务已冻结但正式记录缺失",
 }
+RESEARCH_IDENTITY_PENDING_REASONS = {
+    "TARGET_IDENTITY_SEASON_CONTEXT_MISSING": "赛事/赛季身份还在审核。",
+    "TARGET_IDENTITY_SEASON_CONTEXT_UNRESOLVED": "赛事/赛季身份还在审核。",
+    "TARGET_IDENTITY_CROSSWALK_UNAVAILABLE": "球队与赛事的研究身份还在审核。",
+    "TARGET_IDENTITY_UNRESOLVED": "球队与赛事的研究身份还在审核。",
+}
 
 
 def _read_json(path: Path, errors: list[str], label: str, default: Any) -> Any:
@@ -330,6 +336,40 @@ def _status_reason(status: str, job: dict[str, Any] | None, record: dict[str, An
     return None, None
 
 
+def _complete_canonical_identity(value: Any) -> bool:
+    if not isinstance(value, dict):
+        return False
+    return all(str(value.get(key) or "").strip() for key in (
+        "competition_id", "season_id", "home_team_id", "away_team_id",
+    ))
+
+
+def _research_status(record: dict[str, Any] | None) -> dict[str, str] | None:
+    """Project research readiness without changing Champion or Challenger gates."""
+    if not record:
+        return None
+    evidence = record.get("target_team_identity_evidence")
+    evidence = evidence if isinstance(evidence, dict) else {}
+    if (
+        _complete_canonical_identity(record.get("canonical_team_identity"))
+        and evidence.get("status") == "RESOLVED"
+    ):
+        return {
+            "code": "IDENTITY_CONFIRMED",
+            "label": "研究身份已确认",
+            "detail": "身份已审核；历史样本仍需单独核验。",
+        }
+    detail = RESEARCH_IDENTITY_PENDING_REASONS.get(
+        str(evidence.get("status") or ""),
+        "当前预测照常展示；研究用身份仍在审核，暂不用于 Challenger 对照。",
+    )
+    return {
+        "code": "IDENTITY_PENDING",
+        "label": "研究身份待确认",
+        "detail": detail,
+    }
+
+
 def _card(
     fixture: dict[str, Any],
     job: dict[str, Any] | None,
@@ -355,6 +395,7 @@ def _card(
         "job_id": (job or {}).get("job_id"),
         "prediction_id": prediction_id,
         "prediction": _prediction_projection(record) if record else None,
+        "research_status": _research_status(record),
         "result": {
             "score_90m": (result or {}).get("result_90m") or (result or {}).get("score_90m"),
             "verified_at": (result or {}).get("result_verified_at") or (result or {}).get("verified_at"),
@@ -447,6 +488,10 @@ h1 { margin: 8px 0 4px; font-size: clamp(32px, 5vw, 54px); line-height: 1.02; le
 .status-prediction_failed .status-badge, .status-missed_prematch_window .status-badge { color: var(--danger); background: var(--danger-soft); }
 .reason { display: flex; flex-wrap: wrap; gap: 5px 10px; align-items: baseline; margin-top: 14px; padding: 10px 12px; border: 1px solid rgba(240, 184, 106, .25); background: var(--warning-soft); color: #f6d29a; }
 .reason strong { font-size: 13px; }
+.research-note { display: flex; flex-wrap: wrap; gap: 5px 10px; align-items: baseline; margin-top: 12px; padding: 9px 11px; border: 1px solid rgba(240, 184, 106, .22); background: rgba(240, 184, 106, .08); color: var(--muted); font-size: 12px; }
+.research-note strong { color: var(--warning); font-size: 12px; }
+.research-note.confirmed { border-color: rgba(67, 211, 165, .22); background: rgba(67, 211, 165, .07); }
+.research-note.confirmed strong { color: var(--accent); }
 .pilot-note { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: baseline; margin-top: 12px; color: var(--warning); font-size: 12px; }
 .pilot-note span { color: var(--muted); font-size: 11px; }
 .prediction-panel { margin-top: 16px; padding: 15px 0 0; border-top: 1px solid var(--line); }
@@ -556,6 +601,19 @@ def _modern_result_html(card: dict[str, Any]) -> str:
     return f'<div class="result-line"><strong>90分钟赛果 · {html.escape(str(score))}</strong></div>'
 
 
+def _modern_research_html(status: dict[str, Any] | None) -> str:
+    if not status:
+        return ""
+    code = str(status.get("code") or "")
+    css = " confirmed" if code == "IDENTITY_CONFIRMED" else ""
+    return (
+        f'<div class="research-note{css}">'
+        f'<strong>研究状态 · {html.escape(str(status.get("label") or "待确认"))}</strong>'
+        f'<span>{html.escape(str(status.get("detail") or ""))}</span>'
+        '</div>'
+    )
+
+
 def _historical_results_html(rows: list[dict[str, Any]]) -> str:
     title = "\u5df2\u5b8c\u8d5b / \u5386\u53f2\u590d\u76d8"
     if not rows:
@@ -587,6 +645,7 @@ def _modern_card_html(card: dict[str, Any]) -> str:
     reason_html = ""
     if card.get("reason_code"):
         reason_html = f'<div class="reason"><strong>{html.escape(str(card.get("reason_text") or "数据暂不可用"))}</strong></div>'
+    research_html = _modern_research_html(card.get("research_status"))
     prediction_html = _modern_prediction_html(card["prediction"], pilot_excluded=pilot_excluded) if card.get("prediction") else ""
     return (
         f'<article class="fixture-card status-{html.escape(status.lower())} prediction-{prediction_kind}" data-status="{html.escape(status)}" data-result="{"yes" if card.get("result") else "no"}" data-prediction-kind="{prediction_kind}">'
@@ -599,7 +658,7 @@ def _modern_card_html(card: dict[str, Any]) -> str:
         f'<div class="fixture-meta"><span class="kickoff">开球 · {html.escape(_format_kickoff(card.get("kickoff")))}</span>'
         f'<span><span class="status-badge">{html.escape(str(card.get("status_label") or status))}</span>'
         f'<a class="detail-link" href="../matches/{html.escape(match_id)}/">查看详情</a></span></div>'
-        f'{reason_html}{prediction_html}{_modern_result_html(card)}'
+        f'{reason_html}{research_html}{prediction_html}{_modern_result_html(card)}'
         '</div>'
         '</article>'
     )
