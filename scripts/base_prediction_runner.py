@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import copy
+import hashlib
 import json
 import math
 import sys
@@ -39,6 +40,7 @@ from model_governance import (  # noqa: E402
     build_prediction_record,
     freeze_prediction,
     load_config,
+    load_frozen_prediction,
     prediction_content_hash,
 )
 from nowscore_markets import fetch_match_markets  # noqa: E402
@@ -50,8 +52,8 @@ JOBS_ROOT = PROJECT_ROOT / "data" / "base_prediction_jobs"
 ANALYSIS_INPUT_ROOT = PROJECT_ROOT / "data" / "analysis_inputs" / "automated"
 UNIVERSE_ROOT = PROJECT_ROOT / "data" / "prediction_universe"
 LOCAL_TZ = timezone(timedelta(hours=8))
-RETRYABLE_STATUSES = {"PENDING", "INSUFFICIENT_DATA", "PREDICTION_FAILED"}
-TERMINAL_STATUSES = {"FROZEN", "MISSED_PREMATCH_WINDOW", "PREDICTED"}
+RETRYABLE_STATUSES = {"PENDING", "INSUFFICIENT_DATA", "PREDICTION_FAILED", "FROZEN"}
+TERMINAL_STATUSES = {"MISSED_PREMATCH_WINDOW", "PREDICTED"}
 UNIVERSE_STATUSES = {"READY", "EMPTY_CONFIRMED"}
 
 
@@ -70,6 +72,96 @@ def _load_json(path: Path) -> dict[str, Any] | None:
 def _write_json(path: Path, value: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(value, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
+def _remember_prediction_id(job: dict[str, Any], prediction_id: Any) -> None:
+    """Keep an append-only audit pointer while retaining legacy single-pointer jobs."""
+    history = job.get("prediction_ids")
+    if not isinstance(history, list):
+        history = []
+    current = str(job.get("prediction_id") or "").strip()
+    if current and current not in history:
+        history.append(current)
+    value = str(prediction_id or "").strip()
+    if value and value not in history:
+        history.append(value)
+    job["prediction_ids"] = history
+
+
+_FRESHNESS_KEYS = frozenset({"fetched_at", "captured_at", "source_timestamp", "source_time"})
+
+
+def _stable_model_input_projection(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {
+            str(key): _stable_model_input_projection(child)
+            for key, child in value.items()
+            if str(key).casefold() not in _FRESHNESS_KEYS
+        }
+    if isinstance(value, list):
+        return [_stable_model_input_projection(child) for child in value]
+    return value
+
+
+def _stable_model_input_hash(input_snapshot: dict[str, Any] | None) -> str:
+    projection = None
+    if isinstance(input_snapshot, dict):
+        projection = input_snapshot.get("projection") or input_snapshot.get("input")
+    if not isinstance(projection, dict):
+        return ""
+    canonical = json.dumps(
+        _stable_model_input_projection(projection),
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def _same_deterministic_input(
+    job: dict[str, Any],
+    input_snapshot: dict[str, Any],
+    kickoff: datetime,
+    record_root: Path,
+    input_snapshot_root: Path,
+) -> dict[str, Any] | None:
+    """Return the current frozen record when the new deterministic input is identical."""
+    prediction_id = str(job.get("prediction_id") or "").strip()
+    if not prediction_id:
+        return None
+    existing = load_frozen_prediction(prediction_id, Path(record_root))
+    if not isinstance(existing, dict):
+        return None
+    if existing.get("job_id") and existing.get("job_id") != job.get("job_id"):
+        return None
+    if existing.get("match_id") and existing.get("match_id") != job.get("match_id"):
+        return None
+    existing_kickoff = _parse_timestamp(existing.get("kickoff_at"))
+    if existing_kickoff is None or existing_kickoff != kickoff:
+        return None
+    existing_freeze = _parse_timestamp(existing.get("freeze_created_at"))
+    if existing_freeze is None or existing_freeze >= kickoff:
+        return None
+    new_hash = _stable_model_input_hash(input_snapshot)
+    existing_hash = str(existing.get("model_input_stable_sha256") or "").strip()
+    if not existing_hash:
+        existing_hash = _stable_model_input_hash(existing.get("input_snapshot"))
+    if not existing_hash:
+        snapshot = existing.get("input_snapshot")
+        snapshot_hash = snapshot.get("canonical_input_sha256") if isinstance(snapshot, dict) else None
+        if snapshot_hash:
+            legacy_snapshot = _load_json(Path(input_snapshot_root) / f"{snapshot_hash}.json")
+            existing_hash = _stable_model_input_hash(legacy_snapshot)
+    if not existing_hash:
+        # Legacy records without a stored projection retain the old hash
+        # fallback; new records always use the stable projection hash above.
+        existing_hash = str(
+            existing.get("canonical_model_input_sha256")
+            or existing.get("canonical_input_sha256")
+            or existing.get("input_sha256")
+            or ""
+        ).strip()
+    return existing if new_hash and existing_hash and new_hash == existing_hash else None
 
 
 def _as_now(value: datetime | None) -> datetime:
@@ -723,6 +815,7 @@ def _decorate_record(
         "freeze_created_at": now.isoformat(),
         "minutes_to_kickoff_at_freeze": round((kickoff - now).total_seconds() / 60.0, 3),
         "input_snapshot_ref": record.get("model_input_snapshot_ref"),
+        "model_input_stable_sha256": _stable_model_input_hash(metadata.get("input_snapshot")),
         "market_intelligence_quality": metadata["market_intelligence_quality"],
         "market_sources": metadata["market_sources"],
         "market_data_providers": metadata["market_data_providers"],
@@ -836,7 +929,10 @@ def run_base_prediction_jobs(
                 job["updated_at"] = current_time.isoformat()
             continue
         if current_time >= kickoff:
-            if status in RETRYABLE_STATUSES:
+            # A frozen prematch version is already the last legal artifact;
+            # after kickoff it must remain untouched rather than be replaced
+            # or relabelled as a newly missed prediction.
+            if status in RETRYABLE_STATUSES and status != "FROZEN":
                 job["status"] = "MISSED_PREMATCH_WINDOW"
                 job["last_error"] = "MISSED_PREMATCH_WINDOW"
                 job["updated_at"] = current_time.isoformat()
@@ -878,6 +974,24 @@ def run_base_prediction_jobs(
             job["last_error"] = "MISSED_PREMATCH_WINDOW"
             job["updated_at"] = current_time.isoformat()
             continue
+        kickoff_at = _parse_timestamp(_kickoff(job))
+        assert kickoff_at is not None
+        unchanged = _same_deterministic_input(
+            job,
+            input_snapshot,
+            kickoff_at,
+            Path(record_root),
+            Path(input_snapshot_root),
+        )
+        if unchanged is not None:
+            _remember_prediction_id(job, unchanged.get("prediction_id"))
+            job["status"] = "FROZEN"
+            job["prediction_id"] = unchanged.get("prediction_id")
+            job["prediction_created_at"] = unchanged.get("prediction_created_at")
+            job["freeze_created_at"] = unchanged.get("freeze_created_at")
+            job["last_error"] = None
+            job["updated_at"] = current_time.isoformat()
+            continue
         try:
             # The projection is the exact deterministic input that is frozen;
             # no report or deep-language layer participates in the model call.
@@ -900,8 +1014,6 @@ def run_base_prediction_jobs(
             continue
         try:
             freeze_time = _as_now(None) if real_time else current_time
-            kickoff_at = _parse_timestamp(_kickoff(job))
-            assert kickoff_at is not None
             if freeze_time >= kickoff_at:
                 job["status"] = "MISSED_PREMATCH_WINDOW"
                 job["last_error"] = "MISSED_PREMATCH_WINDOW"
@@ -949,6 +1061,7 @@ def run_base_prediction_jobs(
             continue
         stored = frozen.get("record") or record
         job["status"] = "FROZEN"
+        _remember_prediction_id(job, stored.get("prediction_id"))
         job["prediction_id"] = stored.get("prediction_id")
         job["prediction_created_at"] = stored.get("prediction_created_at")
         job["freeze_created_at"] = stored.get("freeze_created_at")
