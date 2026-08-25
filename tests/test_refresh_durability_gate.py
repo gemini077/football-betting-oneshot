@@ -53,19 +53,19 @@ def test_gate_accepts_site_failure_after_complete_generation(tmp_path):
     }
 
 
-def test_gate_rejects_upstream_failure_even_when_site_fails(tmp_path):
+def test_gate_rejects_any_current_generation_failure_even_when_site_fails(tmp_path):
     data_root = write_generated_artifacts(tmp_path)
 
-    result = classify(
-        cycle_payload(site_status="FAILED", generation_status={"base_prediction": "DEGRADED"}),
-        data_root=data_root,
-        cycle_outcome="failure",
-    )
+    for failed_step in ("universe", "base_jobs", "base_prediction", "dashboard"):
+        result = classify(
+            cycle_payload(site_status="FAILED", generation_status={failed_step: "DEGRADED"}),
+            data_root=data_root,
+            cycle_outcome="failure",
+        )
 
-    assert result == {"ready": False, "reason": "UPSTREAM_GENERATION_NOT_COMPLETE"}
+        assert result == {"ready": False, "reason": "UPSTREAM_GENERATION_NOT_COMPLETE"}
 
-
-def test_gate_rejects_next_prematch_refresh_failure(tmp_path):
+def test_gate_accepts_current_generation_when_next_prematch_is_degraded(tmp_path):
     data_root = write_generated_artifacts(tmp_path)
 
     result = classify(
@@ -77,8 +77,16 @@ def test_gate_rejects_next_prematch_refresh_failure(tmp_path):
         cycle_outcome="success",
     )
 
-    assert result == {"ready": False, "reason": "NEXT_PREMATCH_GENERATION_NOT_COMPLETE"}
-
+    assert result == {
+        "ready": True,
+        "reason": "COMPLETE_GENERATION",
+        "business_date": DATE,
+        "next_prematch": {
+            "ready": False,
+            "status": "DEGRADED",
+            "reason": "NEXT_PREMATCH_GENERATION_NOT_COMPLETE",
+        },
+    }
 
 def test_gate_accepts_next_prematch_generation_when_universe_succeeds(tmp_path):
     data_root = write_generated_artifacts(tmp_path)
@@ -96,7 +104,12 @@ def test_gate_accepts_next_prematch_generation_when_universe_succeeds(tmp_path):
         cycle_outcome="success",
     )
 
-    assert result == {"ready": True, "reason": "COMPLETE_GENERATION", "business_date": DATE}
+    assert result == {
+        "ready": True,
+        "reason": "COMPLETE_GENERATION",
+        "business_date": DATE,
+        "next_prematch": {"ready": True, "status": "READY", "reason": "COMPLETE_GENERATION"},
+    }
 
 def test_gate_rejects_missing_or_stale_generated_artifact(tmp_path):
     data_root = write_generated_artifacts(tmp_path)
