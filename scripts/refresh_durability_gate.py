@@ -62,9 +62,14 @@ def classify(
         return {"ready": False, "reason": "CYCLE_RESULT_INVALID"}
     if any(_step_status(steps, name) != "SUCCESS" for name in GENERATION_STEPS):
         return {"ready": False, "reason": "UPSTREAM_GENERATION_NOT_COMPLETE"}
+    next_prematch = None
     if any(name in steps for name in NEXT_PREMATCH_STEPS):
-        if any(_step_status(steps, name) != "SUCCESS" for name in NEXT_PREMATCH_STEPS):
-            return {"ready": False, "reason": "NEXT_PREMATCH_GENERATION_NOT_COMPLETE"}
+        next_ready = all(_step_status(steps, name) == "SUCCESS" for name in NEXT_PREMATCH_STEPS)
+        next_prematch = {
+            "ready": next_ready,
+            "status": "READY" if next_ready else "DEGRADED",
+            "reason": "COMPLETE_GENERATION" if next_ready else "NEXT_PREMATCH_GENERATION_NOT_COMPLETE",
+        }
 
     publication_name = next((name for name in PUBLICATION_STEPS if name in steps), None)
     publication_status = _step_status(steps, publication_name) if publication_name else None
@@ -77,7 +82,10 @@ def classify(
     if not _artifacts_are_current(Path(data_root), business_date):
         return {"ready": False, "reason": "GENERATED_ARTIFACT_MISSING_OR_STALE"}
     reason = "SITE_FAILURE_AFTER_COMPLETE_GENERATION" if publication_status == "FAILED" else "COMPLETE_GENERATION"
-    return {"ready": True, "reason": reason, "business_date": business_date}
+    result = {"ready": True, "reason": reason, "business_date": business_date}
+    if next_prematch is not None:
+        result["next_prematch"] = next_prematch
+    return result
 
 
 def main() -> int:
