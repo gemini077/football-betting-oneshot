@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
   schedule:
     # Deterministic maintenance only; no LLM/API token use.
-    - cron: "*/30 * * * *"
+    - cron: "7,37 * * * *"
 
 permissions:
   contents: write
@@ -56,6 +56,13 @@ jobs:
             --data-root data \
             --cycle-outcome "$CYCLE_OUTCOME" \
             --github-output "$GITHUB_OUTPUT"
+
+      - name: Fail closed when refresh is not durable
+        if: ${{ steps.generated_data_gate.outputs.ready != 'true' }}
+        shell: bash
+        run: |
+          echo "Durability gate blocked write-back: ${{ steps.generated_data_gate.outputs.reason }}" >&2
+          exit 1
 
       - name: Enforce cross-market report consistency
         run: python scripts/repair_report_consistency.py --root data/analysis_reports/current

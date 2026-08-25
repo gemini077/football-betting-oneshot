@@ -12,6 +12,11 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
+try:
+    from prematch_versioning import select_latest_legal_prematch
+except ImportError:  # package import used by tests
+    from scripts.prematch_versioning import select_latest_legal_prematch
+
 
 BASE_DIR = Path(__file__).resolve().parents[1]
 UNIVERSE_ROOT = BASE_DIR / "data" / "prediction_universe"
@@ -326,6 +331,19 @@ def _status_reason(status: str, job: dict[str, Any] | None, record: dict[str, An
     return None, None
 
 
+def _prematch_identity(fixture: dict[str, Any], job: dict[str, Any] | None) -> dict[str, Any]:
+    projected = _fixture_projection(fixture)
+    job = job or {}
+    return {
+        "job_id": job.get("job_id"),
+        "match_id": job.get("match_id") or projected.get("match_id"),
+        "match_key": job.get("match_key") or job.get("canonical_match_id"),
+        "home": job.get("home") or projected.get("home"),
+        "away": job.get("away") or projected.get("away"),
+        "kickoff_at": job.get("kickoff") or projected.get("kickoff"),
+    }
+
+
 def _card(
     fixture: dict[str, Any],
     job: dict[str, Any] | None,
@@ -334,10 +352,16 @@ def _card(
     exclusions: dict[str, dict[str, Any]],
     formal_samples: dict[str, dict[str, Any]],
     exploratory_samples: dict[str, dict[str, Any]],
+    prematch_selection: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     card = _fixture_projection(fixture)
     status = str((job or {}).get("status") or "PENDING")
-    prediction_id = str((job or {}).get("prediction_id") or "") or None
+    selection = prematch_selection or {}
+    if prematch_selection is not None:
+        record = selection.get("selected_record")
+        prediction_id = str(selection.get("selected_prediction_id") or "") or None
+    else:
+        prediction_id = str((job or {}).get("prediction_id") or "") or None
     reason_code, reason_text = _status_reason(status, job, record)
     result = _find_result(card, record, result_index)
     sample = formal_samples.get(prediction_id or "") or exploratory_samples.get(prediction_id or "")
@@ -350,6 +374,21 @@ def _card(
         "reason_text": reason_text,
         "job_id": (job or {}).get("job_id"),
         "prediction_id": prediction_id,
+        "selected_prediction_id": selection.get("selected_prediction_id") if prematch_selection is not None else prediction_id,
+        "current_prediction_id": selection.get("selected_prediction_id") if prematch_selection is not None else prediction_id,
+        "final_prematch_prediction_id": selection.get("selected_prediction_id") if prematch_selection is not None else prediction_id,
+        "selected_freeze_created_at": selection.get("selected_freeze_created_at") if prematch_selection is not None else (record or {}).get("freeze_created_at"),
+        "selected_source_cutoff_at": selection.get("selected_source_cutoff_at") if prematch_selection is not None else (record or {}).get("source_cutoff_at"),
+        "superseded_count": int(selection.get("superseded_count") or 0) if prematch_selection is not None else 0,
+        "prematch_selection": {
+            "status": selection.get("status") if prematch_selection is not None else "LEGACY_POINTER",
+            "reason": selection.get("reason") if prematch_selection is not None else "JOB_POINTER",
+            "candidate_count": int(selection.get("candidate_count") or 0) if prematch_selection is not None else int(bool(record)),
+            "selected_prediction_id": selection.get("selected_prediction_id") if prematch_selection is not None else prediction_id,
+            "selected_freeze_created_at": selection.get("selected_freeze_created_at") if prematch_selection is not None else (record or {}).get("freeze_created_at"),
+            "selected_source_cutoff_at": selection.get("selected_source_cutoff_at") if prematch_selection is not None else (record or {}).get("source_cutoff_at"),
+            "superseded_count": int(selection.get("superseded_count") or 0) if prematch_selection is not None else 0,
+        },
         "prediction": _prediction_projection(record) if record else None,
         "result": {
             "score_90m": (result or {}).get("result_90m") or (result or {}).get("score_90m"),
@@ -749,7 +788,11 @@ def build_dashboard(
         projected = _fixture_projection(fixture)
         match_id = projected["match_id"]
         job = job_lookup.get(f"match_id:{match_id}") or job_lookup.get(f"job_id:BASE-{business_date}-{match_id}")
-        record = records.get(str((job or {}).get("prediction_id") or "")) if job else None
+        selection = select_latest_legal_prematch(
+            records.values(),
+            identity=_prematch_identity(fixture, job),
+        )
+        record = selection.get("selected_record")
         cards.append(_card(
             fixture,
             job,
@@ -758,6 +801,7 @@ def build_dashboard(
             exclusions,
             formal_samples,
             exploratory_samples,
+            selection,
         ))
     cards.sort(key=lambda item: (_iso_sort(item.get("kickoff")), _text(item.get("match_num"))))
     counts = Counter(card.get("status") for card in cards)

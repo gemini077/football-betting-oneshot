@@ -380,6 +380,91 @@ def test_frozen_job_is_idempotent_and_does_not_call_champion_again():
     assert final_record["probabilities"] == first_record["probabilities"]
 
 
+def test_frozen_job_accepts_later_prematch_input_and_rejects_post_kickoff_replacement():
+    kickoff = "2026-08-12T20:00:00+08:00"
+    first_now = datetime(2026, 8, 12, 14, 0, tzinfo=TZ)
+    second_now = datetime(2026, 8, 12, 19, 15, tzinfo=TZ)
+    after_kickoff = datetime(2026, 8, 12, 20, 5, tzinfo=TZ)
+    with tempfile.TemporaryDirectory() as temp:
+        root = Path(temp)
+        write_case(root, [fixture(1, spf=limited_spf(), kickoff=kickoff)])
+
+        first, first_build = run_case(root, now=first_now)
+        first_record = records(root)[0]
+        first_path = root / "model_governance" / "predictions" / f"{first_record['prediction_id']}.json"
+        first_bytes = first_path.read_bytes()
+
+        changed_form = recent_form()
+        changed_form["home_overall"]["wins"] += 1
+        second, second_build = run_case(
+            root,
+            now=second_now,
+            parsed=parsed_source(
+                captured_at="2026-08-12T19:10:00+08:00",
+                form=changed_form,
+            ),
+        )
+        versions = {record["prediction_id"]: record for record in records(root)}
+        ledger = read_ledger(root)
+        job = ledger["jobs"][0]
+
+        late, late_build = run_case(
+            root,
+            now=after_kickoff,
+            parsed=parsed_source(captured_at="2026-08-12T19:50:00+08:00"),
+            model_side_effect=AssertionError("post-kickoff model call"),
+        )
+
+        assert first["frozen"] == second["frozen"] == late["frozen"] == 1
+        assert first_build.call_count == 1
+        assert second_build.call_count == 1
+        assert late_build.call_count == 0
+        assert len(versions) == 2
+        assert first_record["prediction_id"] != job["prediction_id"]
+        assert job["prediction_ids"] == [first_record["prediction_id"], job["prediction_id"]]
+        assert versions[first_record["prediction_id"]]["prediction_sha256"] == first_record["prediction_sha256"]
+        assert first_path.read_bytes() == first_bytes
+        assert len(records(root)) == 2
+        assert late["missed_prematch"] == 0
+
+
+def test_frozen_job_with_unchanged_input_does_not_call_champion_or_create_version():
+    with tempfile.TemporaryDirectory() as temp:
+        root = Path(temp)
+        write_case(root, [fixture(1, spf=limited_spf())])
+        first, first_build = run_case(root)
+        second, second_build = run_case(root, model_side_effect=AssertionError("unchanged rerun"))
+        ledger = read_ledger(root)
+        version_count = len(records(root))
+
+    assert first["frozen"] == second["frozen"] == 1
+    assert first_build.call_count == 1
+    assert second_build.call_count == 0
+    assert version_count == 1
+    assert ledger["jobs"][0]["prediction_ids"] == [ledger["jobs"][0]["prediction_id"]]
+
+
+def test_frozen_job_with_only_source_freshness_change_does_not_create_version():
+    with tempfile.TemporaryDirectory() as temp:
+        root = Path(temp)
+        write_case(root, [fixture(1, spf=limited_spf())])
+        first, first_build = run_case(root)
+        second, second_build = run_case(
+            root,
+            parsed=parsed_source(captured_at="2026-08-12T15:50:00+08:00"),
+            now=datetime(2026, 8, 12, 16, 0, tzinfo=TZ),
+            model_side_effect=AssertionError("freshness-only rerun"),
+        )
+        version_count = len(records(root))
+        stable_hash = records(root)[0].get("model_input_stable_sha256")
+
+    assert first["frozen"] == second["frozen"] == 1
+    assert first_build.call_count == 1
+    assert second_build.call_count == 0
+    assert version_count == 1
+    assert stable_hash
+
+
 def test_governance_record_contains_minimum_prediction_contract():
     with tempfile.TemporaryDirectory() as temp:
         root = Path(temp)

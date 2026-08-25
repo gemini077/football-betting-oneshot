@@ -1,6 +1,7 @@
 import json
 import re
 import sys
+from datetime import datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -96,7 +97,7 @@ def frozen_job(match_id: str, prediction_id: str) -> dict:
     }
 
 
-def frozen_prediction(prediction_id: str) -> dict:
+def frozen_prediction_legacy(prediction_id: str) -> dict:
     return {
         "prediction_id": prediction_id,
         "prediction_status": "formal",
@@ -116,6 +117,56 @@ def frozen_prediction(prediction_id: str) -> dict:
         "minutes_to_kickoff_at_freeze": 120.0,
         "match_key": "FBOS-TEST-1",
         "match_identity": {"home": "主队1", "away": "客队1"},
+    }
+
+
+def frozen_prediction(
+    prediction_id: str,
+    *,
+    home: str = "\u4e3b\u961f1",
+    away: str = "\u5ba2\u961f1",
+    match_id: str = "1001",
+    job_id: str = f"BASE-{DATE}-1001",
+    match_key: str = "FBOS-TEST-1",
+    kickoff: str = "2026-08-13T04:00:00+08:00",
+    source_cutoff: str = "2026-08-12T12:00:00+08:00",
+    prediction_created: str = "2026-08-12T14:00:00+08:00",
+    freeze_created: str = "2026-08-12T14:01:00+08:00",
+    unique_score: str = "1-0",
+) -> dict:
+    return {
+        "prediction_id": prediction_id,
+        "job_id": job_id,
+        "match_id": match_id,
+        "home": home,
+        "away": away,
+        "kickoff_at": kickoff,
+        "source_cutoff_at": source_cutoff,
+        "market_snapshot_at": source_cutoff,
+        "prediction_created_at": prediction_created,
+        "freeze_created_at": freeze_created,
+        "prediction_status": "formal",
+        "model_role": "champion",
+        "formal_eligible": True,
+        "model_formal_eligible": True,
+        "prediction_variant": "model_only",
+        "manual_override": False,
+        "product_role": "FUSION_BASELINE_V0",
+        "model_family": "recent_form_market_calibrated_poisson_v2",
+        "release_version": "v0.19.0",
+        "lambda_home": 1.4,
+        "lambda_away": 0.8,
+        "probabilities": {"home": 0.5, "draw": 0.3, "away": 0.2},
+        "btts": {"yes": 0.45, "no": 0.55},
+        "totals": [{"goals": "2", "probability": 0.3}],
+        "unique_score": unique_score,
+        "score_top3": [unique_score, "1-1", "2-0"],
+        "market_intelligence_quality": "LIMITED",
+        "data_grade": "C",
+        "base_input_quality": "VERIFIED_MINIMUM",
+        "minutes_to_kickoff_at_freeze": 120.0,
+        "match_key": match_key,
+        "match_identity": {"home": home, "away": away, "kickoff_at": kickoff},
     }
 
 
@@ -206,6 +257,79 @@ def test_dashboard_publishes_workspace_completed_history_when_current_cards_have
     assert "3-0" in html
 
 
+def test_dashboard_selects_latest_legal_prematch_version_and_excludes_post_kickoff_record(tmp_path):
+    current_fixture = fixture(1)
+    current_fixture.update({"homeTeam": "\u65af\u6258\u514b\u57ce", "awayTeam": "\u8d6b\u5c14\u57ce"})
+    job = frozen_job("1001", "FBOS-PRED-stale")
+    job.update({
+        "home": "\u65af\u6258\u514b\u57ce",
+        "away": "\u8d6b\u5c14\u57ce",
+        "prediction_ids": ["FBOS-PRED-early", "FBOS-PRED-latest", "FBOS-PRED-late"],
+    })
+    early = frozen_prediction(
+        "FBOS-PRED-early",
+        home="\u65af\u6258\u514b\u57ce",
+        away="\u8d6b\u5c14\u57ce",
+        source_cutoff="2026-08-12T22:00:00+08:00",
+        prediction_created="2026-08-12T22:05:00+08:00",
+        freeze_created="2026-08-12T22:06:00+08:00",
+    )
+    latest = frozen_prediction(
+        "FBOS-PRED-latest",
+        home="\u65af\u6258\u514b\u57ce",
+        away="\u8d6b\u5c14\u57ce",
+        source_cutoff="2026-08-13T03:10:00+08:00",
+        prediction_created="2026-08-13T03:15:00+08:00",
+        freeze_created="2026-08-13T03:16:00+08:00",
+        unique_score="1-1",
+    )
+    late = frozen_prediction(
+        "FBOS-PRED-late",
+        home="\u65af\u6258\u514b\u57ce",
+        away="\u8d6b\u5c14\u57ce",
+        source_cutoff="2026-08-13T03:50:00+08:00",
+        prediction_created="2026-08-13T04:05:00+08:00",
+        freeze_created="2026-08-13T04:05:00+08:00",
+    )
+    roots = make_roots(tmp_path, [current_fixture], [job], [early, latest, late])
+
+    payload = build_dashboard(
+        DATE,
+        now=datetime.fromisoformat("2026-08-13T03:30:00+08:00"),
+        **roots,
+    )
+
+    card = payload["fixtures"][0]
+    assert card["prediction_id"] == "FBOS-PRED-latest"
+    assert card["selected_prediction_id"] == "FBOS-PRED-latest"
+    assert card["current_prediction_id"] == "FBOS-PRED-latest"
+    assert card["selected_source_cutoff_at"] == "2026-08-13T03:10:00+08:00"
+    assert card["selected_freeze_created_at"] == "2026-08-13T03:16:00+08:00"
+    assert card["superseded_count"] == 1
+    assert card["prematch_selection"]["candidate_count"] == 2
+    assert card["prematch_selection"]["status"] == "SELECTED"
+    assert card["prediction"]["primary_score"] == "1-1"
+
+
+def test_dashboard_fails_closed_on_same_job_identity_conflict(tmp_path):
+    roots = make_roots(
+        tmp_path,
+        [fixture(1)],
+        [frozen_job("1001", "FBOS-PRED-good")],
+        [
+            frozen_prediction("FBOS-PRED-good"),
+            frozen_prediction("FBOS-PRED-conflict", home="\u53e6\u4e00\u4e3b\u961f"),
+        ],
+    )
+
+    payload = build_dashboard(DATE, **roots)
+
+    card = payload["fixtures"][0]
+    assert card["prediction_id"] is None
+    assert card["prematch_selection"]["status"] == "IDENTITY_CONFLICT"
+    assert card["selected_prediction_id"] is None
+
+
 def test_completed_filter_controls_historical_rows_and_real_count(tmp_path):
     roots = make_roots(tmp_path, [fixture(1)], [{"match_id": "1001", "status": "PENDING"}])
     workspace_path = tmp_path / "workspace" / "latest.json"
@@ -273,6 +397,20 @@ def test_pilot_exclusion_and_formal_sample_are_distinguished(tmp_path):
         {**frozen_prediction(excluded_id), "match_key": "FBOS-TEST-1"},
         {**frozen_prediction(formal_id), "match_key": "FBOS-TEST-2", "match_identity": {"home": "主队2", "away": "客队2"}},
     ])
+    formal_path = roots["prediction_root"] / f"{formal_id}.json"
+    formal_record = json.loads(formal_path.read_text(encoding="utf-8"))
+    formal_record.update({
+        "match_id": "1002",
+        "job_id": "BASE-2026-08-12-1002",
+        "home": "\u4e3b\u961f2",
+        "away": "\u5ba2\u961f2",
+        "match_identity": {
+            "home": "\u4e3b\u961f2",
+            "away": "\u5ba2\u961f2",
+            "kickoff_at": "2026-08-13T04:00:00+08:00",
+        },
+    })
+    write_json(formal_path, formal_record)
     write_json(roots["exclusion_root"] / "pilot.json", {
         "prediction_ids": [excluded_id],
         "reason_code": "BASE_QUALITY_GATE_BYPASS",

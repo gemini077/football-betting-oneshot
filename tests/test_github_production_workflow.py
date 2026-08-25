@@ -16,7 +16,7 @@ def _workflow_text():
 def test_deploy_pages_keeps_half_hour_schedule_and_uses_production_cycle():
     text = _workflow_text()
 
-    assert 'cron: "*/30 * * * *"' in text
+    assert 'cron: "7,37 * * * *"' in text
     assert "run: python scripts/automation_cycle.py\n" in text
     assert "automation_cycle.py --date" not in text
     assert "FBOS_DATE" not in text
@@ -105,6 +105,7 @@ def test_generated_data_save_uses_narrow_durability_gate():
     text = _workflow_text()
     cycle_index = text.index("- name: Run production cycle")
     gate_index = text.index("- name: Classify generated data durability")
+    fail_closed_index = text.index("- name: Fail closed when refresh is not durable")
     save_index = text.index("- name: Save generated public data")
     rebuild_index = text.index("- name: Rebuild Pages artifact after data save")
     cycle_block = text[cycle_index:gate_index]
@@ -116,5 +117,9 @@ def test_generated_data_save_uses_narrow_durability_gate():
     assert "id: generated_data_gate" in gate_block
     assert "if: ${{ always() }}" in gate_block
     assert "--cycle-result data/product_runtime/latest_cycle.json" in gate_block
+    fail_closed_block = text[fail_closed_index:save_index]
+    assert fail_closed_index > gate_index
+    assert "steps.generated_data_gate.outputs.ready != 'true'" in fail_closed_block
+    assert "exit 1" in fail_closed_block
     assert "if: ${{ !cancelled() && steps.generated_data_gate.outputs.ready == 'true' }}" in save_block
     assert "always()" not in save_block

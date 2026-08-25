@@ -10,6 +10,7 @@ from typing import Any
 
 
 GENERATION_STEPS = ("universe", "base_jobs", "base_prediction", "dashboard")
+NEXT_PREMATCH_STEPS = ("next_base_jobs", "next_base_prediction")
 PUBLICATION_STEPS = ("site", "site_refresh")
 ACTIVE_ARTIFACT_STATUSES = {"READY", "EMPTY_CONFIRMED"}
 
@@ -61,6 +62,9 @@ def classify(
         return {"ready": False, "reason": "CYCLE_RESULT_INVALID"}
     if any(_step_status(steps, name) != "SUCCESS" for name in GENERATION_STEPS):
         return {"ready": False, "reason": "UPSTREAM_GENERATION_NOT_COMPLETE"}
+    if any(name in steps for name in NEXT_PREMATCH_STEPS):
+        if any(_step_status(steps, name) != "SUCCESS" for name in NEXT_PREMATCH_STEPS):
+            return {"ready": False, "reason": "NEXT_PREMATCH_GENERATION_NOT_COMPLETE"}
 
     publication_name = next((name for name in PUBLICATION_STEPS if name in steps), None)
     publication_status = _step_status(steps, publication_name) if publication_name else None
