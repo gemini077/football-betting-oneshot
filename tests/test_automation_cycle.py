@@ -108,7 +108,23 @@ def test_production_cycle_processes_today_and_yesterday_without_refetching_yeste
     )
     assert payload["steps"]["next_base_jobs"]["status"] == "SUCCESS"
     assert payload["steps"]["next_base_prediction"]["status"] == "SUCCESS"
-    assert any(
+    assert payload["steps"]["next_universe"]["status"] == "SUCCESS"
+    next_universe_index = next(
+        index for index, command in enumerate(calls)
+        if _has_script(command, "daily_schedule_workspace.py")
+        and _command_date(command) == "2026-08-14"
+    )
+    next_jobs_index = next(
+        index for index, command in enumerate(calls)
+        if _has_script(command, "base_prediction_jobs.py")
+        and _command_date(command) == "2026-08-14"
+    )
+    next_prediction_index = next(
+        index for index, command in enumerate(calls)
+        if _has_script(command, "base_prediction_runner.py")
+        and _command_date(command) == "2026-08-14"
+    )
+    assert next_universe_index < next_jobs_index < next_prediction_index    assert any(
         _has_script(command, "base_prediction_jobs.py")
         and _command_date(command) == "2026-08-14"
         for command in calls

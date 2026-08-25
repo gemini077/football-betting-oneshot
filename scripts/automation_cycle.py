@@ -296,7 +296,10 @@ def production_cycle(
     steps = dict(carryover_steps)
     steps.update(current_payload["steps"])
     next_date = next_business_date(current_date)
-    steps["next_base_jobs"] = _step("next_base_jobs", [
+    steps["next_universe"] = _step("next_universe", [
+        sys.executable, "scripts/daily_schedule_workspace.py", "--date", next_date,
+        "--no-cache", "--fetch-only",
+    ], optional=True)    steps["next_base_jobs"] = _step("next_base_jobs", [
         sys.executable, "scripts/base_prediction_jobs.py", "--date", next_date,
     ], optional=True)
     steps["next_base_prediction"] = _step("next_base_prediction", [
