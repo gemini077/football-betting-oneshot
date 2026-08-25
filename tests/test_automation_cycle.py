@@ -108,6 +108,7 @@ def test_production_cycle_processes_today_and_yesterday_without_refetching_yeste
     )
     assert payload["steps"]["next_base_jobs"]["status"] == "SUCCESS"
     assert payload["steps"]["next_base_prediction"]["status"] == "SUCCESS"
+    assert payload["steps"]["next_universe"]["status"] == "SUCCESS"
     assert any(
         _has_script(command, "base_prediction_jobs.py")
         and _command_date(command) == "2026-08-14"
@@ -118,6 +119,21 @@ def test_production_cycle_processes_today_and_yesterday_without_refetching_yeste
         and _command_date(command) == "2026-08-14"
         for command in calls
     )
+    next_prematch_scripts = [
+        next(Path(part).name for part in command if str(part).endswith(".py"))
+        for command in calls
+        if _command_date(command) == "2026-08-14"
+        and any(any(str(part).endswith(name) for part in command) for name in (
+            "daily_schedule_workspace.py",
+            "base_prediction_jobs.py",
+            "base_prediction_runner.py",
+        ))
+    ]
+    assert next_prematch_scripts == [
+        "daily_schedule_workspace.py",
+        "base_prediction_jobs.py",
+        "base_prediction_runner.py",
+    ]
     assert {
         _command_date(command)
         for command in calls

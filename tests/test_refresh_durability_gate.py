@@ -30,6 +30,21 @@ def cycle_payload(*, site_status: str, generation_status: dict[str, str] | None 
     return {"business_date": DATE, "steps": steps}
 
 
+def next_prematch_steps(
+    payload: dict,
+    *,
+    universe_status: str,
+    jobs_status: str,
+    prediction_status: str,
+) -> dict:
+    payload["steps"].update({
+        "next_universe": {"status": universe_status},
+        "next_base_jobs": {"status": jobs_status},
+        "next_base_prediction": {"status": prediction_status},
+    })
+    return payload
+
+
 def write_generated_artifacts(tmp_path: Path) -> Path:
     data_root = tmp_path / "data"
     write_json(data_root / "prediction_universe" / f"{DATE}.json", {"business_date": DATE, "status": "READY"})
@@ -68,16 +83,71 @@ def test_gate_rejects_upstream_failure_even_when_site_fails(tmp_path):
 def test_gate_rejects_next_prematch_refresh_failure(tmp_path):
     data_root = write_generated_artifacts(tmp_path)
 
+    payload = next_prematch_steps(
+        cycle_payload(site_status="SUCCESS"),
+        universe_status="DEGRADED",
+        jobs_status="SUCCESS",
+        prediction_status="SUCCESS",
+    )
+    payload["steps"]["next_universe"]["summary"] = {
+        "status": "BLOCKED_UNIVERSE",
+        "fixture_count": 0,
+        "match_count": 0,
+    }
+
     result = classify(
-        cycle_payload(
-            site_status="SUCCESS",
-            generation_status={"next_base_jobs": "DEGRADED", "next_base_prediction": "SUCCESS"},
-        ),
+        payload,
         data_root=data_root,
         cycle_outcome="success",
     )
 
     assert result == {"ready": False, "reason": "NEXT_PREMATCH_GENERATION_NOT_COMPLETE"}
+
+
+def test_gate_accepts_ready_next_prematch_generation(tmp_path):
+    data_root = write_generated_artifacts(tmp_path)
+    payload = next_prematch_steps(
+        cycle_payload(site_status="SUCCESS"),
+        universe_status="SUCCESS",
+        jobs_status="SUCCESS",
+        prediction_status="SUCCESS",
+    )
+    payload["steps"]["next_universe"]["summary"] = {
+        "status": "READY",
+        "fixture_count": 2,
+        "match_count": 2,
+    }
+
+    result = classify(payload, data_root=data_root, cycle_outcome="success")
+
+    assert result == {"ready": True, "reason": "COMPLETE_GENERATION", "business_date": DATE}
+
+
+def test_gate_accepts_explicitly_empty_next_prematch_generation(tmp_path):
+    data_root = write_generated_artifacts(tmp_path)
+    payload = next_prematch_steps(
+        cycle_payload(site_status="SUCCESS"),
+        universe_status="SUCCESS",
+        jobs_status="SUCCESS",
+        prediction_status="SUCCESS",
+    )
+    payload["steps"]["next_universe"]["summary"] = {
+        "status": "EMPTY_CONFIRMED",
+        "fixture_count": 0,
+        "match_count": 0,
+    }
+    payload["steps"]["next_base_jobs"]["summary"] = {
+        "status": "EMPTY_CONFIRMED",
+        "job_count": 0,
+    }
+    payload["steps"]["next_base_prediction"]["summary"] = {
+        "status": "EMPTY_CONFIRMED",
+        "predicted": 0,
+    }
+
+    result = classify(payload, data_root=data_root, cycle_outcome="success")
+
+    assert result == {"ready": True, "reason": "COMPLETE_GENERATION", "business_date": DATE}
 
 
 def test_gate_rejects_missing_or_stale_generated_artifact(tmp_path):

@@ -10,7 +10,7 @@ from typing import Any
 
 
 GENERATION_STEPS = ("universe", "base_jobs", "base_prediction", "dashboard")
-NEXT_PREMATCH_STEPS = ("next_base_jobs", "next_base_prediction")
+NEXT_PREMATCH_STEPS = ("next_universe", "next_base_jobs", "next_base_prediction")
 PUBLICATION_STEPS = ("site", "site_refresh")
 ACTIVE_ARTIFACT_STATUSES = {"READY", "EMPTY_CONFIRMED"}
 
