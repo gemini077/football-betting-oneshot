@@ -65,6 +65,21 @@ def test_gate_rejects_upstream_failure_even_when_site_fails(tmp_path):
     assert result == {"ready": False, "reason": "UPSTREAM_GENERATION_NOT_COMPLETE"}
 
 
+def test_gate_rejects_next_prematch_refresh_failure(tmp_path):
+    data_root = write_generated_artifacts(tmp_path)
+
+    result = classify(
+        cycle_payload(
+            site_status="SUCCESS",
+            generation_status={"next_base_jobs": "DEGRADED", "next_base_prediction": "SUCCESS"},
+        ),
+        data_root=data_root,
+        cycle_outcome="success",
+    )
+
+    assert result == {"ready": False, "reason": "NEXT_PREMATCH_GENERATION_NOT_COMPLETE"}
+
+
 def test_gate_rejects_missing_or_stale_generated_artifact(tmp_path):
     data_root = write_generated_artifacts(tmp_path)
     write_json(data_root / "prediction_dashboard" / "latest.json", {"business_date": "2026-08-24"})

@@ -7,7 +7,7 @@ import argparse
 import json
 import subprocess
 import sys
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -133,6 +133,10 @@ def active_business_dates(now: datetime | None = None) -> tuple[str, list[str]]:
         current = current.replace(tzinfo=SHANGHAI)
     current_date = current.astimezone(SHANGHAI).date()
     return current_date.isoformat(), [(current_date - timedelta(days=1)).isoformat()]
+
+
+def next_business_date(business_date: str) -> str:
+    return (date.fromisoformat(business_date) + timedelta(days=1)).isoformat()
 
 
 def _carryover_state(business_date: str) -> tuple[str, str]:
@@ -278,7 +282,7 @@ def production_cycle(
     now: datetime | None = None,
     runtime_path: Path = RUNTIME_PATH,
 ) -> dict:
-    """Run today's full cycle plus saved-state maintenance for yesterday."""
+    """Run today's full cycle, tomorrow's prematch refresh, and yesterday's maintenance."""
     current_date, carryover_dates = active_business_dates(now)
     carryover_date = carryover_dates[0]
     carryover_steps, carryover_state = _carryover_preparation(carryover_date)
@@ -291,6 +295,13 @@ def production_cycle(
     )
     steps = dict(carryover_steps)
     steps.update(current_payload["steps"])
+    next_date = next_business_date(current_date)
+    steps["next_base_jobs"] = _step("next_base_jobs", [
+        sys.executable, "scripts/base_prediction_jobs.py", "--date", next_date,
+    ], optional=True)
+    steps["next_base_prediction"] = _step("next_base_prediction", [
+        sys.executable, "scripts/base_prediction_runner.py", "--date", next_date,
+    ], optional=True)
     if carryover_state == "READY":
         steps["carryover_prospective"] = _step("carryover_prospective", [
             sys.executable, "scripts/prospective_settlement.py", "--date", carryover_date,

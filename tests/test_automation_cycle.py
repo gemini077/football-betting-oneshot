@@ -106,6 +106,18 @@ def test_production_cycle_processes_today_and_yesterday_without_refetching_yeste
         and _command_date(command) == "2026-08-12"
         for command in calls
     )
+    assert payload["steps"]["next_base_jobs"]["status"] == "SUCCESS"
+    assert payload["steps"]["next_base_prediction"]["status"] == "SUCCESS"
+    assert any(
+        _has_script(command, "base_prediction_jobs.py")
+        and _command_date(command) == "2026-08-14"
+        for command in calls
+    )
+    assert any(
+        _has_script(command, "base_prediction_runner.py")
+        and _command_date(command) == "2026-08-14"
+        for command in calls
+    )
     assert {
         _command_date(command)
         for command in calls
