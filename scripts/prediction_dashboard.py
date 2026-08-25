@@ -104,6 +104,26 @@ def _iso_sort(value: Any) -> str:
     return str(value or "9999-12-31T23:59:59+08:00")
 
 
+def _parse_kickoff(value: Any) -> datetime | None:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    try:
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=SHANGHAI)
+    return parsed.astimezone(SHANGHAI)
+
+
+def _as_shanghai(value: datetime | None) -> datetime:
+    parsed = value or datetime.now(SHANGHAI)
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=SHANGHAI)
+    return parsed.astimezone(SHANGHAI)
+
+
 def _pick(row: dict[str, Any], *keys: str) -> Any:
     for key in keys:
         value = row.get(key)
@@ -366,6 +386,59 @@ def _card(
     return card
 
 
+def _attention_item(card: dict[str, Any], reference_time: datetime) -> dict[str, Any]:
+    status = str(card.get("status") or "PENDING")
+    kickoff = _parse_kickoff(card.get("kickoff"))
+    if kickoff is not None and kickoff < reference_time:
+        cue = "已过开赛时间"
+        reason = "已过开赛时间，尚未有赛果"
+    elif status == "FROZEN":
+        if kickoff is None:
+            cue = "先确认时间"
+            reason = "开赛时间待补，预测已准备好"
+        elif kickoff - reference_time <= timedelta(hours=3):
+            cue = "马上看"
+            reason = "开赛较近，预测已准备好"
+        else:
+            cue = "稍后看"
+            reason = "预测已准备好，稍后开赛"
+    elif status == "INSUFFICIENT_DATA":
+        cue = "先看数据状态"
+        reason = str(card.get("reason_text") or "数据暂时不足")
+    elif status == "PENDING":
+        cue = "等待预测"
+        reason = "预测尚未生成"
+    else:
+        cue = "先看数据状态"
+        reason = str(card.get("reason_text") or "当前还不能形成完整预测")
+    return {
+        "match_id": card.get("match_id"),
+        "competition": card.get("competition"),
+        "home": card.get("home"),
+        "away": card.get("away"),
+        "kickoff": card.get("kickoff"),
+        "status": status,
+        "status_label": card.get("status_label") or status,
+        "cue": cue,
+        "reason": reason,
+    }
+
+
+def _attention_projection(cards: list[dict[str, Any]], reference_time: datetime) -> dict[str, Any]:
+    unresolved = [
+        card for card in cards
+        if not isinstance(card.get("result"), dict) or not card["result"].get("score_90m")
+    ]
+    unresolved.sort(key=lambda card: (
+        _parse_kickoff(card.get("kickoff")) or datetime.max.replace(tzinfo=SHANGHAI),
+        _text(card.get("match_num")),
+    ))
+    return {
+        "upcoming_count": len(unresolved),
+        "items": [_attention_item(card, reference_time) for card in unresolved[:3]],
+    }
+
+
 def _esc(value: Any) -> str:
     return html.escape(_text(value))
 
@@ -412,6 +485,21 @@ h1 { margin: 8px 0 4px; font-size: clamp(32px, 5vw, 54px); line-height: 1.02; le
 .day-summary { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 12px; margin: 28px 0 20px; color: var(--muted); }
 .day-summary strong { color: var(--accent); font-size: 26px; line-height: 1; letter-spacing: -.04em; }
 .day-summary .summary-date { color: var(--quiet); font-size: 12px; }
+.attention-panel { margin: 22px 0 18px; padding: 18px; border: 1px solid rgba(67, 211, 165, .28); background: rgba(18, 27, 37, .88); }
+.attention-header { display: flex; justify-content: space-between; gap: 16px; align-items: baseline; margin-bottom: 14px; }
+.attention-kicker { color: var(--accent); font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
+.attention-header h2 { margin: 4px 0 0; font-size: 21px; letter-spacing: -.025em; }
+.attention-header p { margin: 0; color: var(--muted); font-size: 12px; text-align: right; }
+.attention-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.attention-item { min-width: 0; padding: 13px 14px; border: 1px solid var(--line); background: var(--surface-2); }
+.attention-item .attention-topline { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; color: var(--quiet); font-size: 11px; }
+.attention-item .attention-cue { color: var(--accent); font-weight: 700; }
+.attention-item.status-insufficient_data .attention-cue, .attention-item.status-pending .attention-cue { color: var(--warning); }
+.attention-item .attention-teams { margin-top: 9px; font-weight: 650; line-height: 1.3; overflow-wrap: anywhere; }
+.attention-item .attention-meta { margin-top: 6px; color: var(--muted); font-size: 12px; }
+.attention-item .attention-reason { margin-top: 8px; color: var(--quiet); font-size: 12px; }
+.attention-item .attention-link { display: inline-block; margin-top: 10px; color: var(--muted); font-size: 11px; }
+.attention-empty { margin: 0; color: var(--muted); }
 .toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 24px 0 15px; }
 .toolbar-label { margin-right: 4px; color: var(--muted); font-size: 12px; }
 .filter { border: 1px solid var(--line); border-radius: 999px; padding: 7px 13px; color: var(--muted); background: transparent; cursor: pointer; }
@@ -472,6 +560,7 @@ h1 { margin: 8px 0 4px; font-size: clamp(32px, 5vw, 54px); line-height: 1.02; le
 .empty { grid-column: 1 / -1; padding: 44px 20px; border: 1px dashed var(--line); color: var(--muted); text-align: center; }
 .data-warning { margin: 18px 0 0; padding: 10px 13px; border: 1px solid rgba(241, 123, 133, .32); background: var(--danger-soft); color: #ffc1c6; font-size: 12px; }
 @media (max-width: 880px) { .fixture-list { grid-template-columns: 1fr; } }
+@media (max-width: 760px) { .attention-list { grid-template-columns: 1fr; } .attention-header { display: block; } .attention-header p { margin-top: 5px; text-align: left; } }
 @media (max-width: 560px) { .shell { padding: 20px 12px 38px; } .topbar { display: block; } .refresh-line { margin-top: 10px; text-align: left; } .day-summary { margin-top: 22px; } .fixture-main { padding: 15px 14px 13px; } .fixture-meta { align-items: flex-start; } .teams { font-size: 22px; } .prediction-topline { display: block; } .score-focus { margin-top: 11px; } }
 """
 
@@ -601,6 +690,33 @@ def _modern_card_html(card: dict[str, Any]) -> str:
     )
 
 
+def _attention_html(attention: dict[str, Any]) -> str:
+    items = [item for item in attention.get("items") or [] if isinstance(item, dict)]
+    if not items:
+        return '<section id="attention-panel" class="attention-panel" aria-labelledby="attention-title"><div class="attention-header"><div><div class="attention-kicker">阅读顺序</div><h2 id="attention-title">先看哪场</h2></div><p>只用于阅读顺序，不代表投注建议。</p></div><p class="attention-empty">当前没有未完赛场次，下面可查看历史复盘。</p></section>'
+    cards = []
+    for rank, item in enumerate(items, 1):
+        match_id = str(item.get("match_id") or "")
+        link = f'<a class="attention-link" href="../matches/{html.escape(match_id, quote=True)}/">查看详情</a>' if match_id else ""
+        status = html.escape(str(item.get("status") or "PENDING").lower())
+        cards.append(
+            f'<article class="attention-item status-{status}">'
+            f'<div class="attention-topline"><span>第 {rank} 顺位</span><span class="attention-cue">{html.escape(str(item.get("cue") or "先看"))}</span></div>'
+            f'<div class="attention-teams">{_esc(item.get("home"))}<span> vs </span>{_esc(item.get("away"))}</div>'
+            f'<div class="attention-meta">{_esc(item.get("competition"))} · {_format_kickoff(item.get("kickoff"))}</div>'
+            f'<div class="attention-reason">{html.escape(str(item.get("reason") or ""))}</div>'
+            f'{link}'
+            '</article>'
+        )
+    return (
+        '<section id="attention-panel" class="attention-panel" aria-labelledby="attention-title">'
+        '<div class="attention-header"><div><div class="attention-kicker">阅读顺序</div>'
+        '<h2 id="attention-title">先看哪场</h2></div>'
+        '<p>按开赛时间从近到远，最多列 3 场；提示只用于阅读，不代表投注建议。</p></div>'
+        f'<div class="attention-list">{"".join(cards)}</div></section>'
+    )
+
+
 STATIC_REFRESH_SCRIPT = """<script>
 (() => {
   const latestJson = "./latest.json";
@@ -653,6 +769,7 @@ def render_dashboard(payload: dict[str, Any]) -> str:
     cards_html = "".join(_modern_card_html(card) for card in payload.get("fixtures") or [])
     if not cards_html:
         cards_html = '<div class="empty">今天没有可展示的比赛。</div>'
+    attention_html = _attention_html(payload.get("attention") or {})
     data_warning = ""
     if summary.get("silent_missing_fixture"):
         data_warning = f'<div class="data-warning">数据完整性提醒：当天 {html.escape(str(summary.get("fixture_count")))} 场，页面仅生成 {html.escape(str(summary.get("card_count")))} 张卡片。</div>'
@@ -665,6 +782,7 @@ def render_dashboard(payload: dict[str, Any]) -> str:
 <header class="topbar"><div><div class="brand-kicker">PRE-MATCH FOOTBALL INTELLIGENCE</div><h1>今日比赛</h1><div class="date-line">{html.escape(str(payload.get('business_date')))} · 今日全部赛事</div></div>
 <div class="refresh-line">数据更新时间<br><strong>{html.escape(_format_updated_at(health.get('updated_at') or payload.get('generated_at')))}</strong></div></header>
 {health_html}<section class="day-summary" aria-label="今日比赛摘要">{overview}</section>
+{attention_html}
 <nav class="toolbar" aria-label="比赛筛选"><span class="toolbar-label">查看</span>
 <button class="filter" type="button" data-filter="ALL" aria-pressed="true">全部</button>
 <button class="filter" type="button" data-filter="FROZEN" aria-pressed="false">已预测</button>
@@ -760,6 +878,8 @@ def build_dashboard(
             exploratory_samples,
         ))
     cards.sort(key=lambda item: (_iso_sort(item.get("kickoff")), _text(item.get("match_num"))))
+    reference_time = _as_shanghai(now)
+    attention = _attention_projection(cards, reference_time)
     counts = Counter(card.get("status") for card in cards)
     verified_results = sum(1 for card in cards if card.get("result"))
     formal_total = summary_payload.get("formal_sample_count_total")
@@ -777,7 +897,7 @@ def build_dashboard(
     failed_steps = [name for name, value in (runtime.get("steps") or {}).items() if isinstance(value, dict) and value.get("status") not in {"SUCCESS", "SKIPPED"}]
     payload = {
         "schema_version": "1.0",
-        "generated_at": (now or datetime.now(SHANGHAI)).isoformat(),
+        "generated_at": reference_time.isoformat(),
         "business_date": business_date,
         "health": {
             "overall_status": health_overall,
@@ -808,6 +928,7 @@ def build_dashboard(
             "pilot_excluded_count": int(excluded_count or 0),
             "silent_missing_fixture": max(0, int(universe.get("fixture_count") or len(fixtures)) - len(cards)),
         },
+        "attention": attention,
         "data_errors": errors,
         "fixtures": cards,
         "completed": completed,

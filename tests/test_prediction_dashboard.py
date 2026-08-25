@@ -1,6 +1,7 @@
 import json
 import re
 import sys
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -174,6 +175,55 @@ def test_universe_three_produces_three_accountable_cards_and_frozen_fields(tmp_p
         "分散",
     ):
         assert forbidden not in html
+
+
+def test_dashboard_exposes_deterministic_reading_order_for_upcoming_matches(tmp_path):
+    fixtures = [fixture(index) for index in range(1, 4)]
+    prediction_id = "FBOS-PRED-focus-1"
+    roots = make_roots(tmp_path, fixtures, [
+        frozen_job("1001", prediction_id),
+        {"job_id": "BASE-2026-08-12-1002", "match_id": "1002", "status": "INSUFFICIENT_DATA", "last_error": "MISSING_RECENT_FORM"},
+        frozen_job("1003", "FBOS-PRED-focus-3"),
+    ], [frozen_prediction(prediction_id), frozen_prediction("FBOS-PRED-focus-3")])
+
+    payload = build_dashboard(
+        DATE,
+        now=datetime(2026, 8, 12, 2, 0, tzinfo=timezone(timedelta(hours=8))),
+        **roots,
+    )
+
+    focus = payload["attention"]
+    assert focus["upcoming_count"] == 3
+    assert [item["match_id"] for item in focus["items"]] == ["1001", "1002", "1003"]
+    assert [item["cue"] for item in focus["items"]] == ["马上看", "先看数据状态", "稍后看"]
+    assert focus["items"][0]["reason"] == "开赛较近，预测已准备好"
+    assert focus["items"][1]["reason"] == "近期比赛数据不足"
+
+    html = (roots["output_root"] / "latest.html").read_text(encoding="utf-8")
+    assert "先看哪场" in html
+    assert "马上看" in html
+    assert "先看数据状态" in html
+    assert "开赛较近，预测已准备好" in html
+    assert html.index("先看哪场") < html.index('id="fixture-list"')
+
+
+def test_attention_does_not_call_past_unsettled_match_soon(tmp_path):
+    fixtures = [fixture(index) for index in range(1, 4)]
+    roots = make_roots(tmp_path, fixtures, [
+        frozen_job("1001", "FBOS-PRED-past-1"),
+        {"job_id": "BASE-2026-08-12-1002", "match_id": "1002", "status": "INSUFFICIENT_DATA", "last_error": "MISSING_RECENT_FORM"},
+        {"job_id": "BASE-2026-08-12-1003", "match_id": "1003", "status": "PENDING"},
+    ], [frozen_prediction("FBOS-PRED-past-1")])
+
+    payload = build_dashboard(
+        DATE,
+        now=datetime(2026, 8, 12, 7, 0, tzinfo=timezone(timedelta(hours=8))),
+        **roots,
+    )
+
+    assert payload["attention"]["upcoming_count"] == 3
+    assert payload["attention"]["items"][0]["cue"] == "已过开赛时间"
+    assert "马上看" not in {item["cue"] for item in payload["attention"]["items"]}
 
 
 def test_dashboard_publishes_workspace_completed_history_when_current_cards_have_no_results(tmp_path):
