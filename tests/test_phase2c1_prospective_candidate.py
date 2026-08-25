@@ -152,6 +152,13 @@ def test_kickoff_after_generation_and_future_history_are_rejected():
         _candidate(prematch_history=_history() + [{**_history()[0], "kickoff_at": KICKOFF}])
 
 
+def test_history_after_source_cutoff_is_rejected_even_before_kickoff():
+    late_history = [{**_history()[0], "kickoff_at": SOURCE_CUTOFF}]
+
+    with pytest.raises(ValueError, match="HISTORY_AFTER_SOURCE_CUTOFF_FORBIDDEN"):
+        _candidate(prematch_history=_history() + late_history)
+
+
 def test_missing_identity_or_result_field_leakage_is_rejected():
     with pytest.raises(ValueError, match="MATCH_IDENTITY_MATCH_KEY_MISSING"):
         _candidate(match_identity={"kickoff_at": KICKOFF})

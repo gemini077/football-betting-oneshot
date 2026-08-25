@@ -117,6 +117,7 @@ def _validate_target(target: Mapping[str, Any], match_identity: Mapping[str, Any
 def _prematch_history(
     history: Iterable[Mapping[str, Any]],
     *,
+    source_cutoff: datetime,
     kickoff: datetime,
 ) -> list[dict[str, Any]]:
     rows = [dict(row) for row in history]
@@ -126,6 +127,8 @@ def _prematch_history(
         row_kickoff = _parse_time(row.get("kickoff_at"), "HISTORY_KICKOFF_AT")
         if row_kickoff >= kickoff:
             raise ValueError("NON_PREMATCH_HISTORY_FORBIDDEN")
+        if row_kickoff >= source_cutoff:
+            raise ValueError("HISTORY_AFTER_SOURCE_CUTOFF_FORBIDDEN")
     return sorted(rows, key=lambda row: (str(row.get("kickoff_at")), canonical_json(row)))
 
 
@@ -182,7 +185,7 @@ def build_prospective_candidate_record(
     if freeze > current:
         raise ValueError("FREEZE_AFTER_NOW")
 
-    history = _prematch_history(prematch_history, kickoff=kickoff)
+    history = _prematch_history(prematch_history, source_cutoff=cutoff, kickoff=kickoff)
     input_projection = {
         "contract": ADAPTER_VERSION,
         "candidate_id": CHALLENGER_ID,
