@@ -82,9 +82,9 @@ Codex 允许：`READY_FOR_ACCEPTANCE`
 
 必须给出 total、mapped、historical eligible、每类 failure reason、按赛事体系分布。
 
-## Gate 4 — Formal 14 Coverage
+## Gate 4 — Formal eligible Coverage
 
-必须给出同样 coverage，并明确真正 paired sample size。
+必须给出同样 coverage，并明确真正 paired sample size。当前正式分母为 `formal eligible=9`，另有 `excluded pilot=5`；`Formal 14` 仅是历史 label。
 
 ## Gate 5 — Paired Sample Integrity
 
@@ -102,7 +102,7 @@ Current / Challenger / Market-only / Uniform 必须使用完全相同 match IDs�
 
 ## Gate 7 — Challenger Parameter Integrity
 
-Formal 14 不得参与 team-strength 参数拟合、recency 参数选择、shrinkage 参数选择、fusion weight 选择。
+旧 `Formal 14` label 不得参与 team-strength 参数拟合、recency 参数选择、shrinkage 参数选择、fusion weight 选择；当前 `formal eligible=9` 也不得用于这些选择。
 
 ## Gate 8 — Metric Integrity
 
@@ -165,6 +165,20 @@ Score NLL 只有真实概率存在时才能计算。
 正式交付放：
 
 `D:\MyProject\_deliveries\football-betting-oneshot\`
+
+## 5A. ID2 当前验收快照
+
+ID2 已验证并可供独立验收，但 Codex 不得将其写成 `SEALED`：
+
+- `formal eligible=9`，`excluded pilot=5`；
+- `AVAILABLE=1`、`COMPETITION_UNSUPPORTED=6`、`HISTORY_UNAVAILABLE=1`、`IDENTITY_UNAVAILABLE=1`；
+- `paired=1`，`same_match_ids_for_all_methods=true`；
+- `result_gate=PARTIAL_PAIRED_EVALUATION`，`verdict=TOO_SMALL_FOR_DECISION`；
+- Hearts–Benfica identity 已 deterministic solved，但 Europa history 为 2/5，仍不可 eligible；Elfsborg 仍 identity unavailable；
+- shared authoritative baseline 是 1,554 historical results / 160 team-strength snapshots；Europa v3 summary 为 `record_count=2,153`、`eligible_count=1,559`、`excluded_count=594`，只属于 staging；
+- 赛后 captured Europa source 不得作为 pre-match prospective evidence；Champion 不变，Challenger shadow-only，CA-1 paused，PA-3 not started。
+
+ID2 evidence package/status：`READY_FOR_ACCEPTANCE / INDEPENDENT ACCEPTANCE PENDING`；这不代表 PA-2-R1 model program overall 已通过。
 
 # 6. PA-2-R1 最终结论允许值
 

@@ -127,9 +127,23 @@ Historical holdout：
 
 因此 Challenger 仍未解决比分集中问题。
 
-# 5. PA-2 当前 blocker
+# 5. PA-2-R1 当前 blocker 与 ID2 状态
 
-PA-2 尚未能对 current production 23 场和 formal prospective 14 场完成安全 paired evaluation。
+PA-2-R1 的 DATA / ID / COV-SRC / ID2 证据已真实生成并完成核验。ID2 evidence package/status 为 `READY_FOR_ACCEPTANCE / INDEPENDENT ACCEPTANCE PENDING`；PA-2-R1 model program overall 仍为 `OVERALL INCOMPLETE / TOO_SMALL_FOR_DECISION`，原因是 formal paired sample 只有 1。
+
+ID2 的正式 cohort 语义为 `formal eligible = 9`，另有 `excluded pilot = 5`。历史文档中的 `Formal 14` 只保留为旧 cohort label，不能继续作为当前执行分母。
+
+正式 eligible=9 的 deterministic bridge 结果：
+
+- `AVAILABLE = 1`；
+- `COMPETITION_UNSUPPORTED = 6`；
+- `HISTORY_UNAVAILABLE = 1`；
+- `IDENTITY_UNAVAILABLE = 1`；
+- `paired = 1`，且所有 paired methods 使用同一 match ID。
+
+Hearts–Benfica 两队 identity 已由官方 fixture/球队证据 deterministic solved，但 Europa history 仅满足 2/5 的目标 prior 门槛；Elfsborg 仍为 `IDENTITY_UNAVAILABLE`。这两项不能被写成已 paired。
+
+数据口径必须分开：shared authoritative baseline 仍为 1,554 historical results / 160 team-strength snapshots。ID2 的 Europa v3 summary exact keys 为 `dataset.record_count=2,153`、`dataset.eligible_count=1,559`、`dataset.excluded_count=594`（`quality.A=1,559`、`quality.C=594`）；这是 staging evidence，不代表 shared authoritative DB 已迁移。
 
 必须区分：
 
@@ -144,11 +158,17 @@ PA-2 尚未能对 current production 23 场和 formal prospective 14 场完成�
 
 状态：
 
-`CURRENT / NOT YET ACCEPTED`
+`OVERALL INCOMPLETE / TOO_SMALL_FOR_DECISION`
+
+ID2 evidence package/status：`READY_FOR_ACCEPTANCE / INDEPENDENT ACCEPTANCE PENDING`
+
+当前执行指针：`ID3 CURRENT`；本次 Governance Current-State Sync 完成后生效。
 
 目标：
 
 把能安全 deterministic mapping 的 production / formal fixtures 接到 historical strength challenger，在完全相同比赛子集上公平比较 Current、Challenger、Market-only、Uniform。
+
+Champion 保持不变：`recent_form_market_calibrated_poisson_v2`。Challenger 仍为 shadow-only；CA-1 保持 paused；PA-3 尚未开始。
 
 # 7. 当前暂停
 
@@ -174,7 +194,7 @@ PA-2 尚未能对 current production 23 场和 formal prospective 14 场完成�
 - 不开始 CA-1；
 - 不在 PA-2-R1 中一口气扩全世界历史联赛；
 - 不使用 fuzzy / LLM / 人工猜测 identity mapping；
-- 不使用 formal 14 调 Challenger 参数；
+- 不使用旧 `Formal 14` label 调 Challenger 参数；当前 formal 分母使用 `formal eligible=9`，且仍不得用于参数选择；
 - 不把 workflow success 当作部署完成证据。
 
 # 9. Prospective / Promotion 治理
