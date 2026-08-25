@@ -16,7 +16,7 @@ def _workflow_text():
 def test_deploy_pages_keeps_half_hour_schedule_and_uses_production_cycle():
     text = _workflow_text()
 
-    assert 'cron: "*/30 * * * *"' in text
+    assert 'cron: "7,37 * * * *"' in text
     assert "run: python scripts/automation_cycle.py\n" in text
     assert "automation_cycle.py --date" not in text
     assert "FBOS_DATE" not in text
