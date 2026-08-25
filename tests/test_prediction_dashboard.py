@@ -37,6 +37,8 @@ def make_roots(tmp_path: Path, fixtures: list[dict], jobs: list[dict], predictio
     exclusion_root = tmp_path / "exclusions"
     result_root = tmp_path / "results"
     prospective_root = tmp_path / "prospective"
+    governance_path = tmp_path / "config" / "model_governance.json"
+    benchmark_health_path = tmp_path / "benchmarks" / "health.json"
     runtime_path = tmp_path / "runtime" / "latest_cycle.json"
     write_json(universe_root / f"{DATE}.json", {
         "schema_version": "1.0",
@@ -60,8 +62,19 @@ def make_roots(tmp_path: Path, fixtures: list[dict], jobs: list[dict], predictio
     write_json(prospective_root / "summary.json", {
         "formal_sample_count_total": 1,
         "samples_added_this_run": 1,
+        "pending_results": 2,
         "excluded_prediction_count": 1,
         "pilot_excluded_settled": 1,
+    })
+    write_json(governance_path, {
+        "challengers": [],
+        "promotion_gates": {"automatic_promotion_forbidden": True},
+    })
+    write_json(benchmark_health_path, {
+        "paired_3way_1x2": 0,
+        "prospective_comparisons": 0,
+        "result_gate": "PARTIAL_PAIRED_EVALUATION",
+        "verdict": "TOO_SMALL_FOR_DECISION",
     })
     write_json(runtime_path, {
         "overall_status": "HEALTHY",
@@ -75,6 +88,8 @@ def make_roots(tmp_path: Path, fixtures: list[dict], jobs: list[dict], predictio
         "exclusion_root": exclusion_root,
         "result_root": result_root,
         "prospective_root": prospective_root,
+        "governance_path": governance_path,
+        "benchmark_health_path": benchmark_health_path,
         "runtime_path": runtime_path,
         "output_root": tmp_path / "dashboard",
     }
@@ -309,6 +324,29 @@ def test_pilot_exclusion_and_formal_sample_are_distinguished(tmp_path):
     assert "1–0" in formal_html
     assert "1–1 · 2–0" in formal_html
     assert "1X2 · 主胜倾向" in formal_html
+
+
+def test_dashboard_exposes_prospective_records_separately_from_fair_comparisons(tmp_path):
+    roots = make_roots(tmp_path, [fixture(1)], [{"match_id": "1001", "status": "PENDING"}])
+
+    payload = build_dashboard(DATE, **roots)
+    status = payload["prospective_status"]
+    rendered = (roots["output_root"] / "latest.html").read_text(encoding="utf-8")
+
+    assert status["formal_sample_count"] == 1
+    assert status["pending_results"] == 2
+    assert status["paired_comparison_count"] == 0
+    assert status["paired_result_gate"] == "PARTIAL_PAIRED_EVALUATION"
+    assert status["paired_verdict"] == "TOO_SMALL_FOR_DECISION"
+    assert "正式记录总数不等于公平的同场对照样本" in status["reason"]
+    assert "正式赛前记录" in rendered
+    assert "当前生产基准公平对照" in rendered
+    assert "正式预测" in rendered
+    assert "暂无可晋级研究对照" in rendered
+    assert "公平对照仍不足，暂不能做切换判断" in rendered
+    assert "PARTIAL_PAIRED_EVALUATION" not in rendered
+    assert "TOO_SMALL_FOR_DECISION" not in rendered
+    assert "正式记录总数不等于公平的同场对照样本" in rendered
 
 
 def test_dashboard_is_read_only_projection_without_model_or_network_imports():

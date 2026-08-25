@@ -20,6 +20,8 @@ PREDICTION_ROOT = BASE_DIR / "data" / "model_governance" / "predictions"
 EXCLUSION_ROOT = BASE_DIR / "data" / "model_governance" / "prediction_exclusions"
 RESULT_ROOT = BASE_DIR / "data" / "postmatch_automation" / "results"
 PROSPECTIVE_ROOT = BASE_DIR / "data" / "prospective"
+MODEL_GOVERNANCE_PATH = BASE_DIR / "config" / "model_governance.json"
+BENCHMARK_HEALTH_PATH = BASE_DIR / "data" / "model_benchmarks" / "health.json"
 RUNTIME_PATH = BASE_DIR / "data" / "product_runtime" / "latest_cycle.json"
 DASHBOARD_ROOT = BASE_DIR / "data" / "prediction_dashboard"
 WORKSPACE_LATEST = BASE_DIR / "data" / "match_workspace" / "latest.json"
@@ -412,6 +414,16 @@ h1 { margin: 8px 0 4px; font-size: clamp(32px, 5vw, 54px); line-height: 1.02; le
 .day-summary { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 12px; margin: 28px 0 20px; color: var(--muted); }
 .day-summary strong { color: var(--accent); font-size: 26px; line-height: 1; letter-spacing: -.04em; }
 .day-summary .summary-date { color: var(--quiet); font-size: 12px; }
+.prospective-status { margin: 18px 0 20px; padding: 16px 18px; border: 1px solid var(--line); background: var(--surface); }
+.prospective-heading { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 16px; align-items: baseline; }
+.prospective-heading h2 { margin: 0; font-size: 18px; }
+.prospective-heading strong { color: var(--warning); font-size: 13px; }
+.prospective-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-top: 14px; }
+.prospective-metric { padding: 10px 12px; border: 1px solid var(--line); background: var(--surface-2); }
+.prospective-metric span { display: block; color: var(--quiet); font-size: 11px; }
+.prospective-metric strong { display: block; margin-top: 3px; color: var(--text); font-size: 20px; }
+.prospective-note { margin: 13px 0 0; color: var(--muted); font-size: 12px; }
+@media (max-width: 760px) { .prospective-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 24px 0 15px; }
 .toolbar-label { margin-right: 4px; color: var(--muted); font-size: 12px; }
 .filter { border: 1px solid var(--line); border-radius: 999px; padding: 7px 13px; color: var(--muted); background: transparent; cursor: pointer; }
@@ -494,6 +506,47 @@ def _format_updated_at(value: Any) -> str:
         return parsed.strftime("%Y-%m-%d %H:%M")
     except ValueError:
         return text[:16].replace("T", " ")
+
+
+def _prospective_status(
+    summary: dict[str, Any],
+    governance: dict[str, Any],
+    benchmark_health: dict[str, Any],
+) -> dict[str, Any]:
+    formal_total = summary.get("formal_sample_count_total")
+    pending = summary.get("pending_results")
+    challengers = governance.get("challengers")
+    challenger_count = len(challengers) if isinstance(challengers, list) else 0
+    paired_count = benchmark_health.get("paired_3way_1x2")
+    if paired_count is None:
+        paired_count = benchmark_health.get("paired_simple_vs_champion")
+    if formal_total is None:
+        return {
+            "formal_sample_count": None,
+            "pending_results": None,
+            "paired_comparison_count": None,
+            "paired_result_gate": None,
+            "paired_verdict": None,
+            "readiness_label": "暂无完整汇总",
+            "research_status": "等待验证数据",
+            "reason": "验证汇总尚未完整生成，暂不展示晋级判断。",
+        }
+    if paired_count is None:
+        reason = "正式记录总数不等于公平的同场对照样本；当前发布数据没有可展示的生产基准公平对照，正式预测保持不变。"
+    elif int(paired_count or 0) == 0:
+        reason = "正式记录总数不等于公平的同场对照样本；当前生产基准公平对照为 0，正式预测保持不变。"
+    else:
+        reason = "正式预测保持不变；研究对照仍需通过完整的可审计晋级门槛。"
+    return {
+        "formal_sample_count": int(formal_total or 0),
+        "pending_results": int(pending or 0),
+        "paired_comparison_count": None if paired_count is None else int(paired_count or 0),
+        "paired_result_gate": benchmark_health.get("result_gate"),
+        "paired_verdict": benchmark_health.get("verdict"),
+        "readiness_label": "证据仍需补齐",
+        "research_status": "已有研究对照" if challenger_count else "暂无可晋级研究对照",
+        "reason": reason,
+    }
 
 
 def _score_label(value: Any) -> str:
@@ -633,6 +686,7 @@ STATIC_REFRESH_SCRIPT = """<script>
 
 def render_dashboard(payload: dict[str, Any]) -> str:
     summary = payload["summary"]
+    prospective = payload.get("prospective_status") or {}
     health = payload.get("health") or {}
     health_overall = str(health.get("overall_status") or "UNKNOWN")
     health_errors = payload.get("data_errors") or []
@@ -651,6 +705,28 @@ def render_dashboard(payload: dict[str, Any]) -> str:
         f'<span class="summary-date">{html.escape(str(payload.get("business_date")))}</span>'
     )
     cards_html = "".join(_modern_card_html(card) for card in payload.get("fixtures") or [])
+    formal_sample = prospective.get("formal_sample_count")
+    pending_results = prospective.get("pending_results")
+    paired_comparison = prospective.get("paired_comparison_count")
+    paired_detail = (
+        "公平对照仍不足，暂不能做切换判断"
+        if paired_comparison is not None and int(paired_comparison) == 0
+        else "公平对照仍需完成晋级复核"
+        if paired_comparison is not None
+        else ""
+    )
+    prospective_html = f'''<section class="prospective-status" aria-label="赛前验证进度">
+<div class="prospective-heading"><h2>赛前验证进度</h2><strong>{html.escape(_text(prospective.get("readiness_label"), "暂无完整汇总"))}</strong></div>
+<div class="prospective-grid">
+<div class="prospective-metric"><span>正式赛前记录</span><strong>{html.escape("—" if formal_sample is None else str(formal_sample))}</strong></div>
+<div class="prospective-metric"><span>待结算结果（汇总口径）</span><strong>{html.escape("—" if pending_results is None else str(pending_results))}</strong></div>
+<div class="prospective-metric"><span>当前生产基准公平对照</span><strong>{html.escape("—" if paired_comparison is None else str(paired_comparison))}</strong></div>
+<div class="prospective-metric"><span>正式预测</span><strong>保持不变</strong></div>
+<div class="prospective-metric"><span>研究对照</span><strong>{html.escape(_text(prospective.get("research_status"), "—"))}</strong></div>
+</div>
+{f'<p class="prospective-note">对照门状态：{html.escape(paired_detail)}</p>' if paired_detail else ''}
+<p class="prospective-note">{html.escape(_text(prospective.get("reason"), "验证汇总尚未完整生成，暂不展示晋级判断。"))}</p>
+</section>'''
     if not cards_html:
         cards_html = '<div class="empty">今天没有可展示的比赛。</div>'
     data_warning = ""
@@ -687,6 +763,7 @@ buttons.forEach(button => button.addEventListener('click', () => {{
   if (historicalResults) historicalResults.hidden = filter !== 'ALL' && filter !== 'RESULT';
 }}));
 </script></body></html>"""
+    page = page.replace('<nav class="toolbar"', prospective_html + '<nav class="toolbar"', 1)
     result_count = int(summary.get("completed_count") or 0)
     page = page.replace('<section id="fixture-list"', historical_html + '<section id="fixture-list"', 1)
     page = page.replace(
@@ -713,6 +790,8 @@ def build_dashboard(
     exclusion_root: Path = EXCLUSION_ROOT,
     result_root: Path = RESULT_ROOT,
     prospective_root: Path = PROSPECTIVE_ROOT,
+    governance_path: Path = MODEL_GOVERNANCE_PATH,
+    benchmark_health_path: Path = BENCHMARK_HEALTH_PATH,
     runtime_path: Path = RUNTIME_PATH,
     workspace_path: Path = WORKSPACE_LATEST,
     output_root: Path = DASHBOARD_ROOT,
@@ -739,6 +818,12 @@ def build_dashboard(
     summary_payload = _read_optional_json(Path(prospective_root) / "summary.json", errors, "prospective:summary", {})
     if not isinstance(summary_payload, dict):
         summary_payload = {}
+    governance = _read_optional_json(Path(governance_path), errors, "model_governance", {})
+    if not isinstance(governance, dict):
+        governance = {}
+    benchmark_health = _read_optional_json(Path(benchmark_health_path), errors, "benchmark_health", {})
+    if not isinstance(benchmark_health, dict):
+        benchmark_health = {}
     runtime = _read_optional_json(Path(runtime_path), errors, "runtime", {})
     if not isinstance(runtime, dict):
         runtime = {}
@@ -808,6 +893,7 @@ def build_dashboard(
             "pilot_excluded_count": int(excluded_count or 0),
             "silent_missing_fixture": max(0, int(universe.get("fixture_count") or len(fixtures)) - len(cards)),
         },
+        "prospective_status": _prospective_status(summary_payload, governance, benchmark_health),
         "data_errors": errors,
         "fixtures": cards,
         "completed": completed,
