@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import re
 import sys
 from collections import Counter, defaultdict
@@ -30,6 +31,133 @@ WATCH = "WATCH"
 ALERT = "ALERT"
 FINAL_RESULT_SCOPES = {"regulation_90m_plus_stoppage", "90m", "regulation_90m"}
 FROZEN_STATUSES = {"formal", "frozen", "FROZEN"}
+EXACT_SCORE_MIN_SAMPLE_COUNT = 8
+EXACT_SCORE_DOMINANT_COUNT_THRESHOLD = 7
+EXACT_SCORE_DOMINANT_SHARE_THRESHOLD = 0.875
+EXACT_SCORE_LAMBDA_GAP_THRESHOLD = 0.5
+
+
+def _normalise_top1_score(value: Any) -> str | None:
+    if isinstance(value, dict):
+        if "home_score" in value or "away_score" in value:
+            value = (value.get("home_score"), value.get("away_score"))
+        else:
+            for key in ("score", "unique_score", "score_top1", "formal_unique_score", "value"):
+                if key in value:
+                    value = value[key]
+                    break
+    if isinstance(value, (tuple, list)) and len(value) == 2:
+        value = f"{value[0]}-{value[1]}"
+    match = re.fullmatch(r"\s*(\d+)\s*[-:]\s*(\d+)\s*", str(value or ""))
+    return f"{int(match.group(1))}-{int(match.group(2))}" if match else None
+
+
+def _stored_top1_score(record: dict[str, Any]) -> str | None:
+    output = record.get("prediction_output")
+    containers = [record, output] if isinstance(output, dict) else [record]
+    for container in containers:
+        for key in ("unique_score", "score_top1", "formal_unique_score"):
+            score = _normalise_top1_score(container.get(key))
+            if score:
+                return score
+        for key in ("top_scores", "score_distribution", "score_probabilities", "score_matrix"):
+            rows = container.get(key)
+            if isinstance(rows, list) and rows:
+                score = _normalise_top1_score(rows[0])
+                if score:
+                    return score
+    return None
+
+
+def _lambda_gap(record: dict[str, Any]) -> float | None:
+    try:
+        home = float(record.get("lambda_home"))
+        away = float(record.get("lambda_away"))
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(home) or not math.isfinite(away):
+        return None
+    return abs(home - away)
+
+
+def evaluate_exact_score_health(formal_records: list[dict[str, Any]]) -> dict[str, Any]:
+    """Describe frozen Champion exact-score concentration without mutating inputs.
+
+    A record is lambda-compressed when ``abs(lambda_home - lambda_away)`` is
+    strictly less than ``EXACT_SCORE_LAMBDA_GAP_THRESHOLD``.
+    """
+    eligible_records: list[dict[str, Any]] = []
+    for record in formal_records:
+        if not isinstance(record, dict):
+            continue
+        try:
+            eligible = is_formally_eligible(record)
+        except Exception:
+            eligible = False
+        if eligible:
+            eligible_records.append(record)
+
+    scored_records = [
+        (record, score)
+        for record in eligible_records
+        if (score := _stored_top1_score(record))
+    ]
+    scores = [score for _, score in scored_records]
+    counts = Counter(scores)
+    ordered_counts = counts.most_common(2)
+    dominant_score = ordered_counts[0][0] if ordered_counts else None
+    dominant_count = ordered_counts[0][1] if ordered_counts else 0
+    runner_up_count = ordered_counts[1][1] if len(ordered_counts) > 1 else 0
+    sample_count = len(scores)
+    dominant_share = round(dominant_count / sample_count, 6) if sample_count else None
+    runner_up_share = round(runner_up_count / sample_count, 6) if sample_count else None
+    dominant_share_gap = (
+        round(dominant_share - runner_up_share, 6)
+        if dominant_share is not None and runner_up_share is not None
+        else dominant_share
+    )
+    lambda_gaps = [_lambda_gap(record) for record, _ in scored_records]
+    lambda_gap_sample_count = sum(gap is not None for gap in lambda_gaps)
+    compressed_count = sum(
+        gap is not None and gap < EXACT_SCORE_LAMBDA_GAP_THRESHOLD
+        for gap in lambda_gaps
+    )
+    compressed_share = round(compressed_count / sample_count, 6) if sample_count else None
+
+    if sample_count < EXACT_SCORE_MIN_SAMPLE_COUNT:
+        status = "INSUFFICIENT_SAMPLE"
+        reason = "INSUFFICIENT_FORMAL_EXACT_SCORE_SAMPLE"
+    elif (
+        dominant_count >= EXACT_SCORE_DOMINANT_COUNT_THRESHOLD
+        and (dominant_share or 0.0) >= EXACT_SCORE_DOMINANT_SHARE_THRESHOLD
+    ):
+        status = ALERT
+        reason = "EXACT_SCORE_CONCENTRATION"
+    else:
+        status = HEALTHY
+        reason = "EXACT_SCORE_DISTRIBUTION_WITHIN_GUARDRAIL"
+
+    return {
+        "schema_version": "1.0",
+        "sample_count": sample_count,
+        "eligible_record_count": len(eligible_records),
+        "missing_top1_count": len(eligible_records) - sample_count,
+        "dominant_score": dominant_score,
+        "dominant_count": dominant_count,
+        "dominant_share": dominant_share,
+        "compressed_count": compressed_count,
+        "compressed_share": compressed_share,
+        "lambda_gap_sample_count": lambda_gap_sample_count,
+        "missing_lambda_gap_count": sample_count - lambda_gap_sample_count,
+        "runner_up_count": runner_up_count,
+        "runner_up_share": runner_up_share,
+        "dominant_share_gap": dominant_share_gap,
+        "gap_threshold": EXACT_SCORE_LAMBDA_GAP_THRESHOLD,
+        "compression_rule": "abs(lambda_home-lambda_away) < gap_threshold",
+        "dominant_share_threshold": EXACT_SCORE_DOMINANT_SHARE_THRESHOLD,
+        "status": status,
+        "reason": reason,
+    }
 
 
 def _now(value: datetime | None = None) -> datetime:
@@ -369,6 +497,10 @@ def _check_prediction_integrity(
         payload for _, payload in predictions
         if str(payload.get("prediction_status") or "").strip() in FROZEN_STATUSES
     ]
+    exact_score_health = evaluate_exact_score_health(formal_records)
+    details["production_exact_score_health"] = exact_score_health
+    if exact_score_health["status"] == ALERT:
+        _reason_once(reasons, "EXACT_SCORE_CONCENTRATION")
     groups: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for record in formal_records:
         key = str(record.get("job_id") or record.get("match_key") or record.get("prediction_id") or "")
@@ -513,6 +645,7 @@ def evaluate_health(
             "HEALTH_STATE_CORRUPTED",
             "MATCH_WORKSPACE_STALE",
             "MATCH_WORKSPACE_INVALID",
+            "EXACT_SCORE_CONCENTRATION",
         }
     ]
     engineering_reasons = [reason for reason in reasons if reason not in immediate_reasons]

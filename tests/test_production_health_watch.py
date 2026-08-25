@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from scripts.production_health_watch import evaluate_health
+from scripts.production_health_watch import evaluate_exact_score_health, evaluate_health
 
 
 def _write_json(path: Path, payload):
@@ -94,6 +94,106 @@ def _healthy_tree(tmp_path, *, universe_status="READY", fixture_count=1, jobs=No
 
 def _cycle(tmp_path, status):
     _write_json(tmp_path / "data" / "product_runtime" / "latest_cycle.json", _base_cycle(status))
+
+
+def _formal_champion_record(prediction_id, score, *, lambda_home=1.0, lambda_away=1.0):
+    return {
+        "prediction_id": prediction_id,
+        "prediction_status": "formal",
+        "model_role": "champion",
+        "prediction_variant": "model_only",
+        "manual_override": False,
+        "model_input_snapshot_ref": f"data/model_governance/input_snapshots/{prediction_id}.json",
+        "input_sha256": f"input-{prediction_id}",
+        "model_source_fingerprint": "champion-fingerprint",
+        "match_key": f"MATCH-{prediction_id}",
+        "match_identity": {
+            "match_key": f"MATCH-{prediction_id}",
+            "home": "Home",
+            "away": "Away",
+        },
+        "kickoff_at": "2026-08-12T23:00:00+08:00",
+        "source_cutoff_at": "2026-08-12T09:59:00+08:00",
+        "prediction_created_at": "2026-08-12T10:00:00+08:00",
+        "freeze_created_at": "2026-08-12T10:01:00+08:00",
+        "formal_eligible": True,
+        "model_formal_eligible": True,
+        "data_grade": "A",
+        "probabilities": {"home": 0.4, "draw": 0.3, "away": 0.3},
+        "lambda_home": lambda_home,
+        "lambda_away": lambda_away,
+        "btts": {"yes": 0.4, "no": 0.6},
+        "unique_score": score,
+        "score_distribution": [{"score": score, "probability": 0.2, "rank": 1}],
+    }
+
+
+def test_exact_score_health_alerts_on_seven_of_eight_one_one_top1_scores():
+    records = [
+        _formal_champion_record(f"P-{index}", "1:1", lambda_home=1.0, lambda_away=1.2)
+        for index in range(7)
+    ]
+    records.append(_formal_champion_record("P-7", "2-1", lambda_home=1.0, lambda_away=2.0))
+
+    result = evaluate_exact_score_health(records)
+
+    assert result["status"] == "ALERT"
+    assert result["reason"] == "EXACT_SCORE_CONCENTRATION"
+    assert result["sample_count"] == 8
+    assert result["dominant_score"] == "1-1"
+    assert result["dominant_count"] == 7
+    assert result["dominant_share"] == 0.875
+    assert result["compressed_count"] == 7
+    assert result["compressed_share"] == 0.875
+    assert result["lambda_gap_sample_count"] == 8
+    assert result["gap_threshold"] == 0.5
+    assert result["compression_rule"] == "abs(lambda_home-lambda_away) < gap_threshold"
+    assert result["dominant_share_threshold"] == 0.875
+
+
+def test_exact_score_health_does_not_alert_on_three_or_four_small_samples():
+    for sample_count in (3, 4):
+        result = evaluate_exact_score_health(
+            [_formal_champion_record(f"P-{sample_count}-{index}", "1-1") for index in range(sample_count)]
+        )
+
+        assert result["status"] == "INSUFFICIENT_SAMPLE"
+        assert result["reason"] == "INSUFFICIENT_FORMAL_EXACT_SCORE_SAMPLE"
+        assert result["sample_count"] == sample_count
+        assert result["dominant_score"] == "1-1"
+        assert result["dominant_count"] == sample_count
+        assert result["dominant_share"] == 1.0
+
+
+def test_evaluate_health_surfaces_exact_score_guardrail_without_switching_models(tmp_path):
+    root = _healthy_tree(tmp_path)
+    for index, score in enumerate(["1-1"] * 7 + ["2-1"]):
+        _write_json(
+            root / "data" / "model_governance" / "predictions" / f"P-{index}.json",
+            _formal_champion_record(
+                f"P-{index}",
+                score,
+                lambda_home=1.0,
+                lambda_away=1.2 if index < 7 else 2.0,
+            ),
+        )
+
+    result = evaluate_health(root=root)
+    health = result["details"]["production_exact_score_health"]
+
+    assert result["status"] == "ALERT"
+    assert "EXACT_SCORE_CONCENTRATION" in result["reasons"]
+    assert health["sample_count"] == 8
+    assert health["dominant_score"] == "1-1"
+    assert health["dominant_count"] == 7
+    assert health["dominant_share"] == 0.875
+    assert health["compressed_count"] == 7
+    assert health["compressed_share"] == 0.875
+    assert health["gap_threshold"] == 0.5
+    assert health["compression_rule"] == "abs(lambda_home-lambda_away) < gap_threshold"
+    assert health["dominant_share_threshold"] == 0.875
+    assert health["status"] == "ALERT"
+    assert health["reason"] == "EXACT_SCORE_CONCENTRATION"
 
 
 def test_healthy_cycle_is_silent(tmp_path):
