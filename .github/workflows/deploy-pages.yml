@@ -41,7 +41,21 @@ jobs:
         run: git pull --rebase origin main
 
       - name: Run production cycle
+        id: production_cycle
         run: python scripts/automation_cycle.py
+
+      - name: Classify generated data durability
+        id: generated_data_gate
+        if: ${{ always() }}
+        shell: bash
+        env:
+          CYCLE_OUTCOME: ${{ steps.production_cycle.outcome }}
+        run: |
+          python scripts/refresh_durability_gate.py \
+            --cycle-result data/product_runtime/latest_cycle.json \
+            --data-root data \
+            --cycle-outcome "$CYCLE_OUTCOME" \
+            --github-output "$GITHUB_OUTPUT"
 
       - name: Enforce cross-market report consistency
         run: python scripts/repair_report_consistency.py --root data/analysis_reports/current
@@ -52,6 +66,7 @@ jobs:
           python scripts/production_health_watch.py | tee health_watch_result.json
 
       - name: Save generated public data
+        if: ${{ !cancelled() && steps.generated_data_gate.outputs.ready == 'true' }}
         shell: bash
         run: |
           git config user.name "github-actions[bot]"
