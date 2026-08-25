@@ -299,7 +299,8 @@ def production_cycle(
     steps["next_universe"] = _step("next_universe", [
         sys.executable, "scripts/daily_schedule_workspace.py", "--date", next_date,
         "--no-cache", "--fetch-only",
-    ], optional=True)    steps["next_base_jobs"] = _step("next_base_jobs", [
+    ], optional=True)
+    steps["next_base_jobs"] = _step("next_base_jobs", [
         sys.executable, "scripts/base_prediction_jobs.py", "--date", next_date,
     ], optional=True)
     steps["next_base_prediction"] = _step("next_base_prediction", [
