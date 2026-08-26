@@ -566,6 +566,10 @@ def _write_summary(
         "excluded_prediction_count": len(excluded_prediction_ids(exclusion_root)),
         "pilot_excluded_settled": len(exploratory_rows),
         "result_failures": result.get("result_failures", 0),
+        "shadow_settlements_added": result.get("shadow_settlements_added", 0),
+        "shadow_settlements_existing": result.get("shadow_settlements_existing", 0),
+        "shadow_settlement_failures": result.get("shadow_settlement_failures", 0),
+        "shadow_failure_reasons": result.get("shadow_failure_reasons", {}),
         "by_product_role": dict(by_role),
         "by_market_intelligence_quality": dict(by_market),
     }
@@ -585,11 +589,15 @@ def settle_records(
     result_root: Path = POSTMATCH_RESULT_ROOT,
     universe_root: Path = UNIVERSE_ROOT,
     date: str | None = None,
+    shadow_prediction_root: Path | None = None,
+    shadow_settlement_root: Path | None = None,
 ) -> dict[str, Any]:
     prospective_root = prospective_root if prospective_root.is_absolute() else BASE_DIR / prospective_root
     exclusion_root = exclusion_root if exclusion_root.is_absolute() else BASE_DIR / exclusion_root
     ledger_path = prospective_root / LEDGER_NAME
     exploratory_path = prospective_root / EXPLORATORY_NAME
+    shadow_prediction_root = Path(shadow_prediction_root) if shadow_prediction_root is not None else BASE_DIR / "data" / "model_benchmarks" / "predictions"
+    shadow_settlement_root = Path(shadow_settlement_root) if shadow_settlement_root is not None else BASE_DIR / "data" / "model_benchmarks" / "settlements"
     formal_rows = _read_jsonl(ledger_path)
     exploratory_rows = _read_jsonl(exploratory_path)
     prospective_root.mkdir(parents=True, exist_ok=True)
@@ -607,6 +615,10 @@ def settle_records(
         "result_conflicts": 0,
         "duplicate_prospective_samples": max(0, len(formal_rows) - len(formal_by_id)),
         "failure_reasons": {},
+        "shadow_settlements_added": 0,
+        "shadow_settlements_existing": 0,
+        "shadow_settlement_failures": 0,
+        "shadow_failure_reasons": {},
         "settled_at": now.isoformat(),
     }
     fetch = result_fetcher or (
@@ -650,6 +662,29 @@ def settle_records(
             result["failure_reasons"]["RESULT_IDENTITY_UNRESOLVED"] = result["failure_reasons"].get("RESULT_IDENTITY_UNRESOLVED", 0) + 1
             continue
         result["results_found"] += 1
+        try:
+            from baseline_production import settle_market_direction_shadow_for_result
+
+            shadow_settlement = settle_market_direction_shadow_for_result(
+                record,
+                actual,
+                prediction_root=shadow_prediction_root,
+                settlement_root=shadow_settlement_root,
+                settled_at=actual.get("result_verified_at") or now.isoformat(),
+            )
+            shadow_status = str(shadow_settlement.get("status") or "no_op")
+            if shadow_status == "created":
+                result["shadow_settlements_added"] += 1
+            elif shadow_status == "existing":
+                result["shadow_settlements_existing"] += 1
+            elif shadow_status not in {"no_op"}:
+                result["shadow_settlement_failures"] += 1
+                reason = str(shadow_settlement.get("reason") or "shadow_settlement_failed")
+                result["shadow_failure_reasons"][reason] = result["shadow_failure_reasons"].get(reason, 0) + 1
+        except Exception as error:  # research settlement must not block formal settlement
+            result["shadow_settlement_failures"] += 1
+            reason = f"shadow_settlement_exception:{type(error).__name__}"
+            result["shadow_failure_reasons"][reason] = result["shadow_failure_reasons"].get(reason, 0) + 1
         existing = exploratory_by_id.get(prediction_id) if excluded is not None else formal_by_id.get(prediction_id)
         if existing is not None:
             old_actual = existing.get("actual") or {}

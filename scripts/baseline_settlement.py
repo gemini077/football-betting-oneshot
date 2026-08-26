@@ -18,6 +18,7 @@ from baseline_shadow_runner import (
 
 OUTCOMES = ("home", "draw", "away")
 DEFAULT_SETTLEMENT_ROOT = Path(__file__).resolve().parents[1] / "data" / "model_benchmarks" / "settlements"
+SHADOW_MODEL_NAME = "market_direction_fusion_full_v1"
 
 
 def canonical_json(value: Any) -> str:
@@ -115,6 +116,59 @@ def _expected_goals(prediction: dict[str, Any]) -> tuple[float, float] | None:
     return home, away
 
 
+def _full_score_rows(prediction: dict[str, Any]) -> tuple[list[dict[str, Any]], bool]:
+    rows = _score_rows(prediction)
+    if prediction.get("score_matrix_complete") is True:
+        return rows, bool(rows)
+    if prediction.get("derive_full_matrix") is not True:
+        return rows, False
+    expected = _expected_goals(prediction)
+    if expected is None:
+        return rows, False
+    try:
+        from risk_engine import dixon_coles_score_matrix
+
+        matrix = dixon_coles_score_matrix({
+            "lambda_home": expected[0],
+            "lambda_away": expected[1],
+            "rho": _number(prediction.get("rho")) or 0.0,
+        })
+    except (ImportError, TypeError, ValueError):
+        return rows, False
+    return _score_rows({
+        "score_matrix": [
+            {"score": f"{home}-{away}", "home_goals": home, "away_goals": away, "probability": probability}
+            for (home, away), probability in matrix.items()
+        ],
+    }), bool(matrix)
+
+
+def _ece(rows: list[dict[str, Any]], model_name: str, bins: int = 10) -> float | None:
+    values: list[float] = []
+    for outcome in OUTCOMES:
+        buckets: dict[int, list[tuple[float, int]]] = {}
+        for row in rows:
+            metrics = (row.get("metrics") or {}).get(model_name) or {}
+            probabilities = metrics.get("outcome_probabilities")
+            actual = metrics.get("actual_outcome")
+            if not isinstance(probabilities, dict) or actual not in OUTCOMES:
+                continue
+            probability = _number(probabilities.get(outcome))
+            if probability is None:
+                continue
+            bucket = min(bins - 1, int(probability * bins))
+            buckets.setdefault(bucket, []).append((probability, int(actual == outcome)))
+        if not buckets:
+            continue
+        total = sum(len(items) for items in buckets.values())
+        values.append(sum(
+            len(items) / total
+            * abs(fmean(probability for probability, _ in items) - fmean(actual for _, actual in items))
+            for items in buckets.values()
+        ))
+    return fmean(values) if values else None
+
+
 def _btts_probability(prediction: dict[str, Any], score_rows: list[dict[str, Any]]) -> float | None:
     btts = prediction.get("btts")
     if isinstance(btts, dict):
@@ -150,6 +204,7 @@ def calculate_metrics(prediction: dict[str, Any], result: Any) -> dict[str, Any]
         "log_loss": None,
         "top1": None,
         "top1_accuracy": None,
+        "outcome_probabilities": None,
         "btts_probability": None,
         "btts_actual": None,
         "btts_hit": None,
@@ -170,6 +225,12 @@ def calculate_metrics(prediction: dict[str, Any], result: Any) -> dict[str, Any]
         "actual_score_rank": None,
         "actual_score_probability": None,
         "actual_score_assigned_probability": None,
+        "actual_score_nll": None,
+        "total_goals_nll": None,
+        "lambda_sum": None,
+        "lambda_gap": None,
+        "lambda_gap_lt_0_5": None,
+        "top1_1_1": None,
         "roi": None,
         "clv": None,
     }
@@ -187,13 +248,14 @@ def calculate_metrics(prediction: dict[str, Any], result: Any) -> dict[str, Any]
             "log_loss": log_loss,
             "top1": int(top == actual_outcome),
             "top1_accuracy": int(top == actual_outcome),
+            "outcome_probabilities": probabilities,
         })
 
     model_name = str(prediction.get("model") or "").lower()
     if model_name in {"market", "market_reference"}:
         return common
 
-    score_rows = _score_rows(prediction)
+    score_rows, full_score_matrix = _full_score_rows(prediction)
     actual_pair = (actual["home_goals"], actual["away_goals"])
     if score_rows:
         matching = [(index + 1, float(row["probability"])) for index, row in enumerate(score_rows) if _row_score(row) == actual_pair]
@@ -209,6 +271,18 @@ def calculate_metrics(prediction: dict[str, Any], result: Any) -> dict[str, Any]
         common["exact_score_top3"] = common["score_top3"]
         common["exact_score_top5"] = common["score_top5"]
         common["exact_score_top10"] = common["score_top10"]
+        common["top1_1_1"] = _row_score(score_rows[0]) == (1, 1)
+        if full_score_matrix:
+            actual_total = actual["home_goals"] + actual["away_goals"]
+            total_probability = sum(
+                float(row["probability"])
+                for row in score_rows
+                if (_row_score(row) or (-1, -1))[0] + (_row_score(row) or (-1, -1))[1] == actual_total
+            )
+            if total_probability > 0:
+                common["total_goals_nll"] = -math.log(max(total_probability, 1e-15))
+            if matching and matching[0][1] > 0:
+                common["actual_score_nll"] = -math.log(max(matching[0][1], 1e-15))
 
     btts_probability = _btts_probability(prediction, score_rows)
     if btts_probability is not None:
@@ -231,6 +305,9 @@ def calculate_metrics(prediction: dict[str, Any], result: Any) -> dict[str, Any]
             "expected_goal_error": (abs(home_error) + abs(away_error)) / 2.0,
             "expected_goal_error_home": abs(home_error),
             "expected_goal_error_away": abs(away_error),
+            "lambda_sum": expected[0] + expected[1],
+            "lambda_gap": abs(expected[0] - expected[1]),
+            "lambda_gap_lt_0_5": abs(expected[0] - expected[1]) < 0.5,
         })
     return common
 
@@ -265,6 +342,8 @@ def settle_comparison(
         if "champion_evaluable" in comparison
         else _prediction_evaluable(predictors.get("champion")),
     }
+    if SHADOW_MODEL_NAME in predictors:
+        evaluable[SHADOW_MODEL_NAME] = comparison.get("market_direction_fusion_evaluable") is True
     return {
         "comparison_id": comparison.get("comparison_id"),
         "benchmark_contract_version": comparison.get("benchmark_contract_version", BENCHMARK_CONTRACT_VERSION),
@@ -291,6 +370,21 @@ def settle_comparison(
         "simple_missing_reason": comparison.get("simple_missing_reason"),
         "champion_evaluable": evaluable["champion"],
         "champion_missing_reason": comparison.get("champion_missing_reason"),
+        "market_direction_fusion_evaluable": evaluable.get(SHADOW_MODEL_NAME),
+        "market_direction_fusion_missing_reason": comparison.get("shadow_failure_reason"),
+        "candidate_id": comparison.get("candidate_id"),
+        "candidate_version": comparison.get("candidate_version"),
+        "shadow_status": comparison.get("shadow_status"),
+        "shadow_created_at": comparison.get("shadow_created_at"),
+        "changed_variables": comparison.get("changed_variables"),
+        "prospective_shadow": comparison.get("prospective_shadow") is True,
+        "user_visible": comparison.get("user_visible") is True,
+        "formal_eligible": comparison.get("formal_eligible") is True,
+        "promotion_eligible": comparison.get("promotion_eligible") is True,
+        "source_champion_prediction_id": comparison.get("source_champion_prediction_id"),
+        "source_champion_prediction_ref": comparison.get("source_champion_prediction_ref"),
+        "snapshot_hash": comparison.get("snapshot_hash"),
+        "champion_total": comparison.get("champion_total"),
         "synthetic": synthetic,
         "excluded_from_formal_metrics": excluded,
         "actual_result": actual,
@@ -476,6 +570,134 @@ def aggregate_settlements(
             "metrics": metrics,
         }
 
+    def paired_shadow_research(rows: list[dict[str, Any]]) -> dict[str, Any]:
+        shadow_rows = [
+            row for row in rows
+            if row.get("prospective_shadow") is True
+            and row.get("candidate_id") == "market-direction-fusion-full-v1"
+            and row.get("market_direction_fusion_evaluable") is True
+            and row.get("champion_evaluable") is True
+        ]
+        shadow_rows = sorted(shadow_rows, key=lambda row: str(row.get("match_key") or ""))
+
+        def metric_pair(metric_name: str) -> dict[str, Any]:
+            candidate_values = []
+            champion_values = []
+            candidate_keys = []
+            champion_keys = []
+            for row in shadow_rows:
+                metrics = row.get("metrics") or {}
+                candidate_value = _metric_number((metrics.get(SHADOW_MODEL_NAME) or {}).get(metric_name))
+                champion_value = _metric_number((metrics.get("champion") or {}).get(metric_name))
+                key = str(row.get("match_key") or "")
+                if candidate_value is not None:
+                    candidate_values.append(candidate_value)
+                    candidate_keys.append(key)
+                if champion_value is not None:
+                    champion_values.append(champion_value)
+                    champion_keys.append(key)
+            result = {
+                "candidate": fmean(candidate_values) if candidate_values else None,
+                "champion": fmean(champion_values) if champion_values else None,
+                "candidate_n": len(candidate_values),
+                "champion_n": len(champion_values),
+                "candidate_match_keys": candidate_keys,
+                "champion_match_keys": champion_keys,
+            }
+            if not candidate_values or not champion_values:
+                result["status"] = "unsupported"
+                result["reason"] = "final frozen distribution is unavailable for one side of this metric"
+            else:
+                result["status"] = "supported"
+                result["n"] = min(len(candidate_values), len(champion_values))
+            return result
+
+        def quantiles(model_name: str) -> dict[str, float | None]:
+            values = [
+                _metric_number(((row.get("metrics") or {}).get(model_name) or {}).get("lambda_gap"))
+                for row in shadow_rows
+            ]
+            values = sorted(value for value in values if value is not None)
+            if not values:
+                return {"p25": None, "median": None, "p75": None}
+            def at(fraction: float) -> float:
+                index = (len(values) - 1) * fraction
+                lower = int(index)
+                upper = min(len(values) - 1, lower + 1)
+                weight = index - lower
+                return values[lower] * (1 - weight) + values[upper] * weight
+            return {"p25": at(0.25), "median": at(0.50), "p75": at(0.75)}
+
+        def group_rows(predicate) -> dict[str, Any]:
+            selected = []
+            for row in shadow_rows:
+                actual = row.get("actual_result") or {}
+                home = _metric_number(actual.get("home_goals"))
+                away = _metric_number(actual.get("away_goals"))
+                if home is None or away is None:
+                    continue
+                if predicate(int(home), int(away)):
+                    selected.append(row)
+            return {
+                "n": len(selected),
+                "brier": metric_pair_from(selected, "brier_score_1x2"),
+                "log_loss": metric_pair_from(selected, "log_loss_1x2"),
+                "total_mae": metric_pair_from(selected, "total_goal_absolute_error"),
+                "exact_top1": metric_pair_from(selected, "exact_score_top1"),
+                "exact_top3": metric_pair_from(selected, "exact_score_top3"),
+            }
+
+        def metric_pair_from(selected: list[dict[str, Any]], metric_name: str) -> dict[str, Any]:
+            candidate_values = [_metric_number(((row.get("metrics") or {}).get(SHADOW_MODEL_NAME) or {}).get(metric_name)) for row in selected]
+            champion_values = [_metric_number(((row.get("metrics") or {}).get("champion") or {}).get(metric_name)) for row in selected]
+            candidate_values = [value for value in candidate_values if value is not None]
+            champion_values = [value for value in champion_values if value is not None]
+            result = {
+                "candidate": fmean(candidate_values) if candidate_values else None,
+                "champion": fmean(champion_values) if champion_values else None,
+                "candidate_n": len(candidate_values),
+                "champion_n": len(champion_values),
+            }
+            if not candidate_values or not champion_values:
+                result.update({"status": "unsupported", "reason": "final frozen distribution is unavailable for one side of this metric"})
+            else:
+                result.update({"status": "supported", "n": min(len(candidate_values), len(champion_values))})
+            return result
+
+        metrics = {
+            "brier": metric_pair("brier_score_1x2"),
+            "log_loss": metric_pair("log_loss_1x2"),
+            "top1": metric_pair("top1_accuracy_1x2"),
+            "macro_ece": {"candidate": _ece(shadow_rows, SHADOW_MODEL_NAME), "champion": _ece(shadow_rows, "champion"), "status": "supported" if shadow_rows else "unsupported"},
+            "exact_score_nll": metric_pair("actual_score_nll"),
+            "exact_top1": metric_pair("exact_score_top1"),
+            "exact_top3": metric_pair("exact_score_top3"),
+            "total_nll": metric_pair("total_goals_nll"),
+            "total_mae": metric_pair("total_goal_absolute_error"),
+            "top1_1_1": metric_pair("top1_1_1"),
+            "lambda_gap": metric_pair("lambda_gap"),
+            "lambda_gap_lt_0_5": metric_pair("lambda_gap_lt_0_5"),
+        }
+        return {
+            "status": "supported" if shadow_rows else "no_shadow_settlements",
+            "candidate_id": "market-direction-fusion-full-v1",
+            "n": len(shadow_rows),
+            "match_keys": [str(row.get("match_key") or "") for row in shadow_rows],
+            "metrics": metrics,
+            "lambda_gap_quantiles": {
+                "candidate": quantiles(SHADOW_MODEL_NAME),
+                "champion": quantiles("champion"),
+            },
+            "groups": {
+                "high_score_total_ge_4": group_rows(lambda home, away: home + away >= 4),
+                "high_margin_abs_ge_3": group_rows(lambda home, away: abs(home - away) >= 3),
+            },
+            "unsupported_policy": {
+                "actual_score_nll": "Champion frozen comparison stores top10 only; no raw lambda reconstruction is used",
+                "total_nll": "only reported when the final frozen score distribution is present",
+            },
+        }
+
     def individual_metrics(rows: list[dict[str, Any]]) -> dict[str, Any]:
         model_names = ("market_reference", "simple_poisson", "champion")
         metric_names = (
@@ -493,6 +715,7 @@ def aggregate_settlements(
 
     paired_3way_result = paired_3way(primary_clean)
     paired_model_result = paired_model_distribution(primary_clean)
+    shadow_candidate_result = paired_shadow_research(scope_rows)
     distribution_metric_values = paired_model_result["metrics"]
     paired_metrics = {
         "market_reference": {
@@ -575,6 +798,7 @@ def aggregate_settlements(
         "champion_unavailable_count": availability["champion"]["unavailable"],
         "paired_3way_1x2": paired_3way_result,
         "paired_model_distribution": paired_model_result,
+        "shadow_candidate_vs_champion": shadow_candidate_result,
         "secondary": secondary_summary,
         "individual_metrics": individual_metrics(eligible),
         "metrics": paired_metrics,

@@ -899,6 +899,28 @@ def _blocked_summary(business_date: str, ledger: dict[str, Any] | None) -> dict[
     }
 
 
+def _capture_market_direction_shadow(
+    record: dict[str, Any],
+    *,
+    now: datetime,
+    input_snapshot_root: Path,
+    shadow_prediction_root: Path,
+) -> dict[str, Any]:
+    """Capture research shadow without changing the formal Champion path."""
+    try:
+        from baseline_production import run_market_direction_shadow_for_frozen_prediction
+
+        return run_market_direction_shadow_for_frozen_prediction(
+            record,
+            shadow_created_at=now,
+            snapshot_root=Path(input_snapshot_root),
+            prediction_root=Path(shadow_prediction_root),
+            repository_root=PROJECT_ROOT,
+        )
+    except Exception as error:  # shadow is failure-isolated from formal freeze
+        return {"status": "failed", "reason": f"shadow_exception:{type(error).__name__}:{error}"}
+
+
 def run_base_prediction_jobs(
     business_date: str,
     *,
@@ -908,10 +930,35 @@ def run_base_prediction_jobs(
     record_root: Path = DEFAULT_RECORD_ROOT,
     input_snapshot_root: Path = DEFAULT_INPUT_SNAPSHOT_ROOT,
     job_id: str | None = None,
+    shadow_prediction_root: Path | None = None,
 ) -> dict[str, Any]:
     """Attempt all retryable pre-kickoff BASE jobs for one business date."""
     current_time = _as_now(now)
     real_time = now is None
+    shadow_prediction_root = Path(shadow_prediction_root or PROJECT_ROOT / "data" / "model_benchmarks" / "predictions")
+    shadow_counts = Counter()
+    shadow_failure_reasons: Counter[str] = Counter()
+
+    def capture_shadow(record: dict[str, Any], job: dict[str, Any]) -> None:
+        shadow_counts["attempted"] += 1
+        result = _capture_market_direction_shadow(
+            record,
+            now=current_time,
+            input_snapshot_root=Path(input_snapshot_root),
+            shadow_prediction_root=shadow_prediction_root,
+        )
+        status = str(result.get("status") or "failed")
+        job["shadow_status"] = status
+        job["shadow_comparison_id"] = result.get("comparison_id")
+        job["shadow_failure_reason"] = result.get("reason") if status == "failed" else None
+        if status == "created":
+            shadow_counts["created"] += 1
+        elif status == "existing":
+            shadow_counts["existing"] += 1
+        else:
+            shadow_counts["failed"] += 1
+            shadow_failure_reasons[str(result.get("reason") or "shadow_unknown_failure")] += 1
+
     ledger_path = Path(jobs_root) / f"{business_date}.json"
     ledger = _load_json(ledger_path)
     universe = load_prediction_universe(business_date, Path(universe_root))
@@ -1003,6 +1050,7 @@ def run_base_prediction_jobs(
             job["prediction_created_at"] = unchanged.get("prediction_created_at")
             job["freeze_created_at"] = unchanged.get("freeze_created_at")
             job["last_error"] = None
+            capture_shadow(unchanged, job)
             job["updated_at"] = current_time.isoformat()
             continue
         try:
@@ -1073,6 +1121,7 @@ def run_base_prediction_jobs(
             job["updated_at"] = current_time.isoformat()
             continue
         stored = frozen.get("record") or record
+        capture_shadow(stored, job)
         job["status"] = "FROZEN"
         _remember_prediction_id(job, stored.get("prediction_id"))
         job["prediction_id"] = stored.get("prediction_id")
@@ -1096,6 +1145,11 @@ def run_base_prediction_jobs(
         "missed_prematch": ledger.get("missed_prematch_count", 0),
         "pending": ledger.get("pending_count", 0),
         "failure_reasons": ledger.get("failure_reasons", {}),
+        "shadow_attempted": int(shadow_counts["attempted"]),
+        "shadow_created": int(shadow_counts["created"]),
+        "shadow_existing": int(shadow_counts["existing"]),
+        "shadow_failed": int(shadow_counts["failed"]),
+        "shadow_failure_reasons": dict(shadow_failure_reasons),
         "ledger": ledger,
     }
 
