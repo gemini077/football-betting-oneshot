@@ -33,6 +33,7 @@ except ModuleNotFoundError:
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 CACHE_PATH = PROJECT_ROOT / "data" / "product_runtime" / "openfootball_recent_form.json"
 MANIFEST_PATH = PROJECT_ROOT / "data" / "football_data" / "openfootball" / "espana_source_manifest.json"
+SOUTH_AMERICA_MANIFEST_PATH = PROJECT_ROOT / "data" / "football_data" / "openfootball" / "south_america_brazil_source_manifest.json"
 RECENCY_RULES_PATH = PROJECT_ROOT / "config" / "team_strength_recency.json"
 MAX_WINDOW = 5
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
@@ -187,10 +188,46 @@ def _read_json(path: Path) -> dict[str, Any] | None:
     return payload if isinstance(payload, dict) else None
 
 
+_REVIEWED_IDENTITY_METHODS = frozenset({
+    "manual_verified",
+    "provider_id_exact",
+    "existing_crosswalk",
+    "exact_alias",
+    "cross_source_context_verified",
+})
+_OPENFOOTBALL_REPOSITORIES = frozenset({"openfootball/espana", "openfootball/south-america"})
+
+
+def _reviewed_targets(manifest: Mapping[str, Any]) -> list[dict[str, Any]]:
+    targets = [dict(row) for row in manifest.get("targets", []) if isinstance(row, Mapping)]
+    evidence_ref = str(manifest.get("identity_evidence_path") or "").strip()
+    if not evidence_ref:
+        return targets
+    relative = Path(evidence_ref)
+    if relative.is_absolute():
+        return []
+    evidence = _read_json(PROJECT_ROOT / relative)
+    if not evidence:
+        return []
+    rows = evidence.get("teams") or evidence.get("mappings") or []
+    reviewed = {
+        (str(row.get("provider_team_name") or ""), str(row.get("canonical_team_id") or ""))
+        for row in rows
+        if isinstance(row, Mapping)
+        and row.get("verified") is True
+        and str(row.get("resolution_method") or "") in _REVIEWED_IDENTITY_METHODS
+    }
+    return [
+        target for target in targets
+        if str(target.get("canonical_team_id") or "")
+        and all((str(name), str(target["canonical_team_id"])) in reviewed for name in target.get("provider_team_names") or [])
+    ]
+
+
 def _provenance_is_reviewed(value: Any) -> bool:
     if not isinstance(value, Mapping):
         return False
-    if value.get("provider") != "openfootball" or value.get("repository") != "openfootball/espana":
+    if value.get("provider") != "openfootball" or value.get("repository") not in _OPENFOOTBALL_REPOSITORIES:
         return False
     if not str(value.get("commit_sha") or "").strip():
         return False
@@ -213,7 +250,6 @@ def _source_references(provenance: Mapping[str, Any], captured_at: str) -> tuple
         source_refs.append(ref)
         references.append({"url": f"https://github.com/{repo}/blob/{commit}/{source_file}", "captured_at": captured_at, "source_record_ref": ref})
     return references, source_refs
-
 
 def load_recent_form_cache(
     job: Mapping[str, Any],
@@ -249,7 +285,7 @@ def load_recent_form_cache(
     return {
         "recent_form": built["recent_form"],
         "records": built["records"],
-        "source": "openfootball_recent_form_cache",
+        "source": str(provenance.get("cache_source") or "openfootball_recent_form_cache"),
         "captured_at": _iso(generated),
         "cutoff_at": _iso(cutoff),
         "references": references,
@@ -298,100 +334,176 @@ def _build_provider_records(raw_sources: Iterable[Mapping[str, Any]], targets: I
     return records
 
 
+def _manifest_paths(manifest_path: str | Path | None) -> list[Path]:
+    if manifest_path is not None:
+        return [Path(manifest_path)]
+    return [MANIFEST_PATH, SOUTH_AMERICA_MANIFEST_PATH]
+
+
+def _source_url(manifest: Mapping[str, Any], source: Mapping[str, Any], commit: str) -> str:
+    explicit = str(source.get("source_url") or "").strip()
+    if explicit:
+        return explicit
+    template = str(manifest.get("source_url_template") or "").strip()
+    if not template:
+        template = "https://raw.githubusercontent.com/{repository}/{commit_sha}/{source_file}"
+    return template.format(
+        repository=str(manifest.get("repository") or ""),
+        commit_sha=commit,
+        source_file=str(source.get("source_file") or ""),
+    )
+
+
+def _load_manifest_sources(manifest: Mapping[str, Any]) -> tuple[str, str, list[dict[str, Any]]]:
+    provider = str(manifest.get("provider") or "openfootball")
+    repository = str(manifest.get("repository") or "")
+    commit = str(manifest.get("commit_sha") or "").strip()
+    if provider != "openfootball" or repository not in _OPENFOOTBALL_REPOSITORIES or not commit:
+        raise ValueError("manifest is not a pinned reviewed OpenFootball source")
+    allowed_history = manifest.get("allowed_history_competition_keys")
+    if isinstance(allowed_history, list) and any(not isinstance(item, str) for item in allowed_history):
+        raise ValueError("manifest history competition allowlist is invalid")
+    allowed_history_set = set(allowed_history or [])
+    raw_sources: list[dict[str, Any]] = []
+    raw_by_url: dict[str, bytes] = {}
+    for source in manifest.get("sources", []):
+        if not isinstance(source, Mapping):
+            continue
+        source_file = str(source.get("source_file") or "").strip()
+        competition_key = str(source.get("competition_key") or "").strip()
+        url = _source_url(manifest, source, commit)
+        if allowed_history_set and competition_key not in allowed_history_set:
+            raise ValueError("source competition is outside the reviewed history allowlist")
+        if not source_file or not url.startswith("https://raw.githubusercontent.com/"):
+            raise ValueError("source is not pinned")
+        raw_bytes = raw_by_url.get(url)
+        if raw_bytes is None:
+            raw_bytes = _github_request(url, accept="text/plain")
+            raw_by_url[url] = raw_bytes
+        actual_sha256 = hashlib.sha256(raw_bytes).hexdigest()
+        expected_sha256 = str(source.get("raw_sha256") or "").strip().lower()
+        if not expected_sha256 or actual_sha256 != expected_sha256:
+            raise ValueError("source hash mismatch")
+        raw_sources.append({
+            **dict(source),
+            "provider": provider,
+            "source_url": url,
+            "raw_text": raw_bytes.decode("utf-8"),
+            "raw_sha256": actual_sha256,
+        })
+    if not raw_sources:
+        raise ValueError("manifest has no sources")
+    return provider, commit, raw_sources
+
+
+def _manifest_demand(manifest: Mapping[str, Any], jobs: list[Mapping[str, Any]], clock: datetime) -> list[tuple[Mapping[str, Any], datetime, Mapping[str, Any], Mapping[str, Any]]]:
+    targets = _reviewed_targets(manifest)
+    allowed_competitions = manifest.get("allowed_fixture_competition_names")
+    if isinstance(allowed_competitions, list) and not all(isinstance(item, str) for item in allowed_competitions):
+        return []
+    demand: list[tuple[Mapping[str, Any], datetime, Mapping[str, Any], Mapping[str, Any]]] = []
+    for job in jobs:
+        if not isinstance(job, Mapping):
+            continue
+        if allowed_competitions and str(job.get("league") or "") not in set(allowed_competitions):
+            continue
+        home_name = str(job.get("home") or "")
+        away_name = str(job.get("away") or "")
+        target_home = next((target for target in targets if home_name in {str(x) for x in target.get("project_names") or []}), None)
+        target_away = next((target for target in targets if away_name in {str(x) for x in target.get("project_names") or []}), None)
+        kickoff = _parse_timestamp(job.get("kickoff"))
+        if target_home and target_away and kickoff is not None and kickoff > clock:
+            demand.append((job, kickoff, target_home, target_away))
+    return demand
+
+
+def _unique_strings(values: Iterable[Any]) -> list[str]:
+    result: list[str] = []
+    for value in values:
+        text = str(value or "").strip()
+        if text and text not in result:
+            result.append(text)
+    return result
+
+
 def refresh_recent_form_cache(
     business_date: str,
     *,
     jobs: Iterable[Mapping[str, Any]],
     now: datetime | str | None = None,
-    manifest_path: str | Path = MANIFEST_PATH,
+    manifest_path: str | Path | None = None,
     cache_path: str | Path = CACHE_PATH,
 ) -> bool:
-    """Refresh only demand-matched entries; network or quality failures retain cache."""
+    """Refresh exact target demand from pinned OpenFootball manifests."""
 
     clock = _parse_timestamp(now) if now is not None else _utc_now()
     if clock is None:
         return False
+    jobs_list = [job for job in jobs if isinstance(job, Mapping)]
+    cache = _read_json(Path(cache_path)) or {"contract_version": "recent_form_cache.v1", "fixtures": []}
+    fixtures = [item for item in cache.get("fixtures", []) if isinstance(item, Mapping)]
+    refreshed = False
     try:
-        manifest = _read_json(Path(manifest_path))
-        if not manifest or manifest.get("repository") != "openfootball/espana":
-            return False
-        targets = [row for row in manifest.get("targets", []) if isinstance(row, Mapping)]
-        demand = []
-        for job in jobs:
-            if not isinstance(job, Mapping):
+        for candidate_path in _manifest_paths(manifest_path):
+            manifest = _read_json(candidate_path)
+            if not manifest:
                 continue
-            home_name = str(job.get("home") or "")
-            away_name = str(job.get("away") or "")
-            home_known = any(home_name in set(str(x) for x in target.get("project_names") or []) for target in targets)
-            away_known = any(away_name in set(str(x) for x in target.get("project_names") or []) for target in targets)
-            if not home_known or not away_known:
+            demand = _manifest_demand(manifest, jobs_list, clock)
+            if not demand:
                 continue
-            kickoff = _parse_timestamp(job.get("kickoff"))
-            if kickoff is not None and kickoff > clock:
-                demand.append((job, kickoff))
-        if not demand:
-            return False
-        repo = str(manifest["repository"])
-        commit = str(manifest.get("commit_sha") or "").strip()
-        if not commit:
-            repo_meta = _github_json(f"https://api.github.com/repos/{repo}")
-            branch = str(repo_meta.get("default_branch") or manifest.get("default_branch") or "master")
-            branch_meta = _github_json(f"https://api.github.com/repos/{repo}/branches/{branch}")
-            commit = str(((branch_meta.get("commit") or {}).get("sha") or "")).strip()
-        if not commit:
-            return False
-        raw_sources: list[dict[str, Any]] = []
-        for source in manifest.get("sources", []):
-            source_file = str(source.get("source_file") or "")
-            if not source_file:
+            try:
+                provider, commit, raw_sources = _load_manifest_sources(manifest)
+                targets = _reviewed_targets(manifest)
+                normalized = _build_provider_records(raw_sources, targets)
+            except (OSError, UnicodeError, ValueError, KeyError, TypeError, json.JSONDecodeError, urllib.error.URLError, urllib.error.HTTPError, TimeoutError):
                 continue
-            raw_bytes = _github_request(f"https://raw.githubusercontent.com/{repo}/{commit}/{source_file}", accept="text/plain")
-            actual_sha256 = hashlib.sha256(raw_bytes).hexdigest()
-            expected_sha256 = str(source.get("raw_sha256") or "").strip().lower()
-            if not expected_sha256 or actual_sha256 != expected_sha256:
-                return False
-            raw_sources.append({**dict(source), "raw_text": raw_bytes.decode("utf-8"), "raw_sha256": actual_sha256})
-        normalized = _build_provider_records(raw_sources, targets)
-        cache = _read_json(Path(cache_path)) or {"contract_version": "recent_form_cache.v1", "fixtures": []}
-        fixtures = [item for item in cache.get("fixtures", []) if isinstance(item, Mapping)]
-        refreshed = False
-        for job, kickoff in demand:
-            target_home = next((target for target in targets if str(job.get("home") or "") in set(str(x) for x in target.get("project_names") or [])), None)
-            target_away = next((target for target in targets if str(job.get("away") or "") in set(str(x) for x in target.get("project_names") or [])), None)
-            if not target_home or not target_away:
-                continue
-            built = build_recent_form(normalized, home_team_id=str(target_home["canonical_team_id"]), away_team_id=str(target_away["canonical_team_id"]), cutoff_at=_iso(kickoff))
-            if not built or not _fresh_latest(built["latest_by_team"], cutoff=kickoff):
-                continue
-            provenance = {
-                "provider": "openfootball",
-                "repository": repo,
-                "commit_sha": commit,
-                "source_files": [str(source["source_file"]) for source in raw_sources],
-                "raw_sha256": {str(source["source_file"]): str(source["raw_sha256"]) for source in raw_sources},
-                "generated_at": _iso(clock),
-                "cutoff_at": _iso(kickoff),
-            }
-            entry = {
-                "match_id": str(job.get("match_id") or ""),
-                "home": str(job.get("home") or ""), "away": str(job.get("away") or ""),
-                "home_team_id": str(target_home["canonical_team_id"]), "away_team_id": str(target_away["canonical_team_id"]),
-                "generated_at": _iso(clock), "cutoff_at": _iso(kickoff),
-                "latest_by_team": built["latest_by_team"], "recent_form": built["recent_form"], "records": built["records"],
-                "provenance": provenance,
-            }
-            fixtures = [item for item in fixtures if str(item.get("match_id") or "") != entry["match_id"]]
-            fixtures.append(entry)
-            refreshed = True
-        if not refreshed:
-            return False
-        result = {"contract_version": "recent_form_cache.v1", "generated_at": _iso(clock), "business_date": business_date, "fixtures": fixtures}
-        output = Path(cache_path)
-        output.parent.mkdir(parents=True, exist_ok=True)
-        output.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-        return True
+            source_files = _unique_strings(source.get("source_file") for source in raw_sources)
+            source_hashes = {str(source["source_file"]): str(source["raw_sha256"]) for source in raw_sources}
+            for job, kickoff, target_home, target_away in demand:
+                built = build_recent_form(
+                    normalized,
+                    home_team_id=str(target_home["canonical_team_id"]),
+                    away_team_id=str(target_away["canonical_team_id"]),
+                    cutoff_at=_iso(kickoff),
+                )
+                if not built or not _fresh_latest(built["latest_by_team"], cutoff=kickoff):
+                    continue
+                provenance = {
+                    "provider": provider,
+                    "repository": str(manifest["repository"]),
+                    "commit_sha": commit,
+                    "source_files": source_files,
+                    "raw_sha256": source_hashes,
+                    "generated_at": _iso(clock),
+                    "cutoff_at": _iso(kickoff),
+                    "cache_source": "openfootball_recent_form_cache",
+                    "competition_keys": _unique_strings(source.get("competition_key") for source in raw_sources),
+                }
+                entry = {
+                    "match_id": str(job.get("match_id") or ""),
+                    "home": str(job.get("home") or ""),
+                    "away": str(job.get("away") or ""),
+                    "home_team_id": str(target_home["canonical_team_id"]),
+                    "away_team_id": str(target_away["canonical_team_id"]),
+                    "generated_at": _iso(clock),
+                    "cutoff_at": _iso(kickoff),
+                    "latest_by_team": built["latest_by_team"],
+                    "recent_form": built["recent_form"],
+                    "records": built["records"],
+                    "provenance": provenance,
+                }
+                fixtures = [item for item in fixtures if str(item.get("match_id") or "") != entry["match_id"]]
+                fixtures.append(entry)
+                refreshed = True
     except (OSError, UnicodeError, ValueError, KeyError, TypeError, json.JSONDecodeError, urllib.error.URLError, urllib.error.HTTPError, TimeoutError):
+        return refreshed
+    if not refreshed:
         return False
+    result = {"contract_version": "recent_form_cache.v1", "generated_at": _iso(clock), "business_date": business_date, "fixtures": fixtures}
+    output = Path(cache_path)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    return True
 
 
 __all__ = ["build_recent_form", "load_recent_form_cache", "refresh_recent_form_cache"]
