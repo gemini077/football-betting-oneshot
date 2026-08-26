@@ -9,7 +9,7 @@ import math
 import re
 import sys
 from collections import Counter, defaultdict
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -21,6 +21,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
+from formal_sample_selection import canonicalize_formal_records, frozen_prediction_identity
 from prospective_settlement import is_formally_eligible
 
 
@@ -82,6 +83,10 @@ def _lambda_gap(record: dict[str, Any]) -> float | None:
     return abs(home - away)
 
 
+# Canonical formal selection and immutable-identity audit are shared with settlement.
+_frozen_prediction_identity = frozen_prediction_identity
+_canonical_formal_records = canonicalize_formal_records
+
 def evaluate_exact_score_health(formal_records: list[dict[str, Any]]) -> dict[str, Any]:
     """Evaluate frozen Champion BASE/DEEP score-selector and lambda guardrails."""
     eligible_records: list[dict[str, Any]] = []
@@ -94,6 +99,10 @@ def evaluate_exact_score_health(formal_records: list[dict[str, Any]]) -> dict[st
             eligible = False
         if eligible:
             eligible_records.append(record)
+
+    raw_eligible_record_count = len(eligible_records)
+    canonical = _canonical_formal_records(eligible_records)
+    eligible_records = canonical["records"]
 
     scored_records = [
         (record, score)
@@ -149,9 +158,22 @@ def evaluate_exact_score_health(formal_records: list[dict[str, Any]]) -> dict[st
 
     return {
         "schema_version": "1.0",
+        "raw_formal_record_count": len(formal_records),
+        "raw_eligible_record_count": raw_eligible_record_count,
+        "raw_match_count": canonical["raw_match_count"],
+        "canonical_match_count": canonical["canonical_match_count"],
+        "canonical_selection_policy": canonical["selection_policy"],
+        "checkpoint_semantics": canonical["checkpoint_semantics"],
+        "superseded_historical_version_count": canonical["superseded_historical_version_count"],
+        "versioned_record_count": canonical["versioned_record_count"],
+        "canonical_excluded_record_count": canonical["canonical_excluded_record_count"],
+        "canonical_exclusion_reason_counts": canonical["canonical_exclusion_reason_counts"],
+        "invalid_time_record_count": canonical["invalid_time_record_count"],
+        "invalid_time_records": canonical["invalid_time_records"],
+        "frozen_prediction_identity": canonical["frozen_prediction_identity"],
         "sample_count": sample_count,
-        "eligible_record_count": len(eligible_records),
-        "missing_top1_count": len(eligible_records) - sample_count,
+        "eligible_record_count": canonical["canonical_match_count"],
+        "missing_top1_count": canonical["canonical_match_count"] - sample_count,
         "dominant_score": dominant_score,
         "dominant_count": dominant_count,
         "dominant_share": dominant_share,
@@ -513,11 +535,14 @@ def _check_prediction_integrity(
     details["production_exact_score_health"] = exact_score_health
     for exact_score_reason in exact_score_health["reasons"]:
         _reason_once(reasons, exact_score_reason)
-    groups: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    # Integrity is intentionally evaluated on every frozen formal record.  A
+    # malformed/ineligible record must still be able to expose an immutable
+    # duplicate; score-health eligibility is a separate concern.
+    identity = _frozen_prediction_identity(formal_records)
+    details["frozen_prediction_identity"] = identity
+    if int(identity.get("duplicate_group_count") or 0) > 0:
+        _reason_once(reasons, "DUPLICATE_FROZEN_PREDICTION")
     for record in formal_records:
-        key = str(record.get("job_id") or record.get("match_key") or record.get("prediction_id") or "")
-        if key:
-            groups[key].append(record)
         kickoff = _parse_at(record.get("kickoff_at"))
         created = _parse_at(record.get("prediction_created_at"))
         freeze = _parse_at(record.get("freeze_created_at"))
@@ -527,13 +552,26 @@ def _check_prediction_integrity(
             _reason_once(reasons, "PREDICTION_AFTER_KICKOFF")
         for conflict_reason in _recursive_conflict_reasons(record):
             _reason_once(reasons, conflict_reason)
-    if any(len(rows) > 1 for rows in groups.values()):
-        _reason_once(reasons, "DUPLICATE_FROZEN_PREDICTION")
 
     exclusion_ids: set[str] = set()
     for _, payload in exclusion_rows:
         exclusion_ids.update(str(value).strip() for value in payload.get("prediction_ids") or [] if str(value).strip())
     ledger_ids = [str(row.get("prediction_id") or "").strip() for row in ledger]
+    ledger_selection = canonicalize_formal_records(ledger)
+    details["formal_ledger_canonicalization"] = {
+        "raw_ledger_record_count": len(ledger),
+        "canonical_match_count": ledger_selection["canonical_match_count"],
+        "superseded_historical_version_count": ledger_selection[
+            "superseded_historical_version_count"
+        ],
+        "canonical_excluded_record_count": ledger_selection[
+            "canonical_excluded_record_count"
+        ],
+        "canonical_exclusion_reasons": ledger_selection[
+            "canonical_exclusion_reason_counts"
+        ],
+        "selection_policy": ledger_selection["selection_policy"],
+    }
     counts = Counter(value for value in ledger_ids if value)
     if any(count > 1 for count in counts.values()):
         _reason_once(reasons, "DUPLICATE_FORMAL_PROSPECTIVE")

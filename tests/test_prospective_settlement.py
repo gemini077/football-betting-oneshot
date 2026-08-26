@@ -12,6 +12,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 from prediction_exclusions import is_prediction_excluded  # noqa: E402
 from prospective_settlement import (  # noqa: E402
     BASE_PREDICTION_POLICY,
+    canonicalize_formal_records,
     evaluate_prediction,
     is_formally_eligible,
     normalize_result,
@@ -101,6 +102,23 @@ def result(*, home=1, away=0, prediction_id="P-1", match_key="FBOS-P-1"):
         "source": "nowscore_match_detail",
         "verified_at": "2026-08-13T05:30:00+08:00",
     }
+
+
+def same_match_record(prediction_id, freeze_created_at):
+    current = record(prediction_id=prediction_id)
+    current.update({
+        "match_key": "FBOS-SAME-MATCH",
+        "match_identity": {
+            "match_key": "FBOS-SAME-MATCH",
+            "home": "Home FC",
+            "away": "Away FC",
+            "kickoff_at": KICKOFF,
+        },
+        "model_input_snapshot_ref": f"data/model_governance/input_snapshots/{prediction_id}.json",
+        "input_sha256": f"input-{prediction_id}",
+        "freeze_created_at": freeze_created_at,
+    })
+    return current
 
 
 def test_base_c_grade_uses_explicit_policy_not_generic_grade():
@@ -222,6 +240,94 @@ def test_valid_base_c_prediction_adds_one_formal_sample(tmp_path):
     rows = (tmp_path / "ledger.jsonl").read_text(encoding="utf-8").splitlines()
     assert len(rows) == 1
     assert json.loads(rows[0])["prediction_id"] == "P-1"
+
+
+def test_settle_records_formally_appends_only_latest_legal_version(tmp_path, monkeypatch):
+    earlier = same_match_record("P-EARLY", "2026-08-12T12:00:00+08:00")
+    latest = same_match_record("P-LATEST", "2026-08-13T02:30:00+08:00")
+    shadow_calls = []
+
+    import baseline_production
+
+    monkeypatch.setattr(
+        baseline_production,
+        "settle_market_direction_shadow_for_result",
+        lambda record, *_args, **_kwargs: shadow_calls.append(record["prediction_id"]) or {"status": "no_op"},
+    )
+    out = settle_records(
+        [earlier, latest],
+        now=datetime(2026, 8, 14, 12, 0, tzinfo=TZ),
+        result_fetcher=lambda *_: result(match_key="FBOS-SAME-MATCH"),
+        prospective_root=tmp_path / "prospective",
+        shadow_prediction_root=tmp_path / "shadow-predictions",
+        shadow_settlement_root=tmp_path / "shadow-settlements",
+    )
+
+    rows = [
+        json.loads(line)
+        for line in (tmp_path / "prospective" / "ledger.jsonl").read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    assert out["formal_samples_added"] == 1
+    assert out["superseded_formal_prediction_count"] == 1
+    assert out["canonical_formal_match_count"] == 1
+    assert [row["prediction_id"] for row in rows] == ["P-LATEST"]
+    assert shadow_calls == ["P-EARLY", "P-LATEST"]
+
+
+def test_canonical_tie_break_is_deterministic_and_not_settled_at_based():
+    first = same_match_record("P-TIE-A", "2026-08-13T02:00:00+08:00")
+    second = same_match_record("P-TIE-B", "2026-08-13T02:00:00+08:00")
+    first["settled_at"] = "2099-01-01T00:00:00+00:00"
+    second["settled_at"] = "2000-01-01T00:00:00+00:00"
+
+    one = canonicalize_formal_records([first, second])
+    two = canonicalize_formal_records([second, first])
+
+    assert [row["prediction_id"] for row in one["records"]] == ["P-TIE-B"]
+    assert [row["prediction_id"] for row in two["records"]] == ["P-TIE-B"]
+
+
+def test_after_kickoff_version_is_not_formally_settled(tmp_path):
+    after = same_match_record("P-AFTER", "2026-08-13T03:00:01+08:00")
+    out = settle_records(
+        [after],
+        now=datetime(2026, 8, 14, 12, 0, tzinfo=TZ),
+        result_fetcher=lambda *_: pytest.fail("after-kickoff record must not be fetched"),
+        prospective_root=tmp_path,
+    )
+
+    assert out["formal_samples_added"] == 0
+    assert out["canonical_formal_match_count"] == 0
+    assert out["canonical_formal_excluded_count"] == 0
+
+
+def test_historical_ledger_row_is_untouched_while_new_latest_is_added(tmp_path):
+    earlier = same_match_record("P-HISTORICAL", "2026-08-12T12:00:00+08:00")
+    latest = same_match_record("P-NEW-LATEST", "2026-08-13T02:30:00+08:00")
+    kwargs = {
+        "now": datetime(2026, 8, 14, 12, 0, tzinfo=TZ),
+        "result_fetcher": lambda *_: result(match_key="FBOS-SAME-MATCH"),
+        "prospective_root": tmp_path,
+    }
+    settle_records([earlier], **kwargs)
+    before = (tmp_path / "ledger.jsonl").read_bytes().splitlines()[0]
+
+    out = settle_records([earlier, latest], **kwargs)
+
+    rows = (tmp_path / "ledger.jsonl").read_bytes().splitlines()
+    assert rows[0] == before
+    assert len(rows) == 2
+    assert out["formal_samples_added"] == 1
+    assert out["formal_prospective_raw_total"] == 2
+    assert out["formal_prospective_total"] == 1
+    assert out["formal_prospective_superseded_total"] == 1
+    summary = json.loads((tmp_path / "summary.json").read_text(encoding="utf-8"))
+    assert summary["formal_sample_count_total"] == 1
+    assert summary["formal_sample_count_total_raw"] == 2
+    assert summary["formal_ledger_raw_record_count"] == 2
+    assert summary["formal_ledger_canonical_match_count"] == 1
+    assert summary["formal_ledger_superseded_historical_version_count"] == 1
 
 
 def test_repeated_settlement_is_idempotent_and_does_not_fetch_twice(tmp_path):

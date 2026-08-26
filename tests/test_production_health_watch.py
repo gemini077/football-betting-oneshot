@@ -1,7 +1,12 @@
 import json
 from pathlib import Path
 
-from scripts.production_health_watch import evaluate_exact_score_health, evaluate_health
+from scripts.production_health_watch import (
+    _canonical_formal_records,
+    _frozen_prediction_identity,
+    evaluate_exact_score_health,
+    evaluate_health,
+)
 
 
 def _write_json(path: Path, payload):
@@ -385,6 +390,248 @@ def test_prediction_after_kickoff_is_immediate_alert(tmp_path):
     assert "PREDICTION_AFTER_KICKOFF" in result["reasons"]
 
 
+
+
+def _versioned_formal_record(prediction_id, *, stage, snapshot, created_at, score="1-1"):
+    record = _formal_champion_base_record(prediction_id, score, lambda_home=1.0, lambda_away=1.2)
+    record.update({
+        "job_id": "BASE-2026-08-12-MULTI",
+        "match_key": "MATCH-MULTI",
+        "match_identity": {"match_key": "MATCH-MULTI", "home": "Home", "away": "Away"},
+        "model_input_snapshot_ref": f"data/model_governance/input_snapshots/{snapshot}.json",
+        "canonical_model_input_sha256": snapshot,
+        "input_sha256": snapshot,
+        "checkpoint_stage": stage,
+        "checkpoint_target_at": created_at,
+        "checkpoint_captured_at": created_at,
+        "prediction_created_at": created_at,
+        "freeze_created_at": created_at,
+    })
+    return record
+
+
+def test_legal_multi_checkpoint_versions_are_deduped_not_alerted(tmp_path):
+    root = _healthy_tree(tmp_path)
+    records = [
+        _versioned_formal_record(
+            "P-24H",
+            stage="24h",
+            snapshot="SNAP-24H",
+            created_at="2026-08-12T10:00:00+08:00",
+        ),
+        _versioned_formal_record(
+            "P-30M",
+            stage="30m",
+            snapshot="SNAP-30M",
+            created_at="2026-08-12T22:30:00+08:00",
+            score="2-1",
+        ),
+    ]
+    for record in records:
+        _write_json(root / "data" / "model_governance" / "predictions" / f"{record['prediction_id']}.json", record)
+
+    result = evaluate_health(root=root)
+    health = result["details"]["production_exact_score_health"]
+
+    assert "DUPLICATE_FROZEN_PREDICTION" not in result["reasons"]
+    assert health["raw_eligible_record_count"] == 2
+    assert health["eligible_record_count"] == 1
+    assert health["versioned_record_count"] == 1
+    assert health["sample_count"] == 1
+    assert health["dominant_score"] == "2-1"
+
+
+def test_same_snapshot_different_prediction_ids_is_a_true_duplicate(tmp_path):
+    root = _healthy_tree(tmp_path)
+    common = _versioned_formal_record(
+        "P-SAME-A",
+        stage="30m",
+        snapshot="SNAP-SAME",
+        created_at="2026-08-12T22:30:00+08:00",
+    )
+    duplicate = dict(common)
+    duplicate["prediction_id"] = "P-SAME-B"
+    for record in (common, duplicate):
+        _write_json(root / "data" / "model_governance" / "predictions" / f"{record['prediction_id']}.json", record)
+
+    result = evaluate_health(root=root)
+
+    assert result["status"] == "ALERT"
+    assert "DUPLICATE_FROZEN_PREDICTION" in result["reasons"]
+    assert result["details"]["frozen_prediction_identity"]["duplicate_group_count"] == 1
+
+
+def test_health_score_structure_uses_one_latest_version_per_match():
+    records = [
+        _versioned_formal_record(
+            f"P-VERSION-{index}",
+            stage="unclassified",
+            snapshot=f"SNAP-{index}",
+            created_at=f"2026-08-12T{10 + index:02d}:00:00+08:00",
+            score="1-1" if index < 7 else "2-1",
+        )
+        for index in range(8)
+    ]
+
+    result = evaluate_exact_score_health(records)
+
+    assert result["raw_eligible_record_count"] == 8
+    assert result["eligible_record_count"] == 1
+    assert result["versioned_record_count"] == 7
+    assert result["sample_count"] == 1
+    assert result["dominant_score"] == "2-1"
+    assert result["reasons"] == []
+
+
+def test_health_reuses_the_authoritative_settlement_selector():
+    from scripts import production_health_watch as health_watch
+    import prospective_settlement as settlement
+    import formal_sample_selection as selection
+
+    assert health_watch._canonical_formal_records is selection.canonicalize_formal_records
+    assert health_watch._frozen_prediction_identity is selection.frozen_prediction_identity
+    assert settlement.canonicalize_formal_records is selection.canonicalize_formal_records
+    assert settlement.frozen_prediction_identity is selection.frozen_prediction_identity
+
+
+def test_missing_snapshot_versions_are_not_all_duplicates():
+    records = [
+        _versioned_formal_record(
+            "P-NO-SNAPSHOT-1",
+            stage="unclassified",
+            snapshot="SNAP-1",
+            created_at="2026-08-12T10:00:00+08:00",
+        ),
+        _versioned_formal_record(
+            "P-NO-SNAPSHOT-2",
+            stage="unclassified",
+            snapshot="SNAP-2",
+            created_at="2026-08-12T11:00:00+08:00",
+        ),
+    ]
+    for record in records:
+        for field in ("model_input_snapshot_ref", "canonical_model_input_sha256", "input_sha256"):
+            record.pop(field, None)
+
+    canonical = _canonical_formal_records(records)
+    identity = _frozen_prediction_identity(records)
+
+    assert canonical["canonical_match_count"] == 1
+    assert canonical["superseded_historical_version_count"] == 1
+    assert identity["duplicate_group_count"] == 0
+    assert identity["missing_immutable_identity_count"] == 2
+
+
+def test_missing_match_identity_fails_closed_instead_of_using_prediction_id():
+    record = _versioned_formal_record(
+        "P-NO-MATCH",
+        stage="30m",
+        snapshot="SNAP-NO-MATCH",
+        created_at="2026-08-12T22:30:00+08:00",
+    )
+    record.pop("match_key")
+    record.pop("match_identity", None)
+
+    canonical = _canonical_formal_records([record])
+
+    assert canonical["canonical_match_count"] == 0
+    assert canonical["canonical_excluded_record_count"] == 1
+    assert canonical["canonical_exclusion_reason_counts"] == {"MISSING_MATCH_IDENTITY": 1}
+    assert canonical["frozen_prediction_identity"]["missing_match_identity_count"] == 1
+
+
+def test_invalid_and_after_kickoff_times_fail_closed():
+    invalid = _versioned_formal_record(
+        "P-INVALID-TIME",
+        stage="30m",
+        snapshot="SNAP-INVALID-TIME",
+        created_at="not-a-timestamp",
+    )
+    after_kickoff = _versioned_formal_record(
+        "P-AFTER-KICKOFF",
+        stage="30m",
+        snapshot="SNAP-AFTER-KICKOFF",
+        created_at="2026-08-13T00:00:00+08:00",
+    )
+
+    canonical = _canonical_formal_records([invalid, after_kickoff])
+
+    assert canonical["canonical_match_count"] == 0
+    assert canonical["canonical_excluded_record_count"] == 2
+    assert canonical["invalid_time_record_count"] == 2
+    assert set(canonical["invalid_time_records"][0].keys()) == {
+        "prediction_id", "match_key", "reason"
+    }
+    assert set(canonical["canonical_exclusion_reason_counts"]) == {
+        "MISSING_OR_INVALID_TIMEZONE_AWARE_FREEZE_CREATED_AT",
+        "FREEZE_NOT_STRICTLY_PRE_KICKOFF",
+    }
+
+
+def test_shadow_is_excluded_and_history_ledger_and_formal_payload_are_unchanged(tmp_path):
+    root = _healthy_tree(tmp_path)
+    formal = _versioned_formal_record(
+        "P-FORMAL",
+        stage="30m",
+        snapshot="SNAP-FORMAL",
+        created_at="2026-08-12T22:30:00+08:00",
+    )
+    shadow = dict(formal)
+    shadow.update({
+        "prediction_id": "P-SHADOW",
+        "prediction_status": "research_only",
+        "model_role": "research_candidate",
+        "prediction_variant": "market-direction-fusion-full-v1",
+    })
+    prediction_dir = root / "data" / "model_governance" / "predictions"
+    _write_json(prediction_dir / "P-FORMAL.json", formal)
+    _write_json(prediction_dir / "P-SHADOW.json", shadow)
+    ledger = root / "data" / "prospective" / "ledger.jsonl"
+    ledger_before = ledger.read_bytes()
+
+    result = evaluate_health(root=root)
+    health = result["details"]["production_exact_score_health"]
+
+    assert health["raw_formal_record_count"] == 1
+    assert health["canonical_match_count"] == 1
+    assert "DUPLICATE_FROZEN_PREDICTION" not in result["reasons"]
+    assert ledger.read_bytes() == ledger_before
+    assert json.loads((prediction_dir / "P-FORMAL.json").read_text(encoding="utf-8")) == formal
+    assert (prediction_dir / "P-SHADOW.json").is_file()
+
+
+def test_health_exposes_ledger_canonical_counts_without_alerting_on_controlled_history(tmp_path):
+    root = _healthy_tree(tmp_path)
+    ledger = root / "data" / "prospective" / "ledger.jsonl"
+    common = {
+        "match_identity": {"match_key": "MATCH-LEDGER", "home": "Home", "away": "Away"},
+        "kickoff_at": "2026-08-13T23:00:00+08:00",
+    }
+    ledger.write_text(
+        "\n".join(
+            json.dumps({
+                "prediction_id": prediction_id,
+                "freeze_at": freeze_at,
+                **common,
+            })
+            for prediction_id, freeze_at in (
+                ("P-LEDGER-EARLY", "2026-08-13T10:00:00+08:00"),
+                ("P-LEDGER-LATEST", "2026-08-13T22:00:00+08:00"),
+            )
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    result = evaluate_health(root=root)
+    details = result["details"]["formal_ledger_canonicalization"]
+
+    assert details["raw_ledger_record_count"] == 2
+    assert details["canonical_match_count"] == 1
+    assert details["superseded_historical_version_count"] == 1
+    assert "DUPLICATE_FROZEN_PREDICTION" not in result["reasons"]
+
+
 def test_duplicate_formal_prospective_is_immediate_alert(tmp_path):
     root = _healthy_tree(tmp_path)
     ledger = root / "data" / "prospective" / "ledger.jsonl"
@@ -413,7 +660,7 @@ def test_duplicate_frozen_prediction_is_immediate_alert(tmp_path):
         "prediction_id": "P-1", **common,
     })
     _write_json(root / "data" / "model_governance" / "predictions" / "P-2.json", {
-        "prediction_id": "P-2", **common,
+        "prediction_id": "P-1", **common,
     })
 
     result = evaluate_health(root=root)

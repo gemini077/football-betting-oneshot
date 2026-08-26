@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
-from collections import Counter
+from collections import Counter, defaultdict
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Any, Callable, Iterable
@@ -15,6 +15,7 @@ from prediction_exclusions import (
     excluded_prediction_ids,
     exclusion_for,
 )
+from formal_sample_selection import canonicalize_formal_records, frozen_prediction_identity
 from postmatch_queue import parse_datetime
 from postmatch_result import (
     RESULT_ROOT as POSTMATCH_RESULT_ROOT,
@@ -556,11 +557,26 @@ def _write_summary(
 ) -> None:
     by_role = Counter(str(row.get("product_role") or "UNKNOWN") for row in formal_rows)
     by_market = Counter(str(row.get("market_intelligence_quality") or "UNKNOWN") for row in formal_rows)
+    ledger_selection = canonicalize_formal_records(formal_rows)
     summary = {
         "schema_version": "1.0",
         "updated_at": datetime.now(SHANGHAI).isoformat(),
         "last_run": {"business_date": date, "settled_at": result.get("settled_at")},
-        "formal_sample_count_total": len(formal_rows),
+        "formal_sample_count_total": ledger_selection["canonical_match_count"],
+        "formal_sample_count_total_raw": len(formal_rows),
+        "formal_sample_count_total_canonical": ledger_selection["canonical_match_count"],
+        "formal_ledger_raw_record_count": len(formal_rows),
+        "formal_ledger_canonical_match_count": ledger_selection["canonical_match_count"],
+        "formal_ledger_superseded_historical_version_count": ledger_selection[
+            "superseded_historical_version_count"
+        ],
+        "formal_ledger_canonical_excluded_record_count": ledger_selection[
+            "canonical_excluded_record_count"
+        ],
+        "formal_ledger_canonical_exclusion_reasons": ledger_selection[
+            "canonical_exclusion_reason_counts"
+        ],
+        "formal_ledger_selection_policy": ledger_selection["selection_policy"],
         "samples_added_this_run": result.get("formal_samples_added", 0),
         "pending_results": result.get("pending_results", 0),
         "excluded_prediction_count": len(excluded_prediction_ids(exclusion_root)),
@@ -570,6 +586,9 @@ def _write_summary(
         "shadow_settlements_existing": result.get("shadow_settlements_existing", 0),
         "shadow_settlement_failures": result.get("shadow_settlement_failures", 0),
         "shadow_failure_reasons": result.get("shadow_failure_reasons", {}),
+        "superseded_formal_prediction_count_last_run": result.get(
+            "superseded_formal_prediction_count", 0
+        ),
         "by_product_role": dict(by_role),
         "by_market_intelligence_quality": dict(by_market),
     }
@@ -600,10 +619,31 @@ def settle_records(
     shadow_settlement_root = Path(shadow_settlement_root) if shadow_settlement_root is not None else BASE_DIR / "data" / "model_benchmarks" / "settlements"
     formal_rows = _read_jsonl(ledger_path)
     exploratory_rows = _read_jsonl(exploratory_path)
+    records = list(records)
     prospective_root.mkdir(parents=True, exist_ok=True)
     ledger_path.touch(exist_ok=True)
     formal_by_id = {str(row.get("prediction_id")): row for row in formal_rows if row.get("prediction_id")}
     exploratory_by_id = {str(row.get("prediction_id")): row for row in exploratory_rows if row.get("prediction_id")}
+    formal_candidates = [
+        record
+        for record in records
+        if isinstance(record, dict)
+        and record.get("prediction_status") in FROZEN_STATUSES
+        and exclusion_for(str(record.get("prediction_id") or "").strip(), exclusion_root) is None
+        and is_formally_eligible(record)
+    ]
+    canonical_selection = canonicalize_formal_records(formal_candidates)
+    canonical_formal_ids = {
+        str(record.get("prediction_id") or "").strip()
+        for record in canonical_selection["records"]
+        if str(record.get("prediction_id") or "").strip()
+    }
+    superseded_formal_ids = sorted(
+        str(record.get("prediction_id") or "").strip()
+        for record in formal_candidates
+        if str(record.get("prediction_id") or "").strip()
+        and str(record.get("prediction_id") or "").strip() not in canonical_formal_ids
+    )
     result = {
         "business_date": date,
         "frozen_predictions": 0,
@@ -619,6 +659,11 @@ def settle_records(
         "shadow_settlements_existing": 0,
         "shadow_settlement_failures": 0,
         "shadow_failure_reasons": {},
+        "canonical_formal_match_count": canonical_selection["canonical_match_count"],
+        "canonical_formal_excluded_count": canonical_selection["canonical_excluded_record_count"],
+        "canonical_formal_exclusion_reasons": canonical_selection["canonical_exclusion_reason_counts"],
+        "superseded_formal_prediction_count": len(superseded_formal_ids),
+        "superseded_formal_prediction_ids": superseded_formal_ids,
         "settled_at": now.isoformat(),
     }
     fetch = result_fetcher or (
@@ -685,6 +730,10 @@ def settle_records(
             result["shadow_settlement_failures"] += 1
             reason = f"shadow_settlement_exception:{type(error).__name__}"
             result["shadow_failure_reasons"][reason] = result["shadow_failure_reasons"].get(reason, 0) + 1
+        if excluded is None and is_formally_eligible(record) and prediction_id not in canonical_formal_ids:
+            # Keep the immutable record and any shadow settlement, but do not
+            # give a superseded rolling version a second formal vote.
+            continue
         existing = exploratory_by_id.get(prediction_id) if excluded is not None else formal_by_id.get(prediction_id)
         if existing is not None:
             old_actual = existing.get("actual") or {}
@@ -725,7 +774,12 @@ def settle_records(
         exploratory_rows=exploratory_rows,
         exclusion_root=exclusion_root,
     )
-    result["formal_prospective_total"] = len(formal_rows)
+    final_ledger_selection = canonicalize_formal_records(formal_rows)
+    result["formal_prospective_raw_total"] = len(formal_rows)
+    result["formal_prospective_total"] = final_ledger_selection["canonical_match_count"]
+    result["formal_prospective_superseded_total"] = final_ledger_selection[
+        "superseded_historical_version_count"
+    ]
     return result
 
 
