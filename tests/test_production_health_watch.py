@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from scripts.production_health_watch import evaluate_health
+from scripts.production_health_watch import evaluate_exact_score_health, evaluate_health
 
 
 def _write_json(path: Path, payload):
@@ -94,6 +94,162 @@ def _healthy_tree(tmp_path, *, universe_status="READY", fixture_count=1, jobs=No
 
 def _cycle(tmp_path, status):
     _write_json(tmp_path / "data" / "product_runtime" / "latest_cycle.json", _base_cycle(status))
+
+
+def _formal_champion_base_record(
+    prediction_id,
+    score,
+    *,
+    lambda_home=1.0,
+    lambda_away=1.0,
+    model_role="champion",
+    prediction_variant="model_only",
+):
+    return {
+        "prediction_id": prediction_id,
+        "business_date": "2026-08-12",
+        "prediction_status": "formal",
+        "model_role": model_role,
+        "prediction_variant": prediction_variant,
+        "manual_override": False,
+        "model_input_snapshot_ref": f"data/model_governance/input_snapshots/{prediction_id}.json",
+        "input_sha256": f"input-{prediction_id}",
+        "model_source_fingerprint": "champion-fingerprint",
+        "match_key": f"MATCH-{prediction_id}",
+        "match_identity": {
+            "match_key": f"MATCH-{prediction_id}",
+            "home": "Home",
+            "away": "Away",
+        },
+        "kickoff_at": "2026-08-12T23:00:00+08:00",
+        "source_cutoff_at": "2026-08-12T09:59:00+08:00",
+        "prediction_created_at": "2026-08-12T10:00:00+08:00",
+        "freeze_created_at": "2026-08-12T10:01:00+08:00",
+        "critical_missing_fields": [],
+        "missing_critical_fields": [],
+        "formal_eligibility_policy": "base_prediction_minimum.v1",
+        "formal_eligible": True,
+        "model_formal_eligible": True,
+        "base_input_quality": "VERIFIED_MINIMUM",
+        "analysis_output": {"report_type": "base_prediction_minimal"},
+        "probabilities": {"home": 0.4, "draw": 0.3, "away": 0.3},
+        "lambda_home": lambda_home,
+        "lambda_away": lambda_away,
+        "btts": {"yes": 0.4, "no": 0.6},
+        "unique_score": score,
+        "score_top3": [score, "0-0", "2-1"],
+    }
+
+
+def test_evaluate_health_alerts_on_current_score_and_lambda_collapse(tmp_path):
+    root = _healthy_tree(tmp_path)
+    records = [
+        _formal_champion_base_record(
+            f"P-{index}",
+            "1-1" if index < 8 else "2-1",
+            lambda_home=1.0,
+            lambda_away=1.2 if index < 7 else 2.0,
+        )
+        for index in range(9)
+    ]
+    for record in records:
+        _write_json(
+            root / "data" / "model_governance" / "predictions" / f"{record['prediction_id']}.json",
+            record,
+        )
+
+    result = evaluate_health(root=root)
+    health = result["details"]["production_exact_score_health"]
+
+    assert result["status"] == "ALERT"
+    assert result["notify"] is True
+    assert "SCORE_SELECTOR_COLLAPSE" in result["reasons"]
+    assert "LAMBDA_COMPRESSION" in result["reasons"]
+    assert health["sample_count"] == 9
+    assert health["dominant_score"] == "1-1"
+    assert health["dominant_count"] == 8
+    assert health["compressed_count"] == 7
+    assert health["dominant_share"] == round(8 / 9, 6)
+    assert health["compressed_share"] == round(7 / 9, 6)
+    assert health["gap_threshold"] == 0.5
+
+
+def test_exact_score_health_alerts_only_selector_collapse():
+    result = evaluate_exact_score_health([
+        _formal_champion_base_record(
+            f"SELECTOR-{index}",
+            "1-1" if index < 7 else "2-1",
+            lambda_home=1.0,
+            lambda_away=1.2 if index < 6 else 2.0,
+        )
+        for index in range(8)
+    ])
+
+    assert result["status"] == "ALERT"
+    assert result["reasons"] == ["SCORE_SELECTOR_COLLAPSE"]
+    assert result["dominant_count"] == 7
+    assert result["dominant_share"] == 0.875
+    assert result["compressed_count"] == 6
+    assert result["compressed_share"] == 0.75
+
+
+def test_exact_score_health_alerts_only_lambda_compression():
+    result = evaluate_exact_score_health([
+        _formal_champion_base_record(
+            f"LAMBDA-{index}",
+            f"{index}-{index + 1}",
+            lambda_home=1.0,
+            lambda_away=1.2 if index < 7 else 2.0,
+        )
+        for index in range(8)
+    ])
+
+    assert result["status"] == "ALERT"
+    assert result["reasons"] == ["LAMBDA_COMPRESSION"]
+    assert result["dominant_count"] == 1
+    assert result["dominant_share"] == 0.125
+    assert result["compressed_count"] == 7
+    assert result["compressed_share"] == 0.875
+
+    boundary = evaluate_exact_score_health([
+        _formal_champion_base_record(
+            f"LAMBDA-BOUNDARY-{index}",
+            f"{index}-{index + 1}",
+            lambda_home=1.0,
+            lambda_away=1.2 if index < 7 else 2.0,
+        )
+        for index in range(10)
+    ])
+
+    assert boundary["compressed_count"] == 7
+    assert boundary["compressed_share"] == 0.7
+    assert boundary["reasons"] == []
+    assert boundary["status"] == "HEALTHY"
+
+
+def test_exact_score_health_ignores_small_samples_and_research_records():
+    records = [
+        _formal_champion_base_record(
+            f"SMALL-{index}",
+            "1-1",
+            lambda_home=1.0,
+            lambda_away=1.2,
+        )
+        for index in range(4)
+    ]
+    records.extend([
+        _formal_champion_base_record("RESEARCH-1", "1-1", lambda_away=1.1, model_role="research"),
+        _formal_champion_base_record("INFO-1", "1-1", lambda_away=1.1, prediction_variant="informational"),
+    ])
+
+    result = evaluate_exact_score_health(records)
+
+    assert result["status"] == "INSUFFICIENT_SAMPLE"
+    assert result["reasons"] == []
+    assert result["eligible_record_count"] == 4
+    assert result["sample_count"] == 4
+    assert result["dominant_count"] == 4
+    assert result["compressed_count"] == 4
 
 
 def test_healthy_cycle_is_silent(tmp_path):
