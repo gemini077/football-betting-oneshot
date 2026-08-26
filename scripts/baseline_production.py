@@ -388,6 +388,31 @@ def _market_direction_candidate(
     }
 
 
+def _compact_shadow_predictor(prediction: dict[str, Any], *, candidate: bool) -> dict[str, Any] | None:
+    if not isinstance(prediction, dict):
+        return None
+    compact: dict[str, Any] = {}
+    for key in (
+        "model", "version", "status", "prediction_variant", "prediction_id",
+        "prediction_sha256", "model_run_fingerprint", "probabilities",
+        "lambda_home", "lambda_away", "rho", "btts",
+    ):
+        if key in prediction and prediction[key] is not None:
+            compact[key] = deepcopy(prediction[key])
+    score_matrix = prediction.get("score_matrix") or prediction.get("score_probabilities")
+    if isinstance(score_matrix, list):
+        compact["score_matrix"] = deepcopy(score_matrix)
+    if candidate:
+        for key in (
+            "score_matrix_complete", "score_top1", "score_top3", "raw_score_top1",
+            "raw_score_top3", "form_share", "market_share", "target_total",
+            "market_probabilities", "calibration_locked", "changed_variables",
+        ):
+            if key in prediction and prediction[key] is not None:
+                compact[key] = deepcopy(prediction[key])
+    return compact
+
+
 def _shadow_metadata(
     comparison: dict[str, Any],
     champion_prediction: dict[str, Any],
@@ -399,21 +424,12 @@ def _shadow_metadata(
     replay_details: dict[str, Any] | None,
 ) -> dict[str, Any]:
     prediction_id = str(champion_prediction.get("prediction_id") or "")
-    comparison["comparison_id"] = comparison_id_for(
+    comparison_id = comparison_id_for(
         str(comparison.get("match_key") or ""),
         str(comparison.get("snapshot_id") or ""),
         MARKET_DIRECTION_SHADOW_CONTRACT_VERSION,
     )
-    comparison["benchmark_contract_version"] = MARKET_DIRECTION_SHADOW_CONTRACT_VERSION
-    comparison["prospective_origin"] = "prospective_shadow"
-    comparison["shadow_scope"] = "prospective_shadow"
-    comparison["candidate_id"] = MARKET_DIRECTION_SHADOW_CANDIDATE_ID
-    comparison["candidate_version"] = MARKET_DIRECTION_SHADOW_CANDIDATE_ID
-    comparison["shadow_status"] = status
-    comparison["shadow_created_at"] = shadow_created_at
-    comparison["shadow_failure_reason"] = failure_reason
-    comparison["changed_variables"] = ["market_direction_fusion"]
-    comparison["challenger_declaration"] = {
+    declaration = {
         "changed_variables": ["market_direction_fusion"],
         "expected_improvement_metrics": ["brier_score_1x2", "log_loss_1x2", "1x2_top1", "macro_ece"],
         "must_not_regress_metrics": ["total_mae", "total_goals_nll", "exact_score_top1", "exact_score_top3"],
@@ -422,47 +438,62 @@ def _shadow_metadata(
         "scope": "retrospective_qualified_then_prospective_shadow_only",
         "promotion": "forbidden_without_separate_governance_review",
     }
-    comparison["product_role"] = "PROSPECTIVE_SHADOW"
-    comparison["prospective_shadow"] = True
-    comparison["user_visible"] = False
-    comparison["formal_eligible"] = False
-    comparison["promotion_eligible"] = False
-    comparison["excluded_from_formal_metrics"] = True
-    comparison["primary_benchmark_eligible"] = False
-    comparison["cohort"] = "shadow"
-    comparison["source_champion_prediction_id"] = prediction_id
-    comparison["source_champion_prediction_ref"] = f"data/model_governance/predictions/{prediction_id}.json"
-    comparison["source_champion_prediction_sha256"] = champion_prediction.get("prediction_sha256")
-    comparison["model_input_snapshot_ref"] = champion_prediction.get("model_input_snapshot_ref")
-    comparison["canonical_model_input_sha256"] = champion_prediction.get("canonical_model_input_sha256")
-    comparison["snapshot_hash"] = champion_prediction.get("canonical_model_input_sha256")
-    comparison["kickoff_at"] = champion_prediction.get("kickoff_at")
-    comparison["champion_total"] = float(champion_prediction.get("lambda_home") or 0) + float(champion_prediction.get("lambda_away") or 0)
-    comparison["replay_details"] = replay_details or {}
+    compact = {
+        "match_key": comparison.get("match_key"),
+        "snapshot_id": comparison.get("snapshot_id"),
+        "canonical_model_input_sha256": comparison.get("canonical_model_input_sha256"),
+        "source_cutoff_at": comparison.get("source_cutoff_at"),
+        "market_snapshot_at": comparison.get("market_snapshot_at"),
+        "checkpoint_stage": comparison.get("checkpoint_stage"),
+        "checkpoint_target_at": comparison.get("checkpoint_target_at"),
+        "checkpoint_captured_at": comparison.get("checkpoint_captured_at"),
+        "minutes_to_kickoff_at_capture": comparison.get("minutes_to_kickoff_at_capture"),
+        "benchmark_snapshot_version": comparison.get("benchmark_snapshot_version"),
+        "comparison_id": comparison_id,
+        "benchmark_contract_version": MARKET_DIRECTION_SHADOW_CONTRACT_VERSION,
+        "benchmark_scope": "prospective",
+        "prospective_origin": "prospective_shadow",
+        "prospective_only": True,
+        "comparison_status": "complete" if status == "complete" else "shadow_failed",
+        "status_reason": None if status == "complete" else failure_reason,
+        "same_snapshot": comparison.get("same_snapshot") is True,
+        "snapshot_consistent": comparison.get("snapshot_consistent") is True,
+        "primary_benchmark_eligible": False,
+        "cohort": "shadow",
+        "primary_eligibility_reason": "prospective_shadow_excluded_from_formal_benchmark",
+        "synthetic": False,
+        "excluded_from_formal_metrics": True,
+        "candidate_id": MARKET_DIRECTION_SHADOW_CANDIDATE_ID,
+        "candidate_version": MARKET_DIRECTION_SHADOW_CANDIDATE_ID,
+        "shadow_status": status,
+        "shadow_created_at": shadow_created_at,
+        "shadow_failure_reason": failure_reason,
+        "changed_variables": ["market_direction_fusion"],
+        "challenger_declaration": declaration,
+        "product_role": "PROSPECTIVE_SHADOW",
+        "prospective_shadow": True,
+        "shadow_scope": "prospective_shadow",
+        "user_visible": False,
+        "formal_eligible": False,
+        "promotion_eligible": False,
+        "source_champion_prediction_id": prediction_id,
+        "source_champion_prediction_ref": f"data/model_governance/predictions/{prediction_id}.json",
+        "source_champion_prediction_sha256": champion_prediction.get("prediction_sha256"),
+        "model_input_snapshot_ref": champion_prediction.get("model_input_snapshot_ref"),
+        "snapshot_hash": champion_prediction.get("canonical_model_input_sha256"),
+        "kickoff_at": champion_prediction.get("kickoff_at"),
+        "champion_total": float(champion_prediction.get("lambda_home") or 0) + float(champion_prediction.get("lambda_away") or 0),
+        "replay_details": replay_details or {},
+        "market_direction_fusion_evaluable": False,
+        "predictors": {},
+    }
+    champion = _compact_shadow_predictor((comparison.get("predictors") or {}).get("champion"), candidate=False)
+    if champion is not None:
+        compact["predictors"]["champion"] = champion
     if candidate is not None:
-        comparison.setdefault("predictors", {})[MARKET_DIRECTION_SHADOW_PREDICTOR_NAME] = candidate
-        comparison["shadow_candidate"] = candidate
-        comparison["market_direction_fusion_evaluable"] = True
-        comparison["shadow_challenger"] = {
-            "candidate_id": MARKET_DIRECTION_SHADOW_CANDIDATE_ID,
-            "version": MARKET_DIRECTION_SHADOW_CANDIDATE_ID,
-            "lambda_home": candidate["lambda_home"],
-            "lambda_away": candidate["lambda_away"],
-            "total": candidate["expected_goals"],
-            "probabilities": candidate["probabilities"],
-            "raw_score_top1": candidate["raw_score_top1"],
-            "raw_score_top3": candidate["raw_score_top3"],
-        }
-    else:
-        comparison["market_direction_fusion_evaluable"] = False
-        comparison["shadow_candidate"] = None
-        comparison["shadow_challenger"] = None
-    if status != "complete":
-        comparison["comparison_status"] = "shadow_failed"
-        comparison["status_reason"] = failure_reason
-        comparison["excluded_from_formal_metrics"] = True
-        comparison.pop("benchmark_error", None)
-    return comparison
+        compact["predictors"][MARKET_DIRECTION_SHADOW_PREDICTOR_NAME] = _compact_shadow_predictor(candidate, candidate=True)
+        compact["market_direction_fusion_evaluable"] = True
+    return compact
 
 
 def run_market_direction_shadow_for_frozen_prediction(

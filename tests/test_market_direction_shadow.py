@@ -44,12 +44,12 @@ def test_shadow_uses_same_snapshot_total_and_single_changed_variable(tmp_path):
 
     assert result["status"] == "created"
     comparison = result["comparison"]
-    candidate = comparison["shadow_candidate"]
+    candidate = comparison["predictors"]["market_direction_fusion_full_v1"]
     assert comparison["source_champion_prediction_id"] == record["prediction_id"]
     assert comparison["model_input_snapshot_ref"] == record["model_input_snapshot_ref"]
     assert comparison["canonical_model_input_sha256"] == record["canonical_model_input_sha256"]
-    assert candidate["expected_goals"] == pytest.approx(comparison["champion_total"])
     assert candidate["lambda_home"] + candidate["lambda_away"] == pytest.approx(record["lambda_home"] + record["lambda_away"])
+    assert comparison["champion_total"] == pytest.approx(record["lambda_home"] + record["lambda_away"])
     assert comparison["changed_variables"] == ["market_direction_fusion"]
     assert comparison["challenger_declaration"]["changed_variables"] == ["market_direction_fusion"]
     assert comparison["challenger_declaration"]["promotion"] == "forbidden_without_separate_governance_review"
@@ -66,6 +66,57 @@ def test_shadow_uses_same_snapshot_total_and_single_changed_variable(tmp_path):
     assert "settlement" not in comparison
     assert candidate["score_matrix_complete"] is True
     assert len(candidate["score_matrix"]) > 10
+
+
+def test_shadow_prediction_is_compact_and_keeps_only_candidate_matrix(tmp_path):
+    record, snapshot_root = make_fixture(tmp_path)
+    root = tmp_path / "shadow_predictions"
+    result = run_market_direction_shadow_for_frozen_prediction(
+        record,
+        shadow_created_at=PREMATCH,
+        snapshot_root=snapshot_root,
+        prediction_root=root,
+        repository_root=ROOT,
+    )
+    assert result["status"] == "created"
+    path = next(root.glob("*.json"))
+    payload = json.loads(path.read_text(encoding="utf-8"))
+
+    # The measured pre-compaction fixture was 263,106 bytes.  One genuine
+    # 13x13 candidate matrix plus refs/metadata measured 32,999 bytes;
+    # 50 KB leaves bounded room for legitimate metadata without allowing
+    # immutable snapshot or duplicated predictor payloads to return.
+    assert path.stat().st_size <= 50_000
+    forbidden_keys = {
+        "benchmark_snapshot",
+        "input_snapshot",
+        "model_input",
+        "source_snapshots",
+        "score_probabilities",
+        "shadow_candidate",
+        "shadow_challenger",
+        "market_reference",
+        "simple_poisson",
+    }
+
+    def keys(value):
+        if isinstance(value, dict):
+            for key, child in value.items():
+                yield key
+                yield from keys(child)
+        elif isinstance(value, list):
+            for child in value:
+                yield from keys(child)
+
+    assert not forbidden_keys.intersection(keys(payload))
+    assert payload["model_input_snapshot_ref"] == record["model_input_snapshot_ref"]
+    assert payload["canonical_model_input_sha256"] == record["canonical_model_input_sha256"]
+    assert payload["source_champion_prediction_ref"].endswith(".json")
+    assert set(payload["predictors"]) == {"champion", "market_direction_fusion_full_v1"}
+    candidate = payload["predictors"]["market_direction_fusion_full_v1"]
+    assert candidate["score_matrix_complete"] is True
+    assert len(candidate["score_matrix"]) == 169
+    assert "score_probabilities" not in candidate
 
 
 def test_shadow_is_strictly_prematch_and_already_started_does_not_capture(tmp_path):
@@ -169,7 +220,7 @@ def test_shadow_settlement_is_separate_from_formal_aggregate_and_is_repeatable(t
     settlement = settled["settlement"]
     assert settlement["excluded_from_formal_metrics"] is True
     assert settlement["prospective_shadow"] is True
-    assert set(settlement["metrics"]) == {"market_reference", "simple_poisson", "champion", "market_direction_fusion_full_v1"}
+    assert set(settlement["metrics"]) == {"champion", "market_direction_fusion_full_v1"}
     candidate_metrics = settlement["metrics"]["market_direction_fusion_full_v1"]
     assert candidate_metrics["actual_score_nll"] is not None
     assert candidate_metrics["total_goals_nll"] is not None
