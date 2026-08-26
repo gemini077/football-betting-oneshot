@@ -231,6 +231,54 @@ def _parse_aware(value: Any) -> datetime | None:
     return parsed.astimezone(timezone.utc)
 
 
+def _champion_time_floor(champion_prediction: dict[str, Any]) -> tuple[datetime | None, str | None]:
+    times: list[datetime] = []
+    for field in ("prediction_created_at", "freeze_created_at"):
+        raw_value = champion_prediction.get(field)
+        if raw_value in (None, ""):
+            continue
+        parsed_value = _parse_aware(raw_value)
+        if parsed_value is None:
+            return None, "champion_time_not_timezone_aware"
+        times.append(parsed_value)
+    if not times:
+        return None, "champion_time_unverified"
+    return max(times), None
+
+
+def _load_shadow_source_champion(
+    comparison: dict[str, Any],
+    supplied_prediction: dict[str, Any],
+    *,
+    repository_root: Path,
+) -> dict[str, Any] | None:
+    source_id = str(comparison.get("source_champion_prediction_id") or "").strip()
+    if not source_id:
+        return None
+    source_ref = str(comparison.get("source_champion_prediction_ref") or "").strip()
+    if source_ref:
+        source_path = Path(source_ref)
+        if not source_path.is_absolute():
+            source_path = Path(repository_root) / source_path
+        if source_path.is_file():
+            try:
+                loaded = json.loads(source_path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                return None
+            if not isinstance(loaded, dict) or loaded.get("prediction_id") != source_id:
+                return None
+            expected_sha = comparison.get("source_champion_prediction_sha256")
+            if expected_sha and loaded.get("prediction_sha256") != expected_sha:
+                return None
+            return loaded
+    if supplied_prediction.get("prediction_id") == source_id:
+        expected_sha = comparison.get("source_champion_prediction_sha256")
+        if expected_sha and supplied_prediction.get("prediction_sha256") not in (None, expected_sha):
+            return None
+        return supplied_prediction
+    return None
+
+
 def _valid_probabilities(value: Any) -> bool:
     if not isinstance(value, dict):
         return False
@@ -518,6 +566,12 @@ def run_market_direction_shadow_for_frozen_prediction(
     kickoff = _parse_aware(champion_prediction.get("kickoff_at"))
     if kickoff is None or not created < kickoff:
         return {"status": "failed", "reason": "shadow_not_strictly_prematch", "snapshot": snapshot}
+    champion_time, time_reason = _champion_time_floor(champion_prediction)
+    if time_reason:
+        return {"status": "failed", "reason": time_reason, "snapshot": snapshot}
+    assert champion_time is not None
+    if created < champion_time:
+        return {"status": "failed", "reason": "shadow_created_before_champion_time", "snapshot": snapshot}
     comparison_id = comparison_id_for(
         str(snapshot.get("match_key") or ""),
         str(snapshot.get("snapshot_id") or ""),
@@ -576,6 +630,7 @@ def settle_market_direction_shadow_for_result(
     prediction_root: Path = DEFAULT_PREDICTION_ROOT,
     settlement_root: Path | None = None,
     settled_at: str | None = None,
+    repository_root: Path = ROOT,
 ) -> dict[str, Any]:
     """Settle the immutable shadow comparison; never writes the formal ledger."""
     snapshot_meta = champion_prediction.get("input_snapshot") or champion_prediction.get("snapshot_identity") or {}
@@ -596,6 +651,20 @@ def settle_market_direction_shadow_for_result(
         or comparison.get("canonical_model_input_sha256") != champion_prediction.get("canonical_model_input_sha256")
     ):
         return {"status": "no_op", "reason": "shadow_identity_mismatch", "comparison_id": comparison_id}
+    source_prediction = _load_shadow_source_champion(
+        comparison,
+        champion_prediction,
+        repository_root=Path(repository_root),
+    )
+    if source_prediction is None:
+        return {"status": "failed", "reason": "shadow_source_champion_unverifiable", "comparison_id": comparison_id}
+    shadow_created = _parse_aware(comparison.get("shadow_created_at"))
+    kickoff = _parse_aware(comparison.get("kickoff_at") or source_prediction.get("kickoff_at"))
+    champion_time, time_reason = _champion_time_floor(source_prediction)
+    if shadow_created is None or kickoff is None or time_reason:
+        return {"status": "failed", "reason": "shadow_audit_invalid_timestamp", "comparison_id": comparison_id}
+    if shadow_created < champion_time or not shadow_created < kickoff:
+        return {"status": "failed", "reason": "shadow_audit_invalid_prematch_time", "comparison_id": comparison_id}
     score = _actual_score_for_shadow(verified_result)
     if score is None:
         return {"status": "no_op", "reason": "shadow_result_invalid", "comparison_id": comparison_id}
