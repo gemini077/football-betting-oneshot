@@ -124,7 +124,8 @@ def test_production_cycle_processes_today_and_yesterday_without_refetching_yeste
         if _has_script(command, "base_prediction_runner.py")
         and _command_date(command) == "2026-08-14"
     )
-    assert next_universe_index < next_jobs_index < next_prediction_index    assert any(
+    assert next_universe_index < next_jobs_index < next_prediction_index
+    assert any(
         _has_script(command, "base_prediction_jobs.py")
         and _command_date(command) == "2026-08-14"
         for command in calls

@@ -171,6 +171,11 @@ def _as_now(value: datetime | None) -> datetime:
     return value.replace(tzinfo=LOCAL_TZ) if value.tzinfo is None else value
 
 
+def _utc_now() -> datetime:
+    """Return the wall-clock instant used for shadow capture auditing."""
+    return datetime.now(timezone.utc)
+
+
 def _parse_timestamp(value: Any) -> datetime | None:
     if isinstance(value, datetime):
         parsed = value
@@ -902,7 +907,6 @@ def _blocked_summary(business_date: str, ledger: dict[str, Any] | None) -> dict[
 def _capture_market_direction_shadow(
     record: dict[str, Any],
     *,
-    now: datetime,
     input_snapshot_root: Path,
     shadow_prediction_root: Path,
 ) -> dict[str, Any]:
@@ -910,9 +914,10 @@ def _capture_market_direction_shadow(
     try:
         from baseline_production import run_market_direction_shadow_for_frozen_prediction
 
+        capture_time = _utc_now()
         return run_market_direction_shadow_for_frozen_prediction(
             record,
-            shadow_created_at=now,
+            shadow_created_at=capture_time,
             snapshot_root=Path(input_snapshot_root),
             prediction_root=Path(shadow_prediction_root),
             repository_root=PROJECT_ROOT,
@@ -943,7 +948,6 @@ def run_base_prediction_jobs(
         shadow_counts["attempted"] += 1
         result = _capture_market_direction_shadow(
             record,
-            now=current_time,
             input_snapshot_root=Path(input_snapshot_root),
             shadow_prediction_root=shadow_prediction_root,
         )

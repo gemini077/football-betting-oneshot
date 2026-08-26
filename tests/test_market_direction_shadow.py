@@ -1,7 +1,7 @@
 import copy
 import json
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -251,7 +251,6 @@ def test_runner_shadow_failure_isolated_from_formal_record(tmp_path, monkeypatch
     monkeypatch.setattr("baseline_production.run_market_direction_shadow_for_frozen_prediction", fail_shadow)
     result = prediction_runner._capture_market_direction_shadow(
         record,
-        now=datetime.fromisoformat(PREMATCH),
         input_snapshot_root=snapshot_root,
         shadow_prediction_root=tmp_path / "shadow_predictions",
     )
@@ -259,6 +258,74 @@ def test_runner_shadow_failure_isolated_from_formal_record(tmp_path, monkeypatch
     assert result["reason"].startswith("shadow_exception:RuntimeError:")
     assert record == original
     assert not (tmp_path / "shadow_predictions").exists()
+
+
+def test_runner_uses_capture_wall_clock_and_fails_after_kickoff(tmp_path, monkeypatch):
+    record, snapshot_root = make_fixture(tmp_path)
+    actual_capture = datetime(2026, 8, 10, 20, 1, tzinfo=timezone.utc)
+    monkeypatch.setattr(prediction_runner, "_utc_now", lambda: actual_capture)
+
+    result = prediction_runner._capture_market_direction_shadow(
+        record,
+        input_snapshot_root=snapshot_root,
+        shadow_prediction_root=tmp_path / "shadow_predictions",
+    )
+
+    assert result["status"] == "failed"
+    assert result["reason"] == "shadow_not_strictly_prematch"
+    assert not (tmp_path / "shadow_predictions").exists()
+
+
+def test_shadow_timestamp_is_after_champion_times_and_before_kickoff(tmp_path, monkeypatch):
+    record, snapshot_root = make_fixture(tmp_path)
+    record["prediction_created_at"] = "2026-08-10T19:31:00+08:00"
+    record["freeze_created_at"] = "2026-08-10T19:35:00+08:00"
+    actual_capture = datetime(2026, 8, 10, 11, 40, tzinfo=timezone.utc)
+    monkeypatch.setattr(prediction_runner, "_utc_now", lambda: actual_capture)
+
+    result = prediction_runner._capture_market_direction_shadow(
+        record,
+        input_snapshot_root=snapshot_root,
+        shadow_prediction_root=tmp_path / "shadow_predictions",
+    )
+
+    assert result["status"] == "created"
+    shadow_created = datetime.fromisoformat(result["comparison"]["shadow_created_at"])
+    prediction_created = datetime.fromisoformat(record["prediction_created_at"])
+    freeze_created = datetime.fromisoformat(record["freeze_created_at"])
+    kickoff = datetime.fromisoformat(record["kickoff_at"])
+    assert shadow_created >= prediction_created
+    assert shadow_created >= freeze_created
+    assert shadow_created < kickoff
+
+
+def test_backdated_shadow_is_not_settled_or_added_to_metrics(tmp_path):
+    record, snapshot_root = make_fixture(tmp_path)
+    prediction_root = tmp_path / "shadow_predictions"
+    settlement_root = tmp_path / "shadow_settlements"
+    captured = run_market_direction_shadow_for_frozen_prediction(
+        record,
+        shadow_created_at=PREMATCH,
+        snapshot_root=snapshot_root,
+        prediction_root=prediction_root,
+        repository_root=ROOT,
+    )
+    assert captured["status"] == "created"
+
+    record["prediction_created_at"] = "2026-08-10T19:45:00+08:00"
+    record["freeze_created_at"] = "2026-08-10T19:50:00+08:00"
+    settled = settle_market_direction_shadow_for_result(
+        record,
+        {"home_score_90m": 2, "away_score_90m": 1},
+        prediction_root=prediction_root,
+        settlement_root=settlement_root,
+        settled_at="2026-08-10T22:00:00+08:00",
+        repository_root=ROOT,
+    )
+
+    assert settled["status"] == "failed"
+    assert settled["reason"] == "shadow_audit_invalid_prematch_time"
+    assert not settlement_root.exists()
 
 
 def test_deploy_pages_persists_only_shadow_benchmark_directories():
