@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import re
-from datetime import date
+from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable, Mapping
 
@@ -18,12 +18,23 @@ from ..historical_results import make_historical_match_result
 
 
 _DATE_RE = re.compile(
-    r"^\s*(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s+(?P<month>[A-Z][a-z]{2})\s+(?P<day>\d{1,2})(?:\s+(?P<year>\d{4}))?\s*$"
+    r"^\s*(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s+(?P<month>[A-Z][a-z]{2})\s+(?P<day>\d{1,2})(?:\s+(?P<year>\d{4}))?(?P<metadata>\s+.*)?\s*$"
 )
+_SEASON_HEADER_RE = re.compile(r"(?<!\d)(?P<start>\d{4})\s*/\s*(?P<end>\d{2,4})(?!\d)")
 _MATCH_RE = re.compile(
     r"^\s*(?:(?P<time>\d{1,2}:\d{2})\s+)?(?P<home>.+?)\s+v\s+(?P<away>.+?)\s+(?P<home_goals>\d+)-(?P<away_goals>\d+)(?:\s|$)"
 )
 _MONTHS = {name: number for number, name in enumerate(("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"), start=1)}
+
+
+def _timezone_from_metadata(metadata: str | None) -> timezone:
+    match = re.search(r"\bUTC(?P<sign>[+-])(?P<hours>\d{1,2})(?::?(?P<minutes>\d{2}))?\b", metadata or "", re.IGNORECASE)
+    if not match:
+        return timezone.utc
+    delta = timedelta(hours=int(match.group("hours")), minutes=int(match.group("minutes") or 0))
+    if match.group("sign") == "-":
+        delta = -delta
+    return timezone(delta)
 
 
 def _slug(value: str) -> str:
@@ -252,26 +263,65 @@ def parse_football_txt_rows(raw_text: str) -> list[dict[str, Any]]:
         raise TypeError("OpenFootball Football.TXT input must be text")
     current_date: date | None = None
     current_year: int | None = None
+    current_timezone: timezone = timezone.utc
+    current_date_time: time | None = None
     rows: list[dict[str, Any]] = []
     for line_number, line in enumerate(raw_text.replace("\r\n", "\n").splitlines(), start=1):
+        # Native season headers seed the first year for files whose date rows
+        # intentionally omit the year.  This is generic for every competition.
+        if line.lstrip().startswith("="):
+            season_header = _SEASON_HEADER_RE.search(line)
+            if season_header:
+                current_year = int(season_header.group("start"))
+            continue
         date_match = _DATE_RE.match(line)
         if date_match:
-            current_date = OpenFootballHistoricalAdapter._date_from_match(date_match, current_year)
-            if date_match.group("year"):
-                current_year = int(date_match.group("year"))
-                current_date = OpenFootballHistoricalAdapter._date_from_match(date_match, current_year)
+            explicit_year = date_match.group("year")
+            month = _MONTHS.get(date_match.group("month"))
+            day = int(date_match.group("day"))
+            inferred_year = int(explicit_year) if explicit_year else current_year
+            # A season file normally lists matches chronologically.  When a
+            # date without a year rolls from December to January, advance the
+            # seeded season year rather than assigning January to the header
+            # year.
+            if (
+                not explicit_year
+                and current_date is not None
+                and inferred_year is not None
+                and month is not None
+                and (month, day) < (current_date.month, current_date.day)
+            ):
+                inferred_year += 1
+            if inferred_year is not None and month is not None:
+                try:
+                    current_date = date(inferred_year, month, day)
+                    current_year = inferred_year
+                    metadata = date_match.group("metadata") or ""
+                    current_timezone = _timezone_from_metadata(metadata)
+                    time_match = re.search(r"\b(?P<hour>\d{1,2}):(?P<minute>\d{2})\b", metadata)
+                    current_date_time = time(int(time_match.group("hour")), int(time_match.group("minute"))) if time_match else None
+                except ValueError:
+                    current_date = None
             continue
         match = _MATCH_RE.match(line)
         if not match or current_date is None:
             continue
         time_text = match.group("time")
+        effective_time = time.fromisoformat(time_text) if time_text else current_date_time
+        kickoff_at = f"{current_date.isoformat()}T00:00:00Z"
+        if effective_time:
+            # The full Football.TXT files may put a local offset/time on the
+            # date row (for example ``19:00 UTC+2 @ stadium``).  Preserve the
+            # fact time in UTC; files without it retain the date boundary.
+            local_time = datetime.combine(current_date, effective_time, tzinfo=current_timezone)
+            kickoff_at = local_time.astimezone(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
         rows.append(
             {
                 "line_number": line_number,
                 "home": match.group("home").strip(),
                 "away": match.group("away").strip(),
-                "kickoff_at": f"{current_date.isoformat()}T{time_text}:00Z" if time_text else f"{current_date.isoformat()}T00:00:00Z",
-                "kickoff_precision": "minute" if time_text else "date",
+                "kickoff_at": kickoff_at,
+                "kickoff_precision": "minute" if effective_time else "date",
                 "home_goals": int(match.group("home_goals")),
                 "away_goals": int(match.group("away_goals")),
             }

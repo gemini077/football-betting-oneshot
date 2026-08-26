@@ -46,6 +46,7 @@ from model_governance import (  # noqa: E402
 from nowscore_markets import fetch_match_markets  # noqa: E402
 from prediction_universe import load_prediction_universe  # noqa: E402
 from prediction_quality import recent_form_is_usable  # noqa: E402
+from recent_form_cache import load_recent_form_cache, refresh_recent_form_cache  # noqa: E402
 
 
 JOBS_ROOT = PROJECT_ROOT / "data" / "base_prediction_jobs"
@@ -612,6 +613,15 @@ def _assemble_context(
                 form_refs = list(form["references"])
                 break
 
+    if not form:
+        cached_form = load_recent_form_cache(job, kickoff.isoformat(), source_clock)
+        if cached_form:
+            form = cached_form
+            form_source = cached_form.get("source")
+            form_captured_at = cached_form.get("captured_at")
+            form_refs = list(cached_form.get("references") or [])
+            source_refs.extend(str(ref) for ref in cached_form.get("source_refs") or [])
+
     if not form or not _form_is_usable(form.get("recent_form")):
         return None, None, "INPUT_TIMESTAMP_UNVERIFIED" if unverified_source else "MISSING_RECENT_FORM"
 
@@ -911,6 +921,9 @@ def run_base_prediction_jobs(
         return _blocked_summary(business_date, ledger)
 
     jobs = [job for job in ledger.get("jobs", []) if isinstance(job, dict)]
+    # One demand-driven refresh per business-date run; the loader below still
+    # validates an existing cache when GitHub/raw access is unavailable.
+    refresh_recent_form_cache(business_date, jobs=jobs, now=current_time)
     attempted = 0
     trade_payload: dict[str, Any] | None = None
     trade_loaded = False
