@@ -56,7 +56,10 @@ def _summary(payload: dict) -> dict:
         "status", "refresh_status", "fixture_count", "match_count", "job_count",
         "frozen", "pending", "insufficient_data", "prediction_failed", "missed_prematch",
         "formal_samples_added", "formal_prospective_total", "results_found", "pending_results",
-        "pilot_excluded_settled", "failure_reasons", "error", "output",
+        "pilot_excluded_settled", "failure_reasons", "shadow_attempted", "shadow_created",
+        "shadow_existing", "shadow_failed", "shadow_failure_reasons",
+        "shadow_settlements_added", "shadow_settlements_existing", "shadow_settlement_failures",
+        "shadow_failure_reasons", "error", "output",
         "target_date", "completed_count", "published_as_latest", "latest_only",
     }
     return {key: value for key, value in payload.items() if key in allowed}
