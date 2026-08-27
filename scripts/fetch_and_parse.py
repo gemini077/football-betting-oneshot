@@ -595,7 +595,7 @@ def parse_touzhu(html_text):
                     ("team", cells[0]),
                     ("euro_odds", float(cells[1])),
                     ("euro_prob_pct", float(cells[2].rstrip('%'))),
-                    ("volume_ratio_pct", float(cells[4].rstrip('%'))),
+                    ("volume_ratio_pct", optional_float(cells[4].rstrip('%'))),
                     # 500/SPdex can publish volume before a visible last-traded
                     # price.  Keep that useful partial market instead of
                     # dropping the complete exchange panel on a literal "-".

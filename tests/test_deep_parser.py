@@ -72,6 +72,16 @@ class DeepParserTests(unittest.TestCase):
         self.assertIsNone(betfair["away"]["pl_index"])
         self.assertEqual("display_only", parsed["betfair_metadata"]["page_simulated_pl_signal_usage"])
 
+    def test_touzhu_allows_missing_volume_ratio(self):
+        row = lambda team, volume_ratio: f"""<tr><td>{team}</td><td>1.21</td><td>76.5%</td><td>-</td><td>{volume_ratio}</td><td>1.25</td><td>117,705</td><td>-7,035</td><td>-</td><td>9</td><td>-6</td></tr>"""
+        html = "热度分析<table>" + row("主队", "-") + row("平局", "84.0%") + row("客队", "72.5%") + "<tr><td>数据提点</td></tr></table>"
+
+        parsed = parse_touzhu(html)
+
+        self.assertIsNone(parsed["betfair"]["home"]["volume_ratio_pct"])
+        self.assertEqual(84.0, parsed["betfair"]["draw"]["volume_ratio_pct"])
+        self.assertEqual(("home", "draw", "away"), tuple(parsed["betfair"]))
+
     def test_touzhu_keeps_volume_when_exchange_price_is_missing(self):
         row = lambda team, price: f"""<tr><td>{team}</td><td>2.10</td><td>33.3%</td><td>-</td><td>33.3%</td><td>{price}</td><td>12,345</td><td>-</td><td>-</td><td>1</td><td>2</td></tr>"""
         html = "热度分析<table>" + row("主队", "1.92") + row("平局", "-") + row("客队", "-") + "<tr><td>数据提点</td></tr></table>"
