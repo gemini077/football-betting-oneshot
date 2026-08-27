@@ -56,6 +56,10 @@ DEFAULT_CACHE_DIR = os.path.join(PROJECT_ROOT, "data", "source_cache", "shared-f
 
 
 # ─── HTTP Fetch with Proper Encoding ────────────────────────
+def _is_fetch_error_text(value):
+    return isinstance(value, str) and value.startswith(("HTTP Error", "URL Error", "Error:"))
+
+
 def fetch_page(url, timeout=30):
     """Fetch a GB2312-encoded page and return decoded UTF-8 text."""
     req = urllib.request.Request(url, headers={
@@ -711,6 +715,7 @@ def fetch_and_parse(shuju_id, date, cache_dir=DEFAULT_CACHE_DIR, no_cache=False)
 
     # ── Fetch pages ──
     raw_html = {}
+    page_errors = {}
     for page_type, url_tpl in PAGE_URLS.items():
         url = url_tpl.format(shuju_id=shuju_id)
         raw_path = os.path.join(raw_dir, f"{page_type}_{shuju_id}.html")
@@ -732,8 +737,14 @@ def fetch_and_parse(shuju_id, date, cache_dir=DEFAULT_CACHE_DIR, no_cache=False)
         else:
             print(f"  [FETCH] {page_type} ...", end=" ", flush=True)
             html = fetch_page(url)
-            if html.startswith("HTTP Error") or html.startswith("URL Error"):
-                print(f"FAILED: {html}")
+            if _is_fetch_error_text(html):
+                page_errors[page_type] = {
+                    "error": "fetch failed",
+                    "page": page_type,
+                    "source_url": url,
+                    "detail": html[:200],
+                }
+                print(f"FAILED: {html[:120]}")
                 raw_html[page_type] = None
                 continue
             # Save raw bytes with original encoding (GB2312)
@@ -764,7 +775,11 @@ def fetch_and_parse(shuju_id, date, cache_dir=DEFAULT_CACHE_DIR, no_cache=False)
 
     for page_type, html in raw_html.items():
         if html is None:
-            result[page_type] = {"error": "fetch failed"}
+            result[page_type] = page_errors.get(page_type) or {
+                "error": "fetch failed",
+                "page": page_type,
+                "source_url": f"https://odds.500.com/fenxi/{page_type}-{shuju_id}.shtml",
+            }
         else:
             try:
                 result[page_type] = parsers[page_type](html)

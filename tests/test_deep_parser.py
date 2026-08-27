@@ -1,11 +1,14 @@
 import sys
+import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
+import fetch_and_parse as deep_parser  # noqa: E402
 from fetch_and_parse import parse_daxiao, parse_ouzhi, parse_touzhu, parse_yazhi  # noqa: E402
 
 
@@ -26,6 +29,39 @@ def market_row(current_line: str, open_line: str) -> str:
 
 
 class DeepParserTests(unittest.TestCase):
+    def test_fetch_error_text_keeps_http_url_and_generic_compatibility(self):
+        for value in ("HTTP Error 503", "URL Error: timed out", "Error: The read operation timed out"):
+            with self.subTest(value=value):
+                self.assertTrue(deep_parser._is_fetch_error_text(value))
+
+    def test_fetch_and_parse_preserves_failure_instead_of_parsing_error_text(self):
+        error_text = "Error: The read operation timed out"
+        with tempfile.TemporaryDirectory() as directory, \
+                patch.object(deep_parser, "fetch_page", return_value=error_text), \
+                patch.object(deep_parser.time, "sleep"):
+            result = deep_parser.fetch_and_parse(1464455, "2026-08-26", cache_dir=directory, no_cache=True)
+
+        self.assertEqual("fetch failed", result["ouzhi"]["error"])
+        self.assertEqual(error_text, result["ouzhi"]["detail"])
+        self.assertIn("ouzhi-1464455", result["ouzhi"]["source_url"])
+
+    def test_failure_cache_remains_explicit_and_match_page_cache_isolated(self):
+        def fetch(url):
+            if "ouzhi-1464455" in url:
+                return "Error: The read operation timed out"
+            return "<html></html>"
+
+        with tempfile.TemporaryDirectory() as directory, \
+                patch.object(deep_parser, "fetch_page", side_effect=fetch) as mocked_fetch:
+            first = deep_parser.fetch_and_parse(1464455, "2026-08-26", cache_dir=directory, no_cache=True)
+            cached = deep_parser.fetch_and_parse(1464455, "2026-08-26", cache_dir=directory, no_cache=False)
+            other_match = deep_parser.fetch_and_parse(1464453, "2026-08-26", cache_dir=directory, no_cache=False)
+
+        self.assertEqual("fetch failed", first["ouzhi"]["error"])
+        self.assertEqual("fetch failed", cached["ouzhi"]["error"])
+        self.assertNotIn("error", other_match["ouzhi"])
+        self.assertEqual(12, mocked_fetch.call_count)
+
     def test_touzhu_allows_missing_optional_index(self):
         row = lambda team, last: f"""<tr><td>{team}</td><td>1.21</td><td>76.5%</td><td>-</td><td>84.0%</td><td>1.25</td><td>117,705</td><td>-7,035</td><td>-</td><td>9</td><td>{last}</td></tr>"""
         html = "热度分析<table>" + row("主队", "-6") + row("平局", "29") + row("客队", "-") + "<tr><td>数据提点</td></tr></table>"
