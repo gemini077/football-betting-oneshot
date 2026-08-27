@@ -257,6 +257,60 @@ def test_tier_a_market_snapshot_is_full():
     assert record["market_families"] == ["1x2", "asian_handicap", "totals"]
 
 
+def test_nowscore_only_combined_snapshot_records_nowscore_not_500():
+    with tempfile.TemporaryDirectory() as temp:
+        root = Path(temp)
+        write_case(root, [fixture(1, spf=limited_spf())])
+        parsed = parsed_source(full_market=True)
+        for page in ("ouzhi", "yazhi", "daxiao"):
+            parsed[page]["source"] = "nowscore_3in1"
+            rows = parsed[page].get("bookmakers") or parsed[page].get("companies") or []
+            for row in rows:
+                row["source"] = "nowscore_3in1"
+        parsed["source_provenance"] = {"market_primary": "nowscore"}
+        summary, _ = run_case(root, parsed=parsed)
+        record = records(root)[0]
+
+    assert summary["frozen"] == 1
+    assert record["market_data_providers"] == ["nowscore"]
+    assert record["market_sources"] == ["nowscore"]
+
+
+def test_mixed_combined_snapshot_records_both_real_market_providers():
+    with tempfile.TemporaryDirectory() as temp:
+        root = Path(temp)
+        write_case(root, [fixture(1, spf=limited_spf())])
+        parsed = parsed_source(full_market=True)
+        parsed["source_provenance"] = {"effective_market_providers": ["nowscore", "500.com"]}
+        summary, _ = run_case(root, parsed=parsed)
+        record = records(root)[0]
+
+    assert summary["frozen"] == 1
+    assert record["market_data_providers"] == ["nowscore", "500.com"]
+
+
+def test_market_provider_prefers_snapshot_provenance_over_container_name():
+    snapshot = {"source_provenance": {"market_primary": "nowscore"}}
+    assert runner._market_provider("500_deep", snapshot) == "nowscore"
+
+
+def test_missing_current_line_is_fail_closed_even_when_display_text_exists():
+    row = {
+        "name": "Book A",
+        "current_line": None,
+        "current_line_str": "2.5",
+        "current_over_water": 0.90,
+        "current_under_water": 0.96,
+    }
+    snapshot = parsed_source(full_market=True)
+    for total in snapshot["daxiao"]["companies"]:
+        total["current_line"] = None
+        total["current_line_str"] = "2.5"
+
+    assert runner._valid_total_rows({"daxiao": {"companies": [row]}}) == []
+    assert not runner._has_full_market(snapshot)
+
+
 def test_two_bookmakers_without_handicap_or_totals_are_limited():
     with tempfile.TemporaryDirectory() as temp:
         root = Path(temp)

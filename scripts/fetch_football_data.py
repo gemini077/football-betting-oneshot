@@ -113,19 +113,69 @@ def _workspace_fallback(query: str | None) -> list[dict]:
 
 def _deep_summary(result: dict) -> dict:
     pages = ["ouzhi", "yazhi", "rangqiu", "daxiao", "shuju", "touzhu"]
+    provenance = result.get("source_provenance") or {}
+    native_status = provenance.get("500_deep_page_status") or {}
+    if not native_status:
+        native_status = {
+            page: (data.get("error") if isinstance(data, dict) and data.get("error") else ("ok" if data is not None else "missing"))
+            for page in pages
+            for data in [result.get(page)]
+        }
+
+    def has_market_rows(data: object, rows_key: str) -> bool:
+        return isinstance(data, dict) and any(isinstance(row, dict) for row in (data.get(rows_key) or []))
+
+    nowscore = result.get("nowscore") or {}
+    nowscore_ok = nowscore.get("status") == "OK"
+    nowscore_market_pages = {
+        page: has_market_rows(result.get(page), "bookmakers" if page == "ouzhi" else "companies")
+        for page in ("ouzhi", "yazhi", "daxiao")
+    }
+    fallback_pages = [page for page, usable in nowscore_market_pages.items() if usable and native_status.get(page) != "ok"]
     page_status = {}
     for page in pages:
         data = result.get(page)
-        if isinstance(data, dict) and data.get("error"):
-            page_status[page] = data["error"]
-        elif data is None:
-            page_status[page] = "missing"
-        else:
+        if nowscore_ok and page in nowscore_market_pages and nowscore_market_pages[page] and native_status.get(page) != "ok":
+            page_status[page] = "fallback"
+        elif native_status.get(page) == "ok":
             page_status[page] = "ok"
+        elif native_status.get(page) in (None, "missing"):
+            page_status[page] = "unavailable"
+        elif data is None:
+            page_status[page] = "unavailable"
+        else:
+            page_status[page] = native_status[page]
+
+    all_pages_ok = all(native_status.get(page) == "ok" for page in pages)
+    if nowscore_ok and fallback_pages:
+        status = "FALLBACK/PARTIAL"
+    elif all_pages_ok:
+        status = "OK"
+    else:
+        status = "PARTIAL"
+    official_market_status = {
+        "spf": "available" if isinstance(result.get("ouzhi"), dict) and result["ouzhi"].get("jingcai_spf") else "unavailable",
+        "rqspf": "available" if isinstance(result.get("rangqiu"), dict) and result["rangqiu"].get("jingcai_rqspf") else "unavailable",
+    }
     return {
         "shuju_id": result.get("shuju_id"),
         "page_status": page_status,
-        "all_pages_ok": all(value == "ok" for value in page_status.values()),
+        "native_500_page_status": native_status,
+        "five_hundred_page_status": native_status,
+        "status": status,
+        "all_pages_ok": all_pages_ok,
+        "market_usable": bool(nowscore_ok and any(nowscore_market_pages.values())) or any(
+            has_market_rows(result.get(page), "bookmakers" if page == "ouzhi" else "companies")
+            for page in ("ouzhi", "yazhi", "daxiao")
+        ),
+        "fallback": {
+            "provider": "nowscore" if nowscore_ok and fallback_pages else None,
+            "pages": fallback_pages,
+            "status": "OK" if nowscore_ok and fallback_pages else "NOT_USED",
+        },
+        "nowscore_status": nowscore.get("status"),
+        "effective_market_providers": provenance.get("effective_market_providers") or _effective_market_providers(result),
+        "official_market_status": official_market_status,
     }
 
 
@@ -138,6 +188,35 @@ def _identity_fields(match: dict) -> tuple[str, str, str | None]:
         or None
     )
     return home, away, kickoff
+
+
+def _identity_for_deep_id(shuju_id: int, discovered_by_id: dict[int, dict]) -> dict:
+    """Return only the identity proven for this deep ID; unknown IDs stay empty."""
+    match = discovered_by_id.get(shuju_id)
+    return match if isinstance(match, dict) else {}
+
+
+def _deep_source_manifest(deep_summaries: list[dict]) -> dict:
+    """Summarize the 500 container without presenting fallback rows as native 500."""
+    summaries = [item for item in deep_summaries if isinstance(item, dict)]
+    native_success = bool(summaries) and all(item.get("all_pages_ok") is True for item in summaries)
+    uses_fallback = any(item.get("status") == "FALLBACK/PARTIAL" for item in summaries)
+    providers: list[str] = []
+    for item in summaries:
+        for provider in item.get("effective_market_providers") or []:
+            if provider not in providers:
+                providers.append(provider)
+    status = "OK" if native_success else ("FALLBACK/PARTIAL" if uses_fallback else "PARTIAL")
+    return {
+        "status": status,
+        "success": native_success,
+        "capture_success": bool(summaries),
+        "native_500_success": native_success,
+        "effective_market_providers": providers,
+        "fallback_used": uses_fallback,
+        "match_count": len(summaries),
+        "matches": summaries,
+    }
 
 
 def _merge_market_page(primary: dict, secondary: dict, rows_key: str) -> dict:
@@ -160,7 +239,58 @@ def _merge_market_page(primary: dict, secondary: dict, rows_key: str) -> dict:
     return merged
 
 
+def _canonical_market_provider(value: object) -> str | None:
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+    lowered = raw.casefold()
+    if lowered.startswith("nowscore"):
+        return "nowscore"
+    if lowered in {"500_deep", "500.com"} or lowered.startswith("500.com"):
+        return "500.com"
+    return raw
+
+
+def _effective_market_providers(result: dict) -> list[str]:
+    """Derive market providers from actual merged rows/pages, not filenames."""
+    providers: list[str] = []
+
+    def add(value: object) -> None:
+        provider = _canonical_market_provider(value)
+        if provider and provider not in providers:
+            providers.append(provider)
+
+    provenance = result.get("source_provenance") or {}
+    add(provenance.get("market_primary"))
+    for value in provenance.get("effective_market_providers") or []:
+        add(value)
+    for page in ("ouzhi", "yazhi", "daxiao"):
+        data = result.get(page)
+        if not isinstance(data, dict):
+            continue
+        rows_key = "bookmakers" if page == "ouzhi" else "companies"
+        rows = [row for row in data.get(rows_key) or [] if isinstance(row, dict)]
+        if not rows:
+            continue
+        for row in rows:
+            add(row.get("source") or row.get("provider") or row.get("market_source"))
+        for value in data.get("sources") or []:
+            add(value)
+        add(data.get("source"))
+    return providers
+
+
 def _attach_nowscore(result: dict, nowscore: dict) -> dict:
+    provenance = result.setdefault("source_provenance", {})
+    pages = ("ouzhi", "yazhi", "rangqiu", "daxiao", "shuju", "touzhu")
+    provenance["500_deep_page_status"] = {
+        page: (
+            result.get(page, {}).get("error")
+            if isinstance(result.get(page), dict) and result.get(page, {}).get("error")
+            else ("ok" if result.get(page) is not None else "missing")
+        )
+        for page in pages
+    }
     result["nowscore"] = nowscore
     if nowscore.get("status") != "OK":
         return result
@@ -177,9 +307,16 @@ def _attach_nowscore(result: dict, nowscore: dict) -> dict:
     if nowscore_shuju.get("recent_form"):
         existing_shuju = result.get("shuju") if isinstance(result.get("shuju"), dict) else {}
         result["shuju"] = {**existing_shuju, **nowscore_shuju}
-    provenance = result.setdefault("source_provenance", {})
-    provenance["market_primary"] = "nowscore"
-    provenance["market_fallback"] = "500.com"
+    effective_providers = _effective_market_providers(result)
+    provenance["effective_market_providers"] = effective_providers
+    if effective_providers:
+        provenance["market_primary"] = effective_providers[0]
+    else:
+        provenance.pop("market_primary", None)
+    if "500.com" in effective_providers:
+        provenance["market_fallback"] = "500.com"
+    else:
+        provenance.pop("market_fallback", None)
     if nowscore_shuju.get("recent_form"):
         provenance["form_primary"] = "nowscore_analysis"
     provenance["nowscore_3in1"] = {
@@ -409,7 +546,7 @@ def main() -> int:
     nowscore_summaries = []
     for shuju_id in deep_ids:
         result = fetch_and_parse(shuju_id, args.date, DEEP_CACHE_DIR, args.no_cache)
-        identity_match = discovered_by_id.get(shuju_id) or ((selected_matches or official_matches or [{}])[0] if len(deep_ids) == 1 else {})
+        identity_match = _identity_for_deep_id(shuju_id, discovered_by_id)
         if identity_match:
             home, away, _ = _identity_fields(identity_match)
             try:
@@ -439,12 +576,7 @@ def main() -> int:
             summary["match"] = discovered_by_id[shuju_id]
         deep_summaries.append(summary)
     if deep_ids:
-        manifest["sources"]["500_deep"] = {
-            "status": "OK" if deep_summaries and all(item["all_pages_ok"] for item in deep_summaries) else "PARTIAL",
-            "success": bool(deep_summaries),
-            "match_count": len(deep_summaries),
-            "matches": deep_summaries,
-        }
+        manifest["sources"]["500_deep"] = _deep_source_manifest(deep_summaries)
     elif args.deep:
         manifest["warnings"].append("已请求深层抓取，但没有可用的shuju_id。")
 

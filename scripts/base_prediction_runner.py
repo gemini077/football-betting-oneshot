@@ -333,8 +333,13 @@ def _valid_total_rows(snapshot: dict[str, Any]) -> list[dict[str, Any]]:
     for row in rows:
         if not isinstance(row, dict) or not _company_name(row):
             continue
-        line_present = row.get("current_line") not in (None, "") or row.get("current_line_str") not in (None, "")
-        if not line_present:
+        # A display-only line string is not enough to reconstruct a current
+        # total line; keep the market fail-closed rather than guessing.
+        try:
+            current_line = float(row.get("current_line"))
+        except (TypeError, ValueError):
+            continue
+        if not math.isfinite(current_line):
             continue
         try:
             waters = [float(row[key]) for key in ("current_over_water", "current_under_water")]
@@ -370,8 +375,52 @@ def _market_bookmakers(snapshot: dict[str, Any]) -> list[str]:
     return names
 
 
-def _market_provider(name: str) -> str:
-    return {"500_deep": "500.com", "nowscore": "nowscore"}.get(name, name)
+def _market_provider(name: str, snapshot: dict[str, Any] | None = None) -> str:
+    providers = _effective_market_providers(snapshot, name) if isinstance(snapshot, dict) else []
+    return providers[0] if providers else {"500_deep": "500.com", "nowscore": "nowscore"}.get(name, name)
+
+
+def _canonical_market_provider(value: object) -> str | None:
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+    lowered = raw.casefold()
+    if lowered.startswith("nowscore"):
+        return "nowscore"
+    if lowered in {"500_deep", "500.com"} or lowered.startswith("500.com"):
+        return "500.com"
+    return raw
+
+
+def _effective_market_providers(snapshot: dict[str, Any], default_name: str | None = None) -> list[str]:
+    """Use merged market evidence provenance instead of the cache filename."""
+    providers: list[str] = []
+
+    def add(value: object) -> None:
+        provider = _canonical_market_provider(value)
+        if provider and provider not in providers:
+            providers.append(provider)
+
+    provenance = snapshot.get("source_provenance") or {}
+    add(provenance.get("market_primary"))
+    for value in provenance.get("effective_market_providers") or []:
+        add(value)
+    for page in ("ouzhi", "yazhi", "daxiao"):
+        data = snapshot.get(page)
+        if not isinstance(data, dict):
+            continue
+        rows_key = "bookmakers" if page == "ouzhi" else "companies"
+        rows = [row for row in data.get(rows_key) or [] if isinstance(row, dict)]
+        if not rows:
+            continue
+        for row in rows:
+            add(row.get("source") or row.get("provider") or row.get("market_source"))
+        for value in data.get("sources") or []:
+            add(value)
+        add(data.get("source"))
+    if not providers:
+        add(default_name)
+    return providers
 
 
 def _has_full_market(snapshot: dict[str, Any]) -> bool:
@@ -381,17 +430,18 @@ def _has_full_market(snapshot: dict[str, Any]) -> bool:
 
 
 def _market_only_baseline(
-    snapshot: dict[str, Any], source: str, source_refs: list[str]
+    snapshot: dict[str, Any], source: str | list[str], source_refs: list[str]
 ) -> dict[str, Any] | None:
     probabilities = _consensus_probabilities(snapshot)
     if not probabilities:
         return None
+    sources = [source] if isinstance(source, str) else list(source)
     return {
         "home": round(float(probabilities["home"]), 9),
         "draw": round(float(probabilities["draw"]), 9),
         "away": round(float(probabilities["away"]), 9),
         "method": "existing_multibook_consensus_devig",
-        "sources": [source, *source_refs],
+        "sources": [*sources, *source_refs],
     }
 
 
@@ -515,8 +565,8 @@ def _five_hundred_source(
     if captured_at is None or captured_at >= kickoff:
         return None, True, refs
     return {
-        # This is the governance/model contract key.  The user-facing source
-        # label remains 500.com in the metadata below.
+        # Keep the governance/model contract key for source selection; the
+        # effective provider is derived from this snapshot's provenance below.
         "name": "500_deep",
         "snapshot": result,
         "captured_at": captured_at,
@@ -641,13 +691,13 @@ def _assemble_context(
     market_bookmakers: list[str]
     market_families: list[str]
     market_only: dict[str, Any] | None
+    market_sources = []
     if full_source:
-        market_label = _market_provider(full_source["name"])
-        market_sources = [market_label]
-        market_data_providers = [market_label]
+        market_sources = _effective_market_providers(full_source["snapshot"], full_source["name"])
+        market_data_providers = list(market_sources)
         market_bookmakers = _market_bookmakers(full_source["snapshot"])
         market_families = _market_families(full_source["snapshot"])
-        market_only = _market_only_baseline(full_source["snapshot"], market_label, full_source["references"])
+        market_only = _market_only_baseline(full_source["snapshot"], market_sources, full_source["references"])
         if market_only is None:
             full_source = None
             market_quality = "LIMITED"
@@ -657,13 +707,12 @@ def _assemble_context(
         market_families = []
         market_only = None
         if market_source:
-            market_label = _market_provider(market_source["name"])
+            market_sources = _effective_market_providers(market_source["snapshot"], market_source["name"])
             market_only = _market_only_baseline(
-                market_source["snapshot"], market_label, market_source["references"]
+                market_source["snapshot"], market_sources, market_source["references"]
             )
             if market_only is not None:
-                market_sources = [market_label]
-                market_data_providers = [market_label]
+                market_data_providers = list(market_sources)
                 market_bookmakers = _market_bookmakers(market_source["snapshot"])
                 market_families = _market_families(market_source["snapshot"])
         if market_only is None:
