@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from scripts.football_data.entity_resolution import TeamEntityResolver
+from scripts.team_identity import canonical_team, team_similarity
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -64,3 +65,15 @@ def test_senior_reserve_women_and_youth_entities_do_not_cross_merge():
     assert value.resolve_team("fixture", "Barcelona U19").canonical_team_id == "team:barcelona-u19"
     assert value.resolve_team("fixture", "Barcelona", team_level="reserve").canonical_team_id is None
     assert value.resolve_team("fixture", "Barcelona", gender="female").canonical_team_id is None
+
+
+def test_braunschweig_shuju_and_universe_names_share_identity_without_cross_wiring():
+    shuju_home = "布伦瑞克"
+    universe_home = "不伦瑞克"
+    shuju_away = "柏林赫塔"
+    universe_away = "柏林赫塔"
+    assert canonical_team(shuju_home) == canonical_team(universe_home) == "不伦瑞克"
+    assert canonical_team(shuju_away) == canonical_team(universe_away) == "柏林赫塔"
+    assert team_similarity(shuju_home, universe_home) == (1.0, "confirmed_alias_or_exact")
+    assert team_similarity(shuju_away, universe_away) == (1.0, "confirmed_alias_or_exact")
+    assert canonical_team(shuju_home) != canonical_team(shuju_away)
