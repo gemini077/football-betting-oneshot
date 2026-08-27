@@ -156,8 +156,8 @@ def test_report_has_explicit_no_change_decision_and_temporal_comparison(tmp_path
     result(tmp_path, "only.json")
     report = build_report(tmp_path, source_commit="SOURCE")
     assert report["model_decision"] == "NO_MODEL_CHANGE"
-    assert report["future_hypothesis"]["id"] == "dynamic_total_goals_regime_v1"
-    assert report["future_hypothesis"]["status"] == "NOT_QUALIFIED"
+    assert "underweighted prematch information" in report["decision_reason"]
+    assert "future_hypothesis" not in report
     assert set(report["complete_recent_late_minus_early_bootstrap"]) == {
         "high_total",
         "big_margin_win",

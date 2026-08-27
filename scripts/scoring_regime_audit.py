@@ -714,18 +714,13 @@ def build_report(
         "champion_diagnostic": champion,
         "shadow_state": shadow_state(shadow_prediction_root, shadow_settlement_root, champion_records) if shadow_prediction_root else None,
         "model_decision": "NO_MODEL_CHANGE",
-        "decision_reason": "Same-system late-15 scoring uptick and Champion right-tail underprediction exist, but no full previous-30-day or 12-month same-coverage baseline and no competition field or verified join to standardize schedule composition.",
-        "future_hypothesis": {
-            "id": "dynamic_total_goals_regime_v1",
-            "status": "NOT_QUALIFIED",
-            "type": "hypothesis_only",
-            "parameter_grid": False,
-            "production_hook": False,
-        },
+        "decision_reason": "Root cause not established; missing or underweighted prematch information is a higher-priority explanation than a global scoring regime. The same-system late-15 scoring uptick and Champion right-tail underprediction exist, but there is no full previous-30-day or 12-month same-coverage baseline and no competition field or verified join to standardize schedule composition.",
         "conclusion": {
             "status": "DIAGNOSTIC_ONLY",
             "model_change": "NO_MODEL_CHANGE",
             "interpretation_limits": [
+                "The result pattern is a symptom audit and does not establish a global scoring-environment change.",
+                "Missing or underweighted prematch information is a higher-priority open explanation than a global regime shift.",
                 "The prior 30-day window is incomplete when the result store starts after its beginning.",
                 "The verified result store does not persist competition or league, so composition cannot be standardized here.",
                 "Champion exact-score storage is top-10; no full score matrix was reconstructed.",
