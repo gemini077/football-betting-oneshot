@@ -466,6 +466,7 @@ def _shadow_metadata(
     champion_prediction: dict[str, Any],
     *,
     shadow_created_at: str,
+    source_champion_time_floor: datetime,
     status: str,
     failure_reason: str | None,
     candidate: dict[str, Any] | None,
@@ -515,6 +516,7 @@ def _shadow_metadata(
         "candidate_version": MARKET_DIRECTION_SHADOW_CANDIDATE_ID,
         "shadow_status": status,
         "shadow_created_at": shadow_created_at,
+        "source_champion_time_floor": source_champion_time_floor.isoformat(),
         "shadow_failure_reason": failure_reason,
         "changed_variables": ["market_direction_fusion"],
         "challenger_declaration": declaration,
@@ -598,6 +600,7 @@ def run_market_direction_shadow_for_frozen_prediction(
         comparison,
         champion_prediction,
         shadow_created_at=created.isoformat(),
+        source_champion_time_floor=champion_time,
         status="complete" if candidate is not None and failure_reason is None else "failed",
         failure_reason=failure_reason,
         candidate=candidate,
@@ -660,8 +663,12 @@ def settle_market_direction_shadow_for_result(
         return {"status": "failed", "reason": "shadow_source_champion_unverifiable", "comparison_id": comparison_id}
     shadow_created = _parse_aware(comparison.get("shadow_created_at"))
     kickoff = _parse_aware(comparison.get("kickoff_at") or source_prediction.get("kickoff_at"))
-    champion_time, time_reason = _champion_time_floor(source_prediction)
-    if shadow_created is None or kickoff is None or time_reason:
+    if "source_champion_time_floor" in comparison:
+        champion_time = _parse_aware(comparison.get("source_champion_time_floor"))
+        time_reason = None if champion_time is not None else "source_champion_time_floor_invalid"
+    else:
+        champion_time, time_reason = _champion_time_floor(source_prediction)
+    if shadow_created is None or kickoff is None or champion_time is None or time_reason:
         return {"status": "failed", "reason": "shadow_audit_invalid_timestamp", "comparison_id": comparison_id}
     if shadow_created < champion_time or not shadow_created < kickoff:
         return {"status": "failed", "reason": "shadow_audit_invalid_prematch_time", "comparison_id": comparison_id}

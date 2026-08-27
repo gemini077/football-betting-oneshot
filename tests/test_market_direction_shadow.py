@@ -1,7 +1,7 @@
 import copy
 import json
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -30,6 +30,14 @@ def make_fixture(tmp_path):
     record, snapshot_root, _ = frozen_phase0_prediction(tmp_path)
     record["kickoff_at"] = KICKOFF
     return record, snapshot_root
+
+
+def rewrite_shadow_comparison(prediction_root, **updates):
+    path = next(prediction_root.glob("*.json"))
+    document = json.loads(path.read_text(encoding="utf-8"))
+    document.update(updates)
+    path.write_text(json.dumps(document), encoding="utf-8")
+    return document
 
 
 def test_shadow_uses_same_snapshot_total_and_single_changed_variable(tmp_path):
@@ -290,16 +298,20 @@ def test_shadow_timestamp_is_after_champion_times_and_before_kickoff(tmp_path, m
     )
 
     assert result["status"] == "created"
-    shadow_created = datetime.fromisoformat(result["comparison"]["shadow_created_at"])
+    comparison = result["comparison"]
+    shadow_created = datetime.fromisoformat(comparison["shadow_created_at"])
     prediction_created = datetime.fromisoformat(record["prediction_created_at"])
     freeze_created = datetime.fromisoformat(record["freeze_created_at"])
     kickoff = datetime.fromisoformat(record["kickoff_at"])
+    source_champion_time_floor = datetime.fromisoformat(comparison["source_champion_time_floor"])
     assert shadow_created >= prediction_created
     assert shadow_created >= freeze_created
     assert shadow_created < kickoff
+    assert source_champion_time_floor == max(prediction_created, freeze_created)
+    assert source_champion_time_floor.tzinfo is not None
 
 
-def test_backdated_shadow_is_not_settled_or_added_to_metrics(tmp_path):
+def test_shadow_settlement_uses_frozen_source_champion_time(tmp_path):
     record, snapshot_root = make_fixture(tmp_path)
     prediction_root = tmp_path / "shadow_predictions"
     settlement_root = tmp_path / "shadow_settlements"
@@ -314,6 +326,105 @@ def test_backdated_shadow_is_not_settled_or_added_to_metrics(tmp_path):
 
     record["prediction_created_at"] = "2026-08-10T19:45:00+08:00"
     record["freeze_created_at"] = "2026-08-10T19:50:00+08:00"
+    settled = settle_market_direction_shadow_for_result(
+        record,
+        {"home_score_90m": 2, "away_score_90m": 1},
+        prediction_root=prediction_root,
+        settlement_root=settlement_root,
+        settled_at="2026-08-10T22:00:00+08:00",
+        repository_root=ROOT,
+    )
+
+    assert settled["status"] == "created"
+    assert settled["settlement"]["prospective_shadow"] is True
+
+
+def test_shadow_before_frozen_source_champion_time_is_not_settled(tmp_path):
+    record, snapshot_root = make_fixture(tmp_path)
+    prediction_root = tmp_path / "shadow_predictions"
+    settlement_root = tmp_path / "shadow_settlements"
+    captured = run_market_direction_shadow_for_frozen_prediction(
+        record,
+        shadow_created_at=PREMATCH,
+        snapshot_root=snapshot_root,
+        prediction_root=prediction_root,
+        repository_root=ROOT,
+    )
+    assert captured["status"] == "created"
+    frozen_floor = datetime.fromisoformat(captured["comparison"]["source_champion_time_floor"])
+    rewrite_shadow_comparison(
+        prediction_root,
+        shadow_created_at=(frozen_floor - timedelta(minutes=1)).isoformat(),
+    )
+    record["prediction_created_at"] = "2026-08-10T19:20:00+08:00"
+    record["freeze_created_at"] = "2026-08-10T19:25:00+08:00"
+
+    settled = settle_market_direction_shadow_for_result(
+        record,
+        {"home_score_90m": 2, "away_score_90m": 1},
+        prediction_root=prediction_root,
+        settlement_root=settlement_root,
+        settled_at="2026-08-10T22:00:00+08:00",
+        repository_root=ROOT,
+    )
+
+    assert settled["status"] == "failed"
+    assert settled["reason"] == "shadow_audit_invalid_prematch_time"
+    assert not settlement_root.exists()
+
+
+def test_post_kickoff_shadow_is_not_settled(tmp_path):
+    record, snapshot_root = make_fixture(tmp_path)
+    prediction_root = tmp_path / "shadow_predictions"
+    settlement_root = tmp_path / "shadow_settlements"
+    captured = run_market_direction_shadow_for_frozen_prediction(
+        record,
+        shadow_created_at=PREMATCH,
+        snapshot_root=snapshot_root,
+        prediction_root=prediction_root,
+        repository_root=ROOT,
+    )
+    assert captured["status"] == "created"
+    kickoff = datetime.fromisoformat(record["kickoff_at"])
+    rewrite_shadow_comparison(
+        prediction_root,
+        shadow_created_at=(kickoff + timedelta(minutes=1)).isoformat(),
+    )
+
+    settled = settle_market_direction_shadow_for_result(
+        record,
+        {"home_score_90m": 2, "away_score_90m": 1},
+        prediction_root=prediction_root,
+        settlement_root=settlement_root,
+        settled_at="2026-08-10T22:00:00+08:00",
+        repository_root=ROOT,
+    )
+
+    assert settled["status"] == "failed"
+    assert settled["reason"] == "shadow_audit_invalid_prematch_time"
+    assert not settlement_root.exists()
+
+
+def test_legacy_shadow_without_frozen_source_time_keeps_strict_validation(tmp_path):
+    record, snapshot_root = make_fixture(tmp_path)
+    prediction_root = tmp_path / "shadow_predictions"
+    settlement_root = tmp_path / "shadow_settlements"
+    captured = run_market_direction_shadow_for_frozen_prediction(
+        record,
+        shadow_created_at=PREMATCH,
+        snapshot_root=snapshot_root,
+        prediction_root=prediction_root,
+        repository_root=ROOT,
+    )
+    assert captured["status"] == "created"
+    rewrite_shadow_comparison(prediction_root, source_champion_time_floor=None)
+    path = next(prediction_root.glob("*.json"))
+    legacy = json.loads(path.read_text(encoding="utf-8"))
+    legacy.pop("source_champion_time_floor", None)
+    path.write_text(json.dumps(legacy), encoding="utf-8")
+    record["prediction_created_at"] = "2026-08-10T19:45:00+08:00"
+    record["freeze_created_at"] = "2026-08-10T19:50:00+08:00"
+
     settled = settle_market_direction_shadow_for_result(
         record,
         {"home_score_90m": 2, "away_score_90m": 1},
