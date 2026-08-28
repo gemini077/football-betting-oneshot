@@ -468,6 +468,43 @@ def _form_summary(rows: list[list[object]], team_id: int, venue: str | None = No
     }
 
 
+def _normalise_recent_match_date(source_date: str) -> str | None:
+    if not re.fullmatch(r"\d{2}-\d{2}-\d{2}", source_date):
+        return None
+    try:
+        datetime.strptime("20" + source_date, "%Y-%m-%d")
+    except ValueError:
+        return None
+    return "20" + source_date
+
+
+def _recent_match_row(row: list[object]) -> dict[str, object] | None:
+    if len(row) < 10:
+        return None
+    try:
+        home_team_id = int(row[4])
+        away_team_id = int(row[6])
+        home_goals = int(row[8])
+        away_goals = int(row[9])
+    except (TypeError, ValueError, IndexError):
+        return None
+    source_date = str(row[0])
+    return {
+        "source_date": source_date,
+        "match_date": _normalise_recent_match_date(source_date),
+        "home_team_id": home_team_id,
+        "home_team_name": str(row[5]),
+        "away_team_id": away_team_id,
+        "away_team_name": str(row[7]),
+        "home_goals": home_goals,
+        "away_goals": away_goals,
+    }
+
+
+def _recent_matches(rows: list[list[object]]) -> list[dict[str, object]]:
+    return [parsed for row in rows if (parsed := _recent_match_row(row)) is not None]
+
+
 def parse_analysis_data(text: str) -> dict:
     """Build the recent-form contract consumed by the deterministic model."""
     home_rows, away_rows = _analysis_array(text, "h_data"), _analysis_array(text, "a_data")
@@ -484,6 +521,10 @@ def parse_analysis_data(text: str) -> dict:
         return {}
     return {
         "recent_form": recent_form,
+        "recent_matches": {
+            "home_team": _recent_matches(home_rows),
+            "away_team": _recent_matches(away_rows),
+        },
         "source_note": "Nowscore analysis recent results; actual goals, not xG",
         "team_ids": {"home": home_id, "away": away_id},
     }

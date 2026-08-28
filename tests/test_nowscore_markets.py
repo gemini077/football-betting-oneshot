@@ -130,6 +130,46 @@ class NowscoreMarketTests(unittest.TestCase):
         self.assertEqual(1, form["home_home"]["matches"])
         self.assertEqual(1, form["away_away"]["matches"])
 
+        recent_matches = result["recent_matches"]
+        self.assertEqual(3, len(recent_matches["home_team"]))
+        self.assertEqual(3, len(recent_matches["away_team"]))
+        self.assertEqual({
+            "source_date": "26-07-12",
+            "match_date": "2026-07-12",
+            "home_team_id": 9,
+            "home_team_name": "opp",
+            "away_team_id": 101,
+            "away_team_name": "home",
+            "home_goals": 2,
+            "away_goals": 1,
+        }, recent_matches["home_team"][0])
+        self.assertEqual({
+            "source_date": "26-07-11",
+            "match_date": "2026-07-11",
+            "home_team_id": 202,
+            "home_team_name": "away",
+            "away_team_id": 6,
+            "away_team_name": "opp",
+            "home_goals": 2,
+            "away_goals": 2,
+        }, recent_matches["away_team"][0])
+
+    def test_analysis_recent_matches_skip_short_and_unparseable_rows(self):
+        text = ANALYSIS_JS.replace(
+            "];\nvar a_data",
+            ",['not-a-date',22,'','#666',101,'home',8,'opp',1,0,'1-0'],"
+            "['26-06-21',22,'','#666','bad','home',101,'opp',1,0,'1-0'],"
+            "['short']];\nvar a_data",
+        )
+
+        result = parse_analysis_data(text)
+
+        home_matches = result["recent_matches"]["home_team"]
+        self.assertEqual(4, len(home_matches))
+        self.assertEqual("not-a-date", home_matches[-1]["source_date"])
+        self.assertIsNone(home_matches[-1]["match_date"])
+        self.assertNotIn("bad", {row["home_team_id"] for row in home_matches})
+
     def test_numeric_split_total_line_is_normalized(self):
         self.assertEqual(2.75, handicap_number("2.5/3"))
 

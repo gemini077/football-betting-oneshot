@@ -49,12 +49,21 @@ def fixture(index: int, *, spf: dict | None = None, kickoff: str = KICKOFF, nows
     return row
 
 
-def parsed_source(index: int = 1, *, captured_at: str = "2026-08-12T12:30:00+08:00", full_market: bool = False, form: dict | None = None) -> dict:
+def parsed_source(
+    index: int = 1,
+    *,
+    captured_at: str = "2026-08-12T12:30:00+08:00",
+    full_market: bool = False,
+    form: dict | None = None,
+    recent_matches: dict | None = None,
+) -> dict:
     value = {
         "shuju_id": 1413000 + index,
         "fetched_at": captured_at,
         "shuju": {"recent_form": recent_form() if form is None else form},
     }
+    if recent_matches is not None:
+        value["shuju"]["recent_matches"] = recent_matches
     if full_market:
         value["ouzhi"] = {
             "bookmakers": [
@@ -78,6 +87,40 @@ def parsed_source(index: int = 1, *, captured_at: str = "2026-08-12T12:30:00+08:
                 "current_water_away": 0.93,
             }]
         }
+    return value
+
+
+def recent_matches() -> dict:
+    return {
+        "home_team": [{
+            "source_date": "26-08-01",
+            "match_date": "2026-08-01",
+            "home_team_id": 101,
+            "home_team_name": "Home 1",
+            "away_team_id": 301,
+            "away_team_name": "Opponent A",
+            "home_goals": 2,
+            "away_goals": 0,
+        }],
+        "away_team": [{
+            "source_date": "26-07-28",
+            "match_date": "2026-07-28",
+            "home_team_id": 302,
+            "home_team_name": "Opponent B",
+            "away_team_id": 202,
+            "away_team_name": "Away 1",
+            "home_goals": 1,
+            "away_goals": 1,
+        }],
+    }
+
+
+def nowscore_source(index: int = 1) -> dict:
+    value = parsed_source(index, full_market=True, recent_matches=recent_matches())
+    value.update({
+        "status": "OK",
+        "nowscore_id": 100000 + index,
+    })
     return value
 
 
@@ -182,6 +225,7 @@ def run_case(
     model_side_effect=None,
     now: datetime = NOW,
     nowscore_result: dict | None = None,
+    football_evidence_root: Path | None = None,
 ) -> tuple[dict, Mock]:
     parsed = parsed if parsed is not None else parsed_source()
     with ExitStack() as stack:
@@ -199,6 +243,7 @@ def run_case(
             now=now,
             record_root=root / "model_governance" / "predictions",
             input_snapshot_root=root / "model_governance" / "input_snapshots",
+            football_evidence_root=football_evidence_root,
         )
     return summary, build
 
@@ -572,3 +617,104 @@ def test_runner_does_not_create_deep_report_or_parallel_prediction_store():
         assert not (root / "base_prediction_inputs").exists()
         assert not (root / "base_predictions").exists()
         assert list(root.rglob("*.html")) == []
+
+
+def test_runner_creates_football_evidence_sidecar_after_champion_freeze():
+    with tempfile.TemporaryDirectory() as temp:
+        root = Path(temp)
+        evidence_root = root / "prospective" / "football_evidence"
+        write_case(root, [fixture(1, spf=limited_spf(), nowscore=True)])
+        summary, _ = run_case(
+            root,
+            parsed=parsed_source(),
+            nowscore_result=nowscore_source(),
+            football_evidence_root=evidence_root,
+        )
+        sidecars = list(evidence_root.glob("*.json"))
+        payload = json.loads(sidecars[0].read_text(encoding="utf-8"))
+
+    assert summary["frozen"] == 1
+    assert len(sidecars) == 1
+    assert payload["contract_version"] == "prospective_football_evidence.v1"
+    assert payload["source_provider"] == "nowscore"
+    assert payload["nowscore_id"] == 100001
+    assert payload["match_key"]
+    assert payload["match_id"] == "M001"
+    assert payload["business_date"] == DATE
+    assert payload["home"] == "Home 1"
+    assert payload["away"] == "Away 1"
+    assert payload["kickoff_at"] == KICKOFF
+    assert payload["prediction_created_at"]
+    assert payload["freeze_created_at"]
+    assert payload["source_cutoff_at"]
+    assert payload["evidence_captured_at"] == "2026-08-12T12:30:00+08:00"
+    assert payload["recent_matches"] == recent_matches()
+    assert not {"actual", "result", "settlement", "verified_result"}.intersection(payload)
+
+
+def test_football_evidence_sidecar_is_idempotent_and_conflict_safe():
+    record = {
+        "prediction_id": "FBOS-PRED-EVIDENCE-001",
+        "match_key": "fixture-001",
+        "match_id": "M001",
+        "business_date": DATE,
+        "home": "Home 1",
+        "away": "Away 1",
+        "kickoff_at": KICKOFF,
+        "prediction_created_at": "2026-08-12T12:31:00+08:00",
+        "freeze_created_at": "2026-08-12T12:32:00+08:00",
+        "source_cutoff_at": "2026-08-12T12:30:00+08:00",
+    }
+    source_snapshots = {
+        "nowscore": {
+            "snapshots": [{
+                "nowscore_id": 100001,
+                "fetched_at": "2026-08-12T12:30:00+08:00",
+                "shuju": {"recent_matches": recent_matches()},
+            }],
+        },
+    }
+
+    with tempfile.TemporaryDirectory() as temp:
+        root = Path(temp)
+        first = runner.write_football_evidence_sidecar(record, source_snapshots, evidence_root=root)
+        path = root / "FBOS-PRED-EVIDENCE-001.json"
+        original = path.read_bytes()
+        second = runner.write_football_evidence_sidecar(record, source_snapshots, evidence_root=root)
+
+        changed_source = json.loads(json.dumps(source_snapshots))
+        changed_source["nowscore"]["snapshots"][0]["shuju"]["recent_matches"]["home_team"][0]["home_goals"] = 3
+        conflict = runner.write_football_evidence_sidecar(record, changed_source, evidence_root=root)
+
+        assert first["status"] == "created"
+        assert second["status"] == "existing"
+        assert conflict["status"] == "conflict"
+        assert path.read_bytes() == original
+
+
+def test_football_evidence_write_failure_does_not_fail_frozen_prediction():
+    with tempfile.TemporaryDirectory() as temp:
+        root = Path(temp)
+        write_case(root, [fixture(1, spf=limited_spf())])
+        with patch.object(
+            runner,
+            "write_football_evidence_sidecar",
+            side_effect=OSError("evidence disk unavailable"),
+        ):
+            summary, _ = run_case(root)
+        job = read_ledger(root)["jobs"][0]
+
+    assert summary["frozen"] == 1
+    assert job["status"] == "FROZEN"
+    assert job["last_error"] is None
+    assert job["football_evidence_status"] == "failed"
+    assert job["football_evidence_error"] == "OSError"
+
+
+def test_custom_record_root_derives_a_nonproduction_evidence_root(tmp_path):
+    custom_record_root = tmp_path / "model_governance" / "predictions"
+
+    derived = runner._resolve_football_evidence_root(custom_record_root, None)
+
+    assert derived == custom_record_root.parent / "football_evidence"
+    assert derived != runner.DEFAULT_FOOTBALL_EVIDENCE_ROOT

@@ -688,6 +688,25 @@ def test_unrelated_state_narrative_and_polymarket_do_not_change_model_snapshot()
     assert first["snapshot_id"] == second["snapshot_id"]
 
 
+def test_recent_matches_are_sidecar_only_and_do_not_change_champion_input_hash():
+    base_context = deterministic_context()
+    evidence_context = json.loads(json.dumps(base_context))
+    evidence_context["source_snapshots"]["500_deep"]["snapshots"][0]["shuju"]["recent_matches"] = {
+        "home_team": [{"source_date": "26-08-01", "home_goals": 2}],
+        "away_team": [{"source_date": "26-07-28", "away_goals": 1}],
+    }
+
+    base_projection = build_deterministic_model_input_projection(base_context)
+    evidence_projection = build_deterministic_model_input_projection(evidence_context)
+    base_snapshot = build_deterministic_model_input_snapshot(base_context)
+    evidence_snapshot = build_deterministic_model_input_snapshot(evidence_context)
+
+    assert base_projection == evidence_projection
+    assert base_snapshot["canonical_model_input_sha256"] == evidence_snapshot["canonical_model_input_sha256"]
+    assert base_snapshot["snapshot_id"] == evidence_snapshot["snapshot_id"]
+    assert "recent_matches" not in evidence_projection["source_snapshots"]["500_deep"]["snapshots"][0]["shuju"]
+
+
 def test_real_model_input_changes_change_model_snapshot():
     first_context = deterministic_context()
     second_context = deterministic_context()

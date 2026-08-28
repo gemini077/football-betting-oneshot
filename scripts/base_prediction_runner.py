@@ -56,6 +56,12 @@ LOCAL_TZ = timezone(timedelta(hours=8))
 RETRYABLE_STATUSES = {"PENDING", "INSUFFICIENT_DATA", "PREDICTION_FAILED", "FROZEN"}
 TERMINAL_STATUSES = {"MISSED_PREMATCH_WINDOW", "PREDICTED"}
 UNIVERSE_STATUSES = {"READY", "EMPTY_CONFIRMED"}
+FOOTBALL_EVIDENCE_CONTRACT_VERSION = "prospective_football_evidence.v1"
+DEFAULT_FOOTBALL_EVIDENCE_ROOT = PROJECT_ROOT / "data" / "prospective" / "football_evidence"
+_FOOTBALL_EVIDENCE_MATCH_FIELDS = (
+    "source_date", "match_date", "home_team_id", "home_team_name",
+    "away_team_id", "away_team_name", "home_goals", "away_goals",
+)
 
 
 class GovernanceContractBlocker(RuntimeError):
@@ -586,6 +592,160 @@ def _strip_source_form(snapshot: dict[str, Any]) -> dict[str, Any]:
     return value
 
 
+def _nowscore_snapshot(source_snapshots: Any) -> dict[str, Any] | None:
+    if not isinstance(source_snapshots, dict):
+        return None
+    source = source_snapshots.get("nowscore")
+    snapshots = source.get("snapshots") if isinstance(source, dict) else []
+    if not isinstance(snapshots, list) or not snapshots or not isinstance(snapshots[0], dict):
+        return None
+    return snapshots[0]
+
+
+def _nowscore_recent_matches(snapshot: dict[str, Any]) -> dict[str, list[dict[str, Any]]] | None:
+    shuju = snapshot.get("shuju")
+    recent_matches = shuju.get("recent_matches") if isinstance(shuju, dict) else None
+    if not isinstance(recent_matches, dict):
+        return None
+    result: dict[str, list[dict[str, Any]]] = {}
+    for group in ("home_team", "away_team"):
+        rows = recent_matches.get(group)
+        if not isinstance(rows, list):
+            return None
+        result[group] = []
+        for row in rows:
+            if not isinstance(row, dict) or not all(
+                field in row for field in _FOOTBALL_EVIDENCE_MATCH_FIELDS
+            ):
+                continue
+            result[group].append({
+                field: copy.deepcopy(row[field])
+                for field in _FOOTBALL_EVIDENCE_MATCH_FIELDS
+            })
+    return result
+
+
+def _build_football_evidence_audit(source_snapshots: Any) -> dict[str, Any] | None:
+    snapshot = _nowscore_snapshot(source_snapshots)
+    if snapshot is None:
+        return None
+    recent_matches = _nowscore_recent_matches(snapshot)
+    if recent_matches is None:
+        return None
+    evidence: dict[str, Any] = {
+        "source_provider": "nowscore",
+        "recent_matches": recent_matches,
+    }
+    nowscore_id = _first(snapshot, "nowscore_id", "nowscoreId")
+    if nowscore_id not in (None, ""):
+        try:
+            nowscore_id = int(nowscore_id)
+        except (TypeError, ValueError):
+            nowscore_id = str(nowscore_id)
+        evidence["nowscore_id"] = nowscore_id
+    captured_at = _snapshot_capture(snapshot)
+    if captured_at is not None:
+        evidence["evidence_captured_at"] = captured_at.isoformat()
+    return evidence
+
+
+def build_football_evidence_sidecar(
+    record: dict[str, Any],
+    source_snapshots: Any,
+    *,
+    business_date: str | None = None,
+) -> dict[str, Any] | None:
+    """Build research-only football evidence without copying the frozen result."""
+    evidence = _build_football_evidence_audit(source_snapshots)
+    if evidence is None:
+        return None
+    identity = record.get("match_identity") if isinstance(record.get("match_identity"), dict) else {}
+    sidecar: dict[str, Any] = {
+        "contract_version": FOOTBALL_EVIDENCE_CONTRACT_VERSION,
+        "prediction_id": record.get("prediction_id"),
+        "match_id": record.get("match_id") or identity.get("match_id"),
+        "business_date": business_date or record.get("business_date"),
+        "home": record.get("home") or identity.get("home"),
+        "away": record.get("away") or identity.get("away"),
+        "kickoff_at": record.get("kickoff_at") or identity.get("kickoff_at"),
+        "source_provider": "nowscore",
+        "evidence_captured_at": evidence.get("evidence_captured_at"),
+        "recent_matches": evidence["recent_matches"],
+    }
+    match_key = record.get("match_key") or identity.get("match_key")
+    if match_key not in (None, ""):
+        sidecar["match_key"] = match_key
+    for key in ("prediction_created_at", "freeze_created_at", "source_cutoff_at"):
+        if record.get(key) not in (None, ""):
+            sidecar[key] = record[key]
+    if "nowscore_id" in evidence:
+        sidecar["nowscore_id"] = evidence["nowscore_id"]
+    return sidecar
+
+
+def write_football_evidence_sidecar(
+    record: dict[str, Any],
+    source_snapshots: Any,
+    *,
+    evidence_root: Path | None = None,
+    business_date: str | None = None,
+) -> dict[str, Any]:
+    """Write one exclusive research sidecar keyed by prediction_id."""
+    try:
+        sidecar = build_football_evidence_sidecar(record, source_snapshots, business_date=business_date)
+    except Exception as error:
+        return {"status": "failed", "reason": f"{type(error).__name__}"}
+    if sidecar is None:
+        return {"status": "skipped", "reason": "NOWSCORE_RECENT_MATCHES_UNAVAILABLE"}
+    prediction_id = str(sidecar.get("prediction_id") or "").strip()
+    if not prediction_id:
+        return {"status": "skipped", "reason": "MISSING_PREDICTION_ID"}
+    root = Path(evidence_root) if evidence_root is not None else DEFAULT_FOOTBALL_EVIDENCE_ROOT
+    target = root / f"{prediction_id}.json"
+    try:
+        root.mkdir(parents=True, exist_ok=True)
+        serialized = json.dumps(sidecar, ensure_ascii=False, indent=2) + "\n"
+        try:
+            with target.open("x", encoding="utf-8") as handle:
+                handle.write(serialized)
+            return {"status": "created", "path": target, "record": sidecar}
+        except FileExistsError:
+            try:
+                existing = _load_json(target)
+            except (OSError, json.JSONDecodeError):
+                return {"status": "conflict", "path": target, "reason": "EXISTING_SIDECAR_UNREADABLE"}
+            if existing == sidecar:
+                return {"status": "existing", "path": target, "record": existing}
+            return {"status": "conflict", "path": target, "reason": "SIDECAR_CONTENT_CONFLICT"}
+    except (OSError, TypeError, ValueError) as error:
+        return {"status": "failed", "reason": f"{type(error).__name__}"}
+
+
+def _resolve_football_evidence_root(record_root: Path, evidence_root: Path | None) -> Path:
+    if evidence_root is not None:
+        return Path(evidence_root)
+    record_path = Path(record_root)
+    if record_path.resolve() == DEFAULT_RECORD_ROOT.resolve():
+        return DEFAULT_FOOTBALL_EVIDENCE_ROOT
+    # A custom governance root is a test/research boundary; keep its sidecar
+    # beside that root instead of silently writing into repository data.
+    return record_path.parent / "football_evidence"
+
+
+def _record_football_evidence_status(job: dict[str, Any], result: Any) -> None:
+    if not isinstance(result, dict):
+        result = {"status": "failed", "reason": "INVALID_WRITER_RESULT"}
+    status = str(result.get("status") or "failed")
+    job["football_evidence_status"] = status
+    path = result.get("path") or result.get("ref")
+    if path:
+        job["football_evidence_ref"] = str(path)
+    if status in {"failed", "conflict"}:
+        job["football_evidence_error"] = str(result.get("reason") or "FOOTBALL_EVIDENCE_WRITE_FAILED")
+    else:
+        job["football_evidence_error"] = None
+
+
 def _assemble_context(
     business_date: str,
     job: dict[str, Any],
@@ -804,6 +964,9 @@ def _assemble_context(
             "missing": [],
         },
     }
+    football_evidence = _build_football_evidence_audit(source_snapshots)
+    if football_evidence is not None:
+        metadata["audit"] = {"research_only": {"football_evidence": football_evidence}}
     return context, metadata, None
 
 
@@ -985,11 +1148,13 @@ def run_base_prediction_jobs(
     input_snapshot_root: Path = DEFAULT_INPUT_SNAPSHOT_ROOT,
     job_id: str | None = None,
     shadow_prediction_root: Path | None = None,
+    football_evidence_root: Path | None = None,
 ) -> dict[str, Any]:
     """Attempt all retryable pre-kickoff BASE jobs for one business date."""
     current_time = _as_now(now)
     real_time = now is None
     shadow_prediction_root = Path(shadow_prediction_root or PROJECT_ROOT / "data" / "model_benchmarks" / "predictions")
+    football_evidence_root = _resolve_football_evidence_root(Path(record_root), football_evidence_root)
     shadow_counts = Counter()
     shadow_failure_reasons: Counter[str] = Counter()
 
@@ -1011,6 +1176,20 @@ def run_base_prediction_jobs(
         else:
             shadow_counts["failed"] += 1
             shadow_failure_reasons[str(result.get("reason") or "shadow_unknown_failure")] += 1
+
+    def capture_football_evidence(
+        record: dict[str, Any], source_snapshots: Any, job: dict[str, Any]
+    ) -> None:
+        try:
+            result = write_football_evidence_sidecar(
+                record,
+                source_snapshots,
+                evidence_root=football_evidence_root,
+                business_date=business_date,
+            )
+        except Exception as error:  # research sidecar is isolated from Champion freeze
+            result = {"status": "failed", "reason": f"{type(error).__name__}"}
+        _record_football_evidence_status(job, result)
 
     ledger_path = Path(jobs_root) / f"{business_date}.json"
     ledger = _load_json(ledger_path)
@@ -1103,6 +1282,7 @@ def run_base_prediction_jobs(
             job["prediction_created_at"] = unchanged.get("prediction_created_at")
             job["freeze_created_at"] = unchanged.get("freeze_created_at")
             job["last_error"] = None
+            capture_football_evidence(unchanged, context.get("source_snapshots"), job)
             capture_shadow(unchanged, job)
             job["updated_at"] = current_time.isoformat()
             continue
@@ -1174,6 +1354,7 @@ def run_base_prediction_jobs(
             job["updated_at"] = current_time.isoformat()
             continue
         stored = frozen.get("record") or record
+        capture_football_evidence(stored, context.get("source_snapshots"), job)
         capture_shadow(stored, job)
         job["status"] = "FROZEN"
         _remember_prediction_id(job, stored.get("prediction_id"))
