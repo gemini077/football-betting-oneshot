@@ -1,7 +1,19 @@
 # 14_PRODUCT_BLUEPRINT_产品全貌.md
 
-最后更新：2026-08-17  
+最后更新：2026-08-28
 文档角色：产品长期北极星。描述“最终要造什么”，不是当前任务清单。
+
+## 2026-08-28 当前产品权威
+
+- **North Star**：足球情报 + 市场情报 + 多玩法赛前概率预测 + 赛后真实验证 + 用户决策。
+- **比分是一级核心能力，但不是唯一目标**：全场 1X2、double chance、O/U、BTTS、球队进球、总进球、winning margin、常用整半让球应尽量从同一 authoritative score distribution 数学一致推导；半场、角球、牌、球员等 specialized markets 使用独立模型。
+- **证据分层**：Market State、Football Evidence、Prematch Intelligence 分开记录，并分别带 `freshness / completeness / confidence`。证据质量决定影响力；低质量 recent-form 不得因为固定系数压过 `FULL` market；固定 `60/40`、`65/35` 仅是 legacy implementation。
+- **Champion 治理**：`recent_form_market_calibrated_poisson_v2` 继续 serving，Promotion Gate 前不替换；它是当前 production baseline，不定义未来架构。
+- **禁止同样本自证**：同一历史样本上的调参 / weight sweep 只用于 hypothesis；真正升级必须经过 prospective Shadow + unique-match evaluation + Promotion Gate。
+- **停止表面补丁**：不围绕 1:1 或单个表面比分连续修补；bounded issue 关闭后回到产品全局。
+- **边跑边优化**：产品不等完美覆盖才可用；缺数据时降置信度或不输出该玩法，绝不编造。
+- **成本原则**：免费且长期稳定 > 自研 / 二次开发 > 付费 benchmark / fallback。
+- **真实运行优先**：云端 production 与本地 research 都必须实际可运行、可追溯、可验证；最新 `origin/main` 与真实 production evidence 优先于陈旧本地状态。
 
 # 1. 一句话产品定义
 

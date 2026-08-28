@@ -1,4 +1,15 @@
 # AGENTS.md — Football Betting OneShot Repository Rules
+## 2026-08-28 CURRENT AUTHORITY
+
+- 最新 `origin/main` 与真实 production evidence 优先于旧聊天、旧本地状态和旧 `LOCKED / CURRENT / SEALED` 叙述；冲突时以最新可验证事实为准，但不得伪造状态。
+- 仓库治理阅读顺序：`14 → 15 → 19 → 16 → 17 → 18 → 00 → WORK_MANIFEST`。只引用仓库真实存在的文件。
+- 产品 North Star：足球情报 + 市场情报 + 多玩法赛前概率预测 + 赛后真实验证 + 用户决策。
+- `Market State / Football Evidence / Prematch Intelligence` 必须分层，并记录 `freshness / completeness / confidence`。证据质量决定影响力；低质量 shallow recent form 不能仅因固定权重覆盖 `FULL` market。现有 `60/40` 与 `65/35` 只是 legacy implementation，不是产品原则。
+- `recent_form_market_calibrated_poisson_v2` 仍是 production Champion；Promotion Gate 前不得替换。
+- 同一历史样本上的权重扫描、调参和回放只用于提出 hypothesis，不能直接 promotion；升级必须经过 prospective Shadow、按 unique match 评估和 Promotion Gate。
+- bounded issue 收口后必须回到产品层，不得围绕 `1:1`、lambda 或单点表象连续打补丁。
+- 产品必须边运行边优化；数据不足时降低置信度或不输出对应玩法，禁止编造。成本优先级：免费且长期稳定 > 自研 / 二次开发 > 付费 benchmark / fallback。
+- `17_NEXT_WORK_后续工作.md` 是当前唯一执行指针；旧 PA-2-R1 / 1:1 / lambda / Shadow 记录只有在 17 的最新 `CURRENT` 块明确要求时才能恢复。
 
 本文件是 Codex / 自动化开发代理进入本仓库时必须优先遵守的仓库级规则。
 
@@ -41,7 +52,7 @@
 
 当前主线：
 
-`Phase PA-2-R1 — Canonical Identity & Paired Challenger Evaluation`
+`17_NEXT_WORK_后续工作.md` 顶部最新 `CURRENT` 块定义当前主线；这里不再硬编码历史 Phase。
 
 除非该文件被正式更新，否则不得擅自启动 Roadmap 中后续阶段。
 

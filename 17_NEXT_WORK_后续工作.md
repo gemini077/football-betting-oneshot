@@ -1,13 +1,33 @@
 # 17_NEXT_WORK_后续工作.md
 
-最后更新：2026-08-17  
-角色：当前唯一执行指针。只描述“现在只做什么”。
+最后更新：2026-08-28
 
 # 当前唯一主线
 
+## PRODUCT-RESET-R1 — Evidence Quality & Prospective Challenger Closure
+
+状态：CURRENT
+
+当前只做四件事：
+
+1. **Production Champion 保持不变**：`recent_form_market_calibrated_poisson_v2` 继续 serving，未通过 Promotion Gate 不替换。
+2. **收口现有方向 Challenger**：只使用既有 `market-direction-fusion-full-v1` Shadow；按 `match_key` 去重，每场只计一个合法赛前快照。小样本不得 promotion；禁止再做新的 recent-form weight sweep。
+3. **Prospective 自然积累**：修复后的 Shadow pipeline 继续自然 capture / settle 新比赛；产品继续运行，不能停着等样本。
+4. **下一研发方向提高 Football Evidence 质量**：本 bounded fusion 问题收口后，研究 Elo、dynamic attack-defense、rolling xG、lineup availability 等更强足球证据，而不是继续给低质量 recent goals 调权重。
+
+停止条件：
+
+- 不做 1:1 cosmetic patch；
+- 不重复创建 market-direction Challenger；
+- 不为补样本强挖旧历史；
+- PA-2-R1 identity / history 只有在真实阻塞 current production / prospective 时才恢复。
+角色：当前唯一执行指针。只描述“现在只做什么”。
+
+# 历史执行记录（非当前指针）
+
 `PA-2-R1-ID3 — Targeted Identity Persistence, Bounded History Closure & Prospective Pair Capture`
 
-状态：`CURRENT`
+状态：HISTORICAL
 
 本指针在本次 Governance Current-State Sync 提交后生效。ID2 evidence package/status 是 `READY_FOR_ACCEPTANCE / INDEPENDENT ACCEPTANCE PENDING`；PA-2-R1 model program overall 仍为 `OVERALL INCOMPLETE / TOO_SMALL_FOR_DECISION`，不是整体已验收。
 
