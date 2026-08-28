@@ -1282,7 +1282,6 @@ def run_base_prediction_jobs(
             job["prediction_created_at"] = unchanged.get("prediction_created_at")
             job["freeze_created_at"] = unchanged.get("freeze_created_at")
             job["last_error"] = None
-            capture_football_evidence(unchanged, context.get("source_snapshots"), job)
             capture_shadow(unchanged, job)
             job["updated_at"] = current_time.isoformat()
             continue

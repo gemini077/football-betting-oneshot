@@ -564,6 +564,50 @@ def test_frozen_job_with_only_source_freshness_change_does_not_create_version():
     assert stable_hash
 
 
+def test_unchanged_frozen_job_with_new_football_evidence_does_not_create_sidecar():
+    with tempfile.TemporaryDirectory() as temp:
+        root = Path(temp)
+        evidence_root = root / "prospective" / "football_evidence"
+        write_case(root, [fixture(1, spf=limited_spf(), nowscore=True)])
+
+        initial_nowscore = nowscore_source()
+        initial_nowscore["shuju"].pop("recent_matches")
+        first, first_build = run_case(
+            root,
+            nowscore_result=initial_nowscore,
+            football_evidence_root=evidence_root,
+        )
+        ledger = read_ledger(root)
+        audit_fields = {
+            "football_evidence_status": "existing",
+            "football_evidence_ref": "old-sidecar.json",
+            "football_evidence_error": None,
+        }
+        ledger["jobs"][0].update(audit_fields)
+        (root / "base_prediction_jobs" / f"{DATE}.json").write_text(
+            json.dumps(ledger, ensure_ascii=False), encoding="utf-8"
+        )
+
+        updated_nowscore = nowscore_source()
+        updated_nowscore["fetched_at"] = "2026-08-12T13:30:00+08:00"
+        updated_nowscore["shuju"]["recent_matches"]["home_team"][0]["home_goals"] = 3
+        second, second_build = run_case(
+            root,
+            nowscore_result=updated_nowscore,
+            now=datetime(2026, 8, 12, 16, 0, tzinfo=TZ),
+            model_side_effect=AssertionError("unchanged rerun"),
+            football_evidence_root=evidence_root,
+        )
+        final_job = read_ledger(root)["jobs"][0]
+
+    assert first["frozen"] == second["frozen"] == 1
+    assert first_build.call_count == 1
+    assert second_build.call_count == 0
+    assert final_job["status"] == "FROZEN"
+    assert {key: final_job[key] for key in audit_fields} == audit_fields
+    assert not evidence_root.exists()
+
+
 def test_governance_record_contains_minimum_prediction_contract():
     with tempfile.TemporaryDirectory() as temp:
         root = Path(temp)
