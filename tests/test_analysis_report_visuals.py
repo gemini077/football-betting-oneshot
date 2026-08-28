@@ -7,6 +7,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
 from generate_analysis_report import (  # noqa: E402
+    display_btts_judgement,
     normalize_betting_portfolio,
     score_matrix_summary,
     sensitivity_scenarios,
@@ -22,6 +23,40 @@ class AnalysisReportVisualTests(unittest.TestCase):
 
     def test_negative_ev_is_rendered_as_a_fractional_percentage(self):
         self.assertEqual("-17.5%", pct(-0.175))
+
+
+    def test_btts_renderer_normalizes_legacy_judgement_from_yes_probability(self):
+        payload = {
+            "report": {"model_name": "Football Betting OneShot", "model_version": "v0.14.1"},
+            "match": {"home": "主队", "away": "客队"},
+            "market": {}, "data_quality": {"missing": []},
+            "model": {"btts": {"yes": 0.540463, "judgement": "双方进球偏否"}},
+            "betting": {"candidates": [], "open_bets": []},
+            "decisions": {},
+        }
+        page = render(payload)
+        self.assertIn('<div class="callout"><b>BTTS</b><span>双方进球无明显倾向</span></div>', page)
+        self.assertNotIn('<div class="callout"><b>BTTS</b><span>双方进球偏否</span></div>', page)
+
+    def test_btts_judgement_uses_thresholds_and_preserves_fallback(self):
+        self.assertEqual("双方进球偏是", display_btts_judgement({"yes": 0.56}))
+        self.assertEqual("双方进球偏否", display_btts_judgement({"yes": 0.44}))
+        self.assertEqual("旧判断", display_btts_judgement({"judgement": "旧判断"}))
+        self.assertEqual("数据不足，暂不判断", display_btts_judgement({}))
+
+    def test_btts_judgement_falls_back_for_invalid_probability(self):
+        for value in ("invalid", None, float("nan"), float("inf"), float("-inf")):
+            with self.subTest(value=value):
+                self.assertEqual(
+                    "旧判断",
+                    display_btts_judgement({"yes": value, "judgement": "旧判断"}),
+                )
+
+    def test_btts_judgement_does_not_modify_input(self):
+        btts = {"yes": 0.540463, "judgement": "双方进球偏否"}
+        original = btts.copy()
+        display_btts_judgement(btts)
+        self.assertEqual(original, btts)
 
     def test_score_matrix_is_normalized_and_has_a_top_score(self):
         summary = score_matrix_summary(self.model)

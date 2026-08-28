@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import html
 import json
+import math
 import re
 import sys
 from statistics import fmean
@@ -63,6 +64,24 @@ def pct(value, digits=1) -> str:
     if -1 <= numeric <= 1:
         numeric *= 100
     return f"{numeric:.{digits}f}%"
+
+
+
+def display_btts_judgement(btts: dict | None) -> str:
+    """Derive the user-facing BTTS judgement without changing frozen data."""
+    data = btts if isinstance(btts, dict) else {}
+    try:
+        yes = float(data.get("yes"))
+    except (TypeError, ValueError, OverflowError):
+        yes = None
+    if yes is not None and math.isfinite(yes):
+        if yes >= 0.55:
+            return "双方进球偏是"
+        if yes <= 0.45:
+            return "双方进球偏否"
+        return "双方进球无明显倾向"
+    judgement = data.get("judgement")
+    return judgement if judgement not in (None, "") else "数据不足，暂不判断"
 
 
 def no_vig(odds: dict | None) -> dict | None:
@@ -1158,7 +1177,7 @@ def render(payload: dict) -> str:
     if line_rows:
         totals_content += '<h3 class="subhead">按实际盘口线计算</h3>'
         totals_content += table(["盘口", "大球有效胜率", "大球公平赔率", "小球有效胜率", "小球公平赔率", "用途"], line_rows)
-    totals_content += f'<div class="callout"><b>BTTS</b><span>{e(model.get("btts", {}).get("judgement"))}</span></div>'
+    totals_content += f'<div class="callout"><b>BTTS</b><span>{e(display_btts_judgement(model.get("btts")))}</span></div>'
     sensitivity_rows = []
     for item in sensitivity_scenarios(model):
         probabilities = item["probabilities"]
