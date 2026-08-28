@@ -806,6 +806,13 @@ def _nowscore_script_context(coach: dict, referee: dict) -> dict:
     }
 
 
+def _btts_judgement(yes_probability: float) -> str:
+    if yes_probability >= 0.55:
+        return "双方进球偏是"
+    if yes_probability <= 0.45:
+        return "双方进球偏否"
+    return "双方进球无明显倾向"
+
 def build_automatic_model(context: dict) -> dict:
     deep = _deep_snapshot(context)
     nowscore_fundamentals = _nowscore_context_fundamentals(deep)
@@ -868,7 +875,7 @@ def build_automatic_model(context: dict) -> dict:
         )
     probabilities = _outcomes(matrix)
     score_rows, total_rows, btts = _model_rows(matrix)
-    btts["judgement"] = "双方进球偏是" if btts["yes"] >= 0.55 else "双方进球偏否"
+    btts["judgement"] = _btts_judgement(btts["yes"])
     top_result = max(probabilities, key=probabilities.get)
     labels = {"home": "主胜", "draw": "平局", "away": "客胜"}
     market_candidates = _market_candidates(

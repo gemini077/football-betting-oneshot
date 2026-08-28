@@ -4,6 +4,7 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 from automatic_model_core import (
+    _btts_judgement,
     _align_exact_total_candidate,
     _dimension_predictions,
     _scenario_score_pick,
@@ -253,3 +254,11 @@ def test_exact_total_is_aligned_with_selected_total_side():
 
     assert aligned["goals"] == "2"
     assert aligned["consistency"]["status"] == "aligned_with_total_dimension"
+
+def test_btts_judgement_uses_neutral_band():
+    assert _btts_judgement(0.56) == "双方进球偏是"
+    assert _btts_judgement(0.55) == "双方进球偏是"
+    assert _btts_judgement(0.54) == "双方进球无明显倾向"
+    assert _btts_judgement(0.514174) == "双方进球无明显倾向"
+    assert _btts_judgement(0.45) == "双方进球偏否"
+    assert _btts_judgement(0.44) == "双方进球偏否"
