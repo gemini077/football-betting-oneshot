@@ -259,6 +259,7 @@ def test_btts_judgement_uses_neutral_band():
     assert _btts_judgement(0.56) == "双方进球偏是"
     assert _btts_judgement(0.55) == "双方进球偏是"
     assert _btts_judgement(0.54) == "双方进球无明显倾向"
+    assert _btts_judgement(0.50) == "双方进球无明显倾向"
     assert _btts_judgement(0.514174) == "双方进球无明显倾向"
     assert _btts_judgement(0.45) == "双方进球偏否"
     assert _btts_judgement(0.44) == "双方进球偏否"
