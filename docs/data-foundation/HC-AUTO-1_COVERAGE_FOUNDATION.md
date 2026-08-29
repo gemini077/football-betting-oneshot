@@ -1,6 +1,10 @@
 # HC-AUTO-1 — League-Agnostic Historical Coverage Foundation
 
-Status: `READY_FOR_ACCEPTANCE`
+Status: `SEALED / ACCEPTANCE PASS`
+
+Independent acceptance: `HC-AUTO-1 = ACCEPTANCE PASS`; PR #117 was merged to
+`main` at merge commit `7680c57475c907ba87cf40c9c1a3d1d48543edb1` after
+preserving the latest automated-run state.
 
 Generated evidence date: `2026-08-29` (Asia/Shanghai)
 

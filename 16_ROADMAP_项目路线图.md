@@ -1,15 +1,18 @@
 # 16_ROADMAP_项目路线图.md
 
-最后更新：2026-08-29
+最后更新：2026-08-30
 路线原则：Gate 驱动，不使用虚假日期承诺。
 
 # Current Route Pointer
 
 CURRENT PHASE:
 
-`HC-AUTO-1 - League-Agnostic Historical Coverage Foundation`
+`ID-AUTO-1 - League-Agnostic Deterministic Team Identity Resolution`
 
 CURRENT STATUS: `READY_FOR_ACCEPTANCE`
+
+`HC-AUTO-1` is now `SEALED / ACCEPTANCE PASS` after independent acceptance;
+PR #117 merged to `main` at `7680c57475c907ba87cf40c9c1a3d1d48543edb1`.
 
 `FE-SE-HIST-1` is `SEALED / ACCEPTANCE PASS` after PR #115 merged to main.
 `FE-SE-DC-CLOSE` is `ACCEPTANCE PASS / CLOSED` with model verdict
@@ -17,20 +20,21 @@ CURRENT STATUS: `READY_FOR_ACCEPTANCE`
 failures. `SWEDEN_SPECIFIC_FURTHER_TUNING` is `CLOSED`; PR #114 remains OPEN
 and unmerged. No Sweden/DC computation is part of HC-AUTO-1.
 
-HC-AUTO-1 builds a reusable registry from existing manifests, adapters,
-reviewed exact identity evidence and the authoritative historical store. It
-adds the automatic `SUPPORTED` / `DEGRADED` / `UNSUPPORTED` gate before BASE
-job intake, without changing the Champion, frozen predictions or model math.
+ID-AUTO-1 builds a reusable team identity registry from existing provider IDs,
+reviewed crosswalks, canonical historical IDs, source names and reviewed alias
+evidence. Its deterministic resolver is competition-scoped and sits behind the
+existing `SUPPORTED` / `DEGRADED` / `UNSUPPORTED` coverage gate. It does not
+change the Champion, frozen predictions or model math.
 
 Current milestone result: `READY_FOR_ACCEPTANCE`. Independent acceptance is
-still required before any `SEALED` state.
+still required before ID-AUTO-1 is `SEALED`.
 
 NEXT MAINLINE CANDIDATE:
 
-> Stop after HC-AUTO-1 acceptance. Do not automatically start HC-AUTO-2.
+> Stop after ID-AUTO-1 acceptance. Do not automatically start ID-AUTO-2.
 >
-> Any future coverage expansion must use the same registry/manifest route and
-> a separately accepted milestone.
+> Any future identity or coverage expansion must use the same generic registry
+> route and a separately accepted milestone.
 
 BLOCKED / NOT ACTIVE:
 

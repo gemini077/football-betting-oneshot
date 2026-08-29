@@ -7,6 +7,7 @@ from .contracts import ContractError, validate_record
 from .competition_resolution import CompetitionEntityResolver
 from .coverage_gate import ExactCoverageIdentityResolver, audit_fixture, audit_fixture_set
 from .coverage_registry import CoverageRegistryBuilder, load_coverage_registry, write_coverage_registry
+from .identity_registry import IdentityRegistryBuilder, IdentityRegistryResolver, validate_identity_registry, write_identity_registry
 from .historical_results import HistoricalResultLedger, deduplicate_historical_results, make_historical_match_result
 from .player_identity import PlayerIdentityResolver
 from .storage import SnapshotStore, content_sha256
@@ -21,6 +22,8 @@ __all__ = [
     "OpenFootballHistoricalAdapter",
     "PlayerIdentityResolver",
     "ExactCoverageIdentityResolver",
+    "IdentityRegistryBuilder",
+    "IdentityRegistryResolver",
     "PreMatchSnapshotStore",
     "SnapshotStore",
     "TeamStrengthBuilder",
@@ -32,4 +35,6 @@ __all__ = [
     "load_coverage_registry",
     "validate_record",
     "write_coverage_registry",
+    "write_identity_registry",
+    "validate_identity_registry",
 ]

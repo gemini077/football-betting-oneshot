@@ -1,7 +1,24 @@
 # 19_DECISIONS_关键决策.md
 
-最后更新：2026-08-29
+最后更新：2026-08-30
 角色：记录不能因换对话 / 换 Codex 而重复推翻的关键决定。若新证据足以改变决定，必须新增 superseding decision，不得静默改历史。
+
+# D-027 - League-agnostic deterministic team identity resolution
+
+Status: `LOCKED FOR ID-AUTO-1`
+
+Identity resolution uses one reusable registry and one competition-scoped exact
+ladder: stable provider ID, reviewed canonical/provider crosswalk, fixture
+canonical ID, competition-constrained exact normalized name, then
+competition-constrained reviewed alias. Only a unique candidate may be
+`AUTO_RESOLVED`; multiple candidates are `AMBIGUOUS` and unresolved evidence
+stays fail-closed. Existing reviewed provider IDs are durable and reusable
+across future fixtures. No fuzzy similarity, LLM guessing, transliteration,
+kickoff proximity, cross-competition matching, manual per-fixture alias list,
+new provider, or league-specific resolver is permitted. Identity status gates
+only historical challenger eligibility; the existing Champion stays fail-open.
+Japan J1 and Spain La Liga are recorded for a generic import path only; no
+league-specific importer is started.
 
 # D-026 - League-agnostic historical coverage foundation
 
@@ -17,6 +34,10 @@ country-specific adapters are outside this milestone. Champion mathematics,
 frozen predictions, prospective records, Sweden/DC research and paid sources
 remain unchanged. HC-AUTO-1 ends at `READY_FOR_ACCEPTANCE`; HC-AUTO-2 does not
 start automatically.
+
+Acceptance record: independent acceptance passed HC-AUTO-1. PR #117 is merged
+to `main` at `7680c57475c907ba87cf40c9c1a3d1d48543edb1`, with the latest
+automatic-run state preserved; HC-AUTO-1 is `SEALED / ACCEPTANCE PASS`.
 
 # D-025 ? Sweden / Dixon-Coles final closeout
 
