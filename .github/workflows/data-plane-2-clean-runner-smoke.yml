@@ -13,12 +13,15 @@ on:
 
 permissions:
   contents: read
-  actions: write
 
 jobs:
   clean-runner-smoke:
     if: ${{ github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository }}
     runs-on: ubuntu-latest
+    env:
+      FOOTBALL_DATA_SNAPSHOT_ENDPOINT_URL: ${{ vars.FOOTBALL_DATA_SNAPSHOT_ENDPOINT_URL }}
+      FOOTBALL_DATA_SNAPSHOT_BUCKET: ${{ vars.FOOTBALL_DATA_SNAPSHOT_BUCKET }}
+      FOOTBALL_DATA_SNAPSHOT_REGION: ${{ vars.FOOTBALL_DATA_SNAPSHOT_REGION }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v4

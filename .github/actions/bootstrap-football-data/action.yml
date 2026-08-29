@@ -14,48 +14,32 @@ inputs:
 runs:
   using: composite
   steps:
-    - name: Load runtime configuration without logging values
+    - name: Bootstrap exact snapshot
       shell: bash
       env:
-        GH_TOKEN: ${{ github.token }}
         RUNTIME_ACCESS_KEY_ID: ${{ inputs.runtime-access-key-id }}
         RUNTIME_SECRET_ACCESS_KEY: ${{ inputs.runtime-secret-access-key }}
       run: |
         set -euo pipefail
 
-        load_variable() {
-          local name="$1"
-          local value
-          if ! value="$(gh api --method GET --jq '.value' "repos/${GITHUB_REPOSITORY}/actions/variables/${name}")"; then
-            echo "GITHUB_RUNTIME_CONFIG_MISSING"
-            echo "RUNTIME_VARIABLE_API_READ_FAILED"
-            exit 1
-          fi
+        for name in \
+          FOOTBALL_DATA_SNAPSHOT_ENDPOINT_URL \
+          FOOTBALL_DATA_SNAPSHOT_BUCKET \
+          FOOTBALL_DATA_SNAPSHOT_REGION; do
+          value="${!name:-}"
           if [[ -z "$value" || "$value" == *$'\n'* || "$value" == *$'\r'* ]]; then
             echo "GITHUB_RUNTIME_CONFIG_MISSING"
-            echo "RUNTIME_VARIABLE_EMPTY_OR_INVALID"
             exit 1
           fi
-          printf '%s=%s\n' "$name" "$value" >> "$GITHUB_ENV"
-        }
-
-        load_variable FOOTBALL_DATA_SNAPSHOT_ENDPOINT_URL
-        load_variable FOOTBALL_DATA_SNAPSHOT_BUCKET
-        load_variable FOOTBALL_DATA_SNAPSHOT_REGION
+          printf '::add-mask::%s\n' "$value"
+        done
 
         if [[ -z "${RUNTIME_ACCESS_KEY_ID:-}" || -z "${RUNTIME_SECRET_ACCESS_KEY:-}" ]]; then
           echo "GITHUB_RUNTIME_CONFIG_MISSING"
           exit 1
         fi
-        {
-          printf 'FOOTBALL_DATA_SNAPSHOT_RUNTIME_ACCESS_KEY_ID=%s\n' "$RUNTIME_ACCESS_KEY_ID"
-          printf 'FOOTBALL_DATA_SNAPSHOT_RUNTIME_SECRET_ACCESS_KEY=%s\n' "$RUNTIME_SECRET_ACCESS_KEY"
-        } >> "$GITHUB_ENV"
-
-    - name: Bootstrap exact snapshot
-      shell: bash
-      run: |
-        set -euo pipefail
+        export FOOTBALL_DATA_SNAPSHOT_RUNTIME_ACCESS_KEY_ID="$RUNTIME_ACCESS_KEY_ID"
+        export FOOTBALL_DATA_SNAPSHOT_RUNTIME_SECRET_ACCESS_KEY="$RUNTIME_SECRET_ACCESS_KEY"
         python -m scripts.football_data.bootstrap_runtime_data \
           --manifest "${{ inputs.manifest }}" \
           --runtime-temp "$RUNNER_TEMP/football-data" \
