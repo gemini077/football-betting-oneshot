@@ -1,0 +1,172 @@
+{
+  "champion_mutation": false,
+  "contract_version": "dynamic_attack_defense_baseline.v1",
+  "evaluation": {
+    "model_metrics": {
+      "champion": {
+        "away_goal_mae": 1.3243965714285715,
+        "brier_1x2": 0.5782587400501041,
+        "exact_top1": 0.0,
+        "exact_top3": 0.14285714285714285,
+        "exact_top5": 0.14285714285714285,
+        "goal_mae": 1.0588577142857143,
+        "home_goal_mae": 0.7933188571428571,
+        "lambda_away_distribution": {
+          "max": 1.855165,
+          "mean": 1.4232108571428572,
+          "median": 1.365984,
+          "min": 1.249777,
+          "n": 7,
+          "p25": 1.2962175,
+          "p75": 1.4495575
+        },
+        "lambda_home_distribution": {
+          "max": 2.464835,
+          "mean": 1.6553605714285715,
+          "median": 1.47676,
+          "min": 1.186362,
+          "n": 7,
+          "p25": 1.4042694999999998,
+          "p75": 1.825514
+        },
+        "large_score_tail": {
+          "actual_share": 0.5714285714285714,
+          "predicted_probability_share": null,
+          "predicted_probability_status": "UNAVAILABLE",
+          "predicted_top1_share": 0.0,
+          "threshold_total_goals": 5
+        },
+        "logloss_1x2": 0.970788370547826,
+        "n": 7,
+        "one_to_one_share": 0.8571428571428571,
+        "score_nll": {
+          "n": 0,
+          "reason": "champion_frozen_distribution_top10_only",
+          "status": "UNAVAILABLE",
+          "value": null
+        }
+      },
+      "dynamic_attack_defense": {
+        "away_goal_mae": 1.4404076661329228,
+        "brier_1x2": 0.6363818941727184,
+        "exact_top1": 0.14285714285714285,
+        "exact_top3": 0.14285714285714285,
+        "exact_top5": 0.14285714285714285,
+        "goal_mae": 1.319706649152891,
+        "home_goal_mae": 1.199005632172859,
+        "lambda_away_distribution": {
+          "max": 1.7106272893219212,
+          "mean": 1.1738864222178145,
+          "median": 1.1310318574240776,
+          "min": 0.8271903269677646,
+          "n": 7,
+          "p25": 0.9399646299145288,
+          "p75": 1.3342131109909405
+        },
+        "lambda_home_distribution": {
+          "max": 1.4693039406897908,
+          "mean": 1.1973977899743233,
+          "median": 1.3818482714376241,
+          "min": 0.7700098092734419,
+          "n": 7,
+          "p25": 0.9676739299822126,
+          "p75": 1.4126373242274906
+        },
+        "large_score_tail": {
+          "actual_share": 0.5714285714285714,
+          "predicted_probability_share": 0.09605699816587887,
+          "predicted_probability_status": "REAL",
+          "predicted_top1_share": 0.0,
+          "threshold_total_goals": 5
+        },
+        "logloss_1x2": 1.0611859166740623,
+        "n": 7,
+        "one_to_one_share": 0.2857142857142857,
+        "score_nll": {
+          "n": 7,
+          "reason": null,
+          "status": "REAL",
+          "value": 3.8890332247865493
+        }
+      }
+    },
+    "paired_deltas_dynamic_minus_champion": {
+      "brier_1x2": 0.05812315412261426,
+      "exact_top1": 0.14285714285714285,
+      "exact_top3": 0.0,
+      "exact_top5": 0.0,
+      "goal_mae": 0.26084893486717675,
+      "logloss_1x2": 0.0903975461262363,
+      "one_to_one_share": -0.5714285714285714
+    },
+    "paired_sample_integrity": {
+      "actual_present_for_each_match": true,
+      "champion_unique": true,
+      "dynamic_unique": true,
+      "evidence_capture_pre_kickoff_for_each_match": true,
+      "history_pre_kickoff_for_each_match": true,
+      "match_keys": [
+        "FBOS-202608290100-18dfb7e9df",
+        "FBOS-202608290200-18f3735b53",
+        "FBOS-202608290200-cc085d9cc6",
+        "FBOS-202608290230-0a22a3adb3",
+        "FBOS-202608290245-86b5c937a4",
+        "FBOS-202608290300-a88bc3fa35",
+        "FBOS-202608290330-d9c7b7118b"
+      ],
+      "n": 7,
+      "same_match_keys": true,
+      "source_cutoff_pre_kickoff_for_each_match": true,
+      "target_result_excluded_for_each_match": true
+    }
+  },
+  "frozen_prediction_mutation": false,
+  "generated_at": "2026-08-29T06:58:51.512344+00:00",
+  "known_limitations": [
+    "paired sample is small and limited to matches with an existing evidence sidecar",
+    "Champion frozen score output is top-10 only; Champion Score NLL and full tail probability are not reported",
+    "provider-scoped recent-match team IDs are not promoted to canonical identity by this research module",
+    "no promotion or production serving decision is made"
+  ],
+  "milestone": "FE-DA-1",
+  "model_name": "dynamic_attack_defense_bounded_baseline_v1",
+  "production_mutation": false,
+  "provider_expansion": false,
+  "recent_form_weight_sweep": false,
+  "research_only": true,
+  "sample": {
+    "actual_source": "settled prospective ledger actual fields",
+    "candidate_evidence_files": 51,
+    "candidate_records": 28,
+    "champion_model_family": "recent_form_market_calibrated_poisson_v2",
+    "champion_path": "data/model_governance/predictions",
+    "duplicate_records_excluded": 21,
+    "evidence_path": "data/prospective/football_evidence",
+    "excluded": {
+      "no_ledger_record": 23
+    },
+    "history_kickoff_max": "2026-08-24T00:00:00+00:00",
+    "history_kickoff_min": "2025-11-29T00:00:00+00:00",
+    "history_source": "prospective_football_evidence.v1",
+    "ledger_path": "data/prospective/ledger.jsonl",
+    "selected_unique_matches": 7,
+    "selection_policy": "latest valid pre-kickoff frozen Champion per match_key with matching evidence",
+    "target_kickoff_max": "2026-08-28T19:30:00+00:00",
+    "target_kickoff_min": "2026-08-28T17:00:00+00:00"
+  },
+  "spec": {
+    "goal_pseudocount": 0.5,
+    "goal_rate_floor": 0.2,
+    "lambda_ceiling": 4.8,
+    "lambda_floor": 0.15,
+    "learning_rate": 0.12,
+    "minimum_history": 10,
+    "minimum_team_history": 5,
+    "parameter_policy": "single_predeclared_spec",
+    "residual_clip": 0.75,
+    "score_matrix_max_goal": 8,
+    "spec_id": "dynamic-attack-defense:bounded-v1",
+    "weight_sweep": false
+  },
+  "status": "READY_FOR_ACCEPTANCE"
+}
