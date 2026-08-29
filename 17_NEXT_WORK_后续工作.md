@@ -4,6 +4,42 @@
 
 # Current Sole Pointer
 
+# DATA-PLANE-1 - Cloud Production Football Data Architecture Decision
+
+Status: `READY_FOR_ACCEPTANCE`
+
+Decision: `B. PRIVATE_SNAPSHOT_STORE`.
+
+The clean-runner audit is `PARTIALLY_REPRODUCIBLE`: tracked inputs reproduce
+206 rows/digest `0a1183aa11ae3c27c8b2081cae2f8776dfc50fbb35371ef48374e6f798d01a74`,
+while the authoritative local store is 1778 rows/digest
+`48088556830cfb5a6ecd523fc4dc29889406b4853001c51849f5533ecc44a3f2`. The
+bounded clean source proof makes `500-1364199` eligible through
+`authoritative_historical_results`, but does not establish full-dataset
+rebuildability or production deployment.
+
+The decision document is
+`docs/data-foundation/DATA-PLANE-1_CLOUD_PRODUCTION_DATA_ARCHITECTURE.md`.
+Implementation is not started. The later implementation milestone must use a
+private versioned snapshot, exact byte/logical digest verification, atomic
+`FOOTBALL_DATA_HOME` bootstrap, read-only DuckDB access, immutable rollback and
+last-known-good fallback. Source refresh must remain separate from prediction
+runs.
+
+STOP CONDITIONS:
+
+- Keep `DATA-PLANE-1` at `READY_FOR_ACCEPTANCE` until independent acceptance.
+- Do not provision R2/S3, Supabase or another database in this decision task.
+- Do not add a full runtime dataset to the public repository.
+- Do not start a workflow bootstrap, provider patch, PRED-AVAIL-3, ID-AUTO-2,
+  Sweden/DC, PA-3, Champion promotion, model tuning or frontend work.
+- Do not modify frozen predictions, prospective ledger, dashboard, runtime or
+  Champion mathematics.
+- Stop after the decision and evidence; implementation requires a new
+  milestone.
+
+# Historical execution record: PRED-AVAIL-1
+
 ## PRED-AVAIL-1 - Daily Prediction Availability Closure
 
 Status: `READY_FOR_ACCEPTANCE`

@@ -7,6 +7,26 @@
 
 CURRENT PHASE:
 
+`DATA-PLANE-1 - Cloud Production Football Data Architecture Decision`
+
+CURRENT STATUS: `READY_FOR_ACCEPTANCE`
+
+Decision: `B. PRIVATE_SNAPSHOT_STORE`. The selected architecture is a
+vendor-neutral private versioned snapshot plus the existing read-only DuckDB
+runtime model. No storage service, workflow bootstrap, runtime migration or
+provider implementation is started in this milestone. The clean-runner result
+is `PARTIALLY_REPRODUCIBLE`; the bounded target proof and all option tradeoffs
+are recorded in
+`docs/data-foundation/DATA-PLANE-1_CLOUD_PRODUCTION_DATA_ARCHITECTURE.md`.
+
+The next implementation milestone must be separately authorized. Until then,
+do not change the Champion, frozen/prospective state, production dashboard,
+runtime artifacts, or public repository data boundary.
+
+# Historical PRED-AVAIL-1 Route Record
+
+PREVIOUS PHASE:
+
 `PRED-AVAIL-1 - Daily Prediction Availability Closure`
 
 CURRENT STATUS: `READY_FOR_ACCEPTANCE`

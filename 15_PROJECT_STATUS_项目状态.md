@@ -3,6 +3,37 @@
 最后更新：2026-08-30
 角色：项目当前唯一人类可读状态真相。只记录当前事实，不承担完整历史档案职责。
 
+# DATA-PLANE-1 Current State
+
+Status: `READY_FOR_ACCEPTANCE`
+
+`DATA-PLANE-1 — Cloud Production Football Data Architecture Decision` selects
+`B. PRIVATE_SNAPSHOT_STORE`. The decision is vendor-neutral and does not
+provision R2/S3, Supabase, another database, or a repository runtime dataset.
+The implementation milestone is intentionally separate and has not started.
+
+The clean-runner classification is `PARTIALLY_REPRODUCIBLE`: the latest checked
+`origin/main` (`9d792b35275045d7e62a02d2edd949b2b253686e`) deterministically
+rebuilds only 206 historical rows with digest
+`0a1183aa11ae3c27c8b2081cae2f8776dfc50fbb35371ef48374e6f798d01a74`, not the
+authoritative local 1778 rows with digest
+`48088556830cfb5a6ecd523fc4dc29889406b4853001c51849f5533ecc44a3f2`.
+Tracked manifests are provenance and rebuild instructions; they do not carry
+the missing raw third-party captures.
+
+A clean temporary source-rebuild proof used the approved Norway capture and
+the tracked exact identity registry to produce a versioned temporary DuckDB;
+`500-1364199` returned `authoritative_historical_results` recent form with 10
+records before kickoff. This proves the candidate path, not full 1778-row
+reproducibility or deployment.
+
+The production bootstrap contract is recorded in
+`docs/data-foundation/DATA-PLANE-1_CLOUD_PRODUCTION_DATA_ARCHITECTURE.md`:
+download the exact private snapshot, verify artifact/logical digest and count,
+atomically install it under `FOOTBALL_DATA_HOME`, and read it read-only. Source
+refresh remains off the prediction critical path. No Champion, frozen,
+prospective, dashboard, runtime, provider or model state changed.
+
 # PRED-AVAIL-1 Current State
 
 Status: `READY_FOR_ACCEPTANCE`

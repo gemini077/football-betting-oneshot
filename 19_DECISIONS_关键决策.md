@@ -3,6 +3,41 @@
 最后更新：2026-08-30
 角色：记录不能因换对话 / 换 Codex 而重复推翻的关键决定。若新证据足以改变决定，必须新增 superseding decision，不得静默改历史。
 
+# D-030 — Cloud Production Football Data Architecture Decision
+
+Status: `READY_FOR_ACCEPTANCE`
+
+Decision: `B. PRIVATE_SNAPSHOT_STORE`.
+
+The production runtime must obtain the same versioned private dataset snapshot
+as local research/runtime, verify both artifact bytes and the existing logical
+dataset digest/count, then open the existing DuckDB read-only under
+`FOOTBALL_DATA_HOME`. The Git-tracked manifest is the pin and provenance
+boundary; it must not contain restricted raw captures or a full public runtime
+dataset.
+
+The clean-runner audit against the latest checked `origin/main` is
+`PARTIALLY_REPRODUCIBLE`: tracked legacy inputs repeatably produce 206 rows
+with digest `0a1183aa11ae3c27c8b2081cae2f8776dfc50fbb35371ef48374e6f798d01a74`,
+not the authoritative 1778 rows with digest
+`48088556830cfb5a6ecd523fc4dc29889406b4853001c51849f5533ecc44a3f2`. The
+manifests pin source facts but do not carry all raw inputs; the current rebuild
+command is offline migration, not a full source downloader. A bounded clean
+source proof nevertheless rebuilt a temporary versioned Norway dataset and
+made `500-1364199` pass authoritative recent-form input eligibility.
+
+Option A remains the offline publisher/recovery builder when all pinned raw
+inputs are present. Option C is overbuilt for a read-only 1778-row artifact;
+Option D conflicts with the public-repository and Football-Data.co.uk terms
+boundary. GitHub cache/artifact remains non-authoritative because of eviction
+and retention. R2/S3-compatible vendor choice, snapshot upload, workflow
+bootstrap and rollback implementation are explicitly deferred to a separate
+milestone.
+
+The full audit, comparison, cost/maintenance assessment, failure recovery,
+refresh frequency and bootstrap contract are recorded in
+`docs/data-foundation/DATA-PLANE-1_CLOUD_PRODUCTION_DATA_ARCHITECTURE.md`.
+
 # D-028 - Daily prediction availability closure
 
 Status: `LOCKED FOR PRED-AVAIL-1`

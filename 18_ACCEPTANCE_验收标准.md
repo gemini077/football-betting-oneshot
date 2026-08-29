@@ -1,6 +1,6 @@
 # 18_ACCEPTANCE_验收标准.md
 
-最后更新：2026-08-29
+最后更新：2026-08-30
 角色：定义“什么才算真正做完”。测试全绿不等于验收通过。
 
 # 1. 通用验收原则
@@ -320,3 +320,37 @@ Challenger verdict：
 因此以后必须同时做：
 
 `Tests + Real Data Sanity + Product Behavior + Durable State`
+
+# 2G. DATA-PLANE-1 Acceptance
+
+`DATA-PLANE-1 — Cloud Production Football Data Architecture Decision` may be
+marked by Codex only as `READY_FOR_ACCEPTANCE`. Independent acceptance must
+verify:
+
+1. The latest checked `origin/main` and current production projection are
+   recorded without treating the isolated PRED-AVAIL replay as deployment.
+2. A clean temporary runner that has no developer `FOOTBALL_DATA_HOME`, local
+   cache, Windows file or developer DuckDB is used for the reproducibility
+   test.
+3. The existing offline rebuild repeats deterministically for its tracked
+   inputs, while its 206-row result/digest is explicitly compared with the
+   authoritative 1778-row result/digest. The result is
+   `PARTIALLY_REPRODUCIBLE`, not `FULLY_REPRODUCIBLE`.
+4. The bounded clean source proof uses a versioned temporary dataset and exact
+   identity/cutoff checks to make `500-1364199` eligible through the existing
+   `authoritative_historical_results` route.
+5. Options A-D are compared on build time, source failure, licensing,
+   durability, rollback, cost, maintenance, update frequency, scale and
+   public-repository impact; GitHub cache/artifact is excluded as sole truth.
+6. The final decision is `B. PRIVATE_SNAPSHOT_STORE`, with A retained only as
+   an offline publisher/recovery builder. No R2/S3/Supabase provisioning,
+   runtime migration, new provider, model change, frontend change or
+   production-state mutation is part of this milestone.
+7. The later implementation contract includes exact object/version pins,
+   artifact and logical digest verification, atomic `FOOTBALL_DATA_HOME`
+   bootstrap, read-only DuckDB access, last-known-good fallback and manifest
+   rollback.
+
+The milestone ends at `DATA-PLANE-1 = READY_FOR_ACCEPTANCE`; it must not be
+marked `SEALED` by the implementation agent and must stop before the separate
+implementation milestone.
