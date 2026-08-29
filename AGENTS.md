@@ -151,6 +151,25 @@ Codex / 开发代理不得自行宣布某阶段 `SEALED`。
 
 不得 `git reset --hard`、不得 force push、不得无理由清理 production durable data。
 
+## 9A. REMOTE_DELIVERY_CHECK（永久规则）
+
+从本规则生效起，每个后续 milestone 在任务结束前都必须执行一次
+`REMOTE_DELIVERY_CHECK`，无论结果是 `READY_FOR_ACCEPTANCE`、`BLOCKED`、
+`INCONCLUSIVE`、`NOT_IMPLEMENTED` 还是 `CREDENTIAL_MISSING`。
+
+必须确认：
+
+1. 当前交付 branch 已 push；
+2. remote branch 存在；
+3. commit SHA 可从 GitHub 读取；
+4. GitHub PR 已创建；
+5. PR head SHA 与本地交付 SHA 一致；
+6. PR body 包含 milestone、result、blockers、tests/evidence 和 STOP state。
+
+阻塞或未实现的 milestone 也必须创建最小 GitHub evidence PR。只有在
+branch、commit、PR 和 head SHA 均可从 GitHub 读取后，才可向用户报告远端
+交付状态；本地文件存在或本地提交本身不构成远端交付证据。
+
 ## 10. 任务完成时必须做的事
 
 每个阶段结束时：

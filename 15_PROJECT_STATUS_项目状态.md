@@ -3,9 +3,24 @@
 最后更新：2026-08-30
 角色：项目当前唯一人类可读状态真相。只记录当前事实，不承担完整历史档案职责。
 
+# DATA-PLANE-2 Current State
+
+Status: `BLOCKED_BY_OBJECT_STORE_CREDENTIAL`
+
+The 2026-08-30 credential preflight found no usable private object-store
+credential in the local environment, GitHub workflow references, repository
+secrets/variables, or GitHub environment secrets. Secret values were not
+printed. No provider was provisioned and no publisher, bootstrap, workflow,
+production smoke, or snapshot upload was started.
+
+The provider-neutral contract, exact credential names, object naming contract,
+one-time setup, and implementation file plan are recorded in
+`docs/data-foundation/DATA-PLANE-2_PRIVATE_SNAPSHOT_BOOTSTRAP_CONTRACT.md`.
+The milestone stops at this credential gate.
+
 # DATA-PLANE-1 Current State
 
-Status: `READY_FOR_ACCEPTANCE`
+Status: `SEALED / ACCEPTANCE PASS`
 
 `DATA-PLANE-1 — Cloud Production Football Data Architecture Decision` selects
 `B. PRIVATE_SNAPSHOT_STORE`. The decision is vendor-neutral and does not
@@ -33,6 +48,16 @@ download the exact private snapshot, verify artifact/logical digest and count,
 atomically install it under `FOOTBALL_DATA_HOME`, and read it read-only. Source
 refresh remains off the prediction critical path. No Champion, frozen,
 prospective, dashboard, runtime, provider or model state changed.
+
+Independent acceptance recorded the authoritative dataset as 1,778 rows with
+dataset SHA-256
+`48088556830cfb5a6ecd523fc4dc29889406b4853001c51849f5533ecc44a3f2`, and the
+clean-runner classification as `PARTIALLY_REPRODUCIBLE`. The clean Norway proof
+made `500-1364199` Bodo/Glimt - Rosenborg pass
+`authoritative_historical_results` with 10 recent-form records before kickoff.
+PR #121 was safely merged to `main` at
+`963f36e7d00e16560fbdcd571dc20415437afa2b`; PR #120 remains OPEN and
+unmerged. The architecture decision remains `B. PRIVATE_SNAPSHOT_STORE`.
 
 # PRED-AVAIL-1 Current State
 

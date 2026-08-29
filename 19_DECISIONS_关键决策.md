@@ -5,7 +5,7 @@
 
 # D-030 — Cloud Production Football Data Architecture Decision
 
-Status: `READY_FOR_ACCEPTANCE`
+Status: `SEALED / ACCEPTANCE PASS`
 
 Decision: `B. PRIVATE_SNAPSHOT_STORE`.
 
@@ -37,6 +37,14 @@ milestone.
 The full audit, comparison, cost/maintenance assessment, failure recovery,
 refresh frequency and bootstrap contract are recorded in
 `docs/data-foundation/DATA-PLANE-1_CLOUD_PRODUCTION_DATA_ARCHITECTURE.md`.
+
+Independent acceptance recorded 1,778 authoritative rows with dataset SHA-256
+`48088556830cfb5a6ecd523fc4dc29889406b4853001c51849f5533ecc44a3f2`,
+`PARTIALLY_REPRODUCIBLE` clean-runner behavior, and the clean Norway proof for
+`500-1364199` with 10 pre-kickoff authoritative recent-form records. PR #121
+merged to `main` at `963f36e7d00e16560fbdcd571dc20415437afa2b`; PR #120 remains
+OPEN and unmerged. This acceptance record does not alter the
+`B. PRIVATE_SNAPSHOT_STORE` architecture decision.
 
 # D-028 - Daily prediction availability closure
 
