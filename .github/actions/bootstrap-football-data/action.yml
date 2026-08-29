@@ -26,12 +26,14 @@ runs:
         load_variable() {
           local name="$1"
           local value
-          if ! value="$(gh api --jq '.value' "repos/${GITHUB_REPOSITORY}/actions/variables/${name}" 2>/dev/null)"; then
+          if ! value="$(gh api --method GET --jq '.value' "repos/${GITHUB_REPOSITORY}/actions/variables/${name}")"; then
             echo "GITHUB_RUNTIME_CONFIG_MISSING"
+            echo "RUNTIME_VARIABLE_API_READ_FAILED"
             exit 1
           fi
           if [[ -z "$value" || "$value" == *$'\n'* || "$value" == *$'\r'* ]]; then
             echo "GITHUB_RUNTIME_CONFIG_MISSING"
+            echo "RUNTIME_VARIABLE_EMPTY_OR_INVALID"
             exit 1
           fi
           printf '%s=%s\n' "$name" "$value" >> "$GITHUB_ENV"
