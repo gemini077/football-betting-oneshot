@@ -413,6 +413,23 @@ def test_missing_recent_form_is_insufficient_data():
     assert build.call_count == 0
 
 
+def test_500_error_envelope_is_not_projected_as_verified_source_timestamp():
+    with tempfile.TemporaryDirectory() as temp:
+        root = Path(temp)
+        write_case(root, [fixture(1, spf=limited_spf())])
+        failed_fetch = {
+            "shuju_id": 1413001,
+            "fetched_at": "2026-08-12T12:30:00+08:00",
+            "shuju": {"error": "connection refused"},
+        }
+        summary, build = run_case(root, parsed=failed_fetch)
+        ledger = read_ledger(root)
+
+    assert summary["failure_reasons"] == {"MISSING_RECENT_FORM": 1}
+    assert build.call_count == 0
+    assert ledger["jobs"][0]["status"] == "INSUFFICIENT_DATA"
+
+
 def test_unverifiable_source_timestamp_is_rejected_before_model_call():
     with tempfile.TemporaryDirectory() as temp:
         root = Path(temp)

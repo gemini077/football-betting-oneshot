@@ -1,6 +1,12 @@
 # ID-AUTO-1 — League-Agnostic Deterministic Team Identity Resolution
 
-Status: `READY_FOR_ACCEPTANCE`
+Status: `SEALED / ACCEPTANCE PASS`
+
+Independent acceptance: `ID-AUTO-1 = ACCEPTANCE PASS`. PR #118 was safely
+merged to `main` at `04a548416513865e4af4771603fb4369074ecd57` without
+reverting the latest automatic prediction, market, prospective, dashboard, or
+runtime state. `IDENTITY_BACKLOG = NON_BLOCKING / ON_DEMAND`; ID-AUTO-2 is not
+started.
 
 Audit cohort: `2026-08-29` through `2026-08-31`, Asia/Shanghai, exactly 66
 Prediction Universe fixtures.
@@ -142,5 +148,5 @@ was executed here, and no Japan/Spain-specific importer was added.
 - `tests/test_hc_auto_1_coverage_gate.py`
 
 Focused resolver, registry, gate, Champion fail-open, audit-artifact, and
-existing HC integration tests pass. ID-AUTO-1 ends at `READY_FOR_ACCEPTANCE`;
-ID-AUTO-2 is not started automatically.
+existing HC integration tests pass. ID-AUTO-1 is now `SEALED / ACCEPTANCE PASS`
+after independent acceptance; ID-AUTO-2 is not started automatically.

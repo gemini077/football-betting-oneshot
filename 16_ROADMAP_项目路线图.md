@@ -7,40 +7,33 @@
 
 CURRENT PHASE:
 
-`ID-AUTO-1 - League-Agnostic Deterministic Team Identity Resolution`
+`PRED-AVAIL-1 - Daily Prediction Availability Closure`
 
 CURRENT STATUS: `READY_FOR_ACCEPTANCE`
 
-`HC-AUTO-1` is now `SEALED / ACCEPTANCE PASS` after independent acceptance;
-PR #117 merged to `main` at `7680c57475c907ba87cf40c9c1a3d1d48543edb1`.
+The exact 25-fixture 2026-08-30 cohort is frozen. BEFORE was 1 FULL/frozen and
+24 `MISSING_RECENT_FORM`; the bounded same-cohort AFTER replay is 2 FULL, 0
+DEGRADED, 23 `MISSING_RECENT_FORM`, 0 prediction failures, and 0 blocked
+Champion jobs. The generic authoritative-history route released one fixture
+without changing Champion math or production automatic state. Detailed audit
+artifacts are under `data/football_data/pred_avail_1/`.
 
-`FE-SE-HIST-1` is `SEALED / ACCEPTANCE PASS` after PR #115 merged to main.
-`FE-SE-DC-CLOSE` is `ACCEPTANCE PASS / CLOSED` with model verdict
-`INCONCLUSIVE` because 7 of 103 fixed-config targets had optimizer fit
-failures. `SWEDEN_SPECIFIC_FURTHER_TUNING` is `CLOSED`; PR #114 remains OPEN
-and unmerged. No Sweden/DC computation is part of HC-AUTO-1.
+`ID-AUTO-1 = SEALED / ACCEPTANCE PASS` and `HC-AUTO-1 = SEALED / ACCEPTANCE PASS`
+after independent acceptance. PR #118 merged to `main` at
+`04a548416513865e4af4771603fb4369074ecd57` without reverting automatic state.
+`IDENTITY_BACKLOG = NON_BLOCKING / ON_DEMAND`; ID-AUTO-2 is not active.
 
-ID-AUTO-1 builds a reusable team identity registry from existing provider IDs,
-reviewed crosswalks, canonical historical IDs, source names and reviewed alias
-evidence. Its deterministic resolver is competition-scoped and sits behind the
-existing `SUPPORTED` / `DEGRADED` / `UNSUPPORTED` coverage gate. It does not
-change the Champion, frozen predictions or model math.
+PRED-AVAIL-1 remains a product blocker at 23/25 unavailable and stops at
+`READY_FOR_ACCEPTANCE`. After independent acceptance, the next candidate is
+Multi-Market Prediction Quality. No model-tuning task is active here.
 
-Current milestone result: `READY_FOR_ACCEPTANCE`. Independent acceptance is
-still required before ID-AUTO-1 is `SEALED`.
+# ID-AUTO-1 Historical Route Record
 
-NEXT MAINLINE CANDIDATE:
+ID-AUTO-1 used one competition-scoped exact identity registry and resolver. It
+retains provider-ID reuse, Champion fail-open behavior, no per-fixture aliases,
+and no league-specific resolver. Its independently accepted result is
+`SEALED / ACCEPTANCE PASS`; no ID-AUTO-2 is started.
 
-> Stop after ID-AUTO-1 acceptance. Do not automatically start ID-AUTO-2.
->
-> Any future identity or coverage expansion must use the same generic registry
-> route and a separately accepted milestone.
-
-BLOCKED / NOT ACTIVE:
-
-- PR #114 FE-DC-1 remains research evidence and OPEN / unmerged.
-- Dixon-Coles, Sweden-specific parameter tuning, and PA-3 are closed / not active.
-- Champion promotion, production model changes, frozen prediction changes, new providers, and other-league expansion are not active.
 # North Star
 
 建立：
