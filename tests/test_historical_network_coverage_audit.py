@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 from scripts.football_data.audit_historical_network_coverage import (
+    build_competition_registry_lookup,
     build_current_fixture_coverage,
     competition_network_coverage,
     historical_identity_diagnostics,
+    normalize_name,
 )
 
 
@@ -79,6 +81,107 @@ def test_identity_blocker_is_not_counted_as_history_blocker() -> None:
     assert result["both_teams_enter_network"] == 0
     assert result["blocker_counts"] == {"identity": 1, "history": 0, "ready": 0}
     assert result["fixtures"][0]["status"] == "identity_blocker"
+
+
+def test_competition_registry_lookup_reads_main_competitions_table() -> None:
+    registry = {
+        "competitions": [
+            {
+                "competition_key": "england-premier-league",
+                "canonical_competition_id": None,
+                "name": "Premier League",
+                "observed_raw_names": ["\u82f1\u683c\u5170\u8d85\u7ea7\u8054\u8d5b"],
+            }
+        ]
+    }
+
+    lookup = build_competition_registry_lookup(registry)
+
+    assert lookup[normalize_name("Premier League")] == {"competition:england-premier-league"}
+    assert lookup[normalize_name("\u82f1\u683c\u5170\u8d85\u7ea7\u8054\u8d5b")] == {
+        "competition:england-premier-league"
+    }
+
+
+def test_competition_status_separates_four_history_attribution_states() -> None:
+    rows = [historical_row("m1", "team:home", "team:away", competition="competition:authoritative")]
+    fixtures = [
+        {
+            "matchId": "500-authoritative",
+            "homeTeam": "Unmapped Home",
+            "awayTeam": "Unmapped Away",
+            "league": "Authoritative League",
+            "matchDate": "2026-02-01",
+            "matchTime": "12:00",
+        },
+        {
+            "matchId": "500-external",
+            "homeTeam": "Unmapped Home",
+            "awayTeam": "Unmapped Away",
+            "league": "External Source League",
+            "matchDate": "2026-02-01",
+            "matchTime": "12:00",
+        },
+        {
+            "matchId": "500-known",
+            "homeTeam": "Unmapped Home",
+            "awayTeam": "Unmapped Away",
+            "league": "Known League",
+            "matchDate": "2026-02-01",
+            "matchTime": "12:00",
+        },
+        {
+            "matchId": "500-unresolved",
+            "homeTeam": "Unmapped Home",
+            "awayTeam": "Unmapped Away",
+            "league": "Unregistered League",
+            "matchDate": "2026-02-01",
+            "matchTime": "12:00",
+        },
+    ]
+    registry = {
+        "competitions": [
+            {"competition_key": "authoritative", "name": "Authoritative League"},
+            {
+                "competition_key": "external",
+                "name": "External Source League",
+                "historical_result_sources": ["reviewed-source"],
+                "source_record_count": 12,
+            },
+            {"competition_key": "known", "name": "Known League"},
+        ]
+    }
+
+    result = build_current_fixture_coverage(
+        fixtures,
+        rows,
+        crosswalk_mappings=[],
+        identity_matches=[],
+        competition_registry=registry,
+    )
+
+    assert [item["competition_status"] for item in result["fixtures"]] == [
+        "authoritative_history_available",
+        "historical_source_known_outside_authoritative_store",
+        "competition_known_but_authoritative_history_unavailable",
+        "competition_alias_or_context_unresolved",
+    ]
+    assert result["competition_history_gate"] == {
+        "authoritative_history_available": 1,
+        "competition_alias_or_context_unresolved": 1,
+        "competition_known_but_authoritative_history_unavailable": 1,
+        "historical_source_known_outside_authoritative_store": 1,
+        "authoritative_history_competitions": {"competition:authoritative": 1},
+        "known_but_authoritative_history_unavailable_competitions": {"competition:known": 1},
+        "historical_source_known_outside_authoritative_store_competitions": {"competition:external": 1},
+        "unresolved_competition_labels": {"Unregistered League": 1},
+        "fixture_ids_by_competition_status": {
+            "authoritative_history_available": ["500-authoritative"],
+            "competition_alias_or_context_unresolved": ["500-unresolved"],
+            "competition_known_but_authoritative_history_unavailable": ["500-known"],
+            "historical_source_known_outside_authoritative_store": ["500-external"],
+        },
+    }
 
 
 def test_verified_exact_pair_requires_one_shared_competition_context() -> None:

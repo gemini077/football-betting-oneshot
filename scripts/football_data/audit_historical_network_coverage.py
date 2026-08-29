@@ -330,28 +330,112 @@ def _canonical_competition_id(value: Any) -> str:
     return text if text.startswith("competition:") else f"competition:{text}"
 
 
+def _registry_entry_competition_id(entry: Mapping[str, Any]) -> str | None:
+    value = entry.get("canonical_competition_id") or entry.get("competition_key") or entry.get("competition")
+    return _canonical_competition_id(value) if value else None
+
+
+def _registry_entry_alias_values(entry: Mapping[str, Any]) -> Iterable[Any]:
+    """Yield only explicit registry labels for deterministic exact lookup."""
+
+    for field in (
+        "competition_key",
+        "canonical_competition_id",
+        "name",
+        "raw_name",
+        "raw_names",
+        "observed_raw_names",
+        "provider_competition_name",
+        "provider_competition_names",
+        "aliases",
+        "competition_aliases",
+    ):
+        value = entry.get(field)
+        if isinstance(value, (list, tuple, set)):
+            yield from value
+        elif value not in (None, ""):
+            yield value
+
+
+def _registry_entry_source_values(entry: Mapping[str, Any]) -> tuple[bool, int, set[str]]:
+    raw_source_names = entry.get("historical_result_sources") or []
+    if not isinstance(raw_source_names, (list, tuple, set)):
+        raw_source_names = [raw_source_names]
+    source_names = {str(value) for value in raw_source_names if value not in (None, "")}
+    try:
+        source_record_count = max(0, int(entry.get("source_record_count") or 0))
+    except (TypeError, ValueError):
+        source_record_count = 0
+    source_known = bool(source_names or source_record_count > 0)
+    return source_known, source_record_count, source_names
+
+
 def build_competition_registry_lookup(registry: Mapping[str, Any]) -> dict[str, set[str]]:
     """Build exact raw-label to canonical competition lookup."""
 
-    if registry and all(isinstance(value, (set, list, tuple)) for value in registry.values()):
+    if "competitions" not in registry and registry and all(
+        isinstance(value, (set, list, tuple)) for value in registry.values()
+    ):
         return {normalize_name(key): {str(item) for item in value} for key, value in registry.items()}
 
     lookup: dict[str, set[str]] = collections.defaultdict(set)
+    entries: list[Mapping[str, Any]] = []
+    entries.extend(entry for entry in registry.get("competitions", []) or [] if isinstance(entry, Mapping))
     for container_name in ("observed_competitions", "source_observed_competitions", "source_completeness"):
-        for entry in registry.get(container_name, []) or []:
-            if not isinstance(entry, Mapping):
-                continue
-            key = entry.get("competition_key")
-            if not key:
-                key = entry.get("competition")
-            if not key:
-                continue
-            canonical = _canonical_competition_id(key)
-            for raw_name in entry.get("raw_names", []) or []:
-                lookup[normalize_name(raw_name)].add(canonical)
-            if entry.get("raw_name"):
-                lookup[normalize_name(entry["raw_name"])].add(canonical)
+        entries.extend(entry for entry in registry.get(container_name, []) or [] if isinstance(entry, Mapping))
+    for entry in entries:
+        canonical = _registry_entry_competition_id(entry)
+        if not canonical:
+            continue
+        for raw_name in _registry_entry_alias_values(entry):
+            normalized = normalize_name(raw_name)
+            if normalized:
+                lookup[normalized].add(canonical)
     return dict(lookup)
+
+
+def build_competition_registry_metadata(registry: Mapping[str, Any]) -> dict[str, dict[str, Any]]:
+    """Summarize registry knowledge without treating it as authoritative history."""
+
+    metadata: dict[str, dict[str, Any]] = collections.defaultdict(
+        lambda: {
+            "registry_known": False,
+            "historical_source_known": False,
+            "historical_result_sources": set(),
+            "source_record_count": 0,
+        }
+    )
+
+    if "competitions" not in registry and registry and all(
+        isinstance(value, (set, list, tuple)) for value in registry.values()
+    ):
+        for values in registry.values():
+            for value in values:
+                canonical = str(value)
+                metadata[canonical]["registry_known"] = True
+    else:
+        containers = [("competitions", True), ("observed_competitions", False), ("source_observed_competitions", False), ("source_completeness", False)]
+        for container_name, is_main_table in containers:
+            for entry in registry.get(container_name, []) or []:
+                if not isinstance(entry, Mapping):
+                    continue
+                canonical = _registry_entry_competition_id(entry)
+                if not canonical:
+                    continue
+                item = metadata[canonical]
+                item["registry_known"] = item["registry_known"] or is_main_table
+                source_known, source_record_count, source_names = _registry_entry_source_values(entry)
+                item["historical_source_known"] = item["historical_source_known"] or source_known
+                item["source_record_count"] = max(item["source_record_count"], source_record_count)
+                item["historical_result_sources"].update(source_names)
+
+    return {
+        key: {
+            **value,
+            "historical_result_sources": sorted(value["historical_result_sources"]),
+        }
+        for key, value in sorted(metadata.items())
+    }
 
 
 def _provider_hint(fixture: Mapping[str, Any]) -> str | None:
@@ -525,13 +609,17 @@ def _schedule_competition_status(
     fixture: Mapping[str, Any],
     competition_lookup: Mapping[str, set[str]],
     historical_competitions: set[str],
+    registry_metadata: Mapping[str, Mapping[str, Any]] | None = None,
 ) -> tuple[str, set[str]]:
     mapped = set(competition_lookup.get(normalize_name(fixture.get("league")), set()))
-    if mapped & historical_competitions:
-        return "historical_supported_competition", mapped
-    if mapped:
-        return "known_competition_without_historical_results", mapped
-    return "competition_context_unresolved", mapped
+    if len(mapped) != 1:
+        return "competition_alias_or_context_unresolved", mapped
+    competition = next(iter(mapped))
+    if competition in historical_competitions:
+        return "authoritative_history_available", mapped
+    if (registry_metadata or {}).get(competition, {}).get("historical_source_known"):
+        return "historical_source_known_outside_authoritative_store", mapped
+    return "competition_known_but_authoritative_history_unavailable", mapped
 
 
 def build_current_fixture_coverage(
@@ -544,6 +632,7 @@ def build_current_fixture_coverage(
 ) -> dict[str, Any]:
     rows = _dedupe_historical_rows(historical_rows)
     competition_lookup = build_competition_registry_lookup(competition_registry)
+    registry_metadata = build_competition_registry_metadata(competition_registry)
     historical_competitions = {str(row.get("competition_id")) for row in rows if row.get("competition_id")}
     identity_index = _identity_by_match_id(identity_matches)
     crosswalk_index = _crosswalk_name_index(crosswalk_mappings)
@@ -552,22 +641,25 @@ def build_current_fixture_coverage(
     identity_reasons: collections.Counter[str] = collections.Counter()
     history_reasons: collections.Counter[str] = collections.Counter()
     competition_statuses: collections.Counter[str] = collections.Counter()
-    supported_competitions: collections.Counter[str] = collections.Counter()
-    missing_competitions: collections.Counter[str] = collections.Counter()
+    authoritative_competitions: collections.Counter[str] = collections.Counter()
+    known_without_history_competitions: collections.Counter[str] = collections.Counter()
+    source_known_outside_store_competitions: collections.Counter[str] = collections.Counter()
+    unresolved_competition_labels: collections.Counter[str] = collections.Counter()
 
     for fixture in fixtures:
         identity = _fixture_identity(fixture, identity_index, crosswalk_index, competition_lookup)
         competition_status, mapped_competitions = _schedule_competition_status(
-            fixture, competition_lookup, historical_competitions
+            fixture, competition_lookup, historical_competitions, registry_metadata
         )
         competition_statuses[competition_status] += 1
-        if competition_status == "historical_supported_competition":
-            for competition in mapped_competitions:
-                if competition in historical_competitions:
-                    supported_competitions[competition] += 1
-        elif competition_status == "known_competition_without_historical_results":
-            for competition in mapped_competitions:
-                missing_competitions[competition] += 1
+        if competition_status == "authoritative_history_available":
+            authoritative_competitions[next(iter(mapped_competitions))] += 1
+        elif competition_status == "competition_known_but_authoritative_history_unavailable":
+            known_without_history_competitions[next(iter(mapped_competitions))] += 1
+        elif competition_status == "historical_source_known_outside_authoritative_store":
+            source_known_outside_store_competitions[next(iter(mapped_competitions))] += 1
+        elif competition_status == "competition_alias_or_context_unresolved":
+            unresolved_competition_labels[str(fixture.get("league") or "")] += 1
         status = "identity_blocker"
         reason = identity["reason"]
         history_match_counts: dict[str, int] = {}
@@ -637,6 +729,20 @@ def build_current_fixture_coverage(
         )
 
     fixture_count = len(fixture_results)
+    bounded_identity_closure_candidates = [
+        item["fixture_id"]
+        for item in fixture_results
+        if item["status"] == "identity_blocker" and item["competition_status"] == "authoritative_history_available"
+    ]
+    fixture_ids_by_competition_status = {
+        status: [item["fixture_id"] for item in fixture_results if item["competition_status"] == status]
+        for status in (
+            "competition_alias_or_context_unresolved",
+            "competition_known_but_authoritative_history_unavailable",
+            "historical_source_known_outside_authoritative_store",
+            "authoritative_history_available",
+        )
+    }
     return {
         "fixture_count": fixture_count,
         "both_teams_enter_network": blocker_counts["ready"],
@@ -645,14 +751,26 @@ def build_current_fixture_coverage(
         "blocker_counts": blocker_counts,
         "identity_blocker_reasons": dict(sorted(identity_reasons.items())),
         "history_blocker_reasons": dict(sorted(history_reasons.items())),
+        "bounded_identity_closure_candidate_count": len(bounded_identity_closure_candidates),
+        "bounded_identity_closure_candidate_fixture_ids": bounded_identity_closure_candidates,
         "competition_history_gate": {
-            "historical_supported_competition": competition_statuses["historical_supported_competition"],
-            "known_competition_without_historical_results": competition_statuses[
-                "known_competition_without_historical_results"
+            "authoritative_history_available": competition_statuses["authoritative_history_available"],
+            "competition_alias_or_context_unresolved": competition_statuses["competition_alias_or_context_unresolved"],
+            "competition_known_but_authoritative_history_unavailable": competition_statuses[
+                "competition_known_but_authoritative_history_unavailable"
             ],
-            "competition_context_unresolved": competition_statuses["competition_context_unresolved"],
-            "historical_supported_competitions": dict(sorted(supported_competitions.items())),
-            "known_missing_competitions": dict(sorted(missing_competitions.items())),
+            "historical_source_known_outside_authoritative_store": competition_statuses[
+                "historical_source_known_outside_authoritative_store"
+            ],
+            "authoritative_history_competitions": dict(sorted(authoritative_competitions.items())),
+            "known_but_authoritative_history_unavailable_competitions": dict(
+                sorted(known_without_history_competitions.items())
+            ),
+            "historical_source_known_outside_authoritative_store_competitions": dict(
+                sorted(source_known_outside_store_competitions.items())
+            ),
+            "unresolved_competition_labels": dict(sorted(unresolved_competition_labels.items())),
+            "fixture_ids_by_competition_status": fixture_ids_by_competition_status,
         },
         "fixtures": fixture_results,
     }
@@ -720,7 +838,7 @@ def build_audit_report(
         accepted_rows,
         crosswalk_mappings=project_crosswalk,
         identity_matches=identity_matches,
-        competition_registry=build_competition_registry_lookup(competition_registry),
+        competition_registry=competition_registry,
     )
 
     current_kickoffs = [kickoff for kickoff in (_universe_kickoff(fixture) for fixture in current_fixtures) if kickoff]
@@ -750,10 +868,16 @@ def build_audit_report(
         str(item.get("id") or item.get("provider_match_id") or item.get("match_id") or "")
         for item in identity_items
     }
+    competition_gate = current_coverage["competition_history_gate"]
+    known_history_gap_count = (
+        competition_gate["competition_known_but_authoritative_history_unavailable"]
+        + competition_gate["historical_source_known_outside_authoritative_store"]
+    )
 
     report = {
         "contract_version": "fe_history_graph_1_audit.v1",
         "milestone": "FE-HISTORY-GRAPH-1",
+        "revision": "R1",
         "status": "READY_FOR_ACCEPTANCE",
         "scope": {
             "read_only_inputs": [
@@ -825,7 +949,12 @@ def build_audit_report(
             "elo": {
                 "historical_research_condition": historical_research_condition,
                 "current_production_condition": "NOT_READY",
-                "blocker": "No current production fixture has a deterministic canonical home/away pair; Portugal history also has 15 exact crosswalk fragmentation clusters, and 24 fixtures lack supported historical competition coverage.",
+                "blocker": (
+                    "No current production fixture has a deterministic canonical home/away pair; "
+                    f"Portugal history has {historical_identity['fragmented_canonical_entity_count']} exact "
+                    "crosswalk fragmentation clusters, and "
+                    f"{known_history_gap_count} current fixtures have no authoritative history in the store."
+                ),
             },
             "dynamic_attack_defense": {
                 "historical_research_condition": historical_research_condition,
@@ -837,11 +966,24 @@ def build_audit_report(
             "current_fixture_identity_blockers": current_coverage["blocker_counts"]["identity"],
             "current_fixture_history_blockers_after_identity_resolution": current_coverage["blocker_counts"]["history"],
             "current_fixture_ready": current_coverage["blocker_counts"]["ready"],
-            "known_schedule_competition_history_gaps_before_team_identity": current_coverage[
-                "competition_history_gate"
-            ]["known_competition_without_historical_results"],
-            "schedule_competition_context_unresolved": current_coverage["competition_history_gate"][
-                "competition_context_unresolved"
+            "known_schedule_competition_history_gaps_before_team_identity": known_history_gap_count,
+            "schedule_competition_alias_or_context_unresolved": competition_gate[
+                "competition_alias_or_context_unresolved"
+            ],
+            "schedule_competition_known_but_authoritative_history_unavailable": competition_gate[
+                "competition_known_but_authoritative_history_unavailable"
+            ],
+            "schedule_historical_source_known_outside_authoritative_store": competition_gate[
+                "historical_source_known_outside_authoritative_store"
+            ],
+            "schedule_competition_authoritative_history_available": competition_gate[
+                "authoritative_history_available"
+            ],
+            "bounded_identity_closure_fixture_count": current_coverage[
+                "bounded_identity_closure_candidate_count"
+            ],
+            "bounded_identity_closure_fixture_ids": current_coverage[
+                "bounded_identity_closure_candidate_fixture_ids"
             ],
             "historical_identity_fragmented_canonical_entity_count": historical_identity[
                 "fragmented_canonical_entity_count"
@@ -851,7 +993,13 @@ def build_audit_report(
             ],
             "primary_blocker": "identity",
             "missing_categories": ["identity", "competition_history"],
-            "data_source_finding": "The existing result sources cover 7 competitions; current-day schedule coverage is exact-supported for 4 fixtures, has 6 known unsupported-competition fixtures, and has 18 unresolved competition labels in the existing registry.",
+            "data_source_finding": (
+                "The existing result sources cover 7 competitions; current-day schedule competition "
+                f"classification is {competition_gate['authoritative_history_available']} authoritative-history, "
+                f"{competition_gate['historical_source_known_outside_authoritative_store']} source-known-outside-store, "
+                f"{competition_gate['competition_known_but_authoritative_history_unavailable']} known-without-authoritative-history, "
+                f"and {competition_gate['competition_alias_or_context_unresolved']} exact alias/context unresolved."
+            ),
         },
         "production_mutation_check": {
             "input_data_written": False,
@@ -919,10 +1067,13 @@ def render_markdown(report: Mapping[str, Any]) -> str:
     blockers = report["blocker_attribution"]
     readiness = report["model_readiness"]
     historical_identity = report["historical_identity"]
+    competition_gate = current["competition_history_gate"]
+    identity_closure_ids = current["bounded_identity_closure_candidate_fixture_ids"]
     lines = [
-        "# FE-HISTORY-GRAPH-1 — Historical Network Coverage Audit",
+        "# FE-HISTORY-GRAPH-1-R1 — Historical Network Coverage Audit",
         "",
         f"Status: `{report['status']}`",
+        f"Revision: `{report.get('revision', 'R0')}`",
         "",
         "## Scope",
         "",
@@ -956,8 +1107,20 @@ def render_markdown(report: Mapping[str, Any]) -> str:
             f"Canonical current-day universe: **{current['fixture_count']} fixtures**; both teams in the same historical network: **{current['both_teams_enter_network']}/{current['fixture_count']} ({_fmt_ratio(current['coverage_ratio'])})**.",
             f"Mutually exclusive blockers: identity `{blockers['current_fixture_identity_blockers']}`, history after identity resolution `{blockers['current_fixture_history_blockers_after_identity_resolution']}`, ready `{blockers['current_fixture_ready']}`.",
             f"Existing current identity evidence has `{report['identity_crosswalk']['current_identity_evidence_match_count']}` rows but exact overlap with this universe is `{report['identity_crosswalk']['current_identity_evidence_exact_match_overlap_count']}`; no verified two-team pair is available.",
-            f"Competition-level pre-identity signal: supported historical competition `{current['competition_history_gate']['historical_supported_competition']}`, known missing historical competition `{current['competition_history_gate']['known_competition_without_historical_results']}`, registry-unresolved `{current['competition_history_gate']['competition_context_unresolved']}`.",
-            f"Known missing competition history keys: `{current['competition_history_gate']['known_missing_competitions']}`.",
+            "Competition-level pre-identity classification: "
+            f"alias/context unresolved `{competition_gate['competition_alias_or_context_unresolved']}`, "
+            f"known without authoritative history `{competition_gate['competition_known_but_authoritative_history_unavailable']}`, "
+            f"source known outside authoritative store `{competition_gate['historical_source_known_outside_authoritative_store']}`, "
+            f"authoritative history available `{competition_gate['authoritative_history_available']}`.",
+            f"Authoritative-history competition keys: `{competition_gate['authoritative_history_competitions']}`.",
+            "Registry/source-known-but-not-authoritative competition keys: "
+            f"`{competition_gate['historical_source_known_outside_authoritative_store_competitions']}`; "
+            "known-without-source keys: "
+            f"`{competition_gate['known_but_authoritative_history_unavailable_competitions']}`.",
+            f"Alias/context unresolved labels: `{competition_gate['unresolved_competition_labels']}`.",
+            "Alias/context unresolved is a conservative exact-mapping result: a canonical main-table definition alone is not treated as a raw-label alias, and this class is not a historical-provider verdict.",
+            f"Mutually exclusive fixture IDs by class: `{competition_gate['fixture_ids_by_competition_status']}`.",
+            f"Bounded identity-closure candidates: **{len(identity_closure_ids)}**; fixture IDs: `{identity_closure_ids}`.",
             "",
             "## Readiness",
             "",
@@ -973,7 +1136,7 @@ def render_markdown(report: Mapping[str, Any]) -> str:
             "## Conclusion",
             "",
             f"Primary blocker: **{blockers['primary_blocker']}**. Missing categories: `{', '.join(blockers['missing_categories'])}`.",
-            f"The historical graph is topologically connected within all seven covered competitions, but the verified crosswalk exposes {historical_identity['fragmented_canonical_entity_count']} identity-fragmentation clusters in Portugal. The current production universe has no deterministic two-team identity pair. In addition, 24 current fixtures are outside an exact-supported historical competition context (6 known missing result coverage, 18 unresolved in the existing competition registry).",
+            f"The historical graph is topologically connected within all seven covered competitions, but the verified crosswalk exposes {historical_identity['fragmented_canonical_entity_count']} identity-fragmentation clusters in Portugal. The current production universe has no deterministic two-team identity pair. The four competition classes above are mutually exclusive; {len(identity_closure_ids)} fixtures have authoritative history available and therefore leave only team identity for bounded closure. No historical topology statistic was recomputed or changed by R1.",
             "",
             "## Production mutation check",
             "",
