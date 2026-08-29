@@ -1,7 +1,20 @@
 # 19_DECISIONS_关键决策.md
 
-最后更新：2026-08-17  
+最后更新：2026-08-29
 角色：记录不能因换对话 / 换 Codex 而重复推翻的关键决定。若新证据足以改变决定，必须新增 superseding decision，不得静默改历史。
+
+# D-024 — Sweden Historical Completeness 采用 bounded authoritative closure
+
+状态：LOCKED FOR FE-SE-HIST-1
+
+FE-DC-1 的独立验收确认工程/研究实验 PASS，但 Dixon-Coles `NOT_PROMOTABLE`；PR #114 保留为 research evidence，暂不 merge。新的上游数据 closure 只针对 `competition:sweden-allsvenskan`：
+
+- 使用现有 Football-Data.co.uk adapter、source contract 和免费稳定 SWE.csv；不新增 provider，不扩其他联赛；
+- 2025 必须是完整 `240/240`，canonical identity 只能使用 reviewed deterministic exact mapping；
+- source hash/timestamp/provenance 必须保留，duplicate/conflict 必须显式审计，事实冲突 fail closed；
+- 2026 authoritative 结果本轮保持 `119`，不因当前来源已出现更多进行中结果而扩大范围；
+- authoritative historical store 可在临时 DuckDB 中从既有记录和目标 source 重建，atomic replace，并保持可重复、无重复、非目标记录不变；
+- 不修改 Champion、production prediction、frozen prediction、FE-DC-1 参数或任何 production model。closure 只服务 research/shadow，不能自动 promotion。
 
 # D-001 — Prediction Universe 是当天 canonical schedule
 
