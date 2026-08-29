@@ -46,7 +46,11 @@ from model_governance import (  # noqa: E402
 from nowscore_markets import fetch_match_markets  # noqa: E402
 from prediction_universe import load_prediction_universe  # noqa: E402
 from prediction_quality import recent_form_is_usable  # noqa: E402
-from recent_form_cache import load_recent_form_cache, refresh_recent_form_cache  # noqa: E402
+from recent_form_cache import (  # noqa: E402
+    load_authoritative_recent_form,
+    load_recent_form_cache,
+    refresh_recent_form_cache,
+)
 
 
 JOBS_ROOT = PROJECT_ROOT / "data" / "base_prediction_jobs"
@@ -570,6 +574,11 @@ def _five_hundred_source(
     refs = [_relative_ref(path)]
     if captured_at is None or captured_at >= kickoff:
         return None, True, refs
+    # ``fetch_and_parse`` preserves a capture timestamp even when every 500
+    # page failed.  Do not project that error envelope as a usable source
+    # snapshot or let it move the deterministic input cutoff.
+    if not _form_is_usable((result.get("shuju") or {}).get("recent_form")) and not _market_families(result):
+        return None, False, refs
     return {
         # Keep the governance/model contract key for source selection; the
         # effective provider is derived from this snapshot's provenance below.
@@ -836,6 +845,20 @@ def _assemble_context(
             form_captured_at = cached_form.get("captured_at")
             form_refs = list(cached_form.get("references") or [])
             source_refs.extend(str(ref) for ref in cached_form.get("source_refs") or [])
+
+    if not form:
+        authoritative_form = load_authoritative_recent_form(
+            job,
+            fixture,
+            kickoff.isoformat(),
+            source_clock,
+        )
+        if authoritative_form:
+            form = authoritative_form
+            form_source = authoritative_form.get("source")
+            form_captured_at = authoritative_form.get("captured_at")
+            form_refs = list(authoritative_form.get("references") or [])
+            source_refs.extend(str(ref) for ref in authoritative_form.get("source_refs") or [])
 
     if not form or not _form_is_usable(form.get("recent_form")):
         return None, None, "INPUT_TIMESTAMP_UNVERIFIED" if unverified_source else "MISSING_RECENT_FORM"

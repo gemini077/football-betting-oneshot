@@ -3,9 +3,46 @@
 最后更新：2026-08-30
 角色：项目当前唯一人类可读状态真相。只记录当前事实，不承担完整历史档案职责。
 
-# ID-AUTO-1 Current State
+# PRED-AVAIL-1 Current State
 
 Status: `READY_FOR_ACCEPTANCE`
+
+The exact 2026-08-30 cohort is frozen at 25 fixtures with cohort SHA-256
+`0cf4f106c34f183c3d61a81952f70e9c7f2525c0376a1e6eff74bb087e15cb8d`.
+BEFORE: 1 FULL/frozen, 24 `MISSING_RECENT_FORM`, 0 prediction failures, and 0
+blocked Champion jobs. The isolated same-cohort AFTER replay is 2 FULL, 0
+DEGRADED, 23 `INSUFFICIENT_DATA` / `MISSING_RECENT_FORM`, 0 prediction failures,
+and 0 blocked Champion jobs. Identity-blocked remains 23, source-blocked moves
+24 -> 23, and history-blocked remains 23.
+
+The generic fix routes exact, eligible pre-kickoff rows from the existing
+read-only authoritative historical-result store into the existing four-block
+recent-form contract. It releases only `500-1364199` Bodo/Glimt - Rosenborg in
+bounded replay. The existing frozen Celta Vigo - Athletic Club artifact was not
+rerun. Production automatic prediction, market, prospective, dashboard and
+runtime files are unchanged; AFTER is not a live deployment claim.
+
+Root cause evidence is retained in
+`data/football_data/pred_avail_1/root_cause_audit_2026-08-30.json`. The common
+system cause is that BASE previously did not route the authoritative store;
+current runtime 500 deep fetches are unavailable and the Nowscore schedule has
+no exact mapping for this 500 fixture cohort. The 23 remaining rows are
+identity-blocked under the exact-only policy. No synthetic evidence, fuzzy or
+LLM identity, league-specific patch, new provider, market-only fallback, or
+Champion math change was introduced.
+
+`HC-AUTO-1 = SEALED / ACCEPTANCE PASS` and `ID-AUTO-1 = SEALED / ACCEPTANCE PASS`
+are recorded after independent acceptance. PR #118 was safely merged to
+`main` at `04a548416513865e4af4771603fb4369074ecd57`, with the latest automatic
+state preserved. `IDENTITY_BACKLOG = NON_BLOCKING / ON_DEMAND`; ID-AUTO-2 is not
+started.
+
+The next pointer after independent acceptance is Multi-Market Prediction
+Quality. No model-tuning task is started in PRED-AVAIL-1.
+
+# ID-AUTO-1 Acceptance Record (historical)
+
+Status: `SEALED / ACCEPTANCE PASS`
 
 HC-AUTO-1 is now `SEALED / ACCEPTANCE PASS` after independent acceptance. PR
 #117 was merged to `main` at
@@ -39,8 +76,9 @@ are recorded in the deterministic backlog.
 optimizer fit failures. `SWEDEN_SPECIFIC_FURTHER_TUNING` is `CLOSED`, PR #114
 remains OPEN and unmerged, and no Sweden/DC computation was run in HC-AUTO-1.
 
-ID-AUTO-1 is the current milestone and is only `READY_FOR_ACCEPTANCE`; it is
-not independently sealed. Do not start ID-AUTO-2 automatically.
+ID-AUTO-1 is an accepted historical milestone: `SEALED / ACCEPTANCE PASS`.
+Do not start ID-AUTO-2 automatically; the identity backlog is
+`NON_BLOCKING / ON_DEMAND`.
 
 # FE-SE-HIST-1 Acceptance Record
 

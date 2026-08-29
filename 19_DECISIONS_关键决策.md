@@ -3,6 +3,26 @@
 最后更新：2026-08-30
 角色：记录不能因换对话 / 换 Codex 而重复推翻的关键决定。若新证据足以改变决定，必须新增 superseding decision，不得静默改历史。
 
+# D-028 - Daily prediction availability closure
+
+Status: `LOCKED FOR PRED-AVAIL-1`
+
+BASE may reuse an existing immutable historical-result store as a recent-form
+source only through one generic exact-identity route. The route must filter
+eligible pre-kickoff records, enforce the existing recency window, preserve
+source/dataset provenance, and feed the existing four-block recent-form
+contract without changing Champion math. It runs after the existing prematch,
+Nowscore, 500 deep, and reviewed-cache paths.
+
+There is no unvalidated market-only fallback: market-only remains metadata-only
+and no DEGRADED production prediction is enabled. The 2026-08-30 bounded replay
+moves availability from 1/25 to 2/25; the remaining 23 rows stay
+identity/source/history blocked. The production automatic prediction, market,
+prospective, dashboard, runtime, frozen, and historical-state artifacts remain
+unchanged. PRED-AVAIL-1 ends at `READY_FOR_ACCEPTANCE`; independent acceptance
+is required before any live refresh. IDENTITY_BACKLOG is
+`NON_BLOCKING / ON_DEMAND`; ID-AUTO-2 does not start.
+
 # D-027 - League-agnostic deterministic team identity resolution
 
 Status: `LOCKED FOR ID-AUTO-1`

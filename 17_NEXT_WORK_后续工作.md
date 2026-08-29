@@ -4,9 +4,45 @@
 
 # Current Sole Pointer
 
-## ID-AUTO-1 - League-Agnostic Deterministic Team Identity Resolution
+## PRED-AVAIL-1 - Daily Prediction Availability Closure
 
 Status: `READY_FOR_ACCEPTANCE`
+
+The same frozen 25-fixture cohort is retained at
+`data/football_data/pred_avail_1/baseline_2026-08-30.json`, with cohort SHA-256
+`0cf4f106c34f183c3d61a81952f70e9c7f2525c0376a1e6eff74bb087e15cb8d`.
+BEFORE: 1 FULL/frozen, 24 `MISSING_RECENT_FORM`, 0 prediction failures, and 0
+blocked Champion jobs. AFTER bounded replay: 2 FULL, 0 DEGRADED, 23
+`INSUFFICIENT_DATA` / `MISSING_RECENT_FORM`, 0 prediction failures, and 0
+blocked Champion jobs. The released fixture is `500-1364199` through the
+existing authoritative historical-result store route.
+
+The 24-row root-cause audit shows 1 `HISTORY_EXISTS_BUT_NOT_USED` and 23
+`IDENTITY_BLOCKED`. All 24 retain the contributing source-not-routed,
+source-unavailable, and provider-mapping-missing causes. The route is generic;
+no league-specific importer, alias work, fuzzy identity, synthetic evidence,
+new provider, market-only fallback, Champion math change, or production-state
+rewrite was used.
+
+`HC-AUTO-1 = SEALED / ACCEPTANCE PASS` and `ID-AUTO-1 = SEALED / ACCEPTANCE PASS`
+after independent acceptance. PR #118 merged to `main` at
+`04a548416513865e4af4771603fb4369074ecd57`. `IDENTITY_BACKLOG = NON_BLOCKING /
+ON_DEMAND`; ID-AUTO-2 is not started. Production automatic state is preserved;
+the AFTER result is a bounded local replay, not a deployment claim.
+
+STOP CONDITIONS:
+
+- Leave PRED-AVAIL-1 at `READY_FOR_ACCEPTANCE` until independent acceptance.
+- Do not start ID-AUTO-2, Sweden/DC, PA-3, Champion promotion, or model tuning.
+- Do not modify frozen prediction, prospective ledger, or automatic market,
+  dashboard, and runtime artifacts.
+- After independent acceptance, return to Multi-Market Prediction Quality.
+
+# Historical execution record: ID-AUTO-1
+
+## ID-AUTO-1 - League-Agnostic Deterministic Team Identity Resolution
+
+Status: `SEALED / ACCEPTANCE PASS`
 
 HC-AUTO-1 closeout is recorded as `SEALED / ACCEPTANCE PASS` after independent
 acceptance. PR #117 was merged to `main` at
@@ -65,8 +101,9 @@ STOP CONDITIONS:
 - Do not tune or calculate Sweden/Dixon-Coles, promote a Champion, or modify
   frozen/prospective records.
 - Identity backlog is only recorded for a later separately scoped milestone.
-- Final state for this task is `READY_FOR_ACCEPTANCE`; HC-AUTO-1's independent
-  acceptance is already recorded as `SEALED / ACCEPTANCE PASS`.
+- This historical execution record was independently accepted; ID-AUTO-1 is
+  `SEALED / ACCEPTANCE PASS`. HC-AUTO-1 is also recorded as
+  `SEALED / ACCEPTANCE PASS`.
 
 # 历史执行记录（非当前指针）
 
@@ -75,6 +112,7 @@ STOP CONDITIONS:
 状态：HISTORICAL
 
 本指针在本次 Governance Current-State Sync 提交后生效。ID2 evidence package/status 是 `READY_FOR_ACCEPTANCE / INDEPENDENT ACCEPTANCE PENDING`；PA-2-R1 model program overall 仍为 `OVERALL INCOMPLETE / TOO_SMALL_FOR_DECISION`，不是整体已验收。
+
 
 # 1. 已完成，不再重跑
 

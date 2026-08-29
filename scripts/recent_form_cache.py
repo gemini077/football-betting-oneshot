@@ -1,10 +1,12 @@
-"""Demand-driven, fail-closed OpenFootball recent-form cache.
+"""Demand-driven, fail-closed recent-form sources.
 
 The cache stores only exact target-team observations needed by the current
 prematch demand.  It is not a replacement for the historical ledger: raw
 provider names, source lines, canonical target identity, and source provenance
 are retained so the runner can reconstruct the four-block form contract
-without inventing opponent identities or neutral defaults.
+without inventing opponent identities or neutral defaults.  The authoritative
+historical-result route below reads the same contract from the immutable local
+ledger when exact fixture identity is already available.
 """
 
 from __future__ import annotations
@@ -29,12 +31,22 @@ try:
 except ModuleNotFoundError:
     from scripts.prediction_quality import recent_form_is_usable
 
+try:
+    from football_data.coverage_gate import ExactCoverageIdentityResolver, audit_fixture
+    from football_data.coverage_registry import DEFAULT_REGISTRY_PATH, load_coverage_registry
+    from football_data.storage import HistoricalResultStore
+except ModuleNotFoundError:  # tests import the repository as a package
+    from scripts.football_data.coverage_gate import ExactCoverageIdentityResolver, audit_fixture
+    from scripts.football_data.coverage_registry import DEFAULT_REGISTRY_PATH, load_coverage_registry
+    from scripts.football_data.storage import HistoricalResultStore
+
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 CACHE_PATH = PROJECT_ROOT / "data" / "product_runtime" / "openfootball_recent_form.json"
 MANIFEST_PATH = PROJECT_ROOT / "data" / "football_data" / "openfootball" / "espana_source_manifest.json"
 SOUTH_AMERICA_MANIFEST_PATH = PROJECT_ROOT / "data" / "football_data" / "openfootball" / "south_america_brazil_source_manifest.json"
 RECENCY_RULES_PATH = PROJECT_ROOT / "config" / "team_strength_recency.json"
+HISTORICAL_RESULTS_MANIFEST_PATH = PROJECT_ROOT / "data" / "football_data" / "manifests" / "historical_results.dataset.json"
 MAX_WINDOW = 5
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 
@@ -188,6 +200,13 @@ def _read_json(path: Path) -> dict[str, Any] | None:
     return payload if isinstance(payload, dict) else None
 
 
+def _project_ref(path: Path) -> str:
+    try:
+        return path.resolve().relative_to(PROJECT_ROOT.resolve()).as_posix()
+    except ValueError:
+        return str(path)
+
+
 _REVIEWED_IDENTITY_METHODS = frozenset({
     "manual_verified",
     "provider_id_exact",
@@ -291,6 +310,206 @@ def load_recent_form_cache(
         "references": references,
         "source_refs": source_refs,
         "provenance": dict(provenance),
+    }
+
+
+def load_authoritative_recent_form(
+    job: Mapping[str, Any],
+    fixture: Mapping[str, Any],
+    kickoff_at: str,
+    now: datetime | str,
+    *,
+    historical_store: HistoricalResultStore | None = None,
+    historical_records: Iterable[Mapping[str, Any]] | None = None,
+    registry: Mapping[str, Any] | None = None,
+    identity: Mapping[str, Any] | None = None,
+    competition_id: str | None = None,
+    identity_resolver: ExactCoverageIdentityResolver | None = None,
+    registry_path: str | Path = DEFAULT_REGISTRY_PATH,
+    dataset_manifest_path: str | Path = HISTORICAL_RESULTS_MANIFEST_PATH,
+) -> dict[str, Any] | None:
+    """Build recent form from exact, eligible records in the immutable ledger.
+
+    This is a read-only bridge from the authoritative historical-result store
+    to the existing Champion recent-form contract.  It deliberately reuses the
+    exact coverage resolver and rejects partial identity, future records,
+    stale team history, untrusted provenance, and duplicate/conflict rows.
+    """
+
+    cutoff = _parse_timestamp(kickoff_at)
+    clock = _parse_timestamp(now)
+    if cutoff is None or clock is None or cutoff <= clock:
+        return None
+
+    resolved_identity: Mapping[str, Any] | None = identity
+    resolved_competition = str(competition_id or "").strip() or None
+    if resolved_identity is None or resolved_competition is None:
+        try:
+            registry_value = dict(registry) if isinstance(registry, Mapping) else load_coverage_registry(registry_path)
+            resolver = identity_resolver or ExactCoverageIdentityResolver()
+            resolution_fixture = dict(fixture)
+            if not resolution_fixture.get("league") and job.get("league"):
+                resolution_fixture["league"] = job.get("league")
+            if not resolution_fixture.get("home") and job.get("home"):
+                resolution_fixture["home"] = job.get("home")
+            if not resolution_fixture.get("away") and job.get("away"):
+                resolution_fixture["away"] = job.get("away")
+            audit = audit_fixture(
+                resolution_fixture,
+                registry_value,
+                historical_records=[],
+                identity_resolver=resolver,
+                now=clock,
+            )
+            if resolved_identity is None:
+                resolved_identity = audit.get("identity") if isinstance(audit.get("identity"), Mapping) else None
+            if resolved_competition is None:
+                resolved_competition = str(audit.get("competition_id") or "").strip() or None
+        except (OSError, TypeError, ValueError, KeyError, json.JSONDecodeError):
+            return None
+
+    home_team_id = str((resolved_identity or {}).get("home_team_id") or "").strip()
+    away_team_id = str((resolved_identity or {}).get("away_team_id") or "").strip()
+    if not (
+        resolved_competition
+        and home_team_id.startswith("team:")
+        and away_team_id.startswith("team:")
+        and home_team_id != away_team_id
+    ):
+        return None
+
+    try:
+        if historical_records is not None:
+            candidates = list(historical_records)
+        else:
+            store = historical_store or HistoricalResultStore()
+            candidates = list(
+                store.iter_records(
+                    competition_id=resolved_competition,
+                    before_kickoff=_iso(cutoff),
+                    entity_type="club",
+                    eligible_only=True,
+                )
+            )
+    except Exception:
+        return None
+
+    form_records: list[dict[str, Any]] = []
+    capture_times: list[datetime] = []
+    for raw in candidates:
+        if not isinstance(raw, Mapping):
+            continue
+        if str(raw.get("competition_id") or "").strip() != resolved_competition:
+            continue
+        if raw.get("eligible_for_team_strength") is not True:
+            continue
+        if raw.get("duplicate_status") not in {"unique", "duplicate_same"} or raw.get("source_conflict") is not False:
+            continue
+        provenance = raw.get("provenance")
+        if not isinstance(provenance, Mapping) or provenance.get("source_reliable") is not True or provenance.get("synthetic") is True:
+            continue
+        record_kickoff = _parse_timestamp(raw.get("kickoff_at"))
+        if record_kickoff is None or record_kickoff >= cutoff:
+            continue
+        captured_at = _parse_timestamp(raw.get("captured_at") or provenance.get("captured_at"))
+        if captured_at is None or captured_at > clock or captured_at >= cutoff:
+            continue
+        capture_times.append(captured_at)
+        home_id = str(raw.get("home_team_id") or "")
+        away_id = str(raw.get("away_team_id") or "")
+        home_goals = _safe_int(raw.get("home_goals"))
+        away_goals = _safe_int(raw.get("away_goals"))
+        if home_goals is None or away_goals is None:
+            continue
+        canonical_match_id = str(raw.get("canonical_match_id") or "").strip()
+        source_record_ref = str(provenance.get("source_record_ref") or raw.get("source_record_ref") or "").strip()
+        source_file = canonical_match_id or source_record_ref or str(raw.get("provider_match_id") or "").strip()
+        if not source_file:
+            continue
+        base = {
+            "kickoff_at": _iso(record_kickoff),
+            "source_file": source_file,
+            "source_line": 0,
+            "raw_home": raw.get("raw_home_team") or home_id,
+            "raw_away": raw.get("raw_away_team") or away_id,
+            "canonical_match_id": canonical_match_id,
+            "source_record_ref": source_record_ref,
+            "provider": raw.get("provider"),
+        }
+        if home_id in {home_team_id, away_team_id}:
+            form_records.append({
+                **base,
+                "team_id": home_id,
+                "venue": "home",
+                "goals_for": home_goals,
+                "goals_against": away_goals,
+            })
+        if away_id in {home_team_id, away_team_id}:
+            form_records.append({
+                **base,
+                "team_id": away_id,
+                "venue": "away",
+                "goals_for": away_goals,
+                "goals_against": home_goals,
+            })
+
+    built = build_recent_form(
+        form_records,
+        home_team_id=home_team_id,
+        away_team_id=away_team_id,
+        cutoff_at=_iso(cutoff),
+    )
+    if not built or not _fresh_latest(built["latest_by_team"], cutoff=cutoff) or not capture_times:
+        return None
+
+    captured = max(capture_times)
+    manifest = _read_json(Path(dataset_manifest_path)) or {}
+    manifest_ref = _project_ref(Path(dataset_manifest_path))
+    dataset_digest = str(manifest.get("dataset_sha256") or "").strip() or None
+    source_refs: list[str] = [manifest_ref]
+    references: list[dict[str, Any]] = [{
+        "path": manifest_ref,
+        "captured_at": _iso(captured),
+        "dataset_sha256": dataset_digest,
+        "source_record_ref": manifest_ref,
+    }]
+    for row in built["records"]:
+        ref = str(row.get("source_record_ref") or row.get("source_file") or "").strip()
+        if not ref or ref in source_refs:
+            continue
+        source_refs.append(ref)
+        reference: dict[str, Any] = {"captured_at": _iso(captured), "source_record_ref": ref}
+        if ref.startswith(("http://", "https://")):
+            reference["url"] = ref
+        references.append(reference)
+
+    provenance = {
+        "provider": "authoritative_historical_results",
+        "dataset": "historical_results.duckdb",
+        "dataset_manifest": manifest_ref,
+        "dataset_sha256": dataset_digest,
+        "captured_at": _iso(captured),
+        "cutoff_at": _iso(cutoff),
+        "competition_id": resolved_competition,
+        "home_team_id": home_team_id,
+        "away_team_id": away_team_id,
+        "identity_status": str((resolved_identity or {}).get("status") or "resolved"),
+        "identity_resolution_method": str((resolved_identity or {}).get("resolution_method") or ""),
+        "eligible_only": True,
+        "record_count": len(built["records"]),
+        "synthetic": False,
+        "source_providers": sorted({str(row.get("provider") or "") for row in built["records"] if row.get("provider")}),
+    }
+    return {
+        "recent_form": built["recent_form"],
+        "records": built["records"],
+        "latest_by_team": built["latest_by_team"],
+        "source": "authoritative_historical_results",
+        "captured_at": _iso(captured),
+        "cutoff_at": _iso(cutoff),
+        "references": references,
+        "source_refs": source_refs,
+        "provenance": provenance,
     }
 
 
@@ -506,4 +725,9 @@ def refresh_recent_form_cache(
     return True
 
 
-__all__ = ["build_recent_form", "load_recent_form_cache", "refresh_recent_form_cache"]
+__all__ = [
+    "build_recent_form",
+    "load_authoritative_recent_form",
+    "load_recent_form_cache",
+    "refresh_recent_form_cache",
+]

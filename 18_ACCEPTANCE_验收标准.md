@@ -116,6 +116,28 @@ verify:
 7. Focused tests pass, evidence is committed, and the task stops at
    `READY_FOR_ACCEPTANCE` without starting ID-AUTO-2.
 
+# 2E. PRED-AVAIL-1 Acceptance
+
+`PRED-AVAIL-1 - Daily Prediction Availability Closure` may be marked by Codex
+only as `READY_FOR_ACCEPTANCE`. Independent acceptance must verify:
+
+1. The exact 25-fixture cohort and cohort SHA-256 are retained, with the
+   baseline showing 1 frozen/fully predicted and 24 `MISSING_RECENT_FORM`.
+2. All 24 missing rows have a fixture-level root-cause audit, reusable-source
+   inventory, exact identity status, history status, and acquisition path.
+3. The generic authoritative-history bridge is read-only, pre-kickoff, exact-ID
+   only, eligible-record only, fresh, provenance-carrying, and covered by tests.
+4. The same-cohort AFTER result reports FULL/DEGRADED/INSUFFICIENT_DATA,
+   MISSING_RECENT_FORM, identity/source/history blockers, prediction failures,
+   Champion jobs blocked, and per-competition deltas.
+5. No synthetic evidence, market-only production fallback, Champion math change,
+   frozen rewrite, prospective mutation, provider addition, fuzzy identity, or
+   league-specific patch is present. Protected automatic state hashes are
+   unchanged.
+6. The current result remains `READY_FOR_ACCEPTANCE` and is not called PASS by
+   Codex. The remaining availability gap is recorded as a product blocker;
+   IDENTITY_BACKLOG is `NON_BLOCKING / ON_DEMAND` and ID-AUTO-2 is not started.
+
 # 3. 部署类任务验收
 
 涉及 GitHub / Pages / workflows 的任务，必须分别核：

@@ -1,0 +1,2432 @@
+{
+  "contract_version": "pred_avail_1_root_cause_audit.v1",
+  "milestone": "PRED-AVAIL-1",
+  "business_date": "2026-08-30",
+  "cohort_sha256": "0cf4f106c34f183c3d61a81952f70e9c7f2525c0376a1e6eff74bb087e15cb8d",
+  "baseline_reference": "data/football_data/pred_avail_1/baseline_2026-08-30.json",
+  "audited_at": "2026-08-29T17:49:07Z",
+  "audited_fixture_count": 24,
+  "root_cause_counts": {
+    "HISTORY_EXISTS_BUT_NOT_USED": 1,
+    "IDENTITY_BLOCKED": 23
+  },
+  "contributing_cause_counts": {
+    "FIXTURE_PROVIDER_MAPPING_MISSING": 24,
+    "RECENT_FORM_SOURCE_NOT_ROUTED": 24,
+    "RECENT_FORM_SOURCE_UNAVAILABLE": 24
+  },
+  "summary": {
+    "true_common_system_cause": "BASE only routed existing prematch/cache/500/nowscore paths; it did not route the authoritative historical-result store into the Champion recent-form contract.",
+    "current_runtime_blocker": "500 deep source connection refused; nowscore has no exact current-fixture mapping.",
+    "identity_boundary": "23 of 24 missing fixtures remain identity-blocked under exact-only policy; no names were guessed.",
+    "automatically_released_by_generic_fix": 1,
+    "not_released": 23,
+    "degraded_fallback_enabled": false,
+    "synthetic_evidence_used": false
+  },
+  "source_landscape": {
+    "method": "landscape -> shortlist -> compare -> bounded validation -> adopt/reuse",
+    "decision": "Reuse existing providers and authoritative store; add no new provider in PRED-AVAIL-1.",
+    "existing_sources": {
+      "football_data_co_uk": {
+        "adapter": "scripts/football_data/providers/football_data_uk.py",
+        "role": "generic historical CSV adapter",
+        "commercial_use_note": "terms review required; raw redistribution remains false in project manifests",
+        "daily_base_status": "historical store not previously routed by BASE"
+      },
+      "openfootball": {
+        "adapter": "scripts/football_data/providers/openfootball.py",
+        "role": "generic Football.TXT adapter",
+        "daily_base_status": "reviewed target cache is narrow and not a general current-fixture route"
+      },
+      "five_hundred_deep": {
+        "role": "current structured fixture/market/recent-form source",
+        "daily_base_status": "runtime deep-page requests observed connection refused"
+      },
+      "nowscore": {
+        "role": "current schedule/market source",
+        "daily_base_status": "schedule path available but no exact mapping for the 25 current 500 fixtures"
+      }
+    },
+    "generic_import_readiness": {
+      "japan_j1_2025": {
+        "source_manifest": "data/football_data/football_data_uk/demand_source_manifest.json",
+        "listed_match_count": 380,
+        "parsed_result_count": 380,
+        "source_completeness_status": "COMPLETE",
+        "identity_coverage_status": "UNVERIFIED",
+        "status": "READY_FOR_GENERIC_IMPORT_BOUNDED_ONLY",
+        "blocker_for_production_import": "exact identity evidence and captured raw input must be verified before mutating the authoritative store"
+      },
+      "spain_la_liga": {
+        "source_manifest": "data/football_data/openfootball/espana_source_manifest.json",
+        "source_files": [
+          "2026-27/1-liga.txt",
+          "2025-26/1-liga-full.txt"
+        ],
+        "reviewed_target_count": 6,
+        "status": "READY_FOR_GENERIC_IMPORT_BOUNDED_ONLY",
+        "blocker_for_current_25": "current Malaga, Deportivo La Coruna, and Valencia fixture identities are not in the reviewed target set"
+      },
+      "production_mutation": "NOT_RUN; no league-specific import and no current automatic data overwritten"
+    },
+    "external_operational_signals": {
+      "football_data_official": {
+        "source": "https://www.football-data.co.uk/data.php",
+        "signal": "free broad historical CSV/odds index; official page states files are updated at least twice weekly",
+        "stability_boundary": "not a live guarantee; official disclaimer does not guarantee correctness; terms/attribution review remains required"
+      },
+      "football_data_community": {
+        "source": "https://github.com/probberechts/soccerdata/issues/927",
+        "signal": "community issue records repeated HTTP 503 failures while downloading Football-Data files",
+        "use": "corroborates runtime source-availability as an explicit state, not silent fallback"
+      },
+      "openfootball_community": {
+        "source": "https://github.com/openfootball/help/issues",
+        "signal": "public issue list includes result-update latency and missing-league-file reports",
+        "use": "reviewed historical import input, not an unqualified current-fixture fallback"
+      },
+      "alternative_shortlist": [
+        "openfootball/football.json converter and Football.TXT repositories",
+        "soccerdata wrapper around historical sources",
+        "existing Nowscore/500 runtime paths"
+      ],
+      "decision": "No new provider was added; existing sources were reused within their evidence and licensing boundaries."
+    }
+  },
+  "fixtures": [
+    {
+      "fixture": {
+        "match_id": "500-1415895",
+        "competition": "荷兰甲级联赛",
+        "home": "乌德勒支",
+        "away": "PSV埃因霍温",
+        "kickoff": "2026-08-30T18:15:00+08:00"
+      },
+      "current_prediction_status": "INSUFFICIENT_DATA",
+      "current_blocker": "MISSING_RECENT_FORM",
+      "root_cause": "IDENTITY_BLOCKED",
+      "root_cause_detail": "No exact reviewed pair identity is available; historical names cannot be guessed or fuzzy-matched into the fixture.",
+      "contributing_root_causes": [
+        "RECENT_FORM_SOURCE_NOT_ROUTED",
+        "RECENT_FORM_SOURCE_UNAVAILABLE",
+        "FIXTURE_PROVIDER_MAPPING_MISSING"
+      ],
+      "existing_reusable_source": [
+        "data/football_data/manifests/historical_results.dataset.json",
+        "data/football_data/football_data_uk/demand_source_manifest.json",
+        "scripts/football_data/providers/football_data_uk.py",
+        "data/football_data/openfootball/espana_source_manifest.json",
+        "scripts/football_data/providers/openfootball.py",
+        "data/product_runtime/openfootball_recent_form.json"
+      ],
+      "source_state": {
+        "authoritative_history_store": "AVAILABLE_DATASET_LEVEL",
+        "five_hundred_deep": "SOURCE_UNAVAILABLE_CONNECTION_REFUSED",
+        "nowscore": "NO_EXACT_MATCH",
+        "existing_prematch_snapshot": "NOT_FOUND",
+        "current_fixture_cache": "MISS"
+      },
+      "identity_status": {
+        "competition_id": "competition:netherlands-eredivisie",
+        "before": "UNRESOLVED",
+        "after": "UNRESOLVED",
+        "coverage_status": "UNSUPPORTED",
+        "home_team_id": null,
+        "away_team_id": null,
+        "home_resolution_method": "unresolved",
+        "away_resolution_method": "unresolved",
+        "reason_codes": [
+          "IDENTITY_UNAVAILABLE"
+        ]
+      },
+      "historical_records": {
+        "store_available": true,
+        "store_record_count": 1778,
+        "store_dataset_sha256": "48088556830cfb5a6ecd523fc4dc29889406b4853001c51849f5533ecc44a3f2",
+        "competition_id": "competition:netherlands-eredivisie",
+        "known_team_records": {},
+        "fixture_pair_status": "UNKNOWN_DUE_TO_IDENTITY"
+      },
+      "recent_form_acquisition_path": [
+        {
+          "step": "existing_prematch_snapshot",
+          "status": "MISS",
+          "match_id": "500-1415895"
+        },
+        {
+          "step": "nowscore_schedule",
+          "status": "NO_EXACT_MATCH",
+          "auto_resolvable": false
+        },
+        {
+          "step": "500_deep",
+          "status": "SOURCE_UNAVAILABLE",
+          "observed_error": "connection_refused",
+          "auto_resolvable": false
+        },
+        {
+          "step": "openfootball_recent_form_cache",
+          "status": "MISS",
+          "auto_resolvable": false
+        },
+        {
+          "step": "authoritative_historical_results",
+          "status": "IDENTITY_BLOCKED",
+          "auto_resolvable": false
+        },
+        {
+          "step": "champion_recent_form_gate",
+          "status": "MISSING_RECENT_FORM"
+        }
+      ],
+      "auto_resolvable_by_current_generic_route": false,
+      "history_blocked": true,
+      "source_blocked_before": true,
+      "evidence_refs": [
+        "data/prediction_universe/2026-08-30.json",
+        "data/base_prediction_jobs/2026-08-30.json",
+        "data/football_data/hc_auto_1/coverage_registry.json",
+        "data/football_data/manifests/historical_results.dataset.json",
+        "data/product_runtime/latest_cycle.json"
+      ]
+    },
+    {
+      "fixture": {
+        "match_id": "500-1373172",
+        "competition": "韩国职业联赛",
+        "home": "仁川联",
+        "away": "全北现代",
+        "kickoff": "2026-08-30T18:30:00+08:00"
+      },
+      "current_prediction_status": "INSUFFICIENT_DATA",
+      "current_blocker": "MISSING_RECENT_FORM",
+      "root_cause": "IDENTITY_BLOCKED",
+      "root_cause_detail": "No exact reviewed pair identity is available; historical names cannot be guessed or fuzzy-matched into the fixture.",
+      "contributing_root_causes": [
+        "RECENT_FORM_SOURCE_NOT_ROUTED",
+        "RECENT_FORM_SOURCE_UNAVAILABLE",
+        "FIXTURE_PROVIDER_MAPPING_MISSING"
+      ],
+      "existing_reusable_source": [
+        "data/football_data/manifests/historical_results.dataset.json",
+        "data/football_data/football_data_uk/demand_source_manifest.json",
+        "scripts/football_data/providers/football_data_uk.py",
+        "data/football_data/openfootball/espana_source_manifest.json",
+        "scripts/football_data/providers/openfootball.py",
+        "data/product_runtime/openfootball_recent_form.json"
+      ],
+      "source_state": {
+        "authoritative_history_store": "AVAILABLE_DATASET_LEVEL",
+        "five_hundred_deep": "SOURCE_UNAVAILABLE_CONNECTION_REFUSED",
+        "nowscore": "NO_EXACT_MATCH",
+        "existing_prematch_snapshot": "NOT_FOUND",
+        "current_fixture_cache": "MISS"
+      },
+      "identity_status": {
+        "competition_id": "competition:south-korea-k-league-1",
+        "before": "UNRESOLVED",
+        "after": "UNRESOLVED",
+        "coverage_status": "UNSUPPORTED",
+        "home_team_id": null,
+        "away_team_id": null,
+        "home_resolution_method": "unresolved",
+        "away_resolution_method": "unresolved",
+        "reason_codes": [
+          "IDENTITY_UNAVAILABLE"
+        ]
+      },
+      "historical_records": {
+        "store_available": true,
+        "store_record_count": 1778,
+        "store_dataset_sha256": "48088556830cfb5a6ecd523fc4dc29889406b4853001c51849f5533ecc44a3f2",
+        "competition_id": "competition:south-korea-k-league-1",
+        "known_team_records": {},
+        "fixture_pair_status": "UNKNOWN_DUE_TO_IDENTITY"
+      },
+      "recent_form_acquisition_path": [
+        {
+          "step": "existing_prematch_snapshot",
+          "status": "MISS",
+          "match_id": "500-1373172"
+        },
+        {
+          "step": "nowscore_schedule",
+          "status": "NO_EXACT_MATCH",
+          "auto_resolvable": false
+        },
+        {
+          "step": "500_deep",
+          "status": "SOURCE_UNAVAILABLE",
+          "observed_error": "connection_refused",
+          "auto_resolvable": false
+        },
+        {
+          "step": "openfootball_recent_form_cache",
+          "status": "MISS",
+          "auto_resolvable": false
+        },
+        {
+          "step": "authoritative_historical_results",
+          "status": "IDENTITY_BLOCKED",
+          "auto_resolvable": false
+        },
+        {
+          "step": "champion_recent_form_gate",
+          "status": "MISSING_RECENT_FORM"
+        }
+      ],
+      "auto_resolvable_by_current_generic_route": false,
+      "history_blocked": true,
+      "source_blocked_before": true,
+      "evidence_refs": [
+        "data/prediction_universe/2026-08-30.json",
+        "data/base_prediction_jobs/2026-08-30.json",
+        "data/football_data/hc_auto_1/coverage_registry.json",
+        "data/football_data/manifests/historical_results.dataset.json",
+        "data/product_runtime/latest_cycle.json"
+      ]
+    },
+    {
+      "fixture": {
+        "match_id": "500-1373246",
+        "competition": "韩国职业联赛",
+        "home": "济州SK",
+        "away": "大田市民",
+        "kickoff": "2026-08-30T18:30:00+08:00"
+      },
+      "current_prediction_status": "INSUFFICIENT_DATA",
+      "current_blocker": "MISSING_RECENT_FORM",
+      "root_cause": "IDENTITY_BLOCKED",
+      "root_cause_detail": "No exact reviewed pair identity is available; historical names cannot be guessed or fuzzy-matched into the fixture.",
+      "contributing_root_causes": [
+        "RECENT_FORM_SOURCE_NOT_ROUTED",
+        "RECENT_FORM_SOURCE_UNAVAILABLE",
+        "FIXTURE_PROVIDER_MAPPING_MISSING"
+      ],
+      "existing_reusable_source": [
+        "data/football_data/manifests/historical_results.dataset.json",
+        "data/football_data/football_data_uk/demand_source_manifest.json",
+        "scripts/football_data/providers/football_data_uk.py",
+        "data/football_data/openfootball/espana_source_manifest.json",
+        "scripts/football_data/providers/openfootball.py",
+        "data/product_runtime/openfootball_recent_form.json"
+      ],
+      "source_state": {
+        "authoritative_history_store": "AVAILABLE_DATASET_LEVEL",
+        "five_hundred_deep": "SOURCE_UNAVAILABLE_CONNECTION_REFUSED",
+        "nowscore": "NO_EXACT_MATCH",
+        "existing_prematch_snapshot": "NOT_FOUND",
+        "current_fixture_cache": "MISS"
+      },
+      "identity_status": {
+        "competition_id": "competition:south-korea-k-league-1",
+        "before": "UNRESOLVED",
+        "after": "UNRESOLVED",
+        "coverage_status": "UNSUPPORTED",
+        "home_team_id": null,
+        "away_team_id": null,
+        "home_resolution_method": "unresolved",
+        "away_resolution_method": "unresolved",
+        "reason_codes": [
+          "IDENTITY_UNAVAILABLE"
+        ]
+      },
+      "historical_records": {
+        "store_available": true,
+        "store_record_count": 1778,
+        "store_dataset_sha256": "48088556830cfb5a6ecd523fc4dc29889406b4853001c51849f5533ecc44a3f2",
+        "competition_id": "competition:south-korea-k-league-1",
+        "known_team_records": {},
+        "fixture_pair_status": "UNKNOWN_DUE_TO_IDENTITY"
+      },
+      "recent_form_acquisition_path": [
+        {
+          "step": "existing_prematch_snapshot",
+          "status": "MISS",
+          "match_id": "500-1373246"
+        },
+        {
+          "step": "nowscore_schedule",
+          "status": "NO_EXACT_MATCH",
+          "auto_resolvable": false
+        },
+        {
+          "step": "500_deep",
+          "status": "SOURCE_UNAVAILABLE",
+          "observed_error": "connection_refused",
+          "auto_resolvable": false
+        },
+        {
+          "step": "openfootball_recent_form_cache",
+          "status": "MISS",
+          "auto_resolvable": false
+        },
+        {
+          "step": "authoritative_historical_results",
+          "status": "IDENTITY_BLOCKED",
+          "auto_resolvable": false
+        },
+        {
+          "step": "champion_recent_form_gate",
+          "status": "MISSING_RECENT_FORM"
+        }
+      ],
+      "auto_resolvable_by_current_generic_route": false,
+      "history_blocked": true,
+      "source_blocked_before": true,
+      "evidence_refs": [
+        "data/prediction_universe/2026-08-30.json",
+        "data/base_prediction_jobs/2026-08-30.json",
+        "data/football_data/hc_auto_1/coverage_registry.json",
+        "data/football_data/manifests/historical_results.dataset.json",
+        "data/product_runtime/latest_cycle.json"
+      ]
+    },
+    {
+      "fixture": {
+        "match_id": "500-1430629",
+        "competition": "德国乙级联赛",
+        "home": "圣保利",
+        "away": "凯泽斯劳滕",
+        "kickoff": "2026-08-30T19:30:00+08:00"
+      },
+      "current_prediction_status": "INSUFFICIENT_DATA",
+      "current_blocker": "MISSING_RECENT_FORM",
+      "root_cause": "IDENTITY_BLOCKED",
+      "root_cause_detail": "No exact reviewed pair identity is available; historical names cannot be guessed or fuzzy-matched into the fixture.",
+      "contributing_root_causes": [
+        "RECENT_FORM_SOURCE_NOT_ROUTED",
+        "RECENT_FORM_SOURCE_UNAVAILABLE",
+        "FIXTURE_PROVIDER_MAPPING_MISSING"
+      ],
+      "existing_reusable_source": [
+        "data/football_data/manifests/historical_results.dataset.json",
+        "data/football_data/football_data_uk/demand_source_manifest.json",
+        "scripts/football_data/providers/football_data_uk.py",
+        "data/football_data/openfootball/espana_source_manifest.json",
+        "scripts/football_data/providers/openfootball.py",
+        "data/product_runtime/openfootball_recent_form.json"
+      ],
+      "source_state": {
+        "authoritative_history_store": "AVAILABLE_DATASET_LEVEL",
+        "five_hundred_deep": "SOURCE_UNAVAILABLE_CONNECTION_REFUSED",
+        "nowscore": "NO_EXACT_MATCH",
+        "existing_prematch_snapshot": "NOT_FOUND",
+        "current_fixture_cache": "MISS"
+      },
+      "identity_status": {
+        "competition_id": "competition:germany-2-bundesliga",
+        "before": "UNRESOLVED",
+        "after": "UNRESOLVED",
+        "coverage_status": "UNSUPPORTED",
+        "home_team_id": null,
+        "away_team_id": null,
+        "home_resolution_method": "unresolved",
+        "away_resolution_method": "unresolved",
+        "reason_codes": [
+          "IDENTITY_UNAVAILABLE"
+        ]
+      },
+      "historical_records": {
+        "store_available": true,
+        "store_record_count": 1778,
+        "store_dataset_sha256": "48088556830cfb5a6ecd523fc4dc29889406b4853001c51849f5533ecc44a3f2",
+        "competition_id": "competition:germany-2-bundesliga",
+        "known_team_records": {},
+        "fixture_pair_status": "UNKNOWN_DUE_TO_IDENTITY"
+      },
+      "recent_form_acquisition_path": [
+        {
+          "step": "existing_prematch_snapshot",
+          "status": "MISS",
+          "match_id": "500-1430629"
+        },
+        {
+          "step": "nowscore_schedule",
+          "status": "NO_EXACT_MATCH",
+          "auto_resolvable": false
+        },
+        {
+          "step": "500_deep",
+          "status": "SOURCE_UNAVAILABLE",
+          "observed_error": "connection_refused",
+          "auto_resolvable": false
+        },
+        {
+          "step": "openfootball_recent_form_cache",
+          "status": "MISS",
+          "auto_resolvable": false
+        },
+        {
+          "step": "authoritative_historical_results",
+          "status": "IDENTITY_BLOCKED",
+          "auto_resolvable": false
+        },
+        {
+          "step": "champion_recent_form_gate",
+          "status": "MISSING_RECENT_FORM"
+        }
+      ],
+      "auto_resolvable_by_current_generic_route": false,
+      "history_blocked": true,
+      "source_blocked_before": true,
+      "evidence_refs": [
+        "data/prediction_universe/2026-08-30.json",
+        "data/base_prediction_jobs/2026-08-30.json",
+        "data/football_data/hc_auto_1/coverage_registry.json",
+        "data/football_data/manifests/historical_results.dataset.json",
+        "data/product_runtime/latest_cycle.json"
+      ]
+    },
+    {
+      "fixture": {
+        "match_id": "500-1362752",
+        "competition": "瑞典超级联赛",
+        "home": "AIK索尔纳",
+        "away": "哈马比",
+        "kickoff": "2026-08-30T20:00:00+08:00"
+      },
+      "current_prediction_status": "INSUFFICIENT_DATA",
+      "current_blocker": "MISSING_RECENT_FORM",
+      "root_cause": "IDENTITY_BLOCKED",
+      "root_cause_detail": "The exact resolver has only one side of the fixture; a pair-level historical query is intentionally fail-closed.",
+      "contributing_root_causes": [
+        "RECENT_FORM_SOURCE_NOT_ROUTED",
+        "RECENT_FORM_SOURCE_UNAVAILABLE",
+        "FIXTURE_PROVIDER_MAPPING_MISSING"
+      ],
+      "existing_reusable_source": [
+        "data/football_data/manifests/historical_results.dataset.json",
+        "data/football_data/football_data_uk/demand_source_manifest.json",
+        "scripts/football_data/providers/football_data_uk.py",
+        "data/football_data/openfootball/espana_source_manifest.json",
+        "scripts/football_data/providers/openfootball.py",
+        "data/product_runtime/openfootball_recent_form.json"
+      ],
+      "source_state": {
+        "authoritative_history_store": "AVAILABLE_DATASET_LEVEL",
+        "five_hundred_deep": "SOURCE_UNAVAILABLE_CONNECTION_REFUSED",
+        "nowscore": "NO_EXACT_MATCH",
+        "existing_prematch_snapshot": "NOT_FOUND",
+        "current_fixture_cache": "MISS"
+      },
+      "identity_status": {
+        "competition_id": "competition:sweden-allsvenskan",
+        "before": "UNRESOLVED",
+        "after": "PARTIAL",
+        "coverage_status": "UNSUPPORTED",
+        "home_team_id": "team:sweden:aik-solna",
+        "away_team_id": null,
+        "home_resolution_method": "competition_reviewed_alias",
+        "away_resolution_method": "unresolved",
+        "reason_codes": [
+          "IDENTITY_UNAVAILABLE"
+        ]
+      },
+      "historical_records": {
+        "store_available": true,
+        "store_record_count": 1778,
+        "store_dataset_sha256": "48088556830cfb5a6ecd523fc4dc29889406b4853001c51849f5533ecc44a3f2",
+        "competition_id": "competition:sweden-allsvenskan",
+        "known_team_records": {
+          "home": {
+            "team_id": "team:sweden:aik-solna",
+            "eligible_record_count": 45,
+            "latest_kickoff_at": "2026-08-02T15:30:00Z"
+          }
+        },
+        "fixture_pair_status": "PARTIAL_IDENTITY_ONLY"
+      },
+      "recent_form_acquisition_path": [
+        {
+          "step": "existing_prematch_snapshot",
+          "status": "MISS",
+          "match_id": "500-1362752"
+        },
+        {
+          "step": "nowscore_schedule",
+          "status": "NO_EXACT_MATCH",
+          "auto_resolvable": false
+        },
+        {
+          "step": "500_deep",
+          "status": "SOURCE_UNAVAILABLE",
+          "observed_error": "connection_refused",
+          "auto_resolvable": false
+        },
+        {
+          "step": "openfootball_recent_form_cache",
+          "status": "MISS",
+          "auto_resolvable": false
+        },
+        {
+          "step": "authoritative_historical_results",
+          "status": "IDENTITY_BLOCKED",
+          "auto_resolvable": false
+        },
+        {
+          "step": "champion_recent_form_gate",
+          "status": "MISSING_RECENT_FORM"
+        }
+      ],
+      "auto_resolvable_by_current_generic_route": false,
+      "history_blocked": true,
+      "source_blocked_before": true,
+      "evidence_refs": [
+        "data/prediction_universe/2026-08-30.json",
+        "data/base_prediction_jobs/2026-08-30.json",
+        "data/football_data/hc_auto_1/coverage_registry.json",
+        "data/football_data/manifests/historical_results.dataset.json",
+        "data/product_runtime/latest_cycle.json"
+      ]
+    },
+    {
+      "fixture": {
+        "match_id": "500-1364199",
+        "competition": "挪威超级联赛",
+        "home": "博德闪耀",
+        "away": "罗森博格",
+        "kickoff": "2026-08-30T20:30:00+08:00"
+      },
+      "current_prediction_status": "INSUFFICIENT_DATA",
+      "current_blocker": "MISSING_RECENT_FORM",
+      "root_cause": "HISTORY_EXISTS_BUT_NOT_USED",
+      "root_cause_detail": "Exact reviewed fixture identity and fresh eligible history exist; the baseline runner did not route the authoritative store into its recent-form contract.",
+      "contributing_root_causes": [
+        "RECENT_FORM_SOURCE_NOT_ROUTED",
+        "RECENT_FORM_SOURCE_UNAVAILABLE",
+        "FIXTURE_PROVIDER_MAPPING_MISSING"
+      ],
+      "existing_reusable_source": [
+        "data/football_data/manifests/historical_results.dataset.json",
+        "data/football_data/football_data_uk/demand_source_manifest.json",
+        "scripts/football_data/providers/football_data_uk.py",
+        "data/football_data/openfootball/espana_source_manifest.json",
+        "scripts/football_data/providers/openfootball.py",
+        "data/product_runtime/openfootball_recent_form.json"
+      ],
+      "source_state": {
+        "authoritative_history_store": "AVAILABLE_DATASET_LEVEL",
+        "five_hundred_deep": "SOURCE_UNAVAILABLE_CONNECTION_REFUSED",
+        "nowscore": "NO_EXACT_MATCH",
+        "existing_prematch_snapshot": "NOT_FOUND",
+        "current_fixture_cache": "MISS"
+      },
+      "identity_status": {
+        "competition_id": "competition:norway-eliteserien",
+        "before": "AUTO_RESOLVED",
+        "after": "AUTO_RESOLVED",
+        "coverage_status": "SUPPORTED",
+        "home_team_id": "team:norway:bod-glimt",
+        "away_team_id": "team:norway:rosenborg",
+        "home_resolution_method": "reviewed_canonical_provider_crosswalk",
+        "away_resolution_method": "reviewed_canonical_provider_crosswalk",
+        "reason_codes": [
+          "CURRENT_SEASON_PARTIAL"
+        ]
+      },
+      "historical_records": {
+        "store_available": true,
+        "store_record_count": 1778,
+        "store_dataset_sha256": "48088556830cfb5a6ecd523fc4dc29889406b4853001c51849f5533ecc44a3f2",
+        "competition_id": "competition:norway-eliteserien",
+        "known_team_records": {
+          "home": {
+            "team_id": "team:norway:bod-glimt",
+            "eligible_record_count": 41,
+            "latest_kickoff_at": "2026-07-26T16:00:00Z"
+          },
+          "away": {
+            "team_id": "team:norway:rosenborg",
+            "eligible_record_count": 42,
+            "latest_kickoff_at": "2026-08-02T18:15:00Z"
+          }
+        },
+        "fixture_pair_status": "PAIR_QUERYABLE"
+      },
+      "recent_form_acquisition_path": [
+        {
+          "step": "existing_prematch_snapshot",
+          "status": "MISS",
+          "match_id": "500-1364199"
+        },
+        {
+          "step": "nowscore_schedule",
+          "status": "NO_EXACT_MATCH",
+          "auto_resolvable": false
+        },
+        {
+          "step": "500_deep",
+          "status": "SOURCE_UNAVAILABLE",
+          "observed_error": "connection_refused",
+          "auto_resolvable": false
+        },
+        {
+          "step": "openfootball_recent_form_cache",
+          "status": "MISS",
+          "auto_resolvable": false
+        },
+        {
+          "step": "authoritative_historical_results",
+          "status": "NOT_ROUTED_IN_BASELINE",
+          "auto_resolvable": false
+        },
+        {
+          "step": "champion_recent_form_gate",
+          "status": "MISSING_RECENT_FORM"
+        }
+      ],
+      "auto_resolvable_by_current_generic_route": true,
+      "history_blocked": false,
+      "source_blocked_before": true,
+      "evidence_refs": [
+        "data/prediction_universe/2026-08-30.json",
+        "data/base_prediction_jobs/2026-08-30.json",
+        "data/football_data/hc_auto_1/coverage_registry.json",
+        "data/football_data/manifests/historical_results.dataset.json",
+        "data/product_runtime/latest_cycle.json"
+      ]
+    },
+    {
+      "fixture": {
+        "match_id": "500-1415897",
+        "competition": "荷兰甲级联赛",
+        "home": "费耶诺德",
+        "away": "海牙",
+        "kickoff": "2026-08-30T20:30:00+08:00"
+      },
+      "current_prediction_status": "INSUFFICIENT_DATA",
+      "current_blocker": "MISSING_RECENT_FORM",
+      "root_cause": "IDENTITY_BLOCKED",
+      "root_cause_detail": "No exact reviewed pair identity is available; historical names cannot be guessed or fuzzy-matched into the fixture.",
+      "contributing_root_causes": [
+        "RECENT_FORM_SOURCE_NOT_ROUTED",
+        "RECENT_FORM_SOURCE_UNAVAILABLE",
+        "FIXTURE_PROVIDER_MAPPING_MISSING"
+      ],
+      "existing_reusable_source": [
+        "data/football_data/manifests/historical_results.dataset.json",
+        "data/football_data/football_data_uk/demand_source_manifest.json",
+        "scripts/football_data/providers/football_data_uk.py",
+        "data/football_data/openfootball/espana_source_manifest.json",
+        "scripts/football_data/providers/openfootball.py",
+        "data/product_runtime/openfootball_recent_form.json"
+      ],
+      "source_state": {
+        "authoritative_history_store": "AVAILABLE_DATASET_LEVEL",
+        "five_hundred_deep": "SOURCE_UNAVAILABLE_CONNECTION_REFUSED",
+        "nowscore": "NO_EXACT_MATCH",
+        "existing_prematch_snapshot": "NOT_FOUND",
+        "current_fixture_cache": "MISS"
+      },
+      "identity_status": {
+        "competition_id": "competition:netherlands-eredivisie",
+        "before": "UNRESOLVED",
+        "after": "UNRESOLVED",
+        "coverage_status": "UNSUPPORTED",
+        "home_team_id": null,
+        "away_team_id": null,
+        "home_resolution_method": "unresolved",
+        "away_resolution_method": "unresolved",
+        "reason_codes": [
+          "IDENTITY_UNAVAILABLE"
+        ]
+      },
+      "historical_records": {
+        "store_available": true,
+        "store_record_count": 1778,
+        "store_dataset_sha256": "48088556830cfb5a6ecd523fc4dc29889406b4853001c51849f5533ecc44a3f2",
+        "competition_id": "competition:netherlands-eredivisie",
+        "known_team_records": {},
+        "fixture_pair_status": "UNKNOWN_DUE_TO_IDENTITY"
+      },
+      "recent_form_acquisition_path": [
+        {
+          "step": "existing_prematch_snapshot",
+          "status": "MISS",
+          "match_id": "500-1415897"
+        },
+        {
+          "step": "nowscore_schedule",
+          "status": "NO_EXACT_MATCH",
+          "auto_resolvable": false
+        },
+        {
+          "step": "500_deep",
+          "status": "SOURCE_UNAVAILABLE",
+          "observed_error": "connection_refused",
+          "auto_resolvable": false
+        },
+        {
+          "step": "openfootball_recent_form_cache",
+          "status": "MISS",
+          "auto_resolvable": false
+        },
+        {
+          "step": "authoritative_historical_results",
+          "status": "IDENTITY_BLOCKED",
+          "auto_resolvable": false
+        },
+        {
+          "step": "champion_recent_form_gate",
+          "status": "MISSING_RECENT_FORM"
+        }
+      ],
+      "auto_resolvable_by_current_generic_route": false,
+      "history_blocked": true,
+      "source_blocked_before": true,
+      "evidence_refs": [
+        "data/prediction_universe/2026-08-30.json",
+        "data/base_prediction_jobs/2026-08-30.json",
+        "data/football_data/hc_auto_1/coverage_registry.json",
+        "data/football_data/manifests/historical_results.dataset.json",
+        "data/product_runtime/latest_cycle.json"
+      ]
+    },
+    {
+      "fixture": {
+        "match_id": "500-1415092",
+        "competition": "法国甲级联赛",
+        "home": "巴黎FC",
+        "away": "尼斯",
+        "kickoff": "2026-08-30T21:00:00+08:00"
+      },
+      "current_prediction_status": "INSUFFICIENT_DATA",
+      "current_blocker": "MISSING_RECENT_FORM",
+      "root_cause": "IDENTITY_BLOCKED",
+      "root_cause_detail": "No exact reviewed pair identity is available; historical names cannot be guessed or fuzzy-matched into the fixture.",
+      "contributing_root_causes": [
+        "RECENT_FORM_SOURCE_NOT_ROUTED",
+        "RECENT_FORM_SOURCE_UNAVAILABLE",
+        "FIXTURE_PROVIDER_MAPPING_MISSING"
+      ],
+      "existing_reusable_source": [
+        "data/football_data/manifests/historical_results.dataset.json",
+        "data/football_data/football_data_uk/demand_source_manifest.json",
+        "scripts/football_data/providers/football_data_uk.py",
+        "data/football_data/openfootball/espana_source_manifest.json",
+        "scripts/football_data/providers/openfootball.py",
+        "data/product_runtime/openfootball_recent_form.json"
+      ],
+      "source_state": {
+        "authoritative_history_store": "AVAILABLE_DATASET_LEVEL",
+        "five_hundred_deep": "SOURCE_UNAVAILABLE_CONNECTION_REFUSED",
+        "nowscore": "NO_EXACT_MATCH",
+        "existing_prematch_snapshot": "NOT_FOUND",
+        "current_fixture_cache": "MISS"
+      },
+      "identity_status": {
+        "competition_id": "competition:france-ligue-1",
+        "before": "UNRESOLVED",
+        "after": "UNRESOLVED",
+        "coverage_status": "UNSUPPORTED",
+        "home_team_id": null,
+        "away_team_id": null,
+        "home_resolution_method": "unresolved",
+        "away_resolution_method": "unresolved",
+        "reason_codes": [
+          "IDENTITY_UNAVAILABLE"
+        ]
+      },
+      "historical_records": {
+        "store_available": true,
+        "store_record_count": 1778,
+        "store_dataset_sha256": "48088556830cfb5a6ecd523fc4dc29889406b4853001c51849f5533ecc44a3f2",
+        "competition_id": "competition:france-ligue-1",
+        "known_team_records": {},
+        "fixture_pair_status": "UNKNOWN_DUE_TO_IDENTITY"
+      },
+      "recent_form_acquisition_path": [
+        {
+          "step": "existing_prematch_snapshot",
+          "status": "MISS",
+          "match_id": "500-1415092"
+        },
+        {
+          "step": "nowscore_schedule",
+          "status": "NO_EXACT_MATCH",
+          "auto_resolvable": false
+        },
+        {
+          "step": "500_deep",
+          "status": "SOURCE_UNAVAILABLE",
+          "observed_error": "connection_refused",
+          "auto_resolvable": false
+        },
+        {
+          "step": "openfootball_recent_form_cache",
+          "status": "MISS",
+          "auto_resolvable": false
+        },
+        {
+          "step": "authoritative_historical_results",
+          "status": "IDENTITY_BLOCKED",
+          "auto_resolvable": false
+        },
+        {
+          "step": "champion_recent_form_gate",
+          "status": "MISSING_RECENT_FORM"
+        }
+      ],
+      "auto_resolvable_by_current_generic_route": false,
+      "history_blocked": true,
+      "source_blocked_before": true,
+      "evidence_refs": [
+        "data/prediction_universe/2026-08-30.json",
+        "data/base_prediction_jobs/2026-08-30.json",
+        "data/football_data/hc_auto_1/coverage_registry.json",
+        "data/football_data/manifests/historical_results.dataset.json",
+        "data/product_runtime/latest_cycle.json"
+      ]
+    },
+    {
+      "fixture": {
+        "match_id": "500-1420362",
+        "competition": "英格兰超级联赛",
+        "home": "利兹联",
+        "away": "布伦特福德",
+        "kickoff": "2026-08-30T21:00:00+08:00"
+      },
+      "current_prediction_status": "INSUFFICIENT_DATA",
+      "current_blocker": "MISSING_RECENT_FORM",
+      "root_cause": "IDENTITY_BLOCKED",
+      "root_cause_detail": "No exact reviewed pair identity is available; historical names cannot be guessed or fuzzy-matched into the fixture.",
+      "contributing_root_causes": [
+        "RECENT_FORM_SOURCE_NOT_ROUTED",
+        "RECENT_FORM_SOURCE_UNAVAILABLE",
+        "FIXTURE_PROVIDER_MAPPING_MISSING"
+      ],
+      "existing_reusable_source": [
+        "data/football_data/manifests/historical_results.dataset.json",
+        "data/football_data/football_data_uk/demand_source_manifest.json",
+        "scripts/football_data/providers/football_data_uk.py",
+        "data/football_data/openfootball/espana_source_manifest.json",
+        "scripts/football_data/providers/openfootball.py",
+        "data/product_runtime/openfootball_recent_form.json"
+      ],
+      "source_state": {
+        "authoritative_history_store": "AVAILABLE_DATASET_LEVEL",
+        "five_hundred_deep": "SOURCE_UNAVAILABLE_CONNECTION_REFUSED",
+        "nowscore": "NO_EXACT_MATCH",
+        "existing_prematch_snapshot": "NOT_FOUND",
+        "current_fixture_cache": "MISS"
+      },
+      "identity_status": {
+        "competition_id": "competition:england-premier-league",
+        "before": "UNRESOLVED",
+        "after": "UNRESOLVED",
+        "coverage_status": "UNSUPPORTED",
+        "home_team_id": null,
+        "away_team_id": null,
+        "home_resolution_method": "unresolved",
+        "away_resolution_method": "unresolved",
+        "reason_codes": [
+          "IDENTITY_UNAVAILABLE"
+        ]
+      },
+      "historical_records": {
+        "store_available": true,
+        "store_record_count": 1778,
+        "store_dataset_sha256": "48088556830cfb5a6ecd523fc4dc29889406b4853001c51849f5533ecc44a3f2",
+        "competition_id": "competition:england-premier-league",
+        "known_team_records": {},
+        "fixture_pair_status": "UNKNOWN_DUE_TO_IDENTITY"
+      },
+      "recent_form_acquisition_path": [
+        {
+          "step": "existing_prematch_snapshot",
+          "status": "MISS",
+          "match_id": "500-1420362"
+        },
+        {
+          "step": "nowscore_schedule",
+          "status": "NO_EXACT_MATCH",
+          "auto_resolvable": false
+        },
+        {
+          "step": "500_deep",
+          "status": "SOURCE_UNAVAILABLE",
+          "observed_error": "connection_refused",
+          "auto_resolvable": false
+        },
+        {
+          "step": "openfootball_recent_form_cache",
+          "status": "MISS",
+          "auto_resolvable": false
+        },
+        {
+          "step": "authoritative_historical_results",
+          "status": "IDENTITY_BLOCKED",
+          "auto_resolvable": false
+        },
+        {
+          "step": "champion_recent_form_gate",
+          "status": "MISSING_RECENT_FORM"
+        }
+      ],
+      "auto_resolvable_by_current_generic_route": false,
+      "history_blocked": true,
+      "source_blocked_before": true,
+      "evidence_refs": [
+        "data/prediction_universe/2026-08-30.json",
+        "data/base_prediction_jobs/2026-08-30.json",
+        "data/football_data/hc_auto_1/coverage_registry.json",
+        "data/football_data/manifests/historical_results.dataset.json",
+        "data/product_runtime/latest_cycle.json"
+      ]
+    },
+    {
+      "fixture": {
+        "match_id": "500-1420369",
+        "competition": "英格兰超级联赛",
+        "home": "桑德兰",
+        "away": "富勒姆",
+        "kickoff": "2026-08-30T21:00:00+08:00"
+      },
+      "current_prediction_status": "INSUFFICIENT_DATA",
+      "current_blocker": "MISSING_RECENT_FORM",
+      "root_cause": "IDENTITY_BLOCKED",
+      "root_cause_detail": "No exact reviewed pair identity is available; historical names cannot be guessed or fuzzy-matched into the fixture.",
+      "contributing_root_causes": [
+        "RECENT_FORM_SOURCE_NOT_ROUTED",
+        "RECENT_FORM_SOURCE_UNAVAILABLE",
+        "FIXTURE_PROVIDER_MAPPING_MISSING"
+      ],
+      "existing_reusable_source": [
+        "data/football_data/manifests/historical_results.dataset.json",
+        "data/football_data/football_data_uk/demand_source_manifest.json",
+        "scripts/football_data/providers/football_data_uk.py",
+        "data/football_data/openfootball/espana_source_manifest.json",
+        "scripts/football_data/providers/openfootball.py",
+        "data/product_runtime/openfootball_recent_form.json"
+      ],
+      "source_state": {
+        "authoritative_history_store": "AVAILABLE_DATASET_LEVEL",
+        "five_hundred_deep": "SOURCE_UNAVAILABLE_CONNECTION_REFUSED",
+        "nowscore": "NO_EXACT_MATCH",
+        "existing_prematch_snapshot": "NOT_FOUND",
+        "current_fixture_cache": "MISS"
+      },
+      "identity_status": {
+        "competition_id": "competition:england-premier-league",
+        "before": "UNRESOLVED",
+        "after": "UNRESOLVED",
+        "coverage_status": "UNSUPPORTED",
+        "home_team_id": null,
+        "away_team_id": null,
+        "home_resolution_method": "unresolved",
+        "away_resolution_method": "unresolved",
+        "reason_codes": [
+          "IDENTITY_UNAVAILABLE"
+        ]
+      },
+      "historical_records": {
+        "store_available": true,
+        "store_record_count": 1778,
+        "store_dataset_sha256": "48088556830cfb5a6ecd523fc4dc29889406b4853001c51849f5533ecc44a3f2",
+        "competition_id": "competition:england-premier-league",
+        "known_team_records": {},
+        "fixture_pair_status": "UNKNOWN_DUE_TO_IDENTITY"
+      },
+      "recent_form_acquisition_path": [
+        {
+          "step": "existing_prematch_snapshot",
+          "status": "MISS",
+          "match_id": "500-1420369"
+        },
+        {
+          "step": "nowscore_schedule",
+          "status": "NO_EXACT_MATCH",
+          "auto_resolvable": false
+        },
+        {
+          "step": "500_deep",
+          "status": "SOURCE_UNAVAILABLE",
+          "observed_error": "connection_refused",
+          "auto_resolvable": false
+        },
+        {
+          "step": "openfootball_recent_form_cache",
+          "status": "MISS",
+          "auto_resolvable": false
+        },
+        {
+          "step": "authoritative_historical_results",
+          "status": "IDENTITY_BLOCKED",
+          "auto_resolvable": false
+        },
+        {
+          "step": "champion_recent_form_gate",
+          "status": "MISSING_RECENT_FORM"
+        }
+      ],
+      "auto_resolvable_by_current_generic_route": false,
+      "history_blocked": true,
+      "source_blocked_before": true,
+      "evidence_refs": [
+        "data/prediction_universe/2026-08-30.json",
+        "data/base_prediction_jobs/2026-08-30.json",
+        "data/football_data/hc_auto_1/coverage_registry.json",
+        "data/football_data/manifests/historical_results.dataset.json",
+        "data/product_runtime/latest_cycle.json"
+      ]
+    },
+    {
+      "fixture": {
+        "match_id": "500-1428463",
+        "competition": "德国甲级联赛",
+        "home": "弗赖堡",
+        "away": "云达不来梅",
+        "kickoff": "2026-08-30T21:30:00+08:00"
+      },
+      "current_prediction_status": "INSUFFICIENT_DATA",
+      "current_blocker": "MISSING_RECENT_FORM",
+      "root_cause": "IDENTITY_BLOCKED",
+      "root_cause_detail": "No exact reviewed pair identity is available; historical names cannot be guessed or fuzzy-matched into the fixture.",
+      "contributing_root_causes": [
+        "RECENT_FORM_SOURCE_NOT_ROUTED",
+        "RECENT_FORM_SOURCE_UNAVAILABLE",
+        "FIXTURE_PROVIDER_MAPPING_MISSING"
+      ],
+      "existing_reusable_source": [
+        "data/football_data/manifests/historical_results.dataset.json",
+        "data/football_data/football_data_uk/demand_source_manifest.json",
+        "scripts/football_data/providers/football_data_uk.py",
+        "data/football_data/openfootball/espana_source_manifest.json",
+        "scripts/football_data/providers/openfootball.py",
+        "data/product_runtime/openfootball_recent_form.json"
+      ],
+      "source_state": {
+        "authoritative_history_store": "AVAILABLE_DATASET_LEVEL",
+        "five_hundred_deep": "SOURCE_UNAVAILABLE_CONNECTION_REFUSED",
+        "nowscore": "NO_EXACT_MATCH",
+        "existing_prematch_snapshot": "NOT_FOUND",
+        "current_fixture_cache": "MISS"
+      },
+      "identity_status": {
+        "competition_id": "competition:germany-bundesliga",
+        "before": "UNRESOLVED",
+        "after": "UNRESOLVED",
+        "coverage_status": "UNSUPPORTED",
+        "home_team_id": null,
+        "away_team_id": null,
+        "home_resolution_method": "unresolved",
+        "away_resolution_method": "unresolved",
+        "reason_codes": [
+          "IDENTITY_UNAVAILABLE"
+        ]
+      },
+      "historical_records": {
+        "store_available": true,
+        "store_record_count": 1778,
+        "store_dataset_sha256": "48088556830cfb5a6ecd523fc4dc29889406b4853001c51849f5533ecc44a3f2",
+        "competition_id": "competition:germany-bundesliga",
+        "known_team_records": {},
+        "fixture_pair_status": "UNKNOWN_DUE_TO_IDENTITY"
+      },
+      "recent_form_acquisition_path": [
+        {
+          "step": "existing_prematch_snapshot",
+          "status": "MISS",
+          "match_id": "500-1428463"
+        },
+        {
+          "step": "nowscore_schedule",
+          "status": "NO_EXACT_MATCH",
+          "auto_resolvable": false
+        },
+        {
+          "step": "500_deep",
+          "status": "SOURCE_UNAVAILABLE",
+          "observed_error": "connection_refused",
+          "auto_resolvable": false
+        },
+        {
+          "step": "openfootball_recent_form_cache",
+          "status": "MISS",
+          "auto_resolvable": false
+        },
+        {
+          "step": "authoritative_historical_results",
+          "status": "IDENTITY_BLOCKED",
+          "auto_resolvable": false
+        },
+        {
+          "step": "champion_recent_form_gate",
+          "status": "MISSING_RECENT_FORM"
+        }
+      ],
+      "auto_resolvable_by_current_generic_route": false,
+      "history_blocked": true,
+      "source_blocked_before": true,
+      "evidence_refs": [
+        "data/prediction_universe/2026-08-30.json",
+        "data/base_prediction_jobs/2026-08-30.json",
+        "data/football_data/hc_auto_1/coverage_registry.json",
+        "data/football_data/manifests/historical_results.dataset.json",
+        "data/product_runtime/latest_cycle.json"
+      ]
+    },
+    {
+      "fixture": {
+        "match_id": "500-1415901",
+        "competition": "荷兰甲级联赛",
+        "home": "特尔斯达",
+        "away": "阿贾克斯",
+        "kickoff": "2026-08-30T22:45:00+08:00"
+      },
+      "current_prediction_status": "INSUFFICIENT_DATA",
+      "current_blocker": "MISSING_RECENT_FORM",
+      "root_cause": "IDENTITY_BLOCKED",
+      "root_cause_detail": "No exact reviewed pair identity is available; historical names cannot be guessed or fuzzy-matched into the fixture.",
+      "contributing_root_causes": [
+        "RECENT_FORM_SOURCE_NOT_ROUTED",
+        "RECENT_FORM_SOURCE_UNAVAILABLE",
+        "FIXTURE_PROVIDER_MAPPING_MISSING"
+      ],
+      "existing_reusable_source": [
+        "data/football_data/manifests/historical_results.dataset.json",
+        "data/football_data/football_data_uk/demand_source_manifest.json",
+        "scripts/football_data/providers/football_data_uk.py",
+        "data/football_data/openfootball/espana_source_manifest.json",
+        "scripts/football_data/providers/openfootball.py",
+        "data/product_runtime/openfootball_recent_form.json"
+      ],
+      "source_state": {
+        "authoritative_history_store": "AVAILABLE_DATASET_LEVEL",
+        "five_hundred_deep": "SOURCE_UNAVAILABLE_CONNECTION_REFUSED",
+        "nowscore": "NO_EXACT_MATCH",
+        "existing_prematch_snapshot": "NOT_FOUND",
+        "current_fixture_cache": "MISS"
+      },
+      "identity_status": {
+        "competition_id": "competition:netherlands-eredivisie",
+        "before": "UNRESOLVED",
+        "after": "UNRESOLVED",
+        "coverage_status": "UNSUPPORTED",
+        "home_team_id": null,
+        "away_team_id": null,
+        "home_resolution_method": "unresolved",
+        "away_resolution_method": "unresolved",
+        "reason_codes": [
+          "IDENTITY_UNAVAILABLE"
+        ]
+      },
+      "historical_records": {
+        "store_available": true,
+        "store_record_count": 1778,
+        "store_dataset_sha256": "48088556830cfb5a6ecd523fc4dc29889406b4853001c51849f5533ecc44a3f2",
+        "competition_id": "competition:netherlands-eredivisie",
+        "known_team_records": {},
+        "fixture_pair_status": "UNKNOWN_DUE_TO_IDENTITY"
+      },
+      "recent_form_acquisition_path": [
+        {
+          "step": "existing_prematch_snapshot",
+          "status": "MISS",
+          "match_id": "500-1415901"
+        },
+        {
+          "step": "nowscore_schedule",
+          "status": "NO_EXACT_MATCH",
+          "auto_resolvable": false
+        },
+        {
+          "step": "500_deep",
+          "status": "SOURCE_UNAVAILABLE",
+          "observed_error": "connection_refused",
+          "auto_resolvable": false
+        },
+        {
+          "step": "openfootball_recent_form_cache",
+          "status": "MISS",
+          "auto_resolvable": false
+        },
+        {
+          "step": "authoritative_historical_results",
+          "status": "IDENTITY_BLOCKED",
+          "auto_resolvable": false
+        },
+        {
+          "step": "champion_recent_form_gate",
+          "status": "MISSING_RECENT_FORM"
+        }
+      ],
+      "auto_resolvable_by_current_generic_route": false,
+      "history_blocked": true,
+      "source_blocked_before": true,
+      "evidence_refs": [
+        "data/prediction_universe/2026-08-30.json",
+        "data/base_prediction_jobs/2026-08-30.json",
+        "data/football_data/hc_auto_1/coverage_registry.json",
+        "data/football_data/manifests/historical_results.dataset.json",
+        "data/product_runtime/latest_cycle.json"
+      ]
+    },
+    {
+      "fixture": {
+        "match_id": "500-1427973",
+        "competition": "西班牙甲级联赛",
+        "home": "皇家马德里",
+        "away": "马拉加",
+        "kickoff": "2026-08-30T23:00:00+08:00"
+      },
+      "current_prediction_status": "INSUFFICIENT_DATA",
+      "current_blocker": "MISSING_RECENT_FORM",
+      "root_cause": "IDENTITY_BLOCKED",
+      "root_cause_detail": "No exact reviewed pair identity is available; historical names cannot be guessed or fuzzy-matched into the fixture.",
+      "contributing_root_causes": [
+        "RECENT_FORM_SOURCE_NOT_ROUTED",
+        "RECENT_FORM_SOURCE_UNAVAILABLE",
+        "FIXTURE_PROVIDER_MAPPING_MISSING"
+      ],
+      "existing_reusable_source": [
+        "data/football_data/manifests/historical_results.dataset.json",
+        "data/football_data/football_data_uk/demand_source_manifest.json",
+        "scripts/football_data/providers/football_data_uk.py",
+        "data/football_data/openfootball/espana_source_manifest.json",
+        "scripts/football_data/providers/openfootball.py",
+        "data/product_runtime/openfootball_recent_form.json"
+      ],
+      "source_state": {
+        "authoritative_history_store": "AVAILABLE_DATASET_LEVEL",
+        "five_hundred_deep": "SOURCE_UNAVAILABLE_CONNECTION_REFUSED",
+        "nowscore": "NO_EXACT_MATCH",
+        "existing_prematch_snapshot": "NOT_FOUND",
+        "current_fixture_cache": "MISS"
+      },
+      "identity_status": {
+        "competition_id": "competition:spain-la-liga",
+        "before": "UNRESOLVED",
+        "after": "UNRESOLVED",
+        "coverage_status": "UNSUPPORTED",
+        "home_team_id": null,
+        "away_team_id": null,
+        "home_resolution_method": "unresolved",
+        "away_resolution_method": "unresolved",
+        "reason_codes": [
+          "IDENTITY_UNAVAILABLE"
+        ]
+      },
+      "historical_records": {
+        "store_available": true,
+        "store_record_count": 1778,
+        "store_dataset_sha256": "48088556830cfb5a6ecd523fc4dc29889406b4853001c51849f5533ecc44a3f2",
+        "competition_id": "competition:spain-la-liga",
+        "known_team_records": {},
+        "fixture_pair_status": "UNKNOWN_DUE_TO_IDENTITY"
+      },
+      "recent_form_acquisition_path": [
+        {
+          "step": "existing_prematch_snapshot",
+          "status": "MISS",
+          "match_id": "500-1427973"
+        },
+        {
+          "step": "nowscore_schedule",
+          "status": "NO_EXACT_MATCH",
+          "auto_resolvable": false
+        },
+        {
+          "step": "500_deep",
+          "status": "SOURCE_UNAVAILABLE",
+          "observed_error": "connection_refused",
+          "auto_resolvable": false
+        },
+        {
+          "step": "openfootball_recent_form_cache",
+          "status": "MISS",
+          "auto_resolvable": false
+        },
+        {
+          "step": "authoritative_historical_results",
+          "status": "IDENTITY_BLOCKED",
+          "auto_resolvable": false
+        },
+        {
+          "step": "champion_recent_form_gate",
+          "status": "MISSING_RECENT_FORM"
+        }
+      ],
+      "auto_resolvable_by_current_generic_route": false,
+      "history_blocked": true,
+      "source_blocked_before": true,
+      "evidence_refs": [
+        "data/prediction_universe/2026-08-30.json",
+        "data/base_prediction_jobs/2026-08-30.json",
+        "data/football_data/hc_auto_1/coverage_registry.json",
+        "data/football_data/manifests/historical_results.dataset.json",
+        "data/product_runtime/latest_cycle.json"
+      ]
+    },
+    {
+      "fixture": {
+        "match_id": "500-1420368",
+        "competition": "英格兰超级联赛",
+        "home": "曼彻斯特联",
+        "away": "伊普斯维奇",
+        "kickoff": "2026-08-30T23:30:00+08:00"
+      },
+      "current_prediction_status": "INSUFFICIENT_DATA",
+      "current_blocker": "MISSING_RECENT_FORM",
+      "root_cause": "IDENTITY_BLOCKED",
+      "root_cause_detail": "No exact reviewed pair identity is available; historical names cannot be guessed or fuzzy-matched into the fixture.",
+      "contributing_root_causes": [
+        "RECENT_FORM_SOURCE_NOT_ROUTED",
+        "RECENT_FORM_SOURCE_UNAVAILABLE",
+        "FIXTURE_PROVIDER_MAPPING_MISSING"
+      ],
+      "existing_reusable_source": [
+        "data/football_data/manifests/historical_results.dataset.json",
+        "data/football_data/football_data_uk/demand_source_manifest.json",
+        "scripts/football_data/providers/football_data_uk.py",
+        "data/football_data/openfootball/espana_source_manifest.json",
+        "scripts/football_data/providers/openfootball.py",
+        "data/product_runtime/openfootball_recent_form.json"
+      ],
+      "source_state": {
+        "authoritative_history_store": "AVAILABLE_DATASET_LEVEL",
+        "five_hundred_deep": "SOURCE_UNAVAILABLE_CONNECTION_REFUSED",
+        "nowscore": "NO_EXACT_MATCH",
+        "existing_prematch_snapshot": "NOT_FOUND",
+        "current_fixture_cache": "MISS"
+      },
+      "identity_status": {
+        "competition_id": "competition:england-premier-league",
+        "before": "UNRESOLVED",
+        "after": "UNRESOLVED",
+        "coverage_status": "UNSUPPORTED",
+        "home_team_id": null,
+        "away_team_id": null,
+        "home_resolution_method": "unresolved",
+        "away_resolution_method": "unresolved",
+        "reason_codes": [
+          "IDENTITY_UNAVAILABLE"
+        ]
+      },
+      "historical_records": {
+        "store_available": true,
+        "store_record_count": 1778,
+        "store_dataset_sha256": "48088556830cfb5a6ecd523fc4dc29889406b4853001c51849f5533ecc44a3f2",
+        "competition_id": "competition:england-premier-league",
+        "known_team_records": {},
+        "fixture_pair_status": "UNKNOWN_DUE_TO_IDENTITY"
+      },
+      "recent_form_acquisition_path": [
+        {
+          "step": "existing_prematch_snapshot",
+          "status": "MISS",
+          "match_id": "500-1420368"
+        },
+        {
+          "step": "nowscore_schedule",
+          "status": "NO_EXACT_MATCH",
+          "auto_resolvable": false
+        },
+        {
+          "step": "500_deep",
+          "status": "SOURCE_UNAVAILABLE",
+          "observed_error": "connection_refused",
+          "auto_resolvable": false
+        },
+        {
+          "step": "openfootball_recent_form_cache",
+          "status": "MISS",
+          "auto_resolvable": false
+        },
+        {
+          "step": "authoritative_historical_results",
+          "status": "IDENTITY_BLOCKED",
+          "auto_resolvable": false
+        },
+        {
+          "step": "champion_recent_form_gate",
+          "status": "MISSING_RECENT_FORM"
+        }
+      ],
+      "auto_resolvable_by_current_generic_route": false,
+      "history_blocked": true,
+      "source_blocked_before": true,
+      "evidence_refs": [
+        "data/prediction_universe/2026-08-30.json",
+        "data/base_prediction_jobs/2026-08-30.json",
+        "data/football_data/hc_auto_1/coverage_registry.json",
+        "data/football_data/manifests/historical_results.dataset.json",
+        "data/product_runtime/latest_cycle.json"
+      ]
+    },
+    {
+      "fixture": {
+        "match_id": "500-1428454",
+        "competition": "德国甲级联赛",
+        "home": "奥格斯堡",
+        "away": "沙尔克04",
+        "kickoff": "2026-08-30T23:30:00+08:00"
+      },
+      "current_prediction_status": "INSUFFICIENT_DATA",
+      "current_blocker": "MISSING_RECENT_FORM",
+      "root_cause": "IDENTITY_BLOCKED",
+      "root_cause_detail": "No exact reviewed pair identity is available; historical names cannot be guessed or fuzzy-matched into the fixture.",
+      "contributing_root_causes": [
+        "RECENT_FORM_SOURCE_NOT_ROUTED",
+        "RECENT_FORM_SOURCE_UNAVAILABLE",
+        "FIXTURE_PROVIDER_MAPPING_MISSING"
+      ],
+      "existing_reusable_source": [
+        "data/football_data/manifests/historical_results.dataset.json",
+        "data/football_data/football_data_uk/demand_source_manifest.json",
+        "scripts/football_data/providers/football_data_uk.py",
+        "data/football_data/openfootball/espana_source_manifest.json",
+        "scripts/football_data/providers/openfootball.py",
+        "data/product_runtime/openfootball_recent_form.json"
+      ],
+      "source_state": {
+        "authoritative_history_store": "AVAILABLE_DATASET_LEVEL",
+        "five_hundred_deep": "SOURCE_UNAVAILABLE_CONNECTION_REFUSED",
+        "nowscore": "NO_EXACT_MATCH",
+        "existing_prematch_snapshot": "NOT_FOUND",
+        "current_fixture_cache": "MISS"
+      },
+      "identity_status": {
+        "competition_id": "competition:germany-bundesliga",
+        "before": "UNRESOLVED",
+        "after": "UNRESOLVED",
+        "coverage_status": "UNSUPPORTED",
+        "home_team_id": null,
+        "away_team_id": null,
+        "home_resolution_method": "unresolved",
+        "away_resolution_method": "unresolved",
+        "reason_codes": [
+          "IDENTITY_UNAVAILABLE"
+        ]
+      },
+      "historical_records": {
+        "store_available": true,
+        "store_record_count": 1778,
+        "store_dataset_sha256": "48088556830cfb5a6ecd523fc4dc29889406b4853001c51849f5533ecc44a3f2",
+        "competition_id": "competition:germany-bundesliga",
+        "known_team_records": {},
+        "fixture_pair_status": "UNKNOWN_DUE_TO_IDENTITY"
+      },
+      "recent_form_acquisition_path": [
+        {
+          "step": "existing_prematch_snapshot",
+          "status": "MISS",
+          "match_id": "500-1428454"
+        },
+        {
+          "step": "nowscore_schedule",
+          "status": "NO_EXACT_MATCH",
+          "auto_resolvable": false
+        },
+        {
+          "step": "500_deep",
+          "status": "SOURCE_UNAVAILABLE",
+          "observed_error": "connection_refused",
+          "auto_resolvable": false
+        },
+        {
+          "step": "openfootball_recent_form_cache",
+          "status": "MISS",
+          "auto_resolvable": false
+        },
+        {
+          "step": "authoritative_historical_results",
+          "status": "IDENTITY_BLOCKED",
+          "auto_resolvable": false
+        },
+        {
+          "step": "champion_recent_form_gate",
+          "status": "MISSING_RECENT_FORM"
+        }
+      ],
+      "auto_resolvable_by_current_generic_route": false,
+      "history_blocked": true,
+      "source_blocked_before": true,
+      "evidence_refs": [
+        "data/prediction_universe/2026-08-30.json",
+        "data/base_prediction_jobs/2026-08-30.json",
+        "data/football_data/hc_auto_1/coverage_registry.json",
+        "data/football_data/manifests/historical_results.dataset.json",
+        "data/product_runtime/latest_cycle.json"
+      ]
+    },
+    {
+      "fixture": {
+        "match_id": "500-1414156",
+        "competition": "意大利甲级联赛",
+        "home": "那不勒斯",
+        "away": "科莫",
+        "kickoff": "2026-08-31T00:30:00+08:00"
+      },
+      "current_prediction_status": "INSUFFICIENT_DATA",
+      "current_blocker": "MISSING_RECENT_FORM",
+      "root_cause": "IDENTITY_BLOCKED",
+      "root_cause_detail": "No exact reviewed pair identity is available; historical names cannot be guessed or fuzzy-matched into the fixture.",
+      "contributing_root_causes": [
+        "RECENT_FORM_SOURCE_NOT_ROUTED",
+        "RECENT_FORM_SOURCE_UNAVAILABLE",
+        "FIXTURE_PROVIDER_MAPPING_MISSING"
+      ],
+      "existing_reusable_source": [
+        "data/football_data/manifests/historical_results.dataset.json",
+        "data/football_data/football_data_uk/demand_source_manifest.json",
+        "scripts/football_data/providers/football_data_uk.py",
+        "data/football_data/openfootball/espana_source_manifest.json",
+        "scripts/football_data/providers/openfootball.py",
+        "data/product_runtime/openfootball_recent_form.json"
+      ],
+      "source_state": {
+        "authoritative_history_store": "AVAILABLE_DATASET_LEVEL",
+        "five_hundred_deep": "SOURCE_UNAVAILABLE_CONNECTION_REFUSED",
+        "nowscore": "NO_EXACT_MATCH",
+        "existing_prematch_snapshot": "NOT_FOUND",
+        "current_fixture_cache": "MISS"
+      },
+      "identity_status": {
+        "competition_id": "competition:italy-serie-a",
+        "before": "UNRESOLVED",
+        "after": "UNRESOLVED",
+        "coverage_status": "UNSUPPORTED",
+        "home_team_id": null,
+        "away_team_id": null,
+        "home_resolution_method": "unresolved",
+        "away_resolution_method": "unresolved",
+        "reason_codes": [
+          "IDENTITY_UNAVAILABLE"
+        ]
+      },
+      "historical_records": {
+        "store_available": true,
+        "store_record_count": 1778,
+        "store_dataset_sha256": "48088556830cfb5a6ecd523fc4dc29889406b4853001c51849f5533ecc44a3f2",
+        "competition_id": "competition:italy-serie-a",
+        "known_team_records": {},
+        "fixture_pair_status": "UNKNOWN_DUE_TO_IDENTITY"
+      },
+      "recent_form_acquisition_path": [
+        {
+          "step": "existing_prematch_snapshot",
+          "status": "MISS",
+          "match_id": "500-1414156"
+        },
+        {
+          "step": "nowscore_schedule",
+          "status": "NO_EXACT_MATCH",
+          "auto_resolvable": false
+        },
+        {
+          "step": "500_deep",
+          "status": "SOURCE_UNAVAILABLE",
+          "observed_error": "connection_refused",
+          "auto_resolvable": false
+        },
+        {
+          "step": "openfootball_recent_form_cache",
+          "status": "MISS",
+          "auto_resolvable": false
+        },
+        {
+          "step": "authoritative_historical_results",
+          "status": "IDENTITY_BLOCKED",
+          "auto_resolvable": false
+        },
+        {
+          "step": "champion_recent_form_gate",
+          "status": "MISSING_RECENT_FORM"
+        }
+      ],
+      "auto_resolvable_by_current_generic_route": false,
+      "history_blocked": true,
+      "source_blocked_before": true,
+      "evidence_refs": [
+        "data/prediction_universe/2026-08-30.json",
+        "data/base_prediction_jobs/2026-08-30.json",
+        "data/football_data/hc_auto_1/coverage_registry.json",
+        "data/football_data/manifests/historical_results.dataset.json",
+        "data/product_runtime/latest_cycle.json"
+      ]
+    },
+    {
+      "fixture": {
+        "match_id": "500-1427964",
+        "competition": "西班牙甲级联赛",
+        "home": "拉科鲁尼亚",
+        "away": "巴伦西亚",
+        "kickoff": "2026-08-31T01:30:00+08:00"
+      },
+      "current_prediction_status": "INSUFFICIENT_DATA",
+      "current_blocker": "MISSING_RECENT_FORM",
+      "root_cause": "IDENTITY_BLOCKED",
+      "root_cause_detail": "No exact reviewed pair identity is available; historical names cannot be guessed or fuzzy-matched into the fixture.",
+      "contributing_root_causes": [
+        "RECENT_FORM_SOURCE_NOT_ROUTED",
+        "RECENT_FORM_SOURCE_UNAVAILABLE",
+        "FIXTURE_PROVIDER_MAPPING_MISSING"
+      ],
+      "existing_reusable_source": [
+        "data/football_data/manifests/historical_results.dataset.json",
+        "data/football_data/football_data_uk/demand_source_manifest.json",
+        "scripts/football_data/providers/football_data_uk.py",
+        "data/football_data/openfootball/espana_source_manifest.json",
+        "scripts/football_data/providers/openfootball.py",
+        "data/product_runtime/openfootball_recent_form.json"
+      ],
+      "source_state": {
+        "authoritative_history_store": "AVAILABLE_DATASET_LEVEL",
+        "five_hundred_deep": "SOURCE_UNAVAILABLE_CONNECTION_REFUSED",
+        "nowscore": "NO_EXACT_MATCH",
+        "existing_prematch_snapshot": "NOT_FOUND",
+        "current_fixture_cache": "MISS"
+      },
+      "identity_status": {
+        "competition_id": "competition:spain-la-liga",
+        "before": "UNRESOLVED",
+        "after": "UNRESOLVED",
+        "coverage_status": "UNSUPPORTED",
+        "home_team_id": null,
+        "away_team_id": null,
+        "home_resolution_method": "unresolved",
+        "away_resolution_method": "unresolved",
+        "reason_codes": [
+          "IDENTITY_UNAVAILABLE"
+        ]
+      },
+      "historical_records": {
+        "store_available": true,
+        "store_record_count": 1778,
+        "store_dataset_sha256": "48088556830cfb5a6ecd523fc4dc29889406b4853001c51849f5533ecc44a3f2",
+        "competition_id": "competition:spain-la-liga",
+        "known_team_records": {},
+        "fixture_pair_status": "UNKNOWN_DUE_TO_IDENTITY"
+      },
+      "recent_form_acquisition_path": [
+        {
+          "step": "existing_prematch_snapshot",
+          "status": "MISS",
+          "match_id": "500-1427964"
+        },
+        {
+          "step": "nowscore_schedule",
+          "status": "NO_EXACT_MATCH",
+          "auto_resolvable": false
+        },
+        {
+          "step": "500_deep",
+          "status": "SOURCE_UNAVAILABLE",
+          "observed_error": "connection_refused",
+          "auto_resolvable": false
+        },
+        {
+          "step": "openfootball_recent_form_cache",
+          "status": "MISS",
+          "auto_resolvable": false
+        },
+        {
+          "step": "authoritative_historical_results",
+          "status": "IDENTITY_BLOCKED",
+          "auto_resolvable": false
+        },
+        {
+          "step": "champion_recent_form_gate",
+          "status": "MISSING_RECENT_FORM"
+        }
+      ],
+      "auto_resolvable_by_current_generic_route": false,
+      "history_blocked": true,
+      "source_blocked_before": true,
+      "evidence_refs": [
+        "data/prediction_universe/2026-08-30.json",
+        "data/base_prediction_jobs/2026-08-30.json",
+        "data/football_data/hc_auto_1/coverage_registry.json",
+        "data/football_data/manifests/historical_results.dataset.json",
+        "data/product_runtime/latest_cycle.json"
+      ]
+    },
+    {
+      "fixture": {
+        "match_id": "500-1415903",
+        "competition": "荷兰甲级联赛",
+        "home": "坎布尔",
+        "away": "特温特",
+        "kickoff": "2026-08-31T02:00:00+08:00"
+      },
+      "current_prediction_status": "INSUFFICIENT_DATA",
+      "current_blocker": "MISSING_RECENT_FORM",
+      "root_cause": "IDENTITY_BLOCKED",
+      "root_cause_detail": "No exact reviewed pair identity is available; historical names cannot be guessed or fuzzy-matched into the fixture.",
+      "contributing_root_causes": [
+        "RECENT_FORM_SOURCE_NOT_ROUTED",
+        "RECENT_FORM_SOURCE_UNAVAILABLE",
+        "FIXTURE_PROVIDER_MAPPING_MISSING"
+      ],
+      "existing_reusable_source": [
+        "data/football_data/manifests/historical_results.dataset.json",
+        "data/football_data/football_data_uk/demand_source_manifest.json",
+        "scripts/football_data/providers/football_data_uk.py",
+        "data/football_data/openfootball/espana_source_manifest.json",
+        "scripts/football_data/providers/openfootball.py",
+        "data/product_runtime/openfootball_recent_form.json"
+      ],
+      "source_state": {
+        "authoritative_history_store": "AVAILABLE_DATASET_LEVEL",
+        "five_hundred_deep": "SOURCE_UNAVAILABLE_CONNECTION_REFUSED",
+        "nowscore": "NO_EXACT_MATCH",
+        "existing_prematch_snapshot": "NOT_FOUND",
+        "current_fixture_cache": "MISS"
+      },
+      "identity_status": {
+        "competition_id": "competition:netherlands-eredivisie",
+        "before": "UNRESOLVED",
+        "after": "UNRESOLVED",
+        "coverage_status": "UNSUPPORTED",
+        "home_team_id": null,
+        "away_team_id": null,
+        "home_resolution_method": "unresolved",
+        "away_resolution_method": "unresolved",
+        "reason_codes": [
+          "IDENTITY_UNAVAILABLE"
+        ]
+      },
+      "historical_records": {
+        "store_available": true,
+        "store_record_count": 1778,
+        "store_dataset_sha256": "48088556830cfb5a6ecd523fc4dc29889406b4853001c51849f5533ecc44a3f2",
+        "competition_id": "competition:netherlands-eredivisie",
+        "known_team_records": {},
+        "fixture_pair_status": "UNKNOWN_DUE_TO_IDENTITY"
+      },
+      "recent_form_acquisition_path": [
+        {
+          "step": "existing_prematch_snapshot",
+          "status": "MISS",
+          "match_id": "500-1415903"
+        },
+        {
+          "step": "nowscore_schedule",
+          "status": "NO_EXACT_MATCH",
+          "auto_resolvable": false
+        },
+        {
+          "step": "500_deep",
+          "status": "SOURCE_UNAVAILABLE",
+          "observed_error": "connection_refused",
+          "auto_resolvable": false
+        },
+        {
+          "step": "openfootball_recent_form_cache",
+          "status": "MISS",
+          "auto_resolvable": false
+        },
+        {
+          "step": "authoritative_historical_results",
+          "status": "IDENTITY_BLOCKED",
+          "auto_resolvable": false
+        },
+        {
+          "step": "champion_recent_form_gate",
+          "status": "MISSING_RECENT_FORM"
+        }
+      ],
+      "auto_resolvable_by_current_generic_route": false,
+      "history_blocked": true,
+      "source_blocked_before": true,
+      "evidence_refs": [
+        "data/prediction_universe/2026-08-30.json",
+        "data/base_prediction_jobs/2026-08-30.json",
+        "data/football_data/hc_auto_1/coverage_registry.json",
+        "data/football_data/manifests/historical_results.dataset.json",
+        "data/product_runtime/latest_cycle.json"
+      ]
+    },
+    {
+      "fixture": {
+        "match_id": "500-1414196",
+        "competition": "意大利甲级联赛",
+        "home": "拉齐奥",
+        "away": "热那亚",
+        "kickoff": "2026-08-31T02:45:00+08:00"
+      },
+      "current_prediction_status": "INSUFFICIENT_DATA",
+      "current_blocker": "MISSING_RECENT_FORM",
+      "root_cause": "IDENTITY_BLOCKED",
+      "root_cause_detail": "No exact reviewed pair identity is available; historical names cannot be guessed or fuzzy-matched into the fixture.",
+      "contributing_root_causes": [
+        "RECENT_FORM_SOURCE_NOT_ROUTED",
+        "RECENT_FORM_SOURCE_UNAVAILABLE",
+        "FIXTURE_PROVIDER_MAPPING_MISSING"
+      ],
+      "existing_reusable_source": [
+        "data/football_data/manifests/historical_results.dataset.json",
+        "data/football_data/football_data_uk/demand_source_manifest.json",
+        "scripts/football_data/providers/football_data_uk.py",
+        "data/football_data/openfootball/espana_source_manifest.json",
+        "scripts/football_data/providers/openfootball.py",
+        "data/product_runtime/openfootball_recent_form.json"
+      ],
+      "source_state": {
+        "authoritative_history_store": "AVAILABLE_DATASET_LEVEL",
+        "five_hundred_deep": "SOURCE_UNAVAILABLE_CONNECTION_REFUSED",
+        "nowscore": "NO_EXACT_MATCH",
+        "existing_prematch_snapshot": "NOT_FOUND",
+        "current_fixture_cache": "MISS"
+      },
+      "identity_status": {
+        "competition_id": "competition:italy-serie-a",
+        "before": "UNRESOLVED",
+        "after": "UNRESOLVED",
+        "coverage_status": "UNSUPPORTED",
+        "home_team_id": null,
+        "away_team_id": null,
+        "home_resolution_method": "unresolved",
+        "away_resolution_method": "unresolved",
+        "reason_codes": [
+          "IDENTITY_UNAVAILABLE"
+        ]
+      },
+      "historical_records": {
+        "store_available": true,
+        "store_record_count": 1778,
+        "store_dataset_sha256": "48088556830cfb5a6ecd523fc4dc29889406b4853001c51849f5533ecc44a3f2",
+        "competition_id": "competition:italy-serie-a",
+        "known_team_records": {},
+        "fixture_pair_status": "UNKNOWN_DUE_TO_IDENTITY"
+      },
+      "recent_form_acquisition_path": [
+        {
+          "step": "existing_prematch_snapshot",
+          "status": "MISS",
+          "match_id": "500-1414196"
+        },
+        {
+          "step": "nowscore_schedule",
+          "status": "NO_EXACT_MATCH",
+          "auto_resolvable": false
+        },
+        {
+          "step": "500_deep",
+          "status": "SOURCE_UNAVAILABLE",
+          "observed_error": "connection_refused",
+          "auto_resolvable": false
+        },
+        {
+          "step": "openfootball_recent_form_cache",
+          "status": "MISS",
+          "auto_resolvable": false
+        },
+        {
+          "step": "authoritative_historical_results",
+          "status": "IDENTITY_BLOCKED",
+          "auto_resolvable": false
+        },
+        {
+          "step": "champion_recent_form_gate",
+          "status": "MISSING_RECENT_FORM"
+        }
+      ],
+      "auto_resolvable_by_current_generic_route": false,
+      "history_blocked": true,
+      "source_blocked_before": true,
+      "evidence_refs": [
+        "data/prediction_universe/2026-08-30.json",
+        "data/base_prediction_jobs/2026-08-30.json",
+        "data/football_data/hc_auto_1/coverage_registry.json",
+        "data/football_data/manifests/historical_results.dataset.json",
+        "data/product_runtime/latest_cycle.json"
+      ]
+    },
+    {
+      "fixture": {
+        "match_id": "500-1414245",
+        "competition": "意大利甲级联赛",
+        "home": "卡利亚里",
+        "away": "国际米兰",
+        "kickoff": "2026-08-31T02:45:00+08:00"
+      },
+      "current_prediction_status": "INSUFFICIENT_DATA",
+      "current_blocker": "MISSING_RECENT_FORM",
+      "root_cause": "IDENTITY_BLOCKED",
+      "root_cause_detail": "The exact resolver has only one side of the fixture; a pair-level historical query is intentionally fail-closed.",
+      "contributing_root_causes": [
+        "RECENT_FORM_SOURCE_NOT_ROUTED",
+        "RECENT_FORM_SOURCE_UNAVAILABLE",
+        "FIXTURE_PROVIDER_MAPPING_MISSING"
+      ],
+      "existing_reusable_source": [
+        "data/football_data/manifests/historical_results.dataset.json",
+        "data/football_data/football_data_uk/demand_source_manifest.json",
+        "scripts/football_data/providers/football_data_uk.py",
+        "data/football_data/openfootball/espana_source_manifest.json",
+        "scripts/football_data/providers/openfootball.py",
+        "data/product_runtime/openfootball_recent_form.json"
+      ],
+      "source_state": {
+        "authoritative_history_store": "AVAILABLE_DATASET_LEVEL",
+        "five_hundred_deep": "SOURCE_UNAVAILABLE_CONNECTION_REFUSED",
+        "nowscore": "NO_EXACT_MATCH",
+        "existing_prematch_snapshot": "NOT_FOUND",
+        "current_fixture_cache": "MISS"
+      },
+      "identity_status": {
+        "competition_id": "competition:italy-serie-a",
+        "before": "UNRESOLVED",
+        "after": "PARTIAL",
+        "coverage_status": "UNSUPPORTED",
+        "home_team_id": null,
+        "away_team_id": "team:inter-milan",
+        "home_resolution_method": "unresolved",
+        "away_resolution_method": "competition_reviewed_alias",
+        "reason_codes": [
+          "IDENTITY_UNAVAILABLE"
+        ]
+      },
+      "historical_records": {
+        "store_available": true,
+        "store_record_count": 1778,
+        "store_dataset_sha256": "48088556830cfb5a6ecd523fc4dc29889406b4853001c51849f5533ecc44a3f2",
+        "competition_id": "competition:italy-serie-a",
+        "known_team_records": {
+          "away": {
+            "team_id": "team:inter-milan",
+            "eligible_record_count": 0,
+            "latest_kickoff_at": null
+          }
+        },
+        "fixture_pair_status": "PARTIAL_IDENTITY_ONLY"
+      },
+      "recent_form_acquisition_path": [
+        {
+          "step": "existing_prematch_snapshot",
+          "status": "MISS",
+          "match_id": "500-1414245"
+        },
+        {
+          "step": "nowscore_schedule",
+          "status": "NO_EXACT_MATCH",
+          "auto_resolvable": false
+        },
+        {
+          "step": "500_deep",
+          "status": "SOURCE_UNAVAILABLE",
+          "observed_error": "connection_refused",
+          "auto_resolvable": false
+        },
+        {
+          "step": "openfootball_recent_form_cache",
+          "status": "MISS",
+          "auto_resolvable": false
+        },
+        {
+          "step": "authoritative_historical_results",
+          "status": "IDENTITY_BLOCKED",
+          "auto_resolvable": false
+        },
+        {
+          "step": "champion_recent_form_gate",
+          "status": "MISSING_RECENT_FORM"
+        }
+      ],
+      "auto_resolvable_by_current_generic_route": false,
+      "history_blocked": true,
+      "source_blocked_before": true,
+      "evidence_refs": [
+        "data/prediction_universe/2026-08-30.json",
+        "data/base_prediction_jobs/2026-08-30.json",
+        "data/football_data/hc_auto_1/coverage_registry.json",
+        "data/football_data/manifests/historical_results.dataset.json",
+        "data/product_runtime/latest_cycle.json"
+      ]
+    },
+    {
+      "fixture": {
+        "match_id": "500-1415091",
+        "competition": "法国甲级联赛",
+        "home": "摩纳哥",
+        "away": "马赛",
+        "kickoff": "2026-08-31T02:45:00+08:00"
+      },
+      "current_prediction_status": "INSUFFICIENT_DATA",
+      "current_blocker": "MISSING_RECENT_FORM",
+      "root_cause": "IDENTITY_BLOCKED",
+      "root_cause_detail": "No exact reviewed pair identity is available; historical names cannot be guessed or fuzzy-matched into the fixture.",
+      "contributing_root_causes": [
+        "RECENT_FORM_SOURCE_NOT_ROUTED",
+        "RECENT_FORM_SOURCE_UNAVAILABLE",
+        "FIXTURE_PROVIDER_MAPPING_MISSING"
+      ],
+      "existing_reusable_source": [
+        "data/football_data/manifests/historical_results.dataset.json",
+        "data/football_data/football_data_uk/demand_source_manifest.json",
+        "scripts/football_data/providers/football_data_uk.py",
+        "data/football_data/openfootball/espana_source_manifest.json",
+        "scripts/football_data/providers/openfootball.py",
+        "data/product_runtime/openfootball_recent_form.json"
+      ],
+      "source_state": {
+        "authoritative_history_store": "AVAILABLE_DATASET_LEVEL",
+        "five_hundred_deep": "SOURCE_UNAVAILABLE_CONNECTION_REFUSED",
+        "nowscore": "NO_EXACT_MATCH",
+        "existing_prematch_snapshot": "NOT_FOUND",
+        "current_fixture_cache": "MISS"
+      },
+      "identity_status": {
+        "competition_id": "competition:france-ligue-1",
+        "before": "UNRESOLVED",
+        "after": "UNRESOLVED",
+        "coverage_status": "UNSUPPORTED",
+        "home_team_id": null,
+        "away_team_id": null,
+        "home_resolution_method": "unresolved",
+        "away_resolution_method": "unresolved",
+        "reason_codes": [
+          "IDENTITY_UNAVAILABLE"
+        ]
+      },
+      "historical_records": {
+        "store_available": true,
+        "store_record_count": 1778,
+        "store_dataset_sha256": "48088556830cfb5a6ecd523fc4dc29889406b4853001c51849f5533ecc44a3f2",
+        "competition_id": "competition:france-ligue-1",
+        "known_team_records": {},
+        "fixture_pair_status": "UNKNOWN_DUE_TO_IDENTITY"
+      },
+      "recent_form_acquisition_path": [
+        {
+          "step": "existing_prematch_snapshot",
+          "status": "MISS",
+          "match_id": "500-1415091"
+        },
+        {
+          "step": "nowscore_schedule",
+          "status": "NO_EXACT_MATCH",
+          "auto_resolvable": false
+        },
+        {
+          "step": "500_deep",
+          "status": "SOURCE_UNAVAILABLE",
+          "observed_error": "connection_refused",
+          "auto_resolvable": false
+        },
+        {
+          "step": "openfootball_recent_form_cache",
+          "status": "MISS",
+          "auto_resolvable": false
+        },
+        {
+          "step": "authoritative_historical_results",
+          "status": "IDENTITY_BLOCKED",
+          "auto_resolvable": false
+        },
+        {
+          "step": "champion_recent_form_gate",
+          "status": "MISSING_RECENT_FORM"
+        }
+      ],
+      "auto_resolvable_by_current_generic_route": false,
+      "history_blocked": true,
+      "source_blocked_before": true,
+      "evidence_refs": [
+        "data/prediction_universe/2026-08-30.json",
+        "data/base_prediction_jobs/2026-08-30.json",
+        "data/football_data/hc_auto_1/coverage_registry.json",
+        "data/football_data/manifests/historical_results.dataset.json",
+        "data/product_runtime/latest_cycle.json"
+      ]
+    },
+    {
+      "fixture": {
+        "match_id": "500-1362439",
+        "competition": "巴西甲级联赛",
+        "home": "弗拉门戈",
+        "away": "博塔弗戈",
+        "kickoff": "2026-08-31T03:00:00+08:00"
+      },
+      "current_prediction_status": "INSUFFICIENT_DATA",
+      "current_blocker": "MISSING_RECENT_FORM",
+      "root_cause": "IDENTITY_BLOCKED",
+      "root_cause_detail": "The exact resolver has only one side of the fixture; a pair-level historical query is intentionally fail-closed.",
+      "contributing_root_causes": [
+        "RECENT_FORM_SOURCE_NOT_ROUTED",
+        "RECENT_FORM_SOURCE_UNAVAILABLE",
+        "FIXTURE_PROVIDER_MAPPING_MISSING"
+      ],
+      "existing_reusable_source": [
+        "data/football_data/manifests/historical_results.dataset.json",
+        "data/football_data/football_data_uk/demand_source_manifest.json",
+        "scripts/football_data/providers/football_data_uk.py",
+        "data/football_data/openfootball/espana_source_manifest.json",
+        "scripts/football_data/providers/openfootball.py",
+        "data/product_runtime/openfootball_recent_form.json"
+      ],
+      "source_state": {
+        "authoritative_history_store": "AVAILABLE_DATASET_LEVEL",
+        "five_hundred_deep": "SOURCE_UNAVAILABLE_CONNECTION_REFUSED",
+        "nowscore": "NO_EXACT_MATCH",
+        "existing_prematch_snapshot": "NOT_FOUND",
+        "current_fixture_cache": "MISS"
+      },
+      "identity_status": {
+        "competition_id": "competition:brazil-serie-a",
+        "before": "PARTIAL",
+        "after": "PARTIAL",
+        "coverage_status": "UNSUPPORTED",
+        "home_team_id": null,
+        "away_team_id": "team:brazil:botafogo",
+        "home_resolution_method": "unresolved",
+        "away_resolution_method": "reviewed_canonical_provider_crosswalk",
+        "reason_codes": [
+          "IDENTITY_UNAVAILABLE"
+        ]
+      },
+      "historical_records": {
+        "store_available": true,
+        "store_record_count": 1778,
+        "store_dataset_sha256": "48088556830cfb5a6ecd523fc4dc29889406b4853001c51849f5533ecc44a3f2",
+        "competition_id": "competition:brazil-serie-a",
+        "known_team_records": {
+          "away": {
+            "team_id": "team:brazil:botafogo",
+            "eligible_record_count": 40,
+            "latest_kickoff_at": "2026-07-26T20:00:00Z"
+          }
+        },
+        "fixture_pair_status": "PARTIAL_IDENTITY_ONLY"
+      },
+      "recent_form_acquisition_path": [
+        {
+          "step": "existing_prematch_snapshot",
+          "status": "MISS",
+          "match_id": "500-1362439"
+        },
+        {
+          "step": "nowscore_schedule",
+          "status": "NO_EXACT_MATCH",
+          "auto_resolvable": false
+        },
+        {
+          "step": "500_deep",
+          "status": "SOURCE_UNAVAILABLE",
+          "observed_error": "connection_refused",
+          "auto_resolvable": false
+        },
+        {
+          "step": "openfootball_recent_form_cache",
+          "status": "MISS",
+          "auto_resolvable": false
+        },
+        {
+          "step": "authoritative_historical_results",
+          "status": "IDENTITY_BLOCKED",
+          "auto_resolvable": false
+        },
+        {
+          "step": "champion_recent_form_gate",
+          "status": "MISSING_RECENT_FORM"
+        }
+      ],
+      "auto_resolvable_by_current_generic_route": false,
+      "history_blocked": true,
+      "source_blocked_before": true,
+      "evidence_refs": [
+        "data/prediction_universe/2026-08-30.json",
+        "data/base_prediction_jobs/2026-08-30.json",
+        "data/football_data/hc_auto_1/coverage_registry.json",
+        "data/football_data/manifests/historical_results.dataset.json",
+        "data/product_runtime/latest_cycle.json"
+      ]
+    },
+    {
+      "fixture": {
+        "match_id": "500-1438080",
+        "competition": "葡萄牙超级联赛",
+        "home": "法马利康",
+        "away": "吉维森特",
+        "kickoff": "2026-08-31T03:30:00+08:00"
+      },
+      "current_prediction_status": "INSUFFICIENT_DATA",
+      "current_blocker": "MISSING_RECENT_FORM",
+      "root_cause": "IDENTITY_BLOCKED",
+      "root_cause_detail": "No exact reviewed pair identity is available; historical names cannot be guessed or fuzzy-matched into the fixture.",
+      "contributing_root_causes": [
+        "RECENT_FORM_SOURCE_NOT_ROUTED",
+        "RECENT_FORM_SOURCE_UNAVAILABLE",
+        "FIXTURE_PROVIDER_MAPPING_MISSING"
+      ],
+      "existing_reusable_source": [
+        "data/football_data/manifests/historical_results.dataset.json",
+        "data/football_data/football_data_uk/demand_source_manifest.json",
+        "scripts/football_data/providers/football_data_uk.py",
+        "data/football_data/openfootball/espana_source_manifest.json",
+        "scripts/football_data/providers/openfootball.py",
+        "data/product_runtime/openfootball_recent_form.json"
+      ],
+      "source_state": {
+        "authoritative_history_store": "AVAILABLE_DATASET_LEVEL",
+        "five_hundred_deep": "SOURCE_UNAVAILABLE_CONNECTION_REFUSED",
+        "nowscore": "NO_EXACT_MATCH",
+        "existing_prematch_snapshot": "NOT_FOUND",
+        "current_fixture_cache": "MISS"
+      },
+      "identity_status": {
+        "competition_id": "competition:portugal-primeira-liga",
+        "before": "UNRESOLVED",
+        "after": "UNRESOLVED",
+        "coverage_status": "UNSUPPORTED",
+        "home_team_id": null,
+        "away_team_id": null,
+        "home_resolution_method": "unresolved",
+        "away_resolution_method": "unresolved",
+        "reason_codes": [
+          "IDENTITY_UNAVAILABLE"
+        ]
+      },
+      "historical_records": {
+        "store_available": true,
+        "store_record_count": 1778,
+        "store_dataset_sha256": "48088556830cfb5a6ecd523fc4dc29889406b4853001c51849f5533ecc44a3f2",
+        "competition_id": "competition:portugal-primeira-liga",
+        "known_team_records": {},
+        "fixture_pair_status": "UNKNOWN_DUE_TO_IDENTITY"
+      },
+      "recent_form_acquisition_path": [
+        {
+          "step": "existing_prematch_snapshot",
+          "status": "MISS",
+          "match_id": "500-1438080"
+        },
+        {
+          "step": "nowscore_schedule",
+          "status": "NO_EXACT_MATCH",
+          "auto_resolvable": false
+        },
+        {
+          "step": "500_deep",
+          "status": "SOURCE_UNAVAILABLE",
+          "observed_error": "connection_refused",
+          "auto_resolvable": false
+        },
+        {
+          "step": "openfootball_recent_form_cache",
+          "status": "MISS",
+          "auto_resolvable": false
+        },
+        {
+          "step": "authoritative_historical_results",
+          "status": "IDENTITY_BLOCKED",
+          "auto_resolvable": false
+        },
+        {
+          "step": "champion_recent_form_gate",
+          "status": "MISSING_RECENT_FORM"
+        }
+      ],
+      "auto_resolvable_by_current_generic_route": false,
+      "history_blocked": true,
+      "source_blocked_before": true,
+      "evidence_refs": [
+        "data/prediction_universe/2026-08-30.json",
+        "data/base_prediction_jobs/2026-08-30.json",
+        "data/football_data/hc_auto_1/coverage_registry.json",
+        "data/football_data/manifests/historical_results.dataset.json",
+        "data/product_runtime/latest_cycle.json"
+      ]
+    },
+    {
+      "fixture": {
+        "match_id": "500-1358632",
+        "competition": "美国职业大联盟",
+        "home": "圣路易斯城",
+        "away": "达拉斯FC",
+        "kickoff": "2026-08-31T07:00:00+08:00"
+      },
+      "current_prediction_status": "INSUFFICIENT_DATA",
+      "current_blocker": "MISSING_RECENT_FORM",
+      "root_cause": "IDENTITY_BLOCKED",
+      "root_cause_detail": "No exact reviewed pair identity is available; historical names cannot be guessed or fuzzy-matched into the fixture.",
+      "contributing_root_causes": [
+        "RECENT_FORM_SOURCE_NOT_ROUTED",
+        "RECENT_FORM_SOURCE_UNAVAILABLE",
+        "FIXTURE_PROVIDER_MAPPING_MISSING"
+      ],
+      "existing_reusable_source": [
+        "data/football_data/manifests/historical_results.dataset.json",
+        "data/football_data/football_data_uk/demand_source_manifest.json",
+        "scripts/football_data/providers/football_data_uk.py",
+        "data/football_data/openfootball/espana_source_manifest.json",
+        "scripts/football_data/providers/openfootball.py",
+        "data/product_runtime/openfootball_recent_form.json"
+      ],
+      "source_state": {
+        "authoritative_history_store": "AVAILABLE_DATASET_LEVEL",
+        "five_hundred_deep": "SOURCE_UNAVAILABLE_CONNECTION_REFUSED",
+        "nowscore": "NO_EXACT_MATCH",
+        "existing_prematch_snapshot": "NOT_FOUND",
+        "current_fixture_cache": "MISS"
+      },
+      "identity_status": {
+        "competition_id": "competition:usa-mls",
+        "before": "UNRESOLVED",
+        "after": "UNRESOLVED",
+        "coverage_status": "UNSUPPORTED",
+        "home_team_id": null,
+        "away_team_id": null,
+        "home_resolution_method": "unresolved",
+        "away_resolution_method": "unresolved",
+        "reason_codes": [
+          "IDENTITY_UNAVAILABLE"
+        ]
+      },
+      "historical_records": {
+        "store_available": true,
+        "store_record_count": 1778,
+        "store_dataset_sha256": "48088556830cfb5a6ecd523fc4dc29889406b4853001c51849f5533ecc44a3f2",
+        "competition_id": "competition:usa-mls",
+        "known_team_records": {},
+        "fixture_pair_status": "UNKNOWN_DUE_TO_IDENTITY"
+      },
+      "recent_form_acquisition_path": [
+        {
+          "step": "existing_prematch_snapshot",
+          "status": "MISS",
+          "match_id": "500-1358632"
+        },
+        {
+          "step": "nowscore_schedule",
+          "status": "NO_EXACT_MATCH",
+          "auto_resolvable": false
+        },
+        {
+          "step": "500_deep",
+          "status": "SOURCE_UNAVAILABLE",
+          "observed_error": "connection_refused",
+          "auto_resolvable": false
+        },
+        {
+          "step": "openfootball_recent_form_cache",
+          "status": "MISS",
+          "auto_resolvable": false
+        },
+        {
+          "step": "authoritative_historical_results",
+          "status": "IDENTITY_BLOCKED",
+          "auto_resolvable": false
+        },
+        {
+          "step": "champion_recent_form_gate",
+          "status": "MISSING_RECENT_FORM"
+        }
+      ],
+      "auto_resolvable_by_current_generic_route": false,
+      "history_blocked": true,
+      "source_blocked_before": true,
+      "evidence_refs": [
+        "data/prediction_universe/2026-08-30.json",
+        "data/base_prediction_jobs/2026-08-30.json",
+        "data/football_data/hc_auto_1/coverage_registry.json",
+        "data/football_data/manifests/historical_results.dataset.json",
+        "data/product_runtime/latest_cycle.json"
+      ]
+    }
+  ]
+}
