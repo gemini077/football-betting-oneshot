@@ -198,6 +198,41 @@ class CoverageGateTests(unittest.TestCase):
         result_set = audit_fixture_set([row], self.registry, historical_records=self.records, identity_resolver=resolver, now=NOW)
         self.assertEqual("SUPPORTED", result_set["fixtures"][0]["status"])
 
+    def test_id_auto_registry_keeps_champion_fail_open_when_identity_is_missing(self):
+        root = Path(self.temp.name)
+        identity_registry = root / "identity_registry.json"
+        write_json(identity_registry, {
+            "contract_version": "identity_registry.v1",
+            "resolution_ladder": [
+                "stable_provider_id_crosswalk",
+                "reviewed_canonical_provider_crosswalk",
+                "fixture_canonical_id",
+                "competition_exact_normalized_name",
+                "competition_reviewed_alias",
+            ],
+            "teams": [{
+                "canonical_team_id": "team:alpha:known",
+                "canonical_name": "Known Team",
+                "competition_scope": ["competition:alpha"],
+                "canonical_source_names": ["Known Team"],
+                "reviewed_aliases": [],
+                "provider_mappings": [],
+            }],
+        })
+        resolver = ExactCoverageIdentityResolver(identity_registry_path=identity_registry)
+        result_set = audit_fixture_set(
+            [fixture("id-auto-missing")],
+            self.registry,
+            historical_records=self.records,
+            identity_resolver=resolver,
+            now=NOW,
+        )
+        row = result_set["fixtures"][0]
+        self.assertEqual("UNSUPPORTED", row["status"])
+        self.assertIn("IDENTITY_UNAVAILABLE", row["reason_codes"])
+        self.assertTrue(row["champion_prediction_allowed"])
+        self.assertFalse(row["blocked"])
+
 
 if __name__ == "__main__":
     unittest.main()

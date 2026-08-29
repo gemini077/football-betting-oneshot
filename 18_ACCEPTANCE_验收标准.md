@@ -92,6 +92,30 @@ following:
 6. The next coverage backlog is recorded as evidence only. The task stops at
    `READY_FOR_ACCEPTANCE` and does not start HC-AUTO-2.
 
+# 2D. ID-AUTO-1 Acceptance
+
+`ID-AUTO-1 - League-Agnostic Deterministic Team Identity Resolution` may be
+marked by Codex only as `READY_FOR_ACCEPTANCE`. Independent acceptance must
+verify:
+
+1. `identity_registry.v1` exists with canonical team, competition scope,
+   provider ID/name, reviewed alias, evidence, confidence and ambiguity fields.
+2. The same five-level deterministic ladder is used for every competition;
+   fuzzy matching, transliteration, LLM guessing, kickoff proximity and
+   highest-score selection are absent.
+3. Existing stable provider IDs are reusable, exact names are competition
+   constrained, and ambiguous candidates fail closed.
+4. The exact 66-fixture cohort has a reproducible BEFORE/AFTER audit, including
+   by-competition results, the six existing-history groups, and the A–E identity
+   chain counts.
+5. Identity gaps do not block Champion jobs; the authoritative historical store,
+   frozen predictions, prospective records and Champion mathematics are
+   unchanged.
+6. Japan J1 and Spain La Liga are only recorded against existing generic import
+   paths; no league-specific importer is added or executed.
+7. Focused tests pass, evidence is committed, and the task stops at
+   `READY_FOR_ACCEPTANCE` without starting ID-AUTO-2.
+
 # 3. 部署类任务验收
 
 涉及 GitHub / Pages / workflows 的任务，必须分别核：

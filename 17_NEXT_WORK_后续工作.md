@@ -1,12 +1,17 @@
 # 17_NEXT_WORK_后续工作.md
 
-最后更新：2026-08-29
+最后更新：2026-08-30
 
 # Current Sole Pointer
 
-## HC-AUTO-1 - League-Agnostic Historical Coverage Foundation
+## ID-AUTO-1 - League-Agnostic Deterministic Team Identity Resolution
 
 Status: `READY_FOR_ACCEPTANCE`
+
+HC-AUTO-1 closeout is recorded as `SEALED / ACCEPTANCE PASS` after independent
+acceptance. PR #117 was merged to `main` at
+`7680c57475c907ba87cf40c9c1a3d1d48543edb1`; latest automatic-run state was
+preserved.
 
 Previous closeout remains recorded: `FE-SE-HIST-1 = SEALED / ACCEPTANCE PASS`,
 `FE-SE-DC-CLOSE = ACCEPTANCE PASS / CLOSED`, model verdict `INCONCLUSIVE`
@@ -14,41 +19,54 @@ because 7 of the original 103 fixed-config targets had optimizer fit failures,
 and `SWEDEN_SPECIFIC_FURTHER_TUNING = CLOSED`. PR #114 remains OPEN and
 unmerged. No Sweden/DC calculation is part of this milestone.
 
-HC-AUTO-1 delivers a generic coverage contract for every canonical competition:
-provider/source availability, available seasons, latest completed season,
-current-season status, authoritative historical count, team count, exact
-identity coverage, history depth, freshness, source quality, use restrictions,
-automatic-import capability, last successful refresh, and failure reasons.
+ID-AUTO-1 delivers a generic team identity contract for every canonical
+competition: canonical team ID/name, competition scope, country, provider and
+provider team ID/name, reviewed aliases, evidence, resolution method,
+confidence class and ambiguity state.
 
-The daily route is:
+The daily route remains:
 
 `Prediction Universe -> coverage registry/gate -> BASE job ledger -> existing Champion`
 
-The gate is exact-only and returns `SUPPORTED`, `DEGRADED`, or `UNSUPPORTED`.
-Every row retains a current Champion job; historical challenger eligibility is
-turned off when the gate is not `SUPPORTED`. Unsupported rows never block other
-fixtures, and no fuzzy identity or invented history is allowed.
+Identity resolution is exact-only and follows stable provider ID, reviewed
+provider crosswalk, fixture canonical ID, competition exact normalized name,
+then competition-scoped reviewed alias. Every row retains a current Champion
+job; historical challenger eligibility is turned off when the coverage gate is
+not `SUPPORTED`. Ambiguous and unresolved rows never block other fixtures.
 
-HC-AUTO-1 evidence:
+ID-AUTO-1 evidence:
 
-- `data/football_data/hc_auto_1/coverage_registry.json`
-- `data/football_data/hc_auto_1/daily_fixture_audit.json`
-- `docs/data-foundation/HC-AUTO-1_COVERAGE_FOUNDATION.md`
-- focused registry, gate, and daily-integration tests
+- `scripts/football_data/identity_registry.py`
+- `scripts/football_data/run_id_auto_1.py`
+- `data/football_data/id_auto_1/identity_registry.json`
+- `data/football_data/id_auto_1/daily_fixture_audit.json`
+- `data/football_data/id_auto_1/identity_resolution_backlog.json`
+- `data/football_data/id_auto_1/provider_id_reuse_evidence.json`
+- `docs/data-foundation/ID-AUTO-1_IDENTITY_RESOLUTION.md`
+- focused identity, gate and audit-artifact tests
 
-The real 2026-08-29 through 2026-08-31 snapshots were audited as one mixed
-fixture set: 66 fixtures, 1 `SUPPORTED`, 65 exact-identity `UNSUPPORTED`, and
-0 blocked Champion jobs. Existing free/reproducible sources were reused; no
-new provider, country-specific adapter, paid source, model change, frozen
-prediction change, or historical-store rebuild was introduced.
+The same real 66-fixture snapshots were audited as one mixed fixture set.
+BEFORE: 1 `SUPPORTED`, 65 `UNSUPPORTED`, 0 blocked Champion jobs. AFTER:
+2 `SUPPORTED`, 0 `DEGRADED`, 64 `UNSUPPORTED`, 2 fully auto-resolved fixtures,
+7 partial fixtures, 57 unresolved fixtures, 0 ambiguous fixtures, and 0 blocked
+Champion jobs. Existing free/reproducible sources and reviewed evidence were
+reused; no manual per-fixture alias work, new provider, country-specific
+adapter, paid source, model change, frozen prediction change, or
+historical-store rebuild was introduced.
+
+Japan J1 and Spain La Liga are recorded as `READY_FOR_GENERIC_IMPORT` only;
+their generic existing adapters were not executed in this milestone. The
+remaining identity backlog is evidence for later scope, not a reason to start
+a league-specific importer.
 
 STOP CONDITIONS:
 
-- Do not start HC-AUTO-2 automatically.
+- Do not start ID-AUTO-2 automatically.
 - Do not tune or calculate Sweden/Dixon-Coles, promote a Champion, or modify
   frozen/prospective records.
-- Coverage backlog is only recorded for a later separately scoped milestone.
-- Final state for this task is `READY_FOR_ACCEPTANCE`, never `SEALED` by Codex.
+- Identity backlog is only recorded for a later separately scoped milestone.
+- Final state for this task is `READY_FOR_ACCEPTANCE`; HC-AUTO-1's independent
+  acceptance is already recorded as `SEALED / ACCEPTANCE PASS`.
 
 # 历史执行记录（非当前指针）
 

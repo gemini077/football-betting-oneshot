@@ -20,6 +20,7 @@ from .coverage_registry import (
     STATUS_UNSUPPORTED,
     load_coverage_registry,
 )
+from .identity_registry import DEFAULT_IDENTITY_REGISTRY_PATH, IdentityRegistryResolver
 from .storage import HistoricalResultStore, content_sha256
 from .team_strength import classify_history_recency
 
@@ -105,9 +106,20 @@ class ExactCoverageIdentityResolver:
         *,
         crosswalk_path: str | Path = DEFAULT_CROSSWALK_PATH,
         identity_evidence_path: str | Path = DEFAULT_IDENTITY_EVIDENCE_PATH,
+        identity_registry_path: str | Path | None = None,
     ) -> None:
         self.crosswalk_path = Path(crosswalk_path)
         self.identity_evidence_path = Path(identity_evidence_path)
+        self.identity_registry_path = Path(identity_registry_path) if identity_registry_path is not None else DEFAULT_IDENTITY_REGISTRY_PATH
+        self.registry_resolver: IdentityRegistryResolver | None = None
+        if (
+            self.identity_registry_path.exists()
+            and (identity_registry_path is not None or self.crosswalk_path == DEFAULT_CROSSWALK_PATH)
+        ):
+            try:
+                self.registry_resolver = IdentityRegistryResolver(self.identity_registry_path)
+            except (OSError, ValueError, json.JSONDecodeError):
+                self.registry_resolver = None
         self.by_name: dict[tuple[str, str], list[dict[str, Any]]] = {}
         self.by_provider_id: dict[tuple[str, str, str], list[dict[str, Any]]] = {}
         self.by_match_id: dict[str, dict[str, Any]] = {}
@@ -163,6 +175,12 @@ class ExactCoverageIdentityResolver:
         explicit = self._explicit_identity(fixture)
         if explicit is not None:
             return explicit
+
+        if self.registry_resolver is not None:
+            return self.registry_resolver.resolve_fixture(
+                fixture,
+                competition_id=competition_id,
+            )
 
         match_ids = [
             _text(_first(fixture, "matchId", "match_id", "id")),

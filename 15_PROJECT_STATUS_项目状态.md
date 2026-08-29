@@ -1,25 +1,32 @@
 # 15_PROJECT_STATUS_项目状态.md
 
-最后更新：2026-08-29
+最后更新：2026-08-30
 角色：项目当前唯一人类可读状态真相。只记录当前事实，不承担完整历史档案职责。
 
-# HC-AUTO-1 Current State
+# ID-AUTO-1 Current State
 
 Status: `READY_FOR_ACCEPTANCE`
 
-HC-AUTO-1 implements the league-agnostic historical coverage foundation. A
-versioned registry now combines the existing Football-Data/OpenFootball
-manifests, reviewed exact identity evidence and the authoritative historical
-store. The daily gate returns `SUPPORTED`, `DEGRADED`, or `UNSUPPORTED` with
-machine-readable reason codes and keeps every current Champion job
-non-blocking. No Champion, frozen prediction, historical ledger, provider, or
-model mathematics changed.
+HC-AUTO-1 is now `SEALED / ACCEPTANCE PASS` after independent acceptance. PR
+#117 was merged to `main` at
+`7680c57475c907ba87cf40c9c1a3d1d48543edb1` without reverting the latest
+automatic prediction-universe, BASE-ledger, market/fetch, prospective, frozen,
+dashboard, or runtime state.
+
+ID-AUTO-1 adds a league-agnostic deterministic team identity registry and
+resolver. The registry consolidates existing provider IDs, reviewed
+crosswalks, canonical historical IDs, source names, and reviewed aliases. It
+uses the five-level exact ladder and keeps ambiguous/unresolved identity
+fail-closed for the historical challenger. No league-specific resolver,
+fuzzy match, new provider, Champion change, frozen mutation, or history-store
+mutation was introduced.
 
 The real 2026-08-29 through 2026-08-31 Prediction Universe audit covers 66
-fixtures in one batch: 1 `SUPPORTED`, 65 `UNSUPPORTED` for missing exact
-current team identity, 0 blocked Champion jobs. The committed HC-AUTO-1
-evidence records the current gaps; it does not repair them or start a new
-provider/league-specific adapter.
+fixtures in one batch. BEFORE ID-AUTO-1: 1 `SUPPORTED`, 65 `UNSUPPORTED`, and
+0 blocked Champion jobs. AFTER: 2 `SUPPORTED`, 0 `DEGRADED`, 64 `UNSUPPORTED`,
+11 resolved sides across 2 fully resolved and 7 partial fixtures, and 0 blocked
+Champion jobs. The remaining 57 fully unresolved fixtures and 7 partial rows
+are recorded in the deterministic backlog.
 
 `FE-SE-HIST-1` is `SEALED / ACCEPTANCE PASS` after PR #115 was merged to main. Its authoritative Sweden closure remains 2025=240, 2026=119, Sweden=359, global historical=1778, unresolved=0, duplicate/conflict=0, and connected 2025 network=true.
 
@@ -32,8 +39,8 @@ provider/league-specific adapter.
 optimizer fit failures. `SWEDEN_SPECIFIC_FURTHER_TUNING` is `CLOSED`, PR #114
 remains OPEN and unmerged, and no Sweden/DC computation was run in HC-AUTO-1.
 
-HC-AUTO-1 is the current milestone and is only `READY_FOR_ACCEPTANCE`; it is
-not `SEALED`.
+ID-AUTO-1 is the current milestone and is only `READY_FOR_ACCEPTANCE`; it is
+not independently sealed. Do not start ID-AUTO-2 automatically.
 
 # FE-SE-HIST-1 Acceptance Record
 
