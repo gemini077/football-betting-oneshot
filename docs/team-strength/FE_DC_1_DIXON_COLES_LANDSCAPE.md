@@ -54,10 +54,11 @@ Dixon 和 Coles 在 Maher/Poisson 结构上加入动态表现处理与低比分�
 - dataset：现有 `FOOTBALL_DATA_HOME/historical_results.duckdb`；只取 `competition:sweden-allsvenskan`、`entity_type=club`、`match_type=league`、`eligible_for_team_strength=true`。
 - chronology：按 `(kickoff_at, canonical_match_id)` 排序；预测目标严格使用 exclusive cutoff。
 - formal warm-up：前 `32` 场作为最小训练窗口；该窗口之后确认 18 个 team IDs、1 个 connected component，再开始 held-out。
-- primary：weighted maximum likelihood 的 Maher + Dixon–Coles；固定 `half_life_days=365`，`rho` 从同一训练窗口估计，禁止按本样本调整 half-life/rho/learning rate。
+- primary: weighted maximum-likelihood Maher + Dixon-Coles; fixed `half_life_days=365`; fit `rho` within the fixed `[-0.10, 0.10]` validity range; no half-life/rho/learning-rate sweep.
 - control：相同 weighted Maher/Poisson network，`rho=0` 固定。
-- parameterization：log-rate、attack sum-to-zero、defense sum-to-zero；固定的有界 deterministic L-BFGS 风格 optimizer；不新增依赖。
-- score output：`0..12 × 0..12` 完整矩阵，显式记录 normalization 和 tail mass。
+- parameterization: log-rate with attack and defense sum-to-zero constraints; deterministic bounded projected-Newton optimizer with analytic gradient/Hessian; no new dependency.
+- score output: `0..12 ? 0..12` full matrix; record raw grid mass, finite-grid tail diagnostic, and normalization.
+- full-distribution guard: the selected fixed rho range is validated at every emitted target; any non-positive low-score tau is an explicit error, never a negative probability or silent NaN.
 - evaluation：expanding-window held-out，每场 refit primary 与 control；输出每场可见的全联赛历史场数、两队历史场数、network team/component counts、训练最大 kickoff。
 - scope：research/shadow only；不写 production/shared DB、不修改 Champion、不改 frozen prediction、不接 provider、不使用 xG/lineup/Elo。
 
