@@ -1,0 +1,36 @@
+{
+  "accounting": {
+    "cache_hit_count": 0,
+    "cache_miss_count": 18,
+    "credential_block_count": 18,
+    "endpoint_counts": {},
+    "free_tier_calls_per_minute": 10,
+    "request_count": 0
+  },
+  "cache_root_policy": "data/product_runtime/football_data_org_recent_form (runtime-only)",
+  "call_governance": {
+    "cache_hit_does_not_make_network_request": true,
+    "credential_missing_makes_zero_network_requests": true,
+    "free_tier_calls_per_minute": 10,
+    "same_day_same_team_deduplicated": true
+  },
+  "contract_version": "pred_avail_2_provider_identity_cache.v1",
+  "fixture_mapping_cache": {
+    "key": "GET /v4/competitions/{code}/matches?dateFrom=YYYY-MM-DD&dateTo=YYYY-MM-DD",
+    "reuse_scope": "same provider competition and UTC calendar date",
+    "ttl_seconds": 21600
+  },
+  "identity_boundary": {
+    "canonical_historical_identity": null,
+    "current_form_provider_identity": "football-data.org:{provider_fixture_id}/{provider_team_id}",
+    "fixture_bridge_policy": "exact canonical competition + exact UTC kickoff + unique source fixture + provider home/away orientation",
+    "provider_team_ids_are_not_canonical_team_ids": true
+  },
+  "observed_at": "2026-08-29T17:49:07Z",
+  "provider": "football-data.org",
+  "team_history_cache": {
+    "key": "GET /v4/teams/{provider_team_id}/matches?dateFrom=...&dateTo=...&competitions={code}&status=FINISHED&limit=100",
+    "reuse_scope": "same provider team, competition and cutoff-date window",
+    "ttl_seconds": 21600
+  }
+}

@@ -4,39 +4,49 @@
 
 # Current Sole Pointer
 
-## PRED-AVAIL-1 - Daily Prediction Availability Closure
+## PRED-AVAIL-2 - Provider-Independent Recent Form Backbone
 
 Status: `READY_FOR_ACCEPTANCE`
+
+This is the final continuous availability development round. PRED-AVAIL
+continuous development is `CLOSED`; do not start PRED-AVAIL-3 or another
+provider patch automatically.
 
 The same frozen 25-fixture cohort is retained at
 `data/football_data/pred_avail_1/baseline_2026-08-30.json`, with cohort SHA-256
 `0cf4f106c34f183c3d61a81952f70e9c7f2525c0376a1e6eff74bb087e15cb8d`.
-BEFORE: 1 FULL/frozen, 24 `MISSING_RECENT_FORM`, 0 prediction failures, and 0
-blocked Champion jobs. AFTER bounded replay: 2 FULL, 0 DEGRADED, 23
-`INSUFFICIENT_DATA` / `MISSING_RECENT_FORM`, 0 prediction failures, and 0
-blocked Champion jobs. The released fixture is `500-1364199` through the
-existing authoritative historical-result store route.
+BASELINE (PRED-AVAIL-1 AFTER): 2 `FULL`, 23 `MISSING_RECENT_FORM`.
+Offline AFTER: 2 `FULL`, 0 `DEGRADED`, 23 `INSUFFICIENT_DATA` /
+`MISSING_RECENT_FORM`; `CALL_COUNT = 0`, `CACHE_HIT_COUNT = 0`.
 
-The 24-row root-cause audit shows 1 `HISTORY_EXISTS_BUT_NOT_USED` and 23
-`IDENTITY_BLOCKED`. All 24 retain the contributing source-not-routed,
-source-unavailable, and provider-mapping-missing causes. The route is generic;
-no league-specific importer, alias work, fuzzy identity, synthetic evidence,
-new provider, market-only fallback, Champion math change, or production-state
-rewrite was used.
+Source preflight is
+`LIVE_VALIDATION_BLOCKED_BY_CREDENTIAL`: no `FOOTBALL_DATA_ORG_TOKEN` exists
+in the checked local or GitHub secret configuration. No token was fabricated,
+logged, persisted, or auto-registered. The adapter contract, fixture samples,
+exact bridge, provider identity/cache contract, no-leakage checks, and offline
+25-fixture evidence are complete, but no live coverage improvement is claimed.
 
-`HC-AUTO-1 = SEALED / ACCEPTANCE PASS` and `ID-AUTO-1 = SEALED / ACCEPTANCE PASS`
-after independent acceptance. PR #118 merged to `main` at
-`04a548416513865e4af4771603fb4369074ecd57`. `IDENTITY_BACKLOG = NON_BLOCKING /
-ON_DEMAND`; ID-AUTO-2 is not started. Production automatic state is preserved;
-the AFTER result is a bounded local replay, not a deployment claim.
+Final verdict: `D. LIVE_VALIDATION_BLOCKED_BY_CREDENTIAL`.
+The product remains blocked at 23/25 unavailable. The next mainline decision is
+`Data Supply Architecture Decision`, not provider-by-provider patching.
 
 STOP CONDITIONS:
 
-- Leave PRED-AVAIL-1 at `READY_FOR_ACCEPTANCE` until independent acceptance.
-- Do not start ID-AUTO-2, Sweden/DC, PA-3, Champion promotion, or model tuning.
-- Do not modify frozen prediction, prospective ledger, or automatic market,
-  dashboard, and runtime artifacts.
-- After independent acceptance, return to Multi-Market Prediction Quality.
+- Leave PRED-AVAIL-2 at `READY_FOR_ACCEPTANCE` until independent acceptance.
+- Do not start PRED-AVAIL-3, FotMob/SofaScore production work, ID-AUTO-2,
+  Sweden/DC, PA-3, Champion promotion, or model tuning.
+- Do not modify frozen predictions, prospective ledger, automatic market,
+  dashboard, runtime, or Champion mathematics.
+- After independent acceptance, return to the product-wide decision point and
+  choose between Multi-Market Prediction Quality and Data Supply Architecture
+  Decision based on the accepted availability result.
+
+# Historical execution record: PRED-AVAIL-1
+
+PRED-AVAIL-1 is retained as `ENGINEERING_ACCEPTED / PRODUCT_BLOCKER_REMAINS`.
+Its exact same-cohort result remains BEFORE 1 FULL / 24 missing and AFTER 2
+FULL / 23 missing. PR #119 merged the synchronized branch to `main` at
+`f6a130a6ded64cc6e2e337e759064cd1673fba86`; this is not a product PASS claim.
 
 # Historical execution record: ID-AUTO-1
 

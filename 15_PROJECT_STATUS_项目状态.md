@@ -3,42 +3,59 @@
 最后更新：2026-08-30
 角色：项目当前唯一人类可读状态真相。只记录当前事实，不承担完整历史档案职责。
 
-# PRED-AVAIL-1 Current State
+# PRED-AVAIL-2 Current State
 
 Status: `READY_FOR_ACCEPTANCE`
 
-The exact 2026-08-30 cohort is frozen at 25 fixtures with cohort SHA-256
+PRED-AVAIL continuous development is `CLOSED` after this bounded milestone.
+The exact 2026-08-30 frozen cohort remains 25 fixtures with cohort SHA-256
 `0cf4f106c34f183c3d61a81952f70e9c7f2525c0376a1e6eff74bb087e15cb8d`.
-BEFORE: 1 FULL/frozen, 24 `MISSING_RECENT_FORM`, 0 prediction failures, and 0
-blocked Champion jobs. The isolated same-cohort AFTER replay is 2 FULL, 0
-DEGRADED, 23 `INSUFFICIENT_DATA` / `MISSING_RECENT_FORM`, 0 prediction failures,
-and 0 blocked Champion jobs. Identity-blocked remains 23, source-blocked moves
-24 -> 23, and history-blocked remains 23.
+BASELINE (PRED-AVAIL-1 AFTER): 2 `FULL`, 23 `MISSING_RECENT_FORM`.
+PRED-AVAIL-2 offline AFTER: 2 `FULL`, 0 `DEGRADED`, 23
+`INSUFFICIENT_DATA` / `MISSING_RECENT_FORM`, 0 prediction failures, and 0
+blocked Champion jobs. `CALL_COUNT = 0` and `CACHE_HIT_COUNT = 0` because the
+required football-data.org credential is absent.
 
-The generic fix routes exact, eligible pre-kickoff rows from the existing
-read-only authoritative historical-result store into the existing four-block
-recent-form contract. It releases only `500-1364199` Bodo/Glimt - Rosenborg in
-bounded replay. The existing frozen Celta Vigo - Athletic Club artifact was not
-rerun. Production automatic prediction, market, prospective, dashboard and
-runtime files are unchanged; AFTER is not a live deployment claim.
+Source preflight result:
+`LIVE_VALIDATION_BLOCKED_BY_CREDENTIAL`. No token was logged, persisted, or
+registered. The adapter contract, exact fixture bridge, provider-scoped team
+identity, cache governance, no-leakage checks, and offline evidence are ready;
+live coverage improvement was not claimed.
 
-Root cause evidence is retained in
-`data/football_data/pred_avail_1/root_cause_audit_2026-08-30.json`. The common
-system cause is that BASE previously did not route the authoritative store;
-current runtime 500 deep fetches are unavailable and the Nowscore schedule has
-no exact mapping for this 500 fixture cohort. The 23 remaining rows are
-identity-blocked under the exact-only policy. No synthetic evidence, fuzzy or
-LLM identity, league-specific patch, new provider, market-only fallback, or
-Champion math change was introduced.
+The primary candidate is the official football-data.org v4 API: free-tier
+competition coverage, stable provider fixture/team IDs, exact UTC kickoff
+bridge, and competition/team match routes. FotMob and SofaScore remain
+research-only candidates. Football-Data.co.uk remains the existing historical
+download source and is not confused with football-data.org.
 
-`HC-AUTO-1 = SEALED / ACCEPTANCE PASS` and `ID-AUTO-1 = SEALED / ACCEPTANCE PASS`
-are recorded after independent acceptance. PR #118 was safely merged to
-`main` at `04a548416513865e4af4771603fb4369074ecd57`, with the latest automatic
-state preserved. `IDENTITY_BACKLOG = NON_BLOCKING / ON_DEMAND`; ID-AUTO-2 is not
-started.
+The provider route keeps `CURRENT_FORM_PROVIDER_IDENTITY` separate from
+`CANONICAL_HISTORICAL_IDENTITY`, uses no fuzzy or LLM team matching, and emits
+the existing Champion `home_overall`, `home_home`, `away_overall`, and
+`away_away` contract only after FINISHED, pre-kickoff, complete-goal evidence.
+No Champion math, evidence gate, market-only fallback, synthetic evidence,
+frozen prediction, prospective ledger, dashboard, runtime state, or
+league-specific adapter changed.
 
-The next pointer after independent acceptance is Multi-Market Prediction
-Quality. No model-tuning task is started in PRED-AVAIL-1.
+Final verdict: `D. LIVE_VALIDATION_BLOCKED_BY_CREDENTIAL`.
+The product remains blocked at 23/25 unavailable. The next decision is
+`Data Supply Architecture Decision`; PRED-AVAIL-3 and additional provider
+patches are not started.
+
+# PRED-AVAIL-1 Engineering Acceptance Record (historical)
+
+Status: `ENGINEERING_ACCEPTED / PRODUCT_BLOCKER_REMAINS`
+
+The same 25-fixture cohort was retained. BEFORE was 1 FULL/frozen and 24
+`MISSING_RECENT_FORM`; the bounded AFTER replay is 2 FULL, 0 DEGRADED, 23
+`INSUFFICIENT_DATA` / `MISSING_RECENT_FORM`, 0 prediction failures, and 0
+blocked Champion jobs. The generic authoritative-history route released only
+`500-1364199` Bodo/Glimt - Rosenborg. The existing frozen Celta Vigo - Athletic
+Club artifact was preserved, and no production automatic state was rewritten.
+
+PRED-AVAIL-1 code, tests, evidence, and the latest automatic refresh were
+merged through PR #119 at
+`f6a130a6ded64cc6e2e337e759064cd1673fba86`. This record deliberately does not
+label the product result PASS.
 
 # ID-AUTO-1 Acceptance Record (historical)
 

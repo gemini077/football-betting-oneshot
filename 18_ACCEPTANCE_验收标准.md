@@ -138,6 +138,43 @@ only as `READY_FOR_ACCEPTANCE`. Independent acceptance must verify:
    Codex. The remaining availability gap is recorded as a product blocker;
    IDENTITY_BACKLOG is `NON_BLOCKING / ON_DEMAND` and ID-AUTO-2 is not started.
 
+# 2F. PRED-AVAIL-2 Acceptance
+
+`PRED-AVAIL-2 - Provider-Independent Recent Form Backbone` may be marked by
+Codex only as `READY_FOR_ACCEPTANCE`. Independent acceptance must verify:
+
+1. The source preflight records whether `FOOTBALL_DATA_ORG_TOKEN` exists,
+   records the safe injection mechanism without exposing its value, and never
+   auto-registers an account. If the credential is absent, the verdict is
+   `D. LIVE_VALIDATION_BLOCKED_BY_CREDENTIAL` and no coverage improvement is
+   claimed.
+2. The exact PRED-AVAIL-1 frozen 25-fixture cohort and SHA-256 are retained;
+   BASELINE is 2 `FULL` / 23 `MISSING_RECENT_FORM`, and the AFTER report
+   includes `FULL`, `DEGRADED`, `INSUFFICIENT_DATA`, `MISSING_RECENT_FORM`,
+   `SOURCE_UNAVAILABLE`, `FIXTURE_MAPPING_UNAVAILABLE`,
+   `OUTSIDE_PROVIDER_FREE_COVERAGE`, `AMBIGUOUS_FIXTURE`, `CALL_COUNT`, and
+   `CACHE_HIT_COUNT`.
+3. football-data.org is documented as the official primary candidate with its
+   free competition scope, stable provider IDs, endpoint references, and rate
+   limit. Football-Data.co.uk remains the existing historical source; FotMob
+   and SofaScore remain research-only candidates.
+4. Fixture bridging is exact canonical competition + exact UTC kickoff + one
+   provider fixture + source state + home/away orientation. Ambiguous,
+   missing, or stale evidence fails closed; fuzzy names, LLM matching, and
+   manual per-fixture aliases are absent.
+5. Provider team IDs remain provider-scoped and are not written as canonical
+   historical IDs. Only same-provider FINISHED matches with complete goals,
+   kickoff strictly before the target, auditable timestamps, and the existing
+   four-block Champion recent-form contract can produce eligibility.
+6. Fixture/team response cache reuse, same-day team deduplication, request and
+   cache accounting, no-leakage verification, and exact per-competition audit
+   evidence are present.
+7. Champion mathematics, weights, calibration, score selector, evidence gate,
+   market-only production fallback, synthetic evidence, frozen predictions,
+   prospective records, dashboard/runtime state, and league-specific adapters
+   are unchanged. The milestone stops at `READY_FOR_ACCEPTANCE` and does not
+   start PRED-AVAIL-3 or another provider patch.
+
 # 3. 部署类任务验收
 
 涉及 GitHub / Pages / workflows 的任务，必须分别核：
