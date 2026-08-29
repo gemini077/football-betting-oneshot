@@ -1,0 +1,485 @@
+{
+  "contract_version": "football_data_coverage_catalog.v1",
+  "policy": {
+    "minimum_history_matches_per_team": 5,
+    "current_max_history_age_days": 60,
+    "offseason_bridge_max_history_age_days": 180,
+    "partial_current_season_is_warning_when_history_is_current": true,
+    "identity_policy": "exact_reviewed_only"
+  },
+  "adapter_capabilities": {
+    "football-data.co.uk": {
+      "adapter": "scripts.football_data.providers.football_data_uk.FootballDataCoUkHistoricalAdapter",
+      "automatic_import": true,
+      "source_quality": "reviewed_historical_results",
+      "commercial_use_review": "source_terms_review_required",
+      "raw_redistribution": false,
+      "internal_analysis_only": true
+    },
+    "openfootball": {
+      "adapter": "scripts.football_data.providers.openfootball.OpenFootballHistoricalAdapter",
+      "automatic_import": true,
+      "source_quality": "CC0_source_with_identity_review",
+      "commercial_use_review": "CC0_with_attribution_review",
+      "raw_redistribution": true,
+      "internal_analysis_only": false
+    },
+    "sporttery": {
+      "adapter": null,
+      "automatic_import": false,
+      "source_quality": "current_fixture_only",
+      "commercial_use_review": "internal_analysis_only",
+      "raw_redistribution": false,
+      "internal_analysis_only": true
+    },
+    "500": {
+      "adapter": null,
+      "automatic_import": false,
+      "source_quality": "current_fixture_only",
+      "commercial_use_review": "internal_analysis_only",
+      "raw_redistribution": false,
+      "internal_analysis_only": true
+    }
+  },
+  "competitions": [
+    {
+      "competition_key": "england-premier-league",
+      "canonical_competition_id": "competition:england-premier-league",
+      "canonical_name": "Premier League",
+      "country": "England",
+      "entity_type": "club",
+      "competition_type": "league",
+      "aliases": [
+        "英格兰超级联赛"
+      ]
+    },
+    {
+      "competition_key": "spain-la-liga",
+      "canonical_competition_id": "competition:spain-la-liga",
+      "canonical_name": "La Liga",
+      "country": "Spain",
+      "entity_type": "club",
+      "competition_type": "league",
+      "aliases": [
+        "西班牙甲级联赛"
+      ]
+    },
+    {
+      "competition_key": "italy-serie-a",
+      "canonical_competition_id": "competition:italy-serie-a",
+      "canonical_name": "Serie A",
+      "country": "Italy",
+      "entity_type": "club",
+      "competition_type": "league",
+      "aliases": [
+        "意大利甲级联赛"
+      ]
+    },
+    {
+      "competition_key": "germany-bundesliga",
+      "canonical_competition_id": "competition:germany-bundesliga",
+      "canonical_name": "Bundesliga",
+      "country": "Germany",
+      "entity_type": "club",
+      "competition_type": "league",
+      "aliases": [
+        "德国甲级联赛"
+      ]
+    },
+    {
+      "competition_key": "france-ligue-1",
+      "canonical_competition_id": "competition:france-ligue-1",
+      "canonical_name": "Ligue 1",
+      "country": "France",
+      "entity_type": "club",
+      "competition_type": "league",
+      "aliases": [
+        "法国甲级联赛"
+      ]
+    },
+    {
+      "competition_key": "france-ligue-2",
+      "canonical_competition_id": "competition:france-ligue-2",
+      "canonical_name": "Ligue 2",
+      "country": "France",
+      "entity_type": "club",
+      "competition_type": "league",
+      "aliases": [
+        "ligue 2",
+        "法国乙级联赛"
+      ]
+    },
+    {
+      "competition_key": "portugal-primeira-liga",
+      "canonical_competition_id": "competition:portugal-primeira-liga",
+      "canonical_name": "Portuguese Primeira Liga",
+      "country": "Portugal",
+      "entity_type": "club",
+      "competition_type": "league",
+      "aliases": [
+        "portuguese primeira liga",
+        "葡萄牙超级联赛"
+      ]
+    },
+    {
+      "competition_key": "netherlands-eredivisie",
+      "canonical_competition_id": "competition:netherlands-eredivisie",
+      "canonical_name": "Eredivisie",
+      "country": "Netherlands",
+      "entity_type": "club",
+      "competition_type": "league",
+      "aliases": [
+        "eredivisie",
+        "荷兰甲级联赛"
+      ]
+    },
+    {
+      "competition_key": "netherlands-eerste-divisie",
+      "canonical_competition_id": "competition:netherlands-eerste-divisie",
+      "canonical_name": "Eerste Divisie",
+      "country": "Netherlands",
+      "entity_type": "club",
+      "competition_type": "league",
+      "aliases": [
+        "eerste divisie",
+        "荷兰乙级联赛"
+      ]
+    },
+    {
+      "competition_key": "belgium-pro-league",
+      "canonical_competition_id": "competition:belgium-pro-league",
+      "canonical_name": "Belgian Pro League",
+      "country": "Belgium",
+      "entity_type": "club",
+      "competition_type": "league",
+      "aliases": []
+    },
+    {
+      "competition_key": "sweden-allsvenskan",
+      "canonical_competition_id": "competition:sweden-allsvenskan",
+      "canonical_name": "Sweden Allsvenskan",
+      "country": "Sweden",
+      "entity_type": "club",
+      "competition_type": "league",
+      "aliases": [
+        "sweden allsvenskan",
+        "瑞典超级联赛"
+      ]
+    },
+    {
+      "competition_key": "sweden-superettan",
+      "canonical_competition_id": "competition:sweden-superettan",
+      "canonical_name": "Sweden Superettan",
+      "country": "Sweden",
+      "entity_type": "club",
+      "competition_type": "league",
+      "aliases": []
+    },
+    {
+      "competition_key": "norway-eliteserien",
+      "canonical_competition_id": "competition:norway-eliteserien",
+      "canonical_name": "Eliteserien",
+      "country": "Norway",
+      "entity_type": "club",
+      "competition_type": "league",
+      "aliases": [
+        "norway eliteserien",
+        "挪威超级联赛",
+        "挪超"
+      ]
+    },
+    {
+      "competition_key": "finland-veikkausliiga",
+      "canonical_competition_id": "competition:finland-veikkausliiga",
+      "canonical_name": "Veikkausliiga",
+      "country": "Finland",
+      "entity_type": "club",
+      "competition_type": "league",
+      "aliases": [
+        "finland veikkausliiga",
+        "芬兰超级联赛"
+      ]
+    },
+    {
+      "competition_key": "denmark-superliga",
+      "canonical_competition_id": "competition:denmark-superliga",
+      "canonical_name": "Danish Superliga",
+      "country": "Denmark",
+      "entity_type": "club",
+      "competition_type": "league",
+      "aliases": []
+    },
+    {
+      "competition_key": "japan-j1-league",
+      "canonical_competition_id": "competition:japan-j1-league",
+      "canonical_name": "J1 League",
+      "country": "Japan",
+      "entity_type": "club",
+      "competition_type": "league",
+      "aliases": [
+        "j1 league",
+        "日本职业联赛"
+      ]
+    },
+    {
+      "competition_key": "japan-j2-league",
+      "canonical_competition_id": "competition:japan-j2-league",
+      "canonical_name": "J2 League",
+      "country": "Japan",
+      "entity_type": "club",
+      "competition_type": "league",
+      "aliases": [
+        "j2 league",
+        "日本乙级联赛"
+      ]
+    },
+    {
+      "competition_key": "south-korea-k-league-1",
+      "canonical_competition_id": "competition:south-korea-k-league-1",
+      "canonical_name": "K League 1",
+      "country": "South Korea",
+      "entity_type": "club",
+      "competition_type": "league",
+      "aliases": [
+        "k league 1",
+        "韩国职业联赛"
+      ]
+    },
+    {
+      "competition_key": "china-super-league",
+      "canonical_competition_id": "competition:china-super-league",
+      "canonical_name": "Chinese Super League",
+      "country": "China",
+      "entity_type": "club",
+      "competition_type": "league",
+      "aliases": []
+    },
+    {
+      "competition_key": "australia-a-league-men",
+      "canonical_competition_id": "competition:australia-a-league-men",
+      "canonical_name": "A-League",
+      "country": "Australia",
+      "entity_type": "club",
+      "competition_type": "league",
+      "aliases": []
+    },
+    {
+      "competition_key": "usa-mls",
+      "canonical_competition_id": "competition:usa-mls",
+      "canonical_name": "MLS",
+      "country": "United States",
+      "entity_type": "club",
+      "competition_type": "league",
+      "aliases": [
+        "mls",
+        "美国职业大联盟"
+      ]
+    },
+    {
+      "competition_key": "mexico-liga-mx",
+      "canonical_competition_id": "competition:mexico-liga-mx",
+      "canonical_name": "Liga MX",
+      "country": "Mexico",
+      "entity_type": "club",
+      "competition_type": "league",
+      "aliases": []
+    },
+    {
+      "competition_key": "brazil-serie-a",
+      "canonical_competition_id": "competition:brazil-serie-a",
+      "canonical_name": "Brazil Serie A",
+      "country": "Brazil",
+      "entity_type": "club",
+      "competition_type": "league",
+      "aliases": [
+        "brazil serie a",
+        "巴西甲级联赛"
+      ]
+    },
+    {
+      "competition_key": "brazil-copa-do-brasil",
+      "canonical_competition_id": "competition:brazil-copa-do-brasil",
+      "canonical_name": "Copa do Brasil",
+      "country": "Brazil",
+      "entity_type": "club",
+      "competition_type": "domestic_cup",
+      "aliases": [
+        "copa do brasil",
+        "巴西杯"
+      ]
+    },
+    {
+      "competition_key": "argentina-primera-division",
+      "canonical_competition_id": "competition:argentina-primera-division",
+      "canonical_name": "Argentine Primera",
+      "country": "Argentina",
+      "entity_type": "club",
+      "competition_type": "league",
+      "aliases": []
+    },
+    {
+      "competition_key": "uefa-champions-league",
+      "canonical_competition_id": "competition:uefa-champions-league",
+      "canonical_name": "Champions League",
+      "country": "Europe",
+      "entity_type": "club",
+      "competition_type": "international_club",
+      "aliases": [
+        "champions league",
+        "欧冠",
+        "欧洲冠军联赛"
+      ]
+    },
+    {
+      "competition_key": "uefa-europa-league",
+      "canonical_competition_id": "competition:uefa-europa-league",
+      "canonical_name": "Europa League",
+      "country": "Europe",
+      "entity_type": "club",
+      "competition_type": "international_club",
+      "aliases": [
+        "europa league",
+        "欧罗巴",
+        "欧罗巴联赛"
+      ]
+    },
+    {
+      "competition_key": "uefa-conference-league",
+      "canonical_competition_id": "competition:uefa-conference-league",
+      "canonical_name": "Conference League",
+      "country": "Europe",
+      "entity_type": "club",
+      "competition_type": "international_club",
+      "aliases": []
+    },
+    {
+      "competition_key": "fifa-world-cup",
+      "canonical_competition_id": "competition:fifa-world-cup",
+      "canonical_name": "World Cup",
+      "country": "International",
+      "entity_type": "national_team",
+      "competition_type": "national_team",
+      "aliases": [
+        "world cup",
+        "世界杯"
+      ]
+    },
+    {
+      "competition_key": "germany-2-bundesliga",
+      "canonical_competition_id": "competition:germany-2-bundesliga",
+      "canonical_name": "2. Bundesliga",
+      "country": "Germany",
+      "entity_type": "club",
+      "competition_type": "league",
+      "aliases": [
+        "2. bundesliga",
+        "德国乙级联赛"
+      ]
+    },
+    {
+      "competition_key": "england-league-cup",
+      "canonical_competition_id": "competition:england-league-cup",
+      "canonical_name": "EFL Cup",
+      "country": "England",
+      "entity_type": "club",
+      "competition_type": "domestic_cup",
+      "aliases": [
+        "efl cup",
+        "英格兰联赛杯"
+      ]
+    },
+    {
+      "competition_key": "england-championship",
+      "canonical_competition_id": "competition:england-championship",
+      "canonical_name": "EFL Championship",
+      "country": "England",
+      "entity_type": "club",
+      "competition_type": "league",
+      "aliases": [
+        "英格兰冠军联赛"
+      ]
+    },
+    {
+      "competition_key": "england-community-shield",
+      "canonical_competition_id": "competition:england-community-shield",
+      "canonical_name": "Community Shield",
+      "country": "England",
+      "entity_type": "club",
+      "competition_type": "domestic_cup",
+      "aliases": [
+        "英格兰社区盾杯"
+      ]
+    },
+    {
+      "competition_key": "germany-dfb-pokal",
+      "canonical_competition_id": "competition:germany-dfb-pokal",
+      "canonical_name": "DFB-Pokal",
+      "country": "Germany",
+      "entity_type": "club",
+      "competition_type": "domestic_cup",
+      "aliases": [
+        "德国杯"
+      ]
+    },
+    {
+      "competition_key": "germany-super-cup",
+      "canonical_competition_id": "competition:germany-super-cup",
+      "canonical_name": "DFL-Supercup",
+      "country": "Germany",
+      "entity_type": "club",
+      "competition_type": "domestic_cup",
+      "aliases": [
+        "德国超级杯"
+      ]
+    },
+    {
+      "competition_key": "saudi-pro-league",
+      "canonical_competition_id": "competition:saudi-pro-league",
+      "canonical_name": "Saudi Pro League",
+      "country": "Saudi Arabia",
+      "entity_type": "club",
+      "competition_type": "league",
+      "aliases": [
+        "沙特职业联赛"
+      ]
+    },
+    {
+      "competition_key": "uefa-super-cup",
+      "canonical_competition_id": "competition:uefa-super-cup",
+      "canonical_name": "UEFA Super Cup",
+      "country": "Europe",
+      "entity_type": "club",
+      "competition_type": "international_club",
+      "aliases": [
+        "欧洲超级杯"
+      ]
+    },
+    {
+      "competition_key": "conmebol-libertadores",
+      "canonical_competition_id": "competition:conmebol-libertadores",
+      "canonical_name": "Copa Libertadores",
+      "country": "South America",
+      "entity_type": "club",
+      "competition_type": "international_club",
+      "aliases": [
+        "南美解放者杯"
+      ]
+    },
+    {
+      "competition_key": "korea-fa-cup",
+      "canonical_competition_id": "competition:korea-fa-cup",
+      "canonical_name": "Korea FA Cup",
+      "country": "South Korea",
+      "entity_type": "club",
+      "competition_type": "domestic_cup",
+      "aliases": [
+        "韩国杯"
+      ]
+    }
+  ],
+  "notes": [
+    "Competition aliases are exact reviewed observations; no fuzzy or substring matching is permitted.",
+    "This catalog describes coverage routing and does not promote any challenger into the Champion.",
+    "Entries without an imported historical source remain backlog candidates and are not fetched by this milestone."
+  ]
+}

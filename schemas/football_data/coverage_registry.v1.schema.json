@@ -1,0 +1,97 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Historical Coverage Registry v1",
+  "type": "object",
+  "required": [
+    "contract_version",
+    "generated_at",
+    "policy",
+    "source_inventory",
+    "competition_count",
+    "competitions"
+  ],
+  "properties": {
+    "contract_version": { "const": "historical_coverage_registry.v1" },
+    "generated_at": { "type": "string", "minLength": 1 },
+    "builder": { "type": "string", "minLength": 1 },
+    "catalog_source": { "type": "string", "minLength": 1 },
+    "registry_digest": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "policy": {
+      "type": "object",
+      "required": ["minimum_history_matches_per_team", "current_max_history_age_days"],
+      "properties": {
+        "minimum_history_matches_per_team": { "type": "integer", "minimum": 1 },
+        "current_max_history_age_days": { "type": "integer", "minimum": 0 },
+        "offseason_bridge_max_history_age_days": { "type": "integer", "minimum": 0 },
+        "identity_policy": { "type": "string", "const": "exact_reviewed_only" }
+      }
+    },
+    "source_inventory": {
+      "type": "object",
+      "required": ["manifest_count", "manifest_paths", "source_row_count", "manifest_failures"],
+      "properties": {
+        "manifest_count": { "type": "integer", "minimum": 0 },
+        "manifest_paths": { "type": "array", "items": { "type": "string" } },
+        "source_row_count": { "type": "integer", "minimum": 0 },
+        "manifest_failures": { "type": "array", "items": { "type": "object" } }
+      }
+    },
+    "competition_count": { "type": "integer", "minimum": 0 },
+    "competitions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "competition_id",
+          "competition_key",
+          "provider_source_availability",
+          "seasons_available",
+          "latest_completed_season",
+          "current_season_status",
+          "historical_match_count",
+          "team_count",
+          "identity_coverage",
+          "history_depth",
+          "freshness",
+          "source_quality",
+          "commercial_use_restrictions",
+          "automatic_import_capability",
+          "last_successful_refresh",
+          "failure_reason"
+        ],
+        "properties": {
+          "competition_id": { "type": "string", "minLength": 1 },
+          "competition_key": { "type": "string", "minLength": 1 },
+          "canonical_name": { "type": "string" },
+          "country": { "type": "string" },
+          "entity_type": { "type": "string" },
+          "competition_type": { "type": "string" },
+          "aliases": { "type": "array", "items": { "type": "string" } },
+          "provider_source_availability": { "type": "array", "items": { "type": "object" } },
+          "seasons_available": { "type": "array", "items": { "type": "string" } },
+          "latest_completed_season": { "type": ["string", "null"] },
+          "current_season_status": { "type": "string" },
+          "historical_match_count": { "type": "integer", "minimum": 0 },
+          "team_count": { "type": "integer", "minimum": 0 },
+          "identity_coverage": {
+            "type": "object",
+            "required": ["historical_record_count", "resolved_record_count", "unresolved_record_count", "ratio"],
+            "properties": {
+              "historical_record_count": { "type": "integer", "minimum": 0 },
+              "resolved_record_count": { "type": "integer", "minimum": 0 },
+              "unresolved_record_count": { "type": "integer", "minimum": 0 },
+              "ratio": { "type": "number", "minimum": 0, "maximum": 1 }
+            }
+          },
+          "history_depth": { "type": "object" },
+          "freshness": { "type": "object" },
+          "source_quality": { "type": "object" },
+          "commercial_use_restrictions": { "type": "object" },
+          "automatic_import_capability": { "type": "boolean" },
+          "last_successful_refresh": { "type": ["string", "null"] },
+          "failure_reason": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    }
+  }
+}

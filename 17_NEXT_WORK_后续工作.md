@@ -2,29 +2,53 @@
 
 最后更新：2026-08-29
 
-# 当前唯一主线
+# Current Sole Pointer
 
-## FE-SE-HIST-1 — Sweden Historical Completeness Closure
+## HC-AUTO-1 - League-Agnostic Historical Coverage Foundation
 
-状态：`READY_FOR_ACCEPTANCE`
+Status: `READY_FOR_ACCEPTANCE`
 
-当前只做四件事：
+Previous closeout remains recorded: `FE-SE-HIST-1 = SEALED / ACCEPTANCE PASS`,
+`FE-SE-DC-CLOSE = ACCEPTANCE PASS / CLOSED`, model verdict `INCONCLUSIVE`
+because 7 of the original 103 fixed-config targets had optimizer fit failures,
+and `SWEDEN_SPECIFIC_FURTHER_TUNING = CLOSED`. PR #114 remains OPEN and
+unmerged. No Sweden/DC calculation is part of this milestone.
 
-1. **先完成历史闭环**：从最新 `origin/main` 分支读取当前 Football-Data SWE.csv，确认 2025 为 240/240，并补进 canonical `competition:sweden-allsvenskan`。
-2. **只用 deterministic identity**：使用现有 adapter/contract，加 reviewed exact supplement；unresolved、冲突和重复在写入前 fail closed。
-3. **保留可复现证据**：记录 source hash/timestamp、OpenFootball 53 场交叉样本、before/after DuckDB digest 和每队/network 审计；raw CSV 不入 Git。
-4. **保持生产边界**：Champion `recent_form_market_calibrated_poisson_v2` 不变；PR #114 保持 OPEN、不 merge；FE-DC-1 Dixon-Coles `NOT_PROMOTABLE`，不继续调 rho/half-life/attack-defense。
+HC-AUTO-1 delivers a generic coverage contract for every canonical competition:
+provider/source availability, available seasons, latest completed season,
+current-season status, authoritative historical count, team count, exact
+identity coverage, history depth, freshness, source quality, use restrictions,
+automatic-import capability, last successful refresh, and failure reasons.
 
-停止条件：
+The daily route is:
 
-- Football-Data 2025 不是完整 240 场；
-- 任一 exact identity unresolved，或 candidate/已有 canonical match 出现事实冲突；
-- secondary cross-check 出现 score disagreement；
-- 发现需要新 provider、其他联赛或模型调参才能完成；
-- 不为效果继续调 FE-DC-1 参数，不用人工惩罚 1:1。
-角色：当前唯一执行指针。只描述“现在只做什么”。
+`Prediction Universe -> coverage registry/gate -> BASE job ledger -> existing Champion`
 
-完成证据：2025 已由 16 补齐至 240，2026 保持 119；目标 network connected；unresolved=0、duplicate conflict=0；authoritative store 已从 1,554 重建为 1,778，状态等待独立验收。
+The gate is exact-only and returns `SUPPORTED`, `DEGRADED`, or `UNSUPPORTED`.
+Every row retains a current Champion job; historical challenger eligibility is
+turned off when the gate is not `SUPPORTED`. Unsupported rows never block other
+fixtures, and no fuzzy identity or invented history is allowed.
+
+HC-AUTO-1 evidence:
+
+- `data/football_data/hc_auto_1/coverage_registry.json`
+- `data/football_data/hc_auto_1/daily_fixture_audit.json`
+- `docs/data-foundation/HC-AUTO-1_COVERAGE_FOUNDATION.md`
+- focused registry, gate, and daily-integration tests
+
+The real 2026-08-29 through 2026-08-31 snapshots were audited as one mixed
+fixture set: 66 fixtures, 1 `SUPPORTED`, 65 exact-identity `UNSUPPORTED`, and
+0 blocked Champion jobs. Existing free/reproducible sources were reused; no
+new provider, country-specific adapter, paid source, model change, frozen
+prediction change, or historical-store rebuild was introduced.
+
+STOP CONDITIONS:
+
+- Do not start HC-AUTO-2 automatically.
+- Do not tune or calculate Sweden/Dixon-Coles, promote a Champion, or modify
+  frozen/prospective records.
+- Coverage backlog is only recorded for a later separately scoped milestone.
+- Final state for this task is `READY_FOR_ACCEPTANCE`, never `SEALED` by Codex.
 
 # 历史执行记录（非当前指针）
 

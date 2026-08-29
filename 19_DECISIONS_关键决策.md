@@ -3,6 +3,30 @@
 最后更新：2026-08-29
 角色：记录不能因换对话 / 换 Codex 而重复推翻的关键决定。若新证据足以改变决定，必须新增 superseding decision，不得静默改历史。
 
+# D-026 - League-agnostic historical coverage foundation
+
+Status: `LOCKED FOR HC-AUTO-1`
+
+The product must route daily fixtures through one manifest/adapter-driven
+coverage registry and exact-only gate. The gate returns `SUPPORTED`,
+`DEGRADED`, or `UNSUPPORTED` with auditable reason codes. Coverage gaps must
+never block other fixtures or the current Champion; insufficient history must
+turn off only the historical challenger metadata. The first source priority is
+existing free, stable, reproducible adapters. New providers and
+country-specific adapters are outside this milestone. Champion mathematics,
+frozen predictions, prospective records, Sweden/DC research and paid sources
+remain unchanged. HC-AUTO-1 ends at `READY_FOR_ACCEPTANCE`; HC-AUTO-2 does not
+start automatically.
+
+# D-025 ? Sweden / Dixon-Coles final closeout
+
+Status: `LOCKED FOR FE-SE-DC-CLOSE`
+
+FE-SE-HIST-1 is accepted and sealed after PR #115 merged to main. The final Sweden/DC experiment must reuse the FE-DC-1 fixed configuration and the exact old 103 target IDs, comparing the old 1554-row history with the complete 1778-row history. No rho, half-life, attack/defense, optimizer, score-grid, or fallback changes are permitted.
+
+The recorded run found 7 model-specific fixed-optimizer non-convergence rows in the new complete-history replay, leaving 96 targets with both models. Because this blocks a complete apples-to-apples 103-row evaluation, the verdict is locked as `INCONCLUSIVE`; partial metrics are diagnostic only and do not justify promotion or further tuning.
+
+This closes `SWEDEN_SPECIFIC_FURTHER_TUNING`. PR #114 remains OPEN and unmerged. Champion, production prediction, frozen prediction, user prediction surface, providers, and other leagues remain unchanged. The next candidate is only `League-Agnostic Historical Coverage / Automatic Coverage Gate`, without implementation in this task.
 # D-024 — Sweden Historical Completeness 采用 bounded authoritative closure
 
 状态：LOCKED FOR FE-SE-HIST-1
