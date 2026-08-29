@@ -206,6 +206,7 @@ def score_distribution(
         raise ValueError("max_goals must include the low-score correction cells")
     home_pmf = _poisson_pmf(lambda_home, max_goals)
     away_pmf = _poisson_pmf(lambda_away, max_goals)
+    independent_poisson_grid_mass = sum(home_pmf) * sum(away_pmf)
     raw_matrix: list[list[float]] = []
     for home_goals in range(max_goals + 1):
         row: list[float] = []
@@ -267,7 +268,8 @@ def score_distribution(
         "max_goals": max_goals,
         "matrix": matrix,
         "grid_mass": grid_mass,
-        "tail_mass": max(0.0, 1.0 - grid_mass),
+        "independent_poisson_grid_mass": independent_poisson_grid_mass,
+        "tail_mass": max(0.0, 1.0 - independent_poisson_grid_mass),
         "normalization_factor": normalization_factor,
         "probabilities": probabilities,
         "score_probabilities": score_probabilities,
@@ -1017,12 +1019,20 @@ def evaluate_predictions(predictions: Sequence[Mapping[str, Any]], model_key: st
     top1_share = sum(score == "1-1" for score in top1_scores) / sample_size
     strong_favourite: dict[str, Any] = {}
     correct_top1 = [
-        row["actual_home_goals"] > row["actual_away_goals"]
-        and row["models"][model_key]["probabilities"]["home"] == max(row["models"][model_key]["probabilities"].values())
-        or row["actual_home_goals"] == row["actual_away_goals"]
-        and row["models"][model_key]["probabilities"]["draw"] == max(row["models"][model_key]["probabilities"].values())
-        or row["actual_home_goals"] < row["actual_away_goals"]
-        and row["models"][model_key]["probabilities"]["away"] == max(row["models"][model_key]["probabilities"].values())
+        (
+            (
+                row["actual_home_goals"] > row["actual_away_goals"]
+                and row["models"][model_key]["probabilities"]["home"] == max(row["models"][model_key]["probabilities"].values())
+            )
+            or (
+                row["actual_home_goals"] == row["actual_away_goals"]
+                and row["models"][model_key]["probabilities"]["draw"] == max(row["models"][model_key]["probabilities"].values())
+            )
+            or (
+                row["actual_home_goals"] < row["actual_away_goals"]
+                and row["models"][model_key]["probabilities"]["away"] == max(row["models"][model_key]["probabilities"].values())
+            )
+        )
         for row in predictions
     ]
     for threshold in (0.55, 0.60, 0.65):
