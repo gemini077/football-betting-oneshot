@@ -49,6 +49,22 @@ Codex 允许：`READY_FOR_ACCEPTANCE`
 
 FE-SE-HIST-1 的代码、normalized sample、source/identity manifest、audit JSON、focused tests 和 PR 必须留在 GitHub；不生成 ZIP。该数据 closure 只为后续 research/shadow 使用，不构成模型 promotion。
 
+# 2B. FE-SE-DC-CLOSE Acceptance
+
+`FE-SE-DC-CLOSE ? Sweden History Closure + Fixed-Config Re-evaluation` uses only the FE-DC-1 implementation, runner/evaluation contract, and focused tests needed for a fixed replay. Its Codex status is only `READY_FOR_ACCEPTANCE` or `BLOCKED`.
+
+Acceptance evidence must show:
+
+- PR #115 merged to main and FE-SE-HIST-1 recorded as `SEALED / ACCEPTANCE PASS`; PR #114 remains OPEN and unmerged.
+- Exact old FE-DC-1 target set is preserved: 103/103 IDs, with deterministic reconciliation and no silent target substitution.
+- Old 1554-row / 135-match input and new 1778-row / 359-match input are recorded by digest; new history is strictly pre-match and the fixed configuration is unchanged.
+- Primary metrics include 1X2 Brier/LogLoss/Top1, strong-favourite thresholds, home/away/total Goal MAE, P(total>=5), Exact Top1/3/5, Score NLL, 1:1 shares, lambda/rho/tail/calibration/extreme diagnostics, and visible history counts.
+- rho=0 new-vs-old, Dixon-Coles new-vs-old, and Dixon-Coles-vs-rho=0 comparisons state their exact common sample counts. Partial results cannot be promoted as a complete 103-row improvement.
+- Any optimizer or data-integrity failure is retained explicitly; no parameter tuning, fallback, silent row removal, or second repair pass is allowed.
+- Expanded 359-match diagnostic is secondary only and cannot replace the 103-target paired comparison.
+- Champion, production predictions, frozen predictions, user prediction surface, providers, and other leagues are unchanged.
+- Final verdict is one of `DATA_COMPLETENESS_WAS_MAJOR_BLOCKER`, `BASE_MODEL_USEFUL_DC_NOT_USEFUL`, `MODEL_ROUTE_NOT_JUSTIFIED`, or `INCONCLUSIVE`; `INCONCLUSIVE` is valid only for the explicit evaluation-integrity blocker recorded in the artifacts.
+- Sweden-specific further tuning is `CLOSED`; the next pointer is only `League-Agnostic Historical Coverage / Automatic Coverage Gate`.
 # 3. 部署类任务验收
 
 涉及 GitHub / Pages / workflows 的任务，必须分别核：

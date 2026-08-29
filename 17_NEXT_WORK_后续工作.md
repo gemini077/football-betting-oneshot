@@ -2,30 +2,33 @@
 
 最后更新：2026-08-29
 
-# 当前唯一主线
+# Current Sole Pointer
 
-## FE-SE-HIST-1 — Sweden Historical Completeness Closure
+## FE-SE-DC-CLOSE ? Sweden History Closure + Fixed-Config Re-evaluation
 
-状态：`READY_FOR_ACCEPTANCE`
+Status: `READY_FOR_ACCEPTANCE`
 
-当前只做四件事：
+FE-SE-HIST-1 is `SEALED / ACCEPTANCE PASS` from merged PR #115. PR #114 remains OPEN and unmerged.
 
-1. **先完成历史闭环**：从最新 `origin/main` 分支读取当前 Football-Data SWE.csv，确认 2025 为 240/240，并补进 canonical `competition:sweden-allsvenskan`。
-2. **只用 deterministic identity**：使用现有 adapter/contract，加 reviewed exact supplement；unresolved、冲突和重复在写入前 fail closed。
-3. **保留可复现证据**：记录 source hash/timestamp、OpenFootball 53 场交叉样本、before/after DuckDB digest 和每队/network 审计；raw CSV 不入 Git。
-4. **保持生产边界**：Champion `recent_form_market_calibrated_poisson_v2` 不变；PR #114 保持 OPEN、不 merge；FE-DC-1 Dixon-Coles `NOT_PROMOTABLE`，不继续调 rho/half-life/attack-defense。
+Closeout evidence:
 
-停止条件：
+1. The exact old FE-DC-1 103 target IDs were reconciled deterministically: 103/103 exact canonical IDs, with no target substitution.
+2. Fixed config remained unchanged: competition `competition:sweden-allsvenskan`, half-life 365, warmup 32, max goals 12, rho bounds [-0.1, 0.1], rho=0 control, max_iter 500, tolerance 1e-6, original parameter/home-advantage bounds, and original time weighting.
+3. Old history is 1554 rows / 135 Sweden matches; closure history is 1778 rows / 359 Sweden matches; target outcomes remain identical.
+4. Complete-history replay has 7 explicit model-specific optimizer non-convergence rows, so only 96/103 targets have both new models. No fallback, tuning, or silent drop was used.
+5. Final verdict is `INCONCLUSIVE` solely because the paired evaluation is incomplete; Sweden-specific further tuning is closed.
 
-- Football-Data 2025 不是完整 240 场；
-- 任一 exact identity unresolved，或 candidate/已有 canonical match 出现事实冲突；
-- secondary cross-check 出现 score disagreement；
-- 发现需要新 provider、其他联赛或模型调参才能完成；
-- 不为效果继续调 FE-DC-1 参数，不用人工惩罚 1:1。
-角色：当前唯一执行指针。只描述“现在只做什么”。
+Stop conditions:
 
-完成证据：2025 已由 16 补齐至 240，2026 保持 119；目标 network connected；unresolved=0、duplicate conflict=0；authoritative store 已从 1,554 重建为 1,778，状态等待独立验收。
+- Do not tune rho, half-life, attack/defense, optimizer, score grid, or add a fallback.
+- Do not modify Champion, production, frozen predictions, user predictions, providers, or other leagues.
+- Do not start PA-3.
 
+NEXT CANDIDATE POINTER ONLY:
+
+`League-Agnostic Historical Coverage / Automatic Coverage Gate`
+
+This pointer is not implemented in FE-SE-DC-CLOSE. After independent acceptance, stop the Sweden-specific line.
 # 历史执行记录（非当前指针）
 
 `PA-2-R1-ID3 — Targeted Identity Persistence, Bounded History Closure & Prospective Pair Capture`

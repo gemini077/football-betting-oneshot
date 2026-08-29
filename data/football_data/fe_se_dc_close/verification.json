@@ -1,0 +1,32 @@
+{
+  "closure_runner": {
+    "command": "python -m scripts.football_data.fe_se_dc_close --old-db PATH_TO_PRE_CLOSURE_DB",
+    "result": "READY_FOR_ACCEPTANCE; verdict=INCONCLUSIVE; target_count=103; new_both_models=96; fit_failures=7"
+  },
+  "compile_and_artifact_checks": {
+    "git_diff_check": "passed",
+    "json_validation": "passed",
+    "python_compile": "passed"
+  },
+  "focused_tests": {
+    "command": "python -m pytest tests/test_fe_se_hist1.py tests/test_fe_dc1_sweden_dc.py tests/test_fe_dc1_artifacts.py tests/test_fe_se_dc_close.py tests/test_football_data_uk_adapter.py tests/test_football_data_contracts.py tests/test_football_data_storage.py tests/test_historical_research_dedup.py tests/test_historical_source_conflict.py tests/test_historical_store_query.py tests/test_openfootball_historical_adapter.py tests/test_team_strength_deduplication.py tests/test_team_strength_no_future_leakage.py -q",
+    "result": "41 passed"
+  },
+  "full_suite_baseline": {
+    "collection_command": "python -m pytest -q",
+    "collection_result": "pre-existing ImportError in tests/test_live_ev_profile.py: PUBLIC_DATA_DIRS",
+    "failures": [
+      "test_champion_data_foundation_isolation.py: stale expected automatic_model_core.py SHA",
+      "test_phase2c1_champion_isolation.py: stale expected automatic_model_core.py SHA",
+      "test_phase2c2_champion_isolation.py: stale expected automatic_model_core.py SHA",
+      "test_prediction_product_surface.py: fixture lacks prediction_dashboard/latest.json",
+      "test_team_strength_champion_isolation.py: stale expected automatic_model_core.py SHA"
+    ],
+    "ignored_command": "python -m pytest -q --ignore=tests/test_live_ev_profile.py",
+    "result": "866 passed, 5 failed, 6 warnings",
+    "scope": "latest-main baseline failures; no FE-SE-DC-CLOSE test failure"
+  },
+  "milestone": "FE-SE-DC-CLOSE",
+  "production_safety": "Champion, production prediction, frozen prediction and user prediction surface unchanged",
+  "status": "READY_FOR_ACCEPTANCE"
+}

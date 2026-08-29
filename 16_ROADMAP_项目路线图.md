@@ -3,32 +3,29 @@
 最后更新：2026-08-29
 路线原则：Gate 驱动，不使用虚假日期承诺。
 
-# 当前路线指针
+# Current Route Pointer
 
-CURRENT PHASE：
+CURRENT PHASE:
 
-`FE-SE-HIST-1 — Sweden Historical Completeness Closure`
+`FE-SE-DC-CLOSE ? Sweden History Closure + Fixed-Config Re-evaluation`
 
-当前子状态：`READY_FOR_ACCEPTANCE / INDEPENDENT ACCEPTANCE PENDING`
+CURRENT STATUS: `READY_FOR_ACCEPTANCE`
 
-下一执行指针：独立验收 FE-SE-HIST-1；PR #114 保持 OPEN、不 merge。
+`FE-SE-HIST-1` is `SEALED / ACCEPTANCE PASS` after PR #115 merged to main. FE-SE-DC-CLOSE uses the exact old 103 target IDs and the frozen FE-DC-1 configuration; it does not tune rho, half-life, attack/defense, optimizer, or score grid.
 
-NEXT GATE：
+The complete-history replay retained 7 fixed-config optimizer fit failures and therefore cannot claim a complete 103-row paired improvement. Verdict: `INCONCLUSIVE` due evaluation-integrity blocker. Sweden-specific further tuning is closed.
 
-> 现有 Football-Data 免费稳定来源能否在 deterministic identity、provenance、去重和 fail-closed 冲突门禁下，形成完整 Sweden Allsvenskan 2025 authoritative network？
+NEXT MAINLINE CANDIDATE:
 
-BLOCKED：
+> `League-Agnostic Historical Coverage / Automatic Coverage Gate`
+>
+> Daily real matches should be classified automatically as `SUPPORTED`, `DEGRADED`, or `UNSUPPORTED` from coverage, identity, provenance, and freshness evidence. This is a future pointer only; it is not implemented here.
 
-`CA-1 — Current Constrained Analysis Layer`
+BLOCKED / NOT ACTIVE:
 
-NOT ACTIVE：
-
-- Betting expansion
-- Live betting
-- Advanced football feature expansion
-- Champion promotion
-- 跨其他联赛的全联赛历史数据扩展
-
+- PR #114 FE-DC-1 remains research evidence and OPEN / unmerged.
+- Dixon-Coles, Sweden-specific parameter tuning, and PA-3 are closed / not active.
+- Champion promotion, production model changes, frozen prediction changes, new providers, and other-league expansion are not active.
 # North Star
 
 建立：
