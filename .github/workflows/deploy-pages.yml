@@ -40,6 +40,15 @@ jobs:
       - name: Sync latest durable state
         run: git pull --rebase origin main
 
+      - name: Bootstrap verified football data
+        uses: ./.github/actions/bootstrap-football-data
+        with:
+          runtime-access-key-id: ${{ secrets.FOOTBALL_DATA_SNAPSHOT_RUNTIME_ACCESS_KEY_ID }}
+          runtime-secret-access-key: ${{ secrets.FOOTBALL_DATA_SNAPSHOT_RUNTIME_SECRET_ACCESS_KEY }}
+          endpoint-url: ${{ vars.FOOTBALL_DATA_SNAPSHOT_ENDPOINT_URL }}
+          bucket: ${{ vars.FOOTBALL_DATA_SNAPSHOT_BUCKET }}
+          region: ${{ vars.FOOTBALL_DATA_SNAPSHOT_REGION }}
+
       - name: Run production cycle
         id: production_cycle
         run: python scripts/automation_cycle.py
@@ -70,7 +79,9 @@ jobs:
       - name: Evaluate production health
         id: health
         run: |
-          python scripts/production_health_watch.py | tee health_watch_result.json
+          python scripts/production_health_watch.py \
+            --runtime-snapshot-health "$FOOTBALL_DATA_RUNTIME_SNAPSHOT_HEALTH" \
+            | tee health_watch_result.json
 
       - name: Save generated public data
         if: ${{ !cancelled() && steps.generated_data_gate.outputs.ready == 'true' }}

@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import os
 import re
 import sys
 from collections import Counter, defaultdict
@@ -22,6 +23,8 @@ if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
 from prospective_settlement import is_formally_eligible
+from football_data.data_home import historical_results_path
+from football_data.storage import HistoricalResultStore
 
 
 BASE_DIR = Path(__file__).resolve().parents[1]
@@ -31,6 +34,8 @@ WATCH = "WATCH"
 ALERT = "ALERT"
 FINAL_RESULT_SCOPES = {"regulation_90m_plus_stoppage", "90m", "regulation_90m"}
 FROZEN_STATUSES = {"formal", "frozen", "FROZEN"}
+RUNTIME_DATA_SNAPSHOT_HEALTH_ENV = "FOOTBALL_DATA_RUNTIME_SNAPSHOT_HEALTH"
+RUNTIME_DATA_SNAPSHOT_STATUSES = {"READY", "DEGRADED_LAST_KNOWN_GOOD", "FAILED"}
 EXACT_SCORE_MIN_SAMPLE_COUNT = 8
 EXACT_SCORE_DOMINANT_COUNT_THRESHOLD = 7
 EXACT_SCORE_DOMINANT_SHARE_THRESHOLD = 0.875
@@ -205,6 +210,82 @@ def _json(path: Path, *, required: tuple[str, ...] = ()) -> tuple[dict[str, Any]
     if missing:
         return None, "MISSING_SCHEMA"
     return value, None
+
+
+def _runtime_data_snapshot_health(path: Path | None) -> dict[str, Any]:
+    """Read bootstrap evidence without exposing object-store configuration."""
+
+    selected = path
+    if selected is None:
+        configured = os.environ.get(RUNTIME_DATA_SNAPSHOT_HEALTH_ENV, "").strip()
+        selected = Path(configured) if configured else None
+    if selected is None:
+        return {
+            "status": "NOT_CHECKED",
+            "snapshot_version": None,
+            "dataset_sha256": None,
+            "record_count": None,
+            "bootstrap_at": None,
+        }
+    payload, error = _json(
+        selected,
+        required=("status", "snapshot_version", "dataset_sha256", "record_count", "bootstrap_at"),
+    )
+    status = payload.get("status") if payload else None
+    if error or payload is None or status not in RUNTIME_DATA_SNAPSHOT_STATUSES:
+        return {
+            "status": "FAILED",
+            "snapshot_version": None,
+            "dataset_sha256": None,
+            "record_count": None,
+            "bootstrap_at": None,
+            "error": "RUNTIME_DATA_SNAPSHOT_INVALID",
+        }
+    if status in {"READY", "DEGRADED_LAST_KNOWN_GOOD"}:
+        snapshot_version = payload.get("snapshot_version")
+        dataset_sha256 = payload.get("dataset_sha256")
+        record_count = payload.get("record_count")
+        bootstrap_at = payload.get("bootstrap_at")
+        if (
+            not isinstance(snapshot_version, str)
+            or not re.fullmatch(r"snapshot-\d{8}T\d{6}Z-[0-9a-f]{64}", snapshot_version)
+            or not isinstance(dataset_sha256, str)
+            or not re.fullmatch(r"[0-9a-f]{64}", dataset_sha256)
+            or isinstance(record_count, bool)
+            or not isinstance(record_count, int)
+            or record_count <= 0
+            or _parse_at(bootstrap_at) is None
+        ):
+            return {
+                "status": "FAILED",
+                "snapshot_version": None,
+                "dataset_sha256": None,
+                "record_count": None,
+                "bootstrap_at": None,
+                "error": "RUNTIME_DATA_SNAPSHOT_INVALID",
+            }
+        configured_home = os.environ.get("FOOTBALL_DATA_HOME", "").strip()
+        if configured_home:
+            try:
+                store = HistoricalResultStore(historical_results_path(configured_home))
+                if store.count() != record_count or store.dataset_digest() != dataset_sha256:
+                    raise ValueError("runtime dataset parity failed")
+            except Exception:
+                return {
+                    "status": "FAILED",
+                    "snapshot_version": None,
+                    "dataset_sha256": None,
+                    "record_count": None,
+                    "bootstrap_at": None,
+                    "error": "RUNTIME_DATASET_PARITY_FAILED",
+                }
+    return {
+        "status": status,
+        "snapshot_version": payload.get("snapshot_version"),
+        "dataset_sha256": payload.get("dataset_sha256"),
+        "record_count": payload.get("record_count"),
+        "bootstrap_at": payload.get("bootstrap_at"),
+    }
 
 
 def _json_files(directory: Path) -> tuple[list[tuple[Path, dict[str, Any]]], bool]:
@@ -595,6 +676,7 @@ def evaluate_health(
     root: Path = BASE_DIR,
     state_path: Path | None = None,
     now: datetime | None = None,
+    runtime_snapshot_path: Path | None = None,
 ) -> dict[str, Any]:
     """Return a machine-readable health result and persist the small counter state."""
     root = Path(root).resolve()
@@ -604,6 +686,12 @@ def evaluate_health(
     current_time = _now(now)
     reasons: list[str] = []
     details: dict[str, Any] = {}
+    runtime_data_snapshot = _runtime_data_snapshot_health(runtime_snapshot_path)
+    details["runtime_data_snapshot"] = runtime_data_snapshot
+    if runtime_data_snapshot["status"] == "FAILED":
+        _reason_once(reasons, "RUNTIME_DATA_SNAPSHOT_FAILED")
+    elif runtime_data_snapshot["status"] == "DEGRADED_LAST_KNOWN_GOOD":
+        _reason_once(reasons, "DEGRADED_DATA_SNAPSHOT")
     previous_state: dict[str, Any] = {}
     state_error = False
     if state_path.exists():
@@ -659,6 +747,7 @@ def evaluate_health(
             "MATCH_WORKSPACE_INVALID",
             "SCORE_SELECTOR_COLLAPSE",
             "LAMBDA_COMPRESSION",
+            "RUNTIME_DATA_SNAPSHOT_FAILED",
         }
     ]
     engineering_reasons = [reason for reason in reasons if reason not in immediate_reasons]
@@ -698,6 +787,7 @@ def evaluate_health(
         "consecutive_problem_cycles": consecutive,
         "business_date": runtime.get("business_date"),
         "last_cycle_generated_at": state["last_cycle_generated_at"],
+        "runtime_data_snapshot": runtime_data_snapshot,
         "details": details,
     }
     return result
@@ -707,12 +797,18 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, default=BASE_DIR)
     parser.add_argument("--state-path", type=Path)
+    parser.add_argument("--runtime-snapshot-health", type=Path)
     parser.add_argument("--now")
     args = parser.parse_args()
     current = _parse_at(args.now) if args.now else None
     if args.now and current is None:
         raise SystemExit("--now must be an ISO timestamp")
-    result = evaluate_health(root=args.root, state_path=args.state_path, now=current)
+    result = evaluate_health(
+        root=args.root,
+        state_path=args.state_path,
+        now=current,
+        runtime_snapshot_path=args.runtime_snapshot_health,
+    )
     print(json.dumps(result, ensure_ascii=False, sort_keys=True))
     return 0
 

@@ -1,0 +1,52 @@
+name: Bootstrap verified football data
+description: Download and verify the pinned private historical snapshot into an isolated runtime home.
+inputs:
+  runtime-access-key-id:
+    description: Repository secret used only for read-only runtime access.
+    required: true
+  runtime-secret-access-key:
+    description: Repository secret used only for read-only runtime access.
+    required: true
+  endpoint-url:
+    description: S3-compatible object-store endpoint.
+    required: true
+  bucket:
+    description: Private snapshot bucket.
+    required: true
+  region:
+    description: S3-compatible object-store region.
+    required: true
+  manifest:
+    description: Exact tracked runtime manifest path.
+    required: false
+    default: data/football_data/runtime_snapshot_manifest.json
+runs:
+  using: composite
+  steps:
+    - name: Bootstrap exact snapshot
+      shell: bash
+      env:
+        FOOTBALL_DATA_SNAPSHOT_RUNTIME_ACCESS_KEY_ID: ${{ inputs.runtime-access-key-id }}
+        FOOTBALL_DATA_SNAPSHOT_RUNTIME_SECRET_ACCESS_KEY: ${{ inputs.runtime-secret-access-key }}
+        FOOTBALL_DATA_SNAPSHOT_ENDPOINT_URL: ${{ inputs.endpoint-url }}
+        FOOTBALL_DATA_SNAPSHOT_BUCKET: ${{ inputs.bucket }}
+        FOOTBALL_DATA_SNAPSHOT_REGION: ${{ inputs.region }}
+      run: |
+        set -euo pipefail
+        for name in \
+          FOOTBALL_DATA_SNAPSHOT_RUNTIME_ACCESS_KEY_ID \
+          FOOTBALL_DATA_SNAPSHOT_RUNTIME_SECRET_ACCESS_KEY \
+          FOOTBALL_DATA_SNAPSHOT_ENDPOINT_URL \
+          FOOTBALL_DATA_SNAPSHOT_BUCKET \
+          FOOTBALL_DATA_SNAPSHOT_REGION; do
+          if [[ -z "${!name:-}" ]]; then
+            echo "GITHUB_RUNTIME_CONFIG_MISSING"
+            exit 1
+          fi
+        done
+        python -m scripts.football_data.bootstrap_runtime_data \
+          --manifest "${{ inputs.manifest }}" \
+          --runtime-temp "$RUNNER_TEMP/football-data" \
+          --data-home "$RUNNER_TEMP/football-data/runtime" \
+          --github-env "$GITHUB_ENV" \
+          --health-path "$RUNNER_TEMP/football-data/runtime_snapshot_health.json"

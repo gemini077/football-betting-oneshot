@@ -7,21 +7,25 @@
 
 CURRENT PHASE:
 
-`DATA-PLANE-1 - Cloud Production Football Data Architecture Decision`
+`DATA-PLANE-2 - Private Snapshot Production Bootstrap`
 
-CURRENT STATUS: `READY_FOR_ACCEPTANCE`
+CURRENT STATUS: `LOCAL_PUBLISHER_INPUT_REQUIRED`
 
-Decision: `B. PRIVATE_SNAPSHOT_STORE`. The selected architecture is a
+Decision: `B. PRIVATE_SNAPSHOT_STORE`. The implementation uses a
 vendor-neutral private versioned snapshot plus the existing read-only DuckDB
-runtime model. No storage service, workflow bootstrap, runtime migration or
-provider implementation is started in this milestone. The clean-runner result
-is `PARTIALLY_REPRODUCIBLE`; the bounded target proof and all option tradeoffs
-are recorded in
-`docs/data-foundation/DATA-PLANE-1_CLOUD_PRODUCTION_DATA_ARCHITECTURE.md`.
+runtime model. PR #122 is merged at
+`a8883c1bd8a2fa5a14d9dcab205343bef7fc53e9`; PR #120 remains OPEN and
+unmerged. The local authoritative verification is 1,778 records with dataset
+SHA-256
+`48088556830cfb5a6ecd523fc4dc29889406b4853001c51849f5533ecc44a3f2`, and the
+local `500-1364199` recent-form smoke is AVAILABLE with 10 pre-kickoff
+records. The Publisher is waiting for masked local input; B2 read-back and
+GitHub clean-runner parity are still required.
 
-The next implementation milestone must be separately authorized. Until then,
-do not change the Champion, frozen/prospective state, production dashboard,
-runtime artifacts, or public repository data boundary.
+Do not declare this milestone `READY_FOR_ACCEPTANCE` until the immutable B2
+object, read-back verification, and GitHub-hosted clean-runner smoke all pass.
+Do not change the Champion, frozen/prospective state, production dashboard,
+or public repository data boundary.
 
 # Historical PRED-AVAIL-1 Route Record
 
