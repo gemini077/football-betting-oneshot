@@ -25,7 +25,7 @@ Canonical candidates are corroborated by checked-in OpenFootball and football-da
 
 - Home usable history: **16** matches (`2025-04-23T00:00:00Z` — `2026-07-26T15:30:00Z`).
 - Away usable history: **16** matches (`2025-05-03T15:00:00Z` — `2026-08-02T13:00:00Z`).
-- Same `Sweden Allsvenskan` network: **True**; component size: `16` teams.
+- Same `Sweden Allsvenskan` network: **True**; target-team induced component size: `16` teams.
 - Direct historical edge: `match:competition:sweden-allsvenskan:2026-04-17:team:sweden:degerfors-if:team:sweden:if-elfsborg`.
 - All selected rows satisfy `kickoff_at < target_kickoff`, are team-strength eligible, unique, and conflict-free; post-kickoff rows used: **0**.
 

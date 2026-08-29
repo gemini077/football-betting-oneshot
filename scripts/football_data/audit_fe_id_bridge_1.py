@@ -158,12 +158,23 @@ def build_target_evidence(*, root: Path = ROOT, historical_path: Path | None = N
     )
 
     crosswalk = _read(root, PROJECT_CROSSWALK)
-    mapping_by_id = {
-        str(row.get("provider_team_id")): row
-        for row in crosswalk.get("mappings", [])
-        if row.get("provider") == "nowscore" and str(row.get("provider_team_id")) in {HOME_PROVIDER_ID, AWAY_PROVIDER_ID}
-    }
+    mapping_candidates: dict[str, list[Mapping[str, Any]]] = {HOME_PROVIDER_ID: [], AWAY_PROVIDER_ID: []}
+    for row in crosswalk.get("mappings", []):
+        provider_id = str(row.get("provider_team_id"))
+        if row.get("provider") == "nowscore" and provider_id in mapping_candidates:
+            mapping_candidates[provider_id].append(row)
+    _require(all(len(rows) == 1 for rows in mapping_candidates.values()), "target provider IDs lack unique crosswalk rows")
+    mapping_by_id = {provider_id: rows[0] for provider_id, rows in mapping_candidates.items()}
     _require(set(mapping_by_id) == {HOME_PROVIDER_ID, AWAY_PROVIDER_ID}, "target provider IDs lack two unique crosswalk rows")
+    required_crosswalk_refs = {
+        f"{UNIVERSE}#fixtures[matchId={MATCH_ID}]",
+        f"{SCHEDULE}#matches[matchId={MATCH_ID}]",
+        f"{PROSPECTIVE}#recent_matches.home_team|away_team",
+        f"{FROZEN}#source_references",
+        f"{SNAPSHOT}#source_hashes[data/source_cache/nowscore/raw/2912253_analysis.js]",
+        "https://live.nowscore.com/analysisJs/data2912253.js#teamNames[TeamId=417|2088]",
+        f"{HISTORICAL_SAMPLE}#canonical_match_id=match:competition:sweden-allsvenskan:2026-04-17:team:sweden:degerfors-if:team:sweden:if-elfsborg",
+    }
     for provider_id, canonical_id, side in ((HOME_PROVIDER_ID, HOME_ID, "home"), (AWAY_PROVIDER_ID, AWAY_ID, "away")):
         row = mapping_by_id[provider_id]
         _require(
@@ -173,6 +184,16 @@ def build_target_evidence(*, root: Path = ROOT, historical_path: Path | None = N
             and row.get("provider_team_name") == fixture.get(f"{side}Team")
             and row.get("source_ref_count") == len(row.get("source_refs", [])),
             f"crosswalk row {provider_id} is not exact and competition-scoped",
+        )
+        row_refs = set(row.get("source_refs", []))
+        _require(
+            required_crosswalk_refs.union(
+                {
+                    f"{OPENFOOTBALL_IDENTITY}#canonical_team_id={canonical_id}",
+                    f"{FOOTBALL_DATA_IDENTITY}#canonical_team_id={canonical_id}",
+                }
+            ).issubset(row_refs),
+            f"crosswalk row {provider_id} is missing source evidence",
         )
 
     prospective = _read(root, PROSPECTIVE)
@@ -250,7 +271,7 @@ def build_target_evidence(*, root: Path = ROOT, historical_path: Path | None = N
         "historical_validation": {
             "store": "FOOTBALL_DATA_HOME/historical_results.duckdb", "dataset_digest": store.dataset_digest(), "target_kickoff_exclusive_cutoff": cutoff_text,
             "home": _history_summary(HOME_ID, home_rows), "away": _history_summary(AWAY_ID, away_rows), "unique_target_team_history_rows": len(history_rows),
-            "network_component_team_count": len(component), "same_network": AWAY_ID in component, "shared_historical_match_ids": shared_matches, "post_kickoff_rows_used": 0,
+            "network_component_team_count": len(component), "network_component_scope": "target-team history induced subgraph", "same_network": AWAY_ID in component, "shared_historical_match_ids": shared_matches, "post_kickoff_rows_used": 0,
         },
         "source_hashes": {path: _sha256(root, path) for path in source_paths},
         "checks": checks,
@@ -269,7 +290,7 @@ def _render_markdown(report: Mapping[str, Any]) -> str:
         "## Scope", "", f"Only fixture `{fixture['match_id']}` (`{fixture['match_key']}`) was audited.", f"Target kickoff: `{fixture['kickoff_at']}`; exclusive UTC cutoff: `{fixture['target_kickoff_utc']}`.", "No provider, historical import, model, Champion, production, or frozen prediction was changed.", "",
         "## Exact provider identity evidence", "", f"Nowscore match `{fixture['nowscore_match_id']}` is bound by the exact Sporttery/Prediction Universe fixture.", f"Prospective evidence records home ID `{provider['home']['provider_team_id']}` in {evidence['home_provider_id_occurrences']}/{evidence['home_recent_rows']} home-side rows and away ID `{provider['away']['provider_team_id']}` in {evidence['away_provider_id_occurrences']}/{evidence['away_recent_rows']} away-side rows.", f"Frozen Nowscore analysis source SHA-256: `{evidence['analysis_js_sha256']}`; selectors: `teamNames[TeamId=417]`, `teamNames[TeamId=2088]`.", "",
         "| side | provider ID | canonical team ID | mapping |", "|---|---:|---|---|", f"| home | `{provider['home']['provider_team_id']}` | `{provider['home']['canonical_team_id']}` | `{provider['home']['crosswalk_method']}` |", f"| away | `{provider['away']['provider_team_id']}` | `{provider['away']['canonical_team_id']}` | `{provider['away']['crosswalk_method']}` |", "", "Canonical candidates are corroborated by checked-in OpenFootball and football-data.co.uk identity evidence plus the authoritative direct historical meeting; no fuzzy or name-distance resolution is used.", "",
-        "## Authoritative historical validation", "", f"- Home usable history: **{history['home']['usable_match_count']}** matches (`{history['home']['kickoff_min']}` — `{history['home']['kickoff_max']}`).", f"- Away usable history: **{history['away']['usable_match_count']}** matches (`{history['away']['kickoff_min']}` — `{history['away']['kickoff_max']}`).", f"- Same `Sweden Allsvenskan` network: **{history['same_network']}**; component size: `{history['network_component_team_count']}` teams.", f"- Direct historical edge: `{history['shared_historical_match_ids'][0]}`." if history["shared_historical_match_ids"] else "- Direct historical edge: none.", "- All selected rows satisfy `kickoff_at < target_kickoff`, are team-strength eligible, unique, and conflict-free; post-kickoff rows used: **0**.", "",
+        "## Authoritative historical validation", "", f"- Home usable history: **{history['home']['usable_match_count']}** matches (`{history['home']['kickoff_min']}` — `{history['home']['kickoff_max']}`).", f"- Away usable history: **{history['away']['usable_match_count']}** matches (`{history['away']['kickoff_min']}` — `{history['away']['kickoff_max']}`).", f"- Same `Sweden Allsvenskan` network: **{history['same_network']}**; target-team induced component size: `{history['network_component_team_count']}` teams.", f"- Direct historical edge: `{history['shared_historical_match_ids'][0]}`." if history["shared_historical_match_ids"] else "- Direct historical edge: none.", "- All selected rows satisfy `kickoff_at < target_kickoff`, are team-strength eligible, unique, and conflict-free; post-kickoff rows used: **0**.", "",
         "## Checks", "", *[f"- `{name}`: `{value}`" for name, value in report["checks"].items()], "", "## Evidence files", "", *[f"- `{path}`" for path in (UNIVERSE, SCHEDULE, PROSPECTIVE, FROZEN, OPENFOOTBALL_IDENTITY, FOOTBALL_DATA_IDENTITY, HISTORICAL_SAMPLE)], "", "The retained Nowscore raw-source hashes are recorded in the frozen input snapshot; raw source-cache files are not copied into this evidence package.",
     ]
     return "\n".join(lines) + "\n"

@@ -46,9 +46,12 @@ def test_target_has_exact_nowscore_ids_and_verified_canonical_crosswalk() -> Non
     assert target_identity["provider_team_ids"] == {"home": HOME_PROVIDER_ID, "away": AWAY_PROVIDER_ID}
     assert target_identity["home_team_id"] == HOME_CANONICAL_ID
     assert target_identity["away_team_id"] == AWAY_CANONICAL_ID
+    assert any("data2912253.js#teamNames[TeamId=417|2088]" in ref for ref in target_identity["source_references"])
     assert len(target_mappings) == 2
     assert {str(item["provider_team_id"]) for item in target_mappings} == {HOME_PROVIDER_ID, AWAY_PROVIDER_ID}
     assert {item["canonical_team_id"] for item in target_mappings} == {HOME_CANONICAL_ID, AWAY_CANONICAL_ID}
+    assert all(item["source_ref_count"] == len(item["source_refs"]) for item in target_mappings)
+    assert all(any("data2912253.js#teamNames" in ref for ref in item["source_refs"]) for item in target_mappings)
 
     resolver = ProjectProviderIdentityResolver(mappings)
     home = resolver.resolve_team(
