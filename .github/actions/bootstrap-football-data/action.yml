@@ -7,15 +7,6 @@ inputs:
   runtime-secret-access-key:
     description: Repository secret used only for read-only runtime access.
     required: true
-  endpoint-url:
-    description: S3-compatible object-store endpoint.
-    required: true
-  bucket:
-    description: Private snapshot bucket.
-    required: true
-  region:
-    description: S3-compatible object-store region.
-    required: true
   manifest:
     description: Exact tracked runtime manifest path.
     required: false
@@ -23,27 +14,46 @@ inputs:
 runs:
   using: composite
   steps:
-    - name: Bootstrap exact snapshot
+    - name: Load runtime configuration without logging values
       shell: bash
       env:
-        FOOTBALL_DATA_SNAPSHOT_RUNTIME_ACCESS_KEY_ID: ${{ inputs.runtime-access-key-id }}
-        FOOTBALL_DATA_SNAPSHOT_RUNTIME_SECRET_ACCESS_KEY: ${{ inputs.runtime-secret-access-key }}
-        FOOTBALL_DATA_SNAPSHOT_ENDPOINT_URL: ${{ inputs.endpoint-url }}
-        FOOTBALL_DATA_SNAPSHOT_BUCKET: ${{ inputs.bucket }}
-        FOOTBALL_DATA_SNAPSHOT_REGION: ${{ inputs.region }}
+        GH_TOKEN: ${{ github.token }}
+        RUNTIME_ACCESS_KEY_ID: ${{ inputs.runtime-access-key-id }}
+        RUNTIME_SECRET_ACCESS_KEY: ${{ inputs.runtime-secret-access-key }}
       run: |
         set -euo pipefail
-        for name in \
-          FOOTBALL_DATA_SNAPSHOT_RUNTIME_ACCESS_KEY_ID \
-          FOOTBALL_DATA_SNAPSHOT_RUNTIME_SECRET_ACCESS_KEY \
-          FOOTBALL_DATA_SNAPSHOT_ENDPOINT_URL \
-          FOOTBALL_DATA_SNAPSHOT_BUCKET \
-          FOOTBALL_DATA_SNAPSHOT_REGION; do
-          if [[ -z "${!name:-}" ]]; then
+
+        load_variable() {
+          local name="$1"
+          local value
+          if ! value="$(gh api --silent --jq '.value' "repos/${GITHUB_REPOSITORY}/actions/variables/${name}" 2>/dev/null)"; then
             echo "GITHUB_RUNTIME_CONFIG_MISSING"
             exit 1
           fi
-        done
+          if [[ -z "$value" || "$value" == *$'\n'* || "$value" == *$'\r'* ]]; then
+            echo "GITHUB_RUNTIME_CONFIG_MISSING"
+            exit 1
+          fi
+          printf '%s=%s\n' "$name" "$value" >> "$GITHUB_ENV"
+        }
+
+        load_variable FOOTBALL_DATA_SNAPSHOT_ENDPOINT_URL
+        load_variable FOOTBALL_DATA_SNAPSHOT_BUCKET
+        load_variable FOOTBALL_DATA_SNAPSHOT_REGION
+
+        if [[ -z "${RUNTIME_ACCESS_KEY_ID:-}" || -z "${RUNTIME_SECRET_ACCESS_KEY:-}" ]]; then
+          echo "GITHUB_RUNTIME_CONFIG_MISSING"
+          exit 1
+        fi
+        {
+          printf 'FOOTBALL_DATA_SNAPSHOT_RUNTIME_ACCESS_KEY_ID=%s\n' "$RUNTIME_ACCESS_KEY_ID"
+          printf 'FOOTBALL_DATA_SNAPSHOT_RUNTIME_SECRET_ACCESS_KEY=%s\n' "$RUNTIME_SECRET_ACCESS_KEY"
+        } >> "$GITHUB_ENV"
+
+    - name: Bootstrap exact snapshot
+      shell: bash
+      run: |
+        set -euo pipefail
         python -m scripts.football_data.bootstrap_runtime_data \
           --manifest "${{ inputs.manifest }}" \
           --runtime-temp "$RUNNER_TEMP/football-data" \

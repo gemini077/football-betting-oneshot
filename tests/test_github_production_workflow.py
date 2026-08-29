@@ -136,11 +136,18 @@ def test_deploy_pages_bootstraps_verified_data_before_production_cycle():
     for name in (
         "FOOTBALL_DATA_SNAPSHOT_RUNTIME_ACCESS_KEY_ID",
         "FOOTBALL_DATA_SNAPSHOT_RUNTIME_SECRET_ACCESS_KEY",
+    ):
+        assert name in bootstrap_block
+    action = (ROOT / ".github" / "actions" / "bootstrap-football-data" / "action.yml").read_text(encoding="utf-8")
+    for name in (
         "FOOTBALL_DATA_SNAPSHOT_ENDPOINT_URL",
         "FOOTBALL_DATA_SNAPSHOT_BUCKET",
         "FOOTBALL_DATA_SNAPSHOT_REGION",
     ):
-        assert name in bootstrap_block
+        assert f"load_variable {name}" in action
+    assert "endpoint-url:" not in bootstrap_block
+    assert "bucket:" not in bootstrap_block
+    assert "region:" not in bootstrap_block
     assert "--runtime-snapshot-health" in text
 
 
@@ -154,6 +161,9 @@ def test_clean_runner_smoke_is_read_only_and_uses_runtime_configuration():
     assert "./.github/actions/bootstrap-football-data" in workflow
     assert "runtime-access-key-id: ${{ secrets.FOOTBALL_DATA_SNAPSHOT_RUNTIME_ACCESS_KEY_ID }}" in workflow
     assert "runtime-secret-access-key: ${{ secrets.FOOTBALL_DATA_SNAPSHOT_RUNTIME_SECRET_ACCESS_KEY }}" in workflow
+    assert "FOOTBALL_DATA_SNAPSHOT_ENDPOINT_URL" not in workflow
+    assert "FOOTBALL_DATA_SNAPSHOT_BUCKET" not in workflow
+    assert "FOOTBALL_DATA_SNAPSHOT_REGION" not in workflow
     assert "python -m scripts.football_data.runtime_clean_runner_smoke" in workflow
     assert "contents: write" not in workflow
     assert "git push" not in workflow

@@ -10,6 +10,7 @@ on:
 
 permissions:
   contents: write
+  actions: read
   issues: write
   pages: write
   id-token: write
@@ -45,9 +46,6 @@ jobs:
         with:
           runtime-access-key-id: ${{ secrets.FOOTBALL_DATA_SNAPSHOT_RUNTIME_ACCESS_KEY_ID }}
           runtime-secret-access-key: ${{ secrets.FOOTBALL_DATA_SNAPSHOT_RUNTIME_SECRET_ACCESS_KEY }}
-          endpoint-url: ${{ vars.FOOTBALL_DATA_SNAPSHOT_ENDPOINT_URL }}
-          bucket: ${{ vars.FOOTBALL_DATA_SNAPSHOT_BUCKET }}
-          region: ${{ vars.FOOTBALL_DATA_SNAPSHOT_REGION }}
 
       - name: Run production cycle
         id: production_cycle

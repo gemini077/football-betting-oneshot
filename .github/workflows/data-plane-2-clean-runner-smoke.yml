@@ -13,6 +13,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   clean-runner-smoke:
@@ -36,9 +37,6 @@ jobs:
         with:
           runtime-access-key-id: ${{ secrets.FOOTBALL_DATA_SNAPSHOT_RUNTIME_ACCESS_KEY_ID }}
           runtime-secret-access-key: ${{ secrets.FOOTBALL_DATA_SNAPSHOT_RUNTIME_SECRET_ACCESS_KEY }}
-          endpoint-url: ${{ vars.FOOTBALL_DATA_SNAPSHOT_ENDPOINT_URL }}
-          bucket: ${{ vars.FOOTBALL_DATA_SNAPSHOT_BUCKET }}
-          region: ${{ vars.FOOTBALL_DATA_SNAPSHOT_REGION }}
 
       - name: Verify clean-runner dataset and recent form
         run: python -m scripts.football_data.runtime_clean_runner_smoke
