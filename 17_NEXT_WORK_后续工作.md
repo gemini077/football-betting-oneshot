@@ -4,9 +4,42 @@
 
 # Current Sole Pointer
 
-# DATA-PLANE-1 - Cloud Production Football Data Architecture Decision
+# DATA-PLANE-2 - Private Snapshot Production Bootstrap
 
-Status: `READY_FOR_ACCEPTANCE`
+Status: `BLOCKED_BY_OBJECT_STORE_CREDENTIAL`
+
+The short preflight found no usable object-store credential in the local
+environment, GitHub workflow references, repository secrets/variables, or
+GitHub environment secrets. Secret values were not printed. No provider
+suitability check, implementation, upload, workflow change, or production
+smoke was started.
+
+The provider-neutral contract and one-time setup are recorded in
+`docs/data-foundation/DATA-PLANE-2_PRIVATE_SNAPSHOT_BOOTSTRAP_CONTRACT.md`.
+The exact canonical names are:
+
+- `FOOTBALL_DATA_SNAPSHOT_PUBLISH_ACCESS_KEY_ID`
+- `FOOTBALL_DATA_SNAPSHOT_PUBLISH_SECRET_ACCESS_KEY`
+- `FOOTBALL_DATA_SNAPSHOT_RUNTIME_ACCESS_KEY_ID`
+- `FOOTBALL_DATA_SNAPSHOT_RUNTIME_SECRET_ACCESS_KEY`
+- `FOOTBALL_DATA_SNAPSHOT_ENDPOINT_URL`
+- `FOOTBALL_DATA_SNAPSHOT_BUCKET`
+- `FOOTBALL_DATA_SNAPSHOT_REGION`
+
+STOP CONDITIONS:
+
+- Stop at `BLOCKED_BY_OBJECT_STORE_CREDENTIAL` until the publisher and runtime
+  credential pairs are configured and the preflight returns `AVAILABLE`.
+- Do not provision a provider, create Supabase, add a new data provider, or
+  choose a vendor in this blocked turn.
+- Do not write an unverified production workflow or run a live production
+  smoke with an unverified/empty historical data home.
+- Do not modify Champion mathematics, frozen predictions, prospective ledger,
+  dashboard state, or raw source data.
+
+# Historical execution record: DATA-PLANE-1 - Cloud Production Football Data Architecture Decision
+
+Status: `SEALED / ACCEPTANCE PASS`
 
 Decision: `B. PRIVATE_SNAPSHOT_STORE`.
 
@@ -37,6 +70,15 @@ STOP CONDITIONS:
   Champion mathematics.
 - Stop after the decision and evidence; implementation requires a new
   milestone.
+
+Independent acceptance recorded the authoritative 1,778-row dataset with
+dataset SHA-256
+`48088556830cfb5a6ecd523fc4dc29889406b4853001c51849f5533ecc44a3f2`, the
+`PARTIALLY_REPRODUCIBLE` clean-runner result, and the clean Norway proof for
+`500-1364199` through `authoritative_historical_results` with 10 recent-form
+records before kickoff. PR #121 merged to `main` at
+`963f36e7d00e16560fbdcd571dc20415437afa2b`; PR #120 remains OPEN and
+unmerged. The architecture decision remains `B. PRIVATE_SNAPSHOT_STORE`.
 
 # Historical execution record: PRED-AVAIL-1
 
