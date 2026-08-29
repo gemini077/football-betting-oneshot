@@ -8,6 +8,8 @@ This is the current atomic milestone. It uses the complete authoritative Sweden 
 
 The FE-ID-BRIDGE-1 independent acceptance is treated as `PASS`. Only the durable identity/crosswalk evidence needed by FE-DC-1 is retained; PR #112 and stacked PR #113 audit packages are not merged wholesale.
 
+GitHub PR #114 is open from `codex/fe-dc-1` to `main`.
+
 
 # 17_NEXT_WORK_后续工作.md
 
