@@ -3,25 +3,23 @@
 最后更新：2026-08-29
 角色：项目当前唯一人类可读状态真相。只记录当前事实，不承担完整历史档案职责。
 
-# FE-SE-HIST-1 当前状态
+# FE-SE-DC-CLOSE Current State
 
-`FE-SE-HIST-1 — Sweden Historical Completeness Closure`
+Status: `READY_FOR_ACCEPTANCE`
 
-状态：`READY_FOR_ACCEPTANCE`
+`FE-SE-HIST-1` is `SEALED / ACCEPTANCE PASS` after PR #115 was merged to main. Its authoritative Sweden closure remains 2025=240, 2026=119, Sweden=359, global historical=1778, unresolved=0, duplicate/conflict=0, and connected 2025 network=true.
 
-基于最新 `origin/main` `d1e6cd1aba80bbed059b5559db2869780a01dc30` 的独立 bounded branch。PR #114 保持 OPEN、暂不 merge；FE-DC-1 独立验收为工程/研究实验 PASS，但 Dixon-Coles `NOT_PROMOTABLE`。
+`FE-SE-DC-CLOSE` replays the exact FE-DC-1 103 target IDs with the frozen configuration against old 1554-row history and new 1778-row history. Target reconciliation is exact for 103/103. Complete-history replay has 7 model-specific fixed-optimizer fit failures, leaving 96 targets with both models; no tuning or fallback was applied. Final research verdict: `INCONCLUSIVE` because this is an explicit evaluation-integrity blocker, not a reason to change parameters.
 
-本轮仅恢复 Sweden Allsvenskan 既有历史结果能力：
+`SWEDEN_SPECIFIC_FURTHER_TUNING` is `CLOSED`. PR #114 remains OPEN and unmerged. Champion `recent_form_market_calibrated_poisson_v2`, production prediction, frozen prediction, and user prediction surface are unchanged.
 
-- 2025：16 → 240 场，16 队，每队 30 场；
-- 2026：119 → 119 场，保持原 authoritative baseline；
-- Sweden Allsvenskan 合计：135 → 359 场；
-- 2025 unresolved identity：0；candidate duplicate：0；duplicate conflict：0；
-- 2025 完整 connected network：是；
-- authoritative historical store：1,554 → 1,778 条；非目标记录 digest 集合不变。
+The next mainline candidate is `League-Agnostic Historical Coverage / Automatic Coverage Gate`; it is only a pointer and is not implemented in this milestone.
 
-Champion `recent_form_market_calibrated_poisson_v2`、production prediction、frozen prediction、FE-DC-1 模型参数均未修改。
+# FE-SE-HIST-1 Acceptance Record
 
+`FE-SE-HIST-1` ? `SEALED / ACCEPTANCE PASS`
+
+PR #115 was merged without reverting the intervening automatic market/data refresh commits. The closure audit, manifest, normalized sample, deterministic identity evidence, focused tests, and authoritative digest are retained in main. FE-SE-HIST-1 is now historical governance evidence, not the active Sweden execution pointer.
 # 1. 当前生产状态
 
 - 本地项目：`D:\MyProject\football-betting-oneshot-main`

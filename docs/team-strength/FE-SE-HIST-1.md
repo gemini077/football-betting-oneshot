@@ -1,10 +1,10 @@
 # FE-SE-HIST-1 — Sweden Historical Completeness Closure
 
-状态：`READY_FOR_ACCEPTANCE`
+状态：`SEALED / ACCEPTANCE PASS`
 
 基线：最新 `origin/main` `d1e6cd1aba80bbed059b5559db2869780a01dc30`。
 
-PR #114（FE-DC-1）保持 `OPEN`、不 merge；其独立验收结论是工程/研究实验 PASS，但 Dixon-Coles `NOT_PROMOTABLE`。本任务不修改 FE-DC-1 参数、Champion、production prediction 或 frozen prediction。
+PR #115 was merged; PR #114（FE-DC-1）保持 `OPEN`、不 merge；其独立验收结论是工程/研究实验 PASS，但 Dixon-Coles `NOT_PROMOTABLE`。本任务不修改 FE-DC-1 参数、Champion、production prediction 或 frozen prediction。
 
 ## 允许范围
 
