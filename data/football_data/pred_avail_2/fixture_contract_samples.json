@@ -1,0 +1,53 @@
+{
+  "contract_version": "football_data_org_fixture_samples.v1",
+  "fixture_sample_role": "offline_contract_only",
+  "not_production_evidence": true,
+  "source_schema": "football-data.org-api-v4",
+  "source_schema_reference": "https://docs.football-data.org/general/v4/match.html",
+  "fixture_query": {
+    "canonical_competition_id": "competition:england-premier-league",
+    "provider_competition_code": "PL",
+    "target_kickoff": "2026-08-30T14:00:00Z",
+    "selection_policy": "exact competition code + exact UTC kickoff + one TIMED/SCHEDULED candidate"
+  },
+  "competition_matches_response": {
+    "resultSet": {"count": 1, "played": 0},
+    "competition": {"id": 2021, "code": "PL", "name": "Premier League"},
+    "matches": [
+      {
+        "id": 990001,
+        "utcDate": "2026-08-30T14:00:00Z",
+        "status": "TIMED",
+        "lastUpdated": "2026-08-29T12:00:00Z",
+        "competition": {"id": 2021, "code": "PL", "name": "Premier League"},
+        "season": {"id": 9999, "startDate": "2026-08-01", "endDate": "2027-05-31"},
+        "homeTeam": {"id": 101, "name": "Contract Sample Home FC"},
+        "awayTeam": {"id": 202, "name": "Contract Sample Away FC"}
+      }
+    ]
+  },
+  "team_matches_response_shape": {
+    "resultSet": {"count": 1, "played": 1},
+    "matches": [
+      {
+        "id": 990000,
+        "utcDate": "2026-08-20T18:00:00Z",
+        "status": "FINISHED",
+        "lastUpdated": "2026-08-20T20:00:00Z",
+        "competition": {"id": 2021, "code": "PL", "name": "Premier League"},
+        "homeTeam": {"id": 101, "name": "Contract Sample Home FC"},
+        "awayTeam": {"id": 303, "name": "Contract Sample Opponent FC"},
+        "score": {"fullTime": {"home": 2, "away": 1}}
+      }
+    ]
+  },
+  "identity_boundary": {
+    "provider_namespace": "football-data.org",
+    "provider_fixture_id": "990001",
+    "provider_home_team_id": "101",
+    "provider_away_team_id": "202",
+    "canonical_home_team_id": null,
+    "canonical_away_team_id": null
+  },
+  "exclusion_note": "These values exercise parser and bridge contracts only; they are never used as daily prediction evidence or coverage results."
+}

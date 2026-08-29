@@ -1,0 +1,245 @@
+{
+  "contract_version": "football_data_org_coverage.v1",
+  "provider": "football-data.org",
+  "provider_schema": "football-data.org-api-v4",
+  "api_base_url": "https://api.football-data.org/v4",
+  "token_env": "FOOTBALL_DATA_ORG_TOKEN",
+  "free_plan": {
+    "price_eur_per_month": 0,
+    "competition_count": 12,
+    "calls_per_minute": 10,
+    "fixtures": true,
+    "delayed_scores": true,
+    "delayed_schedules": true,
+    "league_tables": true
+  },
+  "source_documents": [
+    {
+      "title": "football-data.org API v4 quickstart",
+      "url": "https://www.football-data.org/documentation/quickstart",
+      "role": "endpoint and filter contract"
+    },
+    {
+      "title": "football-data.org Match resource",
+      "url": "https://docs.football-data.org/general/v4/match.html",
+      "role": "fixture/status/utcDate/lastUpdated contract"
+    },
+    {
+      "title": "football-data.org Team resource",
+      "url": "https://docs.football-data.org/general/v4/team.html",
+      "role": "stable team identity and team match route"
+    },
+    {
+      "title": "football-data.org coverage",
+      "url": "https://www.football-data.org/coverage",
+      "role": "free competition coverage"
+    },
+    {
+      "title": "football-data.org pricing",
+      "url": "https://www.football-data.org/pricing",
+      "role": "free plan and rate limit"
+    }
+  ],
+  "selection_decision": {
+    "primary": "football-data.org",
+    "primary_reason": "official documented v4 API, stable provider IDs, competition/team match routes, free fixture/results tier",
+    "secondary_candidates": [
+      {
+        "provider": "FotMob",
+        "role": "research_fallback_candidate_only",
+        "production_enabled": false,
+        "reason": "unofficial endpoint stability and terms require a separate review"
+      },
+      {
+        "provider": "SofaScore",
+        "role": "research_fallback_candidate_only",
+        "production_enabled": false,
+        "reason": "unofficial endpoint stability and terms require a separate review"
+      }
+    ],
+    "not_confused_with": "Football-Data.co.uk remains the existing historical-download source; it is a different service from football-data.org."
+  },
+  "competitions": [
+    {
+      "competition_key": "england-premier-league",
+      "canonical_competition_id": "competition:england-premier-league",
+      "canonical_name": "Premier League",
+      "aliases": ["Premier League", "英格兰超级联赛"],
+      "provider_competition_code": "PL",
+      "provider_competition_name": "Premier League",
+      "free_tier": true,
+      "coverage_source": "https://www.football-data.org/coverage"
+    },
+    {
+      "competition_key": "england-championship",
+      "canonical_competition_id": "competition:england-championship",
+      "canonical_name": "EFL Championship",
+      "aliases": ["EFL Championship", "英格兰冠军联赛"],
+      "provider_competition_code": "ELC",
+      "provider_competition_name": "Championship",
+      "free_tier": true,
+      "coverage_source": "https://www.football-data.org/coverage"
+    },
+    {
+      "competition_key": "germany-bundesliga",
+      "canonical_competition_id": "competition:germany-bundesliga",
+      "canonical_name": "Bundesliga",
+      "aliases": ["Bundesliga", "德国甲级联赛"],
+      "provider_competition_code": "BL1",
+      "provider_competition_name": "Bundesliga",
+      "free_tier": true,
+      "coverage_source": "https://www.football-data.org/coverage"
+    },
+    {
+      "competition_key": "spain-la-liga",
+      "canonical_competition_id": "competition:spain-la-liga",
+      "canonical_name": "La Liga",
+      "aliases": ["La Liga", "西班牙甲级联赛"],
+      "provider_competition_code": "PD",
+      "provider_competition_name": "Primera Division",
+      "free_tier": true,
+      "coverage_source": "https://www.football-data.org/coverage"
+    },
+    {
+      "competition_key": "italy-serie-a",
+      "canonical_competition_id": "competition:italy-serie-a",
+      "canonical_name": "Serie A",
+      "aliases": ["Serie A", "意大利甲级联赛"],
+      "provider_competition_code": "SA",
+      "provider_competition_name": "Serie A",
+      "free_tier": true,
+      "coverage_source": "https://www.football-data.org/coverage"
+    },
+    {
+      "competition_key": "france-ligue-1",
+      "canonical_competition_id": "competition:france-ligue-1",
+      "canonical_name": "Ligue 1",
+      "aliases": ["Ligue 1", "法国甲级联赛"],
+      "provider_competition_code": "FL1",
+      "provider_competition_name": "Ligue 1",
+      "free_tier": true,
+      "coverage_source": "https://www.football-data.org/coverage"
+    },
+    {
+      "competition_key": "netherlands-eredivisie",
+      "canonical_competition_id": "competition:netherlands-eredivisie",
+      "canonical_name": "Eredivisie",
+      "aliases": ["Eredivisie", "荷兰甲级联赛"],
+      "provider_competition_code": "DED",
+      "provider_competition_name": "Eredivisie",
+      "free_tier": true,
+      "coverage_source": "https://www.football-data.org/coverage"
+    },
+    {
+      "competition_key": "portugal-primeira-liga",
+      "canonical_competition_id": "competition:portugal-primeira-liga",
+      "canonical_name": "Portuguese Primeira Liga",
+      "aliases": ["Portuguese Primeira Liga", "葡萄牙超级联赛"],
+      "provider_competition_code": "PPL",
+      "provider_competition_name": "Primeira Liga",
+      "free_tier": true,
+      "coverage_source": "https://www.football-data.org/coverage"
+    },
+    {
+      "competition_key": "brazil-serie-a",
+      "canonical_competition_id": "competition:brazil-serie-a",
+      "canonical_name": "Brazil Serie A",
+      "aliases": ["Brazil Serie A", "巴西甲级联赛"],
+      "provider_competition_code": "BSA",
+      "provider_competition_name": "Campeonato Brasileiro Série A",
+      "free_tier": true,
+      "coverage_source": "https://www.football-data.org/coverage"
+    },
+    {
+      "competition_key": "uefa-champions-league",
+      "canonical_competition_id": "competition:uefa-champions-league",
+      "canonical_name": "Champions League",
+      "aliases": ["Champions League", "欧冠", "欧洲冠军联赛"],
+      "provider_competition_code": "CL",
+      "provider_competition_name": "UEFA Champions League",
+      "free_tier": true,
+      "coverage_source": "https://www.football-data.org/coverage"
+    },
+    {
+      "competition_key": "fifa-world-cup",
+      "canonical_competition_id": "competition:fifa-world-cup",
+      "canonical_name": "World Cup",
+      "aliases": ["World Cup", "世界杯"],
+      "provider_competition_code": "WC",
+      "provider_competition_name": "FIFA World Cup",
+      "free_tier": true,
+      "coverage_source": "https://www.football-data.org/coverage"
+    },
+    {
+      "competition_key": "uefa-european-championship",
+      "canonical_competition_id": "competition:uefa-european-championship",
+      "canonical_name": "European Championship",
+      "aliases": ["European Championship", "欧洲杯"],
+      "provider_competition_code": "EC",
+      "provider_competition_name": "European Championship",
+      "free_tier": true,
+      "coverage_source": "https://www.football-data.org/coverage"
+    },
+    {
+      "competition_key": "germany-2-bundesliga",
+      "canonical_competition_id": "competition:germany-2-bundesliga",
+      "canonical_name": "2. Bundesliga",
+      "aliases": ["2. Bundesliga", "德国乙级联赛"],
+      "provider_competition_code": null,
+      "provider_competition_name": null,
+      "free_tier": false,
+      "coverage_source": "https://www.football-data.org/coverage"
+    },
+    {
+      "competition_key": "norway-eliteserien",
+      "canonical_competition_id": "competition:norway-eliteserien",
+      "canonical_name": "Eliteserien",
+      "aliases": ["Eliteserien", "挪威超级联赛", "挪超"],
+      "provider_competition_code": null,
+      "provider_competition_name": null,
+      "free_tier": false,
+      "coverage_source": "https://www.football-data.org/coverage"
+    },
+    {
+      "competition_key": "sweden-allsvenskan",
+      "canonical_competition_id": "competition:sweden-allsvenskan",
+      "canonical_name": "Sweden Allsvenskan",
+      "aliases": ["Sweden Allsvenskan", "瑞典超级联赛"],
+      "provider_competition_code": null,
+      "provider_competition_name": null,
+      "free_tier": false,
+      "coverage_source": "https://www.football-data.org/coverage"
+    },
+    {
+      "competition_key": "usa-mls",
+      "canonical_competition_id": "competition:usa-mls",
+      "canonical_name": "MLS",
+      "aliases": ["MLS", "美国职业大联盟"],
+      "provider_competition_code": null,
+      "provider_competition_name": null,
+      "free_tier": false,
+      "coverage_source": "https://www.football-data.org/coverage"
+    },
+    {
+      "competition_key": "south-korea-k-league-1",
+      "canonical_competition_id": "competition:south-korea-k-league-1",
+      "canonical_name": "K League 1",
+      "aliases": ["K League 1", "韩国职业联赛"],
+      "provider_competition_code": null,
+      "provider_competition_name": null,
+      "free_tier": false,
+      "coverage_source": "https://www.football-data.org/coverage"
+    }
+  ],
+  "production_policy": {
+    "provider_team_identity_is_canonical_team_identity": false,
+    "fuzzy_team_matching": false,
+    "llm_team_matching": false,
+    "market_only_fallback": false,
+    "synthetic_evidence": false,
+    "champion_math_change": false,
+    "provider_hopping_in_this_milestone": false,
+    "raw_response_redistribution": false,
+    "cache_root_policy": "runtime-only under data/product_runtime/football_data_org_recent_form"
+  }
+}

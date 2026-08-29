@@ -23,6 +23,39 @@ unchanged. PRED-AVAIL-1 ends at `READY_FOR_ACCEPTANCE`; independent acceptance
 is required before any live refresh. IDENTITY_BACKLOG is
 `NON_BLOCKING / ON_DEMAND`; ID-AUTO-2 does not start.
 
+# D-029 - Provider-independent recent-form backbone
+
+Status: `LOCKED FOR PRED-AVAIL-2`
+
+The final continuous availability round uses football-data.org as the primary
+official free-source candidate. Its provider-scoped fixture/team identity is
+separate from canonical historical identity. A fixture may bridge only through
+exact canonical competition, exact UTC kickoff, a unique provider fixture,
+provider source state, and preserved home/away orientation. Ambiguous or
+insufficient evidence fails closed; fuzzy team names, LLM matching, manual
+per-fixture aliases, and provider IDs written as canonical IDs are prohibited.
+
+After a bridge, only the same provider's FINISHED matches with complete goals,
+auditable source timestamps, and kickoff strictly before the target may be
+converted into the existing Champion `home_overall`, `home_home`,
+`away_overall`, and `away_away` contract. The existing source priority remains
+in force, and the provider route may not change Champion mathematics, evidence
+gates, calibration, score selection, market-only policy, frozen predictions,
+prospective records, or production state. Fixture/team response caching and
+same-day team reuse are required for the free 10-calls-per-minute tier.
+
+FotMob and SofaScore remain research-only candidates. Football-Data.co.uk
+retains its existing historical-download role and is a different service from
+football-data.org. No provider hopping is started in this milestone.
+
+The preflight found no `FOOTBALL_DATA_ORG_TOKEN` in the checked local or GitHub
+secret configuration. The exact 25-fixture offline audit therefore records
+`D. LIVE_VALIDATION_BLOCKED_BY_CREDENTIAL`, `CALL_COUNT = 0`, and
+`CACHE_HIT_COUNT = 0`; no live availability improvement is claimed. Continuous
+PRED-AVAIL development is closed at `READY_FOR_ACCEPTANCE`. The next decision
+is Data Supply Architecture Decision, not PRED-AVAIL-3 or another provider
+patch.
+
 # D-027 - League-agnostic deterministic team identity resolution
 
 Status: `LOCKED FOR ID-AUTO-1`

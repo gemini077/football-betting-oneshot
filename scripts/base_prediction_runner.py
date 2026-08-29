@@ -48,6 +48,7 @@ from prediction_universe import load_prediction_universe  # noqa: E402
 from prediction_quality import recent_form_is_usable  # noqa: E402
 from recent_form_cache import (  # noqa: E402
     load_authoritative_recent_form,
+    load_football_data_org_recent_form,
     load_recent_form_cache,
     refresh_recent_form_cache,
 )
@@ -859,6 +860,20 @@ def _assemble_context(
             form_captured_at = authoritative_form.get("captured_at")
             form_refs = list(authoritative_form.get("references") or [])
             source_refs.extend(str(ref) for ref in authoritative_form.get("source_refs") or [])
+
+    if not form:
+        provider_form = load_football_data_org_recent_form(
+            job,
+            fixture,
+            kickoff.isoformat(),
+            source_clock,
+        )
+        if provider_form:
+            form = provider_form
+            form_source = provider_form.get("source")
+            form_captured_at = provider_form.get("captured_at")
+            form_refs = list(provider_form.get("references") or [])
+            source_refs.extend(str(ref) for ref in provider_form.get("source_refs") or [])
 
     if not form or not _form_is_usable(form.get("recent_form")):
         return None, None, "INPUT_TIMESTAMP_UNVERIFIED" if unverified_source else "MISSING_RECENT_FORM"

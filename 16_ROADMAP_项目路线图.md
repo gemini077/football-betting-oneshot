@@ -7,25 +7,33 @@
 
 CURRENT PHASE:
 
-`PRED-AVAIL-1 - Daily Prediction Availability Closure`
+`PRED-AVAIL-2 - Provider-Independent Recent Form Backbone`
 
 CURRENT STATUS: `READY_FOR_ACCEPTANCE`
 
-The exact 25-fixture 2026-08-30 cohort is frozen. BEFORE was 1 FULL/frozen and
-24 `MISSING_RECENT_FORM`; the bounded same-cohort AFTER replay is 2 FULL, 0
-DEGRADED, 23 `MISSING_RECENT_FORM`, 0 prediction failures, and 0 blocked
-Champion jobs. The generic authoritative-history route released one fixture
-without changing Champion math or production automatic state. Detailed audit
-artifacts are under `data/football_data/pred_avail_1/`.
+PRED-AVAIL continuous development is closed after this final availability
+round. The exact frozen 25-fixture cohort is unchanged, with SHA-256
+`0cf4f106c34f183c3d61a81952f70e9c7f2525c0376a1e6eff74bb087e15cb8d`.
+BASELINE (PRED-AVAIL-1 AFTER): 2 FULL and 23 `MISSING_RECENT_FORM`.
+Offline AFTER: 2 FULL, 0 DEGRADED, 23 `INSUFFICIENT_DATA` /
+`MISSING_RECENT_FORM`, `CALL_COUNT = 0`, and `CACHE_HIT_COUNT = 0`.
+
+The source preflight result is
+`D. LIVE_VALIDATION_BLOCKED_BY_CREDENTIAL`. No football-data.org token was
+available in the checked local/GitHub secret configuration, so live coverage
+was not claimed. The provider-scoped adapter, exact UTC fixture bridge,
+provider identity/cache contract, no-leakage checks, and per-competition audit
+are retained under `data/football_data/pred_avail_2/`.
+
+The route does not change Champion mathematics, the evidence gate, market-only
+policy, frozen/prospective state, or canonical team identity. FotMob and
+SofaScore remain research-only candidates. PRED-AVAIL-3 and further provider
+patches are not active; the next decision is Data Supply Architecture Decision.
 
 `ID-AUTO-1 = SEALED / ACCEPTANCE PASS` and `HC-AUTO-1 = SEALED / ACCEPTANCE PASS`
-after independent acceptance. PR #118 merged to `main` at
-`04a548416513865e4af4771603fb4369074ecd57` without reverting automatic state.
-`IDENTITY_BACKLOG = NON_BLOCKING / ON_DEMAND`; ID-AUTO-2 is not active.
-
-PRED-AVAIL-1 remains a product blocker at 23/25 unavailable and stops at
-`READY_FOR_ACCEPTANCE`. After independent acceptance, the next candidate is
-Multi-Market Prediction Quality. No model-tuning task is active here.
+remain historical accepted milestones. PRED-AVAIL-1 is recorded as
+`ENGINEERING_ACCEPTED / PRODUCT_BLOCKER_REMAINS`; PR #119 merged to `main` at
+`f6a130a6ded64cc6e2e337e759064cd1673fba86`.
 
 # ID-AUTO-1 Historical Route Record
 

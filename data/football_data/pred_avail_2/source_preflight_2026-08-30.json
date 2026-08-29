@@ -1,0 +1,80 @@
+{
+  "agent_reach": {
+    "cli_available": false,
+    "fallback": "bounded direct official documentation lookup through the configured web tool"
+  },
+  "contract_version": "pred_avail_2_source_preflight.v1",
+  "credential": {
+    "auto_registration": false,
+    "env_name": "FOOTBALL_DATA_ORG_TOKEN",
+    "github_secret_name_checked": "FOOTBALL_DATA_ORG_TOKEN",
+    "github_secret_present": false,
+    "present": false,
+    "value_logged": false,
+    "value_persisted": false
+  },
+  "live_requested": false,
+  "milestone": "PRED-AVAIL-2",
+  "observed_at": "2026-08-29T17:49:07Z",
+  "result": "LIVE_VALIDATION_BLOCKED_BY_CREDENTIAL",
+  "secret_injection": {
+    "mechanism": "environment variable locally or GitHub Actions secrets context; token is read-only at runtime",
+    "provider_workflow_injected": false,
+    "repository_workflow_reference": ".github/workflows/*.yml",
+    "safe_mechanism_available": true
+  },
+  "source_landscape": [
+    {
+      "free_tier_candidate": true,
+      "official": true,
+      "production_enabled_in_this_run": false,
+      "reason": "v4 competition/team match routes and documented free fixture/results tier",
+      "references": [
+        "https://www.football-data.org/documentation/quickstart",
+        "https://docs.football-data.org/general/v4/match.html",
+        "https://docs.football-data.org/general/v4/team.html",
+        "https://www.football-data.org/coverage",
+        "https://www.football-data.org/pricing"
+      ],
+      "role": "PRIMARY_CANDIDATE",
+      "source": "football-data.org",
+      "stable_provider_ids": true
+    },
+    {
+      "production_enabled_in_this_run": false,
+      "reason": "existing historical-download role; not the football-data.org API",
+      "references": [
+        "https://www.football-data.co.uk/data.php"
+      ],
+      "role": "EXISTING_HISTORICAL_SOURCE",
+      "source": "Football-Data.co.uk"
+    },
+    {
+      "production_enabled_in_this_run": false,
+      "reason": "existing pinned open-data adapter; no new provider hopping",
+      "references": [
+        "https://github.com/openfootball/europe"
+      ],
+      "role": "EXISTING_REVIEWED_HISTORICAL_CACHE",
+      "source": "OpenFootball"
+    },
+    {
+      "production_enabled_in_this_run": false,
+      "reason": "unofficial API stability/terms review is a separate decision",
+      "role": "RESEARCH_FALLBACK_CANDIDATE_ONLY",
+      "source": "FotMob"
+    },
+    {
+      "production_enabled_in_this_run": false,
+      "reason": "unofficial API stability/terms review is a separate decision",
+      "role": "RESEARCH_FALLBACK_CANDIDATE_ONLY",
+      "source": "SofaScore"
+    },
+    {
+      "production_enabled_in_this_run": false,
+      "reason": "not selected for this bounded official-free-source validation; no provider hopping",
+      "role": "ADJACENT_LANDSCAPE_CANDIDATES",
+      "source": "API-Football / Sportmonks / TheSportsDB"
+    }
+  ]
+}

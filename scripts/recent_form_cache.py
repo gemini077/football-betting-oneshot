@@ -34,10 +34,12 @@ except ModuleNotFoundError:
 try:
     from football_data.coverage_gate import ExactCoverageIdentityResolver, audit_fixture
     from football_data.coverage_registry import DEFAULT_REGISTRY_PATH, load_coverage_registry
+    from football_data.providers.football_data_org import FootballDataOrgRecentFormRoute
     from football_data.storage import HistoricalResultStore
 except ModuleNotFoundError:  # tests import the repository as a package
     from scripts.football_data.coverage_gate import ExactCoverageIdentityResolver, audit_fixture
     from scripts.football_data.coverage_registry import DEFAULT_REGISTRY_PATH, load_coverage_registry
+    from scripts.football_data.providers.football_data_org import FootballDataOrgRecentFormRoute
     from scripts.football_data.storage import HistoricalResultStore
 
 
@@ -511,6 +513,30 @@ def load_authoritative_recent_form(
         "source_refs": source_refs,
         "provenance": provenance,
     }
+
+
+def load_football_data_org_recent_form(
+    job: Mapping[str, Any],
+    fixture: Mapping[str, Any],
+    kickoff_at: str,
+    now: datetime | str,
+    *,
+    route: FootballDataOrgRecentFormRoute | None = None,
+) -> dict[str, Any] | None:
+    """Load provider-scoped form after stronger existing sources have missed.
+
+    The route is deliberately opt-in at the provider client: without a fresh
+    cache or ``FOOTBALL_DATA_ORG_TOKEN`` it returns no form and performs no
+    network request.  A successful result already matches the Champion
+    ``recent_form`` contract, so this function only projects the provider
+    result and never changes Champion mathematics or canonical identity.
+    """
+
+    try:
+        result = (route or FootballDataOrgRecentFormRoute()).get_recent_form(job, fixture, now=now)
+    except Exception:
+        return None
+    return result if isinstance(result, Mapping) and result.get("status") == "FULL" else None
 
 
 def _github_request(url: str, *, accept: str) -> bytes:
