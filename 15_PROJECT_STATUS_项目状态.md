@@ -3,25 +3,43 @@
 最后更新：2026-08-29
 角色：项目当前唯一人类可读状态真相。只记录当前事实，不承担完整历史档案职责。
 
-# FE-SE-HIST-1 当前状态
+# HC-AUTO-1 Current State
 
-`FE-SE-HIST-1 — Sweden Historical Completeness Closure`
+Status: `READY_FOR_ACCEPTANCE`
 
-状态：`READY_FOR_ACCEPTANCE`
+HC-AUTO-1 implements the league-agnostic historical coverage foundation. A
+versioned registry now combines the existing Football-Data/OpenFootball
+manifests, reviewed exact identity evidence and the authoritative historical
+store. The daily gate returns `SUPPORTED`, `DEGRADED`, or `UNSUPPORTED` with
+machine-readable reason codes and keeps every current Champion job
+non-blocking. No Champion, frozen prediction, historical ledger, provider, or
+model mathematics changed.
 
-基于最新 `origin/main` `d1e6cd1aba80bbed059b5559db2869780a01dc30` 的独立 bounded branch。PR #114 保持 OPEN、暂不 merge；FE-DC-1 独立验收为工程/研究实验 PASS，但 Dixon-Coles `NOT_PROMOTABLE`。
+The real 2026-08-29 through 2026-08-31 Prediction Universe audit covers 66
+fixtures in one batch: 1 `SUPPORTED`, 65 `UNSUPPORTED` for missing exact
+current team identity, 0 blocked Champion jobs. The committed HC-AUTO-1
+evidence records the current gaps; it does not repair them or start a new
+provider/league-specific adapter.
 
-本轮仅恢复 Sweden Allsvenskan 既有历史结果能力：
+`FE-SE-HIST-1` is `SEALED / ACCEPTANCE PASS` after PR #115 was merged to main. Its authoritative Sweden closure remains 2025=240, 2026=119, Sweden=359, global historical=1778, unresolved=0, duplicate/conflict=0, and connected 2025 network=true.
 
-- 2025：16 → 240 场，16 队，每队 30 场；
-- 2026：119 → 119 场，保持原 authoritative baseline；
-- Sweden Allsvenskan 合计：135 → 359 场；
-- 2025 unresolved identity：0；candidate duplicate：0；duplicate conflict：0；
-- 2025 完整 connected network：是；
-- authoritative historical store：1,554 → 1,778 条；非目标记录 digest 集合不变。
+`FE-SE-DC-CLOSE` replays the exact FE-DC-1 103 target IDs with the frozen configuration against old 1554-row history and new 1778-row history. Target reconciliation is exact for 103/103. Complete-history replay has 7 model-specific fixed-optimizer fit failures, leaving 96 targets with both models; no tuning or fallback was applied. Final research verdict: `INCONCLUSIVE` because this is an explicit evaluation-integrity blocker, not a reason to change parameters.
 
-Champion `recent_form_market_calibrated_poisson_v2`、production prediction、frozen prediction、FE-DC-1 模型参数均未修改。
+`SWEDEN_SPECIFIC_FURTHER_TUNING` is `CLOSED`. PR #114 remains OPEN and unmerged. Champion `recent_form_market_calibrated_poisson_v2`, production prediction, frozen prediction, and user prediction surface are unchanged.
 
+`FE-SE-DC-CLOSE` is `ACCEPTANCE PASS / CLOSED`; its model verdict remains
+`INCONCLUSIVE` solely because 7 of the original 103 fixed-config targets had
+optimizer fit failures. `SWEDEN_SPECIFIC_FURTHER_TUNING` is `CLOSED`, PR #114
+remains OPEN and unmerged, and no Sweden/DC computation was run in HC-AUTO-1.
+
+HC-AUTO-1 is the current milestone and is only `READY_FOR_ACCEPTANCE`; it is
+not `SEALED`.
+
+# FE-SE-HIST-1 Acceptance Record
+
+`FE-SE-HIST-1` = `SEALED / ACCEPTANCE PASS`
+
+PR #115 was merged without reverting the intervening automatic market/data refresh commits. The closure audit, manifest, normalized sample, deterministic identity evidence, focused tests, and authoritative digest are retained in main. FE-SE-HIST-1 is now historical governance evidence, not the active Sweden execution pointer.
 # 1. 当前生产状态
 
 - 本地项目：`D:\MyProject\football-betting-oneshot-main`
@@ -162,7 +180,7 @@ ID2 的正式 cohort 语义为 `formal eligible = 9`，另有 `excluded pilot = 
 
 Hearts–Benfica 两队 identity 已由官方 fixture/球队证据 deterministic solved，但 Europa history 仅满足 2/5 的目标 prior 门槛；Elfsborg 仍为 `IDENTITY_UNAVAILABLE`。这两项不能被写成已 paired。
 
-数据口径必须分开：FE-SE-HIST-1 后 shared authoritative baseline 为 1,778 historical results / 160 team-strength snapshots；ID2 的 Europa v3 summary exact keys 为 `dataset.record_count=2,153`、`dataset.eligible_count=1,559`、`dataset.excluded_count=594`（`quality.A=1,559`、`quality.C=594`）；这是 staging evidence，不代表 shared authoritative DB 已迁移。
+FE-SE-HIST-1 and FE-SE-DC-CLOSE are historical closure records; HC-AUTO-1 is the active execution pointer.
 
 必须区分：
 

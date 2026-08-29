@@ -15,6 +15,11 @@ except ImportError:  # package imports used by tests
     from scripts.match_identity import canonical_match_id
     from scripts.prediction_universe import load_prediction_universe
 
+try:
+    from football_data.coverage_gate import audit_fixture_set, load_default_coverage_context
+except ImportError:  # package imports used by tests
+    from scripts.football_data.coverage_gate import audit_fixture_set, load_default_coverage_context
+
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 UNIVERSE_ROOT = PROJECT_ROOT / "data" / "prediction_universe"
@@ -144,6 +149,7 @@ def _build_job(
     source_universe: str,
     now: datetime,
     old_job: dict[str, Any] | None,
+    coverage: dict[str, Any],
 ) -> dict[str, Any]:
     stable_match_id, safe_identity = _stable_match_identity(fixture)
     kickoff = _kickoff(fixture)
@@ -165,6 +171,19 @@ def _build_job(
         "source_universe": source_universe,
         "prediction_id": (old_job or {}).get("prediction_id"),
         "last_error": (old_job or {}).get("last_error"),
+        "coverage": {
+            "status": coverage.get("status"),
+            "reason_codes": list(coverage.get("reason_codes") or []),
+            "blocking_reason_codes": list(coverage.get("blocking_reason_codes") or []),
+            "warning_codes": list(coverage.get("warning_codes") or []),
+            "historical_challenger_allowed": coverage.get("historical_challenger_allowed") is True,
+            "champion_prediction_allowed": coverage.get("champion_prediction_allowed") is True,
+            "evaluated_at": coverage.get("evaluated_at"),
+        },
+        "coverage_status": coverage.get("status"),
+        "coverage_reason_codes": list(coverage.get("reason_codes") or []),
+        "coverage_blocking_reason_codes": list(coverage.get("blocking_reason_codes") or []),
+        "historical_challenger_allowed": coverage.get("historical_challenger_allowed") is True,
     })
     return job
 
@@ -175,6 +194,8 @@ def sync_base_prediction_jobs(
     universe_root: Path = UNIVERSE_ROOT,
     jobs_root: Path = BASE_JOBS_ROOT,
     now: datetime | None = None,
+    coverage_registry: dict[str, Any] | None = None,
+    historical_records: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Ensure exactly one lightweight BASE job for every current Universe fixture."""
     current_time = _as_now(now)
@@ -199,6 +220,21 @@ def sync_base_prediction_jobs(
         _write_json(_ledger_path(business_date, Path(jobs_root)), ledger)
         return ledger
 
+    if coverage_registry is None:
+        coverage_registry, default_records = load_default_coverage_context()
+        if historical_records is None:
+            historical_records = default_records
+    elif historical_records is None:
+        _, default_records = load_default_coverage_context()
+        historical_records = default_records
+    coverage_audit = audit_fixture_set(
+        [fixture for fixture in fixtures if isinstance(fixture, dict)],
+        coverage_registry,
+        historical_records=historical_records or [],
+        now=current_time,
+    )
+    coverage_rows = iter(coverage_audit.get("fixtures", []))
+
     ledger_path = _ledger_path(business_date, Path(jobs_root))
     existing = _load_json(ledger_path) or {}
     old_jobs = [job for job in existing.get("jobs", []) if isinstance(job, dict)]
@@ -212,6 +248,14 @@ def sync_base_prediction_jobs(
     for fixture in fixtures:
         if not isinstance(fixture, dict):
             continue
+        coverage = next(coverage_rows, {
+            "status": "UNSUPPORTED",
+            "reason_codes": ["COMPETITION_UNSUPPORTED"],
+            "warning_codes": [],
+            "historical_challenger_allowed": False,
+            "champion_prediction_allowed": True,
+            "evaluated_at": generated_at,
+        })
         stable_match_id, safe_identity = _stable_match_identity(fixture)
         job_id = f"BASE-{business_date}-{safe_identity}"
         if job_id in current_ids:
@@ -219,7 +263,7 @@ def sync_base_prediction_jobs(
             continue
         current_ids.add(job_id)
         old_job = old_by_id.get(job_id) or old_removed_by_id.get(job_id)
-        jobs.append(_build_job(business_date, fixture, source_universe, current_time, old_job))
+        jobs.append(_build_job(business_date, fixture, source_universe, current_time, old_job, coverage))
 
     removed_jobs: list[dict[str, Any]] = []
     for old_job in old_jobs + old_removed:
@@ -248,6 +292,8 @@ def sync_base_prediction_jobs(
         "missed_prematch_count": missed_count,
         "duplicate_job_count": duplicate_job_count,
         "source_universe": source_universe,
+        "coverage_registry_digest": coverage_audit.get("coverage_registry_digest"),
+        "coverage_summary": coverage_audit.get("summary", {}),
         "jobs": jobs,
     }
     if removed_jobs:

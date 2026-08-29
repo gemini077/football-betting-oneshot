@@ -3,32 +3,40 @@
 最后更新：2026-08-29
 路线原则：Gate 驱动，不使用虚假日期承诺。
 
-# 当前路线指针
+# Current Route Pointer
 
-CURRENT PHASE：
+CURRENT PHASE:
 
-`FE-SE-HIST-1 — Sweden Historical Completeness Closure`
+`HC-AUTO-1 - League-Agnostic Historical Coverage Foundation`
 
-当前子状态：`READY_FOR_ACCEPTANCE / INDEPENDENT ACCEPTANCE PENDING`
+CURRENT STATUS: `READY_FOR_ACCEPTANCE`
 
-下一执行指针：独立验收 FE-SE-HIST-1；PR #114 保持 OPEN、不 merge。
+`FE-SE-HIST-1` is `SEALED / ACCEPTANCE PASS` after PR #115 merged to main.
+`FE-SE-DC-CLOSE` is `ACCEPTANCE PASS / CLOSED` with model verdict
+`INCONCLUSIVE` because 7 of 103 fixed-config targets had optimizer fit
+failures. `SWEDEN_SPECIFIC_FURTHER_TUNING` is `CLOSED`; PR #114 remains OPEN
+and unmerged. No Sweden/DC computation is part of HC-AUTO-1.
 
-NEXT GATE：
+HC-AUTO-1 builds a reusable registry from existing manifests, adapters,
+reviewed exact identity evidence and the authoritative historical store. It
+adds the automatic `SUPPORTED` / `DEGRADED` / `UNSUPPORTED` gate before BASE
+job intake, without changing the Champion, frozen predictions or model math.
 
-> 现有 Football-Data 免费稳定来源能否在 deterministic identity、provenance、去重和 fail-closed 冲突门禁下，形成完整 Sweden Allsvenskan 2025 authoritative network？
+Current milestone result: `READY_FOR_ACCEPTANCE`. Independent acceptance is
+still required before any `SEALED` state.
 
-BLOCKED：
+NEXT MAINLINE CANDIDATE:
 
-`CA-1 — Current Constrained Analysis Layer`
+> Stop after HC-AUTO-1 acceptance. Do not automatically start HC-AUTO-2.
+>
+> Any future coverage expansion must use the same registry/manifest route and
+> a separately accepted milestone.
 
-NOT ACTIVE：
+BLOCKED / NOT ACTIVE:
 
-- Betting expansion
-- Live betting
-- Advanced football feature expansion
-- Champion promotion
-- 跨其他联赛的全联赛历史数据扩展
-
+- PR #114 FE-DC-1 remains research evidence and OPEN / unmerged.
+- Dixon-Coles, Sweden-specific parameter tuning, and PA-3 are closed / not active.
+- Champion promotion, production model changes, frozen prediction changes, new providers, and other-league expansion are not active.
 # North Star
 
 建立：
@@ -126,7 +134,7 @@ ID2 的 paired=1 只能保持 `TOO_SMALL_FOR_DECISION`，不得自动进入 PA-3
 
 ## FE-SE-HIST-1 — Sweden Historical Completeness Closure
 
-状态：`READY_FOR_ACCEPTANCE / INDEPENDENT ACCEPTANCE PENDING`
+状态：`SEALED / ACCEPTANCE PASS`
 
 FE-DC-1 已独立验收为工程/研究实验 PASS，但 Dixon-Coles `NOT_PROMOTABLE`；PR #114 保留为 research evidence，暂不 merge。本里程碑只修复其上游 Sweden Allsvenskan historical completeness：
 

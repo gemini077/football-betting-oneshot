@@ -144,6 +144,8 @@ def main() -> int:
             "job_count": base_jobs.get("job_count", 0),
             "pending_count": base_jobs.get("pending_count", 0),
             "missed_prematch_count": base_jobs.get("missed_prematch_count", 0),
+            "coverage_registry_digest": base_jobs.get("coverage_registry_digest"),
+            "coverage_summary": base_jobs.get("coverage_summary", {}),
         })
         schedule_path = output_dir / f"{stamp}_sporttery_{business_date}.json"
         schedule_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
