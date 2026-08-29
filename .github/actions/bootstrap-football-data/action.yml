@@ -26,7 +26,7 @@ runs:
         load_variable() {
           local name="$1"
           local value
-          if ! value="$(gh api --silent --jq '.value' "repos/${GITHUB_REPOSITORY}/actions/variables/${name}" 2>/dev/null)"; then
+          if ! value="$(gh api --jq '.value' "repos/${GITHUB_REPOSITORY}/actions/variables/${name}" 2>/dev/null)"; then
             echo "GITHUB_RUNTIME_CONFIG_MISSING"
             exit 1
           fi

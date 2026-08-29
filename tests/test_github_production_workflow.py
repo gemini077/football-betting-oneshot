@@ -145,6 +145,7 @@ def test_deploy_pages_bootstraps_verified_data_before_production_cycle():
         "FOOTBALL_DATA_SNAPSHOT_REGION",
     ):
         assert f"load_variable {name}" in action
+    assert "gh api --silent" not in action
     assert "endpoint-url:" not in bootstrap_block
     assert "bucket:" not in bootstrap_block
     assert "region:" not in bootstrap_block
