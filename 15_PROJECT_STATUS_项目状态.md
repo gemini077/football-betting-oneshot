@@ -1,7 +1,26 @@
 # 15_PROJECT_STATUS_项目状态.md
 
-最后更新：2026-08-17  
+最后更新：2026-08-29
 角色：项目当前唯一人类可读状态真相。只记录当前事实，不承担完整历史档案职责。
+
+# FE-SE-HIST-1 当前状态
+
+`FE-SE-HIST-1 — Sweden Historical Completeness Closure`
+
+状态：`READY_FOR_ACCEPTANCE`
+
+基于最新 `origin/main` `d1e6cd1aba80bbed059b5559db2869780a01dc30` 的独立 bounded branch。PR #114 保持 OPEN、暂不 merge；FE-DC-1 独立验收为工程/研究实验 PASS，但 Dixon-Coles `NOT_PROMOTABLE`。
+
+本轮仅恢复 Sweden Allsvenskan 既有历史结果能力：
+
+- 2025：16 → 240 场，16 队，每队 30 场；
+- 2026：119 → 119 场，保持原 authoritative baseline；
+- Sweden Allsvenskan 合计：135 → 359 场；
+- 2025 unresolved identity：0；candidate duplicate：0；duplicate conflict：0；
+- 2025 完整 connected network：是；
+- authoritative historical store：1,554 → 1,778 条；非目标记录 digest 集合不变。
+
+Champion `recent_form_market_calibrated_poisson_v2`、production prediction、frozen prediction、FE-DC-1 模型参数均未修改。
 
 # 1. 当前生产状态
 
@@ -105,7 +124,7 @@ Research model：
 
 已审计历史结果：
 
-- 约 1554 场；
+- 1,778 场（FE-SE-HIST-1 closure 后）；
 - 时间范围：2025-02-22 → 2026-08-03；
 - 主要覆盖：葡超、挪超、巴甲、芬超、美职联、瑞典超级/次级等有限赛事体系。
 
@@ -143,7 +162,7 @@ ID2 的正式 cohort 语义为 `formal eligible = 9`，另有 `excluded pilot = 
 
 Hearts–Benfica 两队 identity 已由官方 fixture/球队证据 deterministic solved，但 Europa history 仅满足 2/5 的目标 prior 门槛；Elfsborg 仍为 `IDENTITY_UNAVAILABLE`。这两项不能被写成已 paired。
 
-数据口径必须分开：shared authoritative baseline 仍为 1,554 historical results / 160 team-strength snapshots。ID2 的 Europa v3 summary exact keys 为 `dataset.record_count=2,153`、`dataset.eligible_count=1,559`、`dataset.excluded_count=594`（`quality.A=1,559`、`quality.C=594`）；这是 staging evidence，不代表 shared authoritative DB 已迁移。
+数据口径必须分开：FE-SE-HIST-1 后 shared authoritative baseline 为 1,778 historical results / 160 team-strength snapshots；ID2 的 Europa v3 summary exact keys 为 `dataset.record_count=2,153`、`dataset.eligible_count=1,559`、`dataset.excluded_count=594`（`quality.A=1,559`、`quality.C=594`）；这是 staging evidence，不代表 shared authoritative DB 已迁移。
 
 必须区分：
 
@@ -152,17 +171,15 @@ Hearts–Benfica 两队 identity 已由官方 fixture/球队证据 deterministic
 
 历史库赛事覆盖有限，因此“补 ID”并不等于当前全部比赛都能进入 challenger。
 
-# 6. 当前阶段
+# 6. 上一研究阶段
 
 `Phase PA-2-R1 — Canonical Identity & Paired Challenger Evaluation`
 
-状态：
-
-`OVERALL INCOMPLETE / TOO_SMALL_FOR_DECISION`
+状态：`HISTORICAL RESEARCH / OVERALL INCOMPLETE / TOO_SMALL_FOR_DECISION`
 
 ID2 evidence package/status：`READY_FOR_ACCEPTANCE / INDEPENDENT ACCEPTANCE PENDING`
 
-当前执行指针：`ID3 CURRENT`；本次 Governance Current-State Sync 完成后生效。
+FE-SE-HIST-1 是当前已完成、等待独立验收的 bounded closure；PA-2-R1 ID2/PR #114 证据保留为历史研究记录。
 
 目标：
 

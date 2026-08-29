@@ -1,6 +1,6 @@
 # 18_ACCEPTANCE_验收标准.md
 
-最后更新：2026-08-17  
+最后更新：2026-08-29
 角色：定义“什么才算真正做完”。测试全绿不等于验收通过。
 
 # 1. 通用验收原则
@@ -30,6 +30,24 @@ Codex 允许：`READY_FOR_ACCEPTANCE`
 - INCOMPLETE
 
 只有独立 PASS 后：`SEALED`
+
+# 2A. FE-SE-HIST-1 专项验收
+
+`FE-SE-HIST-1 — Sweden Historical Completeness Closure` 的 Codex 状态只允许 `READY_FOR_ACCEPTANCE` 或 `BLOCKED`；本阶段不自动进入 `SEALED`。
+
+必须用真实、可复现证据核对：
+
+- Football-Data 当前 Sweden/Allsvenskan CSV、raw SHA256、capture timestamp、旧 source manifest 与现有 adapter/cache/registry；
+- 根因属于抓取缺失、adapter 漏导入、identity、dedup 或其他原因的证据链；
+- 2025 `240/240`，canonical competition=`competition:sweden-allsvenskan`，每条 identity deterministic exact、unresolved=0；
+- 2025 每队历史场数、完整 connected network、最早/最晚 kickoff；2026 保持 authoritative `119`，不得借机扩展当前赛季；
+- candidate duplicate、已有比赛 overlap、duplicate conflict 分开计数；事实冲突必须在 authoritative write 前阻断；
+- provenance 中的 source URL、source record ref、source fact time、capture time、raw hash 保留；raw provider 文件不提交；
+- 至少一个第二公开来源的 bounded sample 交叉核对；本轮 OpenFootball 53/53 shared fixture、比分冲突=0；
+- authoritative DuckDB before/after record count、dataset digest、non-target digest preservation，以及重复运行 idempotent；
+- production Champion、production prediction、frozen prediction、FE-DC-1 参数和其他联赛均未改变。
+
+FE-SE-HIST-1 的代码、normalized sample、source/identity manifest、audit JSON、focused tests 和 PR 必须留在 GitHub；不生成 ZIP。该数据 closure 只为后续 research/shadow 使用，不构成模型 promotion。
 
 # 3. 部署类任务验收
 
@@ -176,6 +194,7 @@ ID2 已验证并可供独立验收，但 Codex 不得将其写成 `SEALED`：
 - `result_gate=PARTIAL_PAIRED_EVALUATION`，`verdict=TOO_SMALL_FOR_DECISION`；
 - Hearts–Benfica identity 已 deterministic solved，但 Europa history 为 2/5，仍不可 eligible；Elfsborg 仍 identity unavailable；
 - shared authoritative baseline 是 1,554 historical results / 160 team-strength snapshots；Europa v3 summary 为 `record_count=2,153`、`eligible_count=1,559`、`excluded_count=594`，只属于 staging；
+- FE-SE-HIST-1 后 shared historical store 的当前 digest/计数以 `data/football_data/fe_se_hist1/audit.json` 与 `data/football_data/manifests/historical_results.dataset.json` 为准：1,778 条；该 closure 不重建 team-strength snapshots；
 - 赛后 captured Europa source 不得作为 pre-match prospective evidence；Champion 不变，Challenger shadow-only，CA-1 paused，PA-3 not started。
 
 ID2 evidence package/status：`READY_FOR_ACCEPTANCE / INDEPENDENT ACCEPTANCE PENDING`；这不代表 PA-2-R1 model program overall 已通过。

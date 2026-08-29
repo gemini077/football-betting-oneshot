@@ -32,7 +32,7 @@ def load_records(
     source = next(item for item in manifest.get("sources", []) if str(item.get("provider_season_id")) == str(season))
     adapter = FootballDataCoUkHistoricalAdapter(
         competition_id="competition:sweden-allsvenskan",
-        season_id="season:sweden-allsvenskan:2026",
+        season_id=f"season:sweden-allsvenskan:{season}",
         provider_competition_id=str(source["provider_competition_id"]),
         provider_competition_name=str(source["provider_competition_name"]),
         provider_season_id=str(source["provider_season_id"]),
@@ -51,12 +51,13 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("raw_path", type=Path)
     parser.add_argument("--season", default="2026")
-    parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
+    parser.add_argument("--output", type=Path)
     parser.add_argument("--ledger-root", type=Path, default=DEFAULT_LEDGER_ROOT)
     args = parser.parse_args()
     records = load_records(args.raw_path, season=args.season)
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(json.dumps({
+    output = args.output or DEFAULT_OUTPUT.with_name(f"football_data_uk_sweden_{args.season}.json")
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(json.dumps({
         "contract_version": "historical_result_sample.v1",
         "provider": "football-data.co.uk",
         "source_file": "SWE.csv",
@@ -68,7 +69,7 @@ def main() -> int:
     ledger = HistoricalResultLedger(args.ledger_root)
     for record in records:
         ledger.append(record)
-    print(f"wrote {len(records)} normalized football-data.co.uk records to {args.output}")
+    print(f"wrote {len(records)} normalized football-data.co.uk records to {output}")
     return 0
 
 

@@ -1,27 +1,30 @@
 # 17_NEXT_WORK_后续工作.md
 
-最后更新：2026-08-28
+最后更新：2026-08-29
 
 # 当前唯一主线
 
-## PRODUCT-RESET-R1 — Evidence Quality & Prospective Challenger Closure
+## FE-SE-HIST-1 — Sweden Historical Completeness Closure
 
-状态：CURRENT
+状态：`READY_FOR_ACCEPTANCE`
 
 当前只做四件事：
 
-1. **Production Champion 保持不变**：`recent_form_market_calibrated_poisson_v2` 继续 serving，未通过 Promotion Gate 不替换。
-2. **收口现有方向 Challenger**：只使用既有 `market-direction-fusion-full-v1` Shadow；按 `match_key` 去重，每场只计一个合法赛前快照。小样本不得 promotion；禁止再做新的 recent-form weight sweep。
-3. **Prospective 自然积累**：修复后的 Shadow pipeline 继续自然 capture / settle 新比赛；产品继续运行，不能停着等样本。
-4. **下一研发方向提高 Football Evidence 质量**：本 bounded fusion 问题收口后，研究 Elo、dynamic attack-defense、rolling xG、lineup availability 等更强足球证据，而不是继续给低质量 recent goals 调权重。
+1. **先完成历史闭环**：从最新 `origin/main` 分支读取当前 Football-Data SWE.csv，确认 2025 为 240/240，并补进 canonical `competition:sweden-allsvenskan`。
+2. **只用 deterministic identity**：使用现有 adapter/contract，加 reviewed exact supplement；unresolved、冲突和重复在写入前 fail closed。
+3. **保留可复现证据**：记录 source hash/timestamp、OpenFootball 53 场交叉样本、before/after DuckDB digest 和每队/network 审计；raw CSV 不入 Git。
+4. **保持生产边界**：Champion `recent_form_market_calibrated_poisson_v2` 不变；PR #114 保持 OPEN、不 merge；FE-DC-1 Dixon-Coles `NOT_PROMOTABLE`，不继续调 rho/half-life/attack-defense。
 
 停止条件：
 
-- 不做 1:1 cosmetic patch；
-- 不重复创建 market-direction Challenger；
-- 不为补样本强挖旧历史；
-- PA-2-R1 identity / history 只有在真实阻塞 current production / prospective 时才恢复。
+- Football-Data 2025 不是完整 240 场；
+- 任一 exact identity unresolved，或 candidate/已有 canonical match 出现事实冲突；
+- secondary cross-check 出现 score disagreement；
+- 发现需要新 provider、其他联赛或模型调参才能完成；
+- 不为效果继续调 FE-DC-1 参数，不用人工惩罚 1:1。
 角色：当前唯一执行指针。只描述“现在只做什么”。
+
+完成证据：2025 已由 16 补齐至 240，2026 保持 119；目标 network connected；unresolved=0、duplicate conflict=0；authoritative store 已从 1,554 重建为 1,778，状态等待独立验收。
 
 # 历史执行记录（非当前指针）
 
