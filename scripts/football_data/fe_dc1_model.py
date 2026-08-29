@@ -38,7 +38,6 @@ class PreRegisteredConfig:
     max_goals: int = 12
     optimizer_max_iter: int = 500
     optimizer_tolerance: float = 1e-6
-    optimizer_memory: int = 10
     parameter_bound: float = 1.5
     base_log_rate_bounds: tuple[float, float] = (-2.0, 1.0)
     home_advantage_bounds: tuple[float, float] = (-0.8, 0.8)
@@ -51,7 +50,7 @@ class PreRegisteredConfig:
             raise ValueError("half_life_days must be positive")
         if self.max_goals < 4:
             raise ValueError("max_goals must include the four Dixon-Coles cells")
-        if self.optimizer_max_iter < 1 or self.optimizer_memory < 1:
+        if self.optimizer_max_iter < 1:
             raise ValueError("optimizer limits must be positive")
         if self.optimizer_tolerance <= 0 or self.parameter_bound <= 0:
             raise ValueError("optimizer tolerance and parameter bound must be positive")
@@ -627,17 +626,13 @@ def _projected_newton_minimize(
     *,
     max_iter: int,
     tolerance: float,
-    memory: int,
 ) -> _OptimizerResult:
     """Minimize a bounded objective with deterministic projected Newton steps.
 
-    ``memory`` is retained in the public configuration for reproducibility and
-    compatibility with the preregistration.  The bounded Newton implementation
-    uses no external numerical dependency; it resets the active-set curvature
-    whenever a step reaches a parameter bound.
+    The bounded Newton implementation uses no external numerical dependency;
+    it resets the active-set curvature whenever a step reaches a parameter
+    bound.
     """
-
-    del memory
 
     def projected_gradient_norm(values: Sequence[float], current_gradient: Sequence[float]) -> float:
         projected = _project(
@@ -792,7 +787,6 @@ def fit_league_model(
         bounds,
         max_iter=config.optimizer_max_iter,
         tolerance=config.optimizer_tolerance,
-        memory=config.optimizer_memory,
     )
     if not result.converged:
         raise ValueError(f"FE-DC-1 optimizer did not converge: {result.message}")
@@ -1223,7 +1217,6 @@ def run_chronological_backtest(
             "max_goals": config.max_goals,
             "optimizer_max_iter": config.optimizer_max_iter,
             "optimizer_tolerance": config.optimizer_tolerance,
-            "optimizer_memory": config.optimizer_memory,
             "parameter_bound": config.parameter_bound,
             "base_log_rate_bounds": list(config.base_log_rate_bounds),
             "home_advantage_bounds": list(config.home_advantage_bounds),
