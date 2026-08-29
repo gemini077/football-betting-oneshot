@@ -141,4 +141,3 @@ def test_walk_forward_uses_strict_prior_history_and_records_network_counts():
     assert "target" not in target["used_history_match_ids"]
     assert "future" not in target["used_history_match_ids"]
     assert result["metrics"]["dixon_coles"]["sample_size"] == 2
-
