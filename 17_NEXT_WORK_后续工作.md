@@ -1,3 +1,14 @@
+## FE-DC-1 current pointer - 2026-08-29
+
+`FE-DC-1 - Sweden League Dixon-Coles Baseline`
+
+Status: `READY_FOR_ACCEPTANCE`
+
+This is the current atomic milestone. It uses the complete authoritative Sweden Allsvenskan connected network with strict chronological held-out evaluation, a fixed pre-registered configuration, full score distributions, and an internal `rho=0` control. It remains research/shadow-only; it does not replace the Champion, modify frozen predictions, add a provider, or modify the shared historical database.
+
+The FE-ID-BRIDGE-1 independent acceptance is treated as `PASS`. Only the durable identity/crosswalk evidence needed by FE-DC-1 is retained; PR #112 and stacked PR #113 audit packages are not merged wholesale.
+
+
 # 17_NEXT_WORK_后续工作.md
 
 最后更新：2026-08-28
