@@ -3,6 +3,39 @@
 最后更新：2026-08-30
 角色：项目当前唯一人类可读状态真相。只记录当前事实，不承担完整历史档案职责。
 
+# PRED-TRUST-2 Current State
+
+Status: `READY_FOR_ACCEPTANCE`
+
+Decision: `NO_CHALLENGER_BEATS_CHAMPION`
+
+The single bounded offline replay used the PRED-TRUST-1 pinned evidence only:
+accepted production run `33294381128`, accepted write-back commit
+`73994d32fc148da49295a5bfef2e1e42e042a22e`, `217` unique final legal
+prematch matches, and `181` verified 90-minute results. The current raw tree
+contains the pinned records by ID and content hash; automatic generated-data
+refreshes did not change the replay cohort.
+
+The comparison was exactly Champion plus two pre-registered deterministic
+challengers. Challenger A (recent-form strength separation) worsened 1X2 and
+exact-score metrics and did not separate lambda gaps. Challenger B
+(market-to-goal separation) improved 1X2 and concentration, but worsened BTTS,
+O/U 2.5, and right-tail probability error; its exact Top1 also fell from
+`11.60%` to `10.50%`. Neither challenger satisfies the pre-registered
+multi-signal gate. The strongest concentration result was Challenger B:
+1-1 Top1 `49.31%` vs Champion `76.50%`, with lambda gap `<0.5`
+`49.31%` vs `66.36%`; its mean `P(total>=4)` was `29.20%` vs the actual
+verified `41.44%`.
+
+No Champion, production, shadow, frozen prediction, prospective ledger,
+health monitor, health gate, provider, or frontend change was made. The next
+sole milestone is to return to upstream inputs / football evidence / market
+fusion; do not continue a lambda patch series.
+
+Evidence: `data/prediction_quality/pred_trust_2/pinned_cohort_manifest.json`,
+`data/prediction_quality/pred_trust_2/replay_2026-08-30.json`, and
+`docs/prediction-quality/PRED-TRUST-2_FINAL_REPORT.md`.
+
 # DATA-PLANE-2 Current State
 
 Status: `SEALED / DEPLOYED / ACCEPTANCE PASS`
@@ -62,7 +95,7 @@ open security-acceptance item before the log-hygiene requirement is closed.
 
 # PRED-TRUST-1 Current State
 
-Status: `READY_FOR_ACCEPTANCE`
+Status: `SEALED / ACCEPTANCE PASS`
 
 The read-only audit is pinned to accepted production write-back commit
 `73994d32fc148da49295a5bfef2e1e42e042a22e` and run `33294381128`. It selects
@@ -89,10 +122,11 @@ accuracy `60.22%`, and O/U 2.5 accuracy `62.43%`.
 The product conclusion is `MIXED`: P0 lambda generation, P1 product
 presentation, and P2 market-fusion evidence. The legacy `87.5%` exact-score
 gate is unchanged; the audit recommendation is `REPLACE_WITH_MULTI_SIGNAL`.
-The next sole milestone is `PRED-TRUST-2 — Strength/Lambda Challenger
-Experiment Design & Bounded Prospective Shadow Plan`. No model, Champion,
-frozen prediction, provider, identity, or presentation implementation starts
-from this audit.
+PRED-TRUST-1 was independently accepted and sealed after PR #125 was merged
+at `1ec57af0b4bae7ca15cd41e2cdf4e578a21f7d89`. PRED-TRUST-2 is recorded above
+as the current bounded research milestone. No model, Champion, frozen
+prediction, provider, identity, or presentation implementation starts from
+the accepted audit.
 
 # DATA-PLANE-1 Current State
 

@@ -398,3 +398,48 @@ acceptance must verify:
 The audit artifact is
 `data/prediction_quality/pred_trust_1/audit_2026-08-30.json`; the human report
 is `docs/prediction-quality/PRED-TRUST-1_FINAL_REPORT.md`.
+
+Independent acceptance result: `PRED-TRUST-1 = ACCEPTANCE PASS`. PR #125 was
+merged at `1ec57af0b4bae7ca15cd41e2cdf4e578a21f7d89` after the accepted
+write-back and audit pins were rechecked.
+
+# 2J. PRED-TRUST-2 Acceptance
+
+`PRED-TRUST-2 - Bounded Strength/Lambda Challenger Shootout` may be marked by
+Codex only as `READY_FOR_ACCEPTANCE`. Independent acceptance must verify:
+
+1. The replay uses only the accepted PRED-TRUST-1 pins: production run
+   `33294381128`, write-back commit
+   `73994d32fc148da49295a5bfef2e1e42e042a22e`, `217` unique final legal
+   prematch matches, and `181` verified 90-minute results. Cohort IDs and
+   frozen input snapshot hashes are locked in the manifest.
+2. The candidate registry contains exactly Champion, Challenger A, and
+   Challenger B. The two challengers are deterministic, pre-registered,
+   structurally distinct, and use no fitted parameters, new provider, or
+   post-match input.
+3. The dependency map identifies football evidence, recent form, market
+   baseline, strength representation, calibration, lambda generation, and
+   the independent-Poisson score matrix boundary.
+4. The result reports accuracy, Brier, and LogLoss for 1X2; exact-score Top1,
+   Top3, actual-score probability, and NLL; BTTS and O/U 2.5 accuracy/Brier;
+   calibration; lambda gap/total distributions; score diversity; and the
+   probability right tail. A single machine trade-off table marks every
+   challenger metric `BETTER`, `SAME`, or `WORSE` against Champion.
+5. The replay has exactly one offline batch, reproduces the Champion lambda
+   chain within the recorded tolerance, preserves the pinned cohort, and
+   leaves frozen predictions, the prospective ledger, production Champion,
+   shadow automation, health monitor/gate, providers, and frontend unchanged.
+6. The final result is one of `PROMISING_FOR_SHADOW`,
+   `NO_CHALLENGER_BEATS_CHAMPION`, or `INCONCLUSIVE`. This milestone does not
+   promote or enable any challenger. For this result, the next sole milestone
+   is upstream inputs / football evidence / market fusion; no lambda patch
+   series continues.
+7. Focused tests, syntax checks, diff checks, GitHub branch/commit/PR evidence,
+   and the `REMOTE_DELIVERY_CHECK` all pass. The PR body includes the
+   Champion-vs-A-vs-B summary, key metrics, lambda/concentration/right-tail
+   result, blockers, tests/evidence, decision, next milestone, and STOP state.
+
+The durable evidence is
+`data/prediction_quality/pred_trust_2/pinned_cohort_manifest.json`,
+`data/prediction_quality/pred_trust_2/replay_2026-08-30.json`, and
+`docs/prediction-quality/PRED-TRUST-2_FINAL_REPORT.md`.

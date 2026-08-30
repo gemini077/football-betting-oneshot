@@ -4,9 +4,43 @@
 
 # Current Sole Pointer
 
-# PRED-TRUST-1 - Unique-Match Prediction Integrity & Multi-Market Quality Audit
+# PRED-TRUST-2 - Bounded Strength/Lambda Challenger Shootout
 
 Status: `READY_FOR_ACCEPTANCE`
+
+Decision: `NO_CHALLENGER_BEATS_CHAMPION`
+
+The one allowed offline replay is complete. It compared exactly the current
+Champion, Challenger A (recent-form strength separation), and Challenger B
+(market-to-goal separation), using only the pinned PRED-TRUST-1 evidence:
+`217` unique final legal prematch matches and `181` verified 90-minute
+results. The pinned production run is `33294381128` and the accepted
+write-back commit is
+`73994d32fc148da49295a5bfef2e1e42e042a22e`.
+PR #125 was independently accepted for PRED-TRUST-1 and merged at
+`1ec57af0b4bae7ca15cd41e2cdf4e578a21f7d89` before this milestone began.
+
+Challenger A failed on concentration, lambda separation, 1X2 proper scores,
+and exact Top3. Challenger B materially reduced 1-1 Top1 from `76.50%` to
+`49.31%` and improved the lambda gap distribution, but failed the BTTS, O/U
+2.5, and right-tail checks. Neither challenger passed the multi-signal
+qualification gate. The report contains the complete metrics and machine
+trade-off table.
+
+No new data, fitting, post-match parameter input, Champion change, production
+enablement, shadow run, frozen rewrite, ledger rewrite, health change,
+provider change, or frontend change is allowed from this result.
+
+Evidence: `data/prediction_quality/pred_trust_2/pinned_cohort_manifest.json`,
+`data/prediction_quality/pred_trust_2/replay_2026-08-30.json`, and
+`docs/prediction-quality/PRED-TRUST-2_FINAL_REPORT.md`.
+
+Next sole milestone: return to upstream inputs / football evidence / market
+fusion. Do not continue a lambda patch series. STOP.
+
+# Historical execution record: PRED-TRUST-1 - Unique-Match Prediction Integrity & Multi-Market Quality Audit
+
+Status: `SEALED / ACCEPTANCE PASS`
 
 DATA-PLANE-2-PROD is closed as `SEALED / DEPLOYED / ACCEPTANCE PASS` after
 independent final acceptance. PR #124 is the governance-only closeout record.
@@ -55,12 +89,12 @@ log. Runtime access key and secret remained masked, and no values are copied
 into this record. Data-plane verification remains valid; close this item in a
 separate workflow-hygiene change before final security acceptance.
 
-PRED-TRUST-1 is the only active milestone. It is an evidence audit, not a
-model modification task. Use one final legal prematch prediction per unique
-match, classify all production health duplicate groups, and report current-day,
-historical, lambda, cross-market, prospective, and health-gate evidence.
+PRED-TRUST-1 was the preceding evidence audit, not a model modification task.
+It used one final legal prematch prediction per unique match, classified all
+production health duplicate groups, and reported current-day, historical,
+lambda, cross-market, prospective, and health-gate evidence.
 
-Audit result: `MIXED / READY_FOR_ACCEPTANCE`. The accepted current-day source
+Audit result: `MIXED / SEALED / ACCEPTANCE PASS`. The accepted current-day source
 has `22` frozen and `3` insufficient fixtures. Unique-match selection yields
 `16/22` current and `166/217` historical `1-1` Top1, `14/22` and `144/217`
 lambda gaps below `0.5`, and `181` verified prospective matches. Duplicate
@@ -72,9 +106,9 @@ positive for legitimate version history. The health gate recommendation is
 Evidence: `docs/prediction-quality/PRED-TRUST-1_FINAL_REPORT.md` and
 `data/prediction_quality/pred_trust_1/audit_2026-08-30.json`.
 
-Next sole milestone: `PRED-TRUST-2 — Strength/Lambda Challenger Experiment
-Design & Bounded Prospective Shadow Plan` (design only; no automatic build,
-shadow enablement, promotion, or Champion change).
+This historical pointer was followed by PRED-TRUST-2, whose bounded replay is
+recorded at the current sole pointer above. The replay did not enable shadow,
+promotion, or a Champion change.
 
 STOP CONDITIONS:
 
