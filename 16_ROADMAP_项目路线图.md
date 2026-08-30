@@ -7,21 +7,22 @@
 
 CURRENT PHASE:
 
-`PRED-TRUST-2 - Bounded Strength/Lambda Challenger Shootout`
+`PRED-TRUST-3 - Market-Side-Only Hybrid Knockout`
 
 CURRENT STATUS: `READY_FOR_ACCEPTANCE`
 
-CURRENT DECISION: `NO_CHALLENGER_BEATS_CHAMPION`
+CURRENT DECISION: `MARKET_SIDE_ONLY_NOT_SUFFICIENT`
 
-The one bounded offline replay is recorded in
-`data/prediction_quality/pred_trust_2/replay_2026-08-30.json` and compares
-exactly Champion plus two deterministic challengers on the pinned `217`
-unique-match cohort, including `181` verified 90-minute matches. Challenger B
-reduces exact-score concentration and separates lambda gaps, but fails BTTS,
-O/U 2.5, and right-tail checks; Challenger A fails the concentration,
-separation, 1X2, and exact Top3 checks. No challenger is eligible for shadow
-promotion. The next route is upstream inputs / football evidence / market
-fusion, not another lambda patch series.
+The one-shot replay is recorded in
+`data/prediction_quality/pred_trust_3/replay_2026-08-30.json` and compares
+Champion, existing Challenger B, and exactly one new deterministic Challenger
+C on the pinned `217` unique-match cohort, including `181` verified 90-minute
+matches. C retains the 1X2, exact-score, BTTS, O/U, lambda-separation, and
+right-tail properties required by the bounded hypothesis, but fails the
+pre-registered BTTS ECE check (`0.1420` vs Champion `0.0986`). The result is
+`MARKET_SIDE_ONLY_NOT_SUFFICIENT`; no candidate is eligible for shadow. The
+next route is football evidence / team strength representation, not another
+market/lambda patch series.
 
 `DATA-PLANE-2-PROD - Production Deployment Verification` is now
 `SEALED / DEPLOYED / ACCEPTANCE PASS`. PR #124 is the governance-only closeout
@@ -47,10 +48,10 @@ INSUFFICIENT_DATA` out of 25, so daily availability is `PARTIAL`, not
 `SEVERELY_BLOCKED`. No PRED-AVAIL-3, ID-AUTO-2, provider addition, alias work,
 or model change is active.
 
-The accepted PRED-TRUST-1 audit used a canonical unique-match cohort and did
-not alter the Champion, frozen/prospective state, or public repository data
-boundary. The bounded PRED-TRUST-2 replay stopped before any model, provider,
-identity, or presentation change.
+The accepted PRED-TRUST-1 and PRED-TRUST-2 audits used canonical unique-match
+cohorts and did not alter the Champion, frozen/prospective state, or public
+repository data boundary. The bounded PRED-TRUST-3 replay stopped before any
+model, provider, identity, or presentation change.
 
 PRED-TRUST-1 audit evidence is recorded in
 `docs/prediction-quality/PRED-TRUST-1_FINAL_REPORT.md` and
@@ -60,8 +61,9 @@ matches, `217` historical unique matches, and `181` verified prospective
 matches. Exact-score Top1 `1-1` is `72.73%` current and `76.50%` historical;
 lambda gap `<0.5` is `63.64%` current and `66.36%` historical. The ranked
 evidence is P0 lambda generation, P1 product presentation, P2 market fusion.
-PRED-TRUST-2 is now recorded above as a completed one-off research replay at
-`READY_FOR_ACCEPTANCE`; it is not promoted to shadow or production.
+PRED-TRUST-2 is accepted and sealed. PRED-TRUST-3 is recorded above as a
+completed one-off research replay at `READY_FOR_ACCEPTANCE`; it is not
+promoted to shadow or production.
 
 Open workflow-hygiene item: the production Bootstrap step exposed endpoint,
 bucket, and region configuration values through GitHub step environment

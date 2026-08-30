@@ -4,9 +4,35 @@
 
 # Current Sole Pointer
 
-# PRED-TRUST-2 - Bounded Strength/Lambda Challenger Shootout
+# PRED-TRUST-3 - Market-Side-Only Hybrid Knockout
 
 Status: `READY_FOR_ACCEPTANCE`
+
+Decision: `MARKET_SIDE_ONLY_NOT_SUFFICIENT`
+
+The one allowed replay read the accepted PRED-TRUST-2 artifact and reused its
+pinned `217` unique final legal prematch matches and `181` verified 90-minute
+matches. It compared Champion, existing Challenger B, and exactly one new
+deterministic Challenger C. C kept the Champion total and replaced only the
+side-share with `market_share`.
+
+C retained the B/Champion 1X2 improvement (`56.35%` accuracy, `0.5486` Brier,
+`0.9301` LogLoss), exact Top1 (`11.60%`), BTTS accuracy (`60.22%`), O/U 2.5
+accuracy (`62.43%`), and all three right-tail probabilities. It reduced 1-1
+Top1 to `54.84%` and lambda gap `<0.5` to `47.93%`, but failed the
+pre-registered BTTS ECE check (`0.1420` vs Champion `0.0986`).
+
+Result: `MARKET_SIDE_ONLY_NOT_SUFFICIENT`. No production, Champion, shadow,
+frozen, ledger, health, provider, or frontend change was made. The next sole
+milestone is `football evidence / team strength representation`; stop the
+market/lambda patch series. STOP.
+
+Evidence: `data/prediction_quality/pred_trust_3/replay_2026-08-30.json` and
+`docs/prediction-quality/PRED-TRUST-3_FINAL_REPORT.md`.
+
+# Historical execution record: PRED-TRUST-2 - Bounded Strength/Lambda Challenger Shootout
+
+Status: `SEALED / ACCEPTANCE PASS`
 
 Decision: `NO_CHALLENGER_BEATS_CHAMPION`
 
@@ -35,8 +61,9 @@ Evidence: `data/prediction_quality/pred_trust_2/pinned_cohort_manifest.json`,
 `data/prediction_quality/pred_trust_2/replay_2026-08-30.json`, and
 `docs/prediction-quality/PRED-TRUST-2_FINAL_REPORT.md`.
 
-Next sole milestone: return to upstream inputs / football evidence / market
-fusion. Do not continue a lambda patch series. STOP.
+PRED-TRUST-2 was independently accepted and sealed after PR #126 was merged
+at `81d70ad263d58d067237b88b0c332c284345518d`. PRED-TRUST-3 is recorded above
+as the current bounded research milestone.
 
 # Historical execution record: PRED-TRUST-1 - Unique-Match Prediction Integrity & Multi-Market Quality Audit
 

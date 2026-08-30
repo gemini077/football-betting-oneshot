@@ -443,3 +443,44 @@ The durable evidence is
 `data/prediction_quality/pred_trust_2/pinned_cohort_manifest.json`,
 `data/prediction_quality/pred_trust_2/replay_2026-08-30.json`, and
 `docs/prediction-quality/PRED-TRUST-2_FINAL_REPORT.md`.
+
+Independent acceptance result: `PRED-TRUST-2 = ACCEPTANCE PASS`. PR #126 was
+merged at `81d70ad263d58d067237b88b0c332c284345518d` after the PRED-TRUST-2
+pins and evidence were rechecked.
+
+# 2K. PRED-TRUST-3 Acceptance
+
+`PRED-TRUST-3 - Market-Side-Only Hybrid Knockout` may be marked by Codex only
+as `READY_FOR_ACCEPTANCE`. Independent acceptance must verify:
+
+1. The replay reads the accepted PRED-TRUST-2 artifact and preserves its
+   production/write-back pins, `217` unique final legal prematch matches, and
+   `181` verified 90-minute results. The PRED-TRUST-2 replay and cohort
+   manifest hashes are recorded in the output.
+2. The comparison contains exactly Champion, existing Challenger B, and one
+   new deterministic Challenger C. Challenger A remains excluded after its
+   prior `REJECT` result. C uses exactly `total=Champion total` and
+   `share=market_share`, with the existing clamp, independent Poisson, `rho=0`,
+   and score matrix.
+3. The output includes 1X2 accuracy/Brier/LogLoss/ECE; exact-score Top1/Top3,
+   NLL, and actual-score probability; BTTS and O/U 2.5 accuracy/Brier/ECE;
+   lambda total/gap distributions; score diversity and margin shares; and
+   right-tail probabilities for totals `>=4`, `>=5`, and `>=6`.
+4. One machine trade-off table marks Existing B and C as `BETTER`, `SAME`, or
+   `WORSE` against Champion. The experiment records the confounding boundary
+   and does not claim a final causal root from B or C.
+5. Exactly one offline batch is used, with no new data, parameter sweep,
+   post-match parameter input, production/shadow enablement, frozen rewrite,
+   ledger rewrite, health change, provider change, or frontend change.
+6. The final result is exactly one of `MARKET_SIDE_FUSION_PROMISING` or
+   `MARKET_SIDE_ONLY_NOT_SUFFICIENT`. For this result, the next sole milestone
+   is `football evidence / team strength representation`; the market/lambda
+   patch series stops and no Challenger is promoted.
+7. Focused tests, syntax checks, diff checks, GitHub branch/commit/PR evidence,
+   and `REMOTE_DELIVERY_CHECK` pass. The PR body contains Champion-vs-B-vs-C,
+   key metrics, BTTS/O-U/right-tail status, blockers, decision, next milestone,
+   and STOP state.
+
+The durable evidence is
+`data/prediction_quality/pred_trust_3/replay_2026-08-30.json` and
+`docs/prediction-quality/PRED-TRUST-3_FINAL_REPORT.md`.
