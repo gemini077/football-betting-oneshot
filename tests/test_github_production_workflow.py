@@ -123,3 +123,60 @@ def test_generated_data_save_uses_narrow_durability_gate():
     assert "exit 1" in fail_closed_block
     assert "if: ${{ !cancelled() && steps.generated_data_gate.outputs.ready == 'true' }}" in save_block
     assert "always()" not in save_block
+
+
+def test_deploy_pages_bootstraps_verified_data_before_production_cycle():
+    text = _workflow_text()
+
+    bootstrap_index = text.index("- name: Bootstrap verified football data")
+    cycle_index = text.index("- name: Run production cycle")
+    assert bootstrap_index < cycle_index
+    bootstrap_block = text[bootstrap_index:cycle_index]
+    assert "./.github/actions/bootstrap-football-data" in bootstrap_block
+    for name in (
+        "FOOTBALL_DATA_SNAPSHOT_RUNTIME_ACCESS_KEY_ID",
+        "FOOTBALL_DATA_SNAPSHOT_RUNTIME_SECRET_ACCESS_KEY",
+    ):
+        assert name in bootstrap_block
+    action = (ROOT / ".github" / "actions" / "bootstrap-football-data" / "action.yml").read_text(encoding="utf-8")
+    for name in (
+        "FOOTBALL_DATA_SNAPSHOT_ENDPOINT_URL",
+        "FOOTBALL_DATA_SNAPSHOT_BUCKET",
+        "FOOTBALL_DATA_SNAPSHOT_REGION",
+    ):
+        assert f"${{{{ vars.{name} }}}}" in text
+        assert name in action
+    assert "add-mask" in action
+    assert "gh api" not in action
+    assert "endpoint-url:" not in bootstrap_block
+    assert "bucket:" not in bootstrap_block
+    assert "region:" not in bootstrap_block
+    assert "--runtime-snapshot-health" in text
+
+
+def test_clean_runner_smoke_is_read_only_and_uses_runtime_configuration():
+    workflow = (ROOT / ".github" / "workflows" / "data-plane-2-clean-runner-smoke.yml").read_text(encoding="utf-8")
+    action = (ROOT / ".github" / "actions" / "bootstrap-football-data" / "action.yml").read_text(encoding="utf-8")
+
+    assert "pull_request:" in workflow
+    assert "permissions:\n  contents: read" in workflow
+    assert "actions/checkout@v4" in workflow
+    assert "./.github/actions/bootstrap-football-data" in workflow
+    assert "runtime-access-key-id: ${{ secrets.FOOTBALL_DATA_SNAPSHOT_RUNTIME_ACCESS_KEY_ID }}" in workflow
+    assert "runtime-secret-access-key: ${{ secrets.FOOTBALL_DATA_SNAPSHOT_RUNTIME_SECRET_ACCESS_KEY }}" in workflow
+    assert "FOOTBALL_DATA_SNAPSHOT_ENDPOINT_URL" in workflow
+    assert "FOOTBALL_DATA_SNAPSHOT_BUCKET" in workflow
+    assert "FOOTBALL_DATA_SNAPSHOT_REGION" in workflow
+    assert "${{ vars.FOOTBALL_DATA_SNAPSHOT_ENDPOINT_URL }}" in workflow
+    assert "${{ vars.FOOTBALL_DATA_SNAPSHOT_BUCKET }}" in workflow
+    assert "${{ vars.FOOTBALL_DATA_SNAPSHOT_REGION }}" in workflow
+    assert "secrets.FOOTBALL_DATA_SNAPSHOT_ENDPOINT_URL" not in workflow
+    assert "secrets.FOOTBALL_DATA_SNAPSHOT_BUCKET" not in workflow
+    assert "secrets.FOOTBALL_DATA_SNAPSHOT_REGION" not in workflow
+    assert "python -m scripts.football_data.runtime_clean_runner_smoke" in workflow
+    assert "contents: write" not in workflow
+    assert "git push" not in workflow
+    assert "pages:" not in workflow
+    assert "github.event.pull_request.head.repo.full_name == github.repository" in workflow
+    assert "GITHUB_RUNTIME_CONFIG_MISSING" in action
+    assert "--data-home \"$RUNNER_TEMP/football-data/runtime\"" in action

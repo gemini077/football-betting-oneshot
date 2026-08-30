@@ -6,13 +6,22 @@
 
 # DATA-PLANE-2 - Private Snapshot Production Bootstrap
 
-Status: `BLOCKED_BY_OBJECT_STORE_CREDENTIAL`
+Status: `LOCAL_PUBLISHER_INPUT_REQUIRED`
 
-The short preflight found no usable object-store credential in the local
-environment, GitHub workflow references, repository secrets/variables, or
-GitHub environment secrets. Secret values were not printed. No provider
-suitability check, implementation, upload, workflow change, or production
-smoke was started.
+PR #122 is merged into latest `origin/main` at
+`a8883c1bd8a2fa5a14d9dcab205343bef7fc53e9`; PR #120 remains OPEN and
+unmerged. GitHub runtime secret/variable name preflight is ready and secret
+values were not printed. The implementation branch is
+`codex/data-plane-2-bootstrap`.
+
+Local authoritative verification passed with 1,778 records and dataset
+SHA-256
+`48088556830cfb5a6ecd523fc4dc29889406b4853001c51849f5533ecc44a3f2`.
+The local `500-1364199` recent-form smoke returned AVAILABLE with 10 records,
+all before target kickoff. The publisher implementation is ready to run, but
+the local publisher environment is missing. No publisher secret was requested
+in chat or written to repository artifacts. B2 upload and the real GitHub
+clean-runner smoke remain pending.
 
 The provider-neutral contract and one-time setup are recorded in
 `docs/data-foundation/DATA-PLANE-2_PRIVATE_SNAPSHOT_BOOTSTRAP_CONTRACT.md`.
@@ -28,12 +37,14 @@ The exact canonical names are:
 
 STOP CONDITIONS:
 
-- Stop at `BLOCKED_BY_OBJECT_STORE_CREDENTIAL` until the publisher and runtime
-  credential pairs are configured and the preflight returns `AVAILABLE`.
-- Do not provision a provider, create Supabase, add a new data provider, or
-  choose a vendor in this blocked turn.
-- Do not write an unverified production workflow or run a live production
-  smoke with an unverified/empty historical data home.
+- Stop at `LOCAL_PUBLISHER_INPUT_REQUIRED` until the local Publisher values
+  are supplied through the masked interactive command. Do not paste the
+  applicationKey into chat, an issue, a PR, a commit, a log, or repository
+  file.
+- Do not run the publisher with an unverified/empty historical data home.
+- Do not declare `OBJECT_SNAPSHOT_VERIFIED`, cloud parity, or
+  `READY_FOR_ACCEPTANCE` before the B2 read-back and GitHub clean-runner
+  evidence pass.
 - Do not modify Champion mathematics, frozen predictions, prospective ledger,
   dashboard state, or raw source data.
 

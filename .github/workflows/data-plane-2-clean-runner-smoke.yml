@@ -1,0 +1,45 @@
+name: DATA-PLANE-2 clean runner smoke
+
+on:
+  pull_request:
+    paths:
+      - "requirements.txt"
+      - "data/football_data/runtime_snapshot_manifest.json"
+      - "scripts/football_data/**"
+      - "scripts/recent_form_cache.py"
+      - ".github/actions/bootstrap-football-data/**"
+      - ".github/workflows/data-plane-2-clean-runner-smoke.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  clean-runner-smoke:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ubuntu-latest
+    env:
+      FOOTBALL_DATA_SNAPSHOT_ENDPOINT_URL: ${{ vars.FOOTBALL_DATA_SNAPSHOT_ENDPOINT_URL }}
+      FOOTBALL_DATA_SNAPSHOT_BUCKET: ${{ vars.FOOTBALL_DATA_SNAPSHOT_BUCKET }}
+      FOOTBALL_DATA_SNAPSHOT_REGION: ${{ vars.FOOTBALL_DATA_SNAPSHOT_REGION }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Bootstrap verified football data
+        uses: ./.github/actions/bootstrap-football-data
+        with:
+          runtime-access-key-id: ${{ secrets.FOOTBALL_DATA_SNAPSHOT_RUNTIME_ACCESS_KEY_ID }}
+          runtime-secret-access-key: ${{ secrets.FOOTBALL_DATA_SNAPSHOT_RUNTIME_SECRET_ACCESS_KEY }}
+
+      - name: Verify clean-runner dataset and recent form
+        run: python -m scripts.football_data.runtime_clean_runner_smoke

@@ -521,6 +521,80 @@ def test_no_eligible_settlement_is_healthy(tmp_path):
     assert result["status"] == "HEALTHY"
 
 
+def test_runtime_snapshot_ready_is_exposed_as_internal_health(tmp_path):
+    root = _healthy_tree(tmp_path)
+    health_path = tmp_path / "runtime_snapshot_health.json"
+    _write_json(health_path, {
+        "status": "READY",
+        "snapshot_version": "snapshot-20260830T010203Z-" + "1" * 64,
+        "dataset_sha256": "2" * 64,
+        "record_count": 1778,
+        "bootstrap_at": "2026-08-30T01:02:03Z",
+    })
+
+    result = evaluate_health(root=root, runtime_snapshot_path=health_path)
+
+    assert result["status"] == "HEALTHY"
+    assert result["runtime_data_snapshot"]["status"] == "READY"
+    assert result["details"]["runtime_data_snapshot"]["record_count"] == 1778
+
+
+def test_runtime_snapshot_fallback_is_not_reported_as_healthy(tmp_path):
+    root = _healthy_tree(tmp_path)
+    health_path = tmp_path / "runtime_snapshot_health.json"
+    _write_json(health_path, {
+        "status": "DEGRADED_LAST_KNOWN_GOOD",
+        "snapshot_version": "snapshot-20260830T010203Z-" + "1" * 64,
+        "dataset_sha256": "2" * 64,
+        "record_count": 1778,
+        "bootstrap_at": "2026-08-30T01:02:03Z",
+    })
+
+    result = evaluate_health(root=root, runtime_snapshot_path=health_path)
+
+    assert result["status"] == "WATCH"
+    assert result["runtime_data_snapshot"]["status"] == "DEGRADED_LAST_KNOWN_GOOD"
+    assert "DEGRADED_DATA_SNAPSHOT" in result["reasons"]
+
+
+def test_runtime_snapshot_failure_is_immediate_alert(tmp_path):
+    root = _healthy_tree(tmp_path)
+    health_path = tmp_path / "runtime_snapshot_health.json"
+    _write_json(health_path, {
+        "status": "FAILED",
+        "snapshot_version": None,
+        "dataset_sha256": None,
+        "record_count": None,
+        "bootstrap_at": "2026-08-30T01:02:03Z",
+    })
+
+    result = evaluate_health(root=root, runtime_snapshot_path=health_path)
+
+    assert result["status"] == "ALERT"
+    assert result["runtime_data_snapshot"]["status"] == "FAILED"
+    assert "RUNTIME_DATA_SNAPSHOT_FAILED" in result["reasons"]
+
+
+def test_runtime_snapshot_ready_with_missing_runtime_database_is_not_healthy(tmp_path, monkeypatch):
+    root = _healthy_tree(tmp_path)
+    health_path = tmp_path / "runtime_snapshot_health.json"
+    _write_json(health_path, {
+        "status": "READY",
+        "snapshot_version": "snapshot-20260830T010203Z-" + "1" * 64,
+        "dataset_sha256": "2" * 64,
+        "record_count": 1778,
+        "bootstrap_at": "2026-08-30T01:02:03Z",
+    })
+    monkeypatch.setenv("FOOTBALL_DATA_HOME", str(tmp_path / "missing-runtime-home"))
+
+    result = evaluate_health(root=root, runtime_snapshot_path=health_path)
+
+    assert result["status"] == "ALERT"
+    assert result["runtime_data_snapshot"]["status"] == "FAILED"
+    assert result["runtime_data_snapshot"]["error"] == "RUNTIME_DATASET_PARITY_FAILED"
+    assert "RUNTIME_DATA_SNAPSHOT_FAILED" in result["reasons"]
+
+
 def test_corrupt_health_state_is_safe_alert(tmp_path):
     root = _healthy_tree(tmp_path)
     state = root / "data" / "product_runtime" / "health_watch.json"

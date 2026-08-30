@@ -21,6 +21,10 @@ concurrency:
 jobs:
   refresh-build-deploy:
     runs-on: ubuntu-latest
+    env:
+      FOOTBALL_DATA_SNAPSHOT_ENDPOINT_URL: ${{ vars.FOOTBALL_DATA_SNAPSHOT_ENDPOINT_URL }}
+      FOOTBALL_DATA_SNAPSHOT_BUCKET: ${{ vars.FOOTBALL_DATA_SNAPSHOT_BUCKET }}
+      FOOTBALL_DATA_SNAPSHOT_REGION: ${{ vars.FOOTBALL_DATA_SNAPSHOT_REGION }}
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -39,6 +43,12 @@ jobs:
 
       - name: Sync latest durable state
         run: git pull --rebase origin main
+
+      - name: Bootstrap verified football data
+        uses: ./.github/actions/bootstrap-football-data
+        with:
+          runtime-access-key-id: ${{ secrets.FOOTBALL_DATA_SNAPSHOT_RUNTIME_ACCESS_KEY_ID }}
+          runtime-secret-access-key: ${{ secrets.FOOTBALL_DATA_SNAPSHOT_RUNTIME_SECRET_ACCESS_KEY }}
 
       - name: Run production cycle
         id: production_cycle
@@ -70,7 +80,9 @@ jobs:
       - name: Evaluate production health
         id: health
         run: |
-          python scripts/production_health_watch.py | tee health_watch_result.json
+          python scripts/production_health_watch.py \
+            --runtime-snapshot-health "$FOOTBALL_DATA_RUNTIME_SNAPSHOT_HEALTH" \
+            | tee health_watch_result.json
 
       - name: Save generated public data
         if: ${{ !cancelled() && steps.generated_data_gate.outputs.ready == 'true' }}

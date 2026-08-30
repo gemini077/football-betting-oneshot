@@ -5,18 +5,27 @@
 
 # DATA-PLANE-2 Current State
 
-Status: `BLOCKED_BY_OBJECT_STORE_CREDENTIAL`
+Status: `LOCAL_PUBLISHER_INPUT_REQUIRED`
 
-The 2026-08-30 credential preflight found no usable private object-store
-credential in the local environment, GitHub workflow references, repository
-secrets/variables, or GitHub environment secrets. Secret values were not
-printed. No provider was provisioned and no publisher, bootstrap, workflow,
-production smoke, or snapshot upload was started.
+PR #122 was safely merged into the latest `origin/main` at
+`a8883c1bd8a2fa5a14d9dcab205343bef7fc53e9`; the latest prediction, market,
+prospective, frozen, dashboard and runtime state was retained. PR #120 remains
+OPEN and unmerged. The GitHub runtime secret/variable name preflight is
+`GITHUB_RUNTIME_CONFIG_READY`; values were never printed.
 
-The provider-neutral contract, exact credential names, object naming contract,
-one-time setup, and implementation file plan are recorded in
+Implementation branch `codex/data-plane-2-bootstrap` contains the provider-
+neutral boto3 publisher, exact immutable bootstrap, last-known-good fallback,
+runtime health evidence, deploy integration, and clean-runner smoke workflow.
+The local authoritative verification is 1,778 records with dataset SHA-256
+`48088556830cfb5a6ecd523fc4dc29889406b4853001c51849f5533ecc44a3f2`.
+The local target recent-form smoke for `500-1364199` is AVAILABLE with 10
+pre-kickoff records. Cloud upload and GitHub-hosted clean-runner evidence are
+not yet run because publisher credentials are not present in the local
+environment. No secret value was requested, read, or recorded.
+
+The provider-neutral contract remains recorded in
 `docs/data-foundation/DATA-PLANE-2_PRIVATE_SNAPSHOT_BOOTSTRAP_CONTRACT.md`.
-The milestone stops at this credential gate.
+The implementation is not yet `READY_FOR_ACCEPTANCE`.
 
 # DATA-PLANE-1 Current State
 

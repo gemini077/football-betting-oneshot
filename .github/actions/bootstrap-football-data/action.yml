@@ -1,0 +1,48 @@
+name: Bootstrap verified football data
+description: Download and verify the pinned private historical snapshot into an isolated runtime home.
+inputs:
+  runtime-access-key-id:
+    description: Repository secret used only for read-only runtime access.
+    required: true
+  runtime-secret-access-key:
+    description: Repository secret used only for read-only runtime access.
+    required: true
+  manifest:
+    description: Exact tracked runtime manifest path.
+    required: false
+    default: data/football_data/runtime_snapshot_manifest.json
+runs:
+  using: composite
+  steps:
+    - name: Bootstrap exact snapshot
+      shell: bash
+      env:
+        RUNTIME_ACCESS_KEY_ID: ${{ inputs.runtime-access-key-id }}
+        RUNTIME_SECRET_ACCESS_KEY: ${{ inputs.runtime-secret-access-key }}
+      run: |
+        set -euo pipefail
+
+        for name in \
+          FOOTBALL_DATA_SNAPSHOT_ENDPOINT_URL \
+          FOOTBALL_DATA_SNAPSHOT_BUCKET \
+          FOOTBALL_DATA_SNAPSHOT_REGION; do
+          value="${!name:-}"
+          if [[ -z "$value" || "$value" == *$'\n'* || "$value" == *$'\r'* ]]; then
+            echo "GITHUB_RUNTIME_CONFIG_MISSING"
+            exit 1
+          fi
+          printf '::add-mask::%s\n' "$value"
+        done
+
+        if [[ -z "${RUNTIME_ACCESS_KEY_ID:-}" || -z "${RUNTIME_SECRET_ACCESS_KEY:-}" ]]; then
+          echo "GITHUB_RUNTIME_CONFIG_MISSING"
+          exit 1
+        fi
+        export FOOTBALL_DATA_SNAPSHOT_RUNTIME_ACCESS_KEY_ID="$RUNTIME_ACCESS_KEY_ID"
+        export FOOTBALL_DATA_SNAPSHOT_RUNTIME_SECRET_ACCESS_KEY="$RUNTIME_SECRET_ACCESS_KEY"
+        python -m scripts.football_data.bootstrap_runtime_data \
+          --manifest "${{ inputs.manifest }}" \
+          --runtime-temp "$RUNNER_TEMP/football-data" \
+          --data-home "$RUNNER_TEMP/football-data/runtime" \
+          --github-env "$GITHUB_ENV" \
+          --health-path "$RUNNER_TEMP/football-data/runtime_snapshot_health.json"
