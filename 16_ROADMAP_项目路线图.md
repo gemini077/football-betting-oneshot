@@ -7,11 +7,28 @@
 
 CURRENT PHASE:
 
-`MARKET-SIDE-SHADOW-1 - Bounded Prospective Shadow Validation`
+`PROD-HEALTH-1 - Duplicate Alert Truth Closure`
 
 CURRENT STATUS: `READY_FOR_ACCEPTANCE`
 
-CURRENT DECISION: `MARKET-SIDE-SHADOW-1 = READY_FOR_ACCEPTANCE`
+CURRENT DECISION: `PROD-HEALTH-1 = READY_FOR_ACCEPTANCE`
+
+The previous `MARKET-SIDE-SHADOW-1` milestone is now
+`DEPLOYED / SEALED / ACCEPTANCE PASS`. This route is limited to production
+health truth: canonical match identity, legal pre-kickoff immutable versions,
+and final selected-version semantics. It does not change Champion,
+challenger, frozen/prospective data, or the exact-score threshold.
+
+Latest `origin/main` replay at
+`24b2ad233b9cfa7d03497f2014958dd8430b7bb7` found `578` raw frozen rows,
+`219` selected unique matches, `573` legal prematch rows, `74` legitimate
+version-history groups, `0` actual duplicate-final groups, `0` identity
+collisions, and `0` health-only groups. The bounded implementation replay is
+healthy on the duplicate dimension; production workflow verification remains
+part of this milestone's acceptance evidence. STOP after that verification,
+commit, push, and PR delivery.
+
+# Previous milestone: MARKET-SIDE-SHADOW-1
 
 The accepted PRED-TRUST-3 Challenger C is now wired as a background-only
 paired shadow. The existing runner captures Champion and C from the same
@@ -62,9 +79,9 @@ runtime count `1778`, dataset SHA-256
 durability gate PASS, public-data write-back SUCCESS, and Pages deployment
 SUCCESS.
 
-The production health result is an explicit product warning
+That production run reported an explicit product warning
 `DUPLICATE_FROZEN_PREDICTION`; `runtime_data_snapshot.status=READY` and the
-data-plane parity remains PASS. The dashboard is `22 FROZEN / 3
+data-plane parity remained PASS. The dashboard was `22 FROZEN / 3
 INSUFFICIENT_DATA` out of 25, so daily availability is `PARTIAL`, not
 `SEVERELY_BLOCKED`. No PRED-AVAIL-3, ID-AUTO-2, provider addition, alias work,
 or model change is active.
@@ -83,8 +100,8 @@ matches, `217` historical unique matches, and `181` verified prospective
 matches. Exact-score Top1 `1-1` is `72.73%` current and `76.50%` historical;
 lambda gap `<0.5` is `63.64%` current and `66.36%` historical. The ranked
 evidence is P0 lambda generation, P1 product presentation, P2 market fusion.
-PRED-TRUST-2 and PRED-TRUST-3 are accepted and sealed. The current route above
-is the engineering-only shadow wiring milestone; it is not a Champion change,
+PRED-TRUST-2 and PRED-TRUST-3 are accepted and sealed. That previous route was
+the engineering-only shadow wiring milestone; it was not a Champion change,
 production promotion, or frontend change.
 
 Open workflow-hygiene item: the production Bootstrap step exposed endpoint,

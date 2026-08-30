@@ -23,6 +23,11 @@ if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
 from prospective_settlement import is_formally_eligible
+from prematch_versioning import (
+    _identity as _prematch_record_identity,
+    _is_formal_prematch,
+    select_latest_legal_prematch,
+)
 from football_data.data_home import historical_results_path
 from football_data.storage import HistoricalResultStore
 
@@ -327,6 +332,215 @@ def _jsonl(path: Path) -> tuple[list[dict[str, Any]], bool]:
     return rows, valid
 
 
+def _duplicate_text(value: Any) -> str:
+    return str(value or "").strip()
+
+
+def _duplicate_normalise_text(value: Any) -> str:
+    return " ".join(_duplicate_text(value).casefold().split())
+
+
+def _duplicate_identity_signature(record: dict[str, Any]) -> dict[str, str]:
+    identity = _prematch_record_identity(record)
+    kickoff = _parse_at(identity.get("kickoff_at"))
+    return {
+        "job_id": _duplicate_text(identity.get("job_id")),
+        "match_id": _duplicate_text(identity.get("match_id")),
+        "match_key": _duplicate_text(identity.get("match_key")),
+        "home": _duplicate_normalise_text(identity.get("home")),
+        "away": _duplicate_normalise_text(identity.get("away")),
+        "kickoff_at": kickoff.isoformat() if kickoff else _duplicate_text(identity.get("kickoff_at")),
+    }
+
+
+def _duplicate_identity_tokens(record: dict[str, Any], signature: dict[str, str]) -> list[str]:
+    tokens = [
+        f"{field}:{signature[field]}"
+        for field in ("job_id", "match_id", "match_key")
+        if signature[field]
+    ]
+    if not tokens and all(signature[field] for field in ("home", "away", "kickoff_at")):
+        tokens.append(
+            "fallback:{kickoff_at}|{home}|{away}".format(
+                kickoff_at=signature["kickoff_at"],
+                home=signature["home"],
+                away=signature["away"],
+            )
+        )
+    if not tokens and _duplicate_text(record.get("prediction_id")):
+        tokens.append(f"prediction_id:{record['prediction_id']}")
+    return tokens
+
+
+def _duplicate_identity_groups(records: list[dict[str, Any]]) -> list[tuple[str, list[dict[str, Any]]]]:
+    """Connect records sharing durable identity tokens for collision detection."""
+    parents = list(range(len(records)))
+
+    def find(index: int) -> int:
+        while parents[index] != index:
+            parents[index] = parents[parents[index]]
+            index = parents[index]
+        return index
+
+    def union(left: int, right: int) -> None:
+        left_root, right_root = find(left), find(right)
+        if left_root != right_root:
+            parents[right_root] = left_root
+
+    token_owner: dict[str, int] = {}
+    signatures = [_duplicate_identity_signature(record) for record in records]
+    for index, (record, signature) in enumerate(zip(records, signatures)):
+        for token in _duplicate_identity_tokens(record, signature):
+            owner = token_owner.setdefault(token, index)
+            union(index, owner)
+
+    grouped: dict[int, list[int]] = defaultdict(list)
+    for index in range(len(records)):
+        grouped[find(index)].append(index)
+
+    components: list[tuple[str, list[dict[str, Any]]]] = []
+    for indexes in sorted(grouped.values(), key=lambda values: values[0]):
+        rows = [records[index] for index in indexes]
+        tokens = sorted({
+            token
+            for index in indexes
+            for token in _duplicate_identity_tokens(records[index], signatures[index])
+        })
+        components.append((";".join(tokens), rows))
+    return components
+
+
+def _duplicate_selection_identity(record: dict[str, Any]) -> dict[str, Any]:
+    identity = _prematch_record_identity(record)
+    return {
+        "job_id": identity.get("job_id"),
+        "match_id": identity.get("match_id"),
+        "match_key": identity.get("match_key"),
+        "home": identity.get("home"),
+        "away": identity.get("away"),
+        "kickoff_at": identity.get("kickoff_at"),
+    }
+
+
+def _duplicate_chronology_key(record: dict[str, Any]) -> tuple[str, str, str]:
+    values: list[str] = []
+    for field in ("source_cutoff_at", "prediction_created_at", "freeze_created_at"):
+        parsed = _parse_at(record.get(field))
+        values.append(parsed.isoformat() if parsed else _duplicate_text(record.get(field)))
+    return tuple(values)  # type: ignore[return-value]
+
+
+def _duplicate_formally_eligible(record: dict[str, Any]) -> bool:
+    try:
+        return bool(is_formally_eligible(record))
+    except Exception:
+        return False
+
+
+def _excluded_prediction_ids(exclusion_rows: list[tuple[Path, dict[str, Any]]]) -> set[str]:
+    return {
+        _duplicate_text(value)
+        for _, payload in exclusion_rows
+        for value in payload.get("prediction_ids") or []
+        if _duplicate_text(value)
+    }
+
+
+def classify_frozen_prediction_duplicates(
+    records: list[dict[str, Any]], *, excluded_ids: set[str] | None = None
+) -> dict[str, Any]:
+    """Classify frozen rows using the PRED-TRUST-1 legal-version selector."""
+    excluded = excluded_ids or set()
+    frozen = [
+        record for record in records
+        if isinstance(record, dict)
+        and _duplicate_text(record.get("prediction_status")) in FROZEN_STATUSES
+    ]
+    components = _duplicate_identity_groups(frozen)
+    counts = Counter({"A": 0, "B": 0, "C": 0, "D": 0})
+    selected_match_count = 0
+    legal_prematch_row_count = 0
+    duplicate_groups: list[dict[str, Any]] = []
+
+    for group_key, rows in components:
+        candidate_rows = [
+            row
+            for row in rows
+            if _duplicate_text(row.get("prediction_id")) not in excluded
+            and _duplicate_formally_eligible(row)
+        ]
+        signatures = [_duplicate_identity_signature(row) for row in rows]
+        identity_collision = any(
+            len({signature[field] for signature in signatures if signature[field]}) > 1
+            for field in ("match_id", "match_key", "home", "away", "kickoff_at")
+        )
+        expected_identity = (
+            _duplicate_selection_identity(candidate_rows[0]) if candidate_rows else {}
+        )
+        legal_candidates = [
+            row
+            for row in candidate_rows
+            if expected_identity and _is_formal_prematch(row, expected_identity)
+        ]
+        legal_prematch_row_count += len(legal_candidates)
+        selection = (
+            select_latest_legal_prematch(candidate_rows, identity=expected_identity)
+            if candidate_rows
+            else {"status": "NO_LEGAL_PREMATCH_VERSION", "selected_prediction_id": None}
+        )
+        if selection.get("status") == "SELECTED":
+            selected_match_count += 1
+        chronology = [_duplicate_chronology_key(row) for row in legal_candidates]
+        same_chronology = len(chronology) > 1 and len(set(chronology)) != len(chronology)
+        if identity_collision or selection.get("status") == "IDENTITY_CONFLICT":
+            category = "C"
+        elif same_chronology:
+            category = "B"
+        elif len(legal_candidates) > 1:
+            category = "A"
+        else:
+            category = "D"
+        if len(rows) <= 1:
+            continue
+        counts[category] += 1
+        duplicate_groups.append({
+            "group_key": group_key,
+            "category": category,
+            "raw_frozen_record_count": len(rows),
+            "prediction_ids": sorted(
+                _duplicate_text(row.get("prediction_id"))
+                for row in rows
+                if _duplicate_text(row.get("prediction_id"))
+            ),
+            "match_ids": sorted({
+                signature["match_id"] for signature in signatures if signature["match_id"]
+            }),
+            "match_keys": sorted({
+                signature["match_key"] for signature in signatures if signature["match_key"]
+            }),
+            "formal_candidate_count": len(candidate_rows),
+            "legal_prematch_candidate_count": len(legal_candidates),
+            "selected_prediction_id": selection.get("selected_prediction_id"),
+            "same_chronology": same_chronology,
+            "selection_status": selection.get("status"),
+        })
+
+    return {
+        "schema_version": "production_health.duplicate_classifier.v1",
+        "raw_frozen_record_count": len(frozen),
+        "unique_match_count": selected_match_count,
+        "legal_prematch_row_count": legal_prematch_row_count,
+        "duplicate_candidate_group_count": len(duplicate_groups),
+        "version_history_group_count": counts["A"],
+        "actual_duplicate_final_group_count": counts["B"],
+        "identity_collision_group_count": counts["C"],
+        "health_only_group_count": counts["D"],
+        "classification_counts": {key: counts[key] for key in ("A", "B", "C", "D")},
+        "duplicate_alert": bool(counts["B"] or counts["C"]),
+        "groups": duplicate_groups,
+    }
+
+
 def _reason_once(reasons: list[str], reason: str) -> None:
     if reason not in reasons:
         reasons.append(reason)
@@ -594,11 +808,15 @@ def _check_prediction_integrity(
     details["production_exact_score_health"] = exact_score_health
     for exact_score_reason in exact_score_health["reasons"]:
         _reason_once(reasons, exact_score_reason)
-    groups: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    exclusion_ids = _excluded_prediction_ids(exclusion_rows)
+    duplicate_health = classify_frozen_prediction_duplicates(
+        formal_records,
+        excluded_ids=exclusion_ids,
+    )
+    details["production_duplicate_health"] = duplicate_health
+    if duplicate_health["duplicate_alert"]:
+        _reason_once(reasons, "DUPLICATE_FROZEN_PREDICTION")
     for record in formal_records:
-        key = str(record.get("job_id") or record.get("match_key") or record.get("prediction_id") or "")
-        if key:
-            groups[key].append(record)
         kickoff = _parse_at(record.get("kickoff_at"))
         created = _parse_at(record.get("prediction_created_at"))
         freeze = _parse_at(record.get("freeze_created_at"))
@@ -608,12 +826,7 @@ def _check_prediction_integrity(
             _reason_once(reasons, "PREDICTION_AFTER_KICKOFF")
         for conflict_reason in _recursive_conflict_reasons(record):
             _reason_once(reasons, conflict_reason)
-    if any(len(rows) > 1 for rows in groups.values()):
-        _reason_once(reasons, "DUPLICATE_FROZEN_PREDICTION")
 
-    exclusion_ids: set[str] = set()
-    for _, payload in exclusion_rows:
-        exclusion_ids.update(str(value).strip() for value in payload.get("prediction_ids") or [] if str(value).strip())
     ledger_ids = [str(row.get("prediction_id") or "").strip() for row in ledger]
     counts = Counter(value for value in ledger_ids if value)
     if any(count > 1 for count in counts.values()):

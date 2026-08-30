@@ -4,13 +4,39 @@
 
 # Current Sole Pointer
 
-# MARKET-SIDE-SHADOW-1 - Bounded Prospective Shadow Validation
+# PROD-HEALTH-1 - Duplicate Alert Truth Closure
 
 Status: `READY_FOR_ACCEPTANCE`
 
-Decision: `MARKET-SIDE-SHADOW-1 = READY_FOR_ACCEPTANCE`
+Decision: `PROD-HEALTH-1 = READY_FOR_ACCEPTANCE`
 
-This is the current sole execution pointer. The accepted PRED-TRUST-3
+The current task is a bounded production-health fix, not a model task. It
+reuses the PRED-TRUST-1 legal pre-kickoff version selector so immutable
+version history is not mistaken for a duplicate final. The previous false
+positive came from counting every frozen file sharing one `job_id`, while
+normal pre-kickoff market/source refreshes intentionally create new immutable
+versions.
+
+Latest `origin/main` replay at
+`24b2ad233b9cfa7d03497f2014958dd8430b7bb7`: raw frozen rows `578`, selected
+unique matches `219`, legal prematch rows `573`, legitimate version-history
+groups `74`, actual duplicate-final groups `0`, identity collisions `0`, and
+health-only groups `0`. The duplicate dimension replays `HEALTHY`; other
+health reasons remain independently evaluated and fail closed.
+
+Scope is limited to `scripts/production_health_watch.py`, its focused tests,
+and this current-state pointer. Champion, Challenger C, frozen/prospective
+records, providers, coverage, and the exact-score threshold remain unchanged.
+After the merged `Refresh data and deploy Pages` workflow is verified, stop at
+`READY_FOR_ACCEPTANCE`; do not start shadow/model tuning or promotion work.
+
+# Previous milestone: MARKET-SIDE-SHADOW-1 - Bounded Prospective Shadow Validation
+
+Status: `DEPLOYED / SEALED / ACCEPTANCE PASS`
+
+Decision: `MARKET-SIDE-SHADOW-1 = DEPLOYED / SEALED / ACCEPTANCE PASS`
+
+The completed milestone was the sole execution pointer at that time. The accepted PRED-TRUST-3
 Challenger C is wired as a background-only sidecar. For every eligible frozen
 fixture the runner captures Champion and C with the same match identity,
 source cutoff, freeze-eligibility contract, and frozen input digest. The pair
@@ -61,8 +87,8 @@ Brier, LogLoss when available, and reliability bins. Its original pinned
 `217`/`181` evidence and PRED-TRUST-3 report remain immutable.
 
 PR #127 merged at
-`c4a128826e4380ead2bea4ac10453b03cd849a28`. The current pointer above is the
-bounded shadow engineering milestone; it does not change Champion or
+`c4a128826e4380ead2bea4ac10453b03cd849a28`. The previous pointer above was the
+bounded shadow engineering milestone; it did not change Champion or
 production.
 
 # Historical execution record: PRED-TRUST-2 - Bounded Strength/Lambda Challenger Shootout

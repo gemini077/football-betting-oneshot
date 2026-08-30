@@ -3,11 +3,43 @@
 最后更新：2026-08-30
 角色：项目当前唯一人类可读状态真相。只记录当前事实，不承担完整历史档案职责。
 
-# MARKET-SIDE-SHADOW-1 Current State
+# PROD-HEALTH-1 Current State
 
 Status: `READY_FOR_ACCEPTANCE`
 
-Decision: `MARKET-SIDE-SHADOW-1 = READY_FOR_ACCEPTANCE`
+Decision: `PROD-HEALTH-1 = READY_FOR_ACCEPTANCE`
+
+The bounded health fix reuses the PRED-TRUST-1 legal pre-kickoff version
+selector from `scripts/prematch_versioning.py`. Health now evaluates canonical
+match identity, legal immutable prematch versions, and the uniquely selected
+final version instead of treating every frozen file for one job as a duplicate.
+The root cause was the previous `job_id` group-length check: each later
+pre-kickoff source/market refresh intentionally created another immutable
+version, so legitimate version history produced `DUPLICATE_FROZEN_PREDICTION`.
+
+The latest `origin/main` replay at `24b2ad233b9cfa7d03497f2014958dd8430b7bb7`
+recomputed `578` raw frozen rows, `219` selected unique matches, and `573`
+legal prematch rows. It classified `74` legitimate version-history groups,
+`0` actual duplicate-final groups, `0` identity-collision groups, and `0`
+health-only groups. The replayed health result is `HEALTHY` with no active
+reason; no frozen artifact, prospective ledger, Champion, model, or
+exact-score threshold was changed. The `87.5%` exact-score threshold remains
+an explicit debt outside this milestone.
+
+Focused tests cover legitimate v1/v2/v3 history, ambiguous final versions,
+identity collision, one legal prediction, frozen integrity, and preservation
+of unrelated health reasons. Production acceptance is verified separately by
+the merged `Refresh data and deploy Pages` workflow; any other real health
+reason must remain `ALERT`.
+
+Evidence: `scripts/production_health_watch.py`,
+`tests/test_production_health_watch.py`, and the production workflow result.
+
+# MARKET-SIDE-SHADOW-1 Previous Milestone
+
+Status: `DEPLOYED / SEALED / ACCEPTANCE PASS`
+
+Decision: `MARKET-SIDE-SHADOW-1 = DEPLOYED / SEALED / ACCEPTANCE PASS`
 
 The accepted PRED-TRUST-3 Challenger C is wired as a background-only paired
 shadow. The runner captures Champion and C from the same frozen fixture,
