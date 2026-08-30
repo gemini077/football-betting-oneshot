@@ -538,3 +538,14 @@ The engineering evidence is
 `docs/prediction-quality/MARKET-SIDE-SHADOW-1_FINAL_REPORT.md`. No production
 Champion rewrite, frozen rewrite, formal ledger rewrite, provider/model
 addition, health change, or frontend work is part of this milestone.
+
+Closure evidence for the same milestone: `scripts/market_side_shadow_refresh.py`
+reads `data/postmatch_automation/results/*.json` only, reuses
+`normalize_result` and the existing verified/final/regulation-90m constraints,
+matches the pinned pair by exact identity, and atomically writes
+`data/prediction_quality/market_side_shadow_1/latest.json`. The automatic
+refresh smoke must show at least one verified pair, `NOT_REACHED` checkpoint,
+and `auto_promote=false`. `scripts/automation_cycle.py` must invoke the
+refresh after postmatch plus prospective settlement as an optional step and
+record `DEGRADED` with an explicit error if it fails; Champion and formal
+prospective processing continue independently.

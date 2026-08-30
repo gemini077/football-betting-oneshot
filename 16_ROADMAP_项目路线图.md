@@ -29,6 +29,12 @@ Engineering smoke is complete on one existing PRED-TRUST-2 pinned record:
 milestone stops after wiring, smoke, tests, and PR delivery; it does not wait
 for future sample growth.
 
+Closure evidence additionally proves automatic evaluation: the refresh reads
+the existing verified result artifacts, matches one result to the immutable
+pair, atomically persists `latest.json`, and reports verified sample `1` with
+checkpoint `NOT_REACHED`. `automation_cycle.py` runs this research step after
+postmatch and prospective settlement as optional failure-isolated work.
+
 PRED-TRUST-3 remains recorded as `ACCEPTANCE PASS` with independent product
 decision `MARKET_SIDE_FUSION_PROMISING_FOR_SHADOW`. Its original replay
 artifact still records the original machine result

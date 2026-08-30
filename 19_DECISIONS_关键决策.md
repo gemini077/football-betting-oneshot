@@ -124,6 +124,16 @@ pollution, frozen rewrite, new provider/model/parameter, post-match generation
 input, and frontend work. Smoke evidence and focused tests are required, then
 the milestone stops at `READY_FOR_ACCEPTANCE`.
 
+The closure uses `scripts/market_side_shadow_refresh.py` to read only existing
+verified final 90-minute artifacts from
+`data/postmatch_automation/results/*.json`, build an identity-safe result map,
+and atomically persist the latest shadow evaluation under
+`data/prediction_quality/market_side_shadow_1/latest.json`. The optional
+`automation_cycle.py` step runs after postmatch and prospective settlement;
+research-step failure is explicit `DEGRADED` and does not block Champion,
+formal prospective settlement, or publication. No automatic promotion is
+enabled.
+
 # D-028 - Daily prediction availability closure
 
 Status: `LOCKED FOR PRED-AVAIL-1`

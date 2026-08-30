@@ -31,6 +31,14 @@ Smoke evidence used one existing PRED-TRUST-2 pinned record only: pair status
 immutable pair directory. Champion, formal prospective evaluation, and
 production output remain unchanged; no future sample waiting occurred.
 
+The bounded closure now also refreshes evaluation automatically from the
+existing verified 90-minute artifacts under
+`data/postmatch_automation/results/*.json`. The closure smoke matched the
+existing pair to one verified result and atomically persisted
+`data/prediction_quality/market_side_shadow_1/latest.json`: verified sample
+`1`, checkpoint `NOT_REACHED`, `auto_promote=false`. The refresh is an optional
+cycle step and records `DEGRADED` plus an error if the research step fails.
+
 Evidence: `scripts/market_side_shadow.py`,
 `tests/test_market_side_shadow.py`,
 `docs/prediction-quality/MARKET-SIDE-SHADOW-1_FINAL_REPORT.md`.

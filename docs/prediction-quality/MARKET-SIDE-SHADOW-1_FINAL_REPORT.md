@@ -65,11 +65,31 @@ Evidence is stored at:
 - `data/prediction_quality/market_side_shadow_1/smoke_2026-08-30.json`
 - `data/prediction_quality/market_side_shadow_1/pairs/MS-SHADOW-PAIR-c2419d933d267e88530442231cace2e5.json`
 
+## Automatic evaluation closure
+
+`scripts/market_side_shadow_refresh.py` reads only the existing
+`data/postmatch_automation/results/*.json` artifacts, reuses
+`normalize_result` and the existing final/regulation-90m verification rules,
+matches results by exact canonical `match_key` plus available identity and
+kickoff checks, and atomically writes `latest.json`.
+
+The closure smoke consumed the immutable pair above and its existing verified
+`1-1` result artifact. It scanned `382` result files, accepted `382`, matched
+one pair, persisted `latest.json`, produced `verified_paired_count=1`, and
+left the checkpoint at `NOT_REACHED` with `auto_promote=false`. Actual results
+remain evaluation-only and are not persisted into the pair capture.
+
+`scripts/automation_cycle.py` invokes the refresh as the optional
+`market_side_shadow_evaluation` step after postmatch and prospective
+settlement. A refresh failure is recorded as `DEGRADED` with its error while
+the production cycle continues.
+
 ## Verification and stop state
 
 - `7` dedicated shadow tests pass.
 - Existing runner/shadow regression set: `51 passed`.
-- Broader relevant acceptance suite: `139 passed`.
+- Final relevant acceptance suite, including refresh and automation-cycle
+  closure coverage: `173 passed`.
 - `py_compile` passes for the new sidecar and runner hook.
 - No PRED-TRUST-2/3 replay artifact was rewritten; Champion and formal
   prospective records are unchanged by the smoke.

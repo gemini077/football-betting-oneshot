@@ -29,6 +29,13 @@ Engineering smoke is complete using one existing PRED-TRUST-2 pinned record:
 `NOT_REACHED`. No new data was fetched, no frozen artifact was rewritten, and
 the task does not wait for future sample growth.
 
+The bounded closure is wired: `market_side_shadow_refresh.py` consumes only
+existing verified final 90-minute result artifacts, evaluates the immutable
+pair, and atomically persists `latest.json`. The closure smoke has verified
+sample `1`, checkpoint `NOT_REACHED`, and `auto_promote=false`. The optional
+`automation_cycle.py` step records explicit `DEGRADED` research failures while
+continuing the production cycle.
+
 Evidence: `scripts/market_side_shadow.py`,
 `tests/test_market_side_shadow.py`,
 `data/prediction_quality/market_side_shadow_1/`, and
