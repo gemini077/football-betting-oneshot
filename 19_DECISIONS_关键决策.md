@@ -46,6 +46,30 @@ merged to `main` at `963f36e7d00e16560fbdcd571dc20415437afa2b`; PR #120 remains
 OPEN and unmerged. This acceptance record does not alter the
 `B. PRIVATE_SNAPSHOT_STORE` architecture decision.
 
+# D-031 - PRED-TRUST-2 bounded strength/lambda challenger shootout
+
+Status: `LOCKED FOR PRED-TRUST-2 ACCEPTANCE`
+
+The bounded experiment compares exactly the production Champion with two
+deterministic challengers on the pinned PRED-TRUST-1 cohort: `217` unique
+final legal prematch matches and `181` verified 90-minute results. Challenger A
+removes the market side-share blend while holding total intensity fixed.
+Challenger B uses the frozen market total and side share as the scoring state.
+Neither candidate is fitted on post-match results or enabled in shadow.
+
+The result is locked as `NO_CHALLENGER_BEATS_CHAMPION`. Challenger B reduces
+1-1 Top1 concentration from `76.50%` to `49.31%` and separates lambda gaps,
+but worsens BTTS, O/U 2.5, and right-tail probability error; exact-score Top1
+also falls to `10.50%`. Challenger A worsens core 1X2 and exact-score metrics
+without improving the lambda failure signal. The next sole milestone returns
+to upstream inputs / football evidence / market fusion; no lambda patch series
+or production promotion follows from this result.
+
+Champion, production, shadow automation, frozen predictions, the prospective
+ledger, health monitor/gate, providers, and frontend remain unchanged. Durable
+evidence is recorded in the PRED-TRUST-2 manifest, replay artifact, and final
+report.
+
 # D-028 - Daily prediction availability closure
 
 Status: `LOCKED FOR PRED-AVAIL-1`
