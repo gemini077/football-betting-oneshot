@@ -100,11 +100,19 @@ jobs:
           fi
           if ! git diff --cached --quiet; then
             git commit -m "refresh public football data [skip ci]"
+            stash_created=false
+            if [[ -n "$(git status --porcelain)" ]]; then
+              git stash push --include-untracked -m "ci-transient-production-files"
+              stash_created=true
+            fi
             python scripts/durable_main_write.py \
               --remote origin \
               --branch main \
               --max-attempts 3 \
               --retry-delay-seconds 2
+            if [[ "$stash_created" == "true" ]]; then
+              git stash pop
+            fi
           fi
 
       - name: Rebuild Pages artifact after data save
