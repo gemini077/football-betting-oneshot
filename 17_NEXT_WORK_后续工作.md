@@ -1,34 +1,33 @@
 # 17_NEXT_WORK_后续工作.md
 
-最后更新：2026-08-30
+最后更新：2026-08-31
 
 # Current Sole Pointer
 
-# PROD-HEALTH-1 - Duplicate Alert Truth Closure
+# PROD-WRITE-1 - Production Main Write Serialization
 
 Status: `READY_FOR_ACCEPTANCE`
 
-Decision: `PROD-HEALTH-1 = READY_FOR_ACCEPTANCE`
+Decision: `PROD-WRITE-1 = READY_FOR_ACCEPTANCE`
 
-The current task is a bounded production-health fix, not a model task. It
-reuses the PRED-TRUST-1 legal pre-kickoff version selector so immutable
-version history is not mistaken for a duplicate final. The previous false
-positive came from counting every frozen file sharing one `job_id`, while
-normal pre-kickoff market/source refreshes intentionally create new immutable
-versions.
+The current task is a bounded production main write reliability fix. The
+validated root cause is that the full production and high-frequency prematch
+writers use separate concurrency groups while sharing overlapping durable
+paths. The selected protocol commits generated state, fetches and rebases
+`origin/main`, retries only synchronization/push within a bound, never
+regenerates or force-pushes, and fails closed on a genuine rebase conflict.
+Pages is rebuilt after the durable write.
 
-Latest `origin/main` replay at
-`24b2ad233b9cfa7d03497f2014958dd8430b7bb7`: raw frozen rows `578`, selected
-unique matches `219`, legal prematch rows `573`, legitimate version-history
-groups `74`, actual duplicate-final groups `0`, identity collisions `0`, and
-health-only groups `0`. The duplicate dimension replays `HEALTHY`; other
-health reasons remain independently evaluated and fail closed.
+`PROD-HEALTH-1 = SEALED / ACCEPTANCE PASS`.
+`MARKET-SIDE-SHADOW-1 = DEPLOYED / SEALED / ACCEPTANCE PASS`.
+`PARALLEL RESEARCH = GLOBAL-MARKET-0`.
 
-Scope is limited to `scripts/production_health_watch.py`, its focused tests,
-and this current-state pointer. Champion, Challenger C, frozen/prospective
-records, providers, coverage, and the exact-score threshold remain unchanged.
-After the merged `Refresh data and deploy Pages` workflow is verified, stop at
-`READY_FOR_ACCEPTANCE`; do not start shadow/model tuning or promotion work.
+Scope is limited to the workflow write protocol, its focused controlled
+tests, and this current-state pointer. Acceptance requires one merged
+`Refresh data and deploy Pages` verification with production cycle,
+durability, durable write-back, and Pages success. Do not start model,
+shadow, health-classifier, provider, identity, coverage, frontend, or
+exact-score work.
 
 # Previous milestone: MARKET-SIDE-SHADOW-1 - Bounded Prospective Shadow Validation
 

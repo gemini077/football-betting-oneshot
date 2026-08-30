@@ -1,32 +1,29 @@
 # 16_ROADMAP_项目路线图.md
 
-最后更新：2026-08-30
+最后更新：2026-08-31
 路线原则：Gate 驱动，不使用虚假日期承诺。
 
 # Current Route Pointer
 
-CURRENT PHASE:
+CURRENT ACTIVE ENGINEERING:
 
-`PROD-HEALTH-1 - Duplicate Alert Truth Closure`
+`PROD-WRITE-1 - Production Main Write Serialization`
 
 CURRENT STATUS: `READY_FOR_ACCEPTANCE`
 
-CURRENT DECISION: `PROD-HEALTH-1 = READY_FOR_ACCEPTANCE`
+CURRENT DECISION: `PROD-WRITE-1 = READY_FOR_ACCEPTANCE`
 
-The previous `MARKET-SIDE-SHADOW-1` milestone is now
-`DEPLOYED / SEALED / ACCEPTANCE PASS`. This route is limited to production
-health truth: canonical match identity, legal pre-kickoff immutable versions,
-and final selected-version semantics. It does not change Champion,
-challenger, frozen/prospective data, or the exact-score threshold.
+`PROD-HEALTH-1 = SEALED / ACCEPTANCE PASS` is a closed previous milestone.
+`MARKET-SIDE-SHADOW-1 = DEPLOYED / SEALED / ACCEPTANCE PASS` remains closed.
+`GLOBAL-MARKET-0` is parallel research only and is not part of this bounded
+write-protocol task.
 
-Latest `origin/main` replay at
-`24b2ad233b9cfa7d03497f2014958dd8430b7bb7` found `578` raw frozen rows,
-`219` selected unique matches, `573` legal prematch rows, `74` legitimate
-version-history groups, `0` actual duplicate-final groups, `0` identity
-collisions, and `0` health-only groups. The bounded implementation replay is
-healthy on the duplicate dimension; production workflow verification remains
-part of this milestone's acceptance evidence. STOP after that verification,
-commit, push, and PR delivery.
+The write contract is: commit generated durable state, fetch/rebase the current
+`origin/main`, push with bounded retry, never regenerate on retry, never force
+push, and fail closed on a real rebase conflict. Pages deployment follows the
+durable write. Acceptance requires controlled A/B/C/D writer simulations plus
+one merged `Refresh data and deploy Pages` production verification. STOP after
+verification and remote delivery.
 
 # Previous milestone: MARKET-SIDE-SHADOW-1
 
