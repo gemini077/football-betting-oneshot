@@ -472,10 +472,13 @@ as `READY_FOR_ACCEPTANCE`. Independent acceptance must verify:
 5. Exactly one offline batch is used, with no new data, parameter sweep,
    post-match parameter input, production/shadow enablement, frozen rewrite,
    ledger rewrite, health change, provider change, or frontend change.
-6. The final result is exactly one of `MARKET_SIDE_FUSION_PROMISING` or
-   `MARKET_SIDE_ONLY_NOT_SUFFICIENT`. For this result, the next sole milestone
-   is `football evidence / team strength representation`; the market/lambda
-   patch series stops and no Challenger is promoted.
+6. The original machine result is exactly one of
+   `MARKET_SIDE_FUSION_PROMISING` or `MARKET_SIDE_ONLY_NOT_SUFFICIENT` and is
+   preserved in the replay artifact. Independent acceptance may record a
+   separate product disposition when the evidence supports it; the override
+   must name the original strict-gate failure and the reason it is a shadow
+   watch risk rather than a standalone rejection. No Challenger is promoted
+   by this replay.
 7. Focused tests, syntax checks, diff checks, GitHub branch/commit/PR evidence,
    and `REMOTE_DELIVERY_CHECK` pass. The PR body contains Champion-vs-B-vs-C,
    key metrics, BTTS/O-U/right-tail status, blockers, decision, next milestone,
@@ -484,3 +487,74 @@ as `READY_FOR_ACCEPTANCE`. Independent acceptance must verify:
 The durable evidence is
 `data/prediction_quality/pred_trust_3/replay_2026-08-30.json` and
 `docs/prediction-quality/PRED-TRUST-3_FINAL_REPORT.md`.
+
+Independent acceptance result: `PRED-TRUST-3 = ACCEPTANCE PASS`. The original
+machine result remains `MARKET_SIDE_ONLY_NOT_SUFFICIENT` because of the strict
+BTTS ECE gate. The accepted product disposition is
+`MARKET_SIDE_FUSION_PROMISING_FOR_SHADOW` because BTTS accuracy was maintained
+and BTTS Brier improved; BTTS ECE remains a required shadow calibration watch
+with reliability bins and is not deleted from the replay evidence. PR #127
+merged at `c4a128826e4380ead2bea4ac10453b03cd849a28`.
+
+# 2L. MARKET-SIDE-SHADOW-1 Acceptance
+
+`MARKET-SIDE-SHADOW-1 - Bounded Prospective Shadow Validation` may be marked by
+Codex only as `READY_FOR_ACCEPTANCE`. This is an engineering wiring milestone,
+not Champion promotion. Independent acceptance must verify:
+
+1. The existing runner captures Champion and the locked PRED-TRUST-3 C for the
+   same eligible fixture and same frozen input. The pair records identical
+   `match_id`, source cutoff, freeze-eligibility contract, and frozen input
+   digest.
+2. Every pair is immutable and has `pair_status=PAIRED`, or a
+   `CHALLENGER_ABSTAIN` record that preserves the Champion and does not block
+   the formal prediction. The challenger has an independent namespace and
+   cannot enter the formal Champion prospective evaluation.
+2a. The formal shadow promotion cohort requires both `pair_status=PAIRED` and
+    `promotion_eligible=true`. Engineering, replay, manual, and smoke pairs
+    remain `promotion_eligible=false`; they may prove capture/result-discovery
+    plumbing but are excluded from verified promotion counts, checkpoints,
+    early promotion review, and promotion metrics.
+3. C uses no new parameter: Champion total is
+   `0.60*form_total + 0.40*market_total`, side share is frozen `market_share`,
+   and existing clamp, independent Poisson, `rho=0`, and score-matrix logic
+   remain in force.
+4. C persists both lambdas, 1X2 probabilities, the complete exact-score
+   distribution, Top1/Top3, BTTS, O/U 2.5, and tails `>=4`, `>=5`, and `>=6`.
+5. The separate verified-result evaluator reports 1X2 accuracy/Brier/LogLoss/
+   ECE; exact Top1/Top3/NLL/actual-score probability; BTTS and O/U accuracy,
+   Brier, ECE; lambda/distribution behavior; and right-tail calibration.
+6. BTTS calibration watch reports Champion and C ECE, Brier, LogLoss when
+   available, and five reliability bins containing count, mean predicted
+   probability, and observed frequency. ECE is not silently removed or used
+   as the sole automatic veto.
+7. `MIN_PAIRED_VERIFIED=50` promotion-eligible verified pairs emits
+   `CHECKPOINT`; `100` emits `PROMOTION_REVIEW_READY`; neither status
+   auto-promotes. The first 30 promotion-eligible verified pairs can emit
+   `SHADOW_EARLY_STOP_RECOMMENDED` for leakage,
+   identity/freeze mismatch, or severe proper-metric collapse.
+8. The smoke, focused tests, syntax/diff checks, production-mutation check,
+   GitHub branch/commit/PR evidence, and `REMOTE_DELIVERY_CHECK` pass. The
+   milestone ends at `READY_FOR_ACCEPTANCE` and stops without waiting for
+   future result accumulation.
+
+The engineering evidence is
+`scripts/market_side_shadow.py`, `tests/test_market_side_shadow.py`,
+`data/prediction_quality/market_side_shadow_1/`, and
+`docs/prediction-quality/MARKET-SIDE-SHADOW-1_FINAL_REPORT.md`. No production
+Champion rewrite, frozen rewrite, formal ledger rewrite, provider/model
+addition, health change, or frontend work is part of this milestone.
+
+Closure evidence for the same milestone: `scripts/market_side_shadow_refresh.py`
+reads `data/postmatch_automation/results/*.json` only, reuses
+`normalize_result` and the existing verified/final/regulation-90m constraints,
+matches the pinned pair by exact identity, and atomically writes
+`data/prediction_quality/market_side_shadow_1/latest.json`. The automatic
+refresh smoke must prove result discovery and evaluation while distinguishing
+the engineering smoke pair from the prospective cohort: total pairs `1`,
+paired `1`, promotion-eligible pairs `0`, excluded non-promotion pairs `1`,
+verified promotion sample `0`, `NOT_REACHED` checkpoint, and
+`auto_promote=false`. `scripts/automation_cycle.py` must invoke the refresh
+after postmatch plus prospective settlement as an optional step and record
+`DEGRADED` with an explicit error if it fails; Champion and formal prospective
+processing continue independently.

@@ -3,38 +3,79 @@
 最后更新：2026-08-30
 角色：项目当前唯一人类可读状态真相。只记录当前事实，不承担完整历史档案职责。
 
-# PRED-TRUST-3 Current State
+# MARKET-SIDE-SHADOW-1 Current State
 
 Status: `READY_FOR_ACCEPTANCE`
 
-Decision: `MARKET_SIDE_ONLY_NOT_SUFFICIENT`
+Decision: `MARKET-SIDE-SHADOW-1 = READY_FOR_ACCEPTANCE`
 
-The one-shot market-side-only hybrid replay read the accepted PRED-TRUST-2
-replay and reused its pinned evidence: production run `33294381128`, accepted
+The accepted PRED-TRUST-3 Challenger C is wired as a background-only paired
+shadow. The runner captures Champion and C from the same frozen fixture,
+source cutoff, freeze-eligibility contract, and frozen input digest. A paired
+capture is `PAIRED`; a C failure is `CHALLENGER_ABSTAIN` and preserves the
+Champion. The independent challenger namespace is
+`market_side_shadow_1/market_side_only_hybrid`.
+
+The C output contains both lambdas, 1X2 probabilities, a complete 13x13 score
+distribution, Top1/Top3, BTTS, O/U 2.5, and total-goal tails `>=4`, `>=5`, and
+`>=6`. The evaluation contract is separate from capture, includes BTTS ECE,
+Brier, LogLoss, and five-bin reliability rows, and has automatic 50-match
+`CHECKPOINT` and 100-match `PROMOTION_REVIEW_READY` states. Neither state
+promotes C. The first 30 verified pairs expose early-stop integrity/proper
+metric sentinels.
+
+Smoke evidence used one existing PRED-TRUST-2 pinned record only: pair status
+`PAIRED`, C score matrix `169` rows, verified paired sample `0`, checkpoint
+`NOT_REACHED`. It is recorded in
+`data/prediction_quality/market_side_shadow_1/smoke_2026-08-30.json` and the
+immutable pair directory. Champion, formal prospective evaluation, and
+production output remain unchanged; no future sample waiting occurred.
+
+The bounded closure now also refreshes evaluation automatically from the
+existing verified 90-minute artifacts under
+`data/postmatch_automation/results/*.json`. The closure smoke matched the
+existing pair to one verified result and atomically persisted
+`data/prediction_quality/market_side_shadow_1/latest.json`. The pair is an
+engineering smoke pair with `promotion_eligible=false`: total pairs `1`, paired
+`1`, promotion-eligible pairs `0`, excluded non-promotion pairs `1`, verified
+promotion sample `0`, checkpoint `NOT_REACHED`, and `auto_promote=false`.
+The production runner passes explicit automatic-capture context; only a
+pre-kickoff pair that also passes the formal eligibility and identity/freeze
+checks may enter the promotion cohort. The refresh is an optional cycle step
+and records `DEGRADED` plus an error if the research step fails.
+
+Evidence: `scripts/market_side_shadow.py`,
+`tests/test_market_side_shadow.py`,
+`docs/prediction-quality/MARKET-SIDE-SHADOW-1_FINAL_REPORT.md`.
+
+# PRED-TRUST-3 Current State
+
+Status: `SEALED / ACCEPTANCE PASS`
+
+Decision: `MARKET_SIDE_FUSION_PROMISING_FOR_SHADOW`
+
+The original one-shot replay artifact remains unchanged and retains its
+original machine conclusion `MARKET_SIDE_ONLY_NOT_SUFFICIENT`. Independent
+acceptance recorded `PRED-TRUST-3 = ACCEPTANCE PASS` and overrode the strict
+offline product veto because BTTS accuracy was maintained and BTTS Brier
+improved; the five-bin BTTS ECE increase remains a `SHADOW_WATCH_RISK`, not a
+standalone rejection of bounded shadow.
+
+The replay used the accepted pins: production run `33294381128`, accepted
 write-back commit `73994d32fc148da49295a5bfef2e1e42e042a22e`, `217` unique
-final legal prematch matches, and `181` verified 90-minute results. It compared
-only Champion, existing Challenger B, and one new deterministic Challenger C.
-The replay used exactly one offline batch; no parameter sweep, new data,
-post-match parameter input, shadow enablement, or production enablement was
-used.
+final legal prematch matches, and `181` verified 90-minute results. Challenger
+C kept the Champion total, replaced only the frozen market side-share, retained
+the 1X2 improvement, restored the Champion BTTS/O-U/right-tail behavior, and
+reduced 1-1 Top1 to `54.84%`. No replay artifact was rewritten.
 
-Challenger C kept the Champion total and replaced only the side-share with the
-frozen market side-share. It retained the 1X2 gain (`56.35%` accuracy,
-`0.5486` Brier, `0.9301` LogLoss), exact Top1 (`11.60%`), exact Top3
-(`30.39%`), BTTS accuracy (`60.22%`), O/U 2.5 accuracy (`62.43%`), and the
-Champion right-tail distribution. It reduced 1-1 Top1 to `54.84%`, reduced
-lambda gap `<0.5` to `47.93%`, and increased median absolute gap to `0.5340`.
-The candidate failed the pre-registered `BTTS ECE` check: `0.1420` versus
-Champion `0.0986`. Therefore C is not eligible for shadow.
+PR #127 was independently closed at merge commit
+`c4a128826e4380ead2bea4ac10453b03cd849a28`. The next sole milestone is the
+background-only `MARKET-SIDE-SHADOW-1`; no Champion or production promotion is
+implied.
 
-The result supports a useful side-share hypothesis without proving the causal
-root of the confounded Challenger B result. The next sole milestone is
-`football evidence / team strength representation`; stop the market/lambda
-patch series. No Champion, production, shadow, frozen prediction, prospective
-ledger, health monitor/gate, provider, or frontend change was made.
-
-Evidence: `data/prediction_quality/pred_trust_3/replay_2026-08-30.json` and
-`docs/prediction-quality/PRED-TRUST-3_FINAL_REPORT.md`.
+Evidence: `data/prediction_quality/pred_trust_3/replay_2026-08-30.json`,
+`docs/prediction-quality/PRED-TRUST-3_FINAL_REPORT.md`, and the PR #127
+governance closeout.
 
 # PRED-TRUST-2 Current State
 

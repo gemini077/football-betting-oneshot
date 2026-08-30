@@ -72,7 +72,9 @@ report.
 
 # D-032 - PRED-TRUST-3 market-side-only hybrid knockout
 
-Status: `LOCKED FOR PRED-TRUST-3 ACCEPTANCE`
+Status: `SEALED / ACCEPTANCE PASS`
+
+Independent product decision: `MARKET_SIDE_FUSION_PROMISING_FOR_SHADOW`
 
 The one-shot replay reads the accepted PRED-TRUST-2 replay and compares only
 Champion, existing Challenger B, and one new deterministic Challenger C on the
@@ -86,16 +88,61 @@ C retains the 1X2 improvement and exact-score Top1/Top3 performance while
 restoring Champion BTTS accuracy, O/U 2.5 accuracy, and the full right-tail
 probability distribution. It reduces 1-1 Top1 to `54.84%`, reduces lambda gap
 `<0.5` to `47.93%`, and raises median absolute gap to `0.5340`. The bounded
-gate fails only on BTTS ECE (`0.1420` versus Champion `0.0986`). The result is
-`MARKET_SIDE_ONLY_NOT_SUFFICIENT`: the side-share signal is useful as a
-practical hypothesis, but it is not sufficient for shadow and does not prove
-the causal root of the confounded B experiment.
+gate fails only on BTTS ECE (`0.1420` versus Champion `0.0986`). The original
+machine conclusion remains `MARKET_SIDE_ONLY_NOT_SUFFICIENT` in the immutable
+replay artifact. Independent acceptance overrides that product disposition for
+a bounded shadow because BTTS accuracy was maintained and BTTS Brier improved;
+BTTS ECE is retained as `SHADOW_WATCH_RISK`, not hidden or deleted.
 
-The next sole milestone is `football evidence / team strength representation`.
-The market/lambda patch series stops. Champion, production, shadow, frozen
+PR #127 merged at
+`c4a128826e4380ead2bea4ac10453b03cd849a28`. The next decision record is
+D-033 for the engineering-only shadow wiring. Champion, production, frozen
 predictions, prospective ledger, health monitor/gate, providers, and frontend
-remain unchanged. Evidence is recorded in the PRED-TRUST-3 replay artifact and
-final report.
+remain unchanged by this acceptance override. Evidence remains in the
+PRED-TRUST-3 replay artifact and final report.
+
+# D-033 - MARKET-SIDE-SHADOW-1 bounded prospective shadow validation
+
+Status: `LOCKED FOR MARKET-SIDE-SHADOW-1 ACCEPTANCE`
+
+The accepted C formula is wired in an independent `market_side_shadow_1`
+namespace. The existing prediction runner captures Champion and C from the
+same eligible fixture and frozen input snapshot. The immutable pair records
+the same `match_id`, source cutoff, freeze eligibility, and frozen input
+digest, with `PAIRED` or failure-isolated `CHALLENGER_ABSTAIN`.
+
+C stores lambdas, 1X2, the complete 13x13 exact-score distribution, Top1/Top3,
+BTTS, O/U 2.5, and tails `>=4/5/6`. A separate verified-result evaluator
+reports all required proper/hit/distribution metrics and BTTS reliability bins.
+At 50 verified paired matches it emits `CHECKPOINT`; at 100 it emits
+`PROMOTION_REVIEW_READY`; neither state auto-promotes. The first 30-pair
+window exposes `SHADOW_EARLY_STOP_RECOMMENDED` for integrity or severe proper
+metric failures.
+
+This decision forbids Champion mutation, production promotion, formal ledger
+pollution, frozen rewrite, new provider/model/parameter, post-match generation
+input, and frontend work. Smoke evidence and focused tests are required, then
+the milestone stops at `READY_FOR_ACCEPTANCE`.
+
+The closure uses `scripts/market_side_shadow_refresh.py` to read only existing
+verified final 90-minute artifacts from
+`data/postmatch_automation/results/*.json`, build an identity-safe result map,
+and atomically persist the latest shadow evaluation under
+`data/prediction_quality/market_side_shadow_1/latest.json`. The optional
+`automation_cycle.py` step runs after postmatch and prospective settlement;
+research-step failure is explicit `DEGRADED` and does not block Champion,
+formal prospective settlement, or publication. No automatic promotion is
+enabled.
+
+The formal shadow cohort is explicitly filtered to
+`pair_status=PAIRED AND promotion_eligible=true`. Engineering, replay, manual,
+and smoke pairs remain outside that cohort even when a verified result is
+discoverable. A production pair may set `promotion_eligible=true` only through
+the explicit automatic runner context after formal Champion eligibility,
+pre-kickoff capture, same fixture/cutoff/freeze eligibility/frozen input digest,
+`post_match_input_used_for_generation=false`, and all pair integrity checks
+pass. The preserved smoke pair therefore remains evidence for result discovery
+and evaluator execution, not prospective sample evidence.
 
 # D-028 - Daily prediction availability closure
 

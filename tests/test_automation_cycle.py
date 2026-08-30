@@ -14,6 +14,20 @@ def test_cycle_calls_base_runner_and_prospective_settlement_and_writes_health(tm
 
     def fake_run(command, *, optional=False):
         calls.append(command)
+        if _has_script(command, "market_side_shadow_refresh.py"):
+            return {
+                "returncode": 0,
+                "status": "SUCCESS",
+                "market_side_shadow_status": "REFRESHED",
+                "paired_count": 1,
+                "challenger_abstain_count": 0,
+                "promotion_eligible_pairs": 1,
+                "excluded_non_promotion_pair_count": 0,
+                "verified_paired_count": 1,
+                "checkpoint_status": "NOT_REACHED",
+                "early_stop_status": "NOT_TRIGGERED",
+                "auto_promote": False,
+            }
         return {"returncode": 0, "status": "READY"}
 
     monkeypatch.setattr(automation_cycle, "run", fake_run)
@@ -23,9 +37,23 @@ def test_cycle_calls_base_runner_and_prospective_settlement_and_writes_health(tm
 
     assert any("base_prediction_runner.py" in part for command in calls for part in command)
     assert any("prospective_settlement.py" in part for command in calls for part in command)
+    shadow_index = next(
+        index for index, command in enumerate(calls)
+        if _has_script(command, "market_side_shadow_refresh.py")
+    )
+    prospective_index = next(
+        index for index, command in enumerate(calls)
+        if _has_script(command, "prospective_settlement.py")
+    )
+    assert prospective_index < shadow_index
     assert payload["overall_status"] == "HEALTHY"
     assert payload["steps"]["base_prediction"]["status"] == "SUCCESS"
     assert payload["steps"]["prospective"]["status"] == "SUCCESS"
+    assert payload["steps"]["market_side_shadow_evaluation"]["status"] == "SUCCESS"
+    assert payload["steps"]["market_side_shadow_evaluation"]["summary"]["verified_paired_count"] == 1
+    assert payload["steps"]["market_side_shadow_evaluation"]["summary"]["promotion_eligible_pairs"] == 1
+    assert payload["steps"]["market_side_shadow_evaluation"]["summary"]["excluded_non_promotion_pair_count"] == 0
+    assert payload["steps"]["market_side_shadow_evaluation"]["summary"]["checkpoint_status"] == "NOT_REACHED"
     saved = json.loads(runtime_path.read_text(encoding="utf-8"))
     assert saved["business_date"] == "2026-08-12"
     assert saved["carryover_business_dates"] == []
@@ -46,6 +74,21 @@ def test_optional_step_failure_makes_cycle_degraded_but_keeps_health_artifact(tm
     assert payload["overall_status"] == "DEGRADED"
     assert payload["steps"]["universe"]["status"] == "DEGRADED"
     assert runtime_path.exists()
+
+
+def test_market_side_shadow_evaluation_failure_is_explicitly_degraded(tmp_path, monkeypatch):
+    def fake_run(command, *, optional=False):
+        if _has_script(command, "market_side_shadow_refresh.py"):
+            return {"returncode": 1, "error": "RESULT_SOURCE_UNREADABLE"}
+        return {"returncode": 0, "status": "READY"}
+
+    monkeypatch.setattr(automation_cycle, "run", fake_run)
+    payload = automation_cycle.cycle("2026-08-12", runtime_path=tmp_path / "runtime.json")
+
+    step = payload["steps"]["market_side_shadow_evaluation"]
+    assert payload["overall_status"] == "DEGRADED"
+    assert step["status"] == "DEGRADED"
+    assert step["summary"]["error"] == "RESULT_SOURCE_UNREADABLE"
 
 
 def _write_carryover_state(tmp_path, business_date="2026-08-12"):

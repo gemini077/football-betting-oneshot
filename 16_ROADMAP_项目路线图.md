@@ -7,22 +7,43 @@
 
 CURRENT PHASE:
 
-`PRED-TRUST-3 - Market-Side-Only Hybrid Knockout`
+`MARKET-SIDE-SHADOW-1 - Bounded Prospective Shadow Validation`
 
 CURRENT STATUS: `READY_FOR_ACCEPTANCE`
 
-CURRENT DECISION: `MARKET_SIDE_ONLY_NOT_SUFFICIENT`
+CURRENT DECISION: `MARKET-SIDE-SHADOW-1 = READY_FOR_ACCEPTANCE`
 
-The one-shot replay is recorded in
-`data/prediction_quality/pred_trust_3/replay_2026-08-30.json` and compares
-Champion, existing Challenger B, and exactly one new deterministic Challenger
-C on the pinned `217` unique-match cohort, including `181` verified 90-minute
-matches. C retains the 1X2, exact-score, BTTS, O/U, lambda-separation, and
-right-tail properties required by the bounded hypothesis, but fails the
-pre-registered BTTS ECE check (`0.1420` vs Champion `0.0986`). The result is
-`MARKET_SIDE_ONLY_NOT_SUFFICIENT`; no candidate is eligible for shadow. The
-next route is football evidence / team strength representation, not another
-market/lambda patch series.
+The accepted PRED-TRUST-3 Challenger C is now wired as a background-only
+paired shadow. The existing runner captures Champion and C from the same
+fixture, source cutoff, freeze-eligibility contract, and frozen input digest.
+Each capture is immutable and uses `PAIRED` or failure-isolated
+`CHALLENGER_ABSTAIN`; Champion remains the user-facing and formal prediction.
+The independent shadow evaluator stores full C score distributions, BTTS
+calibration reliability bins, right-tail measures, and deterministic 50/100
+sample checkpoint states without automatic promotion.
+
+Engineering smoke is complete on one existing PRED-TRUST-2 pinned record:
+`PAIRED`, `169` exact-score rows, `0` verified paired results, and
+`NOT_REACHED` checkpoint. Evidence is under
+`data/prediction_quality/market_side_shadow_1/` and the final report. This
+milestone stops after wiring, smoke, tests, and PR delivery; it does not wait
+for future sample growth.
+
+Closure evidence additionally proves automatic evaluation: the refresh reads
+the existing verified result artifacts, matches one result to the immutable
+pair, atomically persists `latest.json`, and reports total pairs `1`, paired
+`1`, promotion-eligible pairs `0`, excluded non-promotion pairs `1`, verified
+promotion sample `0`, checkpoint `NOT_REACHED`, and `auto_promote=false`.
+The matched pair remains engineering smoke evidence, not prospective promotion
+cohort evidence. `automation_cycle.py` runs this research step after postmatch
+and prospective settlement as optional failure-isolated work.
+
+PRED-TRUST-3 remains recorded as `ACCEPTANCE PASS` with independent product
+decision `MARKET_SIDE_FUSION_PROMISING_FOR_SHADOW`. Its original replay
+artifact still records the original machine result
+`MARKET_SIDE_ONLY_NOT_SUFFICIENT`; the BTTS ECE increase is retained as a
+shadow watch risk. No Champion or production promotion follows from either
+record.
 
 `DATA-PLANE-2-PROD - Production Deployment Verification` is now
 `SEALED / DEPLOYED / ACCEPTANCE PASS`. PR #124 is the governance-only closeout
@@ -51,7 +72,8 @@ or model change is active.
 The accepted PRED-TRUST-1 and PRED-TRUST-2 audits used canonical unique-match
 cohorts and did not alter the Champion, frozen/prospective state, or public
 repository data boundary. The bounded PRED-TRUST-3 replay stopped before any
-model, provider, identity, or presentation change.
+model, provider, identity, or presentation change; the new shadow sidecar is
+an independent research namespace and does not rewrite those artifacts.
 
 PRED-TRUST-1 audit evidence is recorded in
 `docs/prediction-quality/PRED-TRUST-1_FINAL_REPORT.md` and
@@ -61,9 +83,9 @@ matches, `217` historical unique matches, and `181` verified prospective
 matches. Exact-score Top1 `1-1` is `72.73%` current and `76.50%` historical;
 lambda gap `<0.5` is `63.64%` current and `66.36%` historical. The ranked
 evidence is P0 lambda generation, P1 product presentation, P2 market fusion.
-PRED-TRUST-2 is accepted and sealed. PRED-TRUST-3 is recorded above as a
-completed one-off research replay at `READY_FOR_ACCEPTANCE`; it is not
-promoted to shadow or production.
+PRED-TRUST-2 and PRED-TRUST-3 are accepted and sealed. The current route above
+is the engineering-only shadow wiring milestone; it is not a Champion change,
+production promotion, or frontend change.
 
 Open workflow-hygiene item: the production Bootstrap step exposed endpoint,
 bucket, and region configuration values through GitHub step environment

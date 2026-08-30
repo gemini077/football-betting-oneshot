@@ -61,6 +61,12 @@ def _summary(payload: dict) -> dict:
         "shadow_settlements_added", "shadow_settlements_existing", "shadow_settlement_failures",
         "shadow_failure_reasons", "error", "output",
         "target_date", "completed_count", "published_as_latest", "latest_only",
+        "market_side_shadow_status", "paired_count", "challenger_abstain_count",
+        "promotion_eligible_pairs", "excluded_non_promotion_pair_count",
+        "verified_paired_count", "checkpoint_status", "early_stop_status",
+        "latest_status", "result_files_scanned", "result_files_accepted",
+        "result_files_rejected", "result_identity_conflicts", "result_identity_mismatches",
+        "unmatched_pair_count", "auto_promote",
     }
     return {key: value for key, value in payload.items() if key in allowed}
 
@@ -231,6 +237,9 @@ def cycle(
     ], optional=True)
     steps["prospective"] = _step("prospective", [
         python, "scripts/prospective_settlement.py", "--date", business_date,
+    ], optional=True)
+    steps["market_side_shadow_evaluation"] = _step("market_side_shadow_evaluation", [
+        python, "scripts/market_side_shadow_refresh.py",
     ], optional=True)
     if persist_runtime:
         _write_runtime(Path(runtime_path), business_date=business_date, started_at=started, finished_at=None, steps=steps)
