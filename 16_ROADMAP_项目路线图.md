@@ -7,9 +7,15 @@
 
 CURRENT PHASE:
 
-`DATA-PLANE-2-PROD - Production Deployment Verification`
+`PRED-TRUST-1 - Unique-Match Prediction Integrity & Multi-Market Quality Audit`
 
-CURRENT STATUS: `DEPLOYED / READY_FOR_FINAL_ACCEPTANCE`
+CURRENT STATUS: `CURRENT`
+
+`DATA-PLANE-2-PROD - Production Deployment Verification` is now
+`SEALED / DEPLOYED / ACCEPTANCE PASS`. PR #124 is the governance-only closeout
+record. Publisher live validation remains `DEFERRED / NON_BLOCKING`, licensing
+review remains `LICENSING_REVIEW_REQUIRED`, and the known workflow item is
+`NON_SECRET_LOG_HYGIENE_DEBT`.
 
 Decision: `B. PRIVATE_SNAPSHOT_STORE`. The implementation uses a
 vendor-neutral private versioned snapshot plus the existing read-only DuckDB
@@ -29,10 +35,9 @@ INSUFFICIENT_DATA` out of 25, so daily availability is `PARTIAL`, not
 `SEVERELY_BLOCKED`. No PRED-AVAIL-3, ID-AUTO-2, provider addition, alias work,
 or model change is active.
 
-This production verification is recorded as `DEPLOYED /
-READY_FOR_FINAL_ACCEPTANCE`. Do not merge another change or alter the
-Champion, frozen/prospective state, or public repository data boundary until
-the remaining governance acceptance is complete.
+The next audit must use a canonical unique-match cohort and must not alter the
+Champion, frozen/prospective state, or public repository data boundary. It
+must stop before any model, provider, identity, or presentation change.
 
 Open workflow-hygiene item: the production Bootstrap step exposed endpoint,
 bucket, and region configuration values through GitHub step environment

@@ -5,7 +5,7 @@
 
 # DATA-PLANE-2 Current State
 
-Status: `DEPLOYED / READY_FOR_FINAL_ACCEPTANCE`
+Status: `SEALED / DEPLOYED / ACCEPTANCE PASS`
 
 PR #123 was merged into `main` at
 `8e432d84f5c4d68bd25fb32fb31c3d55a7b6e651` after PR #122 had been safely
@@ -52,8 +52,9 @@ The provider-neutral contract remains recorded in
 `docs/data-foundation/DATA-PLANE-2_PRIVATE_SNAPSHOT_BOOTSTRAP_CONTRACT.md`.
 Publisher live validation remains `DEFERRED / NON_BLOCKING`; initial
 provisioning was `MANUAL_PRIVATE_UPLOAD`.
+Licensing review remains `LICENSING_REVIEW_REQUIRED`.
 
-Log-hygiene follow-up: the production run's Bootstrap step environment
+Log-hygiene follow-up: `NON_SECRET_LOG_HYGIENE_DEBT`. The production run's Bootstrap step environment
 metadata exposed the configured endpoint/bucket/region values in the GitHub
 log. No such values are repeated here; the runtime access key and secret were
 masked. This does not change the verified data-plane parity, but it remains an

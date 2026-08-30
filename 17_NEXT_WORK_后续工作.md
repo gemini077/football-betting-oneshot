@@ -4,9 +4,15 @@
 
 # Current Sole Pointer
 
-# DATA-PLANE-2-PROD - Production Deployment Verification
+# PRED-TRUST-1 - Unique-Match Prediction Integrity & Multi-Market Quality Audit
 
-Status: `DEPLOYED / READY_FOR_FINAL_ACCEPTANCE`
+Status: `CURRENT`
+
+DATA-PLANE-2-PROD is closed as `SEALED / DEPLOYED / ACCEPTANCE PASS` after
+independent final acceptance. PR #124 is the governance-only closeout record.
+Publisher live validation remains `DEFERRED / NON_BLOCKING`; licensing review
+remains `LICENSING_REVIEW_REQUIRED`; the workflow item is
+`NON_SECRET_LOG_HYGIENE_DEBT`.
 
 PR #123 merged into `main` at
 `8e432d84f5c4d68bd25fb32fb31c3d55a7b6e651`; PR #120 remains OPEN and
@@ -49,17 +55,21 @@ log. Runtime access key and secret remained masked, and no values are copied
 into this record. Data-plane verification remains valid; close this item in a
 separate workflow-hygiene change before final security acceptance.
 
-STOP: `DATA-PLANE-2-PROD = DEPLOYED / READY_FOR_FINAL_ACCEPTANCE`.
-The next decision is independent governance review of the production evidence;
-do not start a new availability, identity, provider, or model program here.
+PRED-TRUST-1 is the only active milestone. It is an evidence audit, not a
+model modification task. Use one final legal prematch prediction per unique
+match, classify all production health duplicate groups, and report current-day,
+historical, lambda, cross-market, prospective, and health-gate evidence.
 
 STOP CONDITIONS:
 
 - Publisher live validation remains deferred and is not part of this
   production-deployment verification record.
 - Do not run another production refresh solely to increase availability.
-- Do not declare `SEALED` from this record; the remaining governance review
-  must first inspect the production evidence and the explicit health warning.
+- Do not rewrite today's frozen predictions or the historical prospective
+  ledger; canonical selection is evaluation-only.
+- Do not start PRED-AVAIL-3, ID-AUTO-2, a new provider, manual alias work,
+  league-specific coverage, Publisher validation, B2 work, model tuning, or a
+  Champion/model/selector/lambda change.
 - Do not modify Champion mathematics, frozen predictions, prospective ledger,
   dashboard state, or raw source data.
 
