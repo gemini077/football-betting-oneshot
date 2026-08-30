@@ -6,7 +6,7 @@
 
 # PRED-TRUST-1 - Unique-Match Prediction Integrity & Multi-Market Quality Audit
 
-Status: `CURRENT`
+Status: `READY_FOR_ACCEPTANCE`
 
 DATA-PLANE-2-PROD is closed as `SEALED / DEPLOYED / ACCEPTANCE PASS` after
 independent final acceptance. PR #124 is the governance-only closeout record.
@@ -59,6 +59,22 @@ PRED-TRUST-1 is the only active milestone. It is an evidence audit, not a
 model modification task. Use one final legal prematch prediction per unique
 match, classify all production health duplicate groups, and report current-day,
 historical, lambda, cross-market, prospective, and health-gate evidence.
+
+Audit result: `MIXED / READY_FOR_ACCEPTANCE`. The accepted current-day source
+has `22` frozen and `3` insufficient fixtures. Unique-match selection yields
+`16/22` current and `166/217` historical `1-1` Top1, `14/22` and `144/217`
+lambda gaps below `0.5`, and `181` verified prospective matches. Duplicate
+classification is `A=51, B=0, C=0, D=0`, so `PREDICTION_INTEGRITY_BLOCKED` is
+not active; the existing `DUPLICATE_FROZEN_PREDICTION` is a monitor false
+positive for legitimate version history. The health gate recommendation is
+`REPLACE_WITH_MULTI_SIGNAL`, with no gate change in this milestone.
+
+Evidence: `docs/prediction-quality/PRED-TRUST-1_FINAL_REPORT.md` and
+`data/prediction_quality/pred_trust_1/audit_2026-08-30.json`.
+
+Next sole milestone: `PRED-TRUST-2 — Strength/Lambda Challenger Experiment
+Design & Bounded Prospective Shadow Plan` (design only; no automatic build,
+shadow enablement, promotion, or Champion change).
 
 STOP CONDITIONS:
 

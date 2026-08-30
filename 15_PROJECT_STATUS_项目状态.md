@@ -60,6 +60,40 @@ log. No such values are repeated here; the runtime access key and secret were
 masked. This does not change the verified data-plane parity, but it remains an
 open security-acceptance item before the log-hygiene requirement is closed.
 
+# PRED-TRUST-1 Current State
+
+Status: `READY_FOR_ACCEPTANCE`
+
+The read-only audit is pinned to accepted production write-back commit
+`73994d32fc148da49295a5bfef2e1e42e042a22e` and run `33294381128`. It selects
+one final legal prematch version per unique match without deleting frozen
+files or rewriting the prospective ledger. The current 2026-08-30 cohort is
+`22` unique frozen matches; the historical/prospective legal cohort is `217`
+unique matches.
+
+The health duplicate warning contains `51` groups affecting `51` matches:
+`A=51` legitimate immutable version histories, `B=0` actual duplicate finals,
+`C=0` identity collisions, and `D=0` health-only groups without a second legal
+prematch candidate. There is no real immutable/frozen integrity violation;
+the existing duplicate warning is a bounded health false positive under the
+canonical evaluation view. The monitor is not changed in this milestone.
+
+On the unique cohort, exact-score Top1 `1-1` is `16/22 = 72.73%` today and
+`166/217 = 76.50%` historically. `abs(lambda_home-lambda_away) < 0.5` is
+`14/22 = 63.64%` today and `144/217 = 66.36%` historically. The stored Top1
+equals the independent Poisson joint MAP for `217/217` comparable matches.
+Verified 90-minute prospective evaluation has sample size `181`: 1X2
+accuracy `51.93%`, exact-score Top1 hit `11.60%`, Top3 hit `28.73%`, BTTS
+accuracy `60.22%`, and O/U 2.5 accuracy `62.43%`.
+
+The product conclusion is `MIXED`: P0 lambda generation, P1 product
+presentation, and P2 market-fusion evidence. The legacy `87.5%` exact-score
+gate is unchanged; the audit recommendation is `REPLACE_WITH_MULTI_SIGNAL`.
+The next sole milestone is `PRED-TRUST-2 — Strength/Lambda Challenger
+Experiment Design & Bounded Prospective Shadow Plan`. No model, Champion,
+frozen prediction, provider, identity, or presentation implementation starts
+from this audit.
+
 # DATA-PLANE-1 Current State
 
 Status: `SEALED / ACCEPTANCE PASS`
