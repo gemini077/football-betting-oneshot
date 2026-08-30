@@ -231,7 +231,7 @@ def interactive_config(
         bucket=input_fn("bucket: ").strip(),
         region=input_fn("region: ").strip(),
         access_key_id=input_fn("keyID: ").strip(),
-        secret_access_key=secret_input_fn("applicationKey: "),
+        secret_access_key=secret_input_fn("applicationKey: ").strip(),
     )
 
 

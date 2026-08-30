@@ -214,3 +214,21 @@ def test_object_store_diagnostic_contains_only_safe_request_metadata():
         "http_status": 403,
     }
     assert secret not in repr(diagnostic)
+
+
+def test_interactive_config_strips_application_key_whitespace():
+    values = iter(
+        [
+            "https://object-store.example",
+            "private-bucket",
+            "us-east-1",
+            "key-id",
+        ]
+    )
+
+    config = publish_runtime_snapshot.interactive_config(
+        input_fn=lambda _prompt: next(values),
+        secret_input_fn=lambda _prompt: "  application-key  ",
+    )
+
+    assert config.secret_access_key == "application-key"
