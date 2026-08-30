@@ -62,6 +62,7 @@ TERMINAL_STATUSES = {"MISSED_PREMATCH_WINDOW", "PREDICTED"}
 UNIVERSE_STATUSES = {"READY", "EMPTY_CONFIRMED"}
 FOOTBALL_EVIDENCE_CONTRACT_VERSION = "prospective_football_evidence.v1"
 DEFAULT_FOOTBALL_EVIDENCE_ROOT = PROJECT_ROOT / "data" / "prospective" / "football_evidence"
+DEFAULT_MARKET_SIDE_SHADOW_ROOT = PROJECT_ROOT / "data" / "prediction_quality" / "market_side_shadow_1" / "pairs"
 _FOOTBALL_EVIDENCE_MATCH_FIELDS = (
     "source_date", "match_date", "home_team_id", "home_team_name",
     "away_team_id", "away_team_name", "home_goals", "away_goals",
@@ -1161,6 +1162,29 @@ def _capture_market_direction_shadow(
         return {"status": "failed", "reason": f"shadow_exception:{type(error).__name__}:{error}"}
 
 
+def _capture_market_side_shadow(
+    record: dict[str, Any],
+    *,
+    input_snapshot_root: Path,
+    shadow_pair_root: Path,
+) -> dict[str, Any]:
+    """Capture locked Challenger C without mutating the formal Champion path."""
+    try:
+        from market_side_shadow import capture_pair, persist_pair
+
+        pair = capture_pair(record, snapshot_root=Path(input_snapshot_root))
+        written = persist_pair(pair, Path(shadow_pair_root))
+        return {
+            "status": written["status"],
+            "pair_status": pair.get("pair_status"),
+            "pair_id": pair.get("pair_id"),
+            "path": str(written["path"]),
+            "reason": pair.get("challenger_abstain_reason"),
+        }
+    except Exception as error:  # Challenger failure is isolated from formal freeze
+        return {"status": "failed", "reason": f"shadow_exception:{type(error).__name__}:{error}"}
+
+
 def run_base_prediction_jobs(
     business_date: str,
     *,
@@ -1171,15 +1195,26 @@ def run_base_prediction_jobs(
     input_snapshot_root: Path = DEFAULT_INPUT_SNAPSHOT_ROOT,
     job_id: str | None = None,
     shadow_prediction_root: Path | None = None,
+    market_side_shadow_root: Path | None = None,
     football_evidence_root: Path | None = None,
 ) -> dict[str, Any]:
     """Attempt all retryable pre-kickoff BASE jobs for one business date."""
     current_time = _as_now(now)
     real_time = now is None
     shadow_prediction_root = Path(shadow_prediction_root or PROJECT_ROOT / "data" / "model_benchmarks" / "predictions")
+    record_root_path = Path(record_root)
+    if market_side_shadow_root is None:
+        market_side_shadow_root = (
+            DEFAULT_MARKET_SIDE_SHADOW_ROOT
+            if record_root_path.resolve() == DEFAULT_RECORD_ROOT.resolve()
+            else record_root_path.parent / "market_side_shadow_1" / "pairs"
+        )
+    market_side_shadow_root = Path(market_side_shadow_root)
     football_evidence_root = _resolve_football_evidence_root(Path(record_root), football_evidence_root)
     shadow_counts = Counter()
     shadow_failure_reasons: Counter[str] = Counter()
+    market_side_shadow_counts = Counter()
+    market_side_shadow_failure_reasons: Counter[str] = Counter()
 
     def capture_shadow(record: dict[str, Any], job: dict[str, Any]) -> None:
         shadow_counts["attempted"] += 1
@@ -1199,6 +1234,27 @@ def run_base_prediction_jobs(
         else:
             shadow_counts["failed"] += 1
             shadow_failure_reasons[str(result.get("reason") or "shadow_unknown_failure")] += 1
+
+    def capture_market_side_shadow(record: dict[str, Any]) -> None:
+        market_side_shadow_counts["attempted"] += 1
+        result = _capture_market_side_shadow(
+            record,
+            input_snapshot_root=Path(input_snapshot_root),
+            shadow_pair_root=market_side_shadow_root,
+        )
+        status = str(result.get("status") or "failed")
+        pair_status = str(result.get("pair_status") or "")
+        if status == "created":
+            market_side_shadow_counts["created"] += 1
+        elif status == "existing":
+            market_side_shadow_counts["existing"] += 1
+        else:
+            market_side_shadow_counts["failed"] += 1
+            market_side_shadow_failure_reasons[str(result.get("reason") or "shadow_unknown_failure")] += 1
+        if pair_status == "PAIRED":
+            market_side_shadow_counts["paired"] += 1
+        elif pair_status == "CHALLENGER_ABSTAIN":
+            market_side_shadow_counts["abstain"] += 1
 
     def capture_football_evidence(
         record: dict[str, Any], source_snapshots: Any, job: dict[str, Any]
@@ -1306,6 +1362,7 @@ def run_base_prediction_jobs(
             job["freeze_created_at"] = unchanged.get("freeze_created_at")
             job["last_error"] = None
             capture_shadow(unchanged, job)
+            capture_market_side_shadow(unchanged)
             job["updated_at"] = current_time.isoformat()
             continue
         try:
@@ -1378,6 +1435,7 @@ def run_base_prediction_jobs(
         stored = frozen.get("record") or record
         capture_football_evidence(stored, context.get("source_snapshots"), job)
         capture_shadow(stored, job)
+        capture_market_side_shadow(stored)
         job["status"] = "FROZEN"
         _remember_prediction_id(job, stored.get("prediction_id"))
         job["prediction_id"] = stored.get("prediction_id")
@@ -1406,6 +1464,13 @@ def run_base_prediction_jobs(
         "shadow_existing": int(shadow_counts["existing"]),
         "shadow_failed": int(shadow_counts["failed"]),
         "shadow_failure_reasons": dict(shadow_failure_reasons),
+        "market_side_shadow_attempted": int(market_side_shadow_counts["attempted"]),
+        "market_side_shadow_created": int(market_side_shadow_counts["created"]),
+        "market_side_shadow_existing": int(market_side_shadow_counts["existing"]),
+        "market_side_shadow_paired": int(market_side_shadow_counts["paired"]),
+        "market_side_shadow_abstain": int(market_side_shadow_counts["abstain"]),
+        "market_side_shadow_failed": int(market_side_shadow_counts["failed"]),
+        "market_side_shadow_failure_reasons": dict(market_side_shadow_failure_reasons),
         "ledger": ledger,
     }
 
