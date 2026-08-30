@@ -1,7 +1,11 @@
 import json
 from pathlib import Path
 
-from scripts.production_health_watch import evaluate_exact_score_health, evaluate_health
+from scripts.production_health_watch import (
+    classify_frozen_prediction_duplicates,
+    evaluate_exact_score_health,
+    evaluate_health,
+)
 
 
 def _write_json(path: Path, payload):
@@ -139,6 +143,36 @@ def _formal_champion_base_record(
         "unique_score": score,
         "score_top3": [score, "0-0", "2-1"],
     }
+
+
+def _versioned_prediction(
+    prediction_id,
+    *,
+    match_id="M-1",
+    job_id="JOB-1",
+    match_key="MATCH-1",
+    score="1-1",
+    source="2026-08-12T09:59:00+08:00",
+    created="2026-08-12T10:00:00+08:00",
+    freeze="2026-08-12T10:01:00+08:00",
+):
+    record = _formal_champion_base_record(prediction_id, score)
+    record.update({
+        "job_id": job_id,
+        "match_id": match_id,
+        "match_key": match_key,
+        "source_cutoff_at": source,
+        "prediction_created_at": created,
+        "freeze_created_at": freeze,
+    })
+    record["match_identity"] = {
+        "match_key": match_key,
+        "match_id": match_id,
+        "home": "Home",
+        "away": "Away",
+        "kickoff_at": record["kickoff_at"],
+    }
+    return record
 
 
 def test_evaluate_health_alerts_on_current_score_and_lambda_collapse(tmp_path):
@@ -401,25 +435,122 @@ def test_duplicate_formal_prospective_is_immediate_alert(tmp_path):
 
 def test_duplicate_frozen_prediction_is_immediate_alert(tmp_path):
     root = _healthy_tree(tmp_path)
-    common = {
-        "prediction_status": "formal",
-        "job_id": "BASE-2026-08-12-M-1",
-        "match_key": "MATCH-1",
-        "kickoff_at": "2026-08-12T23:00:00+08:00",
-        "prediction_created_at": "2026-08-12T10:00:00+08:00",
-        "freeze_created_at": "2026-08-12T10:01:00+08:00",
-    }
-    _write_json(root / "data" / "model_governance" / "predictions" / "P-1.json", {
-        "prediction_id": "P-1", **common,
-    })
-    _write_json(root / "data" / "model_governance" / "predictions" / "P-2.json", {
-        "prediction_id": "P-2", **common,
-    })
+    first = _versioned_prediction("P-1", score="1-0")
+    second = _versioned_prediction("P-2", score="0-1")
+    _write_json(root / "data" / "model_governance" / "predictions" / "P-1.json", first)
+    _write_json(root / "data" / "model_governance" / "predictions" / "P-2.json", second)
 
     result = evaluate_health(root=root)
 
     assert result["status"] == "ALERT"
     assert "DUPLICATE_FROZEN_PREDICTION" in result["reasons"]
+    duplicate = result["details"]["production_duplicate_health"]
+    assert duplicate["actual_duplicate_final_group_count"] == 1
+    assert duplicate["identity_collision_group_count"] == 0
+
+
+def test_legitimate_immutable_version_history_does_not_alert(tmp_path):
+    records = [
+        _versioned_prediction(
+            "V1",
+            source="2026-08-12T09:59:00+08:00",
+            created="2026-08-12T10:00:00+08:00",
+            freeze="2026-08-12T10:01:00+08:00",
+        ),
+        _versioned_prediction(
+            "V2",
+            source="2026-08-12T12:59:00+08:00",
+            created="2026-08-12T13:00:00+08:00",
+            freeze="2026-08-12T13:01:00+08:00",
+        ),
+        _versioned_prediction(
+            "V3",
+            source="2026-08-12T15:59:00+08:00",
+            created="2026-08-12T16:00:00+08:00",
+            freeze="2026-08-12T16:01:00+08:00",
+        ),
+    ]
+
+    duplicate = classify_frozen_prediction_duplicates(records)
+
+    assert duplicate["raw_frozen_record_count"] == 3
+    assert duplicate["unique_match_count"] == 1
+    assert duplicate["version_history_group_count"] == 1
+    assert duplicate["actual_duplicate_final_group_count"] == 0
+    assert duplicate["identity_collision_group_count"] == 0
+    assert duplicate["duplicate_alert"] is False
+    assert duplicate["groups"][0]["category"] == "A"
+    assert duplicate["groups"][0]["selected_prediction_id"] == "V3"
+
+
+def test_identity_collision_remains_an_immediate_alert(tmp_path):
+    root = _healthy_tree(tmp_path)
+    first = _versioned_prediction("C-1", match_id="M-1", match_key="MATCH-1")
+    second = _versioned_prediction("C-2", match_id="M-2", match_key="MATCH-2")
+    _write_json(root / "data" / "model_governance" / "predictions" / "C-1.json", first)
+    _write_json(root / "data" / "model_governance" / "predictions" / "C-2.json", second)
+
+    result = evaluate_health(root=root)
+
+    assert result["status"] == "ALERT"
+    assert "DUPLICATE_FROZEN_PREDICTION" in result["reasons"]
+    duplicate = result["details"]["production_duplicate_health"]
+    assert duplicate["actual_duplicate_final_group_count"] == 0
+    assert duplicate["identity_collision_group_count"] == 1
+
+
+def test_single_legal_prediction_is_healthy_on_duplicate_dimension(tmp_path):
+    root = _healthy_tree(tmp_path)
+    record = _versioned_prediction("SINGLE")
+    _write_json(root / "data" / "model_governance" / "predictions" / "SINGLE.json", record)
+
+    result = evaluate_health(root=root)
+
+    assert "DUPLICATE_FROZEN_PREDICTION" not in result["reasons"]
+    duplicate = result["details"]["production_duplicate_health"]
+    assert duplicate["unique_match_count"] == 1
+    assert duplicate["version_history_group_count"] == 0
+    assert duplicate["actual_duplicate_final_group_count"] == 0
+    assert duplicate["identity_collision_group_count"] == 0
+
+
+def test_other_health_reason_is_not_swallowed_by_duplicate_fix(tmp_path):
+    root = _healthy_tree(tmp_path)
+    for record in (
+        _versioned_prediction("E-1", source="2026-08-12T09:59:00+08:00"),
+        _versioned_prediction(
+            "E-2",
+            source="2026-08-12T12:59:00+08:00",
+            created="2026-08-12T13:00:00+08:00",
+            freeze="2026-08-12T13:01:00+08:00",
+        ),
+    ):
+        _write_json(root / "data" / "model_governance" / "predictions" / f"{record['prediction_id']}.json", record)
+    _write_json(root / "data" / "match_workspace" / "latest.json", {
+        "schema_version": "1.0",
+        "target_date": "2026-08-11",
+        "generated_at": "2026-08-11T10:01:00+08:00",
+        "matches": [],
+        "completed": [],
+    })
+
+    result = evaluate_health(root=root)
+
+    assert result["status"] == "ALERT"
+    assert "MATCH_WORKSPACE_STALE" in result["reasons"]
+    assert "DUPLICATE_FROZEN_PREDICTION" not in result["reasons"]
+
+
+def test_frozen_integrity_violation_remains_an_immediate_alert(tmp_path):
+    root = _healthy_tree(tmp_path)
+    record = _versioned_prediction("INTEGRITY")
+    record["prediction_conflicts"] = ["immutable final conflict"]
+    _write_json(root / "data" / "model_governance" / "predictions" / "INTEGRITY.json", record)
+
+    result = evaluate_health(root=root)
+
+    assert result["status"] == "ALERT"
+    assert "IMMUTABLE_PREDICTION_CONFLICT" in result["reasons"]
 
 
 def test_formal_ledger_orphan_is_immediate_alert(tmp_path):
