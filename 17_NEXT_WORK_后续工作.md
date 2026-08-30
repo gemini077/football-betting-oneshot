@@ -4,31 +4,54 @@
 
 # Current Sole Pointer
 
-# PRED-TRUST-3 - Market-Side-Only Hybrid Knockout
+# MARKET-SIDE-SHADOW-1 - Bounded Prospective Shadow Validation
 
 Status: `READY_FOR_ACCEPTANCE`
 
-Decision: `MARKET_SIDE_ONLY_NOT_SUFFICIENT`
+Decision: `MARKET-SIDE-SHADOW-1 = READY_FOR_ACCEPTANCE`
 
-The one allowed replay read the accepted PRED-TRUST-2 artifact and reused its
-pinned `217` unique final legal prematch matches and `181` verified 90-minute
-matches. It compared Champion, existing Challenger B, and exactly one new
-deterministic Challenger C. C kept the Champion total and replaced only the
-side-share with `market_share`.
+This is the current sole execution pointer. The accepted PRED-TRUST-3
+Challenger C is wired as a background-only sidecar. For every eligible frozen
+fixture the runner captures Champion and C with the same match identity,
+source cutoff, freeze-eligibility contract, and frozen input digest. The pair
+is immutable, marked `PAIRED`, or marked `CHALLENGER_ABSTAIN` while preserving
+Champion. C is not user-visible, formal-ledger eligible, or auto-promoted.
 
-C retained the B/Champion 1X2 improvement (`56.35%` accuracy, `0.5486` Brier,
-`0.9301` LogLoss), exact Top1 (`11.60%`), BTTS accuracy (`60.22%`), O/U 2.5
-accuracy (`62.43%`), and all three right-tail probabilities. It reduced 1-1
-Top1 to `54.84%` and lambda gap `<0.5` to `47.93%`, but failed the
-pre-registered BTTS ECE check (`0.1420` vs Champion `0.0986`).
+The sidecar stores C lambdas, 1X2, complete exact-score distribution and
+Top1/Top3, BTTS, O/U 2.5, and total tails `>=4/5/6`. Its verified-result
+consumer reports the paired metrics and BTTS reliability bins, with automatic
+`CHECKPOINT` at 50 verified pairs and `PROMOTION_REVIEW_READY` at 100; neither
+state promotes C. The first 30-pair window exposes early-stop integrity and
+proper-metric sentinels.
 
-Result: `MARKET_SIDE_ONLY_NOT_SUFFICIENT`. No production, Champion, shadow,
-frozen, ledger, health, provider, or frontend change was made. The next sole
-milestone is `football evidence / team strength representation`; stop the
-market/lambda patch series. STOP.
+Engineering smoke is complete using one existing PRED-TRUST-2 pinned record:
+`PAIRED`, `169` C score rows, `0` verified paired results, checkpoint
+`NOT_REACHED`. No new data was fetched, no frozen artifact was rewritten, and
+the task does not wait for future sample growth.
 
-Evidence: `data/prediction_quality/pred_trust_3/replay_2026-08-30.json` and
-`docs/prediction-quality/PRED-TRUST-3_FINAL_REPORT.md`.
+Evidence: `scripts/market_side_shadow.py`,
+`tests/test_market_side_shadow.py`,
+`data/prediction_quality/market_side_shadow_1/`, and
+`docs/prediction-quality/MARKET-SIDE-SHADOW-1_FINAL_REPORT.md`. STOP after
+engineering PR delivery.
+
+# Historical acceptance record: PRED-TRUST-3 - Market-Side-Only Hybrid Knockout
+
+Status: `SEALED / ACCEPTANCE PASS`
+
+Independent product decision: `MARKET_SIDE_FUSION_PROMISING_FOR_SHADOW`
+
+The original replay artifact remains unchanged and retains its machine result
+`MARKET_SIDE_ONLY_NOT_SUFFICIENT`, caused by the strict BTTS ECE gate. The
+independent acceptance override records maintained BTTS accuracy and improved
+BTTS Brier; BTTS ECE remains a shadow-watch risk and must be reported with
+Brier, LogLoss when available, and reliability bins. Its original pinned
+`217`/`181` evidence and PRED-TRUST-3 report remain immutable.
+
+PR #127 merged at
+`c4a128826e4380ead2bea4ac10453b03cd849a28`. The current pointer above is the
+bounded shadow engineering milestone; it does not change Champion or
+production.
 
 # Historical execution record: PRED-TRUST-2 - Bounded Strength/Lambda Challenger Shootout
 
