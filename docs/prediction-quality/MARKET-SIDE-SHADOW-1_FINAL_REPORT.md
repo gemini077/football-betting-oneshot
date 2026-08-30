@@ -19,6 +19,10 @@ wait for future matches.
   frozen input snapshot digest.
 - A successful pair is `PAIRED`. C failure is isolated as
   `CHALLENGER_ABSTAIN`; the Champion record remains preserved.
+- Only `PAIRED` pairs with `promotion_eligible=true` enter the formal shadow
+  promotion cohort. The production runner grants that flag only for explicit
+  automatic pre-kickoff capture after formal Champion eligibility and all
+  identity/freeze/no-post-match-input checks pass.
 - The C namespace is `market_side_only_hybrid` under the independent
   `market_side_shadow_1` namespace. User-visible, formal-ledger, and
   automatic-promotion flags are false.
@@ -53,6 +57,8 @@ manifest, without adding data or using a result:
 - match: `500-1358532`
 - source cutoff: `2026-08-15T11:45:12+08:00`
 - pair status: `PAIRED`
+- promotion eligibility: `false` (engineering smoke only; not a prospective
+  promotion-cohort pair)
 - verified paired sample: `0`
 - checkpoint: `NOT_REACHED`
 - C exact-score rows: `169`
@@ -75,9 +81,13 @@ kickoff checks, and atomically writes `latest.json`.
 
 The closure smoke consumed the immutable pair above and its existing verified
 `1-1` result artifact. It scanned `382` result files, accepted `382`, matched
-one pair, persisted `latest.json`, produced `verified_paired_count=1`, and
-left the checkpoint at `NOT_REACHED` with `auto_promote=false`. Actual results
-remain evaluation-only and are not persisted into the pair capture.
+one pair, and atomically persisted `latest.json`. The result discovery and
+evaluator both succeeded, while the eligibility filter kept the engineering
+smoke pair out of the prospective cohort: total pairs `1`, paired `1`,
+promotion-eligible pairs `0`, excluded non-promotion pairs `1`,
+`verified_paired_count=0`, checkpoint `NOT_REACHED`, and
+`auto_promote=false`. Actual results remain evaluation-only and are not
+persisted into the pair capture.
 
 `scripts/automation_cycle.py` invokes the refresh as the optional
 `market_side_shadow_evaluation` step after postmatch and prospective
@@ -86,10 +96,10 @@ the production cycle continues.
 
 ## Verification and stop state
 
-- `7` dedicated shadow tests pass.
+- `10` dedicated shadow tests pass.
 - Existing runner/shadow regression set: `51 passed`.
 - Final relevant acceptance suite, including refresh and automation-cycle
-  closure coverage: `173 passed`.
+  closure coverage: `176 passed`.
 - `py_compile` passes for the new sidecar and runner hook.
 - No PRED-TRUST-2/3 replay artifact was rewritten; Champion and formal
   prospective records are unchanged by the smoke.

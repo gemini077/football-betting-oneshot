@@ -21,6 +21,8 @@ def test_cycle_calls_base_runner_and_prospective_settlement_and_writes_health(tm
                 "market_side_shadow_status": "REFRESHED",
                 "paired_count": 1,
                 "challenger_abstain_count": 0,
+                "promotion_eligible_pairs": 1,
+                "excluded_non_promotion_pair_count": 0,
                 "verified_paired_count": 1,
                 "checkpoint_status": "NOT_REACHED",
                 "early_stop_status": "NOT_TRIGGERED",
@@ -49,6 +51,8 @@ def test_cycle_calls_base_runner_and_prospective_settlement_and_writes_health(tm
     assert payload["steps"]["prospective"]["status"] == "SUCCESS"
     assert payload["steps"]["market_side_shadow_evaluation"]["status"] == "SUCCESS"
     assert payload["steps"]["market_side_shadow_evaluation"]["summary"]["verified_paired_count"] == 1
+    assert payload["steps"]["market_side_shadow_evaluation"]["summary"]["promotion_eligible_pairs"] == 1
+    assert payload["steps"]["market_side_shadow_evaluation"]["summary"]["excluded_non_promotion_pair_count"] == 0
     assert payload["steps"]["market_side_shadow_evaluation"]["summary"]["checkpoint_status"] == "NOT_REACHED"
     saved = json.loads(runtime_path.read_text(encoding="utf-8"))
     assert saved["business_date"] == "2026-08-12"

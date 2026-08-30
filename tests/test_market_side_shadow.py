@@ -115,6 +115,7 @@ def test_capture_pair_has_same_identity_and_write_once_persistence(tmp_path):
     pair = capture_pair(record, snapshot_root=tmp_path)
 
     assert pair["pair_status"] == "PAIRED"
+    assert pair["promotion_eligible"] is False
     assert pair["match_id"] == "fixture-001"
     assert pair["source_cutoff"] == "2026-08-30T10:00:00+08:00"
     assert pair["frozen_input_digest"]
@@ -136,6 +137,37 @@ def test_capture_pair_has_same_identity_and_write_once_persistence(tmp_path):
         persist_pair(changed, root)
 
 
+def test_promotion_cohort_requires_explicit_production_capture_and_formal_eligibility(tmp_path):
+    record = frozen_record(tmp_path)
+    engineering_pair = capture_pair(record, snapshot_root=tmp_path)
+    production_pair = capture_pair(
+        record,
+        snapshot_root=tmp_path,
+        production_automatic_capture=True,
+    )
+
+    assert engineering_pair["promotion_eligible"] is False
+    assert production_pair["promotion_eligible"] is True
+
+    ineligible_record = frozen_record(tmp_path / "ineligible")
+    ineligible_record["formal_eligible"] = False
+    ineligible_pair = capture_pair(
+        ineligible_record,
+        snapshot_root=tmp_path / "ineligible",
+        production_automatic_capture=True,
+    )
+    assert ineligible_pair["promotion_eligible"] is False
+
+    late_record = frozen_record(tmp_path / "late")
+    late_record["freeze_created_at"] = "2026-08-30T12:01:00+08:00"
+    late_pair = capture_pair(
+        late_record,
+        snapshot_root=tmp_path / "late",
+        production_automatic_capture=True,
+    )
+    assert late_pair["promotion_eligible"] is False
+
+
 def test_challenger_abstain_keeps_champion_side_of_pair(tmp_path):
     record = frozen_record(tmp_path, usable=False)
     pair = capture_pair(record, snapshot_root=tmp_path)
@@ -148,13 +180,19 @@ def test_challenger_abstain_keeps_champion_side_of_pair(tmp_path):
 
 
 def test_evaluator_consumes_pairs_and_keeps_reliability_bins(tmp_path):
-    pair = capture_pair(frozen_record(tmp_path), snapshot_root=tmp_path)
+    pair = capture_pair(
+        frozen_record(tmp_path),
+        snapshot_root=tmp_path,
+        production_automatic_capture=True,
+    )
     evaluation = evaluate_paired_cohort(
         [pair],
         {"fixture-001": {"actual_score": "2-1"}},
     )
 
     assert evaluation["verified_paired_count"] == 1
+    assert evaluation["promotion_eligible_pairs"] == 1
+    assert evaluation["excluded_non_promotion_pair_count"] == 0
     assert evaluation["post_match_input_used_for_generation"] is False
     for candidate_id in ("champion", "challenger"):
         metrics = evaluation["candidates"][candidate_id]
@@ -166,6 +204,48 @@ def test_evaluator_consumes_pairs_and_keeps_reliability_bins(tmp_path):
             "count", "mean_predicted_probability", "observed_frequency"
         }
         assert set(metrics["right_tail"]) == {"total_ge_4", "total_ge_5", "total_ge_6"}
+
+
+def test_evaluator_excludes_verified_engineering_pair_from_promotion_cohort(tmp_path):
+    pair = capture_pair(frozen_record(tmp_path), snapshot_root=tmp_path)
+    evaluation = evaluate_paired_cohort(
+        [pair],
+        {"fixture-001": {"actual_score": "2-1"}},
+    )
+
+    assert pair["pair_status"] == "PAIRED"
+    assert pair["promotion_eligible"] is False
+    assert evaluation["paired_count"] == 1
+    assert evaluation["promotion_eligible_pairs"] == 0
+    assert evaluation["excluded_non_promotion_pair_count"] == 1
+    assert evaluation["verified_paired_count"] == 0
+    assert evaluation["skipped_unverified_pair_count"] == 0
+    assert evaluation["early_kill"]["status"] == "NOT_TRIGGERED"
+
+
+def test_checkpoint_thresholds_use_verified_promotion_eligible_pairs(tmp_path):
+    base = capture_pair(
+        frozen_record(tmp_path),
+        snapshot_root=tmp_path,
+        production_automatic_capture=True,
+    )
+
+    def replay(count):
+        pairs = []
+        results = {}
+        for index in range(count):
+            pair = copy.deepcopy(base)
+            pair["pair_id"] = f"synthetic-pair-{index}"
+            pair["match_id"] = f"synthetic-match-{index}"
+            pair["promotion_eligible"] = True
+            pairs.append(pair)
+            results[pair["match_id"]] = {"actual_score": "2-1"}
+        return build_shadow_document(pairs, results)
+
+    assert replay(49)["evaluation"]["verified_paired_count"] == 49
+    assert replay(49)["checkpoint"]["status"] == "NOT_REACHED"
+    assert replay(50)["checkpoint"]["status"] == "CHECKPOINT"
+    assert replay(100)["checkpoint"]["status"] == "PROMOTION_REVIEW_READY"
 
 
 def test_checkpoints_are_automatic_and_never_promote():
@@ -183,6 +263,10 @@ def test_shadow_document_contains_contract_without_postmatch_capture_fields(tmp_
     assert document["namespace"] == "market_side_shadow_1"
     assert document["capture_contract"]["champion_unchanged"] is True
     assert document["capture_contract"]["production_enabled"] is False
+    assert document["counts"]["paired"] == 1
+    assert document["counts"]["promotion_eligible_pairs"] == 0
+    assert document["counts"]["excluded_non_promotion_pair_count"] == 1
+    assert document["evaluation"]["verified_paired_count"] == 0
     assert document["checkpoint"]["status"] == "NOT_REACHED"
     assert "actual_result" not in pair
     assert "settlement" not in pair
@@ -203,4 +287,6 @@ def test_base_runner_shadow_hook_persists_c_without_touching_champion(tmp_path):
     assert result["pair_status"] == "PAIRED"
     assert result["path"].endswith(".json")
     assert list((tmp_path / "pairs").glob("*.json"))
+    saved_pair = json.loads(next((tmp_path / "pairs").glob("*.json")).read_text(encoding="utf-8"))
+    assert saved_pair["promotion_eligible"] is True
     assert record["prediction_id"] == "FBOS-PRED-fixture-001"

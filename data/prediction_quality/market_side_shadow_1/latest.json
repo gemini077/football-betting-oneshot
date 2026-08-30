@@ -9,6 +9,14 @@
     ],
     "post_match_input_used_for_generation": false,
     "production_enabled": false,
+    "promotion_cohort_filter": "pair_status=PAIRED AND promotion_eligible=true",
+    "promotion_eligibility_requires": [
+      "formal Champion eligibility",
+      "explicit production automatic capture",
+      "pre-kickoff capture",
+      "same fixture/cutoff/freeze eligibility/frozen input digest",
+      "post_match_input_used_for_generation=false"
+    ],
     "promotion_enabled": false,
     "same_fixture": true,
     "same_freeze_eligibility": true,
@@ -22,18 +30,20 @@
     "next_threshold": 50,
     "promotion_review_minimum": 100,
     "status": "NOT_REACHED",
-    "verified_paired_count": 1
+    "verified_paired_count": 0
   },
   "counts": {
     "challenger_abstain": 0,
+    "excluded_non_promotion_pair_count": 1,
     "paired": 1,
-    "pairs": 1
+    "pairs": 1,
+    "promotion_eligible_pairs": 0
   },
   "evaluation": {
     "actual_results_used_for_evaluation_only": true,
     "btts_calibration_watch": {
-      "challenger_brier": 0.178241571,
-      "challenger_ece": 0.422186654,
+      "challenger_brier": null,
+      "challenger_ece": null,
       "challenger_reliability_bins": [
         {
           "count": 0,
@@ -50,10 +60,10 @@
           "upper": 0.4
         },
         {
-          "count": 1,
+          "count": 0,
           "lower": 0.4,
-          "mean_predicted_probability": 0.577813346,
-          "observed_frequency": 1.0,
+          "mean_predicted_probability": null,
+          "observed_frequency": null,
           "upper": 0.6
         },
         {
@@ -71,8 +81,8 @@
           "upper": 1.0
         }
       ],
-      "champion_brier": 0.194163496,
-      "champion_ece": 0.440639871,
+      "champion_brier": null,
+      "champion_ece": null,
       "champion_reliability_bins": [
         {
           "count": 0,
@@ -89,10 +99,10 @@
           "upper": 0.4
         },
         {
-          "count": 1,
+          "count": 0,
           "lower": 0.4,
-          "mean_predicted_probability": 0.559360129,
-          "observed_frequency": 1.0,
+          "mean_predicted_probability": null,
+          "observed_frequency": null,
           "upper": 0.6
         },
         {
@@ -110,15 +120,15 @@
           "upper": 1.0
         }
       ],
-      "status": "TRACKING"
+      "status": "PENDING_MINIMUM_SAMPLE"
     },
     "candidates": {
       "challenger": {
         "btts": {
-          "accuracy": 1.0,
-          "brier": 0.178241571,
-          "ece": 0.422186654,
-          "log_loss": 0.548504393,
+          "accuracy": null,
+          "brier": null,
+          "ece": null,
+          "log_loss": null,
           "reliability_bins": [
             {
               "count": 0,
@@ -135,10 +145,10 @@
               "upper": 0.4
             },
             {
-              "count": 1,
+              "count": 0,
               "lower": 0.4,
-              "mean_predicted_probability": 0.577813346,
-              "observed_frequency": 1.0,
+              "mean_predicted_probability": null,
+              "observed_frequency": null,
               "upper": 0.6
             },
             {
@@ -156,50 +166,48 @@
               "upper": 1.0
             }
           ],
-          "sample_count": 1
+          "sample_count": 0
         },
         "distribution": {
-          "away_margin_top1_share": 0.0,
-          "draw_top1_share": 1.0,
-          "high_score_top1_share": 0.0,
-          "home_margin_top1_share": 0.0,
-          "one_one_top1_share": 1.0,
-          "top1_score_counts": {
-            "1-1": 1
-          },
-          "top1_support_size": 1
+          "away_margin_top1_share": null,
+          "draw_top1_share": null,
+          "high_score_top1_share": null,
+          "home_margin_top1_share": null,
+          "one_one_top1_share": null,
+          "top1_score_counts": {},
+          "top1_support_size": 0
         },
         "exact_score": {
-          "mean_probability_assigned_to_actual_score": 0.104184334,
-          "nll": 2.261593504,
-          "sample_count": 1,
-          "top1_hit_rate": 1.0,
-          "top3_hit_rate": 1.0
+          "mean_probability_assigned_to_actual_score": null,
+          "nll": null,
+          "sample_count": 0,
+          "top1_hit_rate": null,
+          "top3_hit_rate": null
         },
         "lambda": {
-          "gap_lt_0_25_share": 0.0,
-          "gap_lt_0_5_share": 0.0,
+          "gap_lt_0_25_share": null,
+          "gap_lt_0_5_share": null,
           "lambda_total_distribution": {
-            "P10": 3.03,
-            "P25": 3.03,
-            "P50": 3.03,
-            "P75": 3.03,
-            "P90": 3.03
+            "P10": null,
+            "P25": null,
+            "P50": null,
+            "P75": null,
+            "P90": null
           },
-          "median_abs_gap": 0.74538
+          "median_abs_gap": null
         },
         "one_x_two": {
-          "accuracy": 0.0,
-          "brier": 0.954057407,
-          "ece": 0.51726666,
-          "log_loss": 1.495662852,
-          "sample_count": 1
+          "accuracy": null,
+          "brier": null,
+          "ece": null,
+          "log_loss": null,
+          "sample_count": 0
         },
         "ou_2_5": {
-          "accuracy": 0.0,
-          "brier": 0.34046923,
-          "ece": 0.583497412,
-          "log_loss": 0.875862604,
+          "accuracy": null,
+          "brier": null,
+          "ece": null,
+          "log_loss": null,
           "reliability_bins": [
             {
               "count": 0,
@@ -216,10 +224,10 @@
               "upper": 0.4
             },
             {
-              "count": 1,
+              "count": 0,
               "lower": 0.4,
-              "mean_predicted_probability": 0.583497412,
-              "observed_frequency": 0.0,
+              "mean_predicted_probability": null,
+              "observed_frequency": null,
               "upper": 0.6
             },
             {
@@ -237,14 +245,14 @@
               "upper": 1.0
             }
           ],
-          "sample_count": 1
+          "sample_count": 0
         },
         "right_tail": {
           "total_ge_4": {
-            "brier": 0.129232313,
-            "ece": 0.359488961,
-            "mean_probability": 0.359488961,
-            "observed_frequency": 0.0,
+            "brier": null,
+            "ece": null,
+            "mean_probability": null,
+            "observed_frequency": null,
             "reliability_bins": [
               {
                 "count": 0,
@@ -254,10 +262,10 @@
                 "upper": 0.2
               },
               {
-                "count": 1,
+                "count": 0,
                 "lower": 0.2,
-                "mean_predicted_probability": 0.359488961,
-                "observed_frequency": 0.0,
+                "mean_predicted_probability": null,
+                "observed_frequency": null,
                 "upper": 0.4
               },
               {
@@ -282,19 +290,19 @@
                 "upper": 1.0
               }
             ],
-            "sample_count": 1
+            "sample_count": 0
           },
           "total_ge_5": {
-            "brier": 0.036025012,
-            "ece": 0.18980256,
-            "mean_probability": 0.18980256,
-            "observed_frequency": 0.0,
+            "brier": null,
+            "ece": null,
+            "mean_probability": null,
+            "observed_frequency": null,
             "reliability_bins": [
               {
-                "count": 1,
+                "count": 0,
                 "lower": 0.0,
-                "mean_predicted_probability": 0.18980256,
-                "observed_frequency": 0.0,
+                "mean_predicted_probability": null,
+                "observed_frequency": null,
                 "upper": 0.2
               },
               {
@@ -326,19 +334,19 @@
                 "upper": 1.0
               }
             ],
-            "sample_count": 1
+            "sample_count": 0
           },
           "total_ge_6": {
-            "brier": 0.007564233,
-            "ece": 0.086972601,
-            "mean_probability": 0.086972601,
-            "observed_frequency": 0.0,
+            "brier": null,
+            "ece": null,
+            "mean_probability": null,
+            "observed_frequency": null,
             "reliability_bins": [
               {
-                "count": 1,
+                "count": 0,
                 "lower": 0.0,
-                "mean_predicted_probability": 0.086972601,
-                "observed_frequency": 0.0,
+                "mean_predicted_probability": null,
+                "observed_frequency": null,
                 "upper": 0.2
               },
               {
@@ -370,17 +378,17 @@
                 "upper": 1.0
               }
             ],
-            "sample_count": 1
+            "sample_count": 0
           }
         },
-        "sample_count": 1
+        "sample_count": 0
       },
       "champion": {
         "btts": {
-          "accuracy": 1.0,
-          "brier": 0.194163496,
-          "ece": 0.440639871,
-          "log_loss": 0.580961776,
+          "accuracy": null,
+          "brier": null,
+          "ece": null,
+          "log_loss": null,
           "reliability_bins": [
             {
               "count": 0,
@@ -397,10 +405,10 @@
               "upper": 0.4
             },
             {
-              "count": 1,
+              "count": 0,
               "lower": 0.4,
-              "mean_predicted_probability": 0.559360129,
-              "observed_frequency": 1.0,
+              "mean_predicted_probability": null,
+              "observed_frequency": null,
               "upper": 0.6
             },
             {
@@ -418,50 +426,48 @@
               "upper": 1.0
             }
           ],
-          "sample_count": 1
+          "sample_count": 0
         },
         "distribution": {
-          "away_margin_top1_share": 0.0,
-          "draw_top1_share": 1.0,
-          "high_score_top1_share": 0.0,
-          "home_margin_top1_share": 0.0,
-          "one_one_top1_share": 1.0,
-          "top1_score_counts": {
-            "1-1": 1
-          },
-          "top1_support_size": 1
+          "away_margin_top1_share": null,
+          "draw_top1_share": null,
+          "high_score_top1_share": null,
+          "home_margin_top1_share": null,
+          "one_one_top1_share": null,
+          "top1_score_counts": {},
+          "top1_support_size": 0
         },
         "exact_score": {
-          "mean_probability_assigned_to_actual_score": 0.100247138,
-          "nll": 2.30011676,
-          "sample_count": 1,
-          "top1_hit_rate": 1.0,
-          "top3_hit_rate": 1.0
+          "mean_probability_assigned_to_actual_score": null,
+          "nll": null,
+          "sample_count": 0,
+          "top1_hit_rate": null,
+          "top3_hit_rate": null
         },
         "lambda": {
-          "gap_lt_0_25_share": 0.0,
-          "gap_lt_0_5_share": 0.0,
+          "gap_lt_0_25_share": null,
+          "gap_lt_0_5_share": null,
           "lambda_total_distribution": {
-            "P10": 3.03,
-            "P25": 3.03,
-            "P50": 3.03,
-            "P75": 3.03,
-            "P90": 3.03
+            "P10": null,
+            "P25": null,
+            "P50": null,
+            "P75": null,
+            "P90": null
           },
-          "median_abs_gap": 0.938908
+          "median_abs_gap": null
         },
         "one_x_two": {
-          "accuracy": 0.0,
-          "brier": 1.005088092,
-          "ece": 0.523839333,
-          "log_loss": 1.540653729,
-          "sample_count": 1
+          "accuracy": null,
+          "brier": null,
+          "ece": null,
+          "log_loss": null,
+          "sample_count": 0
         },
         "ou_2_5": {
-          "accuracy": 0.0,
-          "brier": 0.34046919,
-          "ece": 0.583497378,
-          "log_loss": 0.875862522,
+          "accuracy": null,
+          "brier": null,
+          "ece": null,
+          "log_loss": null,
           "reliability_bins": [
             {
               "count": 0,
@@ -478,10 +484,10 @@
               "upper": 0.4
             },
             {
-              "count": 1,
+              "count": 0,
               "lower": 0.4,
-              "mean_predicted_probability": 0.583497378,
-              "observed_frequency": 0.0,
+              "mean_predicted_probability": null,
+              "observed_frequency": null,
               "upper": 0.6
             },
             {
@@ -499,14 +505,14 @@
               "upper": 1.0
             }
           ],
-          "sample_count": 1
+          "sample_count": 0
         },
         "right_tail": {
           "total_ge_4": {
-            "brier": 0.129232276,
-            "ece": 0.359488909,
-            "mean_probability": 0.359488909,
-            "observed_frequency": 0.0,
+            "brier": null,
+            "ece": null,
+            "mean_probability": null,
+            "observed_frequency": null,
             "reliability_bins": [
               {
                 "count": 0,
@@ -516,10 +522,10 @@
                 "upper": 0.2
               },
               {
-                "count": 1,
+                "count": 0,
                 "lower": 0.2,
-                "mean_predicted_probability": 0.359488909,
-                "observed_frequency": 0.0,
+                "mean_predicted_probability": null,
+                "observed_frequency": null,
                 "upper": 0.4
               },
               {
@@ -544,19 +550,19 @@
                 "upper": 1.0
               }
             ],
-            "sample_count": 1
+            "sample_count": 0
           },
           "total_ge_5": {
-            "brier": 0.036024987,
-            "ece": 0.189802494,
-            "mean_probability": 0.189802494,
-            "observed_frequency": 0.0,
+            "brier": null,
+            "ece": null,
+            "mean_probability": null,
+            "observed_frequency": null,
             "reliability_bins": [
               {
-                "count": 1,
+                "count": 0,
                 "lower": 0.0,
-                "mean_predicted_probability": 0.189802494,
-                "observed_frequency": 0.0,
+                "mean_predicted_probability": null,
+                "observed_frequency": null,
                 "upper": 0.2
               },
               {
@@ -588,19 +594,19 @@
                 "upper": 1.0
               }
             ],
-            "sample_count": 1
+            "sample_count": 0
           },
           "total_ge_6": {
-            "brier": 0.00756422,
-            "ece": 0.086972527,
-            "mean_probability": 0.086972527,
-            "observed_frequency": 0.0,
+            "brier": null,
+            "ece": null,
+            "mean_probability": null,
+            "observed_frequency": null,
             "reliability_bins": [
               {
-                "count": 1,
+                "count": 0,
                 "lower": 0.0,
-                "mean_predicted_probability": 0.086972527,
-                "observed_frequency": 0.0,
+                "mean_predicted_probability": null,
+                "observed_frequency": null,
                 "upper": 0.2
               },
               {
@@ -632,10 +638,10 @@
                 "upper": 1.0
               }
             ],
-            "sample_count": 1
+            "sample_count": 0
           }
         },
-        "sample_count": 1
+        "sample_count": 0
       }
     },
     "early_kill": {
@@ -645,11 +651,13 @@
       "triggers": [],
       "window_matches": 30
     },
+    "excluded_non_promotion_pair_count": 1,
     "paired_count": 1,
     "post_match_input_used_for_generation": false,
+    "promotion_eligible_pairs": 0,
     "schema_version": "market_side_shadow_1.evaluation.v1",
     "skipped_unverified_pair_count": 0,
-    "verified_paired_count": 1
+    "verified_paired_count": 0
   },
   "milestone": "MARKET-SIDE-SHADOW-1",
   "namespace": "market_side_shadow_1",
@@ -3190,7 +3198,7 @@
   "refresh": {
     "actual_results_persisted": false,
     "matched_pair_count": 1,
-    "refreshed_at": "2026-08-30T12:30:00+08:00",
+    "refreshed_at": "2026-08-30T18:00:00+08:00",
     "result_files_accepted": 382,
     "result_files_rejected": 0,
     "result_files_scanned": 382,

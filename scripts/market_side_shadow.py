@@ -37,6 +37,7 @@ from prediction_trust_2_replay import (  # noqa: E402
     build_score_matrix,
 )
 from prediction_trust_3_replay import derive_market_side_only_lambdas  # noqa: E402
+from postmatch_queue import parse_datetime  # noqa: E402
 
 
 MILESTONE = "MARKET-SIDE-SHADOW-1"
@@ -244,6 +245,50 @@ def _freeze_eligibility(record: Mapping[str, Any]) -> dict[str, Any]:
         "model_role": record.get("model_role"),
         "freeze_created_at": record.get("freeze_created_at"),
     }
+
+
+def _captured_before_kickoff(record: Mapping[str, Any]) -> bool:
+    kickoff = parse_datetime(record.get("kickoff_at"))
+    freeze_created = parse_datetime(record.get("freeze_created_at"))
+    source_cutoff = parse_datetime(record.get("source_cutoff_at"))
+    return bool(
+        kickoff
+        and freeze_created
+        and source_cutoff
+        and freeze_created < kickoff
+        and source_cutoff < kickoff
+    )
+
+
+def _is_promotion_eligible_capture(
+    pair: Mapping[str, Any],
+    record: Mapping[str, Any],
+    *,
+    production_automatic_capture: bool,
+) -> bool:
+    integrity = pair.get("integrity") if isinstance(pair.get("integrity"), Mapping) else {}
+    champion_reproduction = (
+        pair.get("champion_reproduction")
+        if isinstance(pair.get("champion_reproduction"), Mapping)
+        else {}
+    )
+    return bool(
+        production_automatic_capture is True
+        and record.get("formal_eligible") is True
+        and record.get("model_formal_eligible") is True
+        and pair.get("pair_status") == "PAIRED"
+        and pair.get("same_fixture") is True
+        and pair.get("same_source_cutoff") is True
+        and pair.get("same_freeze_eligibility") is True
+        and pair.get("same_frozen_input_digest") is True
+        and integrity.get("same_match_id") is True
+        and integrity.get("same_source_cutoff") is True
+        and integrity.get("same_freeze_eligibility") is True
+        and integrity.get("same_frozen_input_digest") is True
+        and pair.get("post_match_input_used_for_generation") is False
+        and champion_reproduction.get("status") == "MATCHED"
+        and _captured_before_kickoff(record)
+    )
 
 
 def _record_snapshot_ref(record: Mapping[str, Any]) -> str:
@@ -464,8 +509,14 @@ def capture_pair(
     *,
     snapshot_root: Path = ROOT,
     expected_snapshot_sha256: str | None = None,
+    production_automatic_capture: bool = False,
 ) -> dict[str, Any]:
-    """Build one immutable Champion/C pair; C failure is isolated as ABSTAIN."""
+    """Build one immutable Champion/C pair; C failure is isolated as ABSTAIN.
+
+    Promotion eligibility is granted only when the production runner explicitly
+    identifies this as an automatic pre-kickoff capture and all pair checks pass.
+    Manual, CLI, replay, and engineering-smoke calls remain non-promotion data.
+    """
 
     if not isinstance(record, Mapping):
         raise ValueError("frozen record must be an object")
@@ -523,6 +574,11 @@ def capture_pair(
         }
         if not all(pair["integrity"].values()):
             raise ValueError("PAIRED_IDENTITY_MISMATCH")
+        pair["promotion_eligible"] = _is_promotion_eligible_capture(
+            pair,
+            record,
+            production_automatic_capture=production_automatic_capture,
+        )
     except Exception as error:
         if pair is None:
             pair = _base_pair(record, frozen_input_digest=initial_digest)
@@ -829,7 +885,7 @@ def _actual_for_pair(pair: Mapping[str, Any], results: Mapping[str, Any]) -> tup
 def _integrity_failures(pairs: Iterable[Mapping[str, Any]]) -> list[str]:
     failures = []
     for pair in pairs:
-        if pair.get("pair_status") != "PAIRED":
+        if not _is_promotion_eligible_pair(pair):
             continue
         integrity = pair.get("integrity") if isinstance(pair.get("integrity"), Mapping) else {}
         for key, value in integrity.items():
@@ -838,6 +894,10 @@ def _integrity_failures(pairs: Iterable[Mapping[str, Any]]) -> list[str]:
         if pair.get("post_match_input_used_for_generation") is not False:
             failures.append(f"{pair.get('pair_id')}:post_match_input")
     return failures
+
+
+def _is_promotion_eligible_pair(pair: Mapping[str, Any]) -> bool:
+    return pair.get("pair_status") == "PAIRED" and pair.get("promotion_eligible") is True
 
 
 def _metric_collapse(champion: Mapping[str, Any], challenger: Mapping[str, Any]) -> list[str]:
@@ -869,10 +929,9 @@ def evaluate_paired_cohort(
 
     pair_list = [dict(pair) for pair in pairs]
     result_map = dict(verified_results or {})
+    promotion_pairs = [pair for pair in pair_list if _is_promotion_eligible_pair(pair)]
     selected: list[tuple[dict[str, Any], tuple[int, int]]] = []
-    for pair in pair_list:
-        if pair.get("pair_status") != "PAIRED":
-            continue
+    for pair in promotion_pairs:
         actual = _actual_for_pair(pair, result_map)
         if actual is not None:
             selected.append((pair, actual))
@@ -881,7 +940,7 @@ def evaluate_paired_cohort(
     challenger_outputs = [pair["challenger"] for pair, _ in selected if isinstance(pair.get("challenger"), Mapping)]
     champion_metrics = _candidate_metrics(champion_outputs, actual_scores)
     challenger_metrics = _candidate_metrics(challenger_outputs, actual_scores)
-    integrity_failures = _integrity_failures(pair_list)
+    integrity_failures = _integrity_failures(promotion_pairs)
     collapse = _metric_collapse(champion_metrics, challenger_metrics)
     verified_count = len(selected)
     early_triggers = integrity_failures + collapse
@@ -895,9 +954,14 @@ def evaluate_paired_cohort(
         "schema_version": EVALUATION_SCHEMA_VERSION,
         "verified_paired_count": verified_count,
         "paired_count": sum(pair.get("pair_status") == "PAIRED" for pair in pair_list),
-        "skipped_unverified_pair_count": sum(
-            pair.get("pair_status") == "PAIRED" and _actual_for_pair(pair, result_map) is None
+        "promotion_eligible_pairs": len(promotion_pairs),
+        "excluded_non_promotion_pair_count": sum(
+            pair.get("pair_status") == "PAIRED" and pair.get("promotion_eligible") is not True
             for pair in pair_list
+        ),
+        "skipped_unverified_pair_count": sum(
+            _actual_for_pair(pair, result_map) is None
+            for pair in promotion_pairs
         ),
         "post_match_input_used_for_generation": False,
         "actual_results_used_for_evaluation_only": True,
@@ -955,6 +1019,11 @@ def build_shadow_document(
     evaluation = evaluate_paired_cohort(pair_list, verified_results)
     paired_count = sum(pair.get("pair_status") == "PAIRED" for pair in pair_list)
     abstain_count = sum(pair.get("pair_status") == "CHALLENGER_ABSTAIN" for pair in pair_list)
+    promotion_eligible_count = sum(_is_promotion_eligible_pair(pair) for pair in pair_list)
+    excluded_non_promotion_count = sum(
+        pair.get("pair_status") == "PAIRED" and pair.get("promotion_eligible") is not True
+        for pair in pair_list
+    )
     return {
         "schema_version": SCHEMA_VERSION,
         "milestone": MILESTONE,
@@ -972,6 +1041,14 @@ def build_shadow_document(
             "promotion_enabled": False,
             "post_match_input_used_for_generation": False,
             "formula_locked": "PRED-TRUST-3 market-side-only hybrid C",
+            "promotion_cohort_filter": "pair_status=PAIRED AND promotion_eligible=true",
+            "promotion_eligibility_requires": [
+                "formal Champion eligibility",
+                "explicit production automatic capture",
+                "pre-kickoff capture",
+                "same fixture/cutoff/freeze eligibility/frozen input digest",
+                "post_match_input_used_for_generation=false",
+            ],
         },
         "source_pins": {
             "accepted_production_run": ACCEPTED_PRODUCTION_RUN,
@@ -984,6 +1061,8 @@ def build_shadow_document(
             "pairs": len(pair_list),
             "paired": paired_count,
             "challenger_abstain": abstain_count,
+            "promotion_eligible_pairs": promotion_eligible_count,
+            "excluded_non_promotion_pair_count": excluded_non_promotion_count,
         },
         "checkpoint": checkpoint_status(evaluation["verified_paired_count"]),
         "evaluation": evaluation,

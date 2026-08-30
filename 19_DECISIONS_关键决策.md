@@ -134,6 +134,16 @@ research-step failure is explicit `DEGRADED` and does not block Champion,
 formal prospective settlement, or publication. No automatic promotion is
 enabled.
 
+The formal shadow cohort is explicitly filtered to
+`pair_status=PAIRED AND promotion_eligible=true`. Engineering, replay, manual,
+and smoke pairs remain outside that cohort even when a verified result is
+discoverable. A production pair may set `promotion_eligible=true` only through
+the explicit automatic runner context after formal Champion eligibility,
+pre-kickoff capture, same fixture/cutoff/freeze eligibility/frozen input digest,
+`post_match_input_used_for_generation=false`, and all pair integrity checks
+pass. The preserved smoke pair therefore remains evidence for result discovery
+and evaluator execution, not prospective sample evidence.
+
 # D-028 - Daily prediction availability closure
 
 Status: `LOCKED FOR PRED-AVAIL-1`

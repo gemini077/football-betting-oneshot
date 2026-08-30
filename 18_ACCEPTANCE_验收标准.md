@@ -510,6 +510,11 @@ not Champion promotion. Independent acceptance must verify:
    `CHALLENGER_ABSTAIN` record that preserves the Champion and does not block
    the formal prediction. The challenger has an independent namespace and
    cannot enter the formal Champion prospective evaluation.
+2a. The formal shadow promotion cohort requires both `pair_status=PAIRED` and
+    `promotion_eligible=true`. Engineering, replay, manual, and smoke pairs
+    remain `promotion_eligible=false`; they may prove capture/result-discovery
+    plumbing but are excluded from verified promotion counts, checkpoints,
+    early promotion review, and promotion metrics.
 3. C uses no new parameter: Champion total is
    `0.60*form_total + 0.40*market_total`, side share is frozen `market_share`,
    and existing clamp, independent Poisson, `rho=0`, and score-matrix logic
@@ -523,9 +528,10 @@ not Champion promotion. Independent acceptance must verify:
    available, and five reliability bins containing count, mean predicted
    probability, and observed frequency. ECE is not silently removed or used
    as the sole automatic veto.
-7. `MIN_PAIRED_VERIFIED=50` emits `CHECKPOINT`; `100` emits
-   `PROMOTION_REVIEW_READY`; neither status auto-promotes. The first 30
-   verified pairs can emit `SHADOW_EARLY_STOP_RECOMMENDED` for leakage,
+7. `MIN_PAIRED_VERIFIED=50` promotion-eligible verified pairs emits
+   `CHECKPOINT`; `100` emits `PROMOTION_REVIEW_READY`; neither status
+   auto-promotes. The first 30 promotion-eligible verified pairs can emit
+   `SHADOW_EARLY_STOP_RECOMMENDED` for leakage,
    identity/freeze mismatch, or severe proper-metric collapse.
 8. The smoke, focused tests, syntax/diff checks, production-mutation check,
    GitHub branch/commit/PR evidence, and `REMOTE_DELIVERY_CHECK` pass. The
@@ -544,8 +550,11 @@ reads `data/postmatch_automation/results/*.json` only, reuses
 `normalize_result` and the existing verified/final/regulation-90m constraints,
 matches the pinned pair by exact identity, and atomically writes
 `data/prediction_quality/market_side_shadow_1/latest.json`. The automatic
-refresh smoke must show at least one verified pair, `NOT_REACHED` checkpoint,
-and `auto_promote=false`. `scripts/automation_cycle.py` must invoke the
-refresh after postmatch plus prospective settlement as an optional step and
-record `DEGRADED` with an explicit error if it fails; Champion and formal
-prospective processing continue independently.
+refresh smoke must prove result discovery and evaluation while distinguishing
+the engineering smoke pair from the prospective cohort: total pairs `1`,
+paired `1`, promotion-eligible pairs `0`, excluded non-promotion pairs `1`,
+verified promotion sample `0`, `NOT_REACHED` checkpoint, and
+`auto_promote=false`. `scripts/automation_cycle.py` must invoke the refresh
+after postmatch plus prospective settlement as an optional step and record
+`DEGRADED` with an explicit error if it fails; Champion and formal prospective
+processing continue independently.

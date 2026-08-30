@@ -35,9 +35,14 @@ The bounded closure now also refreshes evaluation automatically from the
 existing verified 90-minute artifacts under
 `data/postmatch_automation/results/*.json`. The closure smoke matched the
 existing pair to one verified result and atomically persisted
-`data/prediction_quality/market_side_shadow_1/latest.json`: verified sample
-`1`, checkpoint `NOT_REACHED`, `auto_promote=false`. The refresh is an optional
-cycle step and records `DEGRADED` plus an error if the research step fails.
+`data/prediction_quality/market_side_shadow_1/latest.json`. The pair is an
+engineering smoke pair with `promotion_eligible=false`: total pairs `1`, paired
+`1`, promotion-eligible pairs `0`, excluded non-promotion pairs `1`, verified
+promotion sample `0`, checkpoint `NOT_REACHED`, and `auto_promote=false`.
+The production runner passes explicit automatic-capture context; only a
+pre-kickoff pair that also passes the formal eligibility and identity/freeze
+checks may enter the promotion cohort. The refresh is an optional cycle step
+and records `DEGRADED` plus an error if the research step fails.
 
 Evidence: `scripts/market_side_shadow.py`,
 `tests/test_market_side_shadow.py`,

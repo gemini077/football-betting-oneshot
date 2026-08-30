@@ -206,6 +206,8 @@ def refresh_shadow(
         "market_side_shadow_status": "REFRESHED",
         "paired_count": document["counts"]["paired"],
         "challenger_abstain_count": document["counts"]["challenger_abstain"],
+        "promotion_eligible_pairs": document["counts"]["promotion_eligible_pairs"],
+        "excluded_non_promotion_pair_count": document["counts"]["excluded_non_promotion_pair_count"],
         "verified_paired_count": evaluation["verified_paired_count"],
         "checkpoint_status": document["checkpoint"]["status"],
         "early_stop_status": evaluation["early_kill"]["status"],

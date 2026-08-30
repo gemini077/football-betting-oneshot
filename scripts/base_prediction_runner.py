@@ -1172,7 +1172,11 @@ def _capture_market_side_shadow(
     try:
         from market_side_shadow import capture_pair, persist_pair
 
-        pair = capture_pair(record, snapshot_root=Path(input_snapshot_root))
+        pair = capture_pair(
+            record,
+            snapshot_root=Path(input_snapshot_root),
+            production_automatic_capture=True,
+        )
         written = persist_pair(pair, Path(shadow_pair_root))
         return {
             "status": written["status"],

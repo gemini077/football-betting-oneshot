@@ -31,9 +31,12 @@ for future sample growth.
 
 Closure evidence additionally proves automatic evaluation: the refresh reads
 the existing verified result artifacts, matches one result to the immutable
-pair, atomically persists `latest.json`, and reports verified sample `1` with
-checkpoint `NOT_REACHED`. `automation_cycle.py` runs this research step after
-postmatch and prospective settlement as optional failure-isolated work.
+pair, atomically persists `latest.json`, and reports total pairs `1`, paired
+`1`, promotion-eligible pairs `0`, excluded non-promotion pairs `1`, verified
+promotion sample `0`, checkpoint `NOT_REACHED`, and `auto_promote=false`.
+The matched pair remains engineering smoke evidence, not prospective promotion
+cohort evidence. `automation_cycle.py` runs this research step after postmatch
+and prospective settlement as optional failure-isolated work.
 
 PRED-TRUST-3 remains recorded as `ACCEPTANCE PASS` with independent product
 decision `MARKET_SIDE_FUSION_PROMISING_FOR_SHADOW`. Its original replay
