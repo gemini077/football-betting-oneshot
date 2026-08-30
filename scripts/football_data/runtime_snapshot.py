@@ -77,9 +77,52 @@ class SnapshotVerificationError(SnapshotError):
 class SnapshotObjectError(SnapshotError):
     code = "OBJECT_STORE_REQUEST_FAILED"
 
+    def __init__(self, detail: str | None = None, *, operation: str | None = None):
+        super().__init__(detail)
+        self.operation = operation or "UNKNOWN"
+
 
 class ObjectNotFound(SnapshotObjectError):
     code = "OBJECT_NOT_FOUND"
+
+
+_SAFE_OPERATION_NAMES = frozenset({"CLIENT", "HEAD", "PUT", "GET"})
+_SAFE_DIAGNOSTIC_VALUE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
+
+
+def safe_object_store_diagnostic(error: SnapshotObjectError) -> dict[str, Any]:
+    """Return request metadata safe for a local CLI result.
+
+    SDK exception messages can contain signed URLs, bucket names, request
+    headers, or credential material.  Only fixed operation names, an exception
+    class name, a sanitized service code, and an HTTP status are retained.
+    """
+
+    operation = str(getattr(error, "operation", "UNKNOWN")).upper()
+    if operation not in _SAFE_OPERATION_NAMES:
+        operation = "UNKNOWN"
+
+    cause = error.__cause__ or error
+    diagnostic: dict[str, Any] = {
+        "operation": operation,
+        "exception_type": type(cause).__name__,
+    }
+    response = getattr(cause, "response", None)
+    if not isinstance(response, Mapping):
+        return diagnostic
+
+    error_info = response.get("Error")
+    if isinstance(error_info, Mapping):
+        service_code = error_info.get("Code")
+        if isinstance(service_code, str) and _SAFE_DIAGNOSTIC_VALUE_RE.fullmatch(service_code):
+            diagnostic["service_code"] = service_code
+
+    metadata = response.get("ResponseMetadata")
+    if isinstance(metadata, Mapping):
+        http_status = metadata.get("HTTPStatusCode")
+        if isinstance(http_status, int) and 100 <= http_status <= 599:
+            diagnostic["http_status"] = http_status
+    return diagnostic
 
 
 class ObjectStore(Protocol):
@@ -168,7 +211,7 @@ def build_s3_client(config: SnapshotConfig) -> Any:
             ),
         )
     except Exception as error:  # do not expose provider or credential details
-        raise SnapshotObjectError("S3 client initialization failed") from error
+        raise SnapshotObjectError("S3 client initialization failed", operation="CLIENT") from error
 
 
 def _is_not_found(error: BaseException) -> bool:
@@ -199,7 +242,7 @@ class S3ObjectStore:
         except Exception as error:
             if _is_not_found(error):
                 raise ObjectNotFound() from error
-            raise SnapshotObjectError("S3 HEAD failed") from error
+            raise SnapshotObjectError("S3 HEAD failed", operation="HEAD") from error
 
     def put_file(self, key: str, source: Path, *, content_type: str = "application/octet-stream") -> None:
         try:
@@ -211,7 +254,7 @@ class S3ObjectStore:
                     ContentType=content_type,
                 )
         except Exception as error:
-            raise SnapshotObjectError("S3 PUT failed") from error
+            raise SnapshotObjectError("S3 PUT failed", operation="PUT") from error
 
     def put_bytes(self, key: str, body: bytes, *, content_type: str = "application/octet-stream") -> None:
         try:
@@ -222,7 +265,7 @@ class S3ObjectStore:
                 ContentType=content_type,
             )
         except Exception as error:
-            raise SnapshotObjectError("S3 PUT failed") from error
+            raise SnapshotObjectError("S3 PUT failed", operation="PUT") from error
 
     def download(self, key: str, destination: Path) -> None:
         destination.parent.mkdir(parents=True, exist_ok=True)
@@ -247,7 +290,7 @@ class S3ObjectStore:
                 pass
             if _is_not_found(error):
                 raise ObjectNotFound() from error
-            raise SnapshotObjectError("S3 GET failed") from error
+            raise SnapshotObjectError("S3 GET failed", operation="GET") from error
 
 
 def file_sha256(path: str | Path) -> str:

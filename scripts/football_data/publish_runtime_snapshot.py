@@ -24,12 +24,14 @@ try:  # ``python -m scripts.football_data.publish_runtime_snapshot``
         SnapshotConfigurationError,
         SnapshotError,
         SnapshotManifestError,
+        SnapshotObjectError,
         SnapshotVerificationError,
         atomic_write_json,
         build_manifest,
         file_sha256,
         load_manifest,
         manifest_object_key,
+        safe_object_store_diagnostic,
         source_manifest_hashes,
         temporary_directory,
         verify_artifact,
@@ -49,12 +51,14 @@ except ImportError:  # pragma: no cover - keeps direct script execution usable
         SnapshotConfigurationError,
         SnapshotError,
         SnapshotManifestError,
+        SnapshotObjectError,
         SnapshotVerificationError,
         atomic_write_json,
         build_manifest,
         file_sha256,
         load_manifest,
         manifest_object_key,
+        safe_object_store_diagnostic,
         source_manifest_hashes,
         temporary_directory,
         verify_artifact,
@@ -261,7 +265,10 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps({"status": error.code}, ensure_ascii=False))
         return 2
     except SnapshotError as error:
-        print(json.dumps({"status": error.code}, ensure_ascii=False))
+        result: dict[str, Any] = {"status": error.code}
+        if isinstance(error, SnapshotObjectError):
+            result.update(safe_object_store_diagnostic(error))
+        print(json.dumps(result, ensure_ascii=False, sort_keys=True))
         return 1
     except (KeyboardInterrupt, EOFError):
         print(json.dumps({"status": "LOCAL_PUBLISHER_INPUT_REQUIRED"}, ensure_ascii=False))

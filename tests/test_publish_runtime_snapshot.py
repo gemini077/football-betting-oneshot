@@ -7,7 +7,13 @@ import pytest
 
 from scripts.football_data import publish_runtime_snapshot
 from scripts.football_data.historical_results import make_historical_match_result
-from scripts.football_data.runtime_snapshot import file_sha256, immutable_object_key, manifest_object_key
+from scripts.football_data.runtime_snapshot import (
+    SnapshotObjectError,
+    file_sha256,
+    immutable_object_key,
+    manifest_object_key,
+    safe_object_store_diagnostic,
+)
 from scripts.football_data.storage import HistoricalResultStore
 
 
@@ -185,3 +191,26 @@ def test_publisher_without_local_credentials_prints_only_safe_interactive_comman
         "LOCAL_PUBLISHER_INPUT_REQUIRED\n"
         "python -m scripts.football_data.publish_runtime_snapshot --interactive\n"
     )
+
+
+def test_object_store_diagnostic_contains_only_safe_request_metadata():
+    secret = "APPLICATION_KEY_MUST_NOT_APPEAR"
+
+    class FakeClientError(RuntimeError):
+        response = {
+            "Error": {"Code": "AccessDenied", "Message": f"leaked {secret}"},
+            "ResponseMetadata": {"HTTPStatusCode": 403, "RequestId": "request-id"},
+        }
+
+    error = SnapshotObjectError("S3 PUT failed", operation="PUT")
+    error.__cause__ = FakeClientError(secret)
+
+    diagnostic = safe_object_store_diagnostic(error)
+
+    assert diagnostic == {
+        "operation": "PUT",
+        "exception_type": "FakeClientError",
+        "service_code": "AccessDenied",
+        "http_status": 403,
+    }
+    assert secret not in repr(diagnostic)
