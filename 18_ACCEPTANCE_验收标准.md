@@ -354,3 +354,47 @@ verify:
 The milestone ends at `DATA-PLANE-1 = READY_FOR_ACCEPTANCE`; it must not be
 marked `SEALED` by the implementation agent and must stop before the separate
 implementation milestone.
+
+# 2H. DATA-PLANE-2 Acceptance
+
+`DATA-PLANE-2 — Production Deployment Verification` has independent final
+acceptance and is recorded as `SEALED / DEPLOYED / ACCEPTANCE PASS`.
+
+The durable evidence is PR #123 merged at
+`8e432d84f5c4d68bd25fb32fb31c3d55a7b6e651`, production workflow run
+`33294381128` with SUCCESS, `runtime_data_snapshot.status=READY`, `1778`
+records, dataset SHA-256
+`48088556830cfb5a6ecd523fc4dc29889406b4853001c51849f5533ecc44a3f2`,
+durability gate PASS, write-back SUCCESS, and Pages SUCCESS. Publisher live
+validation remains `DEFERRED / NON_BLOCKING`; licensing remains
+`LICENSING_REVIEW_REQUIRED`; the workflow item is
+`NON_SECRET_LOG_HYGIENE_DEBT`. PR #120 remains OPEN / UNMERGED.
+
+# 2I. PRED-TRUST-1 Acceptance
+
+`PRED-TRUST-1 — Unique-Match Prediction Integrity & Multi-Market Quality
+Audit` may be marked by Codex only as `READY_FOR_ACCEPTANCE`. Independent
+acceptance must verify:
+
+1. The audit is pinned to the accepted production write-back and uses one
+   final legal pre-kickoff prematch version per unique match without deleting
+   frozen files or rewriting the prospective ledger.
+2. Pilot, excluded, post-kickoff, illegal timestamp, superseded, and
+   non-selected duplicate versions are excluded from evaluation.
+3. Every health duplicate group is classified A/B/C/D, with the unique
+   affected-match count and real immutable/frozen violation result recorded.
+4. Current-day and historical score distributions, lambda quantiles/buckets,
+   1X2/BTTS/totals cross-market statistics, and verified 90-minute prospective
+   metrics include explicit sample sizes.
+5. The health-gate comparison includes random, empirical actual-score,
+   Champion time-window, and competition strata, but does not modify the
+   `87.5%` gate.
+6. The result records the root-cause ranking and exactly one next milestone;
+   no model, Champion, provider, identity, frozen prediction, ledger, monitor,
+   or health-gate change is part of this audit.
+7. Focused tests and the complete relevant test suite pass, and the audit PR
+   body contains the required evidence sections and STOP state.
+
+The audit artifact is
+`data/prediction_quality/pred_trust_1/audit_2026-08-30.json`; the human report
+is `docs/prediction-quality/PRED-TRUST-1_FINAL_REPORT.md`.

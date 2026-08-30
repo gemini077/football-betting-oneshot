@@ -9,7 +9,7 @@ CURRENT PHASE:
 
 `PRED-TRUST-1 - Unique-Match Prediction Integrity & Multi-Market Quality Audit`
 
-CURRENT STATUS: `CURRENT`
+CURRENT STATUS: `READY_FOR_ACCEPTANCE`
 
 `DATA-PLANE-2-PROD - Production Deployment Verification` is now
 `SEALED / DEPLOYED / ACCEPTANCE PASS`. PR #124 is the governance-only closeout
@@ -38,6 +38,16 @@ or model change is active.
 The next audit must use a canonical unique-match cohort and must not alter the
 Champion, frozen/prospective state, or public repository data boundary. It
 must stop before any model, provider, identity, or presentation change.
+
+PRED-TRUST-1 audit evidence is recorded in
+`docs/prediction-quality/PRED-TRUST-1_FINAL_REPORT.md` and
+`data/prediction_quality/pred_trust_1/audit_2026-08-30.json`. The result is
+`MIXED`: `A=51/B=0/C=0/D=0` duplicate classification, `22` current unique
+matches, `217` historical unique matches, and `181` verified prospective
+matches. Exact-score Top1 `1-1` is `72.73%` current and `76.50%` historical;
+lambda gap `<0.5` is `63.64%` current and `66.36%` historical. The ranked
+evidence is P0 lambda generation, P1 product presentation, P2 market fusion.
+PRED-TRUST-2 is design-only and is not automatically implemented.
 
 Open workflow-hygiene item: the production Bootstrap step exposed endpoint,
 bucket, and region configuration values through GitHub step environment
