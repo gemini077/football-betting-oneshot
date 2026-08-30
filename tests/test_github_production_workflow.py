@@ -28,6 +28,7 @@ def test_deploy_pages_persists_mvp_durable_state_without_site():
     paths_match = re.search(r"paths=\(([^)]*)\)", text)
     assert paths_match, "durable path allowlist is missing"
     durable_paths = paths_match.group(1)
+    durable_path_tokens = durable_paths.split()
 
     for required in (
         "data/prediction_universe",
@@ -36,10 +37,12 @@ def test_deploy_pages_persists_mvp_durable_state_without_site():
         "data/model_governance/input_snapshots",
         "data/model_governance/prediction_exclusions",
         "data/prospective",
+        "data/prediction_quality/market_side_shadow_1",
         "data/prediction_dashboard",
         "data/product_runtime",
     ):
-        assert required in durable_paths
+        assert required in durable_path_tokens
+    assert "data/prediction_quality" not in durable_path_tokens
     assert "site" not in durable_paths
     assert "actions/upload-pages-artifact@v3" in text
     assert "actions/deploy-pages@v4" in text
