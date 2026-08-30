@@ -100,7 +100,11 @@ jobs:
           fi
           if ! git diff --cached --quiet; then
             git commit -m "refresh public football data [skip ci]"
-            git push
+            python scripts/durable_main_write.py \
+              --remote origin \
+              --branch main \
+              --max-attempts 3 \
+              --retry-delay-seconds 2
           fi
 
       - name: Rebuild Pages artifact after data save

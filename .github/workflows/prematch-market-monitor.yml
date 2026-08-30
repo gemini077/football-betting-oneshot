@@ -63,9 +63,15 @@ jobs:
           if ! git diff --cached --quiet; then
             git commit -m "refresh due pre-match markets [skip ci]"
             git stash push --include-untracked -m "ci-transient-untracked-files" || true
-            git pull --rebase origin main
-            git push
+            python scripts/durable_main_write.py \
+              --remote origin \
+              --branch main \
+              --max-attempts 3 \
+              --retry-delay-seconds 2
           fi
+      - name: Rebuild Pages artifact after durable write
+        if: steps.due.outputs.count != '0'
+        run: python scripts/build_public_site.py
       - uses: actions/configure-pages@v5
         if: steps.due.outputs.count != '0'
       - uses: actions/upload-pages-artifact@v3

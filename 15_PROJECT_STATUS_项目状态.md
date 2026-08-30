@@ -1,13 +1,41 @@
 # 15_PROJECT_STATUS_项目状态.md
 
-最后更新：2026-08-30
+最后更新：2026-08-31
 角色：项目当前唯一人类可读状态真相。只记录当前事实，不承担完整历史档案职责。
 
-# PROD-HEALTH-1 Current State
+# PROD-WRITE-1 Current State
 
 Status: `READY_FOR_ACCEPTANCE`
 
-Decision: `PROD-HEALTH-1 = READY_FOR_ACCEPTANCE`
+Decision: `PROD-WRITE-1 = READY_FOR_ACCEPTANCE`
+
+The validated operational risk was concurrent durable-main writing: the full
+production writer and the high-frequency prematch writer used different
+concurrency groups while both could modify overlapping durable paths,
+including `data/fetch_runs`, `data/market_history`, `data/analysis_inputs`,
+`data/analysis_reports`, and `data/match_workspace`. The full writer committed
+and pushed directly; the prematch writer's pull/rebase still left a race with
+another push.
+
+The bounded protocol uses the selected B design: after generation and commit,
+`scripts/durable_main_write.py` fetches `origin/main`, rebases the existing
+commit, and retries only synchronization/push a bounded number of times. It
+does not regenerate data or force-push. A fetch/push race may retry; a genuine
+rebase conflict aborts the rebase and fails closed. The prematch Pages artifact
+is rebuilt after the durable write so deployment uses the merged working tree.
+Separate concurrency groups remain in place to preserve checkpoint event
+semantics rather than replacing them with a pending-event queue.
+
+Controlled scenarios cover both writer directions, non-conflicting durable
+state preservation, and conflicting immutable files. Production acceptance is
+separate; no Champion, Challenger, prediction, health classifier, provider,
+identity, coverage, frontend, or exact-score threshold change is included.
+
+# PROD-HEALTH-1 Previous Milestone
+
+Status: `SEALED / ACCEPTANCE PASS`
+
+Decision: `PROD-HEALTH-1 = SEALED / ACCEPTANCE PASS`
 
 The bounded health fix reuses the PRED-TRUST-1 legal pre-kickoff version
 selector from `scripts/prematch_versioning.py`. Health now evaluates canonical
@@ -17,12 +45,13 @@ The root cause was the previous `job_id` group-length check: each later
 pre-kickoff source/market refresh intentionally created another immutable
 version, so legitimate version history produced `DUPLICATE_FROZEN_PREDICTION`.
 
-The latest `origin/main` replay at `24b2ad233b9cfa7d03497f2014958dd8430b7bb7`
-recomputed `578` raw frozen rows, `219` selected unique matches, and `573`
-legal prematch rows. It classified `74` legitimate version-history groups,
-`0` actual duplicate-final groups, `0` identity-collision groups, and `0`
-health-only groups. The replayed health result is `HEALTHY` with no active
-reason; no frozen artifact, prospective ledger, Champion, model, or
+The accepted production replay used `595` raw frozen rows, `219` selected
+unique matches, and `590` legal prematch rows. It classified `74` legitimate
+version-history groups, `0` actual duplicate-final groups, `0`
+identity-collision groups, and `0` health-only groups. Production run
+`33311174275` completed SUCCESS and the durable health write-back is
+`00db8ef90d7dade591268ef8810bb4f8da3a9045`; health is `HEALTHY` with no
+active reason. No frozen artifact, prospective ledger, Champion, model, or
 exact-score threshold was changed. The `87.5%` exact-score threshold remains
 an explicit debt outside this milestone.
 
