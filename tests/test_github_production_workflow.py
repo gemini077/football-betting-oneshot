@@ -144,7 +144,7 @@ def test_deploy_pages_bootstraps_verified_data_before_production_cycle():
         "FOOTBALL_DATA_SNAPSHOT_BUCKET",
         "FOOTBALL_DATA_SNAPSHOT_REGION",
     ):
-        assert f"${{{{ secrets.{name} }}}}" in text
+        assert f"${{{{ vars.{name} }}}}" in text
         assert name in action
     assert "add-mask" in action
     assert "gh api" not in action
@@ -167,12 +167,12 @@ def test_clean_runner_smoke_is_read_only_and_uses_runtime_configuration():
     assert "FOOTBALL_DATA_SNAPSHOT_ENDPOINT_URL" in workflow
     assert "FOOTBALL_DATA_SNAPSHOT_BUCKET" in workflow
     assert "FOOTBALL_DATA_SNAPSHOT_REGION" in workflow
-    assert "${{ secrets.FOOTBALL_DATA_SNAPSHOT_ENDPOINT_URL }}" in workflow
-    assert "${{ secrets.FOOTBALL_DATA_SNAPSHOT_BUCKET }}" in workflow
-    assert "${{ secrets.FOOTBALL_DATA_SNAPSHOT_REGION }}" in workflow
-    assert "vars.FOOTBALL_DATA_SNAPSHOT_ENDPOINT_URL" not in workflow
-    assert "vars.FOOTBALL_DATA_SNAPSHOT_BUCKET" not in workflow
-    assert "vars.FOOTBALL_DATA_SNAPSHOT_REGION" not in workflow
+    assert "${{ vars.FOOTBALL_DATA_SNAPSHOT_ENDPOINT_URL }}" in workflow
+    assert "${{ vars.FOOTBALL_DATA_SNAPSHOT_BUCKET }}" in workflow
+    assert "${{ vars.FOOTBALL_DATA_SNAPSHOT_REGION }}" in workflow
+    assert "secrets.FOOTBALL_DATA_SNAPSHOT_ENDPOINT_URL" not in workflow
+    assert "secrets.FOOTBALL_DATA_SNAPSHOT_BUCKET" not in workflow
+    assert "secrets.FOOTBALL_DATA_SNAPSHOT_REGION" not in workflow
     assert "python -m scripts.football_data.runtime_clean_runner_smoke" in workflow
     assert "contents: write" not in workflow
     assert "git push" not in workflow
