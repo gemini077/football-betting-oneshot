@@ -9,8 +9,10 @@ from scripts.football_data.historical_results import make_historical_match_resul
 from scripts.football_data.storage import HistoricalResultStore
 from scripts.football_data import runtime_snapshot
 from scripts.football_data.runtime_snapshot import (
+    S3ObjectStore,
     SnapshotConfig,
     SnapshotManifestError,
+    SnapshotObjectError,
     SnapshotVerificationError,
     atomic_install_verified,
     build_manifest,
@@ -159,3 +161,46 @@ def test_s3_client_is_provider_neutral(monkeypatch):
     assert captured["kwargs"]["region_name"] == config.region
     assert captured["kwargs"]["aws_access_key_id"] == config.access_key_id
     assert captured["kwargs"]["aws_secret_access_key"] == config.secret_access_key
+
+
+def test_s3_store_find_exact_object_uses_list_objects_v2_without_exposing_config():
+    key = immutable_object_key("1" * 64)
+    calls = []
+
+    class FakeClient:
+        @staticmethod
+        def list_objects_v2(**kwargs):
+            calls.append(kwargs)
+            return {"Contents": [{"Key": key + ".other"}, {"Key": key}]}
+
+    config = SnapshotConfig(
+        endpoint_url="https://object-store.example",
+        bucket="private-bucket",
+        region="us-east-1",
+        access_key_id="key-id",
+        secret_access_key="application-key",
+    )
+
+    assert S3ObjectStore(config, client=FakeClient()).find_exact_object(key) is True
+    assert calls == [{"Bucket": config.bucket, "Prefix": key, "MaxKeys": 2}]
+
+
+def test_s3_store_find_exact_object_wraps_list_failure_safely():
+    class FakeClient:
+        @staticmethod
+        def list_objects_v2(**kwargs):
+            raise RuntimeError("credential material must not escape")
+
+    config = SnapshotConfig(
+        endpoint_url="https://object-store.example",
+        bucket="private-bucket",
+        region="us-east-1",
+        access_key_id="key-id",
+        secret_access_key="application-key",
+    )
+
+    with pytest.raises(SnapshotObjectError) as error:
+        S3ObjectStore(config, client=FakeClient()).find_exact_object("key")
+
+    assert error.value.operation == "LIST"
+    assert "credential material" not in str(error.value)

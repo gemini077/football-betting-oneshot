@@ -86,7 +86,7 @@ class ObjectNotFound(SnapshotObjectError):
     code = "OBJECT_NOT_FOUND"
 
 
-_SAFE_OPERATION_NAMES = frozenset({"CLIENT", "HEAD", "PUT", "GET"})
+_SAFE_OPERATION_NAMES = frozenset({"CLIENT", "LIST", "HEAD", "PUT", "GET"})
 _SAFE_DIAGNOSTIC_VALUE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 
 
@@ -133,6 +133,8 @@ class ObjectStore(Protocol):
     def put_file(self, key: str, source: Path, *, content_type: str = "application/octet-stream") -> None: ...
 
     def put_bytes(self, key: str, body: bytes, *, content_type: str = "application/octet-stream") -> None: ...
+
+    def find_exact_object(self, key: str) -> bool: ...
 
     def download(self, key: str, destination: Path) -> None: ...
 
@@ -243,6 +245,30 @@ class S3ObjectStore:
             if _is_not_found(error):
                 raise ObjectNotFound() from error
             raise SnapshotObjectError("S3 HEAD failed", operation="HEAD") from error
+
+    def find_exact_object(self, key: str) -> bool:
+        """Probe an immutable key without relying on missing-object HEAD semantics.
+
+        Some S3-compatible services return 403 for a missing object when the
+        caller lacks a bucket-list permission, even though object read access
+        is valid.  Prefix listing uses the standard object-list capability and
+        lets the publisher distinguish an absent exact key from a real access
+        failure before it attempts the immutable upload.
+        """
+
+        try:
+            response = self._client.list_objects_v2(
+                Bucket=self._config.bucket,
+                Prefix=key,
+                MaxKeys=2,
+            )
+        except Exception as error:
+            raise SnapshotObjectError("S3 LIST failed", operation="LIST") from error
+
+        contents = response.get("Contents") if isinstance(response, Mapping) else None
+        if not isinstance(contents, (list, tuple)):
+            return False
+        return any(isinstance(item, Mapping) and item.get("Key") == key for item in contents)
 
     def put_file(self, key: str, source: Path, *, content_type: str = "application/octet-stream") -> None:
         try:

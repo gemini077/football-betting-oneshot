@@ -17,7 +17,6 @@ try:  # ``python -m scripts.football_data.publish_runtime_snapshot``
         DEFAULT_BUILDER_VERSION,
         EXPECTED_DATASET_SHA256,
         EXPECTED_RECORD_COUNT,
-        ObjectNotFound,
         ObjectStore,
         S3ObjectStore,
         SnapshotConfig,
@@ -44,7 +43,6 @@ except ImportError:  # pragma: no cover - keeps direct script execution usable
         DEFAULT_BUILDER_VERSION,
         EXPECTED_DATASET_SHA256,
         EXPECTED_RECORD_COUNT,
-        ObjectNotFound,
         ObjectStore,
         S3ObjectStore,
         SnapshotConfig,
@@ -122,9 +120,7 @@ def _ensure_immutable_object(
 ) -> str:
     """Put once, or accept an already-present byte-identical immutable object."""
 
-    try:
-        object_store.head_object(key)
-    except ObjectNotFound:
+    if not object_store.find_exact_object(key):
         object_store.put_file(key, source, content_type="application/vnd.duckdb")
         return "UPLOADED"
 

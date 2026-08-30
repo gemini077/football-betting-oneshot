@@ -31,6 +31,10 @@ class FakeObjectStore:
             raise ObjectNotFound()
         return {"ContentLength": len(self.objects[key])}
 
+    def find_exact_object(self, key: str) -> bool:
+        self.calls.append(("list", key))
+        return key in self.objects
+
     def put_file(self, key: str, source: Path, *, content_type: str = "application/octet-stream") -> None:
         self.calls.append(("put", key))
         if self.fail_put:
@@ -114,6 +118,7 @@ def test_publisher_verifies_upload_before_advancing_manifest(tmp_path, monkeypat
     assert manifest["object_key"] == immutable_object_key(manifest["dataset_sha256"])
     assert manifest["object_key"].endswith("historical_results.duckdb")
     assert manifest["previous_snapshot_version"] is None
+    assert object_store.calls[0] == ("list", manifest["object_key"])
     assert ("put", manifest["object_key"]) in object_store.calls
     assert ("head", manifest["object_key"]) in object_store.calls
     assert ("get", manifest["object_key"]) in object_store.calls
