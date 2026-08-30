@@ -166,6 +166,8 @@ def test_target_workflows_use_bounded_writer_and_rebuild_after_prematch_write() 
     assert "python scripts/durable_main_write.py" in deploy
     assert "python scripts/durable_main_write.py" in prematch
     assert "git push" not in deploy[deploy.index("- name: Save generated public data") :]
+    assert "git stash push --include-untracked" in deploy
+    assert "git stash pop" in deploy
     save_start = prematch.index("- name: Save market snapshots and refreshed reports")
     save_end = prematch.index("- uses: actions/configure-pages@v5", save_start)
     save_block = prematch[save_start:save_end]
