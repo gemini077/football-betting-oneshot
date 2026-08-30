@@ -53,6 +53,12 @@ The provider-neutral contract remains recorded in
 Publisher live validation remains `DEFERRED / NON_BLOCKING`; initial
 provisioning was `MANUAL_PRIVATE_UPLOAD`.
 
+Log-hygiene follow-up: the production run's Bootstrap step environment
+metadata exposed the configured endpoint/bucket/region values in the GitHub
+log. No such values are repeated here; the runtime access key and secret were
+masked. This does not change the verified data-plane parity, but it remains an
+open security-acceptance item before the log-hygiene requirement is closed.
+
 # DATA-PLANE-1 Current State
 
 Status: `SEALED / ACCEPTANCE PASS`

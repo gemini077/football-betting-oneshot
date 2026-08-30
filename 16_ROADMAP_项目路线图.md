@@ -34,6 +34,12 @@ READY_FOR_FINAL_ACCEPTANCE`. Do not merge another change or alter the
 Champion, frozen/prospective state, or public repository data boundary until
 the remaining governance acceptance is complete.
 
+Open workflow-hygiene item: the production Bootstrap step exposed endpoint,
+bucket, and region configuration values through GitHub step environment
+metadata. Runtime credentials remained masked. This is separate from the
+successful snapshot parity result and requires a bounded follow-up before the
+log-hygiene requirement can be considered closed.
+
 # Historical PRED-AVAIL-1 Route Record
 
 PREVIOUS PHASE:

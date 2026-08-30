@@ -43,6 +43,12 @@ The exact canonical names are:
 - `FOOTBALL_DATA_SNAPSHOT_BUCKET`
 - `FOOTBALL_DATA_SNAPSHOT_REGION`
 
+Remaining log-hygiene item: the production Bootstrap step's environment
+metadata exposed endpoint/bucket/region configuration values in the GitHub
+log. Runtime access key and secret remained masked, and no values are copied
+into this record. Data-plane verification remains valid; close this item in a
+separate workflow-hygiene change before final security acceptance.
+
 STOP: `DATA-PLANE-2-PROD = DEPLOYED / READY_FOR_FINAL_ACCEPTANCE`.
 The next decision is independent governance review of the production evidence;
 do not start a new availability, identity, provider, or model program here.
