@@ -1,0 +1,785 @@
+{
+  "actual_tail_reference": {
+    "actual_score_support_size": 28,
+    "actual_total_ge_4_share": 0.4143646408839779,
+    "actual_total_ge_5_share": 0.22099447513812154,
+    "actual_total_ge_6_share": 0.09392265193370165,
+    "sample_count": 181
+  },
+  "candidate_specs": [
+    {
+      "boundary_changed": "none; stored Champion lambda state",
+      "candidate_id": "champion",
+      "formula_version": "pred_trust_2_champion_replay.v1",
+      "hypothesis": "current_recent_form_market_calibrated_poisson_v2",
+      "label": "Champion"
+    },
+    {
+      "boundary_changed": "total and side share use frozen market state",
+      "candidate_id": "existing_challenger_b_market_to_goal_separation",
+      "formula_version": "pred_trust_2_market_to_goal_separation.v1",
+      "hypothesis": "market_to_goal_separation",
+      "label": "Existing Challenger B"
+    },
+    {
+      "boundary_changed": "side share only; Champion total retained",
+      "candidate_id": "market_side_only_hybrid",
+      "formula_version": "market_side_only_hybrid.v1",
+      "hypothesis": "market_side_only_hybrid",
+      "label": "New Challenger C"
+    }
+  ],
+  "cohort": {
+    "integrity": "record and input snapshot hashes matched the accepted PRED-TRUST-2 manifest",
+    "pinned_unique_final_legal_prematch_matches": 217,
+    "selected_prediction_digest": "8c5d608c00f1f3bb0b6d68bd2293eb6c0e42ad78f9b36adab67cd552b9ec2033",
+    "unverified_pinned_matches": 36,
+    "verified_90m_matches": 181,
+    "verified_prediction_digest": "94ee022d146ee7905bdeccf64a8bee68844e716c18bad1562c915fd100013aa2"
+  },
+  "decision": "MARKET_SIDE_ONLY_NOT_SUFFICIENT",
+  "dependency_map": {
+    "calibration": "embedded Champion calibration is inactive/shadow_only in the pinned inputs",
+    "candidate_c_boundary": "retain Champion total; replace only side share with market_share",
+    "football_evidence": "frozen source_snapshots.shuju.recent_form",
+    "lambda_home_away": "Champion total=0.60 form + 0.40 market; Champion share=0.65 form + 0.35 market",
+    "market_baseline": "frozen multi-book 1X2 consensus + total line",
+    "probability_state": "independent Poisson score matrix with rho=0 -> 1X2 / BTTS / totals / exact score",
+    "recent_form": "venue-specific and overall goals for/against -> form_home/form_away",
+    "strength_representation": "form_share = clipped form_home / (form_home + form_away)"
+  },
+  "excluded_candidates": {
+    "challenger_a_strength_separation": "REJECT from PRED-TRUST-2; not replayed"
+  },
+  "generated_at": "2026-08-30T00:00:00+08:00",
+  "metrics_by_candidate": {
+    "champion": {
+      "btts": {
+        "accuracy": 0.6022099447513812,
+        "brier": 0.23345179016282344,
+        "ece": 0.09860468133042082,
+        "sample_count": 181
+      },
+      "distribution": {
+        "absolute_gap": {
+          "P10": 0.06533119999999996,
+          "P25": 0.1413040000000001,
+          "P50": 0.35687999999999986,
+          "P75": 0.599364,
+          "P90": 0.859536
+        },
+        "away_margin_top1_share": 0.059907834101382486,
+        "draw_top1_share": 0.7649769585253456,
+        "gap_lt_0_25": 76,
+        "gap_lt_0_25_share": 0.35023041474654376,
+        "gap_lt_0_5": 144,
+        "gap_lt_0_5_share": 0.663594470046083,
+        "high_score_top1_share": 0.0,
+        "home_margin_top1_share": 0.17511520737327188,
+        "lambda_away": {
+          "P10": 1.0348354,
+          "P25": 1.128118,
+          "P50": 1.269333,
+          "P75": 1.455829,
+          "P90": 1.7262254000000001
+        },
+        "lambda_home": {
+          "P10": 1.102188,
+          "P25": 1.255355,
+          "P50": 1.476375,
+          "P75": 1.705873,
+          "P90": 1.9784566000000001
+        },
+        "lambda_total": {
+          "P10": 2.3600000000000003,
+          "P25": 2.5300000000000002,
+          "P50": 2.77,
+          "P75": 3.13,
+          "P90": 3.418
+        },
+        "mean_probability_total_ge_4": 0.3169231667072642,
+        "mean_probability_total_ge_5": 0.16326644936693296,
+        "mean_probability_total_ge_6": 0.07409129896877996,
+        "one_one_top1_share": 0.7649769585253456,
+        "sample_count": 217,
+        "top1_score_counts": {
+          "0-1": 6,
+          "1-0": 18,
+          "1-1": 166,
+          "1-2": 7,
+          "2-1": 20
+        },
+        "top1_support_size": 5
+      },
+      "exact_score": {
+        "actual_score_probability_sample_count": 181,
+        "mean_probability_assigned_to_actual_score": 0.06115286318947071,
+        "nll": 3.1329514234667823,
+        "sample_count": 181,
+        "top1_hit_rate": 0.11602209944751381,
+        "top3_hit_rate": 0.287292817679558
+      },
+      "one_x_two": {
+        "accuracy": 0.5193370165745856,
+        "brier": 0.5962390816333134,
+        "ece": 0.08532101307685362,
+        "log_loss": 0.9975506552103027,
+        "sample_count": 181
+      },
+      "ou_2_5": {
+        "accuracy": 0.6243093922651933,
+        "brier": 0.22480141029117337,
+        "ece": 0.23867631612871437,
+        "sample_count": 181
+      },
+      "sample_count": 181
+    },
+    "existing_challenger_b_market_to_goal_separation": {
+      "btts": {
+        "accuracy": 0.5580110497237569,
+        "brier": 0.23651817911518255,
+        "ece": 0.1795013523184288,
+        "sample_count": 181
+      },
+      "distribution": {
+        "absolute_gap": {
+          "P10": 0.08499999999999996,
+          "P25": 0.22499999999999987,
+          "P50": 0.5049999999999999,
+          "P75": 0.9589999999999999,
+          "P90": 1.4328
+        },
+        "away_margin_top1_share": 0.15207373271889402,
+        "draw_top1_share": 0.5023041474654378,
+        "gap_lt_0_25": 65,
+        "gap_lt_0_25_share": 0.2995391705069124,
+        "gap_lt_0_5": 107,
+        "gap_lt_0_5_share": 0.4930875576036866,
+        "high_score_top1_share": 0.004608294930875576,
+        "home_margin_top1_share": 0.3456221198156682,
+        "lambda_away": {
+          "P10": 0.7849999999999999,
+          "P25": 0.9550000000000001,
+          "P50": 1.145,
+          "P75": 1.3900000000000001,
+          "P90": 1.7619
+        },
+        "lambda_home": {
+          "P10": 0.9945,
+          "P25": 1.1949999999999998,
+          "P50": 1.3975000000000002,
+          "P75": 1.6949999999999998,
+          "P90": 2.2757000000000005
+        },
+        "lambda_total": {
+          "P10": 2.5,
+          "P25": 2.5,
+          "P50": 2.5,
+          "P75": 3.0,
+          "P90": 3.5
+        },
+        "mean_probability_total_ge_4": 0.2920472779861053,
+        "mean_probability_total_ge_5": 0.14669685824641285,
+        "mean_probability_total_ge_6": 0.06521617154239157,
+        "one_one_top1_share": 0.4930875576036866,
+        "sample_count": 217,
+        "top1_score_counts": {
+          "0-0": 2,
+          "0-1": 18,
+          "0-2": 5,
+          "1-0": 43,
+          "1-1": 107,
+          "1-2": 10,
+          "2-0": 20,
+          "2-1": 10,
+          "3-0": 1,
+          "3-1": 1
+        },
+        "top1_support_size": 10
+      },
+      "exact_score": {
+        "actual_score_probability_sample_count": 181,
+        "mean_probability_assigned_to_actual_score": 0.06637185878584566,
+        "nll": 3.0717396313622025,
+        "sample_count": 181,
+        "top1_hit_rate": 0.10497237569060773,
+        "top3_hit_rate": 0.30386740331491713
+      },
+      "one_x_two": {
+        "accuracy": 0.56353591160221,
+        "brier": 0.5535708815040121,
+        "ece": 0.06369235152904432,
+        "log_loss": 0.936781550047601,
+        "sample_count": 181
+      },
+      "ou_2_5": {
+        "accuracy": 0.5138121546961326,
+        "brier": 0.23875467912830325,
+        "ece": 0.29505169382129576,
+        "sample_count": 181
+      },
+      "sample_count": 181
+    },
+    "market_side_only_hybrid": {
+      "btts": {
+        "accuracy": 0.6022099447513812,
+        "brier": 0.2311799845252119,
+        "ece": 0.14199630368681473,
+        "sample_count": 181
+      },
+      "distribution": {
+        "absolute_gap": {
+          "P10": 0.08886000000000022,
+          "P25": 0.23912000000000022,
+          "P50": 0.5339999999999998,
+          "P75": 0.9657,
+          "P90": 1.390368
+        },
+        "away_margin_top1_share": 0.12903225806451613,
+        "draw_top1_share": 0.5483870967741935,
+        "gap_lt_0_25": 58,
+        "gap_lt_0_25_share": 0.2672811059907834,
+        "gap_lt_0_5": 104,
+        "gap_lt_0_5_share": 0.4792626728110599,
+        "high_score_top1_share": 0.004608294930875576,
+        "home_margin_top1_share": 0.3225806451612903,
+        "lambda_away": {
+          "P10": 0.8200320000000001,
+          "P25": 0.99522,
+          "P50": 1.2168800000000002,
+          "P75": 1.49008,
+          "P90": 1.8626880000000001
+        },
+        "lambda_home": {
+          "P10": 1.04226,
+          "P25": 1.24496,
+          "P50": 1.46487,
+          "P75": 1.8212499999999998,
+          "P90": 2.1948320000000003
+        },
+        "lambda_total": {
+          "P10": 2.3600000000000003,
+          "P25": 2.5300000000000002,
+          "P50": 2.7699999999999996,
+          "P75": 3.13,
+          "P90": 3.418
+        },
+        "mean_probability_total_ge_4": 0.31692295200784154,
+        "mean_probability_total_ge_5": 0.16326615493430885,
+        "mean_probability_total_ge_6": 0.07409094552602795,
+        "one_one_top1_share": 0.5483870967741935,
+        "sample_count": 217,
+        "top1_score_counts": {
+          "0-1": 14,
+          "0-2": 4,
+          "1-0": 33,
+          "1-1": 119,
+          "1-2": 10,
+          "2-0": 23,
+          "2-1": 12,
+          "3-0": 1,
+          "3-1": 1
+        },
+        "top1_support_size": 9
+      },
+      "exact_score": {
+        "actual_score_probability_sample_count": 181,
+        "mean_probability_assigned_to_actual_score": 0.06640626462945913,
+        "nll": 3.0305737516944737,
+        "sample_count": 181,
+        "top1_hit_rate": 0.11602209944751381,
+        "top3_hit_rate": 0.30386740331491713
+      },
+      "one_x_two": {
+        "accuracy": 0.56353591160221,
+        "brier": 0.5485931665195007,
+        "ece": 0.055424776862992964,
+        "log_loss": 0.9301275315295306,
+        "sample_count": 181
+      },
+      "ou_2_5": {
+        "accuracy": 0.6243093922651933,
+        "brier": 0.22480143115177859,
+        "ece": 0.23867651918970761,
+        "sample_count": 181
+      },
+      "sample_count": 181
+    }
+  },
+  "milestone": "PRED-TRUST-3",
+  "next_single_milestone": "football evidence / team strength representation; stop market/lambda patch series",
+  "product_interpretation": {
+    "reason": "Keep the current exact-score contract and communicate uncertainty; do not change UI in this milestone.",
+    "recommended_choice": "single exact-score Top1 with insufficient-confidence warning"
+  },
+  "qualification": {
+    "candidate_id": "market_side_only_hybrid",
+    "checks": {
+      "actual_score_probability_not_unacceptable": true,
+      "btts_accuracy_basically_maintained": true,
+      "btts_brier_basically_maintained": true,
+      "btts_ece_not_materially_worse": false,
+      "concentration_materially_improves": true,
+      "exact_nll_not_unacceptable": true,
+      "exact_top1_not_unacceptable": true,
+      "exact_top3_not_unacceptable": true,
+      "lambda_gap_distribution_separates": true,
+      "one_x_two_accuracy_gain_retained": true,
+      "one_x_two_brier_improves": true,
+      "one_x_two_log_loss_improves": true,
+      "ou_accuracy_basically_maintained": true,
+      "ou_brier_basically_maintained": true,
+      "ou_ece_not_materially_worse": true,
+      "right_tail_total_ge_4_not_worse": true,
+      "right_tail_total_ge_5_not_worse": true,
+      "right_tail_total_ge_6_not_worse": true
+    },
+    "qualified_for_shadow": false,
+    "right_tail": {
+      "actual_total_shares": {
+        "total_ge_4": 0.4143646408839779,
+        "total_ge_5": 0.22099447513812154,
+        "total_ge_6": 0.09392265193370165
+      },
+      "candidate_absolute_errors": {
+        "total_ge_4": 0.09744168887613636,
+        "total_ge_5": 0.05772832020381269,
+        "total_ge_6": 0.019831706407673705
+      },
+      "champion_absolute_errors": {
+        "total_ge_4": 0.09744147417671367,
+        "total_ge_5": 0.057728025771188574,
+        "total_ge_6": 0.019831352964921695
+      }
+    },
+    "thresholds": {
+      "binary_accuracy_tolerance": 0.02,
+      "binary_brier_tolerance": 0.005,
+      "binary_ece_tolerance": 0.02,
+      "exact_actual_probability_tolerance": 0.01,
+      "exact_hit_rate_tolerance": 0.03,
+      "exact_nll_tolerance": 0.15,
+      "lambda_gap_lt_0_5_reduction": 0.05,
+      "median_gap_increase": 0.05,
+      "one_one_share_reduction": 0.1,
+      "one_x_two_accuracy_gain": 0.02,
+      "one_x_two_brier_improvement": 0.01,
+      "one_x_two_log_loss_improvement": 0.02,
+      "right_tail_error_tolerance": 0.02
+    }
+  },
+  "reproduction": {
+    "calibration_state": {
+      "active": 0,
+      "inactive": 217
+    },
+    "candidate_count": 3,
+    "input_status": {
+      "venue_proxy_used": 0,
+      "venue_split": 217
+    },
+    "max_absolute_lambda_delta": 5.00000000069889e-07,
+    "post_match_parameter_input": false,
+    "replay_rows_per_candidate": {
+      "champion": 217,
+      "existing_challenger_b_market_to_goal_separation": 217,
+      "market_side_only_hybrid": 217
+    },
+    "selector_recomputed": false
+  },
+  "schema_version": "pred_trust_3.replay.v1",
+  "source": {
+    "accepted_production_run": "33294381128",
+    "accepted_writeback_commit": "73994d32fc148da49295a5bfef2e1e42e042a22e",
+    "audit_artifact_sha256": "6fad690b7dc500f91f1032d8154ca554671635712be599257fbe3cc0241a233a",
+    "cohort_manifest_sha256": "12d0eb7eb45f5ff9b3385765fe0f945b71e78551539fe99808b56aee22dd3015",
+    "no_new_data": true,
+    "post_match_fields_used_only_for_evaluation": true,
+    "pred_trust_1_head": "599e7d82b1938e564d2f622c0eb412dd537d2662",
+    "pred_trust_2_replay_decision": "NO_CHALLENGER_BEATS_CHAMPION",
+    "pred_trust_2_replay_sha256": "ebf5d83acc506bfa74dd97e8a9ce58bf37a8156178c41d71aa381cce1b0bb0d3"
+  },
+  "status": "READY_FOR_ACCEPTANCE",
+  "stop_state": {
+    "champion_modified": false,
+    "frozen_predictions_rewritten": false,
+    "health_gate_modified": false,
+    "health_monitor_modified": false,
+    "new_provider_added": false,
+    "offline_batches": 1,
+    "parameter_sweep": false,
+    "production_enabled": false,
+    "prospective_ledger_rewritten": false,
+    "shadow_enabled": false
+  },
+  "tradeoff_table": [
+    {
+      "champion": 0.519337017,
+      "direction": "higher_is_better",
+      "existing_challenger_b_market_to_goal_separation": {
+        "delta_vs_champion": 0.044198895,
+        "status": "BETTER",
+        "value": 0.563535912
+      },
+      "market_side_only_hybrid": {
+        "delta_vs_champion": 0.044198895,
+        "status": "BETTER",
+        "value": 0.563535912
+      },
+      "metric": "1X2 accuracy",
+      "path": "one_x_two.accuracy"
+    },
+    {
+      "champion": 0.596239082,
+      "direction": "lower_is_better",
+      "existing_challenger_b_market_to_goal_separation": {
+        "delta_vs_champion": -0.0426682,
+        "status": "BETTER",
+        "value": 0.553570882
+      },
+      "market_side_only_hybrid": {
+        "delta_vs_champion": -0.047645915,
+        "status": "BETTER",
+        "value": 0.548593167
+      },
+      "metric": "1X2 Brier",
+      "path": "one_x_two.brier"
+    },
+    {
+      "champion": 0.997550655,
+      "direction": "lower_is_better",
+      "existing_challenger_b_market_to_goal_separation": {
+        "delta_vs_champion": -0.060769105,
+        "status": "BETTER",
+        "value": 0.93678155
+      },
+      "market_side_only_hybrid": {
+        "delta_vs_champion": -0.067423124,
+        "status": "BETTER",
+        "value": 0.930127532
+      },
+      "metric": "1X2 LogLoss",
+      "path": "one_x_two.log_loss"
+    },
+    {
+      "champion": 0.116022099,
+      "direction": "higher_is_better",
+      "existing_challenger_b_market_to_goal_separation": {
+        "delta_vs_champion": -0.011049724,
+        "status": "WORSE",
+        "value": 0.104972376
+      },
+      "market_side_only_hybrid": {
+        "delta_vs_champion": 0.0,
+        "status": "SAME",
+        "value": 0.116022099
+      },
+      "metric": "Exact Score Top1 hit",
+      "path": "exact_score.top1_hit_rate"
+    },
+    {
+      "champion": 0.287292818,
+      "direction": "higher_is_better",
+      "existing_challenger_b_market_to_goal_separation": {
+        "delta_vs_champion": 0.016574586,
+        "status": "BETTER",
+        "value": 0.303867403
+      },
+      "market_side_only_hybrid": {
+        "delta_vs_champion": 0.016574586,
+        "status": "BETTER",
+        "value": 0.303867403
+      },
+      "metric": "Exact Score Top3 hit",
+      "path": "exact_score.top3_hit_rate"
+    },
+    {
+      "champion": 0.061152863,
+      "direction": "higher_is_better",
+      "existing_challenger_b_market_to_goal_separation": {
+        "delta_vs_champion": 0.005218996,
+        "status": "BETTER",
+        "value": 0.066371859
+      },
+      "market_side_only_hybrid": {
+        "delta_vs_champion": 0.005253401,
+        "status": "BETTER",
+        "value": 0.066406265
+      },
+      "metric": "Actual-score probability",
+      "path": "exact_score.mean_probability_assigned_to_actual_score"
+    },
+    {
+      "champion": 3.132951423,
+      "direction": "lower_is_better",
+      "existing_challenger_b_market_to_goal_separation": {
+        "delta_vs_champion": -0.061211792,
+        "status": "BETTER",
+        "value": 3.071739631
+      },
+      "market_side_only_hybrid": {
+        "delta_vs_champion": -0.102377672,
+        "status": "BETTER",
+        "value": 3.030573752
+      },
+      "metric": "Exact Score NLL",
+      "path": "exact_score.nll"
+    },
+    {
+      "champion": 0.602209945,
+      "direction": "higher_is_better",
+      "existing_challenger_b_market_to_goal_separation": {
+        "delta_vs_champion": -0.044198895,
+        "status": "WORSE",
+        "value": 0.55801105
+      },
+      "market_side_only_hybrid": {
+        "delta_vs_champion": 0.0,
+        "status": "SAME",
+        "value": 0.602209945
+      },
+      "metric": "BTTS accuracy",
+      "path": "btts.accuracy"
+    },
+    {
+      "champion": 0.23345179,
+      "direction": "lower_is_better",
+      "existing_challenger_b_market_to_goal_separation": {
+        "delta_vs_champion": 0.003066389,
+        "status": "SAME",
+        "value": 0.236518179
+      },
+      "market_side_only_hybrid": {
+        "delta_vs_champion": -0.002271806,
+        "status": "SAME",
+        "value": 0.231179985
+      },
+      "metric": "BTTS Brier",
+      "path": "btts.brier"
+    },
+    {
+      "champion": 0.624309392,
+      "direction": "higher_is_better",
+      "existing_challenger_b_market_to_goal_separation": {
+        "delta_vs_champion": -0.110497238,
+        "status": "WORSE",
+        "value": 0.513812155
+      },
+      "market_side_only_hybrid": {
+        "delta_vs_champion": 0.0,
+        "status": "SAME",
+        "value": 0.624309392
+      },
+      "metric": "O/U 2.5 accuracy",
+      "path": "ou_2_5.accuracy"
+    },
+    {
+      "champion": 0.22480141,
+      "direction": "lower_is_better",
+      "existing_challenger_b_market_to_goal_separation": {
+        "delta_vs_champion": 0.013953269,
+        "status": "WORSE",
+        "value": 0.238754679
+      },
+      "market_side_only_hybrid": {
+        "delta_vs_champion": 2.1e-08,
+        "status": "SAME",
+        "value": 0.224801431
+      },
+      "metric": "O/U 2.5 Brier",
+      "path": "ou_2_5.brier"
+    },
+    {
+      "champion": 0.085321013,
+      "direction": "lower_is_better",
+      "existing_challenger_b_market_to_goal_separation": {
+        "delta_vs_champion": -0.021628662,
+        "status": "BETTER",
+        "value": 0.063692352
+      },
+      "market_side_only_hybrid": {
+        "delta_vs_champion": -0.029896236,
+        "status": "BETTER",
+        "value": 0.055424777
+      },
+      "metric": "1X2 macro ECE",
+      "path": "one_x_two.ece"
+    },
+    {
+      "champion": 0.098604681,
+      "direction": "lower_is_better",
+      "existing_challenger_b_market_to_goal_separation": {
+        "delta_vs_champion": 0.080896671,
+        "status": "WORSE",
+        "value": 0.179501352
+      },
+      "market_side_only_hybrid": {
+        "delta_vs_champion": 0.043391622,
+        "status": "WORSE",
+        "value": 0.141996304
+      },
+      "metric": "BTTS ECE",
+      "path": "btts.ece"
+    },
+    {
+      "champion": 0.238676316,
+      "direction": "lower_is_better",
+      "existing_challenger_b_market_to_goal_separation": {
+        "delta_vs_champion": 0.056375378,
+        "status": "WORSE",
+        "value": 0.295051694
+      },
+      "market_side_only_hybrid": {
+        "delta_vs_champion": 2.03e-07,
+        "status": "SAME",
+        "value": 0.238676519
+      },
+      "metric": "O/U 2.5 ECE",
+      "path": "ou_2_5.ece"
+    },
+    {
+      "champion": 0.764976959,
+      "direction": "lower_is_better",
+      "existing_challenger_b_market_to_goal_separation": {
+        "delta_vs_champion": -0.271889401,
+        "status": "BETTER",
+        "value": 0.493087558
+      },
+      "market_side_only_hybrid": {
+        "delta_vs_champion": -0.216589862,
+        "status": "BETTER",
+        "value": 0.548387097
+      },
+      "metric": "1-1 Top1 share",
+      "path": "distribution.one_one_top1_share"
+    },
+    {
+      "champion": 5.0,
+      "direction": "higher_is_better",
+      "existing_challenger_b_market_to_goal_separation": {
+        "delta_vs_champion": 5.0,
+        "status": "BETTER",
+        "value": 10.0
+      },
+      "market_side_only_hybrid": {
+        "delta_vs_champion": 4.0,
+        "status": "BETTER",
+        "value": 9.0
+      },
+      "metric": "Top1 support size",
+      "path": "distribution.top1_support_size"
+    },
+    {
+      "champion": 0.0,
+      "direction": "higher_is_better",
+      "existing_challenger_b_market_to_goal_separation": {
+        "delta_vs_champion": 0.004608295,
+        "status": "SAME",
+        "value": 0.004608295
+      },
+      "market_side_only_hybrid": {
+        "delta_vs_champion": 0.004608295,
+        "status": "SAME",
+        "value": 0.004608295
+      },
+      "metric": "High-score Top1 share",
+      "path": "distribution.high_score_top1_share"
+    },
+    {
+      "champion": 0.350230415,
+      "direction": "lower_is_better",
+      "existing_challenger_b_market_to_goal_separation": {
+        "delta_vs_champion": -0.050691244,
+        "status": "BETTER",
+        "value": 0.299539171
+      },
+      "market_side_only_hybrid": {
+        "delta_vs_champion": -0.082949309,
+        "status": "BETTER",
+        "value": 0.267281106
+      },
+      "metric": "Gap <0.25 share",
+      "path": "distribution.gap_lt_0_25_share"
+    },
+    {
+      "champion": 0.66359447,
+      "direction": "lower_is_better",
+      "existing_challenger_b_market_to_goal_separation": {
+        "delta_vs_champion": -0.170506912,
+        "status": "BETTER",
+        "value": 0.493087558
+      },
+      "market_side_only_hybrid": {
+        "delta_vs_champion": -0.184331797,
+        "status": "BETTER",
+        "value": 0.479262673
+      },
+      "metric": "Gap <0.5 share",
+      "path": "distribution.gap_lt_0_5_share"
+    },
+    {
+      "champion": 0.35688,
+      "direction": "higher_is_better",
+      "existing_challenger_b_market_to_goal_separation": {
+        "delta_vs_champion": 0.14812,
+        "status": "BETTER",
+        "value": 0.505
+      },
+      "market_side_only_hybrid": {
+        "delta_vs_champion": 0.17712,
+        "status": "BETTER",
+        "value": 0.534
+      },
+      "metric": "Median absolute lambda gap",
+      "path": "distribution.absolute_gap.P50"
+    },
+    {
+      "champion": 0.316923167,
+      "direction": "higher_is_better",
+      "existing_challenger_b_market_to_goal_separation": {
+        "delta_vs_champion": -0.024875889,
+        "status": "WORSE",
+        "value": 0.292047278
+      },
+      "market_side_only_hybrid": {
+        "delta_vs_champion": -2.15e-07,
+        "status": "SAME",
+        "value": 0.316922952
+      },
+      "metric": "Mean P(total >=4)",
+      "path": "distribution.mean_probability_total_ge_4"
+    },
+    {
+      "champion": 0.163266449,
+      "direction": "higher_is_better",
+      "existing_challenger_b_market_to_goal_separation": {
+        "delta_vs_champion": -0.016569591,
+        "status": "WORSE",
+        "value": 0.146696858
+      },
+      "market_side_only_hybrid": {
+        "delta_vs_champion": -2.94e-07,
+        "status": "SAME",
+        "value": 0.163266155
+      },
+      "metric": "Mean P(total >=5)",
+      "path": "distribution.mean_probability_total_ge_5"
+    },
+    {
+      "champion": 0.074091299,
+      "direction": "higher_is_better",
+      "existing_challenger_b_market_to_goal_separation": {
+        "delta_vs_champion": -0.008875127,
+        "status": "WORSE",
+        "value": 0.065216172
+      },
+      "market_side_only_hybrid": {
+        "delta_vs_champion": -3.53e-07,
+        "status": "SAME",
+        "value": 0.074090946
+      },
+      "metric": "Mean P(total >=6)",
+      "path": "distribution.mean_probability_total_ge_6"
+    }
+  ]
+}

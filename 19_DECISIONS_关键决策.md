@@ -48,7 +48,7 @@ OPEN and unmerged. This acceptance record does not alter the
 
 # D-031 - PRED-TRUST-2 bounded strength/lambda challenger shootout
 
-Status: `LOCKED FOR PRED-TRUST-2 ACCEPTANCE`
+Status: `SEALED / ACCEPTANCE PASS`
 
 The bounded experiment compares exactly the production Champion with two
 deterministic challengers on the pinned PRED-TRUST-1 cohort: `217` unique
@@ -69,6 +69,33 @@ Champion, production, shadow automation, frozen predictions, the prospective
 ledger, health monitor/gate, providers, and frontend remain unchanged. Durable
 evidence is recorded in the PRED-TRUST-2 manifest, replay artifact, and final
 report.
+
+# D-032 - PRED-TRUST-3 market-side-only hybrid knockout
+
+Status: `LOCKED FOR PRED-TRUST-3 ACCEPTANCE`
+
+The one-shot replay reads the accepted PRED-TRUST-2 replay and compares only
+Champion, existing Challenger B, and one new deterministic Challenger C on the
+same `217` unique final legal prematch matches and `181` verified 90-minute
+matches. C keeps the Champion total `0.60*form_total + 0.40*market_total` and
+uses only the frozen `market_share` for side allocation. Clamp, independent
+Poisson, `rho=0`, and the score matrix remain unchanged. Challenger A is not
+replayed after its PRED-TRUST-2 `REJECT` result.
+
+C retains the 1X2 improvement and exact-score Top1/Top3 performance while
+restoring Champion BTTS accuracy, O/U 2.5 accuracy, and the full right-tail
+probability distribution. It reduces 1-1 Top1 to `54.84%`, reduces lambda gap
+`<0.5` to `47.93%`, and raises median absolute gap to `0.5340`. The bounded
+gate fails only on BTTS ECE (`0.1420` versus Champion `0.0986`). The result is
+`MARKET_SIDE_ONLY_NOT_SUFFICIENT`: the side-share signal is useful as a
+practical hypothesis, but it is not sufficient for shadow and does not prove
+the causal root of the confounded B experiment.
+
+The next sole milestone is `football evidence / team strength representation`.
+The market/lambda patch series stops. Champion, production, shadow, frozen
+predictions, prospective ledger, health monitor/gate, providers, and frontend
+remain unchanged. Evidence is recorded in the PRED-TRUST-3 replay artifact and
+final report.
 
 # D-028 - Daily prediction availability closure
 

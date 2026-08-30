@@ -3,9 +3,42 @@
 最后更新：2026-08-30
 角色：项目当前唯一人类可读状态真相。只记录当前事实，不承担完整历史档案职责。
 
-# PRED-TRUST-2 Current State
+# PRED-TRUST-3 Current State
 
 Status: `READY_FOR_ACCEPTANCE`
+
+Decision: `MARKET_SIDE_ONLY_NOT_SUFFICIENT`
+
+The one-shot market-side-only hybrid replay read the accepted PRED-TRUST-2
+replay and reused its pinned evidence: production run `33294381128`, accepted
+write-back commit `73994d32fc148da49295a5bfef2e1e42e042a22e`, `217` unique
+final legal prematch matches, and `181` verified 90-minute results. It compared
+only Champion, existing Challenger B, and one new deterministic Challenger C.
+The replay used exactly one offline batch; no parameter sweep, new data,
+post-match parameter input, shadow enablement, or production enablement was
+used.
+
+Challenger C kept the Champion total and replaced only the side-share with the
+frozen market side-share. It retained the 1X2 gain (`56.35%` accuracy,
+`0.5486` Brier, `0.9301` LogLoss), exact Top1 (`11.60%`), exact Top3
+(`30.39%`), BTTS accuracy (`60.22%`), O/U 2.5 accuracy (`62.43%`), and the
+Champion right-tail distribution. It reduced 1-1 Top1 to `54.84%`, reduced
+lambda gap `<0.5` to `47.93%`, and increased median absolute gap to `0.5340`.
+The candidate failed the pre-registered `BTTS ECE` check: `0.1420` versus
+Champion `0.0986`. Therefore C is not eligible for shadow.
+
+The result supports a useful side-share hypothesis without proving the causal
+root of the confounded Challenger B result. The next sole milestone is
+`football evidence / team strength representation`; stop the market/lambda
+patch series. No Champion, production, shadow, frozen prediction, prospective
+ledger, health monitor/gate, provider, or frontend change was made.
+
+Evidence: `data/prediction_quality/pred_trust_3/replay_2026-08-30.json` and
+`docs/prediction-quality/PRED-TRUST-3_FINAL_REPORT.md`.
+
+# PRED-TRUST-2 Current State
+
+Status: `SEALED / ACCEPTANCE PASS`
 
 Decision: `NO_CHALLENGER_BEATS_CHAMPION`
 
@@ -28,9 +61,10 @@ multi-signal gate. The strongest concentration result was Challenger B:
 verified `41.44%`.
 
 No Champion, production, shadow, frozen prediction, prospective ledger,
-health monitor, health gate, provider, or frontend change was made. The next
-sole milestone is to return to upstream inputs / football evidence / market
-fusion; do not continue a lambda patch series.
+health monitor, health gate, provider, or frontend change was made. PRED-TRUST-2
+was independently accepted and sealed after PR #126 was merged at
+`81d70ad263d58d067237b88b0c332c284345518d`. PRED-TRUST-3 is recorded above as
+the current bounded research milestone.
 
 Evidence: `data/prediction_quality/pred_trust_2/pinned_cohort_manifest.json`,
 `data/prediction_quality/pred_trust_2/replay_2026-08-30.json`, and
