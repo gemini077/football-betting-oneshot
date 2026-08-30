@@ -5,27 +5,60 @@
 
 # DATA-PLANE-2 Current State
 
-Status: `LOCAL_PUBLISHER_INPUT_REQUIRED`
+Status: `SEALED / DEPLOYED / ACCEPTANCE PASS`
 
-PR #122 was safely merged into the latest `origin/main` at
-`a8883c1bd8a2fa5a14d9dcab205343bef7fc53e9`; the latest prediction, market,
-prospective, frozen, dashboard and runtime state was retained. PR #120 remains
-OPEN and unmerged. The GitHub runtime secret/variable name preflight is
-`GITHUB_RUNTIME_CONFIG_READY`; values were never printed.
+PR #123 was merged into `main` at
+`8e432d84f5c4d68bd25fb32fb31c3d55a7b6e651` after PR #122 had been safely
+merged. PR #120 remains OPEN and unmerged. The latest automatic prediction,
+market, prospective, frozen, dashboard, and runtime state was retained.
 
-Implementation branch `codex/data-plane-2-bootstrap` contains the provider-
-neutral boto3 publisher, exact immutable bootstrap, last-known-good fallback,
-runtime health evidence, deploy integration, and clean-runner smoke workflow.
-The local authoritative verification is 1,778 records with dataset SHA-256
+Production workflow run `33294381128` completed SUCCESS on the GitHub-hosted
+Ubuntu runner. Bootstrap was READY with runtime snapshot
+`snapshot-20260830T044503Z-48088556830cfb5a6ecd523fc4dc29889406b4853001c51849f5533ecc44a3f2`,
+record count `1778`, and dataset SHA-256
 `48088556830cfb5a6ecd523fc4dc29889406b4853001c51849f5533ecc44a3f2`.
-The local target recent-form smoke for `500-1364199` is AVAILABLE with 10
-pre-kickoff records. Cloud upload and GitHub-hosted clean-runner evidence are
-not yet run because publisher credentials are not present in the local
-environment. No secret value was requested, read, or recorded.
+The verified artifact SHA-256 is
+`dcec59f3e4af9217b5b82858d662b0ae59b150d358d102905e238541b5f07232`.
+Evidence: `https://github.com/gemini077/football-betting-oneshot/actions/runs/33294381128`.
+The current `origin/main` write-back commit is
+`73994d32fc148da49295a5bfef2e1e42e042a22e`.
+
+Production workflow steps passed: Run production cycle, durability gate,
+cross-market consistency, public-data write-back, and Pages deployment. The
+production health evaluation returned `ALERT` with the explicit product
+warning `DUPLICATE_FROZEN_PREDICTION`; its `runtime_data_snapshot` remained
+`READY` with the same count/digest. This is a product warning, not a
+data-plane parity failure.
+
+Dashboard availability changed from BEFORE `25 fixtures / 1 FROZEN / 24
+INSUFFICIENT_DATA` to AFTER `25 fixtures / 22 FROZEN / 3 INSUFFICIENT_DATA`,
+with `prediction_failed=0`. AFTER reasons are
+`MISSING_RECENT_FORM=1`, `INPUT_TIMESTAMP_UNVERIFIED=2`,
+`IDENTITY_UNAVAILABLE=0`, and `SOURCE_UNAVAILABLE=0`.
+Current daily prediction availability is `PARTIAL` (22/25 usable, not
+`SEVERELY_BLOCKED`).
+
+Twenty-one fixtures moved from insufficient data to FROZEN:
+`500-1358632`, `500-1362439`, `500-1362752`, `500-1364199`, `500-1373246`,
+`500-1414156`, `500-1414196`, `500-1414245`, `500-1415091`, `500-1415092`,
+`500-1415895`, `500-1415897`, `500-1415901`, `500-1420362`, `500-1420368`,
+`500-1420369`, `500-1427964`, `500-1427973`, `500-1428454`, `500-1430629`,
+`500-1438080`. Production model input snapshots report `form_source=nowscore`
+for all 21, so the current evidence attributes `0` fixtures solely to the
+1778-row snapshot. The separate clean-runner probe `500-1364199` verified
+`authoritative_historical_results` directly.
 
 The provider-neutral contract remains recorded in
 `docs/data-foundation/DATA-PLANE-2_PRIVATE_SNAPSHOT_BOOTSTRAP_CONTRACT.md`.
-The implementation is not yet `READY_FOR_ACCEPTANCE`.
+Publisher live validation remains `DEFERRED / NON_BLOCKING`; initial
+provisioning was `MANUAL_PRIVATE_UPLOAD`.
+Licensing review remains `LICENSING_REVIEW_REQUIRED`.
+
+Log-hygiene follow-up: `NON_SECRET_LOG_HYGIENE_DEBT`. The production run's Bootstrap step environment
+metadata exposed the configured endpoint/bucket/region values in the GitHub
+log. No such values are repeated here; the runtime access key and secret were
+masked. This does not change the verified data-plane parity, but it remains an
+open security-acceptance item before the log-hygiene requirement is closed.
 
 # DATA-PLANE-1 Current State
 

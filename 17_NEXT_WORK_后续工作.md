@@ -4,24 +4,38 @@
 
 # Current Sole Pointer
 
-# DATA-PLANE-2 - Private Snapshot Production Bootstrap
+# PRED-TRUST-1 - Unique-Match Prediction Integrity & Multi-Market Quality Audit
 
-Status: `LOCAL_PUBLISHER_INPUT_REQUIRED`
+Status: `CURRENT`
 
-PR #122 is merged into latest `origin/main` at
-`a8883c1bd8a2fa5a14d9dcab205343bef7fc53e9`; PR #120 remains OPEN and
-unmerged. GitHub runtime secret/variable name preflight is ready and secret
-values were not printed. The implementation branch is
-`codex/data-plane-2-bootstrap`.
+DATA-PLANE-2-PROD is closed as `SEALED / DEPLOYED / ACCEPTANCE PASS` after
+independent final acceptance. PR #124 is the governance-only closeout record.
+Publisher live validation remains `DEFERRED / NON_BLOCKING`; licensing review
+remains `LICENSING_REVIEW_REQUIRED`; the workflow item is
+`NON_SECRET_LOG_HYGIENE_DEBT`.
 
-Local authoritative verification passed with 1,778 records and dataset
-SHA-256
-`48088556830cfb5a6ecd523fc4dc29889406b4853001c51849f5533ecc44a3f2`.
-The local `500-1364199` recent-form smoke returned AVAILABLE with 10 records,
-all before target kickoff. The publisher implementation is ready to run, but
-the local publisher environment is missing. No publisher secret was requested
-in chat or written to repository artifacts. B2 upload and the real GitHub
-clean-runner smoke remain pending.
+PR #123 merged into `main` at
+`8e432d84f5c4d68bd25fb32fb31c3d55a7b6e651`; PR #120 remains OPEN and
+unmerged. Production run `33294381128` completed SUCCESS, with bootstrap
+READY, record count `1778`, dataset SHA-256
+`48088556830cfb5a6ecd523fc4dc29889406b4853001c51849f5533ecc44a3f2`,
+durability gate PASS, public-data write-back SUCCESS, and Pages deployment
+SUCCESS. The current main write-back commit is
+`73994d32fc148da49295a5bfef2e1e42e042a22e`.
+
+Production health reported `ALERT / DUPLICATE_FROZEN_PREDICTION`, while
+`runtime_data_snapshot.status=READY`. Dashboard availability is `PARTIAL`:
+22/25 FROZEN, 3/25 INSUFFICIENT_DATA, 0 prediction failures. The remaining
+failure distribution is `MISSING_RECENT_FORM=1`,
+`INPUT_TIMESTAMP_UNVERIFIED=2`, `IDENTITY_UNAVAILABLE=0`, and
+`SOURCE_UNAVAILABLE=0`. The 21 newly FROZEN production rows all record
+`form_source=nowscore`; no row is proven to have been released solely by the
+1778-row snapshot. The clean-runner probe separately remains
+`authoritative_historical_results`.
+
+Publisher live validation is `DEFERRED / NON_BLOCKING`; provisioning was
+`MANUAL_PRIVATE_UPLOAD`. No PRED-AVAIL-3, ID-AUTO-2, provider addition, alias
+work, or model change starts from this record.
 
 The provider-neutral contract and one-time setup are recorded in
 `docs/data-foundation/DATA-PLANE-2_PRIVATE_SNAPSHOT_BOOTSTRAP_CONTRACT.md`.
@@ -35,16 +49,27 @@ The exact canonical names are:
 - `FOOTBALL_DATA_SNAPSHOT_BUCKET`
 - `FOOTBALL_DATA_SNAPSHOT_REGION`
 
+Remaining log-hygiene item: the production Bootstrap step's environment
+metadata exposed endpoint/bucket/region configuration values in the GitHub
+log. Runtime access key and secret remained masked, and no values are copied
+into this record. Data-plane verification remains valid; close this item in a
+separate workflow-hygiene change before final security acceptance.
+
+PRED-TRUST-1 is the only active milestone. It is an evidence audit, not a
+model modification task. Use one final legal prematch prediction per unique
+match, classify all production health duplicate groups, and report current-day,
+historical, lambda, cross-market, prospective, and health-gate evidence.
+
 STOP CONDITIONS:
 
-- Stop at `LOCAL_PUBLISHER_INPUT_REQUIRED` until the local Publisher values
-  are supplied through the masked interactive command. Do not paste the
-  applicationKey into chat, an issue, a PR, a commit, a log, or repository
-  file.
-- Do not run the publisher with an unverified/empty historical data home.
-- Do not declare `OBJECT_SNAPSHOT_VERIFIED`, cloud parity, or
-  `READY_FOR_ACCEPTANCE` before the B2 read-back and GitHub clean-runner
-  evidence pass.
+- Publisher live validation remains deferred and is not part of this
+  production-deployment verification record.
+- Do not run another production refresh solely to increase availability.
+- Do not rewrite today's frozen predictions or the historical prospective
+  ledger; canonical selection is evaluation-only.
+- Do not start PRED-AVAIL-3, ID-AUTO-2, a new provider, manual alias work,
+  league-specific coverage, Publisher validation, B2 work, model tuning, or a
+  Champion/model/selector/lambda change.
 - Do not modify Champion mathematics, frozen predictions, prospective ledger,
   dashboard state, or raw source data.
 

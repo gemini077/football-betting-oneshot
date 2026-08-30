@@ -7,25 +7,43 @@
 
 CURRENT PHASE:
 
-`DATA-PLANE-2 - Private Snapshot Production Bootstrap`
+`PRED-TRUST-1 - Unique-Match Prediction Integrity & Multi-Market Quality Audit`
 
-CURRENT STATUS: `LOCAL_PUBLISHER_INPUT_REQUIRED`
+CURRENT STATUS: `CURRENT`
+
+`DATA-PLANE-2-PROD - Production Deployment Verification` is now
+`SEALED / DEPLOYED / ACCEPTANCE PASS`. PR #124 is the governance-only closeout
+record. Publisher live validation remains `DEFERRED / NON_BLOCKING`, licensing
+review remains `LICENSING_REVIEW_REQUIRED`, and the known workflow item is
+`NON_SECRET_LOG_HYGIENE_DEBT`.
 
 Decision: `B. PRIVATE_SNAPSHOT_STORE`. The implementation uses a
 vendor-neutral private versioned snapshot plus the existing read-only DuckDB
-runtime model. PR #122 is merged at
-`a8883c1bd8a2fa5a14d9dcab205343bef7fc53e9`; PR #120 remains OPEN and
-unmerged. The local authoritative verification is 1,778 records with dataset
-SHA-256
-`48088556830cfb5a6ecd523fc4dc29889406b4853001c51849f5533ecc44a3f2`, and the
-local `500-1364199` recent-form smoke is AVAILABLE with 10 pre-kickoff
-records. The Publisher is waiting for masked local input; B2 read-back and
-GitHub clean-runner parity are still required.
+vendor-neutral private versioned snapshot plus the existing read-only DuckDB
+runtime model. PR #123 merged at
+`8e432d84f5c4d68bd25fb32fb31c3d55a7b6e651`; PR #120 remains OPEN and
+unmerged. Production run `33294381128` completed SUCCESS: bootstrap READY,
+runtime count `1778`, dataset SHA-256
+`48088556830cfb5a6ecd523fc4dc29889406b4853001c51849f5533ecc44a3f2`,
+durability gate PASS, public-data write-back SUCCESS, and Pages deployment
+SUCCESS.
 
-Do not declare this milestone `READY_FOR_ACCEPTANCE` until the immutable B2
-object, read-back verification, and GitHub-hosted clean-runner smoke all pass.
-Do not change the Champion, frozen/prospective state, production dashboard,
-or public repository data boundary.
+The production health result is an explicit product warning
+`DUPLICATE_FROZEN_PREDICTION`; `runtime_data_snapshot.status=READY` and the
+data-plane parity remains PASS. The dashboard is `22 FROZEN / 3
+INSUFFICIENT_DATA` out of 25, so daily availability is `PARTIAL`, not
+`SEVERELY_BLOCKED`. No PRED-AVAIL-3, ID-AUTO-2, provider addition, alias work,
+or model change is active.
+
+The next audit must use a canonical unique-match cohort and must not alter the
+Champion, frozen/prospective state, or public repository data boundary. It
+must stop before any model, provider, identity, or presentation change.
+
+Open workflow-hygiene item: the production Bootstrap step exposed endpoint,
+bucket, and region configuration values through GitHub step environment
+metadata. Runtime credentials remained masked. This is separate from the
+successful snapshot parity result and requires a bounded follow-up before the
+log-hygiene requirement can be considered closed.
 
 # Historical PRED-AVAIL-1 Route Record
 
