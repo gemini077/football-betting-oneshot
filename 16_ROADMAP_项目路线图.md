@@ -5,18 +5,35 @@
 
 # Current Route Pointer
 
-CURRENT ACTIVE ENGINEERING:
+CURRENT ACTIVE MILESTONE:
 
-`PROD-WRITE-1 - Production Main Write Serialization`
+`PRED-COVERAGE-TRUTH-1 - Current-Day Prediction Availability Root-Cause Gate`
 
 CURRENT STATUS: `READY_FOR_ACCEPTANCE`
 
-CURRENT DECISION: `PROD-WRITE-1 = READY_FOR_ACCEPTANCE`
+CURRENT DECISION: `PRED-COVERAGE-TRUTH-1 = READY_FOR_ACCEPTANCE`
+
+`CURRENT = PRED-COVERAGE-TRUTH-1`.
+
+`PARALLEL RESEARCH = GLOBAL-MARKET-0`.
+
+`PROD-WRITE-1 = SEALED / ACCEPTANCE PASS` is the closed previous milestone.
+
+This milestone is audit-only: it records rolling availability truth, the
+current 11-fixture root-cause matrix, and a separate `CYCLE_DEGRADED` gate for
+2026-09-01. It does not change production data, identity aliases, providers,
+Champion, model, health rules, frozen history, or frontend.
 
 `PROD-HEALTH-1 = SEALED / ACCEPTANCE PASS` is a closed previous milestone.
 `MARKET-SIDE-SHADOW-1 = DEPLOYED / SEALED / ACCEPTANCE PASS` remains closed.
-`GLOBAL-MARKET-0` is parallel research only and is not part of this bounded
-write-protocol task.
+`GLOBAL-MARKET-0` remains parallel research only.
+
+# Previous milestone: PROD-WRITE-1 - Production Main Write Serialization
+
+Status: `SEALED / ACCEPTANCE PASS`
+
+The write contract and its production verification are retained below as the
+closed previous milestone record.
 
 The write contract is: commit generated durable state, fetch/rebase the current
 `origin/main`, push with bounded retry, never regenerate on retry, never force
@@ -25,7 +42,7 @@ durable write. Acceptance requires controlled A/B/C/D writer simulations plus
 one merged `Refresh data and deploy Pages` production verification. STOP after
 verification and remote delivery.
 
-# Previous milestone: MARKET-SIDE-SHADOW-1
+# Historical milestone: MARKET-SIDE-SHADOW-1
 
 The accepted PRED-TRUST-3 Challenger C is now wired as a background-only
 paired shadow. The existing runner captures Champion and C from the same

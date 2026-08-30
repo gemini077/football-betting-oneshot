@@ -1,7 +1,31 @@
 # 19_DECISIONS_关键决策.md
 
-最后更新：2026-08-30
+最后更新：2026-08-31
 角色：记录不能因换对话 / 换 Codex 而重复推翻的关键决定。若新证据足以改变决定，必须新增 superseding decision，不得静默改历史。
+
+# D-034 — PRED-COVERAGE-TRUTH-1 current-day availability root-cause gate
+
+Status: `READY_FOR_ACCEPTANCE`
+
+Decision: `PRED-COVERAGE-TRUTH-1 = READY_FOR_ACCEPTANCE`.
+
+The 2026-08-31 result is `1/12 FROZEN` and `11/12 INSUFFICIENT_DATA`, all
+with `MISSING_RECENT_FORM`. The end-to-end root distribution is
+`MULTI_CAUSE=11`; the authoritative history-gate view is
+`CURRENT_SOURCE_NAME_MISMATCH=2` and `MULTI_CAUSE=9`. The project-level
+primary blocker is `IDENTITY_RESOLVER_GAP` in the evidence-coverage sense:
+current-source names do not have reviewed exact mappings to both canonical
+team IDs. This wording records an evidence gap, not a resolver implementation
+defect. `COMPETITION_MAPPING_GAP` is not evidenced.
+
+The minimum remedy category is bounded deterministic
+`IDENTITY_EVIDENCE_COVERAGE_CLOSURE`; `NEXT_DAY_SOURCE_OBSERVABILITY` remains
+a separate route for the 2026-09-01 `CYCLE_DEGRADED` state. This decision does
+not authorize alias additions, ID-AUTO-2, PRED-AVAIL-3 provider hopping, a new
+provider, Champion/model/health-rule/frontend changes, or frozen-history
+rewrites. Evidence and full per-fixture trace are recorded in
+`docs/data-foundation/PRED-COVERAGE-TRUTH-1_ROOT_CAUSE_AUDIT.md` and
+`data/football_data/pred_coverage_truth_1/root_cause_matrix_2026-08-31.json`.
 
 # D-030 — Cloud Production Football Data Architecture Decision
 

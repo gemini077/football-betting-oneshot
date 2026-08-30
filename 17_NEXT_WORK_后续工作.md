@@ -4,13 +4,31 @@
 
 # Current Sole Pointer
 
-# PROD-WRITE-1 - Production Main Write Serialization
+# PRED-COVERAGE-TRUTH-1 - Current-Day Prediction Availability Root-Cause Gate
 
 Status: `READY_FOR_ACCEPTANCE`
 
-Decision: `PROD-WRITE-1 = READY_FOR_ACCEPTANCE`
+Decision: `PRED-COVERAGE-TRUTH-1 = READY_FOR_ACCEPTANCE`
 
-The current task is a bounded production main write reliability fix. The
+`CURRENT = PRED-COVERAGE-TRUTH-1`.
+
+`PARALLEL RESEARCH = GLOBAL-MARKET-0`.
+
+`PROD-WRITE-1 = SEALED / ACCEPTANCE PASS` is the closed previous milestone.
+
+This bounded audit records the 2026-08-31 availability truth, traces all 11
+`MISSING_RECENT_FORM` fixtures through competition, exact identity, history,
+cache, and live-source evidence, and keeps the 2026-09-01 `CYCLE_DEGRADED`
+gate separate. It changes no production state and starts no identity/provider
+or model remedy. STOP at independent acceptance.
+
+# Previous milestone: PROD-WRITE-1 - Production Main Write Serialization
+
+Status: `SEALED / ACCEPTANCE PASS`
+
+Decision: `PROD-WRITE-1 = SEALED / ACCEPTANCE PASS`
+
+The previous task was a bounded production main write reliability fix. The
 validated root cause is that the full production and high-frequency prematch
 writers use separate concurrency groups while sharing overlapping durable
 paths. The selected protocol commits generated state, fetches and rebases
