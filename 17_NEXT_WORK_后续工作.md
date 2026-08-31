@@ -4,7 +4,29 @@
 
 # Current Sole Pointer
 
-# PROD-WRITE-1 - Production Main Write Serialization
+# PRED-NOWSCORE-BIND-1 - Nowscore Source-Present / Binding-Failed Closure
+
+Status: `READY_FOR_FINAL_ACCEPTANCE`
+
+Decision: `PRED-NOWSCORE-BIND-1 = READY_FOR_FINAL_ACCEPTANCE`
+
+`CURRENT = PRED-NOWSCORE-BIND-1`.
+
+This delivery only freezes the completed read-only binding audit. Current
+evidence is `12/12` bf1 source-present, `8/12` current resolver replay exact,
+`4/12` current name-normalization gaps, `12/12` market pages, `12/12`
+analysis pages, and `0` kickoff difference. Historical intake source presence
+is `UNKNOWN_NOT_PROVEN`. The root-cause status is
+`NOWSCORE_SCHEDULE_HORIZON_GAP = EVIDENCE-SUPPORTED PRIMARY BLOCKER CANDIDATE`,
+not a validated historical root cause. The sole next remedy category is
+`NOWSCORE_SCHEDULE_HORIZON_GAP`. No repair or production change is made.
+
+Evidence:
+
+- `docs/data-foundation/PRED-NOWSCORE-BIND-1_ROOT_CAUSE_AUDIT.md`
+- `data/football_data/pred_nowscore_bind_1/root_cause_matrix_2026-08-31.json`
+
+# Previous milestone: PROD-WRITE-1 - Production Main Write Serialization
 
 Status: `READY_FOR_ACCEPTANCE`
 
