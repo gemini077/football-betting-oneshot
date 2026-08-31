@@ -6,9 +6,9 @@
 
 # PRED-INPUT-PROVENANCE-1 — Deterministic Prematch Input Provenance
 
-Status: `READY_FOR_ACCEPTANCE`
+Status: `ACCEPTANCE PASS / MERGE AUTHORIZED`
 
-Decision: `PRED-INPUT-PROVENANCE-1 = READY_FOR_ACCEPTANCE`
+Decision: `PRED-INPUT-PROVENANCE-1 = ACCEPTANCE PASS / MERGE AUTHORIZED`
 
 `CURRENT = PRED-INPUT-PROVENANCE-1`.
 
@@ -26,17 +26,18 @@ No current two-fixture eligibility change, timestamp fabrication, frozen
 prediction rewrite, or Champion change is part of this milestone.
 
 Evidence: `docs/data-foundation/PRED-INPUT-PROVENANCE-1_IMPLEMENTATION_REPORT.md`.
-STOP at `READY_FOR_ACCEPTANCE`; do not start a next milestone.
+Engineering acceptance is PASS and merge is authorized. Real production
+verification follows merge; do not start a next milestone.
 
 # Previous milestone: PRED-IDENTITY-SAFE-PARTIAL-1 - Deterministic Nowscore Fallback
 
-Status: `READY_FOR_ACCEPTANCE`
+Status: `DEPLOYED / SEALED / PRODUCTION ACCEPTANCE PASS`
 
-Decision: `PRED-IDENTITY-SAFE-PARTIAL-1 = READY_FOR_ACCEPTANCE`
+Decision: `PRED-IDENTITY-SAFE-PARTIAL-1 = DEPLOYED / SEALED / PRODUCTION ACCEPTANCE PASS`
 
-PR #139 = `READY_FOR_ACCEPTANCE`
+PR #139 = `DEPLOYED / SEALED / PRODUCTION ACCEPTANCE PASS`
 
-`CURRENT = PRED-IDENTITY-SAFE-PARTIAL-1`.
+Closed historical milestone; current pointer is `PRED-INPUT-PROVENANCE-1`.
 
 PR #139 is the current bounded implementation milestone. Candidate B runs
 only after a strict resolver miss and binds only after exact kickoff, same
@@ -47,9 +48,11 @@ Historical wrong binding, ambiguous collision, orientation conflict,
 accepted-binding regression, and existing-eight regression are all zero.
 
 Evidence: `docs/data-foundation/PRED-IDENTITY-SAFE-PARTIAL-1_IMPLEMENTATION_REPORT.md`.
-Focused tests, `py_compile`, and `git diff --check` pass; replay did not mutate
-durable production data. STOP at `READY_FOR_ACCEPTANCE`: do not merge and do not
-start another milestone.
+PR #139 merged at `ac96358b161abe35e931d873357f6fb69635c0b4`. Production Run
+`33399507542` completed with durable write
+`c0a30839867eefd83d822643e54eecc15cafec7f`; Nowscore binding was `11/12`.
+Focused tests, `py_compile`, and `git diff --check` pass. This milestone is
+deployed, sealed, and production-accepted.
 
 # Previous milestone: NEXT-UNIVERSE-TRUTH-1 / PR #138
 

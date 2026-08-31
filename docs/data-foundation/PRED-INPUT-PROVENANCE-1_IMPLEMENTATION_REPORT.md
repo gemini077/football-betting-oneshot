@@ -4,7 +4,7 @@ Date: 2026-08-31
 Base: `c0a30839867eefd83d822643e54eecc15cafec7f`
 Production run: `33399507542`
 Delivery branch: `codex/pred-input-provenance-1`
-Status: `READY_FOR_ACCEPTANCE`
+Status: `ACCEPTANCE PASS / MERGE AUTHORIZED`
 
 ## Result
 
@@ -141,5 +141,5 @@ form cache diagnostics, dashboard labels for the new machine errors, focused
 tests, and milestone evidence. No dependency, model, Champion, identity,
 provider, frozen history, or production-data rewrite is included.
 
-This milestone stops at `READY_FOR_ACCEPTANCE`. No merge and no next milestone
-are started.
+Engineering acceptance is PASS and merge is authorized. Real production
+verification follows merge; no next milestone starts.

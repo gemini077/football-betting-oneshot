@@ -11,9 +11,9 @@ CURRENT ACTIVE MILESTONE:
 
 `PRED-INPUT-PROVENANCE-1`
 
-CURRENT STATUS: `READY_FOR_ACCEPTANCE`
+CURRENT STATUS: `ACCEPTANCE PASS / MERGE AUTHORIZED`
 
-CURRENT DECISION: `PRED-INPUT-PROVENANCE-1 = READY_FOR_ACCEPTANCE`
+CURRENT DECISION: `PRED-INPUT-PROVENANCE-1 = ACCEPTANCE PASS / MERGE AUTHORIZED`
 
 The milestone closes the general error-classification gap between source
 fetch, observation timestamp, cache/form provenance, official market timing,
@@ -23,19 +23,20 @@ run-level 500 deep fetch failures, so no historical relabeling or eligibility
 change is allowed.
 
 Evidence: `docs/data-foundation/PRED-INPUT-PROVENANCE-1_IMPLEMENTATION_REPORT.md`.
-STOP at `READY_FOR_ACCEPTANCE`; no merge or next milestone starts here.
+Engineering acceptance is PASS and merge is authorized. Real production
+verification follows merge; no next milestone starts here.
 
 # Previous milestone: PRED-IDENTITY-SAFE-PARTIAL-1 - Deterministic Nowscore Fallback
 
 `PRED-IDENTITY-SAFE-PARTIAL-1 - Deterministic Nowscore Fallback`
 
-CURRENT STATUS: `READY_FOR_ACCEPTANCE`
+CURRENT STATUS: `DEPLOYED / SEALED / PRODUCTION ACCEPTANCE PASS`
 
-CURRENT DECISION: `PRED-IDENTITY-SAFE-PARTIAL-1 = READY_FOR_ACCEPTANCE`
+CURRENT DECISION: `PRED-IDENTITY-SAFE-PARTIAL-1 = DEPLOYED / SEALED / PRODUCTION ACCEPTANCE PASS`
 
-PR #139 = `READY_FOR_ACCEPTANCE`
+PR #139 = `DEPLOYED / SEALED / PRODUCTION ACCEPTANCE PASS`
 
-`CURRENT = PRED-IDENTITY-SAFE-PARTIAL-1`.
+Closed historical milestone; current pointer is `PRED-INPUT-PROVENANCE-1`.
 
 PR #139 implements the replay-approved Candidate B as a fail-closed fallback
 behind the existing strict resolver. The current 12-fixture replay preserves
@@ -48,9 +49,11 @@ match IDs.
 
 Evidence is recorded in
 `docs/data-foundation/PRED-IDENTITY-SAFE-PARTIAL-1_IMPLEMENTATION_REPORT.md`.
-Focused tests, `py_compile`, and `git diff --check` pass; replay did not mutate
-durable production data. PR #139 is the current delivery and stops at
-`READY_FOR_ACCEPTANCE`; no merge or next milestone is started.
+PR #139 merged at `ac96358b161abe35e931d873357f6fb69635c0b4`. Production Run
+`33399507542` completed with durable write
+`c0a30839867eefd83d822643e54eecc15cafec7f`; Nowscore binding was `11/12`.
+Focused tests, `py_compile`, and `git diff --check` pass. This milestone is
+deployed, sealed, and production-accepted.
 
 # Previous milestone: NEXT-UNIVERSE-TRUTH-1 / PR #138
 

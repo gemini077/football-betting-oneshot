@@ -1,6 +1,6 @@
 # 18_ACCEPTANCE_验收标准.md
 
-最后更新：2026-08-30
+最后更新：2026-08-31
 角色：定义“什么才算真正做完”。测试全绿不等于验收通过。
 
 # 1. 通用验收原则
@@ -20,8 +20,9 @@
 
 # 2Z. PRED-INPUT-PROVENANCE-1 Acceptance
 
-`PRED-INPUT-PROVENANCE-1` 的 Codex 状态只允许为
-`READY_FOR_ACCEPTANCE`；独立验收通过后才可关闭该里程碑。
+`PRED-INPUT-PROVENANCE-1` 已完成工程验收，当前状态为
+`ACCEPTANCE PASS / MERGE AUTHORIZED`；合并后仍需真实 production verify，
+最终部署状态以真实远端证据为准。
 
 验收必须核对：
 
@@ -44,7 +45,8 @@
    tests、相关 full tests、`py_compile` 和 `git diff --check` 均有真实输出。
 6. branch、commit、remote branch、GitHub commit SHA、PR、PR head SHA 和
    PR body 中的 milestone/result/blockers/tests/evidence/STOP state 均可从
-   GitHub 读取；状态停在 `READY_FOR_ACCEPTANCE`，不启动 next milestone。
+   GitHub 读取；当前状态为 `ACCEPTANCE PASS / MERGE AUTHORIZED`，合并后执行
+   production verify，不启动 next milestone。
 
 # 2. 阶段状态
 
