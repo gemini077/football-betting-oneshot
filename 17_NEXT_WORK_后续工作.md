@@ -4,13 +4,37 @@
 
 # Current Sole Pointer
 
-# NEXT-UNIVERSE-TRUTH-1 - Sporttery / 500 Next Business-Date Universe Root-Cause Closure
+# PRED-IDENTITY-SAFE-PARTIAL-1 - Deterministic Nowscore Fallback
 
-Status: `ACCEPTANCE PASS / MERGE AUTHORIZED`
+Status: `READY_FOR_ACCEPTANCE`
 
-Decision: `NEXT-UNIVERSE-TRUTH-1 = ACCEPTANCE PASS / MERGE AUTHORIZED`
+Decision: `PRED-IDENTITY-SAFE-PARTIAL-1 = READY_FOR_ACCEPTANCE`
 
-`CURRENT = NEXT-UNIVERSE-TRUTH-1`.
+PR #139 = `READY_FOR_ACCEPTANCE`
+
+`CURRENT = PRED-IDENTITY-SAFE-PARTIAL-1`.
+
+PR #139 is the current bounded implementation milestone. Candidate B runs
+only after a strict resolver miss and binds only after exact kickoff, same
+orientation, one confirmed deterministic side, and a unique provider match ID.
+The current 12-fixture replay keeps the existing eight IDs unchanged, adds
+`2913703`, `2913701`, and `2912252`, and keeps `500-1427969` unresolved.
+Historical wrong binding, ambiguous collision, orientation conflict,
+accepted-binding regression, and existing-eight regression are all zero.
+
+Evidence: `docs/data-foundation/PRED-IDENTITY-SAFE-PARTIAL-1_IMPLEMENTATION_REPORT.md`.
+Focused tests, `py_compile`, and `git diff --check` pass; replay did not mutate
+durable production data. STOP at `READY_FOR_ACCEPTANCE`: do not merge and do not
+start another milestone.
+
+# Previous milestone: NEXT-UNIVERSE-TRUTH-1 / PR #138
+
+Status: `DEPLOYED / SEALED / PRODUCTION ACCEPTANCE PASS`
+
+Decision: `NEXT-UNIVERSE-TRUTH-1 / PR #138 = DEPLOYED / SEALED / PRODUCTION ACCEPTANCE PASS`
+
+PR #138 merged at `db4b79793bb79c8637dbd69c0444aa4b5d8bbca6`. The previous
+production-universe milestone remains closed and is not reopened.
 
 The bounded probe found current Sporttery HTTP 200 with only
 `businessDate=2026-08-31` and 12 rows. The single current 500 fetch succeeded;
@@ -29,7 +53,7 @@ Evidence: `docs/data-foundation/NEXT-UNIVERSE-TRUTH-1_FINAL_REPORT.md`.
 STOP after independent acceptance and remote delivery; do not start another
 next-universe, provider, identity, model, or frontend milestone.
 
-# PRED-IDENTITY-EVIDENCE-1 Bounded Gate Result
+# Previous milestone: PRED-IDENTITY-EVIDENCE-1 Bounded Gate Result
 
 Status: `SAFETY GATE FAIL / NO CODE / STOP`
 
@@ -45,8 +69,8 @@ zero; the all-three-target gate is not satisfied.
 
 Evidence: `docs/data-foundation/PRED-IDENTITY-EVIDENCE-1_REPLAY_REPORT.md`.
 No resolver, provider, alias, frozen prediction, prospective ledger, or
-production data changed. The sole pointer remains `NEXT-UNIVERSE-TRUTH-1`; no
-next milestone is started.
+production data changed. The current pointer is `PRED-IDENTITY-SAFE-PARTIAL-1`; no next milestone is
+started.
 
 # Previous milestone: NOWSCORE-FUTURE-FIXTURE-INTAKE-1 - Future Fixture Intake
 

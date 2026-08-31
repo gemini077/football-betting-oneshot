@@ -275,11 +275,12 @@ A[0]=[3001,1,777,888,'跨年主队',0,'Year End Home','跨年客队',0,'New Year
             requested_dates.extend(required_dates)
             return bundle
 
-        def prebind(home, away, kickoff, schedule):
+        def prebind(home, away, kickoff, schedule, *, fixture=None):
             self.assertEqual("主队", home)
             self.assertEqual("客队", away)
             self.assertEqual("2026-09-01T01:00:00+08:00", kickoff)
             self.assertEqual([2001], [row["nowscore_id"] for row in schedule])
+            self.assertIs(payloads[0]["matches"][0], fixture)
             return {"status": "EXACT_MATCH", "nowscore_id": 2001, "match_confidence": 1.0}
 
         with patch.object(daily_schedule_workspace, "fetch_nowscore_schedule", side_effect=fetch), \
