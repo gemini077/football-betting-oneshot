@@ -14,6 +14,12 @@ def test_cycle_calls_base_runner_and_prospective_settlement_and_writes_health(tm
 
     def fake_run(command, *, optional=False):
         calls.append(command)
+        if _has_script(command, "base_prediction_runner.py"):
+            return {
+                "returncode": 0,
+                "status": "READY",
+                "input_provenance_failure_stages": {"SOURCE_FETCH_FAILED": 1},
+            }
         if _has_script(command, "market_side_shadow_refresh.py"):
             return {
                 "returncode": 0,
@@ -48,6 +54,7 @@ def test_cycle_calls_base_runner_and_prospective_settlement_and_writes_health(tm
     assert prospective_index < shadow_index
     assert payload["overall_status"] == "HEALTHY"
     assert payload["steps"]["base_prediction"]["status"] == "SUCCESS"
+    assert payload["steps"]["base_prediction"]["summary"]["input_provenance_failure_stages"] == {"SOURCE_FETCH_FAILED": 1}
     assert payload["steps"]["prospective"]["status"] == "SUCCESS"
     assert payload["steps"]["market_side_shadow_evaluation"]["status"] == "SUCCESS"
     assert payload["steps"]["market_side_shadow_evaluation"]["summary"]["verified_paired_count"] == 1

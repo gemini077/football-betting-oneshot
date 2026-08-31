@@ -57,6 +57,7 @@ def _summary(payload: dict) -> dict:
         "frozen", "pending", "insufficient_data", "prediction_failed", "missed_prematch",
         "formal_samples_added", "formal_prospective_total", "results_found", "pending_results",
         "pilot_excluded_settled", "failure_reasons", "shadow_attempted", "shadow_created",
+        "input_provenance_failure_stages",
         "shadow_existing", "shadow_failed", "shadow_failure_reasons",
         "shadow_settlements_added", "shadow_settlements_existing", "shadow_settlement_failures",
         "shadow_failure_reasons", "error", "output",

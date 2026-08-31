@@ -5,7 +5,27 @@
 
 # Current Route Pointer
 
+# PRED-INPUT-PROVENANCE-1 - Deterministic Prematch Input Provenance
+
 CURRENT ACTIVE MILESTONE:
+
+`PRED-INPUT-PROVENANCE-1`
+
+CURRENT STATUS: `READY_FOR_ACCEPTANCE`
+
+CURRENT DECISION: `PRED-INPUT-PROVENANCE-1 = READY_FOR_ACCEPTANCE`
+
+The milestone closes the general error-classification gap between source
+fetch, observation timestamp, cache/form provenance, official market timing,
+deterministic snapshot construction, and cutoff validation. Durable current
+history cannot distinguish the two target fixtures beyond the observed
+run-level 500 deep fetch failures, so no historical relabeling or eligibility
+change is allowed.
+
+Evidence: `docs/data-foundation/PRED-INPUT-PROVENANCE-1_IMPLEMENTATION_REPORT.md`.
+STOP at `READY_FOR_ACCEPTANCE`; no merge or next milestone starts here.
+
+# Previous milestone: PRED-IDENTITY-SAFE-PARTIAL-1 - Deterministic Nowscore Fallback
 
 `PRED-IDENTITY-SAFE-PARTIAL-1 - Deterministic Nowscore Fallback`
 

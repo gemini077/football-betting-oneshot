@@ -18,6 +18,34 @@
 9. 如果声称“上线”，远端是否真的部署；
 10. 是否产生下一阶段需要的可复用证据。
 
+# 2Z. PRED-INPUT-PROVENANCE-1 Acceptance
+
+`PRED-INPUT-PROVENANCE-1` 的 Codex 状态只允许为
+`READY_FOR_ACCEPTANCE`；独立验收通过后才可关闭该里程碑。
+
+验收必须核对：
+
+1. `500-1363834`、`500-1363823` 已从 durable BASE job、Prediction
+   Universe、dashboard 和 production run `33399507542` 逐层追踪；现有
+   两场的历史原因若证据不足，必须保持 `UNPROVEN_FROM_DURABLE_EVIDENCE`，
+   不得回填时间戳或 source status。
+2. 当前与可用历史中的 `INPUT_TIMESTAMP_UNVERIFIED` 按唯一 fixture 去重，
+   并报告 source 无 form、source fetch、capture timestamp、cache/form
+   provenance、official market、snapshot construction、source cutoff、
+   market cutoff 和 other deterministic cause 的计数与例子。
+3. BASE runner 对每次失败持久化 deterministic stage、source/status、
+   bounded detail、references 和 source attempts；source fetch failure 不得
+   伪装成 timestamp success 或 timestamp failure。
+4. 合法 prematch timing 无法证明时仍 fail-closed；当前 Champion、valid
+   frozen predictions、prospective history 和 post-kickoff evidence 不得
+   回写或回放替换。
+5. 当前两场 production-shaped replay、previous-day/recent available
+   examples、valid frozen idempotence、no post-kickoff acceptance、focused
+   tests、相关 full tests、`py_compile` 和 `git diff --check` 均有真实输出。
+6. branch、commit、remote branch、GitHub commit SHA、PR、PR head SHA 和
+   PR body 中的 milestone/result/blockers/tests/evidence/STOP state 均可从
+   GitHub 读取；状态停在 `READY_FOR_ACCEPTANCE`，不启动 next milestone。
+
 # 2. 阶段状态
 
 Codex 允许：`READY_FOR_ACCEPTANCE`

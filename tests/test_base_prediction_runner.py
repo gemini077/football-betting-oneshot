@@ -407,10 +407,12 @@ def test_missing_recent_form_is_insufficient_data():
         root = Path(temp)
         write_case(root, [fixture(1, spf=limited_spf())])
         summary, build = run_case(root, parsed=parsed_source(form={}))
+        ledger = read_ledger(root)
 
     assert summary["insufficient_data"] == 1
     assert summary["failure_reasons"] == {"MISSING_RECENT_FORM": 1}
     assert build.call_count == 0
+    assert ledger["jobs"][0]["input_provenance_diagnostic"]["stage"] == "SOURCE_HAS_NO_USABLE_RECENT_FORM"
 
 
 def test_500_error_envelope_is_not_projected_as_verified_source_timestamp():
@@ -425,9 +427,30 @@ def test_500_error_envelope_is_not_projected_as_verified_source_timestamp():
         summary, build = run_case(root, parsed=failed_fetch)
         ledger = read_ledger(root)
 
-    assert summary["failure_reasons"] == {"MISSING_RECENT_FORM": 1}
+    assert summary["failure_reasons"] == {"SOURCE_FETCH_FAILED": 1}
     assert build.call_count == 0
     assert ledger["jobs"][0]["status"] == "INSUFFICIENT_DATA"
+    assert ledger["jobs"][0]["input_provenance_diagnostic"]["stage"] == "SOURCE_FETCH_FAILED"
+    assert ledger["jobs"][0]["input_provenance_diagnostic"]["source"] == "500_deep"
+
+
+def test_partial_500_snapshot_retains_recent_form_fetch_failure():
+    partial = parsed_source(form={})
+    partial["shuju"] = {"error": "URL Error: [Errno 111] Connection refused"}
+    partial["ouzhi"] = {
+        "bookmakers": [
+            {"name": "Book A", "spf_current": {"home": 1.8, "draw": 3.5, "away": 4.5}},
+        ]
+    }
+    with tempfile.TemporaryDirectory() as temp:
+        root = Path(temp)
+        write_case(root, [fixture(1, spf=limited_spf())])
+        summary, build = run_case(root, parsed=partial)
+        ledger = read_ledger(root)
+
+    assert summary["failure_reasons"] == {"SOURCE_FETCH_FAILED": 1}
+    assert build.call_count == 0
+    assert ledger["jobs"][0]["input_provenance_diagnostic"]["stage"] == "SOURCE_FETCH_FAILED"
 
 
 def test_unverifiable_source_timestamp_is_rejected_before_model_call():
@@ -438,9 +461,165 @@ def test_unverifiable_source_timestamp_is_rejected_before_model_call():
             root,
             parsed=parsed_source(captured_at=KICKOFF),
         )
+        ledger = read_ledger(root)
 
     assert summary["failure_reasons"] == {"INPUT_TIMESTAMP_UNVERIFIED": 1}
     assert build.call_count == 0
+    assert ledger["jobs"][0]["input_provenance_diagnostic"]["stage"] == "SOURCE_CUTOFF_FAILED"
+
+
+def test_nowscore_fetch_failure_is_not_classified_as_timestamp_failure():
+    with tempfile.TemporaryDirectory() as temp:
+        root = Path(temp)
+        write_case(root, [fixture(1, spf=limited_spf(), nowscore=True)])
+        summary, build = run_case(
+            root,
+            parsed=parsed_source(form={}),
+            nowscore_result={
+                "status": "FETCH_ERROR",
+                "fetched_at": "2026-08-12T12:30:00+08:00",
+                "nowscore_id": 100001,
+                "error": "URLError: connection refused",
+            },
+        )
+        ledger = read_ledger(root)
+
+    assert summary["failure_reasons"] == {"SOURCE_FETCH_FAILED": 1}
+    assert build.call_count == 0
+    diagnostic = ledger["jobs"][0]["input_provenance_diagnostic"]
+    assert diagnostic["stage"] == "SOURCE_FETCH_FAILED"
+    assert diagnostic["source"] == "nowscore"
+    assert diagnostic["error_code"] == "SOURCE_FETCH_FAILED"
+
+
+def test_existing_form_timestamp_failure_is_distinguished_from_source_failure():
+    with tempfile.TemporaryDirectory() as temp:
+        root = Path(temp)
+        write_case(root, [fixture(1, spf=limited_spf())])
+        analysis_root = root / "analysis_inputs"
+        analysis_root.mkdir()
+        (analysis_root / "invalid.json").write_text(
+            json.dumps({
+                "match": {"match_id": "M001"},
+                "report": {"analysis_timestamp": KICKOFF},
+                "fundamentals": {"recent_form": recent_form()},
+            }),
+            encoding="utf-8",
+        )
+        summary, build = run_case(root, parsed=parsed_source(form={}))
+        ledger = read_ledger(root)
+
+    assert summary["failure_reasons"] == {"INPUT_TIMESTAMP_UNVERIFIED": 1}
+    assert build.call_count == 0
+    diagnostic = ledger["jobs"][0]["input_provenance_diagnostic"]
+    assert diagnostic["stage"] == "EXISTING_FORM_TIMESTAMP_INVALID"
+    assert diagnostic["source"] == "existing_prematch_snapshot"
+
+
+def test_missing_source_capture_timestamp_has_its_own_stage():
+    with tempfile.TemporaryDirectory() as temp:
+        root = Path(temp)
+        write_case(root, [fixture(1, spf=limited_spf())])
+        summary, build = run_case(root, parsed=parsed_source(captured_at=None, form={}))
+        ledger = read_ledger(root)
+
+    assert summary["failure_reasons"] == {"INPUT_TIMESTAMP_UNVERIFIED": 1}
+    assert build.call_count == 0
+    assert ledger["jobs"][0]["input_provenance_diagnostic"]["stage"] == "SOURCE_OBSERVATION_TIMESTAMP_MISSING_OR_INVALID"
+
+
+def test_official_market_cutoff_failure_is_distinguished():
+    with tempfile.TemporaryDirectory() as temp:
+        root = Path(temp)
+        write_case(root, [fixture(1, spf=limited_spf())], fetched_at=KICKOFF)
+        summary, build = run_case(root, parsed=parsed_source(full_market=False))
+        ledger = read_ledger(root)
+
+    assert summary["failure_reasons"] == {"INPUT_TIMESTAMP_UNVERIFIED": 1}
+    assert build.call_count == 0
+    assert ledger["jobs"][0]["input_provenance_diagnostic"]["stage"] == "MARKET_SNAPSHOT_CUTOFF_FAILED"
+
+
+def test_official_market_missing_timestamp_has_its_own_stage():
+    with tempfile.TemporaryDirectory() as temp:
+        root = Path(temp)
+        write_case(root, [fixture(1, spf=limited_spf())], fetched_at=None)
+        summary, build = run_case(root, parsed=parsed_source(full_market=False))
+        ledger = read_ledger(root)
+
+    assert summary["failure_reasons"] == {"INPUT_TIMESTAMP_UNVERIFIED": 1}
+    assert build.call_count == 0
+    assert ledger["jobs"][0]["input_provenance_diagnostic"]["stage"] == "OFFICIAL_MARKET_TIMESTAMP_INVALID"
+
+
+def test_deterministic_snapshot_construction_failure_is_distinguished():
+    with tempfile.TemporaryDirectory() as temp:
+        root = Path(temp)
+        write_case(root, [fixture(1, spf=limited_spf())])
+        with patch.object(runner, "build_deterministic_model_input_snapshot", side_effect=ValueError("bad snapshot")):
+            summary, build = run_case(root)
+        ledger = read_ledger(root)
+
+    assert summary["failure_reasons"] == {"INPUT_SNAPSHOT_CONSTRUCTION_FAILED": 1}
+    assert build.call_count == 0
+    assert ledger["jobs"][0]["input_provenance_diagnostic"]["stage"] == "DETERMINISTIC_INPUT_SNAPSHOT_CONSTRUCTION_FAILED"
+
+
+def test_source_and_market_cutoff_failures_are_reported_separately():
+    with tempfile.TemporaryDirectory() as temp:
+        root = Path(temp)
+        write_case(root, [fixture(1, spf=limited_spf())])
+        with patch.object(
+            runner,
+            "build_deterministic_model_input_snapshot",
+            return_value={"source_cutoff_at": None, "market_snapshot_at": None},
+        ):
+            summary, build = run_case(root)
+        ledger = read_ledger(root)
+
+    assert summary["failure_reasons"] == {"INPUT_TIMESTAMP_UNVERIFIED": 1}
+    assert build.call_count == 0
+    diagnostic = ledger["jobs"][0]["input_provenance_diagnostic"]
+    assert diagnostic["stage"] == "SOURCE_CUTOFF_FAILED"
+    assert {attempt["stage"] for attempt in diagnostic["attempts"]} >= {
+        "SOURCE_CUTOFF_FAILED",
+        "MARKET_SNAPSHOT_CUTOFF_FAILED",
+    }
+
+
+def test_invalid_recent_form_cache_provenance_is_reported():
+    with tempfile.TemporaryDirectory() as temp:
+        root = Path(temp)
+        write_case(root, [fixture(1, spf=limited_spf())])
+
+        def invalid_cache(_job, _kickoff, _now, *, diagnostics):
+            diagnostics.append({
+                "schema_version": "input_provenance_diagnostic.v1",
+                "stage": "CACHE_PROVENANCE_INVALID",
+                "error_code": "CACHE_PROVENANCE_INVALID",
+                "source": "recent_form_cache",
+                "detail": "fixture cache entry has no reviewed provenance",
+            })
+            return None
+
+        with patch.object(runner, "load_recent_form_cache", side_effect=invalid_cache):
+            summary, build = run_case(root, parsed=parsed_source(form={}))
+        ledger = read_ledger(root)
+
+    assert summary["failure_reasons"] == {"CACHE_PROVENANCE_INVALID": 1}
+    assert build.call_count == 0
+    assert ledger["jobs"][0]["input_provenance_diagnostic"]["stage"] == "CACHE_PROVENANCE_INVALID"
+
+
+def test_failure_stage_counts_are_persisted_in_ledger_summary():
+    with tempfile.TemporaryDirectory() as temp:
+        root = Path(temp)
+        write_case(root, [fixture(1, spf=limited_spf())])
+        summary, _ = run_case(root, parsed=parsed_source(form={}))
+        ledger = read_ledger(root)
+
+    assert summary["input_provenance_failure_stages"] == {"SOURCE_HAS_NO_USABLE_RECENT_FORM": 1}
+    assert ledger["input_provenance_failure_stages"] == {"SOURCE_HAS_NO_USABLE_RECENT_FORM": 1}
 
 
 def test_model_none_is_insufficient_data():

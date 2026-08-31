@@ -276,13 +276,32 @@ def load_recent_form_cache(
     now: datetime | str,
     *,
     cache_path: str | Path = CACHE_PATH,
+    diagnostics: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any] | None:
     """Load one exact fixture entry, recompute form, and fail closed on freshness."""
 
-    payload = _read_json(Path(cache_path))
+    cache_file = Path(cache_path)
+
+    def cache_failure(detail: str) -> None:
+        if diagnostics is None:
+            return
+        diagnostics.append({
+            "schema_version": "input_provenance_diagnostic.v1",
+            "stage": "CACHE_PROVENANCE_INVALID",
+            "error_code": "CACHE_PROVENANCE_INVALID",
+            "source": "recent_form_cache",
+            "detail": detail,
+            "references": [_project_ref(cache_file)],
+        })
+
+    payload = _read_json(cache_file)
     kickoff = _parse_timestamp(kickoff_at)
     clock = _parse_timestamp(now)
+    if cache_file.exists() and not payload:
+        cache_failure("recent-form cache is missing, unreadable, or invalid JSON")
     if not payload or kickoff is None or clock is None or payload.get("contract_version") != "recent_form_cache.v1":
+        if payload and payload.get("contract_version") != "recent_form_cache.v1":
+            cache_failure("recent-form cache contract version is not supported")
         return None
     match_id = str(job.get("match_id") or "")
     home = str(job.get("home") or "")
@@ -296,9 +315,11 @@ def load_recent_form_cache(
     away_team_id = str(entry.get("away_team_id") or "")
     provenance = entry.get("provenance")
     if generated is None or cutoff is None or generated > clock or generated >= kickoff or cutoff > kickoff or not home_team_id or not away_team_id or not _provenance_is_reviewed(provenance):
+        cache_failure("exact recent-form cache entry has invalid time, identity, or reviewed provenance")
         return None
     built = build_recent_form(entry.get("records") or [], home_team_id=home_team_id, away_team_id=away_team_id, cutoff_at=_iso(cutoff))
     if not built or not _fresh_latest(built["latest_by_team"], cutoff=cutoff):
+        cache_failure("exact recent-form cache entry cannot reconstruct fresh usable form")
         return None
     references, source_refs = _source_references(provenance, _iso(generated))
     return {

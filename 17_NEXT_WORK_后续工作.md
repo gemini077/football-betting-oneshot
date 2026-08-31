@@ -4,7 +4,31 @@
 
 # Current Sole Pointer
 
-# PRED-IDENTITY-SAFE-PARTIAL-1 - Deterministic Nowscore Fallback
+# PRED-INPUT-PROVENANCE-1 — Deterministic Prematch Input Provenance
+
+Status: `READY_FOR_ACCEPTANCE`
+
+Decision: `PRED-INPUT-PROVENANCE-1 = READY_FOR_ACCEPTANCE`
+
+`CURRENT = PRED-INPUT-PROVENANCE-1`.
+
+The bounded audit found a general source-fetch-to-timestamp umbrella bug in
+the BASE runner. The current two target jobs remain historically
+`UNPROVEN_FROM_DURABLE_EVIDENCE`: their stored records have no per-fixture
+Nowscore result or source-stage trace. Production run `33399507542` proves 18
+500 deep page fetch failures across three fallback attempts, but its log does
+not map those attempts to fixture IDs.
+
+The rule-based implementation writes `input_provenance_diagnostic` and
+`input_provenance_failure_stages`, distinguishes source fetch failure from
+timestamp failure, and remains fail-closed for every unproven prematch input.
+No current two-fixture eligibility change, timestamp fabrication, frozen
+prediction rewrite, or Champion change is part of this milestone.
+
+Evidence: `docs/data-foundation/PRED-INPUT-PROVENANCE-1_IMPLEMENTATION_REPORT.md`.
+STOP at `READY_FOR_ACCEPTANCE`; do not start a next milestone.
+
+# Previous milestone: PRED-IDENTITY-SAFE-PARTIAL-1 - Deterministic Nowscore Fallback
 
 Status: `READY_FOR_ACCEPTANCE`
 

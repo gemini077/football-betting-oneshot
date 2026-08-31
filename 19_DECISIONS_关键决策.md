@@ -1,7 +1,28 @@
 # 19_DECISIONS_关键决策.md
 
-最后更新：2026-08-30
+最后更新：2026-08-31
 角色：记录不能因换对话 / 换 Codex 而重复推翻的关键决定。若新证据足以改变决定，必须新增 superseding decision，不得静默改历史。
+
+# D-033 — PRED-INPUT-PROVENANCE-1 deterministic error-stage classification
+
+Status: `READY_FOR_ACCEPTANCE`
+
+Decision: `PRED-INPUT-PROVENANCE-1` may correct the general BASE runner
+classification rule because source fetch failures were being collapsed into
+`INPUT_TIMESTAMP_UNVERIFIED` when recent form was unavailable. The correction
+must classify by deterministic source/validation stage, persist bounded
+provenance diagnostics, keep timing and cutoff checks fail-closed, and leave
+valid existing frozen Champion predictions unchanged.
+
+The two current `INPUT_TIMESTAMP_UNVERIFIED` jobs and the 18 historical
+revision-level umbrella failures lack enough durable causal evidence for
+retroactive relabeling. Production run `33399507542` proves 18 500 deep page
+fetch failures across three fallback attempts, but not their fixture mapping.
+No timestamp, source status, model output, frozen record, or prospective row
+may be fabricated or rewritten. The implementation stops at
+`READY_FOR_ACCEPTANCE` pending independent acceptance and remote delivery.
+
+Evidence: `docs/data-foundation/PRED-INPUT-PROVENANCE-1_IMPLEMENTATION_REPORT.md`.
 
 # D-030 — Cloud Production Football Data Architecture Decision
 

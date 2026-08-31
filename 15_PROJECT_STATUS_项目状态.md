@@ -3,7 +3,34 @@
 最后更新：2026-08-31
 角色：项目当前唯一人类可读状态真相。只记录当前事实，不承担完整历史档案职责。
 
-# PRED-IDENTITY-SAFE-PARTIAL-1 Current State
+# PRED-INPUT-PROVENANCE-1 — Deterministic Prematch Input Provenance
+
+Status: `READY_FOR_ACCEPTANCE`
+
+Decision: `PRED-INPUT-PROVENANCE-1 = READY_FOR_ACCEPTANCE`
+
+`CURRENT = PRED-INPUT-PROVENANCE-1`.
+
+The audit against main `c0a30839867eefd83d822643e54eecc15cafec7f` and
+production run `33399507542` proves a general boolean-to-umbrella
+classification bug: source fetch failures could be reported as
+`INPUT_TIMESTAMP_UNVERIFIED` when recent form was absent. Current durable
+evidence contains two umbrella jobs (`500-1363834`, `500-1363823`) and does not
+preserve enough per-fixture source state to backfill their exact historical
+cause. The same run does preserve 18 500 deep page fetch failures across three
+fallback attempts, but not the fixture mapping.
+
+The implementation persists deterministic stage diagnostics for source fetch,
+capture timestamp, cache/form provenance, official market timing, snapshot
+construction, source cutoff, market cutoff, and other adapter failures. It
+keeps prematch timing fail-closed, leaves valid frozen Champion cases
+unchanged, and does not fabricate or rewrite historical timestamps.
+
+Evidence: `docs/data-foundation/PRED-INPUT-PROVENANCE-1_IMPLEMENTATION_REPORT.md`.
+Focused replay/tests and remote delivery are required before independent
+acceptance. STOP at `READY_FOR_ACCEPTANCE`; no next milestone starts.
+
+# PRED-IDENTITY-SAFE-PARTIAL-1 Previous Milestone
 
 Status: `READY_FOR_ACCEPTANCE`
 
