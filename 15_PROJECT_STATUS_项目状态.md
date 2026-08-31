@@ -3,7 +3,43 @@
 最后更新：2026-08-31
 角色：项目当前唯一人类可读状态真相。只记录当前事实，不承担完整历史档案职责。
 
-# PROD-WRITE-1 Current State
+# PRED-NOWSCORE-BIND-1 Current State
+
+Status: `READY_FOR_FINAL_ACCEPTANCE`
+
+Decision: `PRED-NOWSCORE-BIND-1 = READY_FOR_FINAL_ACCEPTANCE`
+
+`CURRENT = PRED-NOWSCORE-BIND-1`.
+
+This delivery freezes the previously completed read-only Nowscore binding
+audit for business date `2026-08-31`. Current evidence is: `bf1.js`
+source-present `12/12`, current resolver replay exact `8/12`, current
+name-normalization gap `4/12`, current market page `12/12`, current analysis
+page `12/12`, and kickoff difference `0` for all twelve rows. A deterministic
+Nowscore match-ID route exists; direct `500 shujuId → Nowscore ID` mapping was
+not found. Historical intake source presence is explicitly
+`UNKNOWN_NOT_PROVEN` because the 753-row raw was not persisted.
+
+Root-cause status:
+
+```text
+NOWSCORE_SCHEDULE_HORIZON_GAP = EVIDENCE-SUPPORTED PRIMARY BLOCKER CANDIDATE
+```
+
+This is not declared a `VALIDATED HISTORICAL ROOT CAUSE`. The overall audit
+classification remains `MULTI_CAUSE`, with `NOWSCORE_NAME_NORMALIZATION_GAP`
+as the current-feed secondary finding. The sole next remedy category is
+`NOWSCORE_SCHEDULE_HORIZON_GAP`. Nowscore remains secondary market/analysis
+enrichment after ID acquisition; 500 remains the provisional canonical
+schedule anchor and deep fallback. No production, provider, source-order,
+Champion, resolver, endpoint, alias, parser, or frozen-history state changed.
+
+Evidence:
+
+- `docs/data-foundation/PRED-NOWSCORE-BIND-1_ROOT_CAUSE_AUDIT.md`
+- `data/football_data/pred_nowscore_bind_1/root_cause_matrix_2026-08-31.json`
+
+# PROD-WRITE-1 Previous Milestone
 
 Status: `READY_FOR_ACCEPTANCE`
 

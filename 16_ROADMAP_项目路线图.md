@@ -5,18 +5,36 @@
 
 # Current Route Pointer
 
-CURRENT ACTIVE ENGINEERING:
+CURRENT ACTIVE MILESTONE:
 
-`PROD-WRITE-1 - Production Main Write Serialization`
+`PRED-NOWSCORE-BIND-1 - Nowscore Source-Present / Binding-Failed Closure`
 
-CURRENT STATUS: `READY_FOR_ACCEPTANCE`
+CURRENT STATUS: `READY_FOR_FINAL_ACCEPTANCE`
 
-CURRENT DECISION: `PROD-WRITE-1 = READY_FOR_ACCEPTANCE`
+CURRENT DECISION: `PRED-NOWSCORE-BIND-1 = READY_FOR_FINAL_ACCEPTANCE`
+
+`CURRENT = PRED-NOWSCORE-BIND-1`.
+
+This milestone is audit-only. The retained evidence is `12/12` current
+`bf1.js` source-present, `8/12` current resolver replay exact, `4/12`
+current name-normalization gaps, `12/12` current market pages, `12/12`
+current analysis pages, and `0` kickoff difference. Historical intake source
+presence is `UNKNOWN_NOT_PROVEN`. The primary blocker status is
+`NOWSCORE_SCHEDULE_HORIZON_GAP = EVIDENCE-SUPPORTED PRIMARY BLOCKER CANDIDATE`,
+not a validated historical root cause. The sole next remedy category is
+`NOWSCORE_SCHEDULE_HORIZON_GAP`.
+
+This delivery does not change production data, identity aliases, providers,
+source order, Champion, model, resolver, endpoint, parser, frozen history, or
+frontend. Evidence is recorded in
+`docs/data-foundation/PRED-NOWSCORE-BIND-1_ROOT_CAUSE_AUDIT.md` and
+`data/football_data/pred_nowscore_bind_1/root_cause_matrix_2026-08-31.json`.
 
 `PROD-HEALTH-1 = SEALED / ACCEPTANCE PASS` is a closed previous milestone.
 `MARKET-SIDE-SHADOW-1 = DEPLOYED / SEALED / ACCEPTANCE PASS` remains closed.
-`GLOBAL-MARKET-0` is parallel research only and is not part of this bounded
-write-protocol task.
+`GLOBAL-MARKET-0` remains parallel research only.
+
+# Previous milestone: PROD-WRITE-1 - Production Main Write Serialization
 
 The write contract is: commit generated durable state, fetch/rebase the current
 `origin/main`, push with bounded retry, never regenerate on retry, never force
