@@ -3,15 +3,39 @@
 最后更新：2026-08-31
 角色：项目当前唯一人类可读状态真相。只记录当前事实，不承担完整历史档案职责。
 
-# PRED-COVERAGE-TRUTH-1 Current State
+# PRED-NOWSCORE-BIND-1 Current State
+
+Status: `READY_FOR_ACCEPTANCE`
+
+Decision: `PRED-NOWSCORE-BIND-1 = READY_FOR_ACCEPTANCE`
+
+`CURRENT = PRED-NOWSCORE-BIND-1`.
+
+`PARALLEL RESEARCH = GLOBAL-MARKET-0`.
+
+This delivery freezes the read-only Nowscore binding closure for business date
+2026-08-31. The primary blocker for the historical `0/12` binding result is
+`NOWSCORE_SCHEDULE_HORIZON_GAP`; the overall classification is `MULTI_CAUSE`
+with a secondary `NOWSCORE_NAME_NORMALIZATION_GAP` for four rows after the
+fixtures are visible in the current feed. `bf1.js` is insufficient as the
+sole future-fixture business-date intake surface. Nowscore remains secondary
+market/analysis enrichment after deterministic ID acquisition; 500 remains
+the provisional canonical schedule anchor and deep fallback. No production,
+provider, source-order, Champion, resolver, endpoint, alias, parser, or
+frozen-history state changed.
+
+The complete report and machine matrix are:
+
+- `docs/data-foundation/PRED-NOWSCORE-BIND-1_ROOT_CAUSE_AUDIT.md`
+- `data/football_data/pred_nowscore_bind_1/root_cause_matrix_2026-08-31.json`
+
+`PRED-COVERAGE-TRUTH-1` remains in PR #134 and is not merged by this delivery.
+
+# PRED-COVERAGE-TRUTH-1 Previous Milestone
 
 Status: `READY_FOR_ACCEPTANCE`
 
 Decision: `PRED-COVERAGE-TRUTH-1 = READY_FOR_ACCEPTANCE`
-
-`CURRENT = PRED-COVERAGE-TRUTH-1`.
-
-`PARALLEL RESEARCH = GLOBAL-MARKET-0`.
 
 `PROD-WRITE-1 = SEALED / ACCEPTANCE PASS`.
 

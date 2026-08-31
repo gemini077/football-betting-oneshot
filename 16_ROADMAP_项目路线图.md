@@ -7,26 +7,38 @@
 
 CURRENT ACTIVE MILESTONE:
 
-`PRED-COVERAGE-TRUTH-1 - Current-Day Prediction Availability Root-Cause Gate`
+`PRED-NOWSCORE-BIND-1 - Nowscore Source-Present / Binding-Failed Closure`
 
 CURRENT STATUS: `READY_FOR_ACCEPTANCE`
 
-CURRENT DECISION: `PRED-COVERAGE-TRUTH-1 = READY_FOR_ACCEPTANCE`
+CURRENT DECISION: `PRED-NOWSCORE-BIND-1 = READY_FOR_ACCEPTANCE`
 
-`CURRENT = PRED-COVERAGE-TRUTH-1`.
+`CURRENT = PRED-NOWSCORE-BIND-1`.
 
 `PARALLEL RESEARCH = GLOBAL-MARKET-0`.
 
-`PROD-WRITE-1 = SEALED / ACCEPTANCE PASS` is the closed previous milestone.
+`PRED-COVERAGE-TRUTH-1` remains in PR #134 and is not merged by this delivery.
 
-This milestone is audit-only: it records rolling availability truth, the
-current 11-fixture root-cause matrix, and a separate `CYCLE_DEGRADED` gate for
-2026-09-01. It does not change production data, identity aliases, providers,
-Champion, model, health rules, frozen history, or frontend.
+This milestone is audit-only: it records the 2026-08-31 Nowscore
+source-present/binding-failed closure. The primary blocker for `0/12` is
+`NOWSCORE_SCHEDULE_HORIZON_GAP`; the overall classification is `MULTI_CAUSE`.
+The sole next remedy category is `NOWSCORE_SCHEDULE_HORIZON_GAP`. It does not
+change production data, identity aliases, providers, source order, Champion,
+model, resolver, endpoint, parser, frozen history, or frontend.
+
+Evidence is recorded in
+`docs/data-foundation/PRED-NOWSCORE-BIND-1_ROOT_CAUSE_AUDIT.md` and
+`data/football_data/pred_nowscore_bind_1/root_cause_matrix_2026-08-31.json`.
+
+`PROD-WRITE-1 = SEALED / ACCEPTANCE PASS` is a closed previous milestone.
 
 `PROD-HEALTH-1 = SEALED / ACCEPTANCE PASS` is a closed previous milestone.
 `MARKET-SIDE-SHADOW-1 = DEPLOYED / SEALED / ACCEPTANCE PASS` remains closed.
 `GLOBAL-MARKET-0` remains parallel research only.
+
+# Previous milestone: PRED-COVERAGE-TRUTH-1 - Current-Day Prediction Availability Root-Cause Gate
+
+Status: `READY_FOR_ACCEPTANCE` in PR #134; not merged by this delivery.
 
 # Previous milestone: PROD-WRITE-1 - Production Main Write Serialization
 
