@@ -18,7 +18,8 @@ import urllib.error
 import urllib.request
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime
+from collections.abc import Iterable
+from datetime import date, datetime, time as datetime_time
 from html.parser import HTMLParser
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -31,6 +32,8 @@ from team_identity import clean_display_name, team_similarity
 ROOT = Path(__file__).resolve().parents[1]
 CACHE_ROOT = ROOT / "data" / "source_cache" / "nowscore"
 SCHEDULE_URL = "https://live.nowscore.com/data/bf1.js"
+FUTURE_SCHEDULE_URL = "https://live.nowscore.com/data/sc{offset}.js"
+MAX_FUTURE_SCHEDULE_OFFSET = 7
 MARKET_URL = "https://live.nowscore.com/odds/match/{match_id}.htm"
 ANALYSIS_DATA_URL = "https://live.nowscore.com/analysisJs/data{match_id}.js"
 COACH_URL = "https://live.nowscore.com/info/coach/{match_id}.htm?l=1"
@@ -137,31 +140,136 @@ def _split_js_values(raw: str) -> list[object]:
     return parsed
 
 
-def parse_schedule_js(text: str) -> list[dict]:
+def _normalise_expected_date(value: object) -> date | None:
+    if isinstance(value, datetime):
+        if value.tzinfo is None:
+            return value.date()
+        return value.astimezone(SHANGHAI).date()
+    if isinstance(value, date):
+        return value
+    text = str(value or "").strip()
+    if not text:
+        return None
+    try:
+        return date.fromisoformat(text[:10])
+    except ValueError:
+        return None
+
+
+def _parse_schedule_clock(value: object) -> datetime_time | None:
+    found = re.fullmatch(r"\s*(\d{1,2}):(\d{2})(?::(\d{2}))?\s*", str(value or ""))
+    if not found:
+        return None
+    try:
+        return datetime_time(
+            int(found.group(1)), int(found.group(2)), int(found.group(3) or 0)
+        )
+    except ValueError:
+        return None
+
+
+def _integer(value: object) -> int | None:
+    try:
+        if value is None or str(value).strip() == "":
+            return None
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _schedule_datetime(
+    source_date: object,
+    kickoff_value: object,
+    expected_date: date | None,
+) -> tuple[datetime | None, date | str, str]:
+    source_text = str(source_date or "").strip()
+    full_parts = source_text.split(",")
+    if len(full_parts) == 6 and all(re.fullmatch(r"\d+", part.strip()) for part in full_parts):
+        try:
+            year, month_zero_based, day, hour, minute, second = (
+                int(part.strip()) for part in full_parts
+            )
+            calendar_date = date(year, month_zero_based + 1, day)
+            clock = datetime_time(hour, minute, second)
+        except ValueError:
+            return None, "invalid_full_date", "full_datetime"
+        if expected_date is not None and calendar_date != expected_date:
+            return None, "source_date_mismatch", "full_datetime"
+        return (
+            datetime.combine(calendar_date, clock).replace(tzinfo=SHANGHAI),
+            calendar_date,
+            "full_datetime",
+        )
+
+    month_day = re.fullmatch(r"(\d{2})-(\d{2})", source_text)
+    if month_day:
+        if expected_date is None:
+            return None, "expected_date_required", "month_day"
+        month, day = int(month_day.group(1)), int(month_day.group(2))
+        if (month, day) != (expected_date.month, expected_date.day):
+            return None, "source_date_mismatch", "month_day"
+        clock = _parse_schedule_clock(kickoff_value)
+        if clock is None:
+            return None, "invalid_kickoff_time", "month_day"
+        return (
+            datetime.combine(expected_date, clock).replace(tzinfo=SHANGHAI),
+            expected_date,
+            "month_day",
+        )
+
+    return None, "invalid_source_date", "unknown"
+
+
+def _parse_schedule_js(
+    text: str, expected_date: object = None
+) -> tuple[list[dict], dict[str, int]]:
+    expected = _normalise_expected_date(expected_date)
+    expected_was_supplied = expected_date is not None and str(expected_date).strip() != ""
+    diagnostics: Counter[str] = Counter()
+    if expected_was_supplied and expected is None:
+        diagnostics["invalid_expected_date"] += 1
+        return [], dict(diagnostics)
+
     matches = []
     for found in re.finditer(r"(?m)^A\[\d+\]=\[(.*?)\];\s*$", text):
         row = _split_js_values(found.group(1))
         if len(row) < 12:
+            diagnostics["short_row"] += 1
             continue
-        try:
-            date_parts = [int(value) for value in str(row[11]).split(",")]
-            kickoff = datetime(
-                date_parts[0], date_parts[1] + 1, date_parts[2],
-                date_parts[3], date_parts[4], date_parts[5], tzinfo=SHANGHAI,
-            )
-            match_id = int(row[0])
-        except (TypeError, ValueError, IndexError):
+        match_id = _integer(row[0])
+        if match_id is None:
+            diagnostics["invalid_match_id"] += 1
+            continue
+        kickoff, parsed_date, date_format = _schedule_datetime(
+            row[11], row[10], expected
+        )
+        if kickoff is None:
+            diagnostics[str(parsed_date)] += 1
             continue
         matches.append({
             "nowscore_id": match_id,
+            "home_team_id": _integer(row[2]),
+            "away_team_id": _integer(row[3]),
             "home_team": clean_display_name(row[4]),
             "home_team_en": clean_display_name(row[6]),
             "away_team": clean_display_name(row[7]),
             "away_team_en": clean_display_name(row[9]),
             "kickoff_local": kickoff.isoformat(timespec="minutes"),
+            "schedule_source_date": parsed_date.isoformat(),
+            "schedule_source_date_format": date_format,
             "schedule_open_handicap": row[25] if len(row) > 25 else None,
             "schedule_total_line": row[29] if len(row) > 29 else None,
         })
+    return matches, dict(diagnostics)
+
+
+def parse_schedule_js(text: str, expected_date: object = None) -> list[dict]:
+    """Parse bf1/full-date rows or an scN MM-DD surface with a fixed date.
+
+    An MM-DD row is deliberately ignored unless ``expected_date`` supplies its
+    year.  A supplied expected date is also used as a strict source-date gate.
+    """
+    matches, _ = _parse_schedule_js(text, expected_date)
     return matches
 
 
@@ -226,8 +334,194 @@ def resolve_match(
     return {"status": "EXACT_MATCH", **best}
 
 
-def fetch_schedule() -> list[dict]:
-    return parse_schedule_js(_decode(_fetch_bytes(f"{SCHEDULE_URL}?_={int(time.time())}")))
+def _normalise_required_dates(required_dates: Iterable[object] | object | None) -> tuple[list[date], list[str]]:
+    if required_dates is None:
+        values: list[object] = []
+    elif isinstance(required_dates, (str, date, datetime)):
+        values = [required_dates]
+    else:
+        values = list(required_dates)  # type: ignore[arg-type]
+
+    dates: set[date] = set()
+    invalid: list[str] = []
+    for value in values:
+        parsed = _normalise_expected_date(value)
+        if parsed is None:
+            invalid.append(str(value))
+        else:
+            dates.add(parsed)
+    return sorted(dates), invalid
+
+
+def _now_shanghai_date(now: object = None) -> date:
+    if now is None:
+        return datetime.now(SHANGHAI).date()
+    parsed = _normalise_expected_date(now)
+    if parsed is None:
+        raise ValueError(f"invalid now: {now}")
+    if isinstance(now, datetime) and now.tzinfo is not None:
+        return now.astimezone(SHANGHAI).date()
+    return parsed
+
+
+def _dedupe_schedule_rows(rows: Iterable[dict]) -> tuple[list[dict], int]:
+    merged: list[dict] = []
+    seen: set[int] = set()
+    duplicate_count = 0
+    for row in rows:
+        match_id = _integer(row.get("nowscore_id"))
+        if match_id is None:
+            continue
+        if match_id in seen:
+            duplicate_count += 1
+            continue
+        seen.add(match_id)
+        merged.append(row)
+    return merged, duplicate_count
+
+
+def fetch_schedule_bundle(
+    required_dates: Iterable[object] | object | None = None,
+    *,
+    now: object = None,
+) -> dict:
+    """Fetch bf1 plus only the required, bounded scN future surfaces.
+
+    ``bf1`` remains the live fallback.  An scN error is retained in the
+    returned provenance and never causes a guessed fixture to enter the union.
+    """
+    today = _now_shanghai_date(now)
+    required, invalid_required = _normalise_required_dates(required_dates)
+    source_rows: list[dict] = []
+    sources: list[dict] = []
+    errors: list[dict] = []
+
+    bf1_url = f"{SCHEDULE_URL}?_={int(time.time())}"
+    try:
+        raw = _fetch_bytes(bf1_url)
+        parsed, diagnostics = _parse_schedule_js(_decode(raw))
+        source_rows.extend(parsed)
+        sources.append({
+            "surface": "bf1",
+            "url": SCHEDULE_URL,
+            "status": "OK",
+            "raw_match_count": len(parsed) + sum(diagnostics.values()),
+            "parsed_match_count": len(parsed),
+            "diagnostics": diagnostics,
+        })
+        bf1_ok = True
+    except Exception as error:
+        detail = f"{type(error).__name__}: {error}"
+        source = {"surface": "bf1", "url": SCHEDULE_URL, "status": "FETCH_ERROR", "error": detail}
+        sources.append(source)
+        errors.append(source)
+        bf1_ok = False
+
+    future_sources: list[dict] = []
+    future_errors: list[dict] = []
+    for invalid in invalid_required:
+        source = {
+            "surface": "future_schedule",
+            "status": "REJECTED",
+            "error": "INVALID_REQUIRED_DATE",
+            "requested_date": invalid,
+        }
+        future_sources.append(source)
+        future_errors.append(source)
+
+    for expected in required:
+        offset = (expected - today).days
+        if offset < 1:
+            future_sources.append({
+                "surface": "future_schedule",
+                "status": "NOT_NEEDED",
+                "expected_date": expected.isoformat(),
+                "offset": offset,
+            })
+            continue
+        if offset > MAX_FUTURE_SCHEDULE_OFFSET:
+            source = {
+                "surface": "future_schedule",
+                "status": "SKIPPED",
+                "expected_date": expected.isoformat(),
+                "offset": offset,
+                "error": "FUTURE_OFFSET_OUT_OF_RANGE",
+            }
+            future_sources.append(source)
+            future_errors.append(source)
+            continue
+
+        surface = f"sc{offset}"
+        # The browser surface uses a numeric millisecond cache buster.  Keep
+        # it second-aligned to avoid provider/proxy rejection of rapid random
+        # query variants while still preventing a stale cached response.
+        url = f"{FUTURE_SCHEDULE_URL.format(offset=offset)}?{int(time.time()) * 1000}"
+        try:
+            raw = _fetch_bytes(url)
+            parsed, diagnostics = _parse_schedule_js(
+                _decode(raw), expected_date=expected
+            )
+            source = {
+                "surface": surface,
+                "url": FUTURE_SCHEDULE_URL.format(offset=offset),
+                "status": "OK" if parsed else "REJECTED",
+                "expected_date": expected.isoformat(),
+                "offset": offset,
+                "raw_match_count": len(parsed) + sum(diagnostics.values()),
+                "parsed_match_count": len(parsed),
+                "diagnostics": diagnostics,
+            }
+            if not parsed:
+                source["error"] = "NO_MATCHING_ROWS_FOR_EXPECTED_DATE"
+                future_errors.append(source)
+            future_sources.append(source)
+            source_rows.extend(parsed)
+        except Exception as error:
+            source = {
+                "surface": surface,
+                "url": FUTURE_SCHEDULE_URL.format(offset=offset),
+                "status": "FETCH_ERROR",
+                "expected_date": expected.isoformat(),
+                "offset": offset,
+                "error": f"{type(error).__name__}: {error}",
+            }
+            future_sources.append(source)
+            future_errors.append(source)
+
+    matches, duplicate_count = _dedupe_schedule_rows(source_rows)
+    if not bf1_ok:
+        status = "FETCH_ERROR"
+    elif future_errors:
+        status = "DEGRADED"
+    else:
+        status = "OK"
+    future_surface = {
+        "today": today.isoformat(),
+        "required_dates": [value.isoformat() for value in required],
+        "sources": future_sources,
+        "errors": future_errors,
+    }
+    return {
+        "status": status,
+        "matches": matches,
+        "schedule_count": len(matches),
+        "raw_schedule_count": len(source_rows),
+        "duplicate_nowscore_id_count": duplicate_count,
+        "sources": sources,
+        "errors": errors + future_errors,
+        "bf1": sources[0] if sources else {},
+        "future_surface": future_surface,
+        "provenance": {"bf1": sources[0] if sources else {}, "future_surface": future_surface},
+    }
+
+
+def fetch_schedule(
+    required_dates: Iterable[object] | object | None = None,
+    *,
+    now: object = None,
+) -> list[dict]:
+    """Backward-compatible schedule list API backed by the bounded bundle."""
+    return fetch_schedule_bundle(required_dates, now=now)["matches"]
 
 
 def prebind_match(home: str, away: str, kickoff: object, schedule: list[dict]) -> dict:

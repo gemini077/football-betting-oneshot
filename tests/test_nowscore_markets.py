@@ -2,6 +2,7 @@ import unittest
 import tempfile
 from pathlib import Path
 import sys
+from datetime import date
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -15,15 +16,28 @@ from scripts.nowscore_markets import (
     parse_referee_page,
     parse_analysis_data,
     parse_schedule_js,
+    fetch_schedule_bundle,
     parse_three_in_one,
     resolve_match,
     _verified,
 )
 from market_intelligence import nowscore_trend_panel
 import scripts.nowscore_markets as nowscore_markets
+import scripts.daily_schedule_workspace as daily_schedule_workspace
 
 
 SCHEDULE = """A[0]=[2912840,0,0,0,'瓦勒伦加',0,'Valerenga','奥勒松',0,'Aalesund FK','01:00','2026,6,17,01,00,00',0,0,0,0,0,0,0,0,0,0,0,'半/一',0,0,0,2.75];"""
+
+BF1_ONLY_SCHEDULE = """var A=Array(1);
+A[0]=[1001,0,111,222,'主队',0,'Home FC','客队',0,'Away FC','23:00','2026,7,31,23,00,00',0,0,0,,,0,0,0,0,'','','',0,'','','',0,0,0,0];"""
+
+SC1_FUTURE_SCHEDULE = """var A=Array(2);
+A[0]=[2001,1,333,444,'主队',0,'Home FC','客队',0,'Away FC','01:00','09-01',0,0,0,,,0,0,0,0,'','','',0,'','','',0,0,0,0];
+A[1]=[2002,1,555,666,'第二主队',0,'Second Home','第二客队',0,'Second Away','02:00','09-02',0,0,0,,,0,0,0,0,'','','',0,'','','',0,0,0,0];"""
+
+SC2_FUTURE_SCHEDULE = """var A=Array(2);
+A[0]=[2002,1,555,666,'第二主队',0,'Second Home','第二客队',0,'Second Away','02:00','09-02',0,0,0,,,0,0,0,0,'','','',0,'','','',0,0,0,0];
+A[1]=[2002,1,555,666,'第二主队',0,'Second Home','第二客队',0,'Second Away','02:00','09-02',0,0,0,,,0,0,0,0,'','','',0,'','','',0,0,0,0];"""
 
 
 MARKET_HTML = """
@@ -98,6 +112,186 @@ class NowscoreMarketTests(unittest.TestCase):
         match = resolve_match("瓦勒伦加", "奥勒松", "2026-07-17 01:00", rows)
         self.assertEqual("EXACT_MATCH", match["status"])
         self.assertEqual(0, match["kickoff_difference_minutes"])
+
+    def test_bf1_only_does_not_fetch_unneeded_future_surface(self):
+        calls = []
+
+        def fetch(url, timeout=30):
+            calls.append(url)
+            return BF1_ONLY_SCHEDULE.encode("utf-8")
+
+        with patch.object(nowscore_markets, "_fetch_bytes", side_effect=fetch):
+            result = fetch_schedule_bundle(now=date(2026, 8, 31))
+
+        self.assertEqual("OK", result["status"])
+        self.assertEqual([1001], [row["nowscore_id"] for row in result["matches"]])
+        self.assertEqual(1, len(calls))
+        self.assertIn("bf1.js", calls[0])
+        self.assertNotIn("sc1.js", calls[0])
+
+    def test_bf1_plus_one_future_day_uses_expected_date(self):
+        calls = []
+
+        def fetch(url, timeout=30):
+            calls.append(url)
+            if "bf1.js" in url:
+                return BF1_ONLY_SCHEDULE.encode("utf-8")
+            if "sc1.js" in url:
+                return SC1_FUTURE_SCHEDULE.encode("utf-8")
+            raise AssertionError(url)
+
+        with patch.object(nowscore_markets, "_fetch_bytes", side_effect=fetch):
+            result = fetch_schedule_bundle(
+                required_dates={"2026-09-01"}, now=date(2026, 8, 31)
+            )
+
+        self.assertEqual("OK", result["status"])
+        self.assertEqual([1001, 2001], [row["nowscore_id"] for row in result["matches"]])
+        self.assertEqual("2026-09-01", result["matches"][1]["schedule_source_date"])
+        self.assertEqual(333, result["matches"][1]["home_team_id"])
+        self.assertEqual(444, result["matches"][1]["away_team_id"])
+        self.assertEqual(1, result["future_surface"]["sources"][0]["diagnostics"]["source_date_mismatch"])
+        self.assertEqual(2, len(calls))
+        self.assertTrue(any("sc1.js" in url for url in calls))
+
+    def test_future_date_beyond_seven_days_is_not_fetched(self):
+        calls = []
+
+        def fetch(url, timeout=30):
+            calls.append(url)
+            return BF1_ONLY_SCHEDULE.encode("utf-8")
+
+        with patch.object(nowscore_markets, "_fetch_bytes", side_effect=fetch):
+            result = fetch_schedule_bundle(
+                required_dates={"2026-09-08"}, now=date(2026, 8, 31)
+            )
+
+        self.assertEqual("DEGRADED", result["status"])
+        self.assertEqual(1, len(calls))
+        self.assertEqual("FUTURE_OFFSET_OUT_OF_RANGE", result["future_surface"]["errors"][0]["error"])
+
+    def test_bf1_plus_two_required_future_days_fetches_only_sc1_and_sc2(self):
+        calls = []
+
+        def fetch(url, timeout=30):
+            calls.append(url)
+            if "bf1.js" in url:
+                return BF1_ONLY_SCHEDULE.encode("utf-8")
+            if "sc1.js" in url:
+                return SC1_FUTURE_SCHEDULE.encode("utf-8")
+            if "sc2.js" in url:
+                return SC2_FUTURE_SCHEDULE.encode("utf-8")
+            raise AssertionError(url)
+
+        with patch.object(nowscore_markets, "_fetch_bytes", side_effect=fetch):
+            result = fetch_schedule_bundle(
+                required_dates={"2026-09-01", "2026-09-02"},
+                now=date(2026, 8, 31),
+            )
+
+        self.assertEqual("OK", result["status"])
+        self.assertEqual([1001, 2001, 2002], [row["nowscore_id"] for row in result["matches"]])
+        self.assertEqual(1, result["duplicate_nowscore_id_count"])
+        self.assertEqual(3, len(calls))
+        self.assertTrue(any("sc1.js" in url for url in calls))
+        self.assertTrue(any("sc2.js" in url for url in calls))
+        self.assertFalse(any("sc3.js" in url for url in calls))
+
+    def test_future_surface_failure_keeps_bf1_and_records_degraded_provenance(self):
+        def fetch(url, timeout=30):
+            if "bf1.js" in url:
+                return BF1_ONLY_SCHEDULE.encode("utf-8")
+            raise OSError("sc1 down")
+
+        with patch.object(nowscore_markets, "_fetch_bytes", side_effect=fetch):
+            result = fetch_schedule_bundle(
+                required_dates={"2026-09-01"}, now=date(2026, 8, 31)
+            )
+
+        self.assertEqual("DEGRADED", result["status"])
+        self.assertEqual([1001], [row["nowscore_id"] for row in result["matches"]])
+        self.assertTrue(result["future_surface"]["errors"])
+        self.assertIn("sc1", result["future_surface"]["errors"][0]["surface"])
+
+    def test_expected_date_mismatch_is_rejected_without_year_guessing(self):
+        self.assertEqual([], parse_schedule_js(SC1_FUTURE_SCHEDULE, expected_date="2026-09-03"))
+        rows = parse_schedule_js(SC1_FUTURE_SCHEDULE, expected_date="2026-09-01")
+        self.assertEqual([2001], [row["nowscore_id"] for row in rows])
+        self.assertEqual([], parse_schedule_js(SC1_FUTURE_SCHEDULE))
+
+    def test_year_end_future_surface_uses_expected_year(self):
+        text = """var A=Array(1);
+A[0]=[3001,1,777,888,'跨年主队',0,'Year End Home','跨年客队',0,'New Year Away','00:10','01-01',0,0,0,,,0,0,0,0,'','','',0,'','','',0,0,0,0];"""
+
+        rows = parse_schedule_js(text, expected_date="2027-01-01")
+        self.assertEqual(1, len(rows))
+        self.assertEqual("2027-01-01T00:10+08:00", rows[0]["kickoff_local"])
+        self.assertEqual([], parse_schedule_js(text, expected_date="2026-01-02"))
+
+        calls = []
+
+        def fetch(url, timeout=30):
+            calls.append(url)
+            return BF1_ONLY_SCHEDULE.encode("utf-8") if "bf1.js" in url else text.encode("utf-8")
+
+        with patch.object(nowscore_markets, "_fetch_bytes", side_effect=fetch):
+            bundle = fetch_schedule_bundle(
+                required_dates={"2027-01-01"}, now=date(2026, 12, 31)
+            )
+
+        self.assertEqual("OK", bundle["status"])
+        self.assertEqual([3001], [row["nowscore_id"] for row in bundle["matches"] if row["nowscore_id"] == 3001])
+        self.assertEqual(2, len(calls))
+        self.assertTrue(any("sc1.js" in url for url in calls))
+
+    def test_no_wrong_match_binding_after_date_filter(self):
+        rows = parse_schedule_js(SC1_FUTURE_SCHEDULE, expected_date="2026-09-01")
+        exact = resolve_match("主队", "客队", "2026-09-01 01:00", rows)
+        wrong_date = resolve_match("第二主队", "第二客队", "2026-09-02 02:00", rows)
+
+        self.assertEqual("EXACT_MATCH", exact["status"])
+        self.assertEqual(2001, exact["nowscore_id"])
+        self.assertEqual("NO_EXACT_MATCH", wrong_date["status"])
+
+    def test_daily_intake_collects_match_dates_before_prebinding(self):
+        payloads = [{
+            "matches": [{
+                "homeTeam": "主队",
+                "awayTeam": "客队",
+                "matchDate": "2026-09-01",
+                "matchTime": "01:00",
+            }],
+        }]
+        requested_dates = []
+        bundle = {
+            "status": "OK",
+            "matches": parse_schedule_js(SC1_FUTURE_SCHEDULE, expected_date="2026-09-01"),
+            "future_surface": {"required_dates": ["2026-09-01"], "errors": []},
+            "provenance": {},
+            "errors": [],
+        }
+
+        def fetch(required_dates):
+            requested_dates.extend(required_dates)
+            return bundle
+
+        def prebind(home, away, kickoff, schedule):
+            self.assertEqual("主队", home)
+            self.assertEqual("客队", away)
+            self.assertEqual("2026-09-01T01:00:00+08:00", kickoff)
+            self.assertEqual([2001], [row["nowscore_id"] for row in schedule])
+            return {"status": "EXACT_MATCH", "nowscore_id": 2001, "match_confidence": 1.0}
+
+        with patch.object(daily_schedule_workspace, "fetch_nowscore_schedule", side_effect=fetch), \
+                patch.object(daily_schedule_workspace, "prebind_match", side_effect=prebind):
+            result = daily_schedule_workspace.attach_nowscore_bindings(payloads)
+
+        row = payloads[0]["matches"][0]
+        self.assertEqual(["2026-09-01"], requested_dates)
+        self.assertEqual(2001, row["nowscoreId"])
+        self.assertEqual("EXACT_MATCH", row["nowscoreMatchStatus"])
+        self.assertEqual(1, result["bound"])
+        self.assertEqual("OK", result["status"])
 
     def test_three_market_families_are_parsed(self):
         result = parse_three_in_one(MARKET_HTML)
