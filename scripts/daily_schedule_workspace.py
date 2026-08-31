@@ -11,7 +11,7 @@ from pathlib import Path
 from fetch_sporttery import DEFAULT_CACHE_DIR, fetch_jingcai_odds
 from fetch_trade_matches import fetch_trade_matches
 from match_workspace import ROOT, build
-from nowscore_markets import fetch_schedule as fetch_nowscore_schedule, prebind_match
+from nowscore_markets import fetch_schedule_bundle as fetch_nowscore_schedule, prebind_match
 
 try:
     from prediction_universe import update_prediction_universe
@@ -40,12 +40,39 @@ def _payload_is_successful(payload: dict) -> bool:
     }
 
 
+def _required_nowscore_dates(payloads: list[dict]) -> list[str]:
+    dates: set[str] = set()
+    for payload in payloads:
+        for row in payload.get("matches") or []:
+            match_date = str(row.get("matchDate") or "").strip()
+            if not match_date:
+                kickoff = str(row.get("kickoff_local") or "").strip()
+                match_date = kickoff[:10] if kickoff else ""
+            if match_date:
+                dates.add(match_date)
+    return sorted(dates)
+
+
 def attach_nowscore_bindings(payloads: list[dict]) -> dict:
     """Resolve every fixture once during schedule intake, before analysis is requested."""
+    required_dates = _required_nowscore_dates(payloads)
     try:
-        provider_schedule = fetch_nowscore_schedule()
+        fetched = fetch_nowscore_schedule(required_dates)
     except Exception as error:
-        return {"status": "FETCH_ERROR", "error": f"{type(error).__name__}: {error}", "bound": 0}
+        return {
+            "status": "FETCH_ERROR",
+            "error": f"{type(error).__name__}: {error}",
+            "bound": 0,
+            "required_dates": required_dates,
+        }
+    if isinstance(fetched, dict):
+        provider_schedule = list(fetched.get("matches") or [])
+        schedule_status = str(fetched.get("status") or "OK")
+    else:
+        # Keep compatibility with callers/tests that provide the legacy list API.
+        provider_schedule = list(fetched or [])
+        fetched = {"status": "OK", "schedule_count": len(provider_schedule)}
+        schedule_status = "OK"
     bound = ambiguous = missing = 0
     for payload in payloads:
         for row in payload.get("matches") or []:
@@ -62,7 +89,18 @@ def attach_nowscore_bindings(payloads: list[dict]) -> dict:
                 ambiguous += 1
             else:
                 missing += 1
-    return {"status": "OK", "schedule_count": len(provider_schedule), "bound": bound, "ambiguous": ambiguous, "missing": missing}
+    result = {
+        "status": schedule_status,
+        "schedule_count": len(provider_schedule),
+        "bound": bound,
+        "ambiguous": ambiguous,
+        "missing": missing,
+        "required_dates": required_dates,
+    }
+    for key in ("future_surface", "provenance", "errors"):
+        if key in fetched:
+            result[key] = fetched[key]
+    return result
 
 
 def fallback_trade_schedule(business_date: str, no_cache: bool) -> dict:

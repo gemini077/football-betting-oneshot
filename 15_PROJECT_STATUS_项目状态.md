@@ -3,6 +3,34 @@
 最后更新：2026-08-31
 角色：项目当前唯一人类可读状态真相。只记录当前事实，不承担完整历史档案职责。
 
+# NOWSCORE-FUTURE-FIXTURE-INTAKE-1 Current State
+
+Status: `READY_FOR_ACCEPTANCE`
+
+Decision: `NOWSCORE-FUTURE-FIXTURE-INTAKE-1 = READY_FOR_ACCEPTANCE`
+
+`CURRENT = NOWSCORE-FUTURE-FIXTURE-INTAKE-1`.
+
+This bounded implementation keeps `bf1.js` as the live Nowscore schedule and
+adds only the future `sc{offset}.js` surfaces required by the real竞彩
+`matchDate` values. Offset calculation uses `Asia/Shanghai`; only offsets 1–7
+are eligible. `MM-DD` rows require an explicit expected calendar date, and
+source-date mismatches are rejected without guessing a year. The bf1/future
+union is deduplicated by `nowscore_id` before the existing team, kickoff,
+confidence, and registry path runs.
+
+The current bounded replay used the 2026-08-31 12-fixture cohort: 438 unique
+union rows, 0 duplicate IDs, 8 exact-compatible rows, and 8/8 identical known
+Nowscore IDs with 0 kickoff difference and 0 wrong binding. The current sc1
+response has already rolled past the cohort's early rows, so the temporal
+morning claim is backed by the future-only unit path plus the current union
+replay; no production registry write was made. Future fetch failures preserve
+bf1 and return explicit degraded/error provenance.
+
+Evidence: `docs/data-foundation/NOWSCORE-FUTURE-FIXTURE-INTAKE-1_FINAL_REPORT.md`.
+No 500 canonical schedule, identity alias, Champion, frozen history,
+prospective ledger, or the three specified identity gaps changed.
+
 # PRED-NOWSCORE-BIND-1 Current State
 
 Status: `READY_FOR_FINAL_ACCEPTANCE`

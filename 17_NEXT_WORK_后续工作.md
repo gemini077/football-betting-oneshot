@@ -4,6 +4,29 @@
 
 # Current Sole Pointer
 
+# NOWSCORE-FUTURE-FIXTURE-INTAKE-1 - Future Fixture Intake
+
+Status: `READY_FOR_ACCEPTANCE`
+
+Decision: `NOWSCORE-FUTURE-FIXTURE-INTAKE-1 = READY_FOR_ACCEPTANCE`
+
+The implementation keeps `bf1.js` as the live schedule and augments it only
+with the required `sc1`–`sc7` future surface derived from real竞彩
+`matchDate` values. It uses Shanghai-date offset arithmetic, strict
+`expected_date` handling for `MM-DD`, source-date rejection, ID dedupe, and
+explicit degraded/error provenance while preserving the existing exact
+resolver, verification gate, registry persistence, and bf1 fallback.
+
+The bounded 2026-08-31 replay resolved 8 exact-compatible fixtures to the same
+known Nowscore IDs with no wrong binding. The three specified identity gaps
+remain out of scope. Current sc1 early rows have rolled with the live feed, so
+independent acceptance should verify the temporal morning behavior using the
+future-only focused path and the recorded probe/replay evidence.
+
+Evidence: `docs/data-foundation/NOWSCORE-FUTURE-FIXTURE-INTAKE-1_FINAL_REPORT.md`.
+STOP after independent acceptance; do not start identity, provider, source
+migration, Champion, frontend, or next-universe work from this pointer.
+
 # PRED-NOWSCORE-BIND-1 - Nowscore Source-Present / Binding-Failed Closure
 
 Status: `READY_FOR_FINAL_ACCEPTANCE`
