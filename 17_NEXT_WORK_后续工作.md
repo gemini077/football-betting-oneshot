@@ -29,6 +29,25 @@ Evidence: `docs/data-foundation/NEXT-UNIVERSE-TRUTH-1_FINAL_REPORT.md`.
 STOP after independent acceptance and remote delivery; do not start another
 next-universe, provider, identity, model, or frontend milestone.
 
+# PRED-IDENTITY-EVIDENCE-1 Bounded Gate Result
+
+Status: `SAFETY GATE FAIL / NO CODE / STOP`
+
+Decision: `PRED-IDENTITY-EVIDENCE-1 = SAFETY GATE FAIL / NO CODE`
+
+A read-only replay against `origin/main` used 70 accepted Nowscore fetch
+observations (15 unique provider match IDs) plus the current 12-fixture matrix.
+The deterministic candidate rule resolves `500-1363834` to `2913703` and
+`500-1363823` to `2913701`, while `500-1427969` has no confirmed deterministic
+side. Historical wrong binding, ambiguity, orientation conflict, accepted
+binding regression, and the existing eight strict-ID regression counts are all
+zero; the all-three-target gate is not satisfied.
+
+Evidence: `docs/data-foundation/PRED-IDENTITY-EVIDENCE-1_REPLAY_REPORT.md`.
+No resolver, provider, alias, frozen prediction, prospective ledger, or
+production data changed. The sole pointer remains `NEXT-UNIVERSE-TRUTH-1`; no
+next milestone is started.
+
 # Previous milestone: NOWSCORE-FUTURE-FIXTURE-INTAKE-1 - Future Fixture Intake
 
 Status: `PRODUCTION PATH PASS / MORNING TIMING NATURAL-CYCLE VERIFY PENDING`
