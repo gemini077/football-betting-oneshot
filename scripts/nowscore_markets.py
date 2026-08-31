@@ -18,7 +18,7 @@ import urllib.error
 import urllib.request
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from datetime import date, datetime, time as datetime_time
 from html.parser import HTMLParser
 from pathlib import Path
@@ -46,6 +46,7 @@ USER_AGENT = (
     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
 )
 SHANGHAI = ZoneInfo("Asia/Shanghai")
+_IDENTITY_RESOLVER = None
 
 # Stable Nowscore company IDs mapped to this project's confirmed canonical
 # bookmaker IDs.  The original provider ID is retained on every row.
@@ -283,17 +284,15 @@ def _parse_kickoff(value: object) -> datetime | None:
     return parsed.replace(tzinfo=SHANGHAI) if parsed.tzinfo is None else parsed.astimezone(SHANGHAI)
 
 
-def resolve_match(
+def _resolve_match_strict(
     home: str,
     away: str,
     kickoff: object,
     schedule: list[dict],
-    maximum_kickoff_difference_minutes: int = 180,
+    maximum_kickoff_difference_minutes: int,
+    bound_id: int | None,
 ) -> dict:
     target_time = _parse_kickoff(kickoff)
-    target = {"home": home, "away": away, "kickoff": str(kickoff or "")}
-    binding = lookup_provider_binding(target, "nowscore")
-    bound_id = int(binding["id"]) if binding and str(binding.get("id") or "").isdigit() else None
     candidates = []
     for match in schedule:
         home_rows = [team_similarity(home, match.get("home_team", "")), team_similarity(home, match.get("home_team_en", ""))]
@@ -332,6 +331,239 @@ def resolve_match(
     if len(candidates) > 1 and best["match_confidence"] - candidates[1]["match_confidence"] < 0.05:
         return {"status": "AMBIGUOUS_MATCH", "candidates": candidates[:5]}
     return {"status": "EXACT_MATCH", **best}
+
+
+def _identity_resolver():
+    global _IDENTITY_RESOLVER
+    if _IDENTITY_RESOLVER is None:
+        from football_data.identity_registry import (
+            DEFAULT_IDENTITY_REGISTRY_PATH,
+            IdentityRegistryResolver,
+        )
+
+        _IDENTITY_RESOLVER = IdentityRegistryResolver(DEFAULT_IDENTITY_REGISTRY_PATH)
+    return _IDENTITY_RESOLVER
+
+
+def _first_fixture_value(fixture: Mapping[str, object] | None, *keys: str) -> str:
+    if not fixture:
+        return ""
+    for key in keys:
+        value = fixture.get(key)
+        if value not in (None, ""):
+            return str(value).strip()
+    return ""
+
+
+def _fallback_competition_id(
+    fixture: Mapping[str, object] | None,
+    competition_id: str | None,
+) -> str | None:
+    for value in (
+        competition_id,
+        _first_fixture_value(fixture, "competition_id", "canonical_competition_id"),
+    ):
+        text = str(value or "").strip()
+        if text.startswith("competition:"):
+            return text
+    raw_name = _first_fixture_value(fixture, "competition", "league")
+    if not raw_name:
+        return None
+    from football_data.competition_demand import resolve_project_competition
+
+    resolved = resolve_project_competition(raw_name)
+    if resolved.get("resolution_status") != "resolved":
+        return None
+    value = str(resolved.get("canonical_competition_id") or "").strip()
+    return value if value.startswith("competition:") else None
+
+
+def _identity_contains(resolution: Mapping[str, object], canonical_team_id: str) -> bool:
+    status = str(resolution.get("resolution_status") or "")
+    if status == "AUTO_RESOLVED":
+        return resolution.get("canonical_team_id") == canonical_team_id
+    if status == "AMBIGUOUS":
+        return canonical_team_id in set(resolution.get("candidate_team_ids") or [])
+    return False
+
+
+def _resolve_match_identity_fallback(
+    home: str,
+    away: str,
+    kickoff: object,
+    schedule: list[dict],
+    *,
+    fixture: Mapping[str, object] | None,
+    competition_id: str | None,
+    identity_resolver=None,
+) -> dict:
+    target_time = _parse_kickoff(kickoff)
+    exact = [
+        candidate
+        for candidate in schedule
+        if target_time is not None
+        and _parse_kickoff(candidate.get("kickoff_local")) == target_time
+    ]
+    resolved_competition_id = _fallback_competition_id(fixture, competition_id)
+    details = {
+        "competition_id": resolved_competition_id,
+        "exact_kickoff_candidate_count": len(exact),
+        "confirmed_sides": [],
+        "identity_filtered_candidate_ids": [],
+        "orientation_conflicts": [],
+    }
+    if not resolved_competition_id:
+        return {"status": "NO_COMPETITION_CONTEXT", "identity_fallback": details}
+
+    resolver = identity_resolver or _identity_resolver()
+    target_names = {"home": home, "away": away}
+    target_resolutions = {}
+    for side in ("home", "away"):
+        target_resolutions[side] = resolver.resolve_side(
+            competition_id=resolved_competition_id,
+            provider="500",
+            provider_team_id=_first_fixture_value(
+                fixture,
+                f"{side}_provider_team_id",
+                f"{side}ProviderTeamId",
+            ) or None,
+            provider_team_name=target_names[side],
+            fixture_canonical_team_id=_first_fixture_value(
+                fixture,
+                f"{side}_canonical_team_id",
+                f"{side}CanonicalTeamId",
+            ) or None,
+        )
+        resolution = target_resolutions[side]
+        if (
+            resolution.get("resolution_status") == "AUTO_RESOLVED"
+            and resolution.get("canonical_team_id")
+        ):
+            details["confirmed_sides"].append({
+                "side": side,
+                "canonical_team_id": resolution["canonical_team_id"],
+                "resolution_method": resolution.get("resolution_method"),
+                "evidence": list(resolution.get("evidence") or []),
+            })
+
+    if not details["confirmed_sides"]:
+        return {"status": "NO_CONFIRMED_SIDE", "identity_fallback": details}
+
+    filtered: dict[int, dict] = {}
+    for candidate in exact:
+        provider_resolutions = {
+            side: resolver.resolve_side(
+                competition_id=resolved_competition_id,
+                provider="nowscore",
+                provider_team_id=str(candidate.get(f"{side}_team_id") or "") or None,
+                provider_team_name=(
+                    candidate.get(f"{side}_team_en")
+                    or candidate.get(f"{side}_team")
+                    or ""
+                ),
+            )
+            for side in ("home", "away")
+        }
+        matched_sides = []
+        for confirmed in details["confirmed_sides"]:
+            side = str(confirmed["side"])
+            canonical_team_id = str(confirmed["canonical_team_id"])
+            same_side = provider_resolutions[side]
+            opposite_side = provider_resolutions["away" if side == "home" else "home"]
+            if (
+                same_side.get("resolution_status") == "AUTO_RESOLVED"
+                and same_side.get("canonical_team_id") == canonical_team_id
+            ):
+                matched_sides.append(confirmed)
+            if _identity_contains(opposite_side, canonical_team_id):
+                details["orientation_conflicts"].append({
+                    "nowscore_id": candidate.get("nowscore_id"),
+                    "confirmed_side": side,
+                    "canonical_team_id": canonical_team_id,
+                })
+        provider_match_id = candidate.get("nowscore_id")
+        if matched_sides and str(provider_match_id or "").isdigit():
+            filtered.setdefault(int(provider_match_id), {
+                "candidate": candidate,
+                "matched_sides": matched_sides,
+            })
+
+    details["identity_filtered_candidate_ids"] = sorted(filtered)
+    if details["orientation_conflicts"]:
+        return {"status": "ORIENTATION_CONFLICT", "identity_fallback": details}
+    if len(filtered) > 1:
+        return {"status": "AMBIGUOUS_MATCH", "identity_fallback": details}
+    if not filtered:
+        return {"status": "NO_UNIQUE_PROVIDER_CANDIDATE", "identity_fallback": details}
+
+    provider_match_id, selected = next(iter(filtered.items()))
+    candidate = selected["candidate"]
+    confirmed_sides = {str(item["side"]) for item in selected["matched_sides"]}
+    match_scores = {}
+    for side, name in (("home", home), ("away", away)):
+        score, basis = max(
+            [
+                team_similarity(name, candidate.get(f"{side}_team", "")),
+                team_similarity(name, candidate.get(f"{side}_team_en", "")),
+            ],
+            key=lambda row: row[0],
+        )
+        match_scores[f"{side}_match_score"] = score
+        match_scores[f"{side}_match_basis"] = (
+            "deterministic_identity_fallback" if side in confirmed_sides else basis
+        )
+    return {
+        "status": "EXACT_MATCH",
+        **candidate,
+        **match_scores,
+        "kickoff_difference_minutes": 0.0,
+        "match_confidence": 1.0,
+        "resolution_method": "deterministic_identity_fallback",
+        "identity_fallback": details,
+        "nowscore_id": provider_match_id,
+    }
+
+
+def resolve_match(
+    home: str,
+    away: str,
+    kickoff: object,
+    schedule: list[dict],
+    maximum_kickoff_difference_minutes: int = 180,
+    *,
+    fixture: Mapping[str, object] | None = None,
+    competition_id: str | None = None,
+    identity_resolver=None,
+) -> dict:
+    target = {"home": home, "away": away, "kickoff": str(kickoff or "")}
+    binding = lookup_provider_binding(target, "nowscore")
+    bound_id = int(binding["id"]) if binding and str(binding.get("id") or "").isdigit() else None
+    strict = _resolve_match_strict(
+        home,
+        away,
+        kickoff,
+        schedule,
+        maximum_kickoff_difference_minutes,
+        bound_id,
+    )
+    if strict.get("status") == "EXACT_MATCH" or bound_id is not None:
+        return strict
+    fallback = _resolve_match_identity_fallback(
+        home,
+        away,
+        kickoff,
+        schedule,
+        fixture=fixture,
+        competition_id=competition_id,
+        identity_resolver=identity_resolver,
+    )
+    if fallback.get("status") == "EXACT_MATCH":
+        return fallback
+    return {
+        **strict,
+        "fallback_status": fallback.get("status"),
+        "identity_fallback": fallback.get("identity_fallback", {}),
+    }
 
 
 def _normalise_required_dates(required_dates: Iterable[object] | object | None) -> tuple[list[date], list[str]]:
@@ -524,14 +756,35 @@ def fetch_schedule(
     return fetch_schedule_bundle(required_dates, now=now)["matches"]
 
 
-def prebind_match(home: str, away: str, kickoff: object, schedule: list[dict]) -> dict:
-    resolved = resolve_match(home, away, kickoff, schedule)
+def prebind_match(
+    home: str,
+    away: str,
+    kickoff: object,
+    schedule: list[dict],
+    *,
+    fixture: Mapping[str, object] | None = None,
+    competition_id: str | None = None,
+    identity_resolver=None,
+) -> dict:
+    resolved = resolve_match(
+        home,
+        away,
+        kickoff,
+        schedule,
+        fixture=fixture,
+        competition_id=competition_id,
+        identity_resolver=identity_resolver,
+    )
     if resolved.get("status") != "EXACT_MATCH":
         return resolved
     match = {"home": home, "away": away, "kickoff": str(kickoff or "")}
     record_binding(
         match, "nowscore", resolved["nowscore_id"], confidence=resolved["match_confidence"],
-        verification="schedule_pair_time", provider_home=resolved.get("home_team", ""),
+        verification=(
+            "schedule_pair_time_identity_fallback"
+            if resolved.get("resolution_method") == "deterministic_identity_fallback"
+            else "schedule_pair_time"
+        ), provider_home=resolved.get("home_team", ""),
         provider_away=resolved.get("away_team", ""), provider_kickoff=resolved.get("kickoff_local", ""),
     )
     return resolved

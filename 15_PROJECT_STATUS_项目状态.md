@@ -3,13 +3,37 @@
 最后更新：2026-08-31
 角色：项目当前唯一人类可读状态真相。只记录当前事实，不承担完整历史档案职责。
 
-# NEXT-UNIVERSE-TRUTH-1 Current State
+# PRED-IDENTITY-SAFE-PARTIAL-1 Current State
 
-Status: `ACCEPTANCE PASS / MERGE AUTHORIZED`
+Status: `READY_FOR_ACCEPTANCE`
 
-Decision: `NEXT-UNIVERSE-TRUTH-1 = ACCEPTANCE PASS / MERGE AUTHORIZED`
+Decision: `PRED-IDENTITY-SAFE-PARTIAL-1 = READY_FOR_ACCEPTANCE`
 
-`CURRENT = NEXT-UNIVERSE-TRUTH-1`.
+PR #139 = `READY_FOR_ACCEPTANCE`
+
+`CURRENT = PRED-IDENTITY-SAFE-PARTIAL-1`.
+
+PR #139 continues the existing identity branch and implements Candidate B as a
+fail-closed fallback after the strict Nowscore resolver misses. The current
+12-fixture replay preserves all eight existing IDs, adds `2913703`, `2913701`,
+and `2912252`, and leaves `500-1427969` unresolved. Historical wrong binding,
+ambiguous collision, orientation conflict, accepted-binding regression, and
+existing-eight regression counts are all zero. Replay writes were intercepted
+and durable production data was unchanged.
+
+Evidence: `docs/data-foundation/PRED-IDENTITY-SAFE-PARTIAL-1_IMPLEMENTATION_REPORT.md`.
+Focused tests, `py_compile`, and `git diff --check` pass. No merge is performed,
+no next milestone starts, and the task stops at `READY_FOR_ACCEPTANCE`.
+
+# NEXT-UNIVERSE-TRUTH-1 / PR #138 Previous Milestone
+
+Status: `DEPLOYED / SEALED / PRODUCTION ACCEPTANCE PASS`
+
+Decision: `NEXT-UNIVERSE-TRUTH-1 / PR #138 = DEPLOYED / SEALED / PRODUCTION ACCEPTANCE PASS`
+
+PR #138 merged at `db4b79793bb79c8637dbd69c0444aa4b5d8bbca6`. Its acceptance
+state is retained as a closed historical milestone; the current pointer is
+`PRED-IDENTITY-SAFE-PARTIAL-1`.
 
 The bounded live probe at `2026-08-31 16:03:38` Asia/Shanghai found
 Sporttery HTTP 200 with `success=true`, `matchInfoList` present, only
@@ -29,6 +53,25 @@ Evidence: `docs/data-foundation/NEXT-UNIVERSE-TRUTH-1_FINAL_REPORT.md`.
 Production impact remains `next_universe=0`, `BLOCKED_UNIVERSE` for the next
 BASE jobs/prediction, and `CYCLE_DEGRADED`; no fixture was fabricated and no
 historical prediction was rewritten.
+
+# PRED-IDENTITY-EVIDENCE-1 Previous Bounded Gate Result
+
+Status: `SAFETY GATE FAIL / NO CODE / STOP`
+
+Decision: `PRED-IDENTITY-EVIDENCE-1 = SAFETY GATE FAIL / NO CODE`
+
+A read-only replay against `origin/main` used 70 accepted Nowscore fetch
+observations (15 unique provider match IDs) plus the current 12-fixture matrix.
+The deterministic candidate rule resolves `500-1363834` to `2913703` and
+`500-1363823` to `2913701`, while `500-1427969` has no confirmed deterministic
+side. Historical wrong binding, ambiguity, orientation conflict, accepted
+binding regression, and the existing eight strict-ID regression counts are all
+zero; the all-three-target gate is not satisfied.
+
+Evidence: `docs/data-foundation/PRED-IDENTITY-EVIDENCE-1_REPLAY_REPORT.md`.
+No resolver, provider, alias, frozen prediction, prospective ledger, or
+production data changed. The earlier gate-only task remains historical evidence; the current pointer is
+`PRED-IDENTITY-SAFE-PARTIAL-1`. No next milestone is started.
 
 # NOWSCORE-FUTURE-FIXTURE-INTAKE-1 Previous Milestone
 

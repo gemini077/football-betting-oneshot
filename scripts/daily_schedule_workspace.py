@@ -76,7 +76,13 @@ def attach_nowscore_bindings(payloads: list[dict]) -> dict:
     bound = ambiguous = missing = 0
     for payload in payloads:
         for row in payload.get("matches") or []:
-            resolved = prebind_match(row.get("homeTeam") or "", row.get("awayTeam") or "", _kickoff(row), provider_schedule)
+            resolved = prebind_match(
+                row.get("homeTeam") or "",
+                row.get("awayTeam") or "",
+                _kickoff(row),
+                provider_schedule,
+                fixture=row,
+            )
             status = str(resolved.get("status") or "")
             row["nowscoreMatchStatus"] = status
             row["nowscoreMatchConfidence"] = resolved.get("match_confidence")

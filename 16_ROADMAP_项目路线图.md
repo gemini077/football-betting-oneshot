@@ -7,30 +7,51 @@
 
 CURRENT ACTIVE MILESTONE:
 
-`NEXT-UNIVERSE-TRUTH-1 - Sporttery / 500 Next Business-Date Universe Root-Cause Closure`
+`PRED-IDENTITY-SAFE-PARTIAL-1 - Deterministic Nowscore Fallback`
 
-CURRENT STATUS: `ACCEPTANCE PASS / MERGE AUTHORIZED`
+CURRENT STATUS: `READY_FOR_ACCEPTANCE`
 
-CURRENT DECISION: `NEXT-UNIVERSE-TRUTH-1 = ACCEPTANCE PASS / MERGE AUTHORIZED`
+CURRENT DECISION: `PRED-IDENTITY-SAFE-PARTIAL-1 = READY_FOR_ACCEPTANCE`
 
-`CURRENT = NEXT-UNIVERSE-TRUTH-1`.
+PR #139 = `READY_FOR_ACCEPTANCE`
 
-This milestone records one bounded live probe and the smallest deterministic
-fallback-provenance fix. Current Sporttery truth is HTTP 200 with only
-`businessDate=2026-08-31`; current 500 truth is a successful page with 12
-`2026-09-01` kickoff rows assigned to `data-processdate=2026-08-31`, so the
-business-date parser returns 0 for `2026-09-01`. The production 15:41 upstream
-classification remains `UNKNOWN_NOT_PROVEN` because the exact historical
-fallback status/error was not persisted.
+`CURRENT = PRED-IDENTITY-SAFE-PARTIAL-1`.
+
+PR #139 implements the replay-approved Candidate B as a fail-closed fallback
+behind the existing strict resolver. The current 12-fixture replay preserves
+all eight existing IDs, adds `2913703`, `2913701`, and `2912252`, and leaves
+`500-1427969` unresolved. Historical wrong binding, ambiguous collision,
+orientation conflict, accepted-binding regression, and existing-eight
+regression are all zero. The fallback does not relax fuzzy thresholds, add
+aliases or provider data, special-case team IDs, use LLM matching, or hardcode
+match IDs.
 
 Evidence is recorded in
-`docs/data-foundation/NEXT-UNIVERSE-TRUTH-1_FINAL_REPORT.md`. This delivery
-does not change production data, identity aliases, providers, source order,
-Champion, model, resolver, endpoint, business-date parser semantics, frozen
-history, or frontend.
+`docs/data-foundation/PRED-IDENTITY-SAFE-PARTIAL-1_IMPLEMENTATION_REPORT.md`.
+Focused tests, `py_compile`, and `git diff --check` pass; replay did not mutate
+durable production data. PR #139 is the current delivery and stops at
+`READY_FOR_ACCEPTANCE`; no merge or next milestone is started.
 
-The previous Nowscore future-intake route remains recorded in
-`17_NEXT_WORK_后续工作.md` and its final report; it is not reopened.
+# Previous milestone: NEXT-UNIVERSE-TRUTH-1 / PR #138
+
+Status: `DEPLOYED / SEALED / PRODUCTION ACCEPTANCE PASS`
+
+Decision: `NEXT-UNIVERSE-TRUTH-1 / PR #138 = DEPLOYED / SEALED / PRODUCTION ACCEPTANCE PASS`
+
+PR #138 merged at `db4b79793bb79c8637dbd69c0444aa4b5d8bbca6`. This milestone
+recorded one bounded live probe and the smallest deterministic
+fallback-provenance fix. Current Sporttery truth was HTTP 200 with only
+`businessDate=2026-08-31`; current 500 truth was a successful page with 12
+`2026-09-01` kickoff rows assigned to `data-processdate=2026-08-31`, so the
+business-date parser returned 0 for `2026-09-01`. The production 15:41 upstream
+classification remained `UNKNOWN_NOT_PROVEN` because the exact historical
+fallback status/error was not persisted.
+
+Evidence remains recorded in
+`docs/data-foundation/NEXT-UNIVERSE-TRUTH-1_FINAL_REPORT.md`. The milestone did
+not change production data, identity aliases, providers, source order, Champion,
+model, resolver, endpoint, business-date parser semantics, frozen history, or
+frontend. Its route is closed and is not reopened.
 
 `PROD-HEALTH-1 = SEALED / ACCEPTANCE PASS` is a closed previous milestone.
 `MARKET-SIDE-SHADOW-1 = DEPLOYED / SEALED / ACCEPTANCE PASS` remains closed.
