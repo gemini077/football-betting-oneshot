@@ -4,15 +4,34 @@
 
 # Current Sole Pointer
 
-# PRED-COVERAGE-TRUTH-1 - Current-Day Prediction Availability Root-Cause Gate
+# PRED-NOWSCORE-BIND-1 - Nowscore Source-Present / Binding-Failed Closure
+
+Status: `READY_FOR_ACCEPTANCE`
+
+Decision: `PRED-NOWSCORE-BIND-1 = READY_FOR_ACCEPTANCE`
+
+`CURRENT = PRED-NOWSCORE-BIND-1`.
+
+`PARALLEL RESEARCH = GLOBAL-MARKET-0`.
+
+This delivery only freezes the completed 2026-08-31 Nowscore binding audit.
+The primary blocker for `0/12` is `NOWSCORE_SCHEDULE_HORIZON_GAP`; the overall
+classification is `MULTI_CAUSE`, with four current-feed name-normalization
+failures as a secondary finding. The sole next remedy category is
+`NOWSCORE_SCHEDULE_HORIZON_GAP`. No repair is implemented and no production,
+provider, source-order, Champion, resolver, endpoint, alias, parser, or frozen
+history state changes. STOP at independent acceptance.
+
+Evidence:
+
+- `docs/data-foundation/PRED-NOWSCORE-BIND-1_ROOT_CAUSE_AUDIT.md`
+- `data/football_data/pred_nowscore_bind_1/root_cause_matrix_2026-08-31.json`
+
+# Previous milestone: PRED-COVERAGE-TRUTH-1 - Current-Day Prediction Availability Root-Cause Gate
 
 Status: `READY_FOR_ACCEPTANCE`
 
 Decision: `PRED-COVERAGE-TRUTH-1 = READY_FOR_ACCEPTANCE`
-
-`CURRENT = PRED-COVERAGE-TRUTH-1`.
-
-`PARALLEL RESEARCH = GLOBAL-MARKET-0`.
 
 `PROD-WRITE-1 = SEALED / ACCEPTANCE PASS` is the closed previous milestone.
 
