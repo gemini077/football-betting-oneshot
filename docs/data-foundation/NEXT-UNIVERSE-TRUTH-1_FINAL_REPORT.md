@@ -1,8 +1,8 @@
 # NEXT-UNIVERSE-TRUTH-1 — Sporttery / 500 Next Business-Date Universe Root-Cause Closure
 
-Status: `READY_FOR_ACCEPTANCE`
+Status: `ACCEPTANCE PASS / MERGE AUTHORIZED`
 
-Decision: `NEXT-UNIVERSE-TRUTH-1 = READY_FOR_ACCEPTANCE`
+Decision: `NEXT-UNIVERSE-TRUTH-1 = ACCEPTANCE PASS / MERGE AUTHORIZED`
 
 ## 1. Scope and baseline
 
@@ -160,7 +160,7 @@ No production snapshot was regenerated or rewritten by the probe or fix.
 
 ## 7. STOP state
 
-This milestone stops at `READY_FOR_ACCEPTANCE`. The current product impact
+This milestone stops at `ACCEPTANCE PASS / MERGE AUTHORIZED` pending merge and the first post-merge production verification. The current product impact
 remains: the historical next-business-date universe is empty, so the next
 BASE jobs and next BASE prediction remain `BLOCKED_UNIVERSE`, and the recorded
 cycle remains `CYCLE_DEGRADED`. The fix improves the next occurrence's

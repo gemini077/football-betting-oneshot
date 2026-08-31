@@ -5,9 +5,9 @@
 
 # NEXT-UNIVERSE-TRUTH-1 Current State
 
-Status: `READY_FOR_ACCEPTANCE`
+Status: `ACCEPTANCE PASS / MERGE AUTHORIZED`
 
-Decision: `NEXT-UNIVERSE-TRUTH-1 = READY_FOR_ACCEPTANCE`
+Decision: `NEXT-UNIVERSE-TRUTH-1 = ACCEPTANCE PASS / MERGE AUTHORIZED`
 
 `CURRENT = NEXT-UNIVERSE-TRUTH-1`.
 
@@ -32,9 +32,9 @@ historical prediction was rewritten.
 
 # NOWSCORE-FUTURE-FIXTURE-INTAKE-1 Previous Milestone
 
-Status: `READY_FOR_ACCEPTANCE`
+Status: `PRODUCTION PATH PASS / MORNING TIMING NATURAL-CYCLE VERIFY PENDING`
 
-Decision: `NOWSCORE-FUTURE-FIXTURE-INTAKE-1 = READY_FOR_ACCEPTANCE`
+Decision: `NOWSCORE-FUTURE-FIXTURE-INTAKE-1 = PRODUCTION PATH PASS / MORNING TIMING NATURAL-CYCLE VERIFY PENDING`
 
 This bounded implementation keeps `bf1.js` as the live Nowscore schedule and
 adds only the future `sc{offset}.js` surfaces required by the real竞彩

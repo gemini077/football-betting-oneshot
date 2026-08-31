@@ -6,9 +6,9 @@
 
 # NEXT-UNIVERSE-TRUTH-1 - Sporttery / 500 Next Business-Date Universe Root-Cause Closure
 
-Status: `READY_FOR_ACCEPTANCE`
+Status: `ACCEPTANCE PASS / MERGE AUTHORIZED`
 
-Decision: `NEXT-UNIVERSE-TRUTH-1 = READY_FOR_ACCEPTANCE`
+Decision: `NEXT-UNIVERSE-TRUTH-1 = ACCEPTANCE PASS / MERGE AUTHORIZED`
 
 `CURRENT = NEXT-UNIVERSE-TRUTH-1`.
 
@@ -31,9 +31,9 @@ next-universe, provider, identity, model, or frontend milestone.
 
 # Previous milestone: NOWSCORE-FUTURE-FIXTURE-INTAKE-1 - Future Fixture Intake
 
-Status: `READY_FOR_ACCEPTANCE`
+Status: `PRODUCTION PATH PASS / MORNING TIMING NATURAL-CYCLE VERIFY PENDING`
 
-Decision: `NOWSCORE-FUTURE-FIXTURE-INTAKE-1 = READY_FOR_ACCEPTANCE`
+Decision: `NOWSCORE-FUTURE-FIXTURE-INTAKE-1 = PRODUCTION PATH PASS / MORNING TIMING NATURAL-CYCLE VERIFY PENDING`
 
 The implementation keeps `bf1.js` as the live schedule and augments it only
 with the required `sc1`–`sc7` future surface derived from real竞彩
