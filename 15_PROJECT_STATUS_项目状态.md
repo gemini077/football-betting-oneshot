@@ -31,13 +31,11 @@ Evidence: `docs/data-foundation/NOWSCORE-FUTURE-FIXTURE-INTAKE-1_FINAL_REPORT.md
 No 500 canonical schedule, identity alias, Champion, frozen history,
 prospective ledger, or the three specified identity gaps changed.
 
-# PRED-NOWSCORE-BIND-1 Current State
+# PRED-NOWSCORE-BIND-1 Previous Milestone
 
-Status: `READY_FOR_FINAL_ACCEPTANCE`
+Status: `SEALED / ACCEPTANCE PASS`
 
-Decision: `PRED-NOWSCORE-BIND-1 = READY_FOR_FINAL_ACCEPTANCE`
-
-`CURRENT = PRED-NOWSCORE-BIND-1`.
+Decision: `PRED-NOWSCORE-BIND-1 = SEALED / ACCEPTANCE PASS`
 
 This delivery freezes the previously completed read-only Nowscore binding
 audit for business date `2026-08-31`. Current evidence is: `bf1.js`
@@ -69,9 +67,9 @@ Evidence:
 
 # PROD-WRITE-1 Previous Milestone
 
-Status: `READY_FOR_ACCEPTANCE`
+Status: `SEALED / ACCEPTANCE PASS`
 
-Decision: `PROD-WRITE-1 = READY_FOR_ACCEPTANCE`
+Decision: `PROD-WRITE-1 = SEALED / ACCEPTANCE PASS`
 
 The validated operational risk was concurrent durable-main writing: the full
 production writer and the high-frequency prematch writer used different

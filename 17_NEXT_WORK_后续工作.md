@@ -27,13 +27,11 @@ Evidence: `docs/data-foundation/NOWSCORE-FUTURE-FIXTURE-INTAKE-1_FINAL_REPORT.md
 STOP after independent acceptance; do not start identity, provider, source
 migration, Champion, frontend, or next-universe work from this pointer.
 
-# PRED-NOWSCORE-BIND-1 - Nowscore Source-Present / Binding-Failed Closure
+# Previous milestone: PRED-NOWSCORE-BIND-1 - Nowscore Source-Present / Binding-Failed Closure
 
-Status: `READY_FOR_FINAL_ACCEPTANCE`
+Status: `SEALED / ACCEPTANCE PASS`
 
-Decision: `PRED-NOWSCORE-BIND-1 = READY_FOR_FINAL_ACCEPTANCE`
-
-`CURRENT = PRED-NOWSCORE-BIND-1`.
+Decision: `PRED-NOWSCORE-BIND-1 = SEALED / ACCEPTANCE PASS`
 
 This delivery only freezes the completed read-only binding audit. Current
 evidence is `12/12` bf1 source-present, `8/12` current resolver replay exact,
@@ -51,9 +49,9 @@ Evidence:
 
 # Previous milestone: PROD-WRITE-1 - Production Main Write Serialization
 
-Status: `READY_FOR_ACCEPTANCE`
+Status: `SEALED / ACCEPTANCE PASS`
 
-Decision: `PROD-WRITE-1 = READY_FOR_ACCEPTANCE`
+Decision: `PROD-WRITE-1 = SEALED / ACCEPTANCE PASS`
 
 The current task is a bounded production main write reliability fix. The
 validated root cause is that the full production and high-frequency prematch
