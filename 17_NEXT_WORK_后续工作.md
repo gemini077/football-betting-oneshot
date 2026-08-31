@@ -4,11 +4,36 @@
 
 # Current Sole Pointer
 
-# NOWSCORE-FUTURE-FIXTURE-INTAKE-1 - Future Fixture Intake
+# NEXT-UNIVERSE-TRUTH-1 - Sporttery / 500 Next Business-Date Universe Root-Cause Closure
 
-Status: `READY_FOR_ACCEPTANCE`
+Status: `ACCEPTANCE PASS / MERGE AUTHORIZED`
 
-Decision: `NOWSCORE-FUTURE-FIXTURE-INTAKE-1 = READY_FOR_ACCEPTANCE`
+Decision: `NEXT-UNIVERSE-TRUTH-1 = ACCEPTANCE PASS / MERGE AUTHORIZED`
+
+`CURRENT = NEXT-UNIVERSE-TRUTH-1`.
+
+The bounded probe found current Sporttery HTTP 200 with only
+`businessDate=2026-08-31` and 12 rows. The single current 500 fetch succeeded;
+its raw page contained 12 next-natural-date kickoff rows, all marked
+`data-processdate=2026-08-31`, and the current parser correctly returned 0 for
+target business date `2026-09-01`. The exact 15:41 upstream cause remains
+`UNKNOWN_NOT_PROVEN` because the production run did not persist the fallback
+status/error and current source truth is not historical proof.
+
+The smallest deterministic fix preserves `fallback_provenance` when the
+primary source fails and the 500 fallback is unsuccessful. Focused and related
+tests pass. No fixture, provider, Nowscore intake, model, Champion, frozen
+history, or frontend state changed.
+
+Evidence: `docs/data-foundation/NEXT-UNIVERSE-TRUTH-1_FINAL_REPORT.md`.
+STOP after independent acceptance and remote delivery; do not start another
+next-universe, provider, identity, model, or frontend milestone.
+
+# Previous milestone: NOWSCORE-FUTURE-FIXTURE-INTAKE-1 - Future Fixture Intake
+
+Status: `PRODUCTION PATH PASS / MORNING TIMING NATURAL-CYCLE VERIFY PENDING`
+
+Decision: `NOWSCORE-FUTURE-FIXTURE-INTAKE-1 = PRODUCTION PATH PASS / MORNING TIMING NATURAL-CYCLE VERIFY PENDING`
 
 The implementation keeps `bf1.js` as the live schedule and augments it only
 with the required `sc1`–`sc7` future surface derived from real竞彩

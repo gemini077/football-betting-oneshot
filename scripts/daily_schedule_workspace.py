@@ -106,6 +106,16 @@ def attach_nowscore_bindings(payloads: list[dict]) -> dict:
 def fallback_trade_schedule(business_date: str, no_cache: bool) -> dict:
     """Map the visible 500.com sales list to the canonical schedule contract."""
     trade = fetch_trade_matches(business_date, no_cache=no_cache)
+    fallback_provenance = {
+        "source": str(trade.get("source") or "trade.500.com"),
+        "url": trade.get("url"),
+        "fetch_time": trade.get("fetch_time"),
+        "date": trade.get("date"),
+        "success": trade.get("success") is True,
+        "status": str(trade.get("status") or "UNKNOWN"),
+        "parsed_match_count": len(trade.get("matches") or []),
+        "error": trade.get("error"),
+    }
     matches = []
     for row in trade.get("matches") or []:
         kickoff = str(row.get("kickoff_local") or "")
@@ -133,6 +143,7 @@ def fallback_trade_schedule(business_date: str, no_cache: bool) -> dict:
         "success": bool(matches),
         "matches": matches,
         "status": "OK_FALLBACK_500" if matches else str(trade.get("status") or "FALLBACK_FAILED"),
+        "fallback_provenance": fallback_provenance,
     }
 
 
@@ -154,6 +165,7 @@ def main() -> int:
         payload = fetch_jingcai_odds(business_date, args.no_cache, DEFAULT_CACHE_DIR)
         if not payload.get("success"):
             fallback = fallback_trade_schedule(business_date, args.no_cache)
+            payload["fallback_provenance"] = fallback["fallback_provenance"]
             if fallback.get("success"):
                 payload = fallback
         payloads.append(payload)
