@@ -67,10 +67,161 @@ _FOOTBALL_EVIDENCE_MATCH_FIELDS = (
     "source_date", "match_date", "home_team_id", "home_team_name",
     "away_team_id", "away_team_name", "home_goals", "away_goals",
 )
+INPUT_PROVENANCE_DIAGNOSTIC_SCHEMA = "input_provenance_diagnostic.v1"
+PROVENANCE_STAGE_SOURCE_HAS_NO_USABLE_RECENT_FORM = "SOURCE_HAS_NO_USABLE_RECENT_FORM"
+PROVENANCE_STAGE_SOURCE_FETCH_FAILED = "SOURCE_FETCH_FAILED"
+PROVENANCE_STAGE_SOURCE_OBSERVATION_TIMESTAMP_INVALID = "SOURCE_OBSERVATION_TIMESTAMP_MISSING_OR_INVALID"
+PROVENANCE_STAGE_CACHE_PROVENANCE_INVALID = "CACHE_PROVENANCE_INVALID"
+PROVENANCE_STAGE_EXISTING_FORM_TIMESTAMP_INVALID = "EXISTING_FORM_TIMESTAMP_INVALID"
+PROVENANCE_STAGE_OFFICIAL_MARKET_TIMESTAMP_INVALID = "OFFICIAL_MARKET_TIMESTAMP_INVALID"
+PROVENANCE_STAGE_DETERMINISTIC_SNAPSHOT_FAILED = "DETERMINISTIC_INPUT_SNAPSHOT_CONSTRUCTION_FAILED"
+PROVENANCE_STAGE_SOURCE_CUTOFF_FAILED = "SOURCE_CUTOFF_FAILED"
+PROVENANCE_STAGE_MARKET_CUTOFF_FAILED = "MARKET_SNAPSHOT_CUTOFF_FAILED"
+PROVENANCE_STAGE_OTHER = "OTHER_DETERMINISTIC_CAUSE"
+
+
+_PROVENANCE_DIAGNOSTIC_PRIORITY = (
+    PROVENANCE_STAGE_SOURCE_FETCH_FAILED,
+    PROVENANCE_STAGE_SOURCE_OBSERVATION_TIMESTAMP_INVALID,
+    PROVENANCE_STAGE_SOURCE_CUTOFF_FAILED,
+    PROVENANCE_STAGE_EXISTING_FORM_TIMESTAMP_INVALID,
+    PROVENANCE_STAGE_CACHE_PROVENANCE_INVALID,
+    PROVENANCE_STAGE_OFFICIAL_MARKET_TIMESTAMP_INVALID,
+    PROVENANCE_STAGE_DETERMINISTIC_SNAPSHOT_FAILED,
+    PROVENANCE_STAGE_MARKET_CUTOFF_FAILED,
+    PROVENANCE_STAGE_SOURCE_HAS_NO_USABLE_RECENT_FORM,
+    PROVENANCE_STAGE_OTHER,
+)
 
 
 class GovernanceContractBlocker(RuntimeError):
     """The existing governance contract rejected the minimum BASE payload."""
+
+
+def _diagnostic_detail(value: Any) -> str | None:
+    if value in (None, ""):
+        return None
+    text = " ".join(str(value).split())
+    return text[:300] if text else None
+
+
+def _provenance_diagnostic(
+    stage: str,
+    *,
+    error_code: str,
+    source: str | None = None,
+    status: str | None = None,
+    detail: Any = None,
+    captured_at: Any = None,
+    expected_before: Any = None,
+    references: list[str] | None = None,
+    pages: list[str] | None = None,
+) -> dict[str, Any]:
+    diagnostic: dict[str, Any] = {
+        "schema_version": INPUT_PROVENANCE_DIAGNOSTIC_SCHEMA,
+        "stage": stage,
+        "error_code": error_code,
+    }
+    if source:
+        diagnostic["source"] = str(source)
+    if status:
+        diagnostic["status"] = str(status)
+    normalized_detail = _diagnostic_detail(detail)
+    if normalized_detail:
+        diagnostic["detail"] = normalized_detail
+    captured = _iso(captured_at)
+    if captured:
+        diagnostic["captured_at"] = captured
+    expected = _iso(expected_before)
+    if expected:
+        diagnostic["expected_before"] = expected
+    if references:
+        diagnostic["references"] = list(dict.fromkeys(str(value) for value in references if value))
+    if pages:
+        diagnostic["pages"] = list(dict.fromkeys(str(value) for value in pages if value))
+    return diagnostic
+
+
+def _normalized_signal(value: Any, *, source: str, references: list[str] | None = None) -> dict[str, Any] | None:
+    if isinstance(value, dict) and value.get("stage"):
+        signal = copy.deepcopy(value)
+        signal.setdefault("schema_version", INPUT_PROVENANCE_DIAGNOSTIC_SCHEMA)
+        if references and not signal.get("references"):
+            signal["references"] = list(dict.fromkeys(str(ref) for ref in references if ref))
+        return signal
+    if value:
+        return _provenance_diagnostic(
+            PROVENANCE_STAGE_OTHER,
+            error_code="INPUT_PROVENANCE_UNVERIFIED",
+            source=source,
+            detail="source adapter returned an unclassified failure signal",
+            references=references,
+        )
+    return None
+
+
+def _failure_result(
+    error_code: str,
+    stage: str,
+    diagnostics: list[dict[str, Any]],
+    *,
+    source: str | None = None,
+    detail: Any = None,
+    captured_at: Any = None,
+    expected_before: Any = None,
+) -> tuple[None, dict[str, Any], str]:
+    attempts = [copy.deepcopy(item) for item in diagnostics if isinstance(item, dict) and item.get("stage")]
+    selected = next((item for item in reversed(attempts) if item.get("stage") == stage), None)
+    if selected is None:
+        selected = _provenance_diagnostic(
+            stage,
+            error_code=error_code,
+            source=source,
+            detail=detail,
+            captured_at=captured_at,
+            expected_before=expected_before,
+        )
+        attempts.append(copy.deepcopy(selected))
+    else:
+        selected = copy.deepcopy(selected)
+        selected["error_code"] = error_code
+        if detail and not selected.get("detail"):
+            normalized_detail = _diagnostic_detail(detail)
+            if normalized_detail:
+                selected["detail"] = normalized_detail
+        if captured_at and not selected.get("captured_at"):
+            normalized_capture = _iso(captured_at)
+            if normalized_capture:
+                selected["captured_at"] = normalized_capture
+        if expected_before and not selected.get("expected_before"):
+            normalized_expected = _iso(expected_before)
+            if normalized_expected:
+                selected["expected_before"] = normalized_expected
+    selected["attempts"] = attempts
+    return None, {"input_provenance_diagnostic": selected}, error_code
+
+
+def _select_failure_stage(diagnostics: list[dict[str, Any]]) -> str | None:
+    stages = {str(item.get("stage")) for item in diagnostics if isinstance(item, dict) and item.get("stage")}
+    return next((stage for stage in _PROVENANCE_DIAGNOSTIC_PRIORITY if stage in stages), None)
+
+
+def _looks_like_fetch_failure(value: Any) -> bool:
+    text = str(value or "").casefold()
+    return bool(text) and any(
+        marker in text
+        for marker in (
+            "fetch failed",
+            "url error",
+            "http error",
+            "connection refused",
+            "connectionrefused",
+            "connection error",
+            "timeout",
+            "timed out",
+            "unreachable",
+        )
+    )
 
 
 def _load_json(path: Path) -> dict[str, Any] | None:
@@ -293,6 +444,38 @@ def _official_market_baseline(
     }, None
 
 
+def _official_market_failure_signal(
+    universe: dict[str, Any],
+    fixture: dict[str, Any],
+    kickoff: datetime,
+    now: datetime,
+    error_code: str | None,
+    reference: str | None = None,
+) -> dict[str, Any] | None:
+    if error_code != "INPUT_TIMESTAMP_UNVERIFIED":
+        return None
+    raw = fixture.get("captured_at") or fixture.get("fetched_at") or universe.get("fetched_at")
+    captured_at = _parse_timestamp(raw)
+    if captured_at is None:
+        return _provenance_diagnostic(
+            PROVENANCE_STAGE_OFFICIAL_MARKET_TIMESTAMP_INVALID,
+            error_code="INPUT_TIMESTAMP_UNVERIFIED",
+            source="sporttery_spf",
+            detail="official market baseline has no parseable capture timestamp",
+            references=[reference or _relative_ref(UNIVERSE_ROOT)],
+        )
+    return _provenance_diagnostic(
+        PROVENANCE_STAGE_MARKET_CUTOFF_FAILED,
+        error_code="INPUT_TIMESTAMP_UNVERIFIED",
+        source="sporttery_spf",
+        status="POST_KICKOFF" if captured_at >= kickoff else "CAPTURE_AFTER_RUN_CLOCK",
+        detail="official market capture is not strictly before the prematch cutoff",
+        captured_at=captured_at,
+        expected_before=min(kickoff, now),
+        references=[reference or _relative_ref(UNIVERSE_ROOT)],
+    )
+
+
 def _snapshot_capture(snapshot: dict[str, Any]) -> datetime | None:
     for key in ("fetched_at", "captured_at", "source_timestamp", "source_time"):
         captured = _parse_timestamp(snapshot.get(key))
@@ -458,12 +641,12 @@ def _market_only_baseline(
 
 def _find_existing_form(
     job: dict[str, Any], kickoff: datetime, now: datetime
-) -> tuple[dict[str, Any] | None, bool, list[str]]:
+) -> tuple[dict[str, Any] | None, dict[str, Any] | None, list[str]]:
     """Reuse only an existing named prematch snapshot with a verifiable time."""
     if not ANALYSIS_INPUT_ROOT.is_dir():
-        return None, False, []
+        return None, None, []
     match_id = str(job.get("match_id") or "")
-    unverified = False
+    invalid_signal: dict[str, Any] | None = None
     refs: list[str] = []
     for path in sorted(ANALYSIS_INPUT_ROOT.glob("*.json")):
         payload = _load_json(path)
@@ -487,15 +670,25 @@ def _find_existing_form(
         captured_at = _parse_timestamp(captured_raw)
         refs.append(_relative_ref(path))
         if captured_at is None or captured_at >= now or captured_at >= kickoff:
-            unverified = True
+            if invalid_signal is None:
+                invalid_signal = _provenance_diagnostic(
+                    PROVENANCE_STAGE_EXISTING_FORM_TIMESTAMP_INVALID,
+                    error_code="INPUT_TIMESTAMP_UNVERIFIED",
+                    source="existing_prematch_snapshot",
+                    status="MISSING_OR_INVALID" if captured_at is None else "OUT_OF_CUTOFF",
+                    detail="existing form snapshot timestamp is missing, invalid, or not prematch",
+                    captured_at=captured_at,
+                    expected_before=min(now, kickoff),
+                    references=[_relative_ref(path)],
+                )
             continue
         return {
             "recent_form": form,
             "source": "existing_prematch_snapshot",
             "captured_at": captured_at.isoformat(),
             "references": [_source_ref(path, captured_at)],
-        }, unverified, refs
-    return None, unverified, refs
+        }, invalid_signal, refs
+    return None, invalid_signal, refs
 
 
 def _trade_row(
@@ -516,40 +709,105 @@ def _trade_row(
 
 
 def _nowscore_source(
-    job: dict[str, Any], fixture: dict[str, Any], kickoff: datetime, now: datetime
-) -> tuple[dict[str, Any] | None, bool, list[str]]:
+    job: dict[str, Any], fixture: dict[str, Any], kickoff: datetime, now: datetime | None
+) -> tuple[dict[str, Any] | None, dict[str, Any] | None, list[str]]:
     nowscore_id = _first(fixture, "nowscoreId", "nowscore_id")
     status = str(_first(fixture, "nowscoreMatchStatus", "nowscore_match_status") or "")
     if not nowscore_id or status in {"NO_EXACT_MATCH", "AMBIGUOUS_MATCH", "LOW_CONFIDENCE_MATCH"}:
-        return None, False, []
+        return None, None, []
+    try:
+        nowscore_numeric_id = int(nowscore_id)
+    except (TypeError, ValueError):
+        return None, _provenance_diagnostic(
+            PROVENANCE_STAGE_OTHER,
+            error_code="INPUT_PROVENANCE_UNVERIFIED",
+            source="nowscore",
+            status="INVALID_PROVIDER_ID",
+            detail="nowscore fixture ID is not an integer",
+        ), []
+    refs = [
+        _relative_ref(PROJECT_ROOT / "data" / "source_cache" / "nowscore" / "raw" / f"{nowscore_numeric_id}_3in1.html"),
+        _relative_ref(PROJECT_ROOT / "data" / "source_cache" / "nowscore" / "raw" / f"{nowscore_numeric_id}_analysis.js"),
+    ]
     try:
         result = fetch_match_markets(
             str(job.get("home") or ""),
             str(job.get("away") or ""),
             job.get("kickoff"),
-            explicit_id=int(nowscore_id),
+            explicit_id=nowscore_numeric_id,
             no_cache=False,
         )
-    except Exception:
-        return None, True, []
-    if not isinstance(result, dict) or result.get("status") != "OK":
-        return None, bool(result), []
-    captured_at = _snapshot_capture(result)
-    refs = [
-        _relative_ref(PROJECT_ROOT / "data" / "source_cache" / "nowscore" / "raw" / f"{int(nowscore_id)}_3in1.html"),
-        _relative_ref(PROJECT_ROOT / "data" / "source_cache" / "nowscore" / "raw" / f"{int(nowscore_id)}_analysis.js"),
-    ]
+    except Exception as error:
+        return None, _provenance_diagnostic(
+            PROVENANCE_STAGE_SOURCE_FETCH_FAILED,
+            error_code="SOURCE_FETCH_FAILED",
+            source="nowscore",
+            status="EXCEPTION",
+            detail=f"{type(error).__name__}: {error}",
+            references=refs,
+        ), refs
+    if not isinstance(result, dict):
+        return None, _provenance_diagnostic(
+            PROVENANCE_STAGE_SOURCE_FETCH_FAILED,
+            error_code="SOURCE_FETCH_FAILED",
+            source="nowscore",
+            status="INVALID_RESULT",
+            detail="nowscore adapter returned a non-object result",
+            references=refs,
+        ), refs
+    status = str(result.get("status") or "UNKNOWN")
     for key in ("source_url", "analysis_source_url"):
         if result.get(key):
             refs.append(str(result[key]))
-    if captured_at is None or captured_at >= kickoff:
-        return None, True, refs
+    if status != "OK":
+        stage = PROVENANCE_STAGE_SOURCE_FETCH_FAILED if status == "FETCH_ERROR" else PROVENANCE_STAGE_OTHER
+        error_code = "SOURCE_FETCH_FAILED" if stage == PROVENANCE_STAGE_SOURCE_FETCH_FAILED else "INPUT_PROVENANCE_UNVERIFIED"
+        return None, _provenance_diagnostic(
+            stage,
+            error_code=error_code,
+            source="nowscore",
+            status=status,
+            detail=result.get("error") or result.get("resolution") or "nowscore source did not return a usable match",
+            references=refs,
+        ), refs
+    captured_at = _snapshot_capture(result)
+    if captured_at is None:
+        return None, _provenance_diagnostic(
+            PROVENANCE_STAGE_SOURCE_OBSERVATION_TIMESTAMP_INVALID,
+            error_code="INPUT_TIMESTAMP_UNVERIFIED",
+            source="nowscore",
+            status="MISSING_OR_INVALID",
+            detail="nowscore result has no parseable observation timestamp",
+            references=refs,
+        ), refs
+    if captured_at >= kickoff or (now is not None and captured_at > now):
+        return None, _provenance_diagnostic(
+            PROVENANCE_STAGE_SOURCE_CUTOFF_FAILED,
+            error_code="INPUT_TIMESTAMP_UNVERIFIED",
+            source="nowscore",
+            status="POST_KICKOFF" if captured_at >= kickoff else "AFTER_RUN_CLOCK",
+            detail="nowscore observation is not strictly before the prematch cutoff",
+            captured_at=captured_at,
+            expected_before=kickoff if now is None else min(kickoff, now),
+            references=refs,
+        ), refs
+    analysis_error = result.get("analysis_error")
+    analysis_signal = None
+    if analysis_error and _looks_like_fetch_failure(analysis_error):
+        analysis_signal = _provenance_diagnostic(
+            PROVENANCE_STAGE_SOURCE_FETCH_FAILED,
+            error_code="SOURCE_FETCH_FAILED",
+            source="nowscore",
+            status="RECENT_FORM_FETCH_FAILED",
+            detail=analysis_error,
+            references=refs,
+        )
     return {
         "name": "nowscore",
         "snapshot": result,
         "captured_at": captured_at,
         "references": refs,
-    }, False, refs
+    }, analysis_signal, refs
 
 
 def _five_hundred_source(
@@ -558,28 +816,142 @@ def _five_hundred_source(
     fixture: dict[str, Any],
     trade_payload: dict[str, Any] | None,
     kickoff: datetime,
-    now: datetime,
-) -> tuple[dict[str, Any] | None, bool, list[str]]:
+    now: datetime | None,
+) -> tuple[dict[str, Any] | None, dict[str, Any] | None, list[str]]:
     trade = _trade_row(job, fixture, trade_payload)
     shuju_id = _first(fixture, "shujuId", "shuju_id") or (trade or {}).get("shuju_id")
     if not shuju_id:
-        return None, False, []
+        return None, None, []
     try:
-        result = fetch_and_parse(int(shuju_id), business_date, DEFAULT_CACHE_DIR, False)
-    except Exception:
-        return None, True, []
-    if not isinstance(result, dict):
-        return None, True, []
-    captured_at = _snapshot_capture(result)
-    path = PROJECT_ROOT / "data" / "source_cache" / "shared-football" / "parsed" / f"{business_date}_{int(shuju_id)}.json"
+        shuju_numeric_id = int(shuju_id)
+    except (TypeError, ValueError):
+        return None, _provenance_diagnostic(
+            PROVENANCE_STAGE_OTHER,
+            error_code="INPUT_PROVENANCE_UNVERIFIED",
+            source="500_deep",
+            status="INVALID_PROVIDER_ID",
+            detail="500 deep fixture ID is not an integer",
+        ), []
+    path = PROJECT_ROOT / "data" / "source_cache" / "shared-football" / "parsed" / f"{business_date}_{shuju_numeric_id}.json"
     refs = [_relative_ref(path)]
-    if captured_at is None or captured_at >= kickoff:
-        return None, True, refs
+    try:
+        result = fetch_and_parse(shuju_numeric_id, business_date, DEFAULT_CACHE_DIR, False)
+    except Exception as error:
+        return None, _provenance_diagnostic(
+            PROVENANCE_STAGE_SOURCE_FETCH_FAILED,
+            error_code="SOURCE_FETCH_FAILED",
+            source="500_deep",
+            status="EXCEPTION",
+            detail=f"{type(error).__name__}: {error}",
+            references=refs,
+        ), refs
+    if not isinstance(result, dict):
+        return None, _provenance_diagnostic(
+            PROVENANCE_STAGE_SOURCE_FETCH_FAILED,
+            error_code="SOURCE_FETCH_FAILED",
+            source="500_deep",
+            status="INVALID_RESULT",
+            detail="500 deep adapter returned a non-object result",
+            references=refs,
+        ), refs
+    captured_at = _snapshot_capture(result)
+    if captured_at is None:
+        return None, _provenance_diagnostic(
+            PROVENANCE_STAGE_SOURCE_OBSERVATION_TIMESTAMP_INVALID,
+            error_code="INPUT_TIMESTAMP_UNVERIFIED",
+            source="500_deep",
+            status="MISSING_OR_INVALID",
+            detail="500 deep result has no parseable observation timestamp",
+            references=refs,
+        ), refs
+    if captured_at >= kickoff or (now is not None and captured_at > now):
+        return None, _provenance_diagnostic(
+            PROVENANCE_STAGE_SOURCE_CUTOFF_FAILED,
+            error_code="INPUT_TIMESTAMP_UNVERIFIED",
+            source="500_deep",
+            status="POST_KICKOFF" if captured_at >= kickoff else "AFTER_RUN_CLOCK",
+            detail="500 deep observation is not strictly before the prematch cutoff",
+            captured_at=captured_at,
+            expected_before=kickoff if now is None else min(kickoff, now),
+            references=refs,
+        ), refs
     # ``fetch_and_parse`` preserves a capture timestamp even when every 500
     # page failed.  Do not project that error envelope as a usable source
     # snapshot or let it move the deterministic input cutoff.
-    if not _form_is_usable((result.get("shuju") or {}).get("recent_form")) and not _market_families(result):
-        return None, False, refs
+    fetch_error_pages: list[str] = []
+    other_error_pages: list[str] = []
+    for page in ("ouzhi", "yazhi", "rangqiu", "daxiao", "shuju", "touzhu"):
+        value = result.get(page)
+        if not isinstance(value, dict) or not value.get("error"):
+            continue
+        if _looks_like_fetch_failure(value.get("error")) or _looks_like_fetch_failure(value.get("detail")):
+            fetch_error_pages.append(page)
+        else:
+            other_error_pages.append(page)
+    form_usable = _form_is_usable((result.get("shuju") or {}).get("recent_form"))
+    market_usable = bool(_market_families(result))
+    if not form_usable:
+        # ``shuju`` is the 500 page that carries recent form.  A partial
+        # snapshot may still contain usable market rows, but it must retain
+        # the source-fetch diagnostic when that form page failed.
+        if "shuju" in fetch_error_pages:
+            signal = _provenance_diagnostic(
+                PROVENANCE_STAGE_SOURCE_FETCH_FAILED,
+                error_code="SOURCE_FETCH_FAILED",
+                source="500_deep",
+                status="FETCH_ERROR",
+                detail="500 deep recent-form page fetch failed before usable form evidence was built",
+                captured_at=captured_at,
+                references=refs,
+                pages=fetch_error_pages,
+            )
+            return ({
+                "name": "500_deep",
+                "snapshot": result,
+                "captured_at": captured_at,
+                "references": refs,
+            } if market_usable else None), signal, refs
+        if "shuju" in other_error_pages:
+            signal = _provenance_diagnostic(
+                PROVENANCE_STAGE_OTHER,
+                error_code="INPUT_PROVENANCE_UNVERIFIED",
+                source="500_deep",
+                status="PARSE_ERROR",
+                detail="500 deep recent-form page did not produce usable form evidence",
+                captured_at=captured_at,
+                references=refs,
+                pages=other_error_pages,
+            )
+            return ({
+                "name": "500_deep",
+                "snapshot": result,
+                "captured_at": captured_at,
+                "references": refs,
+            } if market_usable else None), signal, refs
+        if not market_usable:
+            if fetch_error_pages:
+                return None, _provenance_diagnostic(
+                    PROVENANCE_STAGE_SOURCE_FETCH_FAILED,
+                    error_code="SOURCE_FETCH_FAILED",
+                    source="500_deep",
+                    status="FETCH_ERROR",
+                    detail="500 deep page fetch failed before a usable form or market snapshot was built",
+                    captured_at=captured_at,
+                    references=refs,
+                    pages=fetch_error_pages,
+                ), refs
+            if other_error_pages:
+                return None, _provenance_diagnostic(
+                    PROVENANCE_STAGE_OTHER,
+                    error_code="INPUT_PROVENANCE_UNVERIFIED",
+                    source="500_deep",
+                    status="PARSE_ERROR",
+                    detail="500 deep pages did not produce a usable form or market snapshot",
+                    captured_at=captured_at,
+                    references=refs,
+                    pages=other_error_pages,
+                ), refs
+            return None, None, refs
     return {
         # Keep the governance/model contract key for source selection; the
         # effective provider is derived from this snapshot's provenance below.
@@ -587,7 +959,7 @@ def _five_hundred_source(
         "snapshot": result,
         "captured_at": captured_at,
         "references": refs,
-    }, False, refs
+    }, None, refs
 
 
 def _source_form(source: dict[str, Any]) -> dict[str, Any] | None:
@@ -768,20 +1140,58 @@ def _assemble_context(
 ) -> tuple[dict[str, Any] | None, dict[str, Any] | None, str | None]:
     kickoff = _parse_timestamp(_kickoff(job))
     if kickoff is None:
-        return None, None, "INPUT_TIMESTAMP_UNVERIFIED"
+        return _failure_result(
+            "INPUT_TIMESTAMP_UNVERIFIED",
+            PROVENANCE_STAGE_OTHER,
+            [],
+            source="fixture",
+            detail="job kickoff is missing or not parseable",
+        )
 
-    official, official_error = _official_market_baseline(universe, fixture, kickoff)
     source_clock = _as_now(None) if real_time else now
-    existing_form, existing_unverified, existing_refs = _find_existing_form(job, kickoff, source_clock)
+    official, official_error = _official_market_baseline(universe, fixture, kickoff)
+    official_capture = _parse_timestamp((official or {}).get("captured_at")) if official else None
+    if official is not None and (official_capture is None or official_capture > source_clock):
+        official = None
+        official_error = "INPUT_TIMESTAMP_UNVERIFIED"
+    diagnostics: list[dict[str, Any]] = []
+    official_signal = _official_market_failure_signal(
+        universe,
+        fixture,
+        kickoff,
+        source_clock,
+        official_error,
+        _relative_ref(UNIVERSE_ROOT / f"{business_date}.json"),
+    )
+    if official_signal:
+        diagnostics.append(official_signal)
+    existing_form, existing_signal, existing_refs = _find_existing_form(job, kickoff, source_clock)
+    normalized_existing_signal = _normalized_signal(
+        existing_signal,
+        source="existing_prematch_snapshot",
+        references=existing_refs,
+    )
+    if normalized_existing_signal:
+        diagnostics.append(normalized_existing_signal)
     source_infos: list[dict[str, Any]] = []
     source_refs: list[str] = [
         _relative_ref(UNIVERSE_ROOT / f"{business_date}.json"),
         *existing_refs,
     ]
-    unverified_source = existing_unverified
 
-    nowscore, nowscore_unverified, nowscore_refs = _nowscore_source(job, fixture, kickoff, source_clock)
-    unverified_source = unverified_source or nowscore_unverified
+    nowscore, nowscore_signal, nowscore_refs = _nowscore_source(
+        job,
+        fixture,
+        kickoff,
+        None if real_time else source_clock,
+    )
+    normalized_nowscore_signal = _normalized_signal(
+        nowscore_signal,
+        source="nowscore",
+        references=nowscore_refs,
+    )
+    if normalized_nowscore_signal:
+        diagnostics.append(normalized_nowscore_signal)
     source_refs.extend(nowscore_refs)
     if nowscore:
         source_infos.append(nowscore)
@@ -793,10 +1203,21 @@ def _assemble_context(
         return bool(existing_form) or any(_form_is_usable(_source_form(info)) for info in source_infos)
 
     if not has_full_market() or not has_form():
-        five_hundred, five_hundred_unverified, five_hundred_refs = _five_hundred_source(
-            business_date, job, fixture, trade_payload, kickoff, now
+        five_hundred, five_hundred_signal, five_hundred_refs = _five_hundred_source(
+            business_date,
+            job,
+            fixture,
+            trade_payload,
+            kickoff,
+            None if real_time else source_clock,
         )
-        unverified_source = unverified_source or five_hundred_unverified
+        normalized_five_hundred_signal = _normalized_signal(
+            five_hundred_signal,
+            source="500_deep",
+            references=five_hundred_refs,
+        )
+        if normalized_five_hundred_signal:
+            diagnostics.append(normalized_five_hundred_signal)
         source_refs.extend(five_hundred_refs)
         if five_hundred:
             source_infos.append(five_hundred)
@@ -839,7 +1260,17 @@ def _assemble_context(
                 break
 
     if not form:
-        cached_form = load_recent_form_cache(job, kickoff.isoformat(), source_clock)
+        cache_diagnostics: list[dict[str, Any]] = []
+        cached_form = load_recent_form_cache(
+            job,
+            kickoff.isoformat(),
+            source_clock,
+            diagnostics=cache_diagnostics,
+        )
+        for item in cache_diagnostics:
+            normalized_cache_signal = _normalized_signal(item, source="recent_form_cache")
+            if normalized_cache_signal:
+                diagnostics.append(normalized_cache_signal)
         if cached_form:
             form = cached_form
             form_source = cached_form.get("source")
@@ -862,7 +1293,24 @@ def _assemble_context(
             source_refs.extend(str(ref) for ref in authoritative_form.get("source_refs") or [])
 
     if not form or not _form_is_usable(form.get("recent_form")):
-        return None, None, "INPUT_TIMESTAMP_UNVERIFIED" if unverified_source else "MISSING_RECENT_FORM"
+        stage = _select_failure_stage(diagnostics) or PROVENANCE_STAGE_SOURCE_HAS_NO_USABLE_RECENT_FORM
+        error_code = "INPUT_TIMESTAMP_UNVERIFIED"
+        if stage == PROVENANCE_STAGE_SOURCE_FETCH_FAILED:
+            error_code = "SOURCE_FETCH_FAILED"
+        elif stage == PROVENANCE_STAGE_SOURCE_HAS_NO_USABLE_RECENT_FORM:
+            error_code = "MISSING_RECENT_FORM"
+        elif stage == PROVENANCE_STAGE_CACHE_PROVENANCE_INVALID:
+            error_code = "CACHE_PROVENANCE_INVALID"
+        elif stage == PROVENANCE_STAGE_OTHER:
+            error_code = "INPUT_PROVENANCE_UNVERIFIED"
+        return _failure_result(
+            error_code,
+            stage,
+            diagnostics,
+            source="recent_form",
+            detail="no eligible prematch recent-form source remained after deterministic validation",
+            expected_before=kickoff,
+        )
 
     full_source = next((info for info in source_infos if _has_full_market(info["snapshot"])), None)
     market_source = next(
@@ -901,6 +1349,20 @@ def _assemble_context(
                 market_families = _market_families(market_source["snapshot"])
         if market_only is None:
             if official is None:
+                if official_error == "INPUT_TIMESTAMP_UNVERIFIED":
+                    stage = (
+                        PROVENANCE_STAGE_OFFICIAL_MARKET_TIMESTAMP_INVALID
+                        if official_signal and official_signal.get("stage") == PROVENANCE_STAGE_OFFICIAL_MARKET_TIMESTAMP_INVALID
+                        else PROVENANCE_STAGE_MARKET_CUTOFF_FAILED
+                    )
+                    return _failure_result(
+                        official_error,
+                        stage,
+                        diagnostics,
+                        source="sporttery_spf",
+                        detail="official market baseline cannot establish a prematch market snapshot",
+                        expected_before=kickoff,
+                    )
                 return None, None, official_error or "MISSING_MARKET_INTELLIGENCE"
             market_sources = ["sporttery_spf"]
             market_data_providers = ["sporttery"]
@@ -950,20 +1412,80 @@ def _assemble_context(
             prediction_created_at=prediction_time.isoformat(),
             repository_root=PROJECT_ROOT,
         )
-    except (TypeError, ValueError):
-        return None, None, "INPUT_TIMESTAMP_UNVERIFIED"
+    except Exception as error:
+        diagnostics.append(_provenance_diagnostic(
+            PROVENANCE_STAGE_DETERMINISTIC_SNAPSHOT_FAILED,
+            error_code="INPUT_SNAPSHOT_CONSTRUCTION_FAILED",
+            source="model_governance",
+            status="EXCEPTION",
+            detail=f"{type(error).__name__}: {error}",
+            references=source_refs,
+        ))
+        return _failure_result(
+            "INPUT_SNAPSHOT_CONSTRUCTION_FAILED",
+            PROVENANCE_STAGE_DETERMINISTIC_SNAPSHOT_FAILED,
+            diagnostics,
+            source="model_governance",
+        )
+
+    if not isinstance(input_snapshot, dict):
+        diagnostics.append(_provenance_diagnostic(
+            PROVENANCE_STAGE_DETERMINISTIC_SNAPSHOT_FAILED,
+            error_code="INPUT_SNAPSHOT_CONSTRUCTION_FAILED",
+            source="model_governance",
+            status="INVALID_RESULT",
+            detail="deterministic snapshot builder returned a non-object result",
+            references=source_refs,
+        ))
+        return _failure_result(
+            "INPUT_SNAPSHOT_CONSTRUCTION_FAILED",
+            PROVENANCE_STAGE_DETERMINISTIC_SNAPSHOT_FAILED,
+            diagnostics,
+            source="model_governance",
+        )
 
     source_cutoff = _parse_timestamp(input_snapshot.get("source_cutoff_at"))
     market_snapshot = _parse_timestamp(input_snapshot.get("market_snapshot_at"))
-    if (
+    source_cutoff_invalid = (
         source_cutoff is None
-        or market_snapshot is None
         or source_cutoff >= prediction_time
-        or market_snapshot >= prediction_time
         or source_cutoff >= kickoff
+    )
+    market_snapshot_invalid = (
+        market_snapshot is None
+        or market_snapshot >= prediction_time
         or market_snapshot >= kickoff
-    ):
-        return None, None, "INPUT_TIMESTAMP_UNVERIFIED"
+    )
+    if source_cutoff_invalid:
+        diagnostics.append(_provenance_diagnostic(
+            PROVENANCE_STAGE_SOURCE_CUTOFF_FAILED,
+            error_code="INPUT_TIMESTAMP_UNVERIFIED",
+            source="deterministic_input_snapshot",
+            status="MISSING_OR_OUT_OF_CUTOFF" if source_cutoff is None else "OUT_OF_CUTOFF",
+            detail="deterministic source cutoff is missing or not strictly prematch",
+            captured_at=source_cutoff,
+            expected_before=min(prediction_time, kickoff),
+            references=source_refs,
+        ))
+    if market_snapshot_invalid:
+        diagnostics.append(_provenance_diagnostic(
+            PROVENANCE_STAGE_MARKET_CUTOFF_FAILED,
+            error_code="INPUT_TIMESTAMP_UNVERIFIED",
+            source="deterministic_input_snapshot",
+            status="MISSING_OR_OUT_OF_CUTOFF" if market_snapshot is None else "OUT_OF_CUTOFF",
+            detail="deterministic market snapshot cutoff is missing or not strictly prematch",
+            captured_at=market_snapshot,
+            expected_before=min(prediction_time, kickoff),
+            references=source_refs,
+        ))
+    if source_cutoff_invalid or market_snapshot_invalid:
+        stage = PROVENANCE_STAGE_SOURCE_CUTOFF_FAILED if source_cutoff_invalid else PROVENANCE_STAGE_MARKET_CUTOFF_FAILED
+        return _failure_result(
+            "INPUT_TIMESTAMP_UNVERIFIED",
+            stage,
+            diagnostics,
+            source="deterministic_input_snapshot",
+        )
 
     metadata = {
         "input_snapshot": input_snapshot,
@@ -1114,6 +1636,13 @@ def _refresh_counts(ledger: dict[str, Any]) -> None:
         if job.get("status") in {"INSUFFICIENT_DATA", "PREDICTION_FAILED"} and job.get("last_error")
     )
     ledger["failure_reasons"] = dict(reasons)
+    stage_counts = Counter(
+        str((job.get("input_provenance_diagnostic") or {}).get("stage"))
+        for job in jobs
+        if isinstance(job.get("input_provenance_diagnostic"), dict)
+        and (job.get("input_provenance_diagnostic") or {}).get("stage")
+    )
+    ledger["input_provenance_failure_stages"] = dict(stage_counts)
 
 
 def _blocked_summary(business_date: str, ledger: dict[str, Any] | None) -> dict[str, Any]:
@@ -1301,6 +1830,12 @@ def run_base_prediction_jobs(
                 attempted += 1
                 job["status"] = "INSUFFICIENT_DATA"
                 job["last_error"] = "INPUT_TIMESTAMP_UNVERIFIED"
+                job["input_provenance_diagnostic"] = _provenance_diagnostic(
+                    PROVENANCE_STAGE_OTHER,
+                    error_code="INPUT_TIMESTAMP_UNVERIFIED",
+                    source="fixture",
+                    detail="job kickoff is missing or not parseable",
+                )
                 job["updated_at"] = current_time.isoformat()
             continue
         if current_time >= kickoff:
@@ -1310,11 +1845,13 @@ def run_base_prediction_jobs(
             if status in RETRYABLE_STATUSES and status != "FROZEN":
                 job["status"] = "MISSED_PREMATCH_WINDOW"
                 job["last_error"] = "MISSED_PREMATCH_WINDOW"
+                job.pop("input_provenance_diagnostic", None)
                 job["updated_at"] = current_time.isoformat()
             continue
         if status not in RETRYABLE_STATUSES:
             continue
         attempted += 1
+        job.pop("input_provenance_diagnostic", None)
         fixture = _job_fixture(universe, job)
         if fixture is None:
             job["status"] = "INSUFFICIENT_DATA"
@@ -1339,6 +1876,9 @@ def run_base_prediction_jobs(
         if assembly_error:
             job["status"] = "INSUFFICIENT_DATA"
             job["last_error"] = assembly_error
+            diagnostic = metadata.get("input_provenance_diagnostic") if isinstance(metadata, dict) else None
+            if isinstance(diagnostic, dict):
+                job["input_provenance_diagnostic"] = diagnostic
             job["updated_at"] = current_time.isoformat()
             continue
         assert context is not None and metadata is not None
@@ -1347,6 +1887,7 @@ def run_base_prediction_jobs(
         if prediction_time >= kickoff:
             job["status"] = "MISSED_PREMATCH_WINDOW"
             job["last_error"] = "MISSED_PREMATCH_WINDOW"
+            job.pop("input_provenance_diagnostic", None)
             job["updated_at"] = current_time.isoformat()
             continue
         kickoff_at = _parse_timestamp(_kickoff(job))
@@ -1365,6 +1906,7 @@ def run_base_prediction_jobs(
             job["prediction_created_at"] = unchanged.get("prediction_created_at")
             job["freeze_created_at"] = unchanged.get("freeze_created_at")
             job["last_error"] = None
+            job.pop("input_provenance_diagnostic", None)
             capture_shadow(unchanged, job)
             capture_market_side_shadow(unchanged)
             job["updated_at"] = current_time.isoformat()
@@ -1376,17 +1918,20 @@ def run_base_prediction_jobs(
         except Exception as error:
             job["status"] = "PREDICTION_FAILED"
             job["last_error"] = f"MODEL_EXCEPTION_{type(error).__name__}"
+            job.pop("input_provenance_diagnostic", None)
             job["updated_at"] = current_time.isoformat()
             continue
         if not isinstance(result, dict) or not isinstance(result.get("model"), dict):
             job["status"] = "INSUFFICIENT_DATA"
             job["last_error"] = "MODEL_RETURNED_NO_PREDICTION"
+            job.pop("input_provenance_diagnostic", None)
             job["updated_at"] = current_time.isoformat()
             continue
         model = result["model"]
         if model.get("method") != MODEL_FAMILY:
             job["status"] = "PREDICTION_FAILED"
             job["last_error"] = "MODEL_IDENTITY_MISMATCH"
+            job.pop("input_provenance_diagnostic", None)
             job["updated_at"] = current_time.isoformat()
             continue
         try:
@@ -1394,6 +1939,7 @@ def run_base_prediction_jobs(
             if freeze_time >= kickoff_at:
                 job["status"] = "MISSED_PREMATCH_WINDOW"
                 job["last_error"] = "MISSED_PREMATCH_WINDOW"
+                job.pop("input_provenance_diagnostic", None)
                 job["updated_at"] = freeze_time.isoformat()
                 continue
             payload = _build_payload(
@@ -1424,16 +1970,19 @@ def run_base_prediction_jobs(
         except PredictionConflictError:
             job["status"] = "PREDICTION_FAILED"
             job["last_error"] = "PREDICTION_CONFLICT"
+            job.pop("input_provenance_diagnostic", None)
             job["updated_at"] = current_time.isoformat()
             continue
         except GovernanceContractBlocker:
             job["status"] = "PREDICTION_FAILED"
             job["last_error"] = "GOVERNANCE_CONTRACT_BLOCKER"
+            job.pop("input_provenance_diagnostic", None)
             job["updated_at"] = current_time.isoformat()
             continue
         except (TypeError, ValueError, OSError):
             job["status"] = "PREDICTION_FAILED"
             job["last_error"] = "GOVERNANCE_CONTRACT_BLOCKER"
+            job.pop("input_provenance_diagnostic", None)
             job["updated_at"] = current_time.isoformat()
             continue
         stored = frozen.get("record") or record
@@ -1446,6 +1995,7 @@ def run_base_prediction_jobs(
         job["prediction_created_at"] = stored.get("prediction_created_at")
         job["freeze_created_at"] = stored.get("freeze_created_at")
         job["last_error"] = None
+        job.pop("input_provenance_diagnostic", None)
         job["updated_at"] = current_time.isoformat()
 
     ledger["last_run_at"] = current_time.isoformat()
@@ -1463,6 +2013,7 @@ def run_base_prediction_jobs(
         "missed_prematch": ledger.get("missed_prematch_count", 0),
         "pending": ledger.get("pending_count", 0),
         "failure_reasons": ledger.get("failure_reasons", {}),
+        "input_provenance_failure_stages": ledger.get("input_provenance_failure_stages", {}),
         "shadow_attempted": int(shadow_counts["attempted"]),
         "shadow_created": int(shadow_counts["created"]),
         "shadow_existing": int(shadow_counts["existing"]),

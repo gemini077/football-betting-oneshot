@@ -162,7 +162,9 @@ def test_compact_cache_builds_four_blocks_from_exact_project_names_and_rejects_f
     assert all(row["kickoff_at"] < CUTOFF for row in selected["records"])
 
     _write_cache(cache, _cache_records(stale=True))
-    assert load_recent_form_cache(_job(), _job()["kickoff"], NOW, cache_path=cache) is None
+    diagnostics = []
+    assert load_recent_form_cache(_job(), _job()["kickoff"], NOW, cache_path=cache, diagnostics=diagnostics) is None
+    assert diagnostics[0]["stage"] == "CACHE_PROVENANCE_INVALID"
     _write_cache(cache, _cache_records(missing_home_venue=True))
     assert load_recent_form_cache(_job(), _job()["kickoff"], NOW, cache_path=cache) is None
 
