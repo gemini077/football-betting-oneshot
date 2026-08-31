@@ -94,6 +94,32 @@ class PredictionUniverseTests(unittest.TestCase):
             self.assertEqual("FETCH_FAILED", snapshot["status"])
             self.assertEqual(0, snapshot["fixture_count"])
 
+    def test_failed_refresh_persists_fallback_provenance(self):
+        fallback_provenance = {
+            "source": "trade.500.com",
+            "url": "https://trade.500.com/jczq/?playid=312&g=2",
+            "fetch_time": "2026-08-31T07:41:13+00:00",
+            "date": "2026-09-01",
+            "success": False,
+            "status": "NO_MATCHES_FOR_DATE",
+            "parsed_match_count": 0,
+            "error": None,
+        }
+
+        with tempfile.TemporaryDirectory() as temp:
+            snapshot = update_prediction_universe(
+                "2026-09-01",
+                {
+                    "source": "sporttery.cn",
+                    "success": False,
+                    "status": "API_FAILED",
+                    "fallback_provenance": fallback_provenance,
+                },
+                root=Path(temp),
+            )
+
+        self.assertEqual(fallback_provenance, snapshot["last_fetch"]["fallback_provenance"])
+
     def test_successful_empty_full_schedule_is_confirmed_empty(self):
         with tempfile.TemporaryDirectory() as temp:
             snapshot = update_prediction_universe(

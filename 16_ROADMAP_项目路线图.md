@@ -7,28 +7,30 @@
 
 CURRENT ACTIVE MILESTONE:
 
-`PRED-NOWSCORE-BIND-1 - Nowscore Source-Present / Binding-Failed Closure`
+`NEXT-UNIVERSE-TRUTH-1 - Sporttery / 500 Next Business-Date Universe Root-Cause Closure`
 
-CURRENT STATUS: `READY_FOR_FINAL_ACCEPTANCE`
+CURRENT STATUS: `READY_FOR_ACCEPTANCE`
 
-CURRENT DECISION: `PRED-NOWSCORE-BIND-1 = READY_FOR_FINAL_ACCEPTANCE`
+CURRENT DECISION: `NEXT-UNIVERSE-TRUTH-1 = READY_FOR_ACCEPTANCE`
 
-`CURRENT = PRED-NOWSCORE-BIND-1`.
+`CURRENT = NEXT-UNIVERSE-TRUTH-1`.
 
-This milestone is audit-only. The retained evidence is `12/12` current
-`bf1.js` source-present, `8/12` current resolver replay exact, `4/12`
-current name-normalization gaps, `12/12` current market pages, `12/12`
-current analysis pages, and `0` kickoff difference. Historical intake source
-presence is `UNKNOWN_NOT_PROVEN`. The primary blocker status is
-`NOWSCORE_SCHEDULE_HORIZON_GAP = EVIDENCE-SUPPORTED PRIMARY BLOCKER CANDIDATE`,
-not a validated historical root cause. The sole next remedy category is
-`NOWSCORE_SCHEDULE_HORIZON_GAP`.
+This milestone records one bounded live probe and the smallest deterministic
+fallback-provenance fix. Current Sporttery truth is HTTP 200 with only
+`businessDate=2026-08-31`; current 500 truth is a successful page with 12
+`2026-09-01` kickoff rows assigned to `data-processdate=2026-08-31`, so the
+business-date parser returns 0 for `2026-09-01`. The production 15:41 upstream
+classification remains `UNKNOWN_NOT_PROVEN` because the exact historical
+fallback status/error was not persisted.
 
-This delivery does not change production data, identity aliases, providers,
-source order, Champion, model, resolver, endpoint, parser, frozen history, or
-frontend. Evidence is recorded in
-`docs/data-foundation/PRED-NOWSCORE-BIND-1_ROOT_CAUSE_AUDIT.md` and
-`data/football_data/pred_nowscore_bind_1/root_cause_matrix_2026-08-31.json`.
+Evidence is recorded in
+`docs/data-foundation/NEXT-UNIVERSE-TRUTH-1_FINAL_REPORT.md`. This delivery
+does not change production data, identity aliases, providers, source order,
+Champion, model, resolver, endpoint, business-date parser semantics, frozen
+history, or frontend.
+
+The previous Nowscore future-intake route remains recorded in
+`17_NEXT_WORK_后续工作.md` and its final report; it is not reopened.
 
 `PROD-HEALTH-1 = SEALED / ACCEPTANCE PASS` is a closed previous milestone.
 `MARKET-SIDE-SHADOW-1 = DEPLOYED / SEALED / ACCEPTANCE PASS` remains closed.

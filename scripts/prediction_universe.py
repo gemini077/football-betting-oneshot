@@ -184,6 +184,9 @@ def _attempt_record(
     }
     if error:
         record["error"] = error
+    fallback_provenance = payload.get("fallback_provenance") if isinstance(payload, dict) else None
+    if isinstance(fallback_provenance, dict):
+        record["fallback_provenance"] = dict(fallback_provenance)
     return record
 
 

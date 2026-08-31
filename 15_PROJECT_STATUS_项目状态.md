@@ -3,13 +3,38 @@
 最后更新：2026-08-31
 角色：项目当前唯一人类可读状态真相。只记录当前事实，不承担完整历史档案职责。
 
-# NOWSCORE-FUTURE-FIXTURE-INTAKE-1 Current State
+# NEXT-UNIVERSE-TRUTH-1 Current State
+
+Status: `READY_FOR_ACCEPTANCE`
+
+Decision: `NEXT-UNIVERSE-TRUTH-1 = READY_FOR_ACCEPTANCE`
+
+`CURRENT = NEXT-UNIVERSE-TRUTH-1`.
+
+The bounded live probe at `2026-08-31 16:03:38` Asia/Shanghai found
+Sporttery HTTP 200 with `success=true`, `matchInfoList` present, only
+`businessDate=2026-08-31`, and 12 rows; `2026-09-01` was absent. The single
+500.com fetch also succeeded. Its raw page had 12 rows with
+`data-matchdate=2026-09-01`, but all 12 had `data-processdate=2026-08-31`
+and the current business-date parser returned 0 for `2026-09-01`.
+
+The historical upstream cause for production run `33369186141` at 15:41 is
+`UNKNOWN_NOT_PROVEN`: the run persisted the primary failure but not the exact
+500 fallback status/error, and a later live response does not backdate source
+publication. A deterministic provenance fix adds `fallback_provenance` to the
+retained schedule payload without changing fixture selection or business-date
+semantics.
+
+Evidence: `docs/data-foundation/NEXT-UNIVERSE-TRUTH-1_FINAL_REPORT.md`.
+Production impact remains `next_universe=0`, `BLOCKED_UNIVERSE` for the next
+BASE jobs/prediction, and `CYCLE_DEGRADED`; no fixture was fabricated and no
+historical prediction was rewritten.
+
+# NOWSCORE-FUTURE-FIXTURE-INTAKE-1 Previous Milestone
 
 Status: `READY_FOR_ACCEPTANCE`
 
 Decision: `NOWSCORE-FUTURE-FIXTURE-INTAKE-1 = READY_FOR_ACCEPTANCE`
-
-`CURRENT = NOWSCORE-FUTURE-FIXTURE-INTAKE-1`.
 
 This bounded implementation keeps `bf1.js` as the live Nowscore schedule and
 adds only the future `sc{offset}.js` surfaces required by the real竞彩
