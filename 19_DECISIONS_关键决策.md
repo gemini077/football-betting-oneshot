@@ -5,8 +5,8 @@
 
 # D-037 - NOWSCORE-JC-SALES-PAGE-1 direct current-universe source
 
-Status: READY_FOR_ACCEPTANCE / PASS
-Decision: NOWSCORE-JC-SALES-PAGE-1 = PASS.
+Status: DEPLOYED / SEALED / PRODUCTION ACCEPTANCE READY
+Decision: NOWSCORE-JC-SALES-PAGE-1 = DEPLOYED / SEALED / PRODUCTION ACCEPTANCE READY.
 
 The direct Nowscore JC sales page is authoritative current-universe membership
 and China JC business-date source. Deterministic anchor is selected SelDate
@@ -25,9 +25,20 @@ existing Nowscore market/analysis evidence -> BASE. Sporttery/500 retired from
 current-universe blocking roles but retained for independent optional evidence.
 No model/identity/frozen/prospective/settlement change.
 
-Evidence: docs/data-foundation/NOWSCORE-JC-SALES-PAGE-1_PROBE_REPORT.md.
-STOP at READY_FOR_ACCEPTANCE; do not merge and do not start Challenger Promotion
-Review.
+Production closure: PR #141 final head
+3eff9c4ea6294a1100c96209e47413dbb7a7ba41 merged at 2026-09-01T05:58:50Z as
+30df0fb3c047e1126ed81766b5371073d61ed024. The first production run containing
+that merge SHA was 33475679629; its durable write is main commit
+7a3d431a856fb2c28e360b8e2a333c87c8277151. Durable current output is direct
+nowscore_public_jc_sales, 10 fixtures/jobs, 周二001--周二010,
+businessDate 2026-09-01, kickoff calendar date 2026-09-02, no Monday ID
+overlap, READY Universe/BASE, and HEALTHY production state. A32 remains
+optional corroboration only.
+
+Evidence: docs/data-foundation/NOWSCORE-JC-SALES-PAGE-1_PROBE_REPORT.md and
+docs/data-foundation/NOWSCORE-JC-SALES-PAGE-1_PROD_CLOSURE_RUN_33475679629.json.
+STOP at DEPLOYED / SEALED / PRODUCTION ACCEPTANCE READY; do not start
+Challenger Promotion Review.
 
 # Historical D-036 - NOWSCORE-JC-BUSINESS-DATE-1 business-day gate
 

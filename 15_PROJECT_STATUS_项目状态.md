@@ -5,9 +5,9 @@
 
 # NOWSCORE-JC-SALES-PAGE-1 - Direct JC sales-page current-universe source
 
-Status: READY_FOR_ACCEPTANCE / PASS
+Status: DEPLOYED / SEALED / PRODUCTION ACCEPTANCE READY
 
-Decision: PASS / Nowscore direct JC sales page
+Decision: NOWSCORE-JC-SALES-PAGE-1 = DEPLOYED / SEALED / PRODUCTION ACCEPTANCE READY
 
 The direct Nowscore JC sales page is now the current-universe membership and
 China JC business-date authority. Its deterministic contract is selected
@@ -29,9 +29,26 @@ no longer block current-universe creation; their independent optional evidence
 roles remain. No Champion, model, identity threshold, frozen history,
 prospective ledger, or settlement semantics changed.
 
+Production closure is proven by merge SHA
+30df0fb3c047e1126ed81766b5371073d61ed024, PR #141 final head
+3eff9c4ea6294a1100c96209e47413dbb7a7ba41, merged at 2026-09-01T05:58:50Z,
+and the first production run containing that merge SHA: runner 33475679629.
+The durable write completed as main commit
+7a3d431a856fb2c28e360b8e2a333c87c8277151, whose parent is the merge SHA.
+The durable 2026-09-01 current source primary is
+nowscore_public_jc_sales: exactly 10 fixtures, 周二001--周二010,
+businessDate 2026-09-01, all kickoff calendar dates 2026-09-02, and no
+previous 2026-08-31 fixture ID overlap. Prediction Universe is READY and BASE
+jobs are READY with fixture_count/job_count 10/10; the four
+INSUFFICIENT_DATA jobs are evidence-source outcomes, not a universe failure.
+Nowscore IDs and direct business-date provenance are persisted, and the
+production health state is HEALTHY.
+
 Exact evidence and integration replay are recorded in
-docs/data-foundation/NOWSCORE-JC-SALES-PAGE-1_PROBE_REPORT.md and the paired
-JSON artifacts. STOP at READY_FOR_ACCEPTANCE; do not merge and do not start
+docs/data-foundation/NOWSCORE-JC-SALES-PAGE-1_PROBE_REPORT.md, the paired
+JSON artifacts, and the production closure artifact
+docs/data-foundation/NOWSCORE-JC-SALES-PAGE-1_PROD_CLOSURE_RUN_33475679629.json.
+STOP at DEPLOYED / SEALED / PRODUCTION ACCEPTANCE READY; do not start
 Challenger Promotion Review.
 
 # Historical NOWSCORE-JC-BUSINESS-DATE-1 - China JC business-date anchor

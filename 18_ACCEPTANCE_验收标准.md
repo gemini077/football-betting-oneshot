@@ -20,7 +20,7 @@
 
 # NOWSCORE-JC-SALES-PAGE-1 Acceptance Gate
 
-Status: READY_FOR_ACCEPTANCE / PASS
+Status: DEPLOYED / SEALED / PRODUCTION ACCEPTANCE READY
 
 Acceptance evidence:
 - GitHub runner 33474080863 completed successfully against delivered
@@ -42,8 +42,22 @@ Acceptance evidence:
 - Exact remote JSON and local integration JSON are listed in probe report.
 - Focused/related tests, py_compile, git diff --check passed. No
   Champion/model/frozen/history rewrite.
+- PR #141 merged at 2026-09-01T05:58:50Z with merge SHA
+  30df0fb3c047e1126ed81766b5371073d61ed024. First production run containing
+  the merge SHA was 33475679629 and completed successfully.
+- The durable write produced main commit
+  7a3d431a856fb2c28e360b8e2a333c87c8277151, with the merge SHA as parent.
+- Actual durable production output uses primary source
+  nowscore_public_jc_sales: Prediction Universe READY, fixture_count 10,
+  周二001--周二010, businessDate 2026-09-01, all kickoff dates 2026-09-02.
+- BASE is READY with job_count 10; BLOCKED_UNIVERSE is absent. Four
+  INSUFFICIENT_DATA outcomes are source-evidence outcomes and do not zero the
+  universe. Nowscore IDs and direct date provenance are persisted.
+- Production health is HEALTHY; Sporttery/500 failure does not zero or replace
+  the direct universe. Merge-SHA lineage is present in durable prediction
+  artifacts and the Pages deployment.
 
-Acceptance boundary: READY_FOR_ACCEPTANCE / PASS only. Do not merge and do not
+Acceptance boundary: DEPLOYED / SEALED / PRODUCTION ACCEPTANCE READY. Do not
 start Challenger Promotion Review.
 
 # Historical NOWSCORE-JC-BUSINESS-DATE-1 Acceptance Gate

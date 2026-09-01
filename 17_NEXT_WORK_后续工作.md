@@ -6,8 +6,8 @@
 
 # NOWSCORE-JC-SALES-PAGE-1 - Sole current execution pointer
 
-Status: READY_FOR_ACCEPTANCE / PASS
-Decision: PASS / Nowscore direct JC sales page
+Status: DEPLOYED / SEALED / PRODUCTION ACCEPTANCE READY
+Decision: NOWSCORE-JC-SALES-PAGE-1 = DEPLOYED / SEALED / PRODUCTION ACCEPTANCE READY
 
 Current execution pointer: use the direct Nowscore JC sales-page contract at
 https://cp.nowscore.com/buy/jingcai.aspx?typeID=101&oddstype=2&date={business_date}.
@@ -17,9 +17,13 @@ not kickoff calendar date. Sales window is 11:00--next-day-11:00.
 Paired replay returned 12 verified fixtures for 2026-08-31 and 10 for
 2026-09-01, all next-calendar-day kickoffs preserved, zero duplicate or
 ambiguous IDs, zero ID overlap. A32 is optional; live ft1/scN absence cannot
-zero the direct universe. Chain is direct Nowscore JC -> canonical fixture /
-identity -> evidence -> BASE. STOP at READY_FOR_ACCEPTANCE; do not merge and
-do not start Challenger Promotion Review.
+zero the direct universe. The first production run containing merge SHA
+30df0fb3c047e1126ed81766b5371073d61ed024 is 33475679629. Durable current
+output is 10 direct 周二001--周二010 fixtures and 10 BASE jobs for businessDate
+2026-09-01; all kickoff dates are 2026-09-02 and BLOCKED_UNIVERSE is absent.
+Chain is direct Nowscore JC -> canonical fixture / identity -> evidence -> BASE.
+STOP at DEPLOYED / SEALED / PRODUCTION ACCEPTANCE READY; do not start
+Challenger Promotion Review.
 
 # Historical NOWSCORE-JC-BUSINESS-DATE-1 - Sole current execution pointer
 

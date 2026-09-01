@@ -8,8 +8,8 @@
 # NOWSCORE-JC-SALES-PAGE-1 - Current route gate
 
 CURRENT ROUTE MILESTONE: NOWSCORE-JC-SALES-PAGE-1
-CURRENT ROUTE STATUS: READY_FOR_ACCEPTANCE / PASS
-CURRENT ROUTE DECISION: PASS / Nowscore direct JC sales page
+CURRENT ROUTE STATUS: DEPLOYED / SEALED / PRODUCTION ACCEPTANCE READY
+CURRENT ROUTE DECISION: NOWSCORE-JC-SALES-PAGE-1 = DEPLOYED / SEALED / PRODUCTION ACCEPTANCE READY
 
 The direct JC sales page is the current-universe route. It supplies selected
 SelDate, matching niDate date/group, explicit 11:00--next-day-11:00 sales
@@ -21,8 +21,12 @@ not an acceptance intersection.
 
 The route is Nowscore JC sales page -> canonical fixture / identity -> existing
 evidence -> BASE. Sporttery and 500 are not current-universe blocking sources;
-independent optional capabilities remain. STOP at READY_FOR_ACCEPTANCE; no
-merge and no Challenger Promotion Review.
+independent optional capabilities remain. First production run 33475679629
+contained merge SHA 30df0fb3c047e1126ed81766b5371073d61ed024 and durably wrote
+main commit 7a3d431a856fb2c28e360b8e2a333c87c8277151. Its current universe is
+READY with 10 direct 周二001--周二010 fixtures and BASE is READY with 10 jobs;
+all kickoffs are on 2026-09-02 under businessDate 2026-09-01. STOP at
+DEPLOYED / SEALED / PRODUCTION ACCEPTANCE READY; no Challenger Promotion Review.
 
 # Historical NOWSCORE-JC-BUSINESS-DATE-1 - Current route gate
 
