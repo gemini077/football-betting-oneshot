@@ -3,7 +3,38 @@
 最后更新：2026-09-01
 角色：项目当前唯一人类可读状态真相。只记录当前事实，不承担完整历史档案职责。
 
-# NOWSCORE-JC-BUSINESS-DATE-1 - China JC business-date anchor
+# NOWSCORE-JC-SALES-PAGE-1 - Direct JC sales-page current-universe source
+
+Status: READY_FOR_ACCEPTANCE / PASS
+
+Decision: PASS / Nowscore direct JC sales page
+
+The direct Nowscore JC sales page is now the current-universe membership and
+China JC business-date authority. Its deterministic contract is selected
+SelDate plus the matching niDate header date/group, the explicit
+11:00--next-day-11:00 sales window, the 周XNNN match number, one Nowscore match
+ID, kickoff, home/away, league, cansale, and the sales-row ID.
+
+The paired GitHub replay for 2026-08-31 and 2026-09-01 passed with 12 and 10
+rows respectively. All 22 rows are retained under their selected business
+dates even though all kickoffs are on the following calendar date. Direct
+business-date ID overlap, accepted-ID overlap, duplicate, and ambiguous counts
+are all zero. SetLevel(3) / A[j][32] == 1 is optional corroboration only; the
+2026-09-01 ten-row direct set remains accepted when live scN has none of its
+IDs.
+
+The current chain is Nowscore JC sales page -> canonical schedule / identity
+-> existing Nowscore market and analysis evidence -> BASE. Sporttery and 500
+no longer block current-universe creation; their independent optional evidence
+roles remain. No Champion, model, identity threshold, frozen history,
+prospective ledger, or settlement semantics changed.
+
+Exact evidence and integration replay are recorded in
+docs/data-foundation/NOWSCORE-JC-SALES-PAGE-1_PROBE_REPORT.md and the paired
+JSON artifacts. STOP at READY_FOR_ACCEPTANCE; do not merge and do not start
+Challenger Promotion Review.
+
+# Historical NOWSCORE-JC-BUSINESS-DATE-1 - China JC business-date anchor
 
 Status: READY_FOR_ACCEPTANCE / NO_CODE
 

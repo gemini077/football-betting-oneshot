@@ -3,7 +3,33 @@
 最后更新：2026-09-01
 角色：记录不能因换对话 / 换 Codex 而重复推翻的关键决定。若新证据足以改变决定，必须新增 superseding decision，不得静默改历史。
 
-# D-036 - NOWSCORE-JC-BUSINESS-DATE-1 business-day gate
+# D-037 - NOWSCORE-JC-SALES-PAGE-1 direct current-universe source
+
+Status: READY_FOR_ACCEPTANCE / PASS
+Decision: NOWSCORE-JC-SALES-PAGE-1 = PASS.
+
+The direct Nowscore JC sales page is authoritative current-universe membership
+and China JC business-date source. Deterministic anchor is selected SelDate
+plus matching niDate header date/group and explicit 11:00--next-day-11:00
+sales window. It supplies 周XNNN match number, sales-row ID, unique Nowscore
+match ID, kickoff, home/away, league, cansale. Kickoff calendar date is
+provenance only and never derives business date.
+
+SetLevel(3) / A[j][32] == 1 remains previously proven but optional
+corroboration. Missing/not-yet-synchronized live ft1/scN rows do not reject a
+direct sales-page fixture. Paired replay accepted 12 for 2026-08-31 and 10 for
+2026-09-01; duplicates, ambiguous rows, cross-date ID overlap all zero.
+
+Current chain: Nowscore JC sales page -> canonical fixture / identity ->
+existing Nowscore market/analysis evidence -> BASE. Sporttery/500 retired from
+current-universe blocking roles but retained for independent optional evidence.
+No model/identity/frozen/prospective/settlement change.
+
+Evidence: docs/data-foundation/NOWSCORE-JC-SALES-PAGE-1_PROBE_REPORT.md.
+STOP at READY_FOR_ACCEPTANCE; do not merge and do not start Challenger Promotion
+Review.
+
+# Historical D-036 - NOWSCORE-JC-BUSINESS-DATE-1 business-day gate
 
 Status: READY_FOR_ACCEPTANCE / NO_CODE
 

@@ -5,7 +5,26 @@
 
 # Current Route Pointer
 
-# NOWSCORE-JC-BUSINESS-DATE-1 - Current route gate
+# NOWSCORE-JC-SALES-PAGE-1 - Current route gate
+
+CURRENT ROUTE MILESTONE: NOWSCORE-JC-SALES-PAGE-1
+CURRENT ROUTE STATUS: READY_FOR_ACCEPTANCE / PASS
+CURRENT ROUTE DECISION: PASS / Nowscore direct JC sales page
+
+The direct JC sales page is the current-universe route. It supplies selected
+SelDate, matching niDate date/group, explicit 11:00--next-day-11:00 sales
+window, 周XNNN match number, unique Nowscore ID, kickoff, and identity fields.
+Paired replay is 12 rows for 2026-08-31 and 10 rows for 2026-09-01; all
+next-calendar-day kickoffs remain under selected business date. Duplicate,
+ambiguous, and cross-date ID overlap are zero. A32 is optional corroboration,
+not an acceptance intersection.
+
+The route is Nowscore JC sales page -> canonical fixture / identity -> existing
+evidence -> BASE. Sporttery and 500 are not current-universe blocking sources;
+independent optional capabilities remain. STOP at READY_FOR_ACCEPTANCE; no
+merge and no Challenger Promotion Review.
+
+# Historical NOWSCORE-JC-BUSINESS-DATE-1 - Current route gate
 
 CURRENT ROUTE MILESTONE: NOWSCORE-JC-BUSINESS-DATE-1
 

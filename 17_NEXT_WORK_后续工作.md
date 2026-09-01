@@ -4,7 +4,24 @@
 
 # Current Sole Pointer
 
-# NOWSCORE-JC-BUSINESS-DATE-1 - Sole current execution pointer
+# NOWSCORE-JC-SALES-PAGE-1 - Sole current execution pointer
+
+Status: READY_FOR_ACCEPTANCE / PASS
+Decision: PASS / Nowscore direct JC sales page
+
+Current execution pointer: use the direct Nowscore JC sales-page contract at
+https://cp.nowscore.com/buy/jingcai.aspx?typeID=101&oddstype=2&date={business_date}.
+Business date is copied from selected SelDate and matching niDate header/group,
+not kickoff calendar date. Sales window is 11:00--next-day-11:00.
+
+Paired replay returned 12 verified fixtures for 2026-08-31 and 10 for
+2026-09-01, all next-calendar-day kickoffs preserved, zero duplicate or
+ambiguous IDs, zero ID overlap. A32 is optional; live ft1/scN absence cannot
+zero the direct universe. Chain is direct Nowscore JC -> canonical fixture /
+identity -> evidence -> BASE. STOP at READY_FOR_ACCEPTANCE; do not merge and
+do not start Challenger Promotion Review.
+
+# Historical NOWSCORE-JC-BUSINESS-DATE-1 - Sole current execution pointer
 
 Status: READY_FOR_ACCEPTANCE / NO_CODE
 

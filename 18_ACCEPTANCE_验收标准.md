@@ -18,7 +18,35 @@
 9. 如果声称“上线”，远端是否真的部署；
 10. 是否产生下一阶段需要的可复用证据。
 
-# NOWSCORE-JC-BUSINESS-DATE-1 Acceptance Gate
+# NOWSCORE-JC-SALES-PAGE-1 Acceptance Gate
+
+Status: READY_FOR_ACCEPTANCE / PASS
+
+Acceptance evidence:
+- GitHub runner 33474080863 completed successfully against delivered
+  implementation and PR #141 head.
+- Direct sales page returned HTTP 200 for both replay dates and exposed selected
+  SelDate, matching niDate business-date group, explicit 11:00--next-day-11:00
+  window, match number, unique Nowscore ID, kickoff, identity fields,
+  sales-row ID, and cansale.
+- 2026-08-31: exactly 12 Monday fixtures, businessDate 2026-08-31, all kickoffs
+  on 2026-09-01.
+- 2026-09-01: exactly 10 Tuesday fixtures, businessDate 2026-09-01, all kickoffs
+  on 2026-09-02; none of Monday 12 IDs reused.
+- Direct membership is explicit jc_membership=VERIFIED from
+  nowscore_public_jc_sales; no team/league/kickoff/weekday/A32 guess. A32 is
+  optional only.
+- Duplicate, ambiguous, and paired-date ID overlap are zero.
+- Prediction Universe and BASE replay READY with 12 and 10 fixtures/jobs;
+  identity binding exact with ambiguous/missing 0/0.
+- Exact remote JSON and local integration JSON are listed in probe report.
+- Focused/related tests, py_compile, git diff --check passed. No
+  Champion/model/frozen/history rewrite.
+
+Acceptance boundary: READY_FOR_ACCEPTANCE / PASS only. Do not merge and do not
+start Challenger Promotion Review.
+
+# Historical NOWSCORE-JC-BUSINESS-DATE-1 Acceptance Gate
 
 Status: READY_FOR_ACCEPTANCE / NO_CODE
 
