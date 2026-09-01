@@ -3,6 +3,35 @@
 最后更新：2026-09-01
 角色：项目当前唯一人类可读状态真相。只记录当前事实，不承担完整历史档案职责。
 
+# CHALLENGER-C-UNIQUE-COHORT-SEMANTICS-1 - Promotion cohort semantics
+
+Status: READY_FOR_INDEPENDENT_ACCEPTANCE
+
+Decision: KEEP CHAMPION / KEEP C SHADOW; no merge or promotion.
+
+PR #142 now keeps every immutable pair/version artifact while separating raw
+version-row audit counts from the one-match-one-observation Promotion cohort.
+The shared legal-prematch selector chooses one deterministic latest valid
+pre-kickoff representative per `match_id` and fails closed on equal final
+chronology. Post-kickoff and integrity-invalid versions are excluded from
+representative selection without deleting their history.
+
+The current closure naturally records 124 total version rows, 123 eligible
+version rows, 112 verified version rows, 36 eligible unique matches, 29
+verified unique matches, 26 verified version-history groups, and 83 extra
+verified version rows. The checkpoint is `NOT_REACHED` at 29 unique matches,
+with next threshold 50 and `auto_promote=false`. Canonical metrics and bounded
+slices use unique-match representatives; the 112-row table remains audit-only.
+
+Focused semantics, shadow/refresh, governance, formula-boundary, and review
+tests pass. No C parameter, Champion, frozen history, prospective history, or
+pair/version artifact was changed. Evidence is recorded in
+`data/prediction_quality/market_side_shadow_1/latest.json`,
+`data/prediction_quality/challenger_c_promotion_review_1/review.json`, and
+`docs/prediction-quality/CHALLENGER-C-PROMOTION-REVIEW-1_FINAL_REPORT.md`.
+STOP at `READY_FOR_INDEPENDENT_ACCEPTANCE`; do not merge, promote C, or create
+another Challenger.
+
 # CHALLENGER-C-PROMOTION-REVIEW-1 - Final prospective promotion review
 
 Status: FAIL / STOPPED

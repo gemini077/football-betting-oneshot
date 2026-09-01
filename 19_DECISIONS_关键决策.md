@@ -3,6 +3,29 @@
 最后更新：2026-09-01
 角色：记录不能因换对话 / 换 Codex 而重复推翻的关键决定。若新证据足以改变决定，必须新增 superseding decision，不得静默改历史。
 
+# D-039 - Challenger C unique-match Promotion cohort semantics
+
+Status: READY_FOR_INDEPENDENT_ACCEPTANCE
+Decision: Keep the complete immutable version history, but evaluate Promotion
+using one deterministic representative per football match.
+
+PR #142 reuses `prematch_versioning.select_latest_legal_prematch` for the
+Promotion representative. A candidate must be promotion-eligible, integrity
+valid, and strictly pre-kickoff; post-kickoff or invalid versions are excluded.
+Equal final chronology fails closed for that match. All pair/version files stay
+unchanged. Formal counters distinguish total/eligible/verified version rows,
+eligible/verified unique matches, verified version-history groups, and extra
+verified version rows.
+
+The current replay is 124/123/112 version rows, 36/29 eligible/verified unique
+matches, 26 verified history groups, and 83 extra verified version rows. The
+checkpoint is `NOT_REACHED` at 29 unique matches with next threshold 50 and no
+automatic promotion. Canonical overall and subgroup metrics use the unique
+representatives; the 112-row reproduction is audit-only. No fitting, parameter,
+rho, score-grid, Champion, frozen-history, or prospective-history change is
+authorized. STOP at `READY_FOR_INDEPENDENT_ACCEPTANCE`; no merge, promotion, or
+new Challenger in this milestone.
+
 # D-038 - Challenger C promotion review stopped on unique-match integrity
 
 Status: FAIL / STOPPED

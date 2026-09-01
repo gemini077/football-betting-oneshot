@@ -42,6 +42,11 @@ def test_refresh_discovers_verified_result_and_writes_latest(tmp_path):
     assert summary["promotion_eligible_pairs"] == 0
     assert summary["excluded_non_promotion_pair_count"] == 1
     assert summary["verified_paired_count"] == 0
+    assert summary["total_pair_version_rows"] == 1
+    assert summary["promotion_eligible_pair_version_rows"] == 0
+    assert summary["verified_pair_version_rows"] == 0
+    assert summary["promotion_eligible_unique_matches"] == 0
+    assert summary["verified_unique_matches"] == 0
     assert summary["unmatched_pair_count"] == 0
     assert summary["checkpoint_status"] == "NOT_REACHED"
     assert summary["early_stop_status"] == "NOT_TRIGGERED"
@@ -51,6 +56,9 @@ def test_refresh_discovers_verified_result_and_writes_latest(tmp_path):
     assert latest["counts"]["promotion_eligible_pairs"] == 0
     assert latest["counts"]["excluded_non_promotion_pair_count"] == 1
     assert latest["evaluation"]["verified_paired_count"] == 0
+    assert latest["counts"]["total_pair_version_rows"] == 1
+    assert latest["counts"]["verified_unique_matches"] == 0
+    assert latest["checkpoint"]["verified_unique_matches"] == 0
     assert latest["refresh"]["matched_pair_count"] == 1
     assert latest["checkpoint"]["auto_promote"] is False
     assert latest["checkpoint"]["status"] == "NOT_REACHED"

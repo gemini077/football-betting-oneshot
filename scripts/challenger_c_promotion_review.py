@@ -34,7 +34,7 @@ from market_side_shadow_refresh import (  # noqa: E402
 
 
 REVIEW_ID = "CHALLENGER-C-PROMOTION-REVIEW-1"
-REVIEW_SCHEMA_VERSION = "challenger_c_promotion_review_1.v1"
+REVIEW_SCHEMA_VERSION = "challenger_c_promotion_review_1.v2"
 DEFAULT_LATEST = ROOT / "data" / "prediction_quality" / "market_side_shadow_1" / "latest.json"
 DEFAULT_RESULT_ROOT = ROOT / "data" / "postmatch_automation" / "results"
 DEFAULT_UNIVERSE_ROOT = ROOT / "data" / "prediction_universe"
@@ -70,9 +70,9 @@ METRIC_PATHS = {
     "lambda_gap_lt_0_5_share": ("lambda", "gap_lt_0_5_share"),
 }
 
-# These are the accepted 112-row values supplied for this review.  They are
-# a reproduction target, not a new fit or a replacement for the source data.
-EXPECTED_ACCEPTED_METRICS = {
+# These are retained only as a raw immutable version-history audit.  They are
+# not the canonical Promotion table and are never used for the Promotion gate.
+EXPECTED_ACCEPTED_VERSION_ROW_METRICS = {
     "champion": {
         "exact_top1": 0.107142857,
         "exact_top3": 0.285714286,
@@ -112,6 +112,9 @@ EXPECTED_ACCEPTED_METRICS = {
         "lambda_gap_lt_0_5_share": 0.285714286,
     },
 }
+
+# Backward-compatible export for callers that used the previous audit name.
+EXPECTED_ACCEPTED_METRICS = EXPECTED_ACCEPTED_VERSION_ROW_METRICS
 
 
 def _load_json(path: Path) -> Any:
@@ -224,36 +227,10 @@ def _pair_metadata(pair: dict[str, Any], universe_map: dict[str, dict[str, Any]]
     }
 
 
-def _select_latest_unique(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
-    for row in rows:
-        grouped[str(row.get("match_id") or "")].append(row)
-    selected: list[dict[str, Any]] = []
-    for match_id, candidates in grouped.items():
-        if not match_id:
-            continue
-        selected.append(
-            max(
-                candidates,
-                key=lambda row: (
-                    _parse_time(row.get("source_cutoff")) or datetime.min.replace(tzinfo=timezone.utc),
-                    _parse_time(row.get("freeze_created_at")) or datetime.min.replace(tzinfo=timezone.utc),
-                    str(row.get("pair_id") or ""),
-                ),
-            )
-        )
-    return sorted(
-        selected,
-        key=lambda row: (
-            _parse_time(row.get("kickoff_at")) or datetime.min.replace(tzinfo=timezone.utc),
-            str(row.get("match_id") or ""),
-        ),
-    )
-
-
 def _slice_metrics(rows: list[dict[str, Any]], result_map: dict[str, Any]) -> dict[str, Any]:
     evaluation = evaluate_paired_cohort(rows, result_map)
     return {
+        "representative_count": len(rows),
         "pair_row_count": len(rows),
         "unique_match_count": len({str(row.get("match_id") or "") for row in rows}),
         "metrics": compact_evaluation(evaluation),
@@ -413,7 +390,6 @@ def _gate_statuses(
     integrity: dict[str, Any],
     reproduction: dict[str, Any],
     unique_count: int,
-    verified_pair_count: int,
     minimum_unique_matches: int,
     subgroup_gate: dict[str, Any],
     overall_metrics: dict[str, dict[str, Any]],
@@ -440,9 +416,8 @@ def _gate_statuses(
             one_one_support.append(name)
     statuses = {
         "pair_freeze_integrity": integrity["status"] == "PASS",
-        "accepted_overall_112_reproduce": reproduction["status"] == "PASS",
-        "unique_match_promotion_gate": unique_count >= minimum_unique_matches
-        and unique_count == verified_pair_count,
+        "accepted_overall_unique_reproduce": reproduction["status"] == "PASS",
+        "unique_match_promotion_gate": unique_count >= minimum_unique_matches,
         "meaningful_subgroup_safety": subgroup_gate["status"] == "PASS" and not overall_triggers,
         "exact_score_improvement_not_confined": len(exact_support) >= 2,
         "one_one_reduction_broad": len(one_one_support) >= 2,
@@ -501,30 +476,53 @@ def render_report(evidence: dict[str, Any]) -> str:
         "",
         f"- Latest shadow artifact: `{evidence['source']['latest']}`",
         f"- Existing result artifacts only; no new matches fetched: `{evidence['source']['result_root']}`",
-        f"- Pair rows: `{evidence['counts']['pair_rows']}`; promotion-eligible rows: `{evidence['counts']['promotion_eligible_rows']}`",
-        f"- Verified promotion-eligible rows: `{evidence['counts']['verified_pair_rows']}`",
-        f"- Verified unique matches: `{evidence['counts']['verified_unique_matches']}`",
-        f"- Duplicate verified-match groups: `{evidence['counts']['duplicate_verified_match_groups']}`; duplicate rows beyond one per match: `{evidence['counts']['duplicate_verified_rows']}`",
+        f"- Total pair/version rows: `{evidence['counts']['total_pair_version_rows']}`; promotion-eligible version rows: `{evidence['counts']['promotion_eligible_pair_version_rows']}`",
+        f"- Verified version rows (audit only): `{evidence['counts']['verified_pair_version_rows']}`",
+        f"- Promotion-eligible unique matches: `{evidence['counts']['promotion_eligible_unique_matches']}`; verified unique matches: `{evidence['counts']['verified_unique_matches']}`",
+        f"- Version-history match groups: `{evidence['counts']['version_history_match_groups']}`; extra verified version rows: `{evidence['counts']['extra_version_rows']}`",
+        f"- Checkpoint: `{evidence['checkpoint'].get('status')}`; next threshold: `{evidence['checkpoint'].get('next_threshold')}`; auto-promote: `{evidence['checkpoint'].get('auto_promote')}`",
         "",
-        "The accepted `112` value is therefore a pair-row count, not 112 independent matches. "
-        "The repository promotion gate requires unique-match evaluation, and the current cohort has "
+        "The accepted `112` value is a pair/version-row audit count, not 112 independent observations. "
+        "Canonical Promotion statistics use exactly one deterministic legal prematch representative per match. "
+        "The current cohort has "
         f"`{evidence['counts']['verified_unique_matches']}` unique matches against a minimum of "
         f"`{evidence['safety_gate']['minimum_unique_matches']}`.",
         "",
-        "## Accepted 112-row reproduction",
+        "## Canonical unique-match Promotion metrics",
         "",
         "| Scope | Candidate | n | Exact Top1 | Exact Top3 | Exact NLL | 1X2 Acc | 1X2 Brier | 1X2 LogLoss | BTTS Acc | BTTS Brier | BTTS LogLoss | BTTS ECE | O/U Acc | O/U Brier | O/U LogLoss | 1-1 Top1 | Median Lambda Gap | Lambda Gap < 0.5 |",
         "|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for candidate_id in ("champion", "challenger"):
-        lines.append(_metric_table_row("112 pair rows", candidate_id, overall[candidate_id]))
+        lines.append(_metric_table_row(
+            f"{evidence['counts']['verified_unique_matches']} unique matches",
+            candidate_id,
+            overall[candidate_id],
+        ))
     lines.extend([
         "",
         f"Reproduction check: **`{evidence['overall_reproduction']['status']}`**; mismatches: `{len(evidence['overall_reproduction']['mismatches'])}`.",
         "",
+        "## Raw version-history audit (not the Promotion table)",
+        "",
+        "All verified immutable version rows remain available for audit. Their metrics are shown separately and are not used by the sample-count or Promotion gates.",
+        "",
+        "| Scope | Candidate | n | Exact Top1 | Exact Top3 | Exact NLL | 1X2 Acc | 1X2 Brier | 1X2 LogLoss | BTTS Acc | BTTS Brier | BTTS LogLoss | BTTS ECE | O/U Acc | O/U Brier | O/U LogLoss | 1-1 Top1 | Median Lambda Gap | Lambda Gap < 0.5 |",
+        "|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
+    ])
+    for candidate_id in ("champion", "challenger"):
+        lines.append(_metric_table_row(
+            f"{evidence['counts']['verified_pair_version_rows']} version rows",
+            candidate_id,
+            evidence["overall"]["version_row_audit_metrics"][candidate_id],
+        ))
+    lines.extend([
+        "",
+        f"Version-row audit reproduction: **`{evidence['version_row_reproduction']['status']}`**; mismatches: `{len(evidence['version_row_reproduction']['mismatches'])}`.",
+        "",
         "## Bounded robustness slices",
         "",
-        "Slices below use one deterministic latest pre-match row per unique match. "
+        "Slices below use the same deterministic legal-prematch representative selector, with one observation per unique match. "
         f"Only groups with at least `{MIN_MEANINGFUL_SLICE}` unique matches are shown; smaller league/regime groups are count-only and are not decision signals.",
         "",
         "| Slice | Candidate | n | Exact Top1 | Exact Top3 | Exact NLL | 1X2 Acc | 1X2 Brier | 1X2 LogLoss | BTTS Acc | BTTS Brier | BTTS LogLoss | BTTS ECE | O/U Acc | O/U Brier | O/U LogLoss | 1-1 Top1 | Median Lambda Gap | Lambda Gap < 0.5 |",
@@ -565,7 +563,7 @@ def render_report(evidence: dict[str, Any]) -> str:
         "",
         "`KEEP CHAMPION / KEEP C SHADOW`",
         "",
-        "Required next action is to repair/replace the prospective cohort capture so that the formal review has the required unique-match population. Do not refit C and do not create another Challenger in this stopped milestone.",
+        "The current unique-match sample is below the configured minimum, so this milestone stops before merge or promotion. Unique matches may continue accumulating naturally after independent acceptance; do not wait for 50 before returning to other product work. Do not refit C and do not create another Challenger in this stopped milestone.",
         "",
     ])
     return "\n".join(lines)
@@ -588,7 +586,10 @@ def run_review(
     catalog, discovery = discover_verified_results(result_root)
     result_map, matching = build_identity_safe_result_map(pairs, catalog)
     eligible = [pair for pair in pairs if _is_promotion_eligible_pair(pair)]
-    verified = [pair for pair in eligible if str(pair.get("pair_id")) in result_map]
+    verified = [
+        pair for pair in eligible
+        if str(pair.get("pair_id") or "") in result_map
+    ]
     by_match: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for pair in verified:
         by_match[str(pair.get("match_id") or "")].append(pair)
@@ -597,10 +598,34 @@ def run_review(
 
     overall_evaluation = evaluate_paired_cohort(pairs, result_map)
     overall_metrics = compact_evaluation(overall_evaluation)
-    overall_reproduction = _metric_projection_matches(overall_metrics, EXPECTED_ACCEPTED_METRICS)
+    stored_evaluation = latest.get("evaluation") or {}
+    overall_reproduction = _metric_projection_matches(
+        overall_metrics,
+        compact_evaluation(stored_evaluation),
+    )
+    version_row_metrics = compact_evaluation({
+        "candidates": overall_evaluation.get("version_row_candidates") or {},
+    })
+    version_row_reproduction = _metric_projection_matches(
+        version_row_metrics,
+        EXPECTED_ACCEPTED_VERSION_ROW_METRICS,
+    )
     universe_map = _load_universe_map(universe_root)
-    metadata = {pair["pair_id"]: _pair_metadata(pair, universe_map) for pair in verified}
-    unique_verified = _select_latest_unique(verified)
+    representative_selection = overall_evaluation["representative_selector"]
+    verified_representative_ids = set(
+        representative_selection.get("verified_representative_pair_ids") or []
+    )
+    unique_verified = sorted(
+        [
+            pair for pair in pairs
+            if str(pair.get("pair_id") or "") in verified_representative_ids
+        ],
+        key=lambda row: (
+            _parse_time(row.get("kickoff_at")) or datetime.min.replace(tzinfo=timezone.utc),
+            str(row.get("match_id") or ""),
+        ),
+    )
+    metadata = {pair["pair_id"]: _pair_metadata(pair, universe_map) for pair in unique_verified}
     slices, slice_counts = _meaningful_slices(unique_verified, metadata, result_map)
     integrity = _integrity_summary(pairs, eligible, result_map, matching)
     config = _load_json(config_path)
@@ -610,7 +635,6 @@ def run_review(
         integrity=integrity,
         reproduction=overall_reproduction,
         unique_count=len(unique_verified),
-        verified_pair_count=len(verified),
         minimum_unique_matches=minimum_unique_matches,
         subgroup_gate=subgroup_safety,
         overall_metrics=overall_metrics,
@@ -633,20 +657,33 @@ def run_review(
             "eligible_rows": len(eligible),
             "promotion_eligible_rows": len(eligible),
             "verified_pair_rows": len(verified),
-            "verified_unique_matches": len(unique_verified),
+            "total_pair_version_rows": overall_evaluation["total_pair_version_rows"],
+            "promotion_eligible_pair_version_rows": overall_evaluation["promotion_eligible_pair_version_rows"],
+            "verified_pair_version_rows": overall_evaluation["verified_pair_version_rows"],
+            "promotion_eligible_unique_matches": overall_evaluation["promotion_eligible_unique_matches"],
+            "verified_unique_matches": overall_evaluation["verified_unique_matches"],
+            "version_history_match_groups": overall_evaluation["version_history_match_groups"],
+            "extra_version_rows": overall_evaluation["extra_version_rows"],
             "duplicate_verified_match_groups": len(duplicate_groups),
             "duplicate_verified_rows": duplicate_rows,
             "eligible_unique_matches": len({str(pair.get("match_id") or "") for pair in eligible}),
             "unmatched_eligible_rows": len(eligible) - len(verified),
+            "unmatched_eligible_unique_matches": max(0, len({str(pair.get("match_id") or "") for pair in eligible}) - len(unique_verified)),
         },
         "discovery": discovery,
         "matching": matching,
         "integrity": integrity,
         "overall": {
+            "metric_unit": "unique_match",
             "metrics": overall_metrics,
-            "stored_evaluation": compact_evaluation(latest.get("evaluation") or {}),
+            "stored_evaluation": compact_evaluation(stored_evaluation),
+            "version_row_metric_unit": "immutable_pair_version_row_audit_only",
+            "version_row_audit_metrics": version_row_metrics,
         },
         "overall_reproduction": overall_reproduction,
+        "version_row_reproduction": version_row_reproduction,
+        "representative_selector": representative_selection,
+        "checkpoint": latest.get("checkpoint"),
         "slices": slices,
         "slice_counts": slice_counts,
         "subgroup_safety": subgroup_safety,

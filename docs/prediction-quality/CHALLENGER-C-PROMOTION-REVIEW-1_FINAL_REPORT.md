@@ -12,25 +12,37 @@ No new Challenger was created and no frozen/prospective history was rewritten.
 
 - Latest shadow artifact: `data/prediction_quality/market_side_shadow_1/latest.json`
 - Existing result artifacts only; no new matches fetched: `data/postmatch_automation/results`
-- Pair rows: `124`; promotion-eligible rows: `123`
-- Verified promotion-eligible rows: `112`
-- Verified unique matches: `29`
-- Duplicate verified-match groups: `26`; duplicate rows beyond one per match: `83`
+- Total pair/version rows: `124`; promotion-eligible version rows: `123`
+- Verified version rows (audit only): `112`
+- Promotion-eligible unique matches: `36`; verified unique matches: `29`
+- Version-history match groups: `26`; extra verified version rows: `83`
+- Checkpoint: `NOT_REACHED`; next threshold: `50`; auto-promote: `False`
 
-The accepted `112` value is therefore a pair-row count, not 112 independent matches. The repository promotion gate requires unique-match evaluation, and the current cohort has `29` unique matches against a minimum of `50`.
+The accepted `112` value is a pair/version-row audit count, not 112 independent observations. Canonical Promotion statistics use exactly one deterministic legal prematch representative per match. The current cohort has `29` unique matches against a minimum of `50`.
 
-## Accepted 112-row reproduction
+## Canonical unique-match Promotion metrics
 
 | Scope | Candidate | n | Exact Top1 | Exact Top3 | Exact NLL | 1X2 Acc | 1X2 Brier | 1X2 LogLoss | BTTS Acc | BTTS Brier | BTTS LogLoss | BTTS ECE | O/U Acc | O/U Brier | O/U LogLoss | 1-1 Top1 | Median Lambda Gap | Lambda Gap < 0.5 |
 |---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| 112 pair rows | champion | 112 | 0.107143 | 0.285714 | 3.028905 | 0.821429 | 0.435565 | 0.771895 | 0.428571 | 0.276516 | 0.748053 | 0.156400 | 0.660714 | 0.226805 | 0.645221 | 0.660714 | 0.486788 | 0.526786 |
-| 112 pair rows | challenger | 112 | 0.125000 | 0.303571 | 2.974157 | 0.803571 | 0.378420 | 0.687060 | 0.455357 | 0.281726 | 0.759252 | 0.163670 | 0.660714 | 0.226805 | 0.645221 | 0.383929 | 0.773430 | 0.285714 |
+| 29 unique matches | champion | 29 | 0.103448 | 0.241379 | 3.068060 | 0.758621 | 0.472051 | 0.824306 | 0.482759 | 0.267614 | 0.729976 | 0.125154 | 0.689655 | 0.208757 | 0.607237 | 0.655172 | 0.479278 | 0.517241 |
+| 29 unique matches | challenger | 29 | 0.103448 | 0.275862 | 3.014980 | 0.758621 | 0.440058 | 0.776552 | 0.517241 | 0.270822 | 0.736647 | 0.115808 | 0.689655 | 0.208757 | 0.607238 | 0.413793 | 0.878820 | 0.344828 |
 
 Reproduction check: **`PASS`**; mismatches: `0`.
 
+## Raw version-history audit (not the Promotion table)
+
+All verified immutable version rows remain available for audit. Their metrics are shown separately and are not used by the sample-count or Promotion gates.
+
+| Scope | Candidate | n | Exact Top1 | Exact Top3 | Exact NLL | 1X2 Acc | 1X2 Brier | 1X2 LogLoss | BTTS Acc | BTTS Brier | BTTS LogLoss | BTTS ECE | O/U Acc | O/U Brier | O/U LogLoss | 1-1 Top1 | Median Lambda Gap | Lambda Gap < 0.5 |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 112 version rows | champion | 112 | 0.107143 | 0.285714 | 3.028905 | 0.821429 | 0.435565 | 0.771895 | 0.428571 | 0.276516 | 0.748053 | 0.156400 | 0.660714 | 0.226805 | 0.645221 | 0.660714 | 0.486788 | 0.526786 |
+| 112 version rows | challenger | 112 | 0.125000 | 0.303571 | 2.974157 | 0.803571 | 0.378420 | 0.687060 | 0.455357 | 0.281726 | 0.759252 | 0.163670 | 0.660714 | 0.226805 | 0.645221 | 0.383929 | 0.773430 | 0.285714 |
+
+Version-row audit reproduction: **`PASS`**; mismatches: `0`.
+
 ## Bounded robustness slices
 
-Slices below use one deterministic latest pre-match row per unique match. Only groups with at least `10` unique matches are shown; smaller league/regime groups are count-only and are not decision signals.
+Slices below use the same deterministic legal-prematch representative selector, with one observation per unique match. Only groups with at least `10` unique matches are shown; smaller league/regime groups are count-only and are not decision signals.
 
 | Slice | Candidate | n | Exact Top1 | Exact Top3 | Exact NLL | 1X2 Acc | 1X2 Brier | 1X2 LogLoss | BTTS Acc | BTTS Brier | BTTS LogLoss | BTTS ECE | O/U Acc | O/U Brier | O/U LogLoss | 1-1 Top1 | Median Lambda Gap | Lambda Gap < 0.5 |
 |---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
@@ -51,7 +63,7 @@ Slice counts not reported as decision signals:
 | Gate | Result |
 |---|---|
 | pair_freeze_integrity | `PASS` |
-| accepted_overall_112_reproduce | `PASS` |
+| accepted_overall_unique_reproduce | `PASS` |
 | unique_match_promotion_gate | `FAIL` |
 | meaningful_subgroup_safety | `PASS` |
 | exact_score_improvement_not_confined | `PASS` |
@@ -77,4 +89,4 @@ Subgroup safety: **`PASS`**; checked slices: `4`; triggers: `0`.
 
 `KEEP CHAMPION / KEEP C SHADOW`
 
-Required next action is to repair/replace the prospective cohort capture so that the formal review has the required unique-match population. Do not refit C and do not create another Challenger in this stopped milestone.
+The current unique-match sample is below the configured minimum, so this milestone stops before merge or promotion. Unique matches may continue accumulating naturally after independent acceptance; do not wait for 50 before returning to other product work. Do not refit C and do not create another Challenger in this stopped milestone.
