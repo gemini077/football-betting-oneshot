@@ -3,6 +3,25 @@
 最后更新：2026-09-01
 角色：项目当前唯一人类可读状态真相。只记录当前事实，不承担完整历史档案职责。
 
+# CHALLENGER-C-PROMOTION-REVIEW-1 - Final prospective promotion review
+
+Status: FAIL / STOPPED
+
+Decision: KEEP CHAMPION / KEEP C SHADOW
+
+The existing shadow closure reproduces the accepted 112 pair-row metrics and
+passes pair/freeze integrity, post-match-generation, bounded subgroup safety,
+BTTS regression, and O/U safety checks. The verified rows contain only 29
+unique match IDs, with 26 duplicate-match groups and 83 duplicate rows beyond
+one row per match. This fails the configured minimum of 50 unique matches and
+means the accepted 112 value cannot be treated as 112 independent matches.
+
+Evidence: `docs/prediction-quality/CHALLENGER-C-PROMOTION-REVIEW-1_FINAL_REPORT.md`
+and `data/prediction_quality/challenger_c_promotion_review_1/review.json`.
+No Challenger was created, no parameter was refit, no frozen/prospective
+history was rewritten, and no Champion promotion, merge, or production run
+was attempted. STOP this milestone at FAIL / STOPPED.
+
 # NOWSCORE-JC-SALES-PAGE-1 - Direct JC sales-page current-universe source
 
 Status: DEPLOYED / SEALED / PRODUCTION ACCEPTANCE READY

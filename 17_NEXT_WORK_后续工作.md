@@ -4,6 +4,25 @@
 
 # Current Sole Pointer
 
+# CHALLENGER-C-PROMOTION-REVIEW-1 - Current review stop state
+
+Status: FAIL / STOPPED
+Decision: KEEP CHAMPION / KEEP C SHADOW
+
+The existing `market_side_shadow_1/latest.json` reproduces the supplied 112
+verified pair-row metrics, but those rows represent only 29 unique matches.
+There are 26 duplicate-match groups and 83 duplicate rows beyond one row per
+match, so the configured minimum unique-match gate of 50 is not met. Pair and
+freeze integrity is clean; no meaningful checked slice crossed the severe
+collapse floors; and no post-match generation input was detected.
+
+Evidence is recorded in
+`docs/prediction-quality/CHALLENGER-C-PROMOTION-REVIEW-1_FINAL_REPORT.md` and
+`data/prediction_quality/challenger_c_promotion_review_1/review.json`.
+STOP: do not promote, merge, run production verification, refit C, or create
+another Challenger in this stopped milestone. The next implementation task
+must address the prospective cohort's unique-match capture integrity.
+
 # NOWSCORE-JC-SALES-PAGE-1 - Sole current execution pointer
 
 Status: DEPLOYED / SEALED / PRODUCTION ACCEPTANCE READY

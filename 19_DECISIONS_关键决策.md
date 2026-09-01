@@ -3,6 +3,31 @@
 最后更新：2026-09-01
 角色：记录不能因换对话 / 换 Codex 而重复推翻的关键决定。若新证据足以改变决定，必须新增 superseding decision，不得静默改历史。
 
+# D-038 - Challenger C promotion review stopped on unique-match integrity
+
+Status: FAIL / STOPPED
+Decision: KEEP CHAMPION / KEEP C SHADOW.
+
+The final review of the existing `market_side_only_hybrid` shadow closure
+uses only the local 112 verified promotion-eligible pair rows and existing
+90-minute result artifacts. The accepted pair-row metrics reproduce exactly;
+pair/freeze integrity is clean; no post-match generation input is present; no
+meaningful checked slice triggers the explicit severe-collapse floors; and
+BTTS ECE is not used as a sole veto.
+
+The formal cohort nevertheless contains only 29 unique match IDs, 26
+duplicate-match groups, and 83 duplicate rows beyond one row per match. The
+configured promotion gate requires at least 50 unique matches, and the
+repository evaluation rule is unique-match based. This is a hard promotion
+gate failure even though the 112 pair-row headline reproduces.
+
+No parameter refit, C formula change, frozen-history rewrite, prospective
+history rewrite, new Challenger, Champion promotion, merge, or production run
+is authorized by this review. Keep the current Champion
+`recent_form_market_calibrated_poisson_v2` and C shadow-only. Evidence:
+`docs/prediction-quality/CHALLENGER-C-PROMOTION-REVIEW-1_FINAL_REPORT.md` and
+`data/prediction_quality/challenger_c_promotion_review_1/review.json`.
+
 # D-037 - NOWSCORE-JC-SALES-PAGE-1 direct current-universe source
 
 Status: DEPLOYED / SEALED / PRODUCTION ACCEPTANCE READY
