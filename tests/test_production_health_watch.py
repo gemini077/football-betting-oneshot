@@ -5,6 +5,7 @@ from scripts.production_health_watch import (
     classify_frozen_prediction_duplicates,
     evaluate_exact_score_health,
     evaluate_health,
+    select_current_serving_predictions,
 )
 
 
@@ -206,6 +207,134 @@ def test_evaluate_health_alerts_on_current_score_and_lambda_collapse(tmp_path):
     assert health["dominant_share"] == round(8 / 9, 6)
     assert health["compressed_share"] == round(7 / 9, 6)
     assert health["gap_threshold"] == 0.5
+
+
+def test_current_serving_selector_uses_latest_legal_version_once_per_match():
+    records = []
+    latest_ids = []
+    for index in range(10):
+        match_id = f"SERVING-M-{index}"
+        match_key = f"SERVING-MATCH-{index}"
+        records.append(_versioned_prediction(
+            f"OLD-{index}",
+            match_id=match_id,
+            job_id=f"SERVING-JOB-{index}",
+            match_key=match_key,
+            score="0-0",
+            source="2026-08-12T09:00:00+08:00",
+            created="2026-08-12T09:01:00+08:00",
+            freeze="2026-08-12T09:02:00+08:00",
+        ))
+        latest_id = f"LATEST-{index}"
+        latest_ids.append(latest_id)
+        records.append(_versioned_prediction(
+            latest_id,
+            match_id=match_id,
+            job_id=f"SERVING-JOB-{index}",
+            match_key=match_key,
+            score="1-1" if index < 9 else "2-1",
+            source="2026-08-12T09:59:00+08:00",
+            created="2026-08-12T10:00:00+08:00",
+            freeze="2026-08-12T10:01:00+08:00",
+        ))
+
+    pilot = _versioned_prediction(
+        "PILOT-1",
+        match_id="PILOT-MATCH",
+        job_id="PILOT-JOB",
+        match_key="PILOT-MATCH-KEY",
+    )
+    records.append(pilot)
+    post_kickoff = _versioned_prediction(
+        "POST-KICKOFF-1",
+        match_id="POST-KICKOFF-MATCH",
+        job_id="POST-KICKOFF-JOB",
+        match_key="POST-KICKOFF-MATCH-KEY",
+    )
+    post_kickoff["prediction_created_at"] = "2026-08-13T00:01:00+08:00"
+    post_kickoff["freeze_created_at"] = "2026-08-13T00:02:00+08:00"
+    records.append(post_kickoff)
+    integrity_invalid = _versioned_prediction(
+        "INVALID-1",
+        match_id="INVALID-MATCH",
+        job_id="INVALID-JOB",
+        match_key="INVALID-MATCH-KEY",
+    )
+    integrity_invalid["prediction_conflicts"] = ["immutable final conflict"]
+    records.append(integrity_invalid)
+    other_date = _versioned_prediction(
+        "OTHER-DATE-1",
+        match_id="OTHER-DATE-MATCH",
+        job_id="OTHER-DATE-JOB",
+        match_key="OTHER-DATE-MATCH-KEY",
+    )
+    other_date["business_date"] = "2026-08-11"
+    records.append(other_date)
+
+    selection = select_current_serving_predictions(
+        records,
+        business_date="2026-08-12",
+        excluded_ids={"PILOT-1"},
+    )
+
+    selected = selection["selected_records"]
+    assert len(selected) == 10
+    assert {record["prediction_id"] for record in selected} == set(latest_ids)
+    assert len({record["match_id"] for record in selected}) == 10
+    assert selection["current_business_date"] == "2026-08-12"
+
+
+def test_evaluate_health_gates_on_current_serving_and_keeps_historical_audit(tmp_path):
+    root = _healthy_tree(tmp_path)
+    for index in range(10):
+        match_id = f"AUDIT-M-{index}"
+        match_key = f"AUDIT-MATCH-{index}"
+        for prediction_id, score, source, created, freeze in (
+            (
+                f"AUDIT-OLD-{index}",
+                "0-0",
+                "2026-08-12T09:00:00+08:00",
+                "2026-08-12T09:01:00+08:00",
+                "2026-08-12T09:02:00+08:00",
+            ),
+            (
+                f"AUDIT-LATEST-{index}",
+                "1-1" if index < 9 else "2-1",
+                "2026-08-12T09:59:00+08:00",
+                "2026-08-12T10:00:00+08:00",
+                "2026-08-12T10:01:00+08:00",
+            ),
+        ):
+            record = _versioned_prediction(
+                prediction_id,
+                match_id=match_id,
+                job_id=f"AUDIT-JOB-{index}",
+                match_key=match_key,
+                score=score,
+                source=source,
+                created=created,
+                freeze=freeze,
+            )
+            record["lambda_away"] = 2.0
+            _write_json(
+                root / "data" / "model_governance" / "predictions" / f"{prediction_id}.json",
+                record,
+            )
+
+    result = evaluate_health(root=root)
+    current = result["details"]["production_exact_score_health"]
+    audit = result["details"]["production_exact_score_health_historical_audit"]
+
+    assert result["status"] == "ALERT"
+    assert "SCORE_SELECTOR_COLLAPSE" in result["reasons"]
+    assert current["sample_count"] == 10
+    assert current["dominant_score"] == "1-1"
+    assert current["dominant_count"] == 9
+    assert current["dominant_share"] == 0.9
+    assert audit["sample_count"] == 20
+    assert audit["status"] == "HEALTHY"
+    assert result["details"]["production_exact_score_health_scopes"]["current_serving"] == current
+    assert result["details"]["production_exact_score_health_scopes"]["historical_audit"] == audit
 
 
 def test_exact_score_health_alerts_only_selector_collapse():
