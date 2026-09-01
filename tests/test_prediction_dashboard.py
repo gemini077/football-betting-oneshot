@@ -195,7 +195,7 @@ def test_universe_three_produces_three_accountable_cards_and_frozen_fields(tmp_p
     html = (roots["output_root"] / "latest.html").read_text(encoding="utf-8")
     assert "已预测" in html
     assert "预测已冻结" not in html
-    assert "系统首推比分" in html
+    assert "预测质量状态待确认 · 模型原始输出" in html
     assert "1X2 · 主胜倾向" in html
     assert "1–0" in html
     assert "1–1 · 2–0" in html
@@ -588,7 +588,7 @@ def test_dashboard_separates_system_runtime_and_current_prediction_quality_alert
             "scope": "current_serving",
             "business_date": DATE,
             "runtime_cycle_finished_at": runtime["finished_at"],
-            "reasons": ["SCORE_SELECTOR_COLLAPSE", "LAMBDA_COMPRESSION"],
+            "reasons": ["SCORE_SELECTOR_COLLAPSE"],
         },
     })
 
@@ -602,6 +602,37 @@ def test_dashboard_separates_system_runtime_and_current_prediction_quality_alert
     assert "\u7cfb\u7edf\u8fd0\u884c \u00b7 \u6b63\u5e38" in html
     assert "\u9884\u6d4b\u8d28\u91cf\u5f02\u5e38" in html
     assert "\u4eca\u65e5\u6bd4\u5206\u9884\u6d4b\u51fa\u73b0\u5f02\u5e38\u96c6\u4e2d\uff0c\u5f53\u524d\u9884\u6d4b\u4ecd\u4fdd\u7559\u4f9b\u89c2\u5bdf\u3002" in html
+    assert "系统首推比分" not in html
+    assert "模型原始比分 · 当前不作为推荐" in html
+    assert "当前比分推荐能力处于质量降级状态" in html
+
+
+def test_dashboard_uses_normal_exact_score_copy_only_for_healthy_matched_current_serving(tmp_path):
+    roots, runtime = _quality_roots(tmp_path, [f"{index}-{index + 1}" for index in range(1, 11)])
+    write_json(roots["health_watch_path"], {
+        "schema_version": "1.0",
+        "updated_at": "2026-08-12T12:06:00+08:00",
+        "current_status": "HEALTHY",
+        "business_date": DATE,
+        "last_cycle_generated_at": runtime["finished_at"],
+        "prediction_quality_health": {
+            "status": "HEALTHY",
+            "scope": "current_serving",
+            "business_date": DATE,
+            "runtime_cycle_finished_at": runtime["finished_at"],
+            "reasons": [],
+        },
+    })
+
+    payload = build_dashboard(DATE, **roots)
+    html = (roots["output_root"] / "latest.html").read_text(encoding="utf-8")
+
+    assert payload["prediction_quality_health"]["status"] == "HEALTHY"
+    assert payload["prediction_quality_health"]["available"] is True
+    assert payload["prediction_quality_health"]["provenance_status"] == "MATCHED"
+    assert "系统首推比分" in html
+    assert "模型原始比分 · 当前不作为推荐" not in html
+    assert "预测质量状态待确认 · 模型原始输出" not in html
 
 
 def test_dashboard_does_not_use_mismatched_health_watch_as_current_quality(tmp_path):
@@ -629,6 +660,7 @@ def test_dashboard_does_not_use_mismatched_health_watch_as_current_quality(tmp_p
     assert payload["prediction_quality_health"]["provenance_status"] == "MISMATCHED"
     assert "\u9884\u6d4b\u8d28\u91cf\u5f02\u5e38" not in html
     assert "\u4eca\u65e5\u6bd4\u5206\u9884\u6d4b\u51fa\u73b0\u5f02\u5e38\u96c6\u4e2d" not in html
+    assert "预测质量状态待确认 · 模型原始输出" in html
 
 
 def test_dashboard_rejects_health_watch_from_previous_cycle_even_on_same_business_date(tmp_path):
@@ -654,6 +686,8 @@ def test_dashboard_rejects_health_watch_from_previous_cycle_even_on_same_busines
     assert payload["prediction_quality_health"]["status"] == "HEALTHY"
     assert payload["prediction_quality_health"]["provenance_status"] == "MISMATCHED"
     assert payload["prediction_quality_health"]["runtime_cycle_finished_at"] == runtime["finished_at"]
+    html = (roots["output_root"] / "latest.html").read_text(encoding="utf-8")
+    assert "预测质量状态待确认 · 模型原始输出" in html
 
 
 def test_abnormal_runtime_shows_warning_without_normal_kpi_grid(tmp_path):

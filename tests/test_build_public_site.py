@@ -177,6 +177,8 @@ def test_build_propagates_current_prediction_quality_warning_to_linked_detail(tm
     dashboard["prediction_quality_health"] = {
         "status": "ALERT",
         "scope": "current_serving",
+        "available": True,
+        "provenance_status": "MATCHED",
         "business_date": "2026-08-25",
         "runtime_cycle_finished_at": "2026-08-25T12:01:00+08:00",
     }
@@ -188,3 +190,6 @@ def test_build_propagates_current_prediction_quality_warning_to_linked_detail(tm
     detail = (tmp_path / "site" / "matches/1001/index.html").read_text(encoding="utf-8")
     assert "\u9884\u6d4b\u8d28\u91cf\u5f02\u5e38" in detail
     assert "\u4eca\u65e5\u6bd4\u5206\u9884\u6d4b\u51fa\u73b0\u5f02\u5e38\u96c6\u4e2d\uff0c\u5f53\u524d\u9884\u6d4b\u4ecd\u4fdd\u7559\u4f9b\u89c2\u5bdf\u3002" in detail
+    assert "模型原始比分 · 当前不作为推荐" in detail
+    assert "当前比分推荐能力处于质量降级状态" in detail
+    assert "首推比分" not in detail
