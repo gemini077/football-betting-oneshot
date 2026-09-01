@@ -1,212 +1,145 @@
-# AGENTS.md — Football Betting OneShot Repository Rules
-## 2026-08-28 CURRENT AUTHORITY
+# AGENTS.md — Football Betting OneShot
 
-- 最新 `origin/main` 与真实 production evidence 优先于旧聊天、旧本地状态和旧 `LOCKED / CURRENT / SEALED` 叙述；冲突时以最新可验证事实为准，但不得伪造状态。
-- 仓库治理阅读顺序：`14 → 15 → 19 → 16 → 17 → 18 → 00 → WORK_MANIFEST`。只引用仓库真实存在的文件。
-- 产品 North Star：足球情报 + 市场情报 + 多玩法赛前概率预测 + 赛后真实验证 + 用户决策。
-- `Market State / Football Evidence / Prematch Intelligence` 必须分层，并记录 `freshness / completeness / confidence`。证据质量决定影响力；低质量 shallow recent form 不能仅因固定权重覆盖 `FULL` market。现有 `60/40` 与 `65/35` 只是 legacy implementation，不是产品原则。
-- `recent_form_market_calibrated_poisson_v2` 仍是 production Champion；Promotion Gate 前不得替换。
-- 同一历史样本上的权重扫描、调参和回放只用于提出 hypothesis，不能直接 promotion；升级必须经过 prospective Shadow、按 unique match 评估和 Promotion Gate。
-- bounded issue 收口后必须回到产品层，不得围绕 `1:1`、lambda 或单点表象连续打补丁。
-- 产品必须边运行边优化；数据不足时降低置信度或不输出对应玩法，禁止编造。成本优先级：免费且长期稳定 > 自研 / 二次开发 > 付费 benchmark / fallback。
-- `17_NEXT_WORK_后续工作.md` 是当前唯一执行指针；旧 PA-2-R1 / 1:1 / lambda / Shadow 记录只有在 17 的最新 `CURRENT` 块明确要求时才能恢复。
+本文件是本仓库 Codex / 自动化开发代理的长期执行层。目标：安全、快速、低调用开销。
 
-本文件是 Codex / 自动化开发代理进入本仓库时必须优先遵守的仓库级规则。
+## 1. Authority / Start
 
-## 1. 每次任务开始前必须阅读
+优先级：
 
-按以下顺序读取：
+1. 当前用户任务 / milestone prompt；
+2. 最新 remote `main` 与真实 runtime / production evidence；
+3. 本文件的 Durable Rules；
+4. prompt 明确指向的 current-state / decision / acceptance 文件；
+5. 其他历史治理文档。
 
-1. `14_PRODUCT_BLUEPRINT_产品全貌.md`
-2. `15_PROJECT_STATUS_项目状态.md`
-3. `16_ROADMAP_项目路线图.md`
-4. `17_NEXT_WORK_后续工作.md`
-5. `18_ACCEPTANCE_验收标准.md`
-6. `19_DECISIONS_关键决策.md`
-7. `00_PROJECT_INSTRUCTIONS_粘贴到项目指令.md`
-8. `WORK_MANIFEST.json`
+旧聊天、旧 SHA、旧 `LOCKED / CURRENT / SEALED` 若与最新事实冲突，必须以最新可验证事实为准。
 
-然后再根据当前任务读取对应业务/技术文件。
+**不要默认批量读取 00 / 14 / 15 / 16 / 17 / 18 / 19 / WORK_MANIFEST。**
+Codex 已加载本文件；任务开始后只读 prompt 明确指向的文件和代码。只有确实缺少当前事实时，才按需读取相关治理文件的最新 CURRENT / decision / acceptance 段。
 
-如果这些文件与旧历史文档冲突，以更新、更具体的当前状态、关键决策和验收标准为准。不得静默覆盖已锁定决定。
+不得因为 `17_NEXT_WORK_后续工作.md` 写了 Next 就机械继续；当前 prompt 已代表 ChatGPT 完成后的 Project Gate / decision delta。发现 prompt 与 latest repo/runtime 明显冲突时，FAIL CLOSED 并报告。
 
-## 2. 当前产品定位
+## 2. Product invariants
 
-本项目是“足球情报 + 市场情报 + 赛前概率预测 + 赛后真实验证”的足球分析平台。
+North Star：
+足球情报 + 市场情报 + 多玩法赛前概率预测 + 赛后真实验证 + 用户决策。
 
-竞彩、亚盘、大小球、比分、EV、组合策略属于下游应用，不是所有开发工作的默认主线。
-
-核心优先级：
-
-1. 数据真实、完整、可追溯；
-2. 预测赛前冻结、赛后不可篡改；
-3. 模型质量通过真实 prospective 验证；
-4. 用户能快速理解比赛结论、证据与风险；
-5. 再扩展投注决策层。
-
-禁止为了页面完整、分析好看或命中率叙事而掩盖底层模型问题。
-
-## 3. 当前唯一主线
-
-以 `17_NEXT_WORK_后续工作.md` 为唯一当前任务指针。
-
-当前主线：
-
-`17_NEXT_WORK_后续工作.md` 顶部最新 `CURRENT` 块定义当前主线；这里不再硬编码历史 Phase。
-
-除非该文件被正式更新，否则不得擅自启动 Roadmap 中后续阶段。
-
-## 4. 阶段状态权限
-
-Codex / 开发代理不得自行宣布某阶段 `SEALED`。
-
-允许状态流转：
-
-`CURRENT → READY_FOR_ACCEPTANCE → PASS/FAIL（独立验收） → SEALED`
-
-完成代码、测试全绿或生成交付 ZIP，只能说明 `READY_FOR_ACCEPTANCE`。
-
-只有独立验收通过后，才允许将阶段标记为 `SEALED`。
-
-## 5. Production / Research 边界
-
-当前正式 Champion：
-
+Production Champion：
 `recent_form_market_calibrated_poisson_v2`
 
-已知其 exact-score headline 存在严重结构性 collapse。不能将当前“唯一比分”包装成高可信结论；但在没有通过 promotion gate 前，也不得直接替换 production Champion。
+Promotion Gate 前不得替换 Champion。
 
-研究 Challenger 必须保持 shadow / research only。
+必须保持：
 
-禁止：
+- 正式预测只使用合法赛前证据；
+- frozen prediction 不得重写；
+- 赛后结果不得反灌赛前输入；
+- 正式结果口径为 90 分钟 + 伤停补时，不含加时/点球；
+- Challenger 只能 shadow / research，除非 prompt 明确给出已通过的独立 Promotion 决策；
+- Promotion 统计单位 = unique football match；immutable pair/version history 只作审计；
+- 数据不足时降低置信度或 abstain，禁止编造；
+- 不为减少 1:1 人工加入 diversity quota / draw penalty / random score replacement；
+- 不把 pilot / legacy / excluded 样本混入 formal prospective 主指标。
 
-- 重写已有 frozen prediction；
-- 赛后重跑模型冒充赛前预测；
-- 用真实结果调当前比赛的 shadow 输出；
-- 为减少 1-1 人工加入 score diversity、draw penalty、随机化；
-- 未验证即启用 Outcome-conditioned 或 Scenario Challenger；
-- 修改历史 prospective ledger 以改善指标；
-- 将 pilot / legacy / excluded 样本混入 formal prospective 主指标。
+## 3. Luna Max Cost / Time Gate
 
-## 6. 数据与时间规则
+本项目默认把 Codex 当**已收敛路线的执行器**，不是研究员或产品经理。
 
-- 足球业务日期统一使用 Asia/Shanghai（UTC+8）。
-- Prediction Universe 是当天赛程 canonical schedule。
-- 正式结果口径：90 分钟 + 伤停补时，不含加时和点球。
-- 正式研究必须防 future leakage；训练数据时间必须早于评价比赛。
-- Canonical competition/team identity 是后续模型研究与产品数据层的基础能力。
-- 禁止 fuzzy / LLM / 人工猜测式 identity mapping 进入正式链路。
+每轮：
 
-## 7. 用户界面语言
+- 先精确定位 prompt 给出的 paths / symbols / failing evidence；
+- 禁止无必要 repo-wide 全文扫描；
+- 禁止重新做市场、provider、竞品、价格、路线研究；这些由 ChatGPT 先完成；
+- 只修改完成当前 Goal 所需的最小 coherent diff；
+- 不顺手重构、不清理无关历史、不扩展功能；
+- 优先复用已有 helper / test / fixture / governance contract；
+- focused tests 优先；
+- full suite 只在 prompt 明确要求，或改动确实跨越核心公共接口/高风险边界时执行；
+- 同一 run 内代码未再变化时，不重复运行已经 PASS 的重型测试；
+- 同类失败连续两次后，第三次尝试前必须停止 patch loop，输出 root cause / disconfirming evidence；
+- 遇到外部服务不可用时，区分 source failure 与代码 failure；不要无限 retry；
+- 若当前 hypothesis 被证据推翻，STOP 并报告，不自行发明新路线。
 
-正常用户页面使用足球产品语言，不暴露内部工程术语。
+目标不是最少 token 本身，而是最少**总成本**：
+`Luna quota + wall time + retries + Founder time + regression risk`。
 
-用户界面不得突出：
-
-- AI / LLM / OpenAI；
-- Claim / Validator / Taxonomy；
-- FUSION_BASELINE；
-- Frozen / lineage / governance；
-- internal model family / internal file path。
-
-工程信息只能放低权重、默认折叠的技术详情中。
-
-## 8. 开发方式
+## 4. Engineering boundary
 
 默认：
 
-- 成品优先；
+- 一个 milestone = 一个目标；
+- 一个 atomic branch / PR；
 - 最短交付路径；
-- 小阶段、唯一任务名；
-- 先修阻塞真实产品价值的问题；
-- 不因为 Roadmap 存在未来阶段就顺手一起开发；
-- 不做与当前阶段无关的重构。
+- fail closed；
+- 不新增依赖，除非 prompt 明确允许；
+- 不修改与当前 Goal 无关的 workflow / deployment / provider；
+- 不占用 Founder 桌面、鼠标、键盘或长期前台窗口；
+- 优先 CLI / headless / CI / isolated worktree。
 
-凡需要占用用户桌面、鼠标、键盘或长期前台窗口的方式默认禁止。
+涉及 identity：
+禁止用 LLM 猜测或无约束 fuzzy mapping 进入正式链路；必须保留 deterministic provenance / ambiguity / orientation / kickoff safety。
 
-优先后台脚本、CLI、headless、独立工作目录、临时 worktree、CI。
+涉及 provider：
+免费且长期稳定 > 自研/二次开发 > 付费 fallback；不要因为单点失败自行 provider hopping。
 
-### 工具与市场发现
+## 5. Validation proportionality
 
-凡涉及重大模块或 build-vs-buy，执行顺序必须是 `landscape → shortlist → compare → bounded validation → build/adopt`。用户提供的工具或仓库只是搜索种子，不是完整候选空间；必须主动扩展到竞品、替代方案、相邻类别、开源项目、国内外商业工具/API、上下游组件、近期更新和低成本组合，并以 D-023 的比较与门禁规则为准。发现结果不得绕过现有 Champion、生产、验收或 promotion 门禁，也不得仅因出现新选项就无界限地 churn 架构。
+先验证最接近改动的契约：
 
-## 9. Git 与交付
+1. targeted reproduction / fixture；
+2. focused unit / integration tests；
+3. lint / compile / `git diff --check`；
+4. 只有必要时才扩大 regression / full suite。
 
-项目正式验收/交付目录位于仓库外：
+测试失败若明显属于 unchanged baseline：
+记录证据并隔离，不为让全仓“全绿”而顺手改 unrelated code。
 
-`D:\MyProject\_deliveries\football-betting-oneshot\`
+没有真实 runtime evidence 时：
+只能报告 Implementation / Engineering PASS，不能报告 Runtime / Production PASS。
 
-仓库内不得新增正式交付副本目录：
+## 6. Git / delivery
 
-- `deliverables/`
-- `delivery/`
-- `handoff/`
-- `evidence/`
-- `screenshots/`
-- `submission/`
+禁止：
 
-历史 `artifacts/*handoff.zip` 属于待治理遗留物，不得在无独立清理任务时顺手删除。
+- `git reset --hard`
+- force push main
+- 无理由删除 production durable data
+- 重写 frozen / prospective history
 
-临时 staging 使用 `%TEMP%`。
+交付前执行 `REMOTE_DELIVERY_CHECK`：
 
-不得 `git reset --hard`、不得 force push、不得无理由清理 production durable data。
+- branch pushed；
+- remote branch 可读；
+- commit SHA 可读；
+- PR 已创建；
+- PR head = delivery SHA；
+- PR body 简洁包含 milestone / result / blockers / tests / STOP。
 
-## 9A. REMOTE_DELIVERY_CHECK（永久规则）
+默认 STOP：
+`READY_FOR_INDEPENDENT_ACCEPTANCE`
 
-从本规则生效起，每个后续 milestone 在任务结束前都必须执行一次
-`REMOTE_DELIVERY_CHECK`，无论结果是 `READY_FOR_ACCEPTANCE`、`BLOCKED`、
-`INCONCLUSIVE`、`NOT_IMPLEMENTED` 还是 `CREDENTIAL_MISSING`。
+除非当前 prompt 明确授权 merge / production verify，否则不得自行 SEALED。
 
-必须确认：
+## 7. Status vocabulary
 
-1. 当前交付 branch 已 push；
-2. remote branch 存在；
-3. commit SHA 可从 GitHub 读取；
-4. GitHub PR 已创建；
-5. PR head SHA 与本地交付 SHA 一致；
-6. PR body 包含 milestone、result、blockers、tests/evidence 和 STOP state。
+必须区分：
 
-阻塞或未实现的 milestone 也必须创建最小 GitHub evidence PR。只有在
-branch、commit、PR 和 head SHA 均可从 GitHub 读取后，才可向用户报告远端
-交付状态；本地文件存在或本地提交本身不构成远端交付证据。
+- Implementation PASS
+- Engineering PASS
+- Runtime PASS
+- Closed Beta Ready
+- Public Launch Ready
+- Product Outcome PASS
 
-## 10. 任务完成时必须做的事
+`tests green != production deployed`
+`merge != runtime pass`
+`local fix != product closure`
 
-每个阶段结束时：
+涉及 production 时，必须分别验证：
+merge → workflow actual run → durable write-back → runtime freshness / health。
 
-1. 按 `18_ACCEPTANCE_验收标准.md` 自检；
-2. 运行该阶段 focused tests；
-3. 运行完整测试（若阶段要求）；
-4. 验证 production mutation safety；
-5. 生成规定的仓库外交付；
-6. 将阶段标记为 `READY_FOR_ACCEPTANCE`，不得自称 SEALED；
-7. 如阶段改变项目事实，更新：
-   - `15_PROJECT_STATUS_项目状态.md`
-   - `17_NEXT_WORK_后续工作.md`
-   - `16_ROADMAP_项目路线图.md`（仅当路线变化）
-   - `19_DECISIONS_关键决策.md`（仅当有新锁定决定）
+## 8. User-facing boundary
 
-## 11. 部署类任务的额外验收
+正常产品页面使用足球语言，不暴露 AI / LLM / internal governance / model paths。
 
-“测试通过”或“本地代码完成”不等于“已经上线”。
-
-涉及 production / Pages / workflow 的任务，必须区分：
-
-- local code accepted；
-- remote branch / PR；
-- merge to `main`；
-- workflow actual run；
-- durable GitHub state；
-- actual Pages；
-- runtime freshness / health。
-
-没有真实远端证据时，不得写“已部署”。
-
-## 12. 冲突处理
-
-若当前任务要求与仓库状态、Roadmap、关键决策冲突：
-
-- 不得默认照做；
-- 先指出冲突；
-- 优先保护 frozen history、prospective integrity、production Champion、自动化和数据完整性；
-- 需要改变已锁定决定时，必须留下新证据和明确决策记录。
+Founder 不承担日常 QA、研究、数据搬运或多轮调试。只有账户、登录、权限、支付、本机或人类感知不可替代时才要求 Founder 操作；动作必须一次性、机械、有 stop rule。
