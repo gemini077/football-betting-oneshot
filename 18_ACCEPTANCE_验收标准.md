@@ -18,6 +18,35 @@
 9. 如果声称“上线”，远端是否真的部署；
 10. 是否产生下一阶段需要的可复用证据。
 
+# PRED-AVAILABILITY-NOWSCORE-IDENTITY-GATE-1-RUNTIME-CORRECTION-1 Acceptance Gate
+
+Status: READY_FOR_INDEPENDENT_ACCEPTANCE
+
+Independent acceptance must verify:
+1. Ordinary explicit IDs use the pre-#143 team identity/name, kickoff, and
+   existing binding gates; missing, zero, or unparsable page IDs do not add a
+   false negative, and no fuzzy threshold or kickoff tolerance changed.
+2. The trusted path still requires verified
+   `nowscore_public_jc_sales` membership, exact match/confidence, matching
+   fixture/evidence/requested IDs, complete sales/date provenance, compatible
+   kickoff, and no orientation or ambiguity conflict.
+3. A positive equal page ID is corroborating, a positive unequal page ID is
+   `PROVIDER_ID_MISMATCH` and fails closed, and an unavailable page ID is
+   `PAGE_PROVIDER_ID_UNAVAILABLE` but is non-blocking when trusted identity
+   facts otherwise pass.
+4. A rejected Nowscore result persists status, resolution, identity errors,
+   identity-verification status/reasons, trusted-JC provenance reasons, parsed
+   page ID, and page-ID availability state in the BASE diagnostic.
+5. The five current failure IDs and four PR #143-repaired IDs have deterministic
+   synthetic replay coverage. Missing raw pages must be stated; the replay is
+   not live production proof and durable production/frozen/prospective data
+   remains unchanged.
+6. Focused tests, `py_compile`, `git diff --check`, scope review, branch/
+   commit/PR/head-SHA evidence, and `REMOTE_DELIVERY_CHECK` pass.
+
+Acceptance boundary: stop at `READY_FOR_INDEPENDENT_ACCEPTANCE`. Do not merge,
+change the Champion, modify the 500 fetcher, or start the next blocker.
+
 # PRED-AVAILABILITY-NOWSCORE-IDENTITY-GATE-1 Acceptance Gate
 
 Status: READY_FOR_INDEPENDENT_ACCEPTANCE

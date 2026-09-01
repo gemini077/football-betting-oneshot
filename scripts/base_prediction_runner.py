@@ -142,6 +142,59 @@ def _provenance_diagnostic(
     return diagnostic
 
 
+def _nowscore_identity_diagnostic(result: dict[str, Any], references: list[str]) -> dict[str, Any]:
+    """Persist the identity gate evidence instead of reducing it to a generic failure."""
+
+    page_identity = result.get("page_identity") or result.get("identity") or {}
+    page_provider_id = result.get("page_provider_id")
+    if page_provider_id is None and isinstance(page_identity, dict):
+        page_provider_id = page_identity.get("page_provider_id")
+    availability_state = result.get("page_provider_id_availability_state")
+    if availability_state is None and isinstance(page_identity, dict):
+        availability_state = page_identity.get("page_provider_id_availability_state")
+    page_provider_id_reason = result.get("page_provider_id_reason")
+    if page_provider_id_reason is None and isinstance(page_identity, dict):
+        page_provider_id_reason = page_identity.get("page_provider_id_reason")
+    diagnostic = _provenance_diagnostic(
+        PROVENANCE_STAGE_OTHER,
+        error_code="INPUT_PROVENANCE_UNVERIFIED",
+        source="nowscore",
+        status=str(result.get("status") or "IDENTITY_MISMATCH"),
+        detail="nowscore identity verification rejected",
+        references=references,
+    )
+    identity_verification = copy.deepcopy(result.get("identity_verification"))
+    trusted_jc_provenance = copy.deepcopy(result.get("trusted_jc_provenance"))
+    diagnostic.update({
+        "nowscore_status": result.get("status"),
+        "resolution": copy.deepcopy(result.get("resolution")),
+        "identity_errors": copy.deepcopy(result.get("identity_errors") or []),
+        "identity_verification": identity_verification,
+        "identity_verification_status": (
+            identity_verification.get("status")
+            if isinstance(identity_verification, dict)
+            else None
+        ),
+        "identity_verification_reasons": (
+            copy.deepcopy(identity_verification.get("reasons") or [])
+            if isinstance(identity_verification, dict)
+            else []
+        ),
+        "trusted_jc_provenance": trusted_jc_provenance,
+        "trusted_jc_provenance_reasons": (
+            copy.deepcopy(trusted_jc_provenance.get("reasons") or [])
+            if isinstance(trusted_jc_provenance, dict)
+            else []
+        ),
+        "page_identity": copy.deepcopy(page_identity),
+        "parsed_page_provider_id": page_provider_id,
+        "page_provider_id": page_provider_id,
+        "page_provider_id_availability_state": availability_state,
+        "page_provider_id_reason": page_provider_id_reason,
+    })
+    return diagnostic
+
+
 def _normalized_signal(value: Any, *, source: str, references: list[str] | None = None) -> dict[str, Any] | None:
     if isinstance(value, dict) and value.get("stage"):
         signal = copy.deepcopy(value)
@@ -763,6 +816,8 @@ def _nowscore_source(
     if status != "OK":
         stage = PROVENANCE_STAGE_SOURCE_FETCH_FAILED if status == "FETCH_ERROR" else PROVENANCE_STAGE_OTHER
         error_code = "SOURCE_FETCH_FAILED" if stage == PROVENANCE_STAGE_SOURCE_FETCH_FAILED else "INPUT_PROVENANCE_UNVERIFIED"
+        if status == "IDENTITY_MISMATCH":
+            return None, _nowscore_identity_diagnostic(result, refs), refs
         return None, _provenance_diagnostic(
             stage,
             error_code=error_code,

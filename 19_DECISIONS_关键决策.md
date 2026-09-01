@@ -3,6 +3,31 @@
 最后更新：2026-09-01
 角色：记录不能因换对话 / 换 Codex 而重复推翻的关键决定。若新证据足以改变决定，必须新增 superseding decision，不得静默改历史。
 
+# D-041 - PRED-AVAILABILITY-NOWSCORE-IDENTITY-GATE-1-RUNTIME-CORRECTION-1
+
+Status: READY_FOR_INDEPENDENT_ACCEPTANCE
+Decision: Supersede only the page-provider-ID semantics introduced by PR #143.
+Ordinary explicit Nowscore IDs return to the pre-#143 verification contract:
+team identity/name, kickoff, and existing binding safety. A missing, zero, or
+unparsable `hide_scheduleId` is `PAGE_PROVIDER_ID_UNAVAILABLE`, an
+observability state rather than an ordinary false-negative gate.
+
+The trusted JC path remains gated by verified
+`nowscore_public_jc_sales` provenance, exact requested/fixture/evidence ID
+equality, exact match/confidence, complete sales/date provenance, kickoff, and
+orientation/ambiguity safety. A positive equal page ID corroborates; a
+positive unequal page ID fails closed with `PROVIDER_ID_MISMATCH`; unavailable
+page IDs do not alone reject a trusted fixture. BASE must persist the full
+Nowscore rejection context, including nested and flattened verification /
+provenance reasons and page-ID availability state.
+
+This is a bounded runtime correction. It does not change aliases, thresholds,
+kickoff tolerance, providers, the 500 fetcher, Champion/Challenger, model
+parameters, score selection, frozen history, or prospective history. Current
+fixture replay is deterministic/synthetic because raw pages are absent; it is
+not live production proof. STOP at READY_FOR_INDEPENDENT_ACCEPTANCE; do not
+merge or start the next blocker.
+
 # D-040 - PRED-AVAILABILITY-NOWSCORE-IDENTITY-GATE-1
 
 Status: READY_FOR_INDEPENDENT_ACCEPTANCE

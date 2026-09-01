@@ -3,32 +3,41 @@
 最后更新：2026-09-01
 角色：项目当前唯一人类可读状态真相。只记录当前事实，不承担完整历史档案职责。
 
-# PRED-AVAILABILITY-NOWSCORE-IDENTITY-GATE-1 - Trusted same-provider identity gate
+# PRED-AVAILABILITY-NOWSCORE-IDENTITY-GATE-1-RUNTIME-CORRECTION-1 - Runtime correction
 
 Status: READY_FOR_INDEPENDENT_ACCEPTANCE
-Decision: KEEP CHAMPION / KEEP existing production and research boundaries.
+Decision: KEEP CHAMPION / KEEP the trusted Nowscore JC route; correct only the
+page-provider-ID availability semantics and BASE rejection observability.
 
-BASE now passes the complete Prediction Universe fixture into the Nowscore
-market adapter. An explicit Nowscore ID may use the trusted path only when the
-fixture has exact Nowscore matching, jc_membership=VERIFIED from
-nowscore_public_jc_sales, matching fixture/evidence IDs, complete sales and
-business-date provenance, compatible kickoff, and no identity/orientation
-conflict. Team display-name fuzzy mismatch alone is not a rejection on that
-path. Ordinary explicit IDs without trusted JC evidence still use the existing
-name gate and fail closed.
+PR #143 (`a52b03550e746ec72f940be7d1e24966a376bdf3`) merged as
+`fdad6502e3f38c2ffbe816bc3b0a45c64c653720` and completed production run
+`33496472362`, but Runtime Acceptance failed: the two-day result remained
+12/17 FROZEN. The code diff confirms that PR #143 added an unconditional
+`expected_provider_id=match_id` gate to ordinary `_verified()`, while the page
+ID is parsed from one optional `hide_scheduleId` field. The pre-#143 version
+did not use that page ID in ordinary verification. This is the root-cause
+aligned correction; no raw current page is available for a per-ID live replay.
 
-Negative coverage includes provider-ID mismatch, missing provenance, ambiguous
-match status, conflicting stored binding, kickoff conflict, reversed team
-orientation, ambiguous page identity, and target/fixture reversal. The current
-2026-09-01 four-job failure cohort plus the 2026-09-02 one-job failure cohort
-passed a local synthetic page-identity replay: market status OK and analysis
-recent-form complete. The raw current pages for those five IDs are not present
-in the local cache, so this is a gate/integration replay, not a live-source
-claim; durable production data was not modified.
+Ordinary explicit IDs now retain the pre-#143 team-name, kickoff, and existing
+binding behavior. Missing, zero, or unparsable page IDs are classified as
+`PAGE_PROVIDER_ID_UNAVAILABLE` and are non-blocking for that path. A trusted
+JC path still requires verified `nowscore_public_jc_sales` provenance, exact
+same-provider IDs, complete sales/date provenance, kickoff compatibility, and
+orientation/ambiguity safety. A positive page-ID mismatch fails closed; a
+positive equal page ID is corroborating; an unavailable page ID is recorded but
+does not alone reject the trusted fixture.
 
-Focused tests: 95 passed. py_compile and git diff --check passed. No provider,
-500 fetcher, Champion/Challenger, model, frozen history, or prospective history
-was changed. STOP at READY_FOR_INDEPENDENT_ACCEPTANCE.
+BASE now persists Nowscore status/resolution, identity errors, identity
+verification status/reasons, trusted-JC provenance reasons, parsed page ID,
+and page-ID availability state in the durable input-provenance diagnostic.
+The five current failure IDs and four PR #143-repaired IDs pass deterministic
+synthetic replay; the raw pages are absent, so this is not live production
+proof. No durable production, frozen, prospective, Champion, Challenger C,
+provider, or 500-fetcher data was changed.
+
+Focused Nowscore/BASE/Prediction-Universe tests, `py_compile`, and
+`git diff --check` are required evidence. STOP at
+`READY_FOR_INDEPENDENT_ACCEPTANCE`; do not merge or start the next blocker.
 # CHALLENGER-C-UNIQUE-COHORT-SEMANTICS-1 - Promotion cohort semantics
 
 Status: INDEPENDENT_ACCEPTANCE_PASS / READY_FOR_MERGE

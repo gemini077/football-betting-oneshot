@@ -4,26 +4,34 @@
 
 # Current Sole Pointer
 
-# PRED-AVAILABILITY-NOWSCORE-IDENTITY-GATE-1 - Current implementation stop state
+# PRED-AVAILABILITY-NOWSCORE-IDENTITY-GATE-1-RUNTIME-CORRECTION-1 - Current stop state
 
 Status: READY_FOR_INDEPENDENT_ACCEPTANCE
 Decision: Keep the direct Nowscore JC sales-page route and existing Champion;
-close only the explicit-ID identity false-negative.
+restore ordinary explicit-ID semantics and make page-ID rejection causes
+durable.
 
-The BASE call now carries its matched Universe fixture into the Nowscore
-adapter. The trusted same-provider path requires exact JC match status and
-confidence, matching Nowscore IDs, complete nowscore_public_jc_sales
-sales/business-date provenance, compatible kickoff, and no orientation or
-identity conflict. It bypasses only the page team-name fuzzy rejection;
-ordinary explicit IDs remain fail-closed.
+PR #143's runtime result was FAIL / NOT SEALED: after merge, availability was
+still 12/17 FROZEN and the new unavailable cohort included 3008193,
+3000437, 3000436, and 2995152. The bounded correction removes the page-ID
+hard gate from ordinary `_verified()`. It classifies missing/zero/unparsable
+page IDs as `PAGE_PROVIDER_ID_UNAVAILABLE` without lowering name thresholds or
+changing kickoff tolerance.
 
-Local replay of the four 2026-09-01 failures and one 2026-09-02 failure
-returned Nowscore market OK with complete analysis recent-form under translated
-page names. This replay used synthetic page identity because the five current
-raw pages are absent from the local cache; no durable data was rewritten.
-Focused identity/BASE/Universe tests, 95 total, plus py_compile and diff-check
-passed. STOP at READY_FOR_INDEPENDENT_ACCEPTANCE; do not merge or start the
-next blocker.
+The trusted path remains strict: verified
+`nowscore_public_jc_sales` membership, exact same-provider fixture/evidence
+IDs, complete sales/date provenance, kickoff compatibility, and orientation /
+ambiguity safety. Positive unequal page IDs fail closed; positive equal IDs
+corroborate; unavailable IDs are non-blocking only when all trusted identity
+facts pass. BASE diagnostics now retain the Nowscore status, resolution,
+identity errors, both verification/provenance reason sets, parsed page ID, and
+availability state.
+
+The 2026-09-01 IDs 3008191/3008193, 2026-09-02 IDs 3000437/3000436/2995152,
+and PR #143-repaired IDs 3008194/3008190/3008192/3008739 have deterministic
+synthetic replay coverage. Current raw pages are absent, so the replay is not
+live production proof and no durable data was rewritten. STOP at
+`READY_FOR_INDEPENDENT_ACCEPTANCE`; do not merge or start the next blocker.
 # CHALLENGER-C-UNIQUE-COHORT-SEMANTICS-1 - Current implementation stop state
 
 Status: INDEPENDENT_ACCEPTANCE_PASS / READY_FOR_MERGE

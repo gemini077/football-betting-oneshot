@@ -1,4 +1,5 @@
 import unittest
+import json
 import tempfile
 from pathlib import Path
 import sys
@@ -20,6 +21,7 @@ from scripts.nowscore_markets import (
     parse_three_in_one,
     resolve_match,
     _verified,
+    _identity,
 )
 from market_intelligence import nowscore_trend_panel
 import scripts.nowscore_markets as nowscore_markets
@@ -60,20 +62,20 @@ var next_value = [];
 """
 
 
-def _trusted_jc_fixture() -> dict:
+def _trusted_jc_fixture(match_id: int = 123, business_date: str = "2026-09-01") -> dict:
     sales_url = (
         "https://cp.nowscore.com/buy/jingcai.aspx"
-        "?typeID=101&oddstype=2&date=2026-09-01"
+        f"?typeID=101&oddstype=2&date={business_date}"
     )
     return {
         "homeTeam": "Fixture Home",
         "awayTeam": "Fixture Away",
-        "businessDate": "2026-09-01",
-        "matchDate": "2026-09-01",
+        "businessDate": business_date,
+        "matchDate": business_date,
         "matchTime": "01:00:00",
         "matchNum": "周二001",
-        "nowscoreId": 123,
-        "nowscore_id": 123,
+        "nowscoreId": match_id,
+        "nowscore_id": match_id,
         "nowscoreMatchStatus": "EXACT_MATCH",
         "nowscoreMatchConfidence": 1.0,
         "jc_membership": "VERIFIED",
@@ -84,21 +86,21 @@ def _trusted_jc_fixture() -> dict:
         "business_date_source_url": sales_url,
         "match_number_source": "nowscore_public_jc_sales",
         "sales_row_id": "5510001",
-        "fetched_at": "2026-09-01T12:00:00+08:00",
+        "fetched_at": f"{business_date}T12:00:00+08:00",
         "jc_membership_evidence": {
             "source": "nowscore_public_jc_sales",
             "source_surface": sales_url,
-            "selected_date": "2026-09-01",
-            "business_date": "2026-09-01",
-            "nowscore_id": 123,
+            "selected_date": business_date,
+            "business_date": business_date,
+            "nowscore_id": match_id,
             "match_number": "周二001",
             "sales_row_id": "5510001",
             "sales_window": "11:00--次日11:00",
         },
         "date_provenance": {
-            "source_date_value": "2026-09-01 01:00",
-            "expected_business_date": "2026-09-01",
-            "business_date": "2026-09-01",
+            "source_date_value": f"{business_date} 01:00",
+            "expected_business_date": business_date,
+            "business_date": business_date,
             "business_date_source": "nowscore_public_jc_sales",
             "business_date_source_url": sales_url,
             "sales_window": "11:00--次日11:00",
@@ -116,6 +118,7 @@ def _fetch_explicit_market(
     binding: dict | None = None,
     home: str = "Fixture Home",
     away: str = "Fixture Away",
+    explicit_id: int = 123,
 ) -> dict:
     parsed = {
         "identity": page_identity,
@@ -145,10 +148,23 @@ def _fetch_explicit_market(
             home,
             away,
             kickoff,
-            explicit_id=123,
+            explicit_id=explicit_id,
             no_cache=True,
             fixture=fixture,
         )
+
+
+def _current_universe_fixture(match_id: int) -> dict:
+    for business_date in ("2026-09-01", "2026-09-02"):
+        document = json.loads(
+            (ROOT / "data" / "prediction_universe" / f"{business_date}.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        for fixture in document.get("fixtures") or []:
+            if int(fixture.get("nowscoreId") or 0) == match_id:
+                return fixture
+    raise AssertionError(f"fixture {match_id} not found in current universe")
 
 
 class NowscoreMarketTests(unittest.TestCase):
@@ -406,6 +422,135 @@ A[0]=[3001,1,777,888,'跨年主队',0,'Year End Home','跨年客队',0,'New Year
         self.assertIn("HOME_TEAM_MISMATCH", reasons)
         self.assertIn("AWAY_TEAM_MISMATCH", reasons)
 
+    def test_identity_parser_marks_missing_zero_and_unparseable_page_ids_unavailable(self):
+        pages = (
+            '<input id="hide_matchTime" value="2026-09-01 01:00">',
+            '<input id="hide_scheduleId" value="0">',
+            '<input id="hide_scheduleId" value="not-an-id">',
+        )
+
+        for html in pages:
+            with self.subTest(html=html):
+                identity = _identity(html)
+                self.assertEqual(0, identity["nowscore_id"])
+                self.assertEqual("UNAVAILABLE", identity["page_provider_id_availability_state"])
+                self.assertEqual("PAGE_PROVIDER_ID_UNAVAILABLE", identity["page_provider_id_reason"])
+
+    def test_ordinary_explicit_id_accepts_valid_identity_when_page_id_is_unavailable(self):
+        for page_id in (None, 0, "not-an-id"):
+            with self.subTest(page_id=page_id):
+                result = _fetch_explicit_market(
+                    {
+                        "nowscore_id": page_id,
+                        "kickoff_local": "2026/09/01 01:00",
+                        "home_team": "Fixture Home",
+                        "away_team": "Fixture Away",
+                    }
+                )
+
+                self.assertEqual("OK", result["status"])
+                self.assertEqual("UNAVAILABLE", result["page_provider_id_availability_state"])
+                self.assertEqual("ORDINARY_EXPLICIT_ID", result["identity_verification"]["status"])
+                self.assertIn(
+                    "PAGE_PROVIDER_ID_UNAVAILABLE",
+                    result["identity_verification"]["non_blocking_reasons"],
+                )
+
+    def test_ordinary_explicit_id_name_mismatch_still_fails_closed_without_page_id(self):
+        result = _fetch_explicit_market(
+            {
+                "nowscore_id": 0,
+                "kickoff_local": "2026/09/01 01:00",
+                "home_team": "Home Translation",
+                "away_team": "Away Translation",
+            }
+        )
+
+        self.assertEqual("IDENTITY_MISMATCH", result["status"])
+        self.assertIn("HOME_TEAM_MISMATCH", result["identity_errors"])
+        self.assertIn("AWAY_TEAM_MISMATCH", result["identity_errors"])
+        self.assertNotIn("PROVIDER_ID_MISMATCH", result["identity_errors"])
+
+    def test_trusted_jc_accepts_fuzzy_names_when_page_id_is_unavailable(self):
+        for page_id in (None, 0, "not-an-id"):
+            with self.subTest(page_id=page_id):
+                result = _fetch_explicit_market(
+                    {
+                        "nowscore_id": page_id,
+                        "kickoff_local": "2026/09/01 01:00",
+                        "home_team": "Home Translation",
+                        "away_team": "Away Translation",
+                    },
+                    fixture=_trusted_jc_fixture(),
+                )
+
+                self.assertEqual("OK", result["status"])
+                self.assertTrue(result["identity_verification"]["trusted"])
+                self.assertEqual("TRUSTED_JC_SAME_PROVIDER", result["identity_verification"]["status"])
+                self.assertIn(
+                    "PAGE_PROVIDER_ID_UNAVAILABLE",
+                    result["identity_verification"]["non_blocking_reasons"],
+                )
+
+    def test_pr143_regression_ordinary_explicit_id_remains_accepted_with_page_id_unavailable(self):
+        result = _fetch_explicit_market(
+            {
+                "nowscore_id": None,
+                "kickoff_local": "2026/09/01 01:00",
+                "home_team": "Fixture Home",
+                "away_team": "Fixture Away",
+            }
+        )
+
+        self.assertEqual("OK", result["status"])
+        self.assertNotIn("PROVIDER_ID_MISMATCH", result.get("identity_errors", []))
+
+    def test_current_failure_cohort_synthetic_replay_preserves_trusted_and_ordinary_paths(self):
+        cohorts = {
+            "2026-09-01": (3008191, 3008193),
+            "2026-09-02": (3000437, 3000436, 2995152),
+        }
+        repaired_by_pr143 = (3008194, 3008190, 3008192, 3008739)
+
+        for business_date, match_ids in cohorts.items():
+            for match_id in match_ids:
+                with self.subTest(business_date=business_date, match_id=match_id):
+                    fixture = _current_universe_fixture(match_id)
+                    kickoff = f"{fixture['matchDate']}T{fixture['matchTime']}:00+08:00"
+                    result = _fetch_explicit_market(
+                        {
+                            "nowscore_id": 0,
+                            "kickoff_local": f"{fixture['matchDate'].replace('-', '/')} {fixture['matchTime']}",
+                            "home_team": "Home Translation",
+                            "away_team": "Away Translation",
+                        },
+                        fixture=fixture,
+                        kickoff=kickoff,
+                        home=fixture["homeTeam"],
+                        away=fixture["awayTeam"],
+                        explicit_id=match_id,
+                    )
+                    self.assertEqual("OK", result["status"])
+
+        for match_id in repaired_by_pr143:
+            with self.subTest(business_date="2026-09-01", match_id=match_id):
+                fixture = _current_universe_fixture(match_id)
+                kickoff = f"{fixture['matchDate']}T{fixture['matchTime']}:00+08:00"
+                result = _fetch_explicit_market(
+                    {
+                        "nowscore_id": 0,
+                        "kickoff_local": f"{fixture['matchDate'].replace('-', '/')} {fixture['matchTime']}",
+                        "home_team": "Home Translation",
+                        "away_team": "Away Translation",
+                    },
+                    fixture=fixture,
+                    kickoff=kickoff,
+                    home=fixture["homeTeam"],
+                    away=fixture["awayTeam"],
+                    explicit_id=match_id,
+                )
+                self.assertEqual("OK", result["status"])
+
     def test_trusted_jc_explicit_id_allows_translated_market_names(self):
         result = _fetch_explicit_market(
             {
@@ -420,6 +565,7 @@ A[0]=[3001,1,777,888,'跨年主队',0,'Year End Home','跨年客队',0,'New Year
         self.assertEqual("OK", result["status"])
         self.assertEqual(123, result["nowscore_id"])
         self.assertEqual("TRUSTED_JC_SAME_PROVIDER", result["identity_verification"]["status"])
+        self.assertTrue(result["identity_verification"]["page_provider_id_corroborated"])
         self.assertTrue(result["quality"]["recent_form_complete"])
 
     def test_explicit_id_without_trusted_jc_provenance_still_rejects_name_mismatch(self):
@@ -465,6 +611,7 @@ A[0]=[3001,1,777,888,'跨年主队',0,'Year End Home','跨年客队',0,'New Year
 
         self.assertEqual("IDENTITY_MISMATCH", result["status"])
         self.assertIn("PROVIDER_ID_MISMATCH", result["identity_errors"])
+        self.assertFalse(result["identity_verification"]["page_provider_id_corroborated"])
 
     def test_trusted_jc_path_fails_closed_when_membership_evidence_is_missing(self):
         fixture = _trusted_jc_fixture()
@@ -481,6 +628,22 @@ A[0]=[3001,1,777,888,'跨年主队',0,'Year End Home','跨年客队',0,'New Year
 
         self.assertEqual("IDENTITY_MISMATCH", result["status"])
         self.assertIn("JC_MEMBERSHIP_EVIDENCE_MISSING", result["identity_errors"])
+
+    def test_trusted_jc_path_fails_closed_when_membership_is_unverified(self):
+        fixture = _trusted_jc_fixture()
+        fixture["jc_membership"] = "UNVERIFIED"
+        result = _fetch_explicit_market(
+            {
+                "nowscore_id": 123,
+                "kickoff_local": "2026/09/01 01:00",
+                "home_team": "Home Translation",
+                "away_team": "Away Translation",
+            },
+            fixture=fixture,
+        )
+
+        self.assertEqual("IDENTITY_MISMATCH", result["status"])
+        self.assertIn("JC_MEMBERSHIP_UNVERIFIED", result["identity_errors"])
 
     def test_trusted_jc_path_fails_closed_on_conflicting_stored_binding(self):
         result = _fetch_explicit_market(
