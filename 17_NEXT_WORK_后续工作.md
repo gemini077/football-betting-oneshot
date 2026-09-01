@@ -6,16 +6,16 @@
 
 # CHALLENGER-C-UNIQUE-COHORT-SEMANTICS-1 - Current implementation stop state
 
-Status: READY_FOR_INDEPENDENT_ACCEPTANCE
-Decision: KEEP CHAMPION / KEEP C SHADOW; no merge or promotion.
+Status: INDEPENDENT_ACCEPTANCE_PASS / READY_FOR_MERGE
+Decision: KEEP CHAMPION / KEEP C SHADOW; semantics fix ready for merge; no C promotion.
 
 PR #142 separates immutable pair/version history from the formal Promotion
 statistical cohort. Every legal version remains retained, while the shared
 legal-prematch selector chooses one deterministic latest valid pre-kickoff
 representative per football match and fails closed on equal final chronology.
 
-The current closure is 124 total rows, 123 promotion-eligible rows, 112
-verified version rows, 36 eligible unique matches, 29 verified unique matches,
+The synchronized closure is 138 total rows, 137 promotion-eligible rows, 112
+verified version rows, 40 eligible unique matches, 29 verified unique matches,
 26 verified version-history groups, and 83 extra verified version rows. The
 checkpoint now uses `verified_unique_matches=29`, is `NOT_REACHED`, has next
 threshold 50, and keeps `auto_promote=false`. Canonical metrics and bounded
@@ -23,10 +23,10 @@ slices are unique-match metrics; raw version rows are audit-only.
 
 Focused semantics/review/shadow/refresh/governance/formula tests, `py_compile`,
 and `git diff --check` are required evidence for independent acceptance.
-STOP this milestone at `READY_FOR_INDEPENDENT_ACCEPTANCE`: do not merge, do not
-promote C, and do not create another Challenger. Unique matches continue
+STOP this milestone at `READY_FOR_MERGE`: merge only this accepted semantics
+change; do not promote C or create another Challenger. Unique matches continue
 accumulating naturally; do not wait for 50 before returning to other product
-work after acceptance.
+work.
 
 # CHALLENGER-C-PROMOTION-REVIEW-1 - Current review stop state
 

@@ -5,16 +5,18 @@ Safety Gate: **`FAIL`**
 
 ## Stop state
 
-The final review stops before Champion promotion, merge, and production verification.
-No new Challenger was created and no frozen/prospective history was rewritten.
+The Promotion review stops before Champion or Challenger C promotion. Unique-cohort
+semantics are independently accepted, PR #142 is synchronized to latest main, and
+the implementation is ready for merge. No new Challenger was created and no
+frozen/prospective history was rewritten.
 
 ## Source and cohort
 
 - Latest shadow artifact: `data/prediction_quality/market_side_shadow_1/latest.json`
 - Existing result artifacts only; no new matches fetched: `data/postmatch_automation/results`
-- Total pair/version rows: `124`; promotion-eligible version rows: `123`
+- Total pair/version rows: `138`; promotion-eligible version rows: `137`
 - Verified version rows (audit only): `112`
-- Promotion-eligible unique matches: `36`; verified unique matches: `29`
+- Promotion-eligible unique matches: `40`; verified unique matches: `29`
 - Version-history match groups: `26`; extra verified version rows: `83`
 - Checkpoint: `NOT_REACHED`; next threshold: `50`; auto-promote: `False`
 
@@ -80,13 +82,14 @@ Subgroup safety: **`PASS`**; checked slices: `4`; triggers: `0`.
 ## Integrity and production boundary
 
 - Pair/freeze integrity: **`PASS`**
-- Post-match generation flag: `123/123` false
+- Post-match generation flag: `137/137` false
 - Result identity mismatches: `0`
-- No promotion implementation, merge, production run, or production mutation was attempted after the failed gate.
+- No Champion promotion, Challenger C activation, or production run was attempted;
+  PR #142 contains only the accepted semantics change plus synchronized derived evidence.
 - Current Champion remains `recent_form_market_calibrated_poisson_v2`; C remains shadow-only.
 
 ## Exact stop decision
 
 `KEEP CHAMPION / KEEP C SHADOW`
 
-The current unique-match sample is below the configured minimum, so this milestone stops before merge or promotion. Unique matches may continue accumulating naturally after independent acceptance; do not wait for 50 before returning to other product work. Do not refit C and do not create another Challenger in this stopped milestone.
+The current unique-match sample is below the configured minimum, so Challenger C promotion remains stopped. The accepted semantics change in PR #142 is ready for merge. Unique matches may continue accumulating naturally; do not wait for 50 before returning to other product work. Do not refit C and do not create another Challenger in this stopped milestone.
