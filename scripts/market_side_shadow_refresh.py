@@ -32,7 +32,7 @@ from prospective_settlement import (  # noqa: E402
 
 
 MILESTONE = "MARKET-SIDE-SHADOW-1"
-REFRESH_SCHEMA_VERSION = "market_side_shadow_1.refresh.v1"
+REFRESH_SCHEMA_VERSION = "market_side_shadow_1.refresh.v2"
 DEFAULT_RESULT_ROOT = POSTMATCH_RESULT_ROOT
 DEFAULT_OUTPUT = ROOT / "data" / "prediction_quality" / "market_side_shadow_1" / "latest.json"
 RESULT_SOURCE_LABEL = "data/postmatch_automation/results/*.json"
@@ -209,6 +209,13 @@ def refresh_shadow(
         "promotion_eligible_pairs": document["counts"]["promotion_eligible_pairs"],
         "excluded_non_promotion_pair_count": document["counts"]["excluded_non_promotion_pair_count"],
         "verified_paired_count": evaluation["verified_paired_count"],
+        "total_pair_version_rows": document["counts"]["total_pair_version_rows"],
+        "promotion_eligible_pair_version_rows": document["counts"]["promotion_eligible_pair_version_rows"],
+        "verified_pair_version_rows": document["counts"]["verified_pair_version_rows"],
+        "promotion_eligible_unique_matches": document["counts"]["promotion_eligible_unique_matches"],
+        "verified_unique_matches": document["counts"]["verified_unique_matches"],
+        "version_history_match_groups": document["counts"]["version_history_match_groups"],
+        "extra_version_rows": document["counts"]["extra_version_rows"],
         "checkpoint_status": document["checkpoint"]["status"],
         "early_stop_status": evaluation["early_kill"]["status"],
         "latest_status": latest_status,

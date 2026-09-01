@@ -10,6 +10,7 @@ ledger, or post-match fields into a prediction capture.
 from __future__ import annotations
 
 import argparse
+from collections import Counter, defaultdict
 from copy import deepcopy
 import hashlib
 import json
@@ -38,11 +39,12 @@ from prediction_trust_2_replay import (  # noqa: E402
 )
 from prediction_trust_3_replay import derive_market_side_only_lambdas  # noqa: E402
 from postmatch_queue import parse_datetime  # noqa: E402
+from prematch_versioning import select_latest_legal_prematch  # noqa: E402
 
 
 MILESTONE = "MARKET-SIDE-SHADOW-1"
 SCHEMA_VERSION = "market_side_shadow_1.paired_capture.v1"
-EVALUATION_SCHEMA_VERSION = "market_side_shadow_1.evaluation.v1"
+EVALUATION_SCHEMA_VERSION = "market_side_shadow_1.evaluation.v2"
 NAMESPACE = "market_side_shadow_1"
 CHAMPION_NAMESPACE = "production_champion"
 CANDIDATE_NAMESPACE = "market_side_only_hybrid"
@@ -900,6 +902,191 @@ def _is_promotion_eligible_pair(pair: Mapping[str, Any]) -> bool:
     return pair.get("pair_status") == "PAIRED" and pair.get("promotion_eligible") is True
 
 
+def _pair_representative_exclusion_reason(pair: Mapping[str, Any]) -> str | None:
+    """Return why a version cannot represent its match in the promotion cohort."""
+
+    if not _is_promotion_eligible_pair(pair):
+        return "NOT_PROMOTION_ELIGIBLE"
+    integrity = pair.get("integrity") if isinstance(pair.get("integrity"), Mapping) else {}
+    if not integrity or any(value is not True for value in integrity.values()):
+        return "INTEGRITY_INVALID"
+    if pair.get("same_fixture") is not True or pair.get("champion_preserved") is not True:
+        return "PAIR_INTEGRITY_INVALID"
+    if pair.get("post_match_input_used_for_generation") is not False:
+        return "POST_MATCH_INPUT"
+
+    kickoff = parse_datetime(pair.get("kickoff_at"))
+    source_cutoff = parse_datetime(pair.get("source_cutoff"))
+    freeze_created = parse_datetime(pair.get("freeze_created_at"))
+    if kickoff is None or source_cutoff is None or freeze_created is None:
+        return "MISSING_PREMATCH_CHRONOLOGY"
+    if source_cutoff >= kickoff or freeze_created >= kickoff:
+        return "POST_KICKOFF_VERSION"
+    return None
+
+
+def _pair_selector_record(pair: Mapping[str, Any]) -> dict[str, Any]:
+    """Adapt one immutable pair version to the shared prematch selector contract."""
+
+    match_id = str(pair.get("match_id") or pair.get("match_key") or "")
+    match_key = str(pair.get("match_key") or "")
+    kickoff_at = pair.get("kickoff_at")
+    prediction_id = str(pair.get("challenger_prediction_id") or pair.get("pair_id") or "")
+    prediction_created_at = (
+        pair.get("prediction_created_at")
+        or pair.get("challenger_prediction_created_at")
+        or pair.get("champion_prediction_created_at")
+        or pair.get("freeze_created_at")
+    )
+    home = str(pair.get("home") or pair.get("home_team") or match_key or match_id)
+    away = str(pair.get("away") or pair.get("away_team") or match_key or match_id)
+    return {
+        "prediction_id": prediction_id,
+        "match_id": match_id,
+        "match_key": match_key,
+        "home": home,
+        "away": away,
+        "kickoff_at": kickoff_at,
+        "match_identity": {
+            "match_id": match_id,
+            "match_key": match_key,
+            "home": home,
+            "away": away,
+            "kickoff_at": kickoff_at,
+        },
+        "source_cutoff_at": pair.get("source_cutoff"),
+        "prediction_created_at": prediction_created_at,
+        "freeze_created_at": pair.get("freeze_created_at"),
+        "prediction_status": "formal",
+        "model_role": "champion",
+        "formal_eligible": True,
+        "model_formal_eligible": True,
+        "prediction_variant": "model_only",
+        "manual_override": False,
+    }
+
+
+def select_promotion_representatives(
+    pairs: Iterable[Mapping[str, Any]],
+    verified_results: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Select one legal prematch version per match without mutating history.
+
+    Pair/version rows remain the immutable audit history.  Only the selected
+    representative rows enter formal Promotion statistics.  The shared
+    ``prematch_versioning`` selector supplies the chronology rule and fails
+    closed when the final chronology is tied.
+    """
+
+    pair_list = [dict(pair) for pair in pairs]
+    result_map = dict(verified_results or {})
+    eligible_pairs = [pair for pair in pair_list if _is_promotion_eligible_pair(pair)]
+    groups: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for pair in eligible_pairs:
+        match_id = str(pair.get("match_id") or pair.get("match_key") or "")
+        if match_id:
+            groups[match_id].append(pair)
+
+    verified_version_pairs = [
+        pair for pair in eligible_pairs if _actual_for_pair(pair, result_map) is not None
+    ]
+    verified_groups: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for pair in verified_version_pairs:
+        match_id = str(pair.get("match_id") or pair.get("match_key") or "")
+        if match_id:
+            verified_groups[match_id].append(pair)
+
+    selected_representatives: list[dict[str, Any]] = []
+    verified_representatives: list[dict[str, Any]] = []
+    provenance: list[dict[str, Any]] = []
+    exclusion_counts: Counter[str] = Counter()
+    for match_id in sorted(groups):
+        group = sorted(groups[match_id], key=lambda pair: str(pair.get("pair_id") or ""))
+        legal_pairs: list[tuple[dict[str, Any], dict[str, Any]]] = []
+        group_exclusions: Counter[str] = Counter()
+        for pair in group:
+            reason = _pair_representative_exclusion_reason(pair)
+            if reason:
+                group_exclusions[reason] += 1
+                exclusion_counts[reason] += 1
+                continue
+            legal_pairs.append((pair, _pair_selector_record(pair)))
+
+        identity_pair = group[0]
+        identity = {
+            "match_id": match_id,
+            "match_key": identity_pair.get("match_key"),
+            "kickoff_at": identity_pair.get("kickoff_at"),
+        }
+        selection = select_latest_legal_prematch(
+            [record for _, record in legal_pairs],
+            identity=identity,
+        )
+        selected_pair: dict[str, Any] | None = None
+        if selection.get("status") == "SELECTED":
+            selected_id = str(selection.get("selected_prediction_id") or "")
+            selected_pair = next(
+                (pair for pair, record in legal_pairs if str(record.get("prediction_id") or "") == selected_id),
+                None,
+            )
+            if selected_pair is None:
+                selection = {
+                    **selection,
+                    "status": "SELECTOR_MAPPING_ERROR",
+                    "reason": "SELECTED_VERSION_NOT_FOUND_IN_PAIR_HISTORY",
+                    "selected_record": None,
+                    "selected_prediction_id": None,
+                }
+
+        actual = _actual_for_pair(selected_pair, result_map) if selected_pair is not None else None
+        if selected_pair is not None:
+            selected_representatives.append(deepcopy(selected_pair))
+            if actual is not None:
+                verified_representatives.append(deepcopy(selected_pair))
+
+        provenance.append({
+            "match_id": match_id,
+            "match_key": identity_pair.get("match_key"),
+            "version_count": len(group),
+            "promotion_eligible_version_count": len(group),
+            "legal_candidate_count": len(legal_pairs),
+            "excluded_version_counts": dict(sorted(group_exclusions.items())),
+            "status": selection.get("status"),
+            "reason": selection.get("reason"),
+            "selected_pair_id": selected_pair.get("pair_id") if selected_pair else None,
+            "selected_prediction_id": selection.get("selected_prediction_id"),
+            "selected_freeze_created_at": selection.get("selected_freeze_created_at"),
+            "selected_source_cutoff_at": selection.get("selected_source_cutoff_at"),
+            "selected_frozen_input_digest": selected_pair.get("frozen_input_digest") if selected_pair else None,
+            "verified": actual is not None,
+        })
+
+    verified_unique_matches = len(verified_representatives)
+    return {
+        "selector": "prematch_versioning.select_latest_legal_prematch",
+        "selector_version": "prematch_versioning.v1",
+        "groups": provenance,
+        "selected_representatives": selected_representatives,
+        "verified_representatives": verified_representatives,
+        "counts": {
+            "total_pair_version_rows": len(pair_list),
+            "promotion_eligible_pair_version_rows": len(eligible_pairs),
+            "verified_pair_version_rows": len(verified_version_pairs),
+            "promotion_eligible_unique_matches": len(groups),
+            "verified_unique_matches": verified_unique_matches,
+            "version_history_match_groups": sum(len(group) > 1 for group in verified_groups.values()),
+            "extra_version_rows": max(0, len(verified_version_pairs) - verified_unique_matches),
+            "promotion_eligible_version_history_match_groups": sum(len(group) > 1 for group in groups.values()),
+            "promotion_eligible_extra_version_rows": max(0, len(eligible_pairs) - len(groups)),
+            "selected_representative_matches": len(selected_representatives),
+            "excluded_version_counts": dict(sorted(exclusion_counts.items())),
+            "ambiguous_final_chronology_match_groups": sum(
+                item.get("status") == "AMBIGUOUS_FINAL_CHRONOLOGY" for item in provenance
+            ),
+        },
+    }
+
+
 def _metric_collapse(champion: Mapping[str, Any], challenger: Mapping[str, Any]) -> list[str]:
     """Operational early-kill sentinels, not a promotion gate or tuner."""
 
@@ -917,6 +1104,27 @@ def _metric_collapse(champion: Mapping[str, Any], challenger: Mapping[str, Any])
     return checks
 
 
+def _evaluate_selected_pairs(
+    selected: Iterable[tuple[Mapping[str, Any], tuple[int, int]]],
+) -> dict[str, Any]:
+    rows = list(selected)
+    actual_scores = [actual for _, actual in rows]
+    champion_outputs = [
+        pair["champion"]
+        for pair, _ in rows
+        if isinstance(pair.get("champion"), Mapping)
+    ]
+    challenger_outputs = [
+        pair["challenger"]
+        for pair, _ in rows
+        if isinstance(pair.get("challenger"), Mapping)
+    ]
+    return {
+        "champion": _candidate_metrics(champion_outputs, actual_scores),
+        "challenger": _candidate_metrics(challenger_outputs, actual_scores),
+    }
+
+
 def evaluate_paired_cohort(
     pairs: Iterable[Mapping[str, Any]],
     verified_results: Mapping[str, Any] | None = None,
@@ -930,29 +1138,55 @@ def evaluate_paired_cohort(
     pair_list = [dict(pair) for pair in pairs]
     result_map = dict(verified_results or {})
     promotion_pairs = [pair for pair in pair_list if _is_promotion_eligible_pair(pair)]
-    selected: list[tuple[dict[str, Any], tuple[int, int]]] = []
-    for pair in promotion_pairs:
-        actual = _actual_for_pair(pair, result_map)
-        if actual is not None:
-            selected.append((pair, actual))
-    actual_scores = [actual for _, actual in selected]
-    champion_outputs = [pair["champion"] for pair, _ in selected if isinstance(pair.get("champion"), Mapping)]
-    challenger_outputs = [pair["challenger"] for pair, _ in selected if isinstance(pair.get("challenger"), Mapping)]
-    champion_metrics = _candidate_metrics(champion_outputs, actual_scores)
-    challenger_metrics = _candidate_metrics(challenger_outputs, actual_scores)
-    integrity_failures = _integrity_failures(promotion_pairs)
+    raw_selected = [
+        (pair, actual)
+        for pair in promotion_pairs
+        if (actual := _actual_for_pair(pair, result_map)) is not None
+    ]
+    representative_selection = select_promotion_representatives(pair_list, result_map)
+    selected_representatives = representative_selection["selected_representatives"]
+    unique_selected = [
+        (pair, actual)
+        for pair in selected_representatives
+        if (actual := _actual_for_pair(pair, result_map)) is not None
+    ]
+    unique_metrics = _evaluate_selected_pairs(unique_selected)
+    version_row_metrics = _evaluate_selected_pairs(raw_selected)
+    champion_metrics = unique_metrics["champion"]
+    challenger_metrics = unique_metrics["challenger"]
+    integrity_failures = _integrity_failures(selected_representatives)
     collapse = _metric_collapse(champion_metrics, challenger_metrics)
-    verified_count = len(selected)
+    verified_version_count = len(raw_selected)
+    verified_unique_count = len(unique_selected)
     early_triggers = integrity_failures + collapse
-    if verified_count <= EARLY_KILL_WINDOW and early_triggers:
+    if verified_unique_count <= EARLY_KILL_WINDOW and early_triggers:
         early_status = "SHADOW_EARLY_STOP_RECOMMENDED"
-    elif verified_count > EARLY_KILL_WINDOW:
+    elif verified_unique_count > EARLY_KILL_WINDOW:
         early_status = "WINDOW_CLOSED"
     else:
         early_status = "NOT_TRIGGERED"
+    counts = representative_selection["counts"]
     return {
         "schema_version": EVALUATION_SCHEMA_VERSION,
-        "verified_paired_count": verified_count,
+        "metric_unit": "unique_match",
+        "version_row_metric_unit": "immutable_pair_version_row_audit_only",
+        # Legacy names remain as raw version-row audit aliases.  Promotion
+        # checkpointing and canonical metrics use the explicit unique count.
+        "verified_paired_count": verified_version_count,
+        "total_pair_version_rows": counts["total_pair_version_rows"],
+        "promotion_eligible_pair_version_rows": counts["promotion_eligible_pair_version_rows"],
+        "verified_pair_version_rows": counts["verified_pair_version_rows"],
+        "promotion_eligible_unique_matches": counts["promotion_eligible_unique_matches"],
+        "verified_unique_matches": counts["verified_unique_matches"],
+        "version_history_match_groups": counts["version_history_match_groups"],
+        "extra_version_rows": counts["extra_version_rows"],
+        "promotion_eligible_version_history_match_groups": counts["promotion_eligible_version_history_match_groups"],
+        "promotion_eligible_extra_version_rows": counts["promotion_eligible_extra_version_rows"],
+        "selected_representative_matches": counts["selected_representative_matches"],
+        "skipped_unverified_unique_match_count": max(
+            0,
+            counts["promotion_eligible_unique_matches"] - counts["verified_unique_matches"],
+        ),
         "paired_count": sum(pair.get("pair_status") == "PAIRED" for pair in pair_list),
         "promotion_eligible_pairs": len(promotion_pairs),
         "excluded_non_promotion_pair_count": sum(
@@ -969,8 +1203,21 @@ def evaluate_paired_cohort(
             "champion": champion_metrics,
             "challenger": challenger_metrics,
         },
+        "version_row_candidates": version_row_metrics,
+        "representative_selector": {
+            "selector": representative_selection["selector"],
+            "selector_version": representative_selection["selector_version"],
+            "groups": representative_selection["groups"],
+            "selected_representative_pair_ids": [
+                str(pair.get("pair_id") or "") for pair in selected_representatives
+            ],
+            "verified_representative_pair_ids": [
+                str(pair.get("pair_id") or "") for pair, _ in unique_selected
+            ],
+            "counts": counts,
+        },
         "btts_calibration_watch": {
-            "status": "TRACKING" if verified_count else "PENDING_MINIMUM_SAMPLE",
+            "status": "TRACKING" if verified_unique_count else "PENDING_MINIMUM_SAMPLE",
             "champion_ece": champion_metrics["btts"]["ece"],
             "challenger_ece": challenger_metrics["btts"]["ece"],
             "champion_brier": champion_metrics["btts"]["brier"],
@@ -988,8 +1235,14 @@ def evaluate_paired_cohort(
     }
 
 
-def checkpoint_status(verified_paired_count: int) -> dict[str, Any]:
-    count = max(0, int(verified_paired_count))
+def checkpoint_status(
+    verified_unique_matches: int,
+    *,
+    verified_pair_version_rows: int | None = None,
+) -> dict[str, Any]:
+    """Return a non-promoting checkpoint based on unique football matches."""
+
+    count = max(0, int(verified_unique_matches))
     if count >= PROMOTION_REVIEW_MINIMUM:
         status = "PROMOTION_REVIEW_READY"
         next_threshold = None
@@ -1001,6 +1254,15 @@ def checkpoint_status(verified_paired_count: int) -> dict[str, Any]:
         next_threshold = MIN_PAIRED_VERIFIED
     return {
         "status": status,
+        "observation_unit": "unique_match",
+        "verified_unique_matches": count,
+        "verified_pair_version_rows": (
+            max(0, int(verified_pair_version_rows))
+            if verified_pair_version_rows is not None
+            else None
+        ),
+        # Compatibility alias: this field now carries the checkpoint
+        # observation count, not raw immutable version rows.
         "verified_paired_count": count,
         "checkpoint_minimum": MIN_PAIRED_VERIFIED,
         "promotion_review_minimum": PROMOTION_REVIEW_MINIMUM,
@@ -1042,6 +1304,10 @@ def build_shadow_document(
             "post_match_input_used_for_generation": False,
             "formula_locked": "PRED-TRUST-3 market-side-only hybrid C",
             "promotion_cohort_filter": "pair_status=PAIRED AND promotion_eligible=true",
+            "immutable_version_history_preserved": True,
+            "promotion_statistical_unit": "one football match = one observation",
+            "promotion_representative_selector": "prematch_versioning.select_latest_legal_prematch",
+            "ambiguous_final_chronology": "fail_closed_for_match",
             "promotion_eligibility_requires": [
                 "formal Champion eligibility",
                 "explicit production automatic capture",
@@ -1063,8 +1329,18 @@ def build_shadow_document(
             "challenger_abstain": abstain_count,
             "promotion_eligible_pairs": promotion_eligible_count,
             "excluded_non_promotion_pair_count": excluded_non_promotion_count,
+            "total_pair_version_rows": evaluation["total_pair_version_rows"],
+            "promotion_eligible_pair_version_rows": evaluation["promotion_eligible_pair_version_rows"],
+            "verified_pair_version_rows": evaluation["verified_pair_version_rows"],
+            "promotion_eligible_unique_matches": evaluation["promotion_eligible_unique_matches"],
+            "verified_unique_matches": evaluation["verified_unique_matches"],
+            "version_history_match_groups": evaluation["version_history_match_groups"],
+            "extra_version_rows": evaluation["extra_version_rows"],
         },
-        "checkpoint": checkpoint_status(evaluation["verified_paired_count"]),
+        "checkpoint": checkpoint_status(
+            evaluation["verified_unique_matches"],
+            verified_pair_version_rows=evaluation["verified_pair_version_rows"],
+        ),
         "evaluation": evaluation,
         "pairs": pair_list,
         "production_protection": {
@@ -1139,6 +1415,8 @@ def main() -> int:
         "pair_path": str(persisted["path"]),
         "document_path": str(document_write["path"]),
         "verified_paired_count": document["evaluation"]["verified_paired_count"],
+        "verified_pair_version_rows": document["evaluation"]["verified_pair_version_rows"],
+        "verified_unique_matches": document["evaluation"]["verified_unique_matches"],
         "checkpoint": document["checkpoint"]["status"],
     }, ensure_ascii=False, indent=2))
     return 0

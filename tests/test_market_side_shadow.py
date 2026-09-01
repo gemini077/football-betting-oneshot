@@ -223,7 +223,7 @@ def test_evaluator_excludes_verified_engineering_pair_from_promotion_cohort(tmp_
     assert evaluation["early_kill"]["status"] == "NOT_TRIGGERED"
 
 
-def test_checkpoint_thresholds_use_verified_promotion_eligible_pairs(tmp_path):
+def test_checkpoint_thresholds_use_verified_unique_matches(tmp_path):
     base = capture_pair(
         frozen_record(tmp_path),
         snapshot_root=tmp_path,
@@ -242,7 +242,7 @@ def test_checkpoint_thresholds_use_verified_promotion_eligible_pairs(tmp_path):
             results[pair["match_id"]] = {"actual_score": "2-1"}
         return build_shadow_document(pairs, results)
 
-    assert replay(49)["evaluation"]["verified_paired_count"] == 49
+    assert replay(49)["evaluation"]["verified_unique_matches"] == 49
     assert replay(49)["checkpoint"]["status"] == "NOT_REACHED"
     assert replay(50)["checkpoint"]["status"] == "CHECKPOINT"
     assert replay(100)["checkpoint"]["status"] == "PROMOTION_REVIEW_READY"

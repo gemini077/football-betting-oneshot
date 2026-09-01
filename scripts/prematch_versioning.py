@@ -157,7 +157,8 @@ def select_latest_legal_prematch(
     """Select the latest legal immutable version for one match identity.
 
     The selector never mutates records and never treats a post-kickoff record
-    as a replacement for a prematch version.  Identity conflicts fail closed.
+    as a replacement for a prematch version.  Identity conflicts and equal
+    final chronology fail closed rather than being resolved by an ID tie-break.
     """
     expected = _expected_identity(identity)
     associated: list[dict[str, Any]] = []
@@ -191,6 +192,17 @@ def select_latest_legal_prematch(
         )
 
     legal.sort(key=sort_key, reverse=True)
+    if len(legal) >= 2 and sort_key(legal[0])[:3] == sort_key(legal[1])[:3]:
+        return {
+            "status": "AMBIGUOUS_FINAL_CHRONOLOGY",
+            "reason": "EQUAL_FINAL_PREMATCH_CHRONOLOGY",
+            "selected_record": None,
+            "selected_prediction_id": None,
+            "selected_freeze_created_at": None,
+            "selected_source_cutoff_at": None,
+            "candidate_count": len(legal),
+            "superseded_count": 0,
+        }
     selected = legal[0] if legal else None
     if selected is None:
         return {

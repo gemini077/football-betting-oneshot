@@ -4,6 +4,49 @@
 
 # Current Sole Pointer
 
+# CHALLENGER-C-UNIQUE-COHORT-SEMANTICS-1 - Current implementation stop state
+
+Status: INDEPENDENT_ACCEPTANCE_PASS / READY_FOR_MERGE
+Decision: KEEP CHAMPION / KEEP C SHADOW; semantics fix ready for merge; no C promotion.
+
+PR #142 separates immutable pair/version history from the formal Promotion
+statistical cohort. Every legal version remains retained, while the shared
+legal-prematch selector chooses one deterministic latest valid pre-kickoff
+representative per football match and fails closed on equal final chronology.
+
+The synchronized closure is 138 total rows, 137 promotion-eligible rows, 112
+verified version rows, 40 eligible unique matches, 29 verified unique matches,
+26 verified version-history groups, and 83 extra verified version rows. The
+checkpoint now uses `verified_unique_matches=29`, is `NOT_REACHED`, has next
+threshold 50, and keeps `auto_promote=false`. Canonical metrics and bounded
+slices are unique-match metrics; raw version rows are audit-only.
+
+Focused semantics/review/shadow/refresh/governance/formula tests, `py_compile`,
+and `git diff --check` are required evidence for independent acceptance.
+STOP this milestone at `READY_FOR_MERGE`: merge only this accepted semantics
+change; do not promote C or create another Challenger. Unique matches continue
+accumulating naturally; do not wait for 50 before returning to other product
+work.
+
+# CHALLENGER-C-PROMOTION-REVIEW-1 - Current review stop state
+
+Status: FAIL / STOPPED
+Decision: KEEP CHAMPION / KEEP C SHADOW
+
+The existing `market_side_shadow_1/latest.json` reproduces the supplied 112
+verified pair-row metrics, but those rows represent only 29 unique matches.
+There are 26 duplicate-match groups and 83 duplicate rows beyond one row per
+match, so the configured minimum unique-match gate of 50 is not met. Pair and
+freeze integrity is clean; no meaningful checked slice crossed the severe
+collapse floors; and no post-match generation input was detected.
+
+Evidence is recorded in
+`docs/prediction-quality/CHALLENGER-C-PROMOTION-REVIEW-1_FINAL_REPORT.md` and
+`data/prediction_quality/challenger_c_promotion_review_1/review.json`.
+STOP: do not promote, merge, run production verification, refit C, or create
+another Challenger in this stopped milestone. The next implementation task
+must address the prospective cohort's unique-match capture integrity.
+
 # NOWSCORE-JC-SALES-PAGE-1 - Sole current execution pointer
 
 Status: DEPLOYED / SEALED / PRODUCTION ACCEPTANCE READY
