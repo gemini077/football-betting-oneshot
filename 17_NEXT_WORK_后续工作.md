@@ -76,9 +76,9 @@ Next required action is independent acceptance of the evidence gate. If a later 
 
 # Historical pointer: PRED-INPUT-PROVENANCE-1 — Deterministic Prematch Input Provenance
 
-Historical status: `ACCEPTANCE PASS / MERGE AUTHORIZED`
+Historical status: `DEPLOYED / SEALED / PRODUCTION ACCEPTANCE PASS`
 
-Historical decision: `PRED-INPUT-PROVENANCE-1 = ACCEPTANCE PASS / MERGE AUTHORIZED`
+Historical decision: `PRED-INPUT-PROVENANCE-1 = DEPLOYED / SEALED / PRODUCTION ACCEPTANCE PASS`
 
 `HISTORICAL = PRED-INPUT-PROVENANCE-1`.
 
@@ -96,8 +96,8 @@ No current two-fixture eligibility change, timestamp fabrication, frozen
 prediction rewrite, or Champion change is part of this milestone.
 
 Evidence: `docs/data-foundation/PRED-INPUT-PROVENANCE-1_IMPLEMENTATION_REPORT.md`.
-Engineering acceptance is PASS and merge is authorized. Real production
-verification follows merge; do not start a next milestone.
+Production acceptance is PASS and the milestone is DEPLOYED / SEALED. The
+post-merge production verification is recorded; do not start a next milestone.
 
 # Previous milestone: PRED-IDENTITY-SAFE-PARTIAL-1 - Deterministic Nowscore Fallback
 
@@ -107,7 +107,7 @@ Decision: `PRED-IDENTITY-SAFE-PARTIAL-1 = DEPLOYED / SEALED / PRODUCTION ACCEPTA
 
 PR #139 = `DEPLOYED / SEALED / PRODUCTION ACCEPTANCE PASS`
 
-Closed historical milestone; current pointer is `PRED-INPUT-PROVENANCE-1`.
+Closed historical milestone; current pointer is `NOWSCORE-JC-SALES-PAGE-1`.
 
 PR #139 is the current bounded implementation milestone. Candidate B runs
 only after a strict resolver miss and binds only after exact kickoff, same

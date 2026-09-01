@@ -113,9 +113,9 @@ The production runs 33431411824 and 33450251359 remain explained only at the ups
 
 # Historical milestone: PRED-INPUT-PROVENANCE-1 — Deterministic Prematch Input Provenance
 
-Historical status: `ACCEPTANCE PASS / MERGE AUTHORIZED`
+Historical status: `DEPLOYED / SEALED / PRODUCTION ACCEPTANCE PASS`
 
-Historical decision: `PRED-INPUT-PROVENANCE-1 = ACCEPTANCE PASS / MERGE AUTHORIZED`
+Historical decision: `PRED-INPUT-PROVENANCE-1 = DEPLOYED / SEALED / PRODUCTION ACCEPTANCE PASS`
 
 `HISTORICAL = PRED-INPUT-PROVENANCE-1`.
 
@@ -135,9 +135,8 @@ keeps prematch timing fail-closed, leaves valid frozen Champion cases
 unchanged, and does not fabricate or rewrite historical timestamps.
 
 Evidence: `docs/data-foundation/PRED-INPUT-PROVENANCE-1_IMPLEMENTATION_REPORT.md`.
-Engineering acceptance is PASS and merge is authorized. Real production
-verification follows merge; final deployment state is not predeclared. STOP
-after verification; no next milestone starts.
+Production acceptance is PASS and the milestone is DEPLOYED / SEALED. The
+post-merge production verification is recorded; no next milestone starts.
 
 # PRED-IDENTITY-SAFE-PARTIAL-1 Previous Milestone
 
@@ -147,7 +146,7 @@ Decision: `PRED-IDENTITY-SAFE-PARTIAL-1 = DEPLOYED / SEALED / PRODUCTION ACCEPTA
 
 PR #139 = `DEPLOYED / SEALED / PRODUCTION ACCEPTANCE PASS`
 
-Closed historical milestone; current pointer is `PRED-INPUT-PROVENANCE-1`.
+Closed historical milestone; current pointer is `NOWSCORE-JC-SALES-PAGE-1`.
 
 PR #139 continues the existing identity branch and implements Candidate B as a
 fail-closed fallback after the strict Nowscore resolver misses. The current
@@ -192,7 +191,7 @@ Evidence: `docs/data-foundation/NEXT-UNIVERSE-TRUTH-1_FINAL_REPORT.md`.
 Production impact remains `next_universe=0`, `BLOCKED_UNIVERSE` for the next
 BASE jobs/prediction, and `CYCLE_DEGRADED`; no fixture was fabricated and no
 historical prediction was rewritten. The current pointer is
-`PRED-INPUT-PROVENANCE-1`.
+`NOWSCORE-JC-SALES-PAGE-1`.
 
 # PRED-IDENTITY-EVIDENCE-1 Previous Bounded Gate Result
 

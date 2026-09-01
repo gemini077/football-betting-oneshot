@@ -107,8 +107,8 @@ Acceptance boundary: this milestone does not claim a production fix or a current
 # 2Z. PRED-INPUT-PROVENANCE-1 Acceptance
 
 `PRED-INPUT-PROVENANCE-1` 已完成工程验收，当前状态为
-`ACCEPTANCE PASS / MERGE AUTHORIZED`；合并后仍需真实 production verify，
-最终部署状态以真实远端证据为准。
+`DEPLOYED / SEALED / PRODUCTION ACCEPTANCE PASS`；真实 production verify
+已完成，部署状态已有真实远端证据。
 
 验收必须核对：
 
@@ -131,8 +131,8 @@ Acceptance boundary: this milestone does not claim a production fix or a current
    tests、相关 full tests、`py_compile` 和 `git diff --check` 均有真实输出。
 6. branch、commit、remote branch、GitHub commit SHA、PR、PR head SHA 和
    PR body 中的 milestone/result/blockers/tests/evidence/STOP state 均可从
-   GitHub 读取；当前状态为 `ACCEPTANCE PASS / MERGE AUTHORIZED`，合并后执行
-   production verify，不启动 next milestone。
+   GitHub 读取；当前状态为 `DEPLOYED / SEALED / PRODUCTION ACCEPTANCE PASS`，
+   production verify 已完成，不启动 next milestone。
 
 # 2. 阶段状态
 

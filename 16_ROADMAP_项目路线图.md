@@ -85,9 +85,9 @@ HISTORICAL ACTIVE MILESTONE:
 
 `HISTORICAL-PRED-INPUT-PROVENANCE-1`
 
-HISTORICAL STATUS: `ACCEPTANCE PASS / MERGE AUTHORIZED`
+HISTORICAL STATUS: `DEPLOYED / SEALED / PRODUCTION ACCEPTANCE PASS`
 
-HISTORICAL DECISION: `PRED-INPUT-PROVENANCE-1 = ACCEPTANCE PASS / MERGE AUTHORIZED`
+HISTORICAL DECISION: `PRED-INPUT-PROVENANCE-1 = DEPLOYED / SEALED / PRODUCTION ACCEPTANCE PASS`
 
 The milestone closes the general error-classification gap between source
 fetch, observation timestamp, cache/form provenance, official market timing,
@@ -97,8 +97,8 @@ run-level 500 deep fetch failures, so no historical relabeling or eligibility
 change is allowed.
 
 Evidence: `docs/data-foundation/PRED-INPUT-PROVENANCE-1_IMPLEMENTATION_REPORT.md`.
-Engineering acceptance is PASS and merge is authorized. Real production
-verification follows merge; no next milestone starts here.
+Production acceptance is PASS and the milestone is DEPLOYED / SEALED. The
+post-merge production verification is recorded; no next milestone starts here.
 
 # Previous milestone: PRED-IDENTITY-SAFE-PARTIAL-1 - Deterministic Nowscore Fallback
 
@@ -110,7 +110,7 @@ CURRENT DECISION: `PRED-IDENTITY-SAFE-PARTIAL-1 = DEPLOYED / SEALED / PRODUCTION
 
 PR #139 = `DEPLOYED / SEALED / PRODUCTION ACCEPTANCE PASS`
 
-Closed historical milestone; current pointer is `PRED-INPUT-PROVENANCE-1`.
+Closed historical milestone; current pointer is `NOWSCORE-JC-SALES-PAGE-1`.
 
 PR #139 implements the replay-approved Candidate B as a fail-closed fallback
 behind the existing strict resolver. The current 12-fixture replay preserves

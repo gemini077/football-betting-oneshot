@@ -89,9 +89,9 @@ The exact GitHub-runner response summaries and raw response metadata are durable
 
 # D-033 — PRED-INPUT-PROVENANCE-1 deterministic error-stage classification
 
-Status: `ACCEPTANCE PASS / MERGE AUTHORIZED`
+Status: `DEPLOYED / SEALED / PRODUCTION ACCEPTANCE PASS`
 
-Decision: `PRED-INPUT-PROVENANCE-1 = ACCEPTANCE PASS / MERGE AUTHORIZED`. The
+Decision: `PRED-INPUT-PROVENANCE-1 = DEPLOYED / SEALED / PRODUCTION ACCEPTANCE PASS`. The
 general BASE runner classification rule was corrected because source fetch failures were being collapsed into
 `INPUT_TIMESTAMP_UNVERIFIED` when recent form was unavailable. The correction
 must classify by deterministic source/validation stage, persist bounded
@@ -103,8 +103,8 @@ revision-level umbrella failures lack enough durable causal evidence for
 retroactive relabeling. Production run `33399507542` proves 18 500 deep page
 fetch failures across three fallback attempts, but not their fixture mapping.
 No timestamp, source status, model output, frozen record, or prospective row
-was fabricated or rewritten. Engineering acceptance is PASS, merge is
-authorized, and real production verification follows merge.
+was fabricated or rewritten. Production acceptance is PASS, the milestone is
+deployed and sealed, and the post-merge production verification is recorded.
 
 Evidence: `docs/data-foundation/PRED-INPUT-PROVENANCE-1_IMPLEMENTATION_REPORT.md`.
 
