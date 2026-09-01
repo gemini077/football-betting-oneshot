@@ -6,6 +6,8 @@ on:
       - ".github/workflows/current-universe-rollover-probe.yml"
       - "scripts/probe_current_universe_rollover.py"
       - "tests/test_probe_current_universe_rollover.py"
+      - "scripts/probe_nowscore_jc.py"
+      - "tests/test_probe_nowscore_jc.py"
   workflow_dispatch:
     inputs:
       business_date:
@@ -38,10 +40,18 @@ jobs:
           --date "$PROBE_DATE"
           --output current-universe-rollover-probe.json
 
+      - name: Run Nowscore public JC contract probe
+        run: >-
+          python scripts/probe_nowscore_jc.py
+          --date "$PROBE_DATE"
+          --output nowscore-jc-probe.json
+
       - name: Upload exact probe evidence
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
           name: current-universe-rollover-probe-${{ inputs.business_date || '2026-09-01' }}
-          path: current-universe-rollover-probe.json
+          path: |
+            current-universe-rollover-probe.json
+            nowscore-jc-probe.json
           if-no-files-found: error
