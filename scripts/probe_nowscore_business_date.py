@@ -2,9 +2,10 @@
 """Replay Nowscore's public JC sales-day grouping contract.
 
 This probe is intentionally independent of the production refresh path.  The
-Nowscore betting page supplies the business-day anchor and match-number group;
-the live schedule page remains the only source used to verify the existing
-``SetLevel(3)`` / ``A[j][32] == 1`` membership contract.
+Nowscore direct JC sales page supplies the business-day anchor, membership,
+match-number group, and fixture identity.  The live schedule page is only an
+optional corroboration surface for the existing ``SetLevel(3)`` /
+``A[j][32] == 1`` contract.
 """
 
 from __future__ import annotations
@@ -430,47 +431,84 @@ def _join_membership(
     schedule_duplicate = 0
     source_date_mismatch = 0
     not_flagged = 0
+    a32_corroborated = 0
     for candidate in page_result.get("fixtures") or []:
         kickoff = str(candidate.get("kickoff") or "")
         calendar = _date(kickoff[:10])
         surface = _surface_for_calendar(calendar, _date(page_result.get("today")) or calendar) if calendar else None
-        # The caller annotates the replay's fixed today date on the page result.
+        # The direct sales page is authoritative.  Live ft1/scN is inspected
+        # only when a bounded surface is available; no optional result can
+        # remove a direct-page fixture from the replay.
         if surface is None or surface not in schedule_surfaces:
             missing_surface += 1
-            continue
-        schedule = schedule_surfaces[surface]
-        matched = [
-            (index, values)
-            for index, values in schedule.get("rows") or []
-            if len(values) > 0 and values[0] == candidate.get("nowscore_id")
-        ]
-        if len(matched) > 1:
-            schedule_duplicate += len(matched) - 1
-            continue
-        if not matched:
-            missing_schedule_row += 1
-            continue
-        index, values = matched[0]
-        if len(values) <= 32 or values[32] != 1:
-            not_flagged += 1
-            continue
-        expected_source_date = kickoff[5:10].replace("-", "-")
-        if str(values[11]) != expected_source_date:
-            source_date_mismatch += 1
-            continue
+        else:
+            schedule = schedule_surfaces[surface]
+            matched = [
+                (index, values)
+                for index, values in schedule.get("rows") or []
+                if len(values) > 0 and values[0] == candidate.get("nowscore_id")
+            ]
+            if len(matched) > 1:
+                schedule_duplicate += len(matched) - 1
+            elif not matched:
+                missing_schedule_row += 1
+            else:
+                index, values = matched[0]
+                if len(values) <= 32 or values[32] != 1:
+                    not_flagged += 1
+                else:
+                    a32_corroborated += 1
+                    candidate = {
+                        **candidate,
+                        "a32_corroboration": {
+                            "filter_function": "SetLevel(3)",
+                            "predicate": "A[j][32] == 1",
+                            "row_index": 32,
+                            "raw_value": values[32],
+                            "array_index": index,
+                            "source_surface": schedule.get("page", {}).get("url"),
+                            "backing_data_url": schedule.get("data", {}).get("url"),
+                            "schedule_source_date": values[11] if len(values) > 11 else None,
+                            "calendar_date": calendar.isoformat() if calendar else None,
+                        },
+                    }
+                if len(values) > 11 and str(values[11]) != kickoff[5:10]:
+                    source_date_mismatch += 1
+        evidence = {
+            "source": "nowscore_public_jc_sales",
+            "source_surface": page_result.get("source_surface"),
+            "selected_date": (page_result.get("contract") or {}).get("selected_date"),
+            "business_date": page_result.get("business_date"),
+            "group": candidate.get("match_number_group"),
+            "match_number": candidate.get("match_number"),
+            "sales_row_id": candidate.get("sales_row_id"),
+            "nowscore_id": candidate.get("nowscore_id"),
+            "sales_window": (page_result.get("contract") or {}).get("requested_header", {}).get("window"),
+            "fetched_at": page_result.get("fetched_at"),
+        }
         accepted.append({
             **candidate,
             "business_date": page_result.get("business_date"),
-            "schedule_surface": surface,
-            "jc_membership": "VERIFIED",
-            "jc_membership_source": "nowscore_public_jc",
-            "jc_membership_evidence": {
-                "filter_function": "SetLevel(3)",
-                "predicate": "A[j][32] == 1",
-                "row_index": 32,
-                "raw_value": values[32],
-                "array_index": index,
+            "business_date_source": "nowscore_public_jc_sales",
+            "business_date_source_url": page_result.get("source_surface"),
+            "date_provenance": {
+                "source_date_value": kickoff,
+                "source_date_format": "full_datetime",
+                "schedule_calendar_date": kickoff[:10],
+                "business_date": page_result.get("business_date"),
+                "business_date_source": "nowscore_public_jc_sales",
+                "business_date_source_url": page_result.get("source_surface"),
+                "business_date_anchor": "SelDate + niDate header date",
+                "sales_window": evidence["sales_window"],
+                "match_number": candidate.get("match_number"),
+                "sales_row_id": candidate.get("sales_row_id"),
             },
+            "source_surface": page_result.get("source_surface"),
+            "source_url": page_result.get("source_surface"),
+            "fetched_at": page_result.get("fetched_at"),
+            "jc_membership": "VERIFIED",
+            "jc_membership_source": "nowscore_public_jc_sales",
+            "jc_membership_evidence": evidence,
         })
     return {
         "accepted_fixture_count": len(accepted),
@@ -480,18 +518,17 @@ def _join_membership(
         "schedule_duplicate_count": schedule_duplicate,
         "source_date_mismatch_count": source_date_mismatch,
         "not_flagged_count": not_flagged,
+        "a32_corroborated_count": a32_corroborated,
+        "membership_source": "nowscore_public_jc_sales",
     }
 
 
-def _current_target_rows_available(pages: list[dict[str, Any]]) -> bool:
-    """Require an explicit schedule row when the public JC page is nonempty."""
-    for page in pages:
-        if int(page.get("row_count") or 0) <= 0:
-            continue
-        replay = page.get("membership_replay") or {}
-        if int(replay.get("accepted_fixture_count") or 0) <= 0:
-            return False
-    return True
+def _direct_page_rows_available(pages: list[dict[str, Any]]) -> bool:
+    """The direct sales page itself establishes nonempty current JC rows."""
+    return bool(pages) and all(
+        page.get("status") == "PASS" and int(page.get("row_count") or 0) > 0
+        for page in pages
+    )
 
 
 def run_probe(dates: tuple[str, ...] = DEFAULT_DATES, *, today: object = "2026-09-01") -> dict[str, Any]:
@@ -546,32 +583,37 @@ def run_probe(dates: tuple[str, ...] = DEFAULT_DATES, *, today: object = "2026-0
         for right in keys[index + 1:]:
             accepted_overlap[f"{left}|{right}"] = sorted(accepted_id_sets[left] & accepted_id_sets[right])
     pages_pass = all(page.get("status") == "PASS" for page in pages) and bool(pages)
-    schedule_pass = all(
+    direct_membership_only = all(
+        fixture.get("jc_membership_source") == "nowscore_public_jc_sales"
+        and fixture.get("jc_membership_evidence", {}).get("source")
+        == "nowscore_public_jc_sales"
+        for page in pages
+        for fixture in page.get("membership_replay", {}).get("accepted_fixtures") or []
+    )
+    direct_page_rows_available = _direct_page_rows_available(pages)
+    direct_id_overlap_free = all(not values for values in dates_overlap.values())
+    accepted_id_overlap_free = all(not values for values in accepted_overlap.values())
+    optional_schedule_pass = bool(surfaces) and all(
         surface.get("status") == "PASS"
         and surface.get("page", {}).get("http_status") == 200
         and surface.get("data", {}).get("http_status") == 200
         for surface in surfaces.values()
     )
-    explicit_membership_only = all(
-        fixture.get("jc_membership_evidence", {}).get("predicate") == "A[j][32] == 1"
-        for page in pages
-        for fixture in page.get("membership_replay", {}).get("accepted_fixtures") or []
-    )
-    current_target_rows_available = _current_target_rows_available(pages)
     gate_pass = bool(
         pages_pass
-        and schedule_pass
-        and explicit_membership_only
-        and current_target_rows_available
+        and direct_page_rows_available
+        and direct_membership_only
+        and direct_id_overlap_free
+        and accepted_id_overlap_free
     )
     return {
-        "probe": "NOWSCORE-JC-BUSINESS-DATE-1",
+        "probe": "NOWSCORE-JC-SALES-PAGE-1",
         "status": "PASS" if gate_pass else "FAIL",
         "decision_gate": "PASS" if gate_pass else "NO_CODE",
         "today": replay_today.isoformat(),
         "fetched_at": fetched_at,
         "business_date_contract": {
-            "surface": "Nowscore public JC page",
+            "surface": "Nowscore direct JC sales page",
             "url_template": CP_BASE_URL,
             "date_anchor": "SelDate + niDate header date",
             "sales_window": "11:00--次日11:00",
@@ -596,8 +638,11 @@ def run_probe(dates: tuple[str, ...] = DEFAULT_DATES, *, today: object = "2026-0
             for values in accepted_overlap.values()
             for fixture_id in values
         }),
-        "membership_contract_preserved": explicit_membership_only,
-        "current_target_rows_available": current_target_rows_available,
+        "membership_contract_preserved": direct_membership_only,
+        "direct_membership_source": "nowscore_public_jc_sales",
+        "direct_page_rows_available": direct_page_rows_available,
+        "optional_schedule_pass": optional_schedule_pass,
+        "current_target_rows_available": direct_page_rows_available,
     }
 
 

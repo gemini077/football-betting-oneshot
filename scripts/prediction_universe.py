@@ -39,6 +39,20 @@ _FIELD_ALIASES = {
     "jc_membership_evidence": ("jc_membership_evidence", "jcMembershipEvidence"),
     "source_surface": ("source_surface", "sourceSurface"),
     "source_url": ("source_url", "sourceUrl"),
+    "business_date_source": ("business_date_source", "businessDateSource"),
+    "business_date_source_url": (
+        "business_date_source_url", "businessDateSourceUrl"
+    ),
+    "business_date_contract": (
+        "business_date_contract", "businessDateContract"
+    ),
+    "match_number_source": ("match_number_source", "matchNumberSource"),
+    "sales_row_id": ("sales_row_id", "salesRowId"),
+    "cansale": ("cansale", "canSale"),
+    "a32_corroboration": ("a32_corroboration", "a32Corroboration"),
+    "a32_corroboration_status": (
+        "a32_corroboration_status", "a32CorroborationStatus"
+    ),
     "fetched_at": ("fetched_at", "fetchedAt"),
     "date_provenance": ("date_provenance", "dateProvenance"),
     "schedule_source_date": ("schedule_source_date", "scheduleSourceDate"),
@@ -99,23 +113,54 @@ def _is_authorized_full_schedule_payload(payload: Any) -> bool:
         rows = payload.get("matches")
         if payload.get("success") is not True:
             return isinstance(rows, list) and not rows
+        if payload.get("primary_source") != "nowscore_public_jc_sales":
+            return False
         if not isinstance(rows, list) or not rows:
             return False
         try:
-            if int(payload.get("duplicate_nowscore_id_count") or 0) != 0:
-                return False
-            if int(payload.get("ambiguous_nowscore_id_count") or 0) != 0:
-                return False
+            for key in (
+                "duplicate_nowscore_id_count",
+                "duplicate_sales_row_id_count",
+                "duplicate_match_number_count",
+                "ambiguous_nowscore_id_count",
+            ):
+                if int(payload.get(key) or 0) != 0:
+                    return False
         except (TypeError, ValueError):
             return False
-        contract = payload.get("jc_contract")
+        contract = payload.get("business_date_contract")
         if not isinstance(contract, dict):
             return False
         if (
             contract.get("valid") is not True
-            or contract.get("filter_function") != "SetLevel(3)"
-            or contract.get("row_index") != 32
-            or contract.get("predicate") != "A[j][32] == 1"
+            or contract.get("surface") != "nowscore_public_jc_sales"
+            or contract.get("date_anchor") != "SelDate + niDate header date"
+            or contract.get("sales_window") != "11:00--次日11:00"
+            or contract.get("selected_date") != str(
+                payload.get("business_date") or payload.get("date") or ""
+            )
+            or contract.get("requested_date") != str(
+                payload.get("business_date") or payload.get("date") or ""
+            )
+        ):
+            return False
+        business_date = str(
+            payload.get("business_date") or payload.get("date") or ""
+        )
+        if (
+            not business_date
+            or payload.get("business_date") != business_date
+            or payload.get("date") not in (None, "", business_date)
+        ):
+            return False
+        sales_url = str(
+            payload.get("business_date_source_url") or payload.get("url") or ""
+        )
+        if (
+            payload.get("business_date_source") != "nowscore_public_jc_sales"
+            or not sales_url
+            or payload.get("business_date_source_url") != sales_url
+            or payload.get("url") != sales_url
         ):
             return False
         for row in rows:
@@ -123,7 +168,7 @@ def _is_authorized_full_schedule_payload(payload: Any) -> bool:
                 return False
             if row.get("jc_membership") != "VERIFIED":
                 return False
-            if row.get("jc_membership_source") != "nowscore_public_jc":
+            if row.get("jc_membership_source") != "nowscore_public_jc_sales":
                 return False
             if row.get("nowscore_id", row.get("nowscoreId")) in (None, ""):
                 return False
@@ -131,13 +176,43 @@ def _is_authorized_full_schedule_payload(payload: Any) -> bool:
                 return False
             if row.get("source_url") in (None, ""):
                 return False
+            if row.get("source_surface") != sales_url or row.get("source_url") != sales_url:
+                return False
+            if row.get("business_date_source") != "nowscore_public_jc_sales":
+                return False
+            if row.get("business_date_source_url") in (None, ""):
+                return False
+            if row.get("business_date_source_url") != sales_url:
+                return False
+            if row.get("businessDate", row.get("business_date")) != business_date:
+                return False
+            if row.get("sales_row_id") in (None, ""):
+                return False
+            if row.get("match_number", row.get("matchNum")) in (None, ""):
+                return False
             provenance = row.get("date_provenance")
             if not isinstance(provenance, dict):
+                return False
+            if (
+                provenance.get("business_date") != business_date
+                or provenance.get("business_date_source")
+                != "nowscore_public_jc_sales"
+                or provenance.get("sales_window") != "11:00--次日11:00"
+            ):
                 return False
             evidence = row.get("jc_membership_evidence")
             if not isinstance(evidence, dict):
                 return False
-            if evidence.get("row_index") != 32 or evidence.get("raw_value") != 1:
+            if evidence.get("source") != "nowscore_public_jc_sales":
+                return False
+            if (
+                evidence.get("selected_date") != business_date
+                or evidence.get("business_date") != business_date
+                or evidence.get("sales_window") != "11:00--次日11:00"
+                or evidence.get("nowscore_id")
+                not in (row.get("nowscore_id"), row.get("nowscoreId"))
+                or evidence.get("sales_row_id") != row.get("sales_row_id")
+            ):
                 return False
         return True
     if payload.get("match_filter") not in (None, ""):
@@ -252,7 +327,9 @@ def _attempt_record(
     if isinstance(payload, dict):
         for key in (
             "url", "source_surface", "backing_data_url", "surface",
-            "jc_contract", "jc_membership_source", "date_provenance",
+            "primary_source", "business_date_source", "business_date_source_url",
+            "jc_contract", "business_date_contract",
+            "jc_membership_source", "date_provenance",
         ):
             if key in payload and payload[key] not in (None, ""):
                 record[key] = payload[key]

@@ -42,18 +42,32 @@ class PredictionUniverseTests(unittest.TestCase):
     def test_verified_nowscore_jc_payload_creates_deterministic_universe(self):
         payload = {
             "source": "nowscore_public_jc",
+            "primary_source": "nowscore_public_jc_sales",
             "schedule_scope": "jc",
             "date": "2026-09-01",
+            "business_date": "2026-09-01",
+            "business_date_source": "nowscore_public_jc_sales",
+            "business_date_source_url": "https://cp.nowscore.com/buy/jingcai.aspx?typeID=101&oddstype=2&date=2026-09-01",
+            "url": "https://cp.nowscore.com/buy/jingcai.aspx?typeID=101&oddstype=2&date=2026-09-01",
             "fetch_time": "2026-09-01T12:00:00+08:00",
             "success": True,
             "status": "OK",
-            "source_surface": "https://live.nowscore.com/schedule.aspx?f=ft1",
-            "backing_data_url": "https://live.nowscore.com/data/ft1.js",
+            "source_surface": "https://cp.nowscore.com/buy/jingcai.aspx?typeID=101&oddstype=2&date=2026-09-01",
+            "business_date_contract": {
+                "valid": True,
+                "surface": "nowscore_public_jc_sales",
+                "date_anchor": "SelDate + niDate header date",
+                "sales_window": "11:00--次日11:00",
+                "selected_date": "2026-09-01",
+                "requested_date": "2026-09-01",
+            },
             "jc_contract": {
                 "valid": True,
-                "filter_function": "SetLevel(3)",
-                "row_index": 32,
-                "predicate": "A[j][32] == 1",
+                "surface": "nowscore_public_jc_sales",
+                "date_anchor": "SelDate + niDate header date",
+                "sales_window": "11:00--次日11:00",
+                "selected_date": "2026-09-01",
+                "requested_date": "2026-09-01",
             },
             "matches": [{
                 "matchId": "2913701",
@@ -64,19 +78,32 @@ class PredictionUniverseTests(unittest.TestCase):
                 "businessDate": "2026-09-01",
                 "matchDate": "2026-09-01",
                 "matchTime": "00:30",
+                "matchNum": "周二001",
                 "jc_membership": "VERIFIED",
-                "jc_membership_source": "nowscore_public_jc",
+                "jc_membership_source": "nowscore_public_jc_sales",
                 "jc_membership_evidence": {
-                    "filter_function": "SetLevel(3)",
-                    "row_index": 32,
-                    "raw_value": 1,
+                    "source": "nowscore_public_jc_sales",
+                    "selected_date": "2026-09-01",
+                    "business_date": "2026-09-01",
+                    "nowscore_id": 2913701,
+                    "sales_row_id": "5510001",
+                    "sales_window": "11:00--次日11:00",
                 },
-                "source_surface": "https://live.nowscore.com/schedule.aspx?f=ft1",
-                "source_url": "https://live.nowscore.com/data/ft1.js",
+                "source_surface": "https://cp.nowscore.com/buy/jingcai.aspx?typeID=101&oddstype=2&date=2026-09-01",
+                "source_url": "https://cp.nowscore.com/buy/jingcai.aspx?typeID=101&oddstype=2&date=2026-09-01",
+                "business_date_source": "nowscore_public_jc_sales",
+                "business_date_source_url": "https://cp.nowscore.com/buy/jingcai.aspx?typeID=101&oddstype=2&date=2026-09-01",
+                "sales_row_id": "5510001",
+                "match_number_source": "nowscore_public_jc_sales",
+                "cansale": "true",
                 "fetched_at": "2026-09-01T12:00:00+08:00",
                 "date_provenance": {
+                    "business_date": "2026-09-01",
+                    "business_date_source": "nowscore_public_jc_sales",
+                    "business_date_source_url": "https://cp.nowscore.com/buy/jingcai.aspx?typeID=101&oddstype=2&date=2026-09-01",
+                    "sales_window": "11:00--次日11:00",
                     "expected_business_date": "2026-09-01",
-                    "source_date_value": "09-01",
+                    "source_date_value": "2026-09-01 00:30",
                 },
             }],
         }
@@ -94,10 +121,10 @@ class PredictionUniverseTests(unittest.TestCase):
         assert saved["nowscoreId"] == 2913701
         assert saved["nowscore_id"] == 2913701
         assert saved["jc_membership"] == "VERIFIED"
-        assert saved["jc_membership_source"] == "nowscore_public_jc"
-        assert saved["jc_membership_evidence"]["row_index"] == 32
-        assert saved["jc_membership_evidence"]["raw_value"] == 1
-        assert saved["source_surface"].endswith("f=ft1")
+        assert saved["jc_membership_source"] == "nowscore_public_jc_sales"
+        assert saved["jc_membership_evidence"]["source"] == "nowscore_public_jc_sales"
+        assert saved["sales_row_id"] == "5510001"
+        assert saved["source_surface"].startswith("https://cp.nowscore.com/buy/")
         assert saved["date_provenance"]["expected_business_date"] == "2026-09-01"
 
     def test_full_schedule_creates_fourteen_fixture_universe(self):

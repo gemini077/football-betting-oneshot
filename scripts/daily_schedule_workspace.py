@@ -65,18 +65,52 @@ def _nowscore_schedule_payload(business_date: str, fetched: dict) -> dict:
     source_rows = list(fetched.get("matches") or []) if isinstance(fetched, dict) else []
     matches: list[dict] = []
     invalid_rows = 0
+    sales_url = str(
+        fetched.get("business_date_source_url") or fetched.get("url") or ""
+    )
+    contract = fetched.get("business_date_contract") if isinstance(fetched, dict) else None
+    contract_valid = bool(
+        isinstance(contract, dict)
+        and contract.get("valid") is True
+        and contract.get("surface") == "nowscore_public_jc_sales"
+        and contract.get("date_anchor") == "SelDate + niDate header date"
+        and contract.get("sales_window") == "11:00--次日11:00"
+        and contract.get("selected_date") == business_date
+        and contract.get("requested_date") == business_date
+        and fetched.get("source") == "nowscore_public_jc"
+        and fetched.get("primary_source") == "nowscore_public_jc_sales"
+        and fetched.get("business_date_source") == "nowscore_public_jc_sales"
+        and fetched.get("business_date_source_url") == sales_url
+        and sales_url == str(fetched.get("url") or "")
+    )
     for source_row in source_rows:
         if not isinstance(source_row, dict):
             invalid_rows += 1
             continue
         nowscore_id = source_row.get("nowscore_id")
         kickoff = str(source_row.get("kickoff_local") or "")
+        date_provenance = source_row.get("date_provenance") or {}
+        try:
+            datetime.fromisoformat(kickoff.replace("Z", "+00:00"))
+            valid_kickoff = bool(kickoff)
+        except ValueError:
+            valid_kickoff = False
         if (
             nowscore_id in (None, "")
-            or not kickoff.startswith(f"{business_date}T")
+            or not valid_kickoff
             or source_row.get("business_date") != business_date
+            or source_row.get("business_date_source") != "nowscore_public_jc_sales"
+            or source_row.get("business_date_source_url") != sales_url
             or source_row.get("jc_membership") != "VERIFIED"
-            or source_row.get("jc_membership_source") != "nowscore_public_jc"
+            or source_row.get("jc_membership_source") != "nowscore_public_jc_sales"
+            or source_row.get("match_number") in (None, "")
+            or source_row.get("sales_row_id") in (None, "")
+            or source_row.get("source_surface") != sales_url
+            or source_row.get("source_url") != sales_url
+            or date_provenance.get("business_date") != business_date
+            or date_provenance.get("business_date_source")
+            != "nowscore_public_jc_sales"
+            or date_provenance.get("sales_window") != "11:00--次日11:00"
         ):
             invalid_rows += 1
             continue
@@ -92,10 +126,12 @@ def _nowscore_schedule_payload(business_date: str, fetched: dict) -> dict:
             "matchDate": kickoff[:10],
             "matchTime": kickoff[11:16],
             "jc_membership": "VERIFIED",
-            "jc_membership_source": "nowscore_public_jc",
+            "jc_membership_source": "nowscore_public_jc_sales",
             "jc_membership_evidence": source_row.get("jc_membership_evidence"),
             "source_surface": source_row.get("source_surface"),
             "source_url": source_row.get("source_url"),
+            "business_date_source": source_row.get("business_date_source"),
+            "business_date_source_url": source_row.get("business_date_source_url"),
             "fetched_at": source_row.get("fetched_at") or fetched_at,
             "date_provenance": source_row.get("date_provenance"),
             "schedule_source_date": source_row.get("schedule_source_date"),
@@ -103,18 +139,45 @@ def _nowscore_schedule_payload(business_date: str, fetched: dict) -> dict:
         }
         if source_row.get("match_number") not in (None, ""):
             row["matchNum"] = source_row["match_number"]
+        if source_row.get("match_number_source") not in (None, ""):
+            row["match_number_source"] = source_row["match_number_source"]
+        if source_row.get("sales_row_id") not in (None, ""):
+            row["sales_row_id"] = source_row["sales_row_id"]
+        if source_row.get("cansale") not in (None, ""):
+            row["cansale"] = source_row["cansale"]
+        if source_row.get("a32_corroboration") not in (None, ""):
+            row["a32_corroboration"] = source_row["a32_corroboration"]
+        if source_row.get("a32_corroboration_status") not in (None, ""):
+            row["a32_corroboration_status"] = source_row["a32_corroboration_status"]
         if source_row.get("league") not in (None, ""):
             row["league"] = source_row["league"]
         matches.append(row)
 
     source_success = fetched.get("success") is True if isinstance(fetched, dict) else False
-    success = source_success and bool(matches) and invalid_rows == 0
+    duplicate_free = all(
+        int(fetched.get(key) or 0) == 0
+        for key in (
+            "duplicate_nowscore_id_count",
+            "duplicate_sales_row_id_count",
+            "duplicate_match_number_count",
+            "ambiguous_nowscore_id_count",
+        )
+    ) if isinstance(fetched, dict) else False
+    success = (
+        source_success
+        and contract_valid
+        and duplicate_free
+        and bool(matches)
+        and invalid_rows == 0
+    )
     return {
         "source": "nowscore_public_jc",
-        "primary_source": "nowscore_public_jc",
+        "primary_source": "nowscore_public_jc_sales",
         "schedule_scope": "jc",
         "url": fetched.get("url"),
         "source_surface": fetched.get("source_surface"),
+        "business_date_source": fetched.get("business_date_source"),
+        "business_date_source_url": fetched.get("business_date_source_url"),
         "backing_data_url": fetched.get("backing_data_url"),
         "surface": fetched.get("surface"),
         "date": business_date,
@@ -126,6 +189,7 @@ def _nowscore_schedule_payload(business_date: str, fetched: dict) -> dict:
         "error": "INVALID_NOWSCORE_JC_ROW" if invalid_rows else fetched.get("error"),
         "matches": matches if success else [],
         "jc_contract": fetched.get("jc_contract"),
+        "business_date_contract": contract,
         "jc_flagged_row_count": fetched.get("jc_flagged_row_count", 0),
         "duplicate_nowscore_id_count": fetched.get("duplicate_nowscore_id_count", 0),
         "ambiguous_nowscore_id_count": fetched.get("ambiguous_nowscore_id_count", 0),
