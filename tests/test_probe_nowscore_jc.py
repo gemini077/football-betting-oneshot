@@ -5,6 +5,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
+from scripts import probe_nowscore_jc as probe
 from scripts.probe_nowscore_jc import inspect_jc_surface
 
 
@@ -91,3 +92,35 @@ def test_inspect_jc_surface_fails_closed_on_duplicate_ids():
     assert result["ambiguous_nowscore_id_count"] == 1
     assert result["accepted_fixture_count"] == 0
     assert result["fixtures"] == []
+
+
+def test_surface_result_fetches_page_contract_before_backing_data(monkeypatch):
+    calls = []
+
+    def fake_fetch(url, *, referer):
+        calls.append((url, referer))
+        if "schedule.aspx" in url:
+            return PAGE.encode(), {
+                "http_status": 200,
+                "content_type": "text/html",
+                "bytes": len(PAGE),
+                "sha256": "page-sha",
+            }
+        data = _row(1001, "Home FC", "Away FC", 1)
+        return data.encode(), {
+            "http_status": 200,
+            "content_type": "application/javascript",
+            "bytes": len(data),
+            "sha256": "data-sha",
+        }
+
+    monkeypatch.setattr(probe, "_fetch", fake_fetch)
+    result = probe._surface_result(
+        "ft1",
+        probe.date.fromisoformat("2026-09-01"),
+        "2026-09-01T12:00:00+08:00",
+    )
+
+    assert result["status"] == "PASS"
+    assert result["accepted_fixture_count"] == 1
+    assert len(calls) == 2

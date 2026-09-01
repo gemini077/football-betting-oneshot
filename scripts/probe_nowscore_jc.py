@@ -113,7 +113,7 @@ def _surface_result(surface: str, expected: date, fetched_at: str) -> dict[str, 
         page_raw, page_meta = _fetch(page_url, referer=f"{Nowscore_URL}/")
         page_text = nowscore._decode(page_raw)
         page_record.update(page_meta, status="OK")
-        page_contract = _page_contract(page_text, surface)
+        page_contract = nowscore._public_jc_page_contract(page_text, surface)
         filename = page_contract.get("filename2") or f"{surface}.js"
         if filename != f"{surface}.js":
             return {
