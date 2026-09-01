@@ -1762,6 +1762,41 @@ def handicap_number(value: object) -> float | None:
     return depth if receiving else -depth
 
 
+def _page_provider_id_details(page_identity: Mapping[str, object] | None) -> dict[str, object]:
+    """Classify the page's provider ID without turning parser gaps into mismatches."""
+
+    identity = page_identity if isinstance(page_identity, Mapping) else {}
+    missing = object()
+    raw = identity.get("page_provider_id_raw", missing)
+    if raw is missing:
+        raw = identity.get("nowscore_id", missing)
+    if raw is missing:
+        raw = identity.get("page_provider_id")
+
+    base = {
+        "page_provider_id": None,
+        "page_provider_id_availability_state": "UNAVAILABLE",
+        "page_provider_id_reason": "PAGE_PROVIDER_ID_UNAVAILABLE",
+        "page_provider_id_parse_state": "MISSING",
+        "page_provider_id_raw": None if raw is missing else raw,
+    }
+    if raw is missing or raw is None or str(raw).strip() == "":
+        return base
+    try:
+        parsed = int(str(raw).strip())
+    except (TypeError, ValueError):
+        return {**base, "page_provider_id_parse_state": "UNPARSEABLE"}
+    if parsed <= 0:
+        return {**base, "page_provider_id_parse_state": "ZERO"}
+    return {
+        "page_provider_id": parsed,
+        "page_provider_id_availability_state": "AVAILABLE",
+        "page_provider_id_reason": None,
+        "page_provider_id_parse_state": "POSITIVE",
+        "page_provider_id_raw": raw,
+    }
+
+
 def _identity(html: str) -> dict:
     def find(pattern: str) -> str | None:
         found = re.search(pattern, html, re.I | re.S)
@@ -1775,8 +1810,12 @@ def _identity(html: str) -> dict:
         )
         return int(found.group(1)) if found else None
 
+    provider_id_raw = find(r'id=["\']hide_scheduleId["\'][^>]*value=["\']([^"\']*)')
+    provider_id = _page_provider_id_details({"page_provider_id_raw": provider_id_raw})
     return {
-        "nowscore_id": int(find(r'id=["\']hide_scheduleId["\'][^>]*value=["\'](\d+)') or 0),
+        "nowscore_id": int(provider_id["page_provider_id"] or 0),
+        "nowscore_id_raw": provider_id_raw,
+        **provider_id,
         "kickoff_local": find(r'id=["\']hide_matchTime["\'][^>]*value=["\']([^"\']+)'),
         "home_team": find(r'<div[^>]+id=["\']home["\'][^>]*>.*?<a[^>]+class=["\']name["\'][^>]*>(.*?)</a>'),
         "away_team": find(r'<div[^>]+id=["\']guest["\'][^>]*>.*?<a[^>]+class=["\']name["\'][^>]*>(.*?)</a>'),
@@ -2113,17 +2152,8 @@ def _verified(
     target: dict,
     page_identity: dict,
     maximum_minutes: int = 180,
-    *,
-    expected_provider_id: int | None = None,
 ) -> tuple[bool, list[str]]:
     reasons = []
-    if expected_provider_id is not None:
-        try:
-            page_provider_id = int(page_identity.get("nowscore_id") or 0)
-        except (TypeError, ValueError):
-            page_provider_id = 0
-        if page_provider_id != expected_provider_id:
-            reasons.append("PROVIDER_ID_MISMATCH")
     home_score, _ = team_similarity(target.get("home", ""), page_identity.get("home_team", ""))
     away_score, _ = team_similarity(target.get("away", ""), page_identity.get("away_team", ""))
     if home_score < 0.75:
@@ -2199,12 +2229,16 @@ def _trusted_jc_page_verification(
     """Verify non-name identity facts before accepting a trusted JC ID."""
 
     reasons: list[str] = []
-    try:
-        page_id = int(page_identity.get("nowscore_id") or 0)
-    except (TypeError, ValueError):
-        page_id = 0
-    if page_id != explicit_id:
+    page_provider_id = _page_provider_id_details(page_identity)
+    non_blocking_reasons = []
+    if page_provider_id["page_provider_id_availability_state"] == "UNAVAILABLE":
+        non_blocking_reasons.append("PAGE_PROVIDER_ID_UNAVAILABLE")
+    elif page_provider_id["page_provider_id"] != explicit_id:
         reasons.append("PROVIDER_ID_MISMATCH")
+    page_id_corroborated = (
+        page_provider_id["page_provider_id_availability_state"] == "AVAILABLE"
+        and page_provider_id["page_provider_id"] == explicit_id
+    )
 
     target_time = _parse_kickoff(target.get("kickoff"))
     fixture_time = _parse_kickoff(_fixture_kickoff(fixture))
@@ -2296,12 +2330,15 @@ def _trusted_jc_page_verification(
         "status": "TRUSTED_JC_SAME_PROVIDER" if not reasons else "TRUSTED_JC_REJECTED",
         "source": "nowscore_public_jc_sales",
         "nowscore_id": explicit_id,
+        **page_provider_id,
+        "page_provider_id_corroborated": page_id_corroborated,
         "display_name_mismatch": bool(
             same_scores["home"] < 0.75 or same_scores["away"] < 0.75
         ),
         "same_side_scores": same_scores,
         "reverse_side_scores": reverse_scores,
         "reasons": list(dict.fromkeys(reasons)),
+        "non_blocking_reasons": list(dict.fromkeys(non_blocking_reasons)),
     }
 
 
@@ -2429,11 +2466,8 @@ def fetch_match_markets(
         cache_path.write_bytes(raw)
     parsed = parse_three_in_one(_decode(raw))
     target = {"home": home, "away": away, "kickoff": kickoff}
-    verified, reasons = _verified(
-        target,
-        parsed["identity"],
-        expected_provider_id=match_id,
-    )
+    page_provider_id = _page_provider_id_details(parsed["identity"])
+    verified, reasons = _verified(target, parsed["identity"])
     trusted_provenance = trusted_nowscore_jc_fixture(
         fixture,
         match_id,
@@ -2451,7 +2485,7 @@ def fetch_match_markets(
                 ],
             }
     identity_verification = None
-    if not verified and trusted_provenance.get("trusted"):
+    if trusted_provenance.get("trusted"):
         identity_verification = _trusted_jc_page_verification(
             target,
             parsed["identity"],
@@ -2461,31 +2495,41 @@ def fetch_match_markets(
         if identity_verification.get("trusted"):
             verified = True
             reasons = []
-            resolved = {
-                **resolved,
-                "identity_verification": identity_verification,
-                "trusted_jc_provenance": trusted_provenance,
-            }
-    if not verified:
-        if identity_verification is None and trusted_provenance.get("reasons"):
-            identity_verification = {
-                "trusted": False,
-                "status": "TRUSTED_JC_REJECTED",
-                "source": "nowscore_public_jc_sales",
-                "nowscore_id": match_id,
-                "reasons": list(trusted_provenance.get("reasons") or []),
-            }
-        if identity_verification and identity_verification.get("reasons"):
+        else:
             reasons = list(dict.fromkeys([
                 *reasons,
                 *list(identity_verification.get("reasons") or []),
             ]))
+    else:
+        provenance_reasons = list(trusted_provenance.get("reasons") or []) if fixture is not None else []
+        identity_verification = {
+            "trusted": False,
+            "status": "TRUSTED_JC_REJECTED" if fixture is not None else "ORDINARY_EXPLICIT_ID",
+            "source": "nowscore_public_jc_sales",
+            "nowscore_id": match_id,
+            **page_provider_id,
+            "page_provider_id_corroborated": None,
+            "reasons": list(dict.fromkeys([*reasons, *provenance_reasons])),
+            "non_blocking_reasons": (
+                ["PAGE_PROVIDER_ID_UNAVAILABLE"]
+                if page_provider_id["page_provider_id_availability_state"] == "UNAVAILABLE"
+                else []
+            ),
+        }
+        reasons = list(dict.fromkeys([*reasons, *provenance_reasons]))
+    resolved = {
+        **resolved,
+        "identity_verification": identity_verification,
+        "trusted_jc_provenance": trusted_provenance,
+    }
+    if not verified:
         return {
             "source": "nowscore_public_3in1", "status": "IDENTITY_MISMATCH", "fetched_at": fetched_at,
             "nowscore_id": match_id, "target": target, "page_identity": parsed["identity"],
             "identity_errors": reasons, "resolution": resolved,
             "identity_verification": identity_verification,
             "trusted_jc_provenance": trusted_provenance,
+            **page_provider_id,
         }
     confidence = float((resolved or {}).get("match_confidence") or 1.0)
     record_binding(
@@ -2523,6 +2567,7 @@ def fetch_match_markets(
         "identity": parsed["identity"], "source_url": MARKET_URL.format(match_id=match_id),
         "identity_verification": identity_verification,
         "trusted_jc_provenance": trusted_provenance,
+        **page_provider_id,
         "ouzhi": parsed["ouzhi"], "yazhi": parsed["yazhi"], "daxiao": parsed["daxiao"],
         "shuju": shuju,
         "context": context,

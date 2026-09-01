@@ -492,6 +492,57 @@ def test_nowscore_fetch_failure_is_not_classified_as_timestamp_failure():
     assert diagnostic["error_code"] == "SOURCE_FETCH_FAILED"
 
 
+def test_base_persists_nowscore_identity_rejection_diagnostics():
+    identity_verification = {
+        "trusted": False,
+        "status": "TRUSTED_JC_REJECTED",
+        "reasons": ["PROVIDER_ID_MISMATCH", "ORIENTATION_CONFLICT"],
+        "page_provider_id": 999,
+        "page_provider_id_availability_state": "AVAILABLE",
+        "page_provider_id_reason": None,
+    }
+    trusted_provenance = {
+        "trusted": False,
+        "reasons": ["JC_PROVENANCE_INVALID"],
+    }
+    nowscore_result = {
+        "status": "IDENTITY_MISMATCH",
+        "nowscore_id": 100001,
+        "resolution": {"status": "EXPLICIT_ID", "nowscore_id": 100001},
+        "identity_errors": ["PROVIDER_ID_MISMATCH", "ORIENTATION_CONFLICT"],
+        "identity_verification": identity_verification,
+        "trusted_jc_provenance": trusted_provenance,
+        "page_identity": {"nowscore_id": 999},
+        "page_provider_id": 999,
+        "page_provider_id_availability_state": "AVAILABLE",
+        "page_provider_id_reason": None,
+    }
+
+    with tempfile.TemporaryDirectory() as temp:
+        root = Path(temp)
+        write_case(root, [fixture(1, spf=limited_spf(), nowscore=True)])
+        summary, build = run_case(
+            root,
+            parsed=parsed_source(form={}),
+            nowscore_result=nowscore_result,
+        )
+        ledger = read_ledger(root)
+
+    assert summary["failure_reasons"] == {"INPUT_PROVENANCE_UNVERIFIED": 1}
+    assert build.call_count == 0
+    diagnostic = ledger["jobs"][0]["input_provenance_diagnostic"]
+    assert diagnostic["nowscore_status"] == "IDENTITY_MISMATCH"
+    assert diagnostic["resolution"] == nowscore_result["resolution"]
+    assert diagnostic["identity_errors"] == nowscore_result["identity_errors"]
+    assert diagnostic["identity_verification"] == identity_verification
+    assert diagnostic["identity_verification_status"] == "TRUSTED_JC_REJECTED"
+    assert diagnostic["identity_verification_reasons"] == identity_verification["reasons"]
+    assert diagnostic["trusted_jc_provenance"] == trusted_provenance
+    assert diagnostic["trusted_jc_provenance_reasons"] == trusted_provenance["reasons"]
+    assert diagnostic["page_provider_id"] == 999
+    assert diagnostic["page_provider_id_availability_state"] == "AVAILABLE"
+
+
 def test_base_passes_universe_fixture_to_nowscore_identity_gate():
     with tempfile.TemporaryDirectory() as temp:
         root = Path(temp)
