@@ -210,10 +210,84 @@ class BasePredictionJobsTests(unittest.TestCase):
         self.assertEqual(first["jobs"][0]["job_id"], second["jobs"][0]["job_id"])
 
     def test_daily_schedule_success_triggers_base_job_sync(self):
-        payload = universe_payload(fixtures=[fixture("daily-1", 1)])
+        def fetched(business_date: str, nowscore_id: int) -> dict:
+            sales_url = (
+                "https://cp.nowscore.com/buy/jingcai.aspx"
+                f"?typeID=101&oddstype=2&date={business_date}"
+            )
+            kickoff_date = (
+                datetime.fromisoformat(business_date) + timedelta(days=1)
+            ).date().isoformat()
+            return {
+                "source": "nowscore_public_jc",
+                "primary_source": "nowscore_public_jc_sales",
+                "url": sales_url,
+                "source_surface": sales_url,
+                "business_date_source": "nowscore_public_jc_sales",
+                "business_date_source_url": sales_url,
+                "surface": "nowscore_public_jc_sales",
+                "fetch_time": "2026-08-12T12:00:00+08:00",
+                "fetched_at": "2026-08-12T12:00:00+08:00",
+                "date": business_date,
+                "business_date": business_date,
+                "success": True,
+                "status": "OK",
+                "business_date_contract": {
+                    "valid": True,
+                    "surface": "nowscore_public_jc_sales",
+                    "date_anchor": "SelDate + niDate header date",
+                    "sales_window": "11:00--次日11:00",
+                    "selected_date": business_date,
+                    "requested_date": business_date,
+                },
+                "jc_contract": {
+                    "valid": True,
+                    "surface": "nowscore_public_jc_sales",
+                    "date_anchor": "SelDate + niDate header date",
+                    "sales_window": "11:00--次日11:00",
+                    "selected_date": business_date,
+                    "requested_date": business_date,
+                },
+                "matches": [{
+                    "nowscore_id": nowscore_id,
+                    "home_team": "Home FC",
+                    "away_team": "Away FC",
+                    "home_team_en": "Home FC",
+                    "away_team_en": "Away FC",
+                    "kickoff_local": f"{kickoff_date}T03:00+08:00",
+                    "business_date": business_date,
+                    "business_date_source": "nowscore_public_jc_sales",
+                    "business_date_source_url": sales_url,
+                    "match_number": f"周三{nowscore_id:03d}",
+                    "match_number_source": "nowscore_public_jc_sales",
+                    "sales_row_id": str(nowscore_id),
+                    "cansale": "true",
+                    "jc_membership": "VERIFIED",
+                    "jc_membership_source": "nowscore_public_jc_sales",
+                    "jc_membership_evidence": {
+                        "source": "nowscore_public_jc_sales",
+                        "selected_date": business_date,
+                        "business_date": business_date,
+                        "sales_window": "11:00--次日11:00",
+                    },
+                    "source_surface": sales_url,
+                    "source_url": sales_url,
+                    "fetched_at": "2026-08-12T12:00:00+08:00",
+                    "date_provenance": {
+                        "expected_business_date": business_date,
+                        "business_date": business_date,
+                        "business_date_source": "nowscore_public_jc_sales",
+                        "business_date_source_url": sales_url,
+                        "sales_window": "11:00--次日11:00",
+                    },
+                    "schedule_source_date": business_date,
+                    "schedule_source_date_format": "month_day",
+                }],
+            }
+
         universe_result = {
             "status": "READY",
-            "source": "sporttery.cn",
+            "source": "nowscore_public_jc",
             "fetched_at": "2026-08-12T12:00:00+08:00",
             "source_fixture_count": 1,
             "fixture_count": 1,
@@ -230,7 +304,9 @@ class BasePredictionJobsTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             with patch.object(daily_schedule_workspace, "ROOT", root), \
-                patch.object(daily_schedule_workspace, "fetch_jingcai_odds", side_effect=[payload, payload]), \
+                patch.object(daily_schedule_workspace, "fetch_nowscore_jc_schedule", side_effect=[
+                    fetched("2026-08-12", 2913701), fetched("2026-08-13", 2913702),
+                ]), \
                 patch.object(daily_schedule_workspace, "attach_nowscore_bindings", return_value={"status": "OK"}), \
                 patch.object(daily_schedule_workspace, "update_prediction_universe", side_effect=[universe_result, universe_result]), \
                 patch.object(daily_schedule_workspace, "sync_base_prediction_jobs", side_effect=[job_result, job_result]) as sync, \

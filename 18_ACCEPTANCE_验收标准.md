@@ -1,6 +1,6 @@
 # 18_ACCEPTANCE_验收标准.md
 
-最后更新：2026-08-31
+最后更新：2026-09-01
 角色：定义“什么才算真正做完”。测试全绿不等于验收通过。
 
 # 1. 通用验收原则
@@ -18,11 +18,97 @@
 9. 如果声称“上线”，远端是否真的部署；
 10. 是否产生下一阶段需要的可复用证据。
 
+# NOWSCORE-JC-SALES-PAGE-1 Acceptance Gate
+
+Status: READY_FOR_ACCEPTANCE / PASS
+
+Acceptance evidence:
+- GitHub runner 33474080863 completed successfully against delivered
+  implementation and PR #141 head.
+- Direct sales page returned HTTP 200 for both replay dates and exposed selected
+  SelDate, matching niDate business-date group, explicit 11:00--next-day-11:00
+  window, match number, unique Nowscore ID, kickoff, identity fields,
+  sales-row ID, and cansale.
+- 2026-08-31: exactly 12 Monday fixtures, businessDate 2026-08-31, all kickoffs
+  on 2026-09-01.
+- 2026-09-01: exactly 10 Tuesday fixtures, businessDate 2026-09-01, all kickoffs
+  on 2026-09-02; none of Monday 12 IDs reused.
+- Direct membership is explicit jc_membership=VERIFIED from
+  nowscore_public_jc_sales; no team/league/kickoff/weekday/A32 guess. A32 is
+  optional only.
+- Duplicate, ambiguous, and paired-date ID overlap are zero.
+- Prediction Universe and BASE replay READY with 12 and 10 fixtures/jobs;
+  identity binding exact with ambiguous/missing 0/0.
+- Exact remote JSON and local integration JSON are listed in probe report.
+- Focused/related tests, py_compile, git diff --check passed. No
+  Champion/model/frozen/history rewrite.
+
+Acceptance boundary: READY_FOR_ACCEPTANCE / PASS only. Do not merge and do not
+start Challenger Promotion Review.
+
+# Historical NOWSCORE-JC-BUSINESS-DATE-1 Acceptance Gate
+
+Status: READY_FOR_ACCEPTANCE / NO_CODE
+
+Acceptance evidence:
+- GitHub runner [33470293458](https://github.com/gemini077/football-betting-oneshot/actions/runs/33470293458) completed the paired 2026-08-31 / 2026-09-01 replay.
+- The public Nowscore JC page contract is deterministic and credential-free:
+  selected SelDate, matching niDate header date/group, and the explicit
+  11:00--??11:00 sales window.
+- The existing JC membership contract is unchanged and exact:
+  SetLevel(3) -> A[j][32] == 1.
+- 2026-08-31: 12 public rows, 12 next-calendar-day kickoff rows, 12
+  explicit accepted rows, duplicate/ambiguous 0/0.
+- 2026-09-01: 10 public rows, 10 next-calendar-day kickoff rows, 0 explicit
+  accepted rows because live sc1 contained none of the ten public IDs.
+- Business-date ID overlap and accepted-ID overlap are both empty.
+- Exact JSON evidence is
+  docs/data-foundation/NOWSCORE-JC-BUSINESS-DATE-1_PROBE_RUN_33470293458.json
+  with SHA-256
+  186361AFCD01D884DD1B50BF901CAC54C1DC967F0D04FA3860D6B281FC6665B.
+- The full gate is NO_CODE; no production code or durable prediction/history
+  state was changed.
+
+The detailed report is
+docs/data-foundation/NOWSCORE-JC-BUSINESS-DATE-1_PROBE_REPORT.md.
+
+Acceptance boundary: this milestone is READY_FOR_ACCEPTANCE / NO_CODE only.
+Do not merge and do not start Challenger Promotion Review.
+
+# Historical acceptance gate: NOWSCORE-JC-UNIVERSE-1
+
+Status: READY_FOR_ACCEPTANCE
+
+Acceptance evidence:
+- GitHub-runner [33466072890](https://github.com/gemini077/football-betting-oneshot/actions/runs/33466072890) reached the public Nowscore `ft1` page and backing `ft1.js` with HTTP 200.
+- The public page contract is `SetLevel(3)` with exact backing-row predicate `A[j][32] == 1`; no heuristic JC-membership inference is used.
+- The target date `2026-09-01` produced 12 accepted JC fixtures, all with deterministic Nowscore IDs, date provenance, explicit `jc_membership=VERIFIED`, and `jc_membership_source=nowscore_public_jc`.
+- Duplicate Nowscore IDs and ambiguous IDs are both `0`; the exact fixture set and response hashes are in `docs/data-foundation/NOWSCORE-JC-UNIVERSE-1_PROBE_RUN_33466072890.json`.
+- Existing `bf1` comparison was `OK` with 102 target-date rows and zero ID intersection; this does not override the explicit JC contract.
+- Current-universe schedule intake no longer depends on Sporttery or 500. Existing optional evidence paths remain, and their failure cannot zero a verified Nowscore JC universe.
+- Focused tests: `90 passed, 6 warnings`; `py_compile` and `git diff --check` passed. No Champion, model, identity threshold, frozen history, prospective ledger, or settlement semantics changed.
+
+Acceptance boundary: this milestone is `READY_FOR_ACCEPTANCE` only. Do not
+merge and do not start Challenger Promotion Review.
+
+# Historical acceptance gate: CURRENT-UNIVERSE-ROLLOVER-1
+
+Historical status: READY_FOR_ACCEPTANCE / NO CODE
+
+Acceptance evidence:
+- GitHub-runner probe run 33455183881 completed successfully for 2026-09-01.
+- All six official Sporttery probe routes returned HTTP 567 HTML WAF/challenge responses with zero target rows.
+- The 500 trade page returned HTTP 200 HTML access-denied challenge content, zero raw match rows, and zero target business-date or match-date rows.
+- Classification is WAF_BLOCK and the decision gate is NO_CODE.
+- Focused tests, py_compile, and git diff --check passed; the unrelated full-suite collection failure remains documented in the task handoff.
+
+Acceptance boundary: this milestone does not claim a production fix or a current-day universe recovery. Independent acceptance may mark only the evidence gate; no merge or Challenger Promotion Review is authorized here.
+
 # 2Z. PRED-INPUT-PROVENANCE-1 Acceptance
 
 `PRED-INPUT-PROVENANCE-1` 已完成工程验收，当前状态为
-`ACCEPTANCE PASS / MERGE AUTHORIZED`；合并后仍需真实 production verify，
-最终部署状态以真实远端证据为准。
+`DEPLOYED / SEALED / PRODUCTION ACCEPTANCE PASS`；真实 production verify
+已完成，部署状态已有真实远端证据。
 
 验收必须核对：
 
@@ -45,8 +131,8 @@
    tests、相关 full tests、`py_compile` 和 `git diff --check` 均有真实输出。
 6. branch、commit、remote branch、GitHub commit SHA、PR、PR head SHA 和
    PR body 中的 milestone/result/blockers/tests/evidence/STOP state 均可从
-   GitHub 读取；当前状态为 `ACCEPTANCE PASS / MERGE AUTHORIZED`，合并后执行
-   production verify，不启动 next milestone。
+   GitHub 读取；当前状态为 `DEPLOYED / SEALED / PRODUCTION ACCEPTANCE PASS`，
+   production verify 已完成，不启动 next milestone。
 
 # 2. 阶段状态
 

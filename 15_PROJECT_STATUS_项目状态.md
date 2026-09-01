@@ -1,15 +1,123 @@
 # 15_PROJECT_STATUS_项目状态.md
 
-最后更新：2026-08-31
+最后更新：2026-09-01
 角色：项目当前唯一人类可读状态真相。只记录当前事实，不承担完整历史档案职责。
 
-# PRED-INPUT-PROVENANCE-1 — Deterministic Prematch Input Provenance
+# NOWSCORE-JC-SALES-PAGE-1 - Direct JC sales-page current-universe source
 
-Status: `ACCEPTANCE PASS / MERGE AUTHORIZED`
+Status: READY_FOR_ACCEPTANCE / PASS
 
-Decision: `PRED-INPUT-PROVENANCE-1 = ACCEPTANCE PASS / MERGE AUTHORIZED`
+Decision: PASS / Nowscore direct JC sales page
 
-`CURRENT = PRED-INPUT-PROVENANCE-1`.
+The direct Nowscore JC sales page is now the current-universe membership and
+China JC business-date authority. Its deterministic contract is selected
+SelDate plus the matching niDate header date/group, the explicit
+11:00--next-day-11:00 sales window, the 周XNNN match number, one Nowscore match
+ID, kickoff, home/away, league, cansale, and the sales-row ID.
+
+The paired GitHub replay for 2026-08-31 and 2026-09-01 passed with 12 and 10
+rows respectively. All 22 rows are retained under their selected business
+dates even though all kickoffs are on the following calendar date. Direct
+business-date ID overlap, accepted-ID overlap, duplicate, and ambiguous counts
+are all zero. SetLevel(3) / A[j][32] == 1 is optional corroboration only; the
+2026-09-01 ten-row direct set remains accepted when live scN has none of its
+IDs.
+
+The current chain is Nowscore JC sales page -> canonical schedule / identity
+-> existing Nowscore market and analysis evidence -> BASE. Sporttery and 500
+no longer block current-universe creation; their independent optional evidence
+roles remain. No Champion, model, identity threshold, frozen history,
+prospective ledger, or settlement semantics changed.
+
+Exact evidence and integration replay are recorded in
+docs/data-foundation/NOWSCORE-JC-SALES-PAGE-1_PROBE_REPORT.md and the paired
+JSON artifacts. STOP at READY_FOR_ACCEPTANCE; do not merge and do not start
+Challenger Promotion Review.
+
+# Historical NOWSCORE-JC-BUSINESS-DATE-1 - China JC business-date anchor
+
+Status: READY_FOR_ACCEPTANCE / NO_CODE
+
+Decision: NO_CODE
+
+The Nowscore public JC sales page provides a deterministic, credential-free
+business-day anchor: selected SelDate plus the matching niDate header date,
+with the explicit 11:00--??11:00 sales window. Match numbers are the
+niDate group name plus the row number cell. This fixes the date semantics in
+evidence, but does not authorize production code in this milestone.
+
+The paired GitHub replay for 2026-08-31 and 2026-09-01 passed page/data
+access and preserved the existing SetLevel(3) / A[j][32] == 1 membership
+contract. It accepted 12 explicit rows for 2026-08-31, all with
+2026-09-01 kickoff dates. The 2026-09-01 public page had 10 rows, all with
+2026-09-02 kickoff dates, but the corresponding live sc1 replay had zero
+of those ten IDs, so explicit accepted rows were zero. The full gate therefore
+failed the requirement that a nonempty public current JC page have nonzero
+explicit current rows.
+
+Exact evidence is docs/data-foundation/NOWSCORE-JC-BUSINESS-DATE-1_PROBE_RUN_33470293458.json with SHA-256
+186361AFCD01D884DD1B50BF901CAC54C1DC967F0D04FA3860D6B281FC6665B9; the
+runner is [33470293458](https://github.com/gemini077/football-betting-oneshot/actions/runs/33470293458).
+The detailed report is docs/data-foundation/NOWSCORE-JC-BUSINESS-DATE-1_PROBE_REPORT.md.
+
+No kickoff cutoff, weekday/league/team rule, fixture-ID exception, membership
+guess, Sporttery/500 change, Champion/model change, identity-threshold change,
+frozen-history rewrite, prospective-ledger rewrite, or settlement change was
+made. STOP at READY_FOR_ACCEPTANCE; do not merge and do not start Challenger
+Promotion Review.
+
+# Historical milestone: NOWSCORE-JC-UNIVERSE-1 - Current JC universe restoration
+
+Status: READY_FOR_ACCEPTANCE
+
+Decision: PASS / Nowscore public JC
+
+The public Nowscore football schedule page and its backing `ft1.js` data
+surface provide a deterministic, credential-free current JC contract:
+`SetLevel(3)` selects rows where `A[j][32] == 1`. The GitHub-hosted runner
+proved HTTP 200 page/data access for business date `2026-09-01`, accepted 12
+current JC fixtures, and recorded duplicate Nowscore IDs `0` and ambiguous IDs
+`0`. No JC membership was guessed from league, team, kickoff, odds, or another
+flag.
+
+Exact evidence is preserved in
+`docs/data-foundation/NOWSCORE-JC-UNIVERSE-1_PROBE_RUN_33466072890.json` with
+SHA-256 `7162B858F11F5C8117C78504AD10A13991D69038E0186D4987C2CAB0B1C71536`.
+The runner is [33466072890](https://github.com/gemini077/football-betting-oneshot/actions/runs/33466072890),
+from PR #141 head `c662d27c047dd0d6e6638b7c3c563fd6d22ff8f1`.
+
+Current schedule intake now converges on Nowscore JC → canonical schedule and
+identity → existing Nowscore market/analysis evidence → BASE. Sporttery and
+500 no longer block the current fixture universe; their independent optional
+market/corroboration and 500 deep evidence paths remain. The existing `bf1`
+comparison returned 102 target-date rows with `intersection_ids=[]`; the
+explicit JC page filter, not that comparison, is the membership authority.
+
+No Champion, model, identity threshold, frozen prediction, prospective ledger,
+or result-settlement semantics changed. The focused suite passed with
+`90 passed, 6 warnings`; `py_compile` and `git diff --check` passed. STOP at
+`READY_FOR_ACCEPTANCE`; do not merge and do not start Challenger Promotion
+Review.
+
+# Historical milestone: CURRENT-UNIVERSE-ROLLOVER-1 - Production current-day universe rollover gate
+
+Historical status: READY_FOR_ACCEPTANCE / NO CODE
+
+Historical decision: WAF_BLOCK / NO_CODE
+
+The bounded one-shot probe ran on the GitHub-hosted production runner for business date 2026-09-01. The repository Sporttery calculator, both official getMatchListV1 routes, both official calculator contracts, and the current 500 trade page returned no target-date rows. Sporttery returned HTTP 567 HTML EdgeOne/WAF challenge responses; the 500 page returned HTTP 200 HTML but only an access-denied challenge with zero raw match rows.
+
+Exact evidence is preserved in docs/data-foundation/CURRENT-UNIVERSE-ROLLOVER-1_PROBE_RUN_33455183881.json, with SHA-256 C7CE80D034630105B9DDB21083013CB48F2BF61BDF6BEC38E9226AC14FC34B03. The resulting classification is WAF_BLOCK and the decision gate is NO_CODE. No production source, request, parser, provider, model, identity, frozen prediction, or prospective ledger was changed.
+
+The production runs 33431411824 and 33450251359 remain explained only at the upstream generation boundary: current universe count zero, BLOCKED_UNIVERSE downstream, and UPSTREAM_GENERATION_NOT_COMPLETE durability. The evidence does not prove stale endpoint contract, wrong channel or pool contract, source rollover lag, or a deterministic business-date parser bug.
+
+# Historical milestone: PRED-INPUT-PROVENANCE-1 — Deterministic Prematch Input Provenance
+
+Historical status: `DEPLOYED / SEALED / PRODUCTION ACCEPTANCE PASS`
+
+Historical decision: `PRED-INPUT-PROVENANCE-1 = DEPLOYED / SEALED / PRODUCTION ACCEPTANCE PASS`
+
+`HISTORICAL = PRED-INPUT-PROVENANCE-1`.
 
 The audit against main `c0a30839867eefd83d822643e54eecc15cafec7f` and
 production run `33399507542` proves a general boolean-to-umbrella
@@ -27,9 +135,8 @@ keeps prematch timing fail-closed, leaves valid frozen Champion cases
 unchanged, and does not fabricate or rewrite historical timestamps.
 
 Evidence: `docs/data-foundation/PRED-INPUT-PROVENANCE-1_IMPLEMENTATION_REPORT.md`.
-Engineering acceptance is PASS and merge is authorized. Real production
-verification follows merge; final deployment state is not predeclared. STOP
-after verification; no next milestone starts.
+Production acceptance is PASS and the milestone is DEPLOYED / SEALED. The
+post-merge production verification is recorded; no next milestone starts.
 
 # PRED-IDENTITY-SAFE-PARTIAL-1 Previous Milestone
 
@@ -39,7 +146,7 @@ Decision: `PRED-IDENTITY-SAFE-PARTIAL-1 = DEPLOYED / SEALED / PRODUCTION ACCEPTA
 
 PR #139 = `DEPLOYED / SEALED / PRODUCTION ACCEPTANCE PASS`
 
-Closed historical milestone; current pointer is `PRED-INPUT-PROVENANCE-1`.
+Closed historical milestone; current pointer is `NOWSCORE-JC-SALES-PAGE-1`.
 
 PR #139 continues the existing identity branch and implements Candidate B as a
 fail-closed fallback after the strict Nowscore resolver misses. The current
@@ -84,7 +191,7 @@ Evidence: `docs/data-foundation/NEXT-UNIVERSE-TRUTH-1_FINAL_REPORT.md`.
 Production impact remains `next_universe=0`, `BLOCKED_UNIVERSE` for the next
 BASE jobs/prediction, and `CYCLE_DEGRADED`; no fixture was fabricated and no
 historical prediction was rewritten. The current pointer is
-`PRED-INPUT-PROVENANCE-1`.
+`NOWSCORE-JC-SALES-PAGE-1`.
 
 # PRED-IDENTITY-EVIDENCE-1 Previous Bounded Gate Result
 

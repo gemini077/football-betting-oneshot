@@ -1,19 +1,93 @@
 # 16_ROADMAP_项目路线图.md
 
-最后更新：2026-08-31
+最后更新：2026-09-01
 路线原则：Gate 驱动，不使用虚假日期承诺。
 
 # Current Route Pointer
 
-# PRED-INPUT-PROVENANCE-1 - Deterministic Prematch Input Provenance
+# NOWSCORE-JC-SALES-PAGE-1 - Current route gate
 
-CURRENT ACTIVE MILESTONE:
+CURRENT ROUTE MILESTONE: NOWSCORE-JC-SALES-PAGE-1
+CURRENT ROUTE STATUS: READY_FOR_ACCEPTANCE / PASS
+CURRENT ROUTE DECISION: PASS / Nowscore direct JC sales page
 
-`PRED-INPUT-PROVENANCE-1`
+The direct JC sales page is the current-universe route. It supplies selected
+SelDate, matching niDate date/group, explicit 11:00--next-day-11:00 sales
+window, 周XNNN match number, unique Nowscore ID, kickoff, and identity fields.
+Paired replay is 12 rows for 2026-08-31 and 10 rows for 2026-09-01; all
+next-calendar-day kickoffs remain under selected business date. Duplicate,
+ambiguous, and cross-date ID overlap are zero. A32 is optional corroboration,
+not an acceptance intersection.
 
-CURRENT STATUS: `ACCEPTANCE PASS / MERGE AUTHORIZED`
+The route is Nowscore JC sales page -> canonical fixture / identity -> existing
+evidence -> BASE. Sporttery and 500 are not current-universe blocking sources;
+independent optional capabilities remain. STOP at READY_FOR_ACCEPTANCE; no
+merge and no Challenger Promotion Review.
 
-CURRENT DECISION: `PRED-INPUT-PROVENANCE-1 = ACCEPTANCE PASS / MERGE AUTHORIZED`
+# Historical NOWSCORE-JC-BUSINESS-DATE-1 - Current route gate
+
+CURRENT ROUTE MILESTONE: NOWSCORE-JC-BUSINESS-DATE-1
+
+CURRENT ROUTE STATUS: READY_FOR_ACCEPTANCE / NO_CODE
+
+CURRENT ROUTE DECISION: NO_CODE
+
+The public Nowscore JC sales page exposes the deterministic anchor
+SelDate + niDate header date and the explicit 11:00--??11:00 sales
+window. The paired replay preserved the exact existing membership contract
+SetLevel(3) -> A[j][32] == 1: 12/12 public rows for 2026-08-31 joined
+explicitly, while the nonempty 2026-09-01 public group had 0/10 explicit
+live sc1 joins. The full decision gate is therefore NO_CODE, not a
+permission to guess membership.
+
+Exact evidence is recorded in docs/data-foundation/NOWSCORE-JC-BUSINESS-DATE-1_PROBE_RUN_33470293458.json and the report
+docs/data-foundation/NOWSCORE-JC-BUSINESS-DATE-1_PROBE_REPORT.md. No current-universe business-date production code was changed in
+this milestone. STOP at READY_FOR_ACCEPTANCE; no merge and no Challenger
+Promotion Review.
+
+# Historical milestone: NOWSCORE-JC-UNIVERSE-1 - Current route gate
+
+CURRENT ROUTE MILESTONE: NOWSCORE-JC-UNIVERSE-1
+
+CURRENT ROUTE STATUS: READY_FOR_ACCEPTANCE
+
+CURRENT ROUTE DECISION: PASS / Nowscore public JC
+
+The bounded GitHub-runner gate proved the public Nowscore current `ft1` page
+and backing data contract for `2026-09-01`: `SetLevel(3)` maps to
+`A[j][32] == 1`, yielding 12 deterministic fixtures with duplicate IDs `0`
+and ambiguous IDs `0`. Exact evidence is recorded in
+`docs/data-foundation/NOWSCORE-JC-UNIVERSE-1_PROBE_RUN_33466072890.json`.
+
+The route is now Nowscore JC → canonical fixture / identity → existing
+evidence → BASE. Sporttery and 500 are retired from current-universe schedule
+dependency, while independent optional market/corroboration and 500 deep
+evidence capabilities remain. No model or historical/prospective state is
+changed.
+
+STOP at `READY_FOR_ACCEPTANCE`; no merge and no Challenger Promotion Review.
+
+# Historical milestone: CURRENT-UNIVERSE-ROLLOVER-1 - Current route gate
+
+HISTORICAL ROUTE MILESTONE: CURRENT-UNIVERSE-ROLLOVER-1
+
+HISTORICAL ROUTE STATUS: READY_FOR_ACCEPTANCE / NO CODE
+
+HISTORICAL ROUTE DECISION: WAF_BLOCK / NO_CODE
+
+The route gate is a bounded production-source probe for the 2026-09-01 business date. It keeps Sporttery primary, preserves the existing 2026-08-31 path, and does not authorize a production change because every official Sporttery route and the 500 fallback surface was blocked or challenged before target rows could be observed. The exact runner artifact and classification are recorded in docs/data-foundation/CURRENT-UNIVERSE-ROLLOVER-1_PROBE_REPORT.md and the paired JSON evidence file.
+
+No later model, identity, provenance, or promotion route is opened by this milestone.
+
+# Historical milestone: PRED-INPUT-PROVENANCE-1 - Deterministic Prematch Input Provenance
+
+HISTORICAL ACTIVE MILESTONE:
+
+`HISTORICAL-PRED-INPUT-PROVENANCE-1`
+
+HISTORICAL STATUS: `DEPLOYED / SEALED / PRODUCTION ACCEPTANCE PASS`
+
+HISTORICAL DECISION: `PRED-INPUT-PROVENANCE-1 = DEPLOYED / SEALED / PRODUCTION ACCEPTANCE PASS`
 
 The milestone closes the general error-classification gap between source
 fetch, observation timestamp, cache/form provenance, official market timing,
@@ -23,8 +97,8 @@ run-level 500 deep fetch failures, so no historical relabeling or eligibility
 change is allowed.
 
 Evidence: `docs/data-foundation/PRED-INPUT-PROVENANCE-1_IMPLEMENTATION_REPORT.md`.
-Engineering acceptance is PASS and merge is authorized. Real production
-verification follows merge; no next milestone starts here.
+Production acceptance is PASS and the milestone is DEPLOYED / SEALED. The
+post-merge production verification is recorded; no next milestone starts here.
 
 # Previous milestone: PRED-IDENTITY-SAFE-PARTIAL-1 - Deterministic Nowscore Fallback
 
@@ -36,7 +110,7 @@ CURRENT DECISION: `PRED-IDENTITY-SAFE-PARTIAL-1 = DEPLOYED / SEALED / PRODUCTION
 
 PR #139 = `DEPLOYED / SEALED / PRODUCTION ACCEPTANCE PASS`
 
-Closed historical milestone; current pointer is `PRED-INPUT-PROVENANCE-1`.
+Closed historical milestone; current pointer is `NOWSCORE-JC-SALES-PAGE-1`.
 
 PR #139 implements the replay-approved Candidate B as a fail-closed fallback
 behind the existing strict resolver. The current 12-fixture replay preserves

@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import argparse
-from copy import deepcopy
 import json
 import re
 from datetime import datetime
@@ -22,17 +21,6 @@ from market_history import rebuild_history
 from nowscore_markets import fetch_match_markets as fetch_nowscore_markets
 from polymarket_public import fetch_snapshot as fetch_polymarket_snapshot
 from spdex_exchange import fetch_snapshot as fetch_spdex_snapshot, merge_into as merge_spdex_exchange
-
-try:
-    from prediction_universe import update_prediction_universe
-except ImportError:  # package imports used by tests
-    from scripts.prediction_universe import update_prediction_universe
-
-try:
-    from base_prediction_jobs import sync_base_prediction_jobs
-except ImportError:  # package imports used by tests
-    from scripts.base_prediction_jobs import sync_base_prediction_jobs
-
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 RUNS_ROOT = PROJECT_ROOT / "data" / "fetch_runs"
@@ -379,12 +367,8 @@ def main() -> int:
         and not args.polymarket_home
         and not args.polymarket_away
     )
-    full_schedule_attempts = []
-
     if not args.skip_sporttery:
         official = fetch_jingcai_odds(args.date, args.no_cache, SPORTTERY_CACHE_DIR)
-        if full_schedule_mode:
-            full_schedule_attempts.append(deepcopy(official))
         official_unfiltered_count = len(official.get("matches", []))
         official["matches"] = _match_filter(official.get("matches", []), args.match)
         official_matches = official["matches"]
@@ -404,8 +388,6 @@ def main() -> int:
 
     if not args.skip_trade:
         trade_result = fetch_trade_matches(args.date, args.no_cache, TRADE_CACHE_DIR)
-        if full_schedule_mode:
-            full_schedule_attempts.append(deepcopy(trade_result))
         selected_matches = _match_filter(trade_result.get("matches", []), args.match)
         trade_output = {**trade_result, "matches": selected_matches, "unfiltered_match_count": len(trade_result.get("matches", []))}
         trade_path = run_dir / f"{stamp}_500_trade_{args.date}.json"
@@ -421,24 +403,11 @@ def main() -> int:
     else:
         selected_matches = []
 
-    if full_schedule_mode and full_schedule_attempts:
-        full_schedule = next(
-            (payload for payload in full_schedule_attempts if payload.get("success")),
-            full_schedule_attempts[0],
-        )
-        universe = update_prediction_universe(args.date, full_schedule)
-        base_jobs = sync_base_prediction_jobs(args.date)
+    if full_schedule_mode:
         manifest["prediction_universe"] = {
-            "status": universe.get("status"),
-            "fixture_count": universe.get("fixture_count", 0),
-            "source_fixture_count": universe.get("source_fixture_count", 0),
-        }
-        manifest["base_prediction_jobs"] = {
-            "status": base_jobs.get("status"),
-            "fixture_count": base_jobs.get("fixture_count", 0),
-            "job_count": base_jobs.get("job_count", 0),
-            "pending_count": base_jobs.get("pending_count", 0),
-            "missed_prematch_count": base_jobs.get("missed_prematch_count", 0),
+            "status": "SKIPPED_CURRENT_UNIVERSE_OWNED_BY_NOWSCORE_JC",
+            "source": "nowscore_public_jc",
+            "role": "optional_official_market_and_corroboration_fetch_only",
         }
 
     if not selected_matches and not official_matches:

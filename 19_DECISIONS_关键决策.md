@@ -1,13 +1,97 @@
 # 19_DECISIONS_关键决策.md
 
-最后更新：2026-08-31
+最后更新：2026-09-01
 角色：记录不能因换对话 / 换 Codex 而重复推翻的关键决定。若新证据足以改变决定，必须新增 superseding decision，不得静默改历史。
+
+# D-037 - NOWSCORE-JC-SALES-PAGE-1 direct current-universe source
+
+Status: READY_FOR_ACCEPTANCE / PASS
+Decision: NOWSCORE-JC-SALES-PAGE-1 = PASS.
+
+The direct Nowscore JC sales page is authoritative current-universe membership
+and China JC business-date source. Deterministic anchor is selected SelDate
+plus matching niDate header date/group and explicit 11:00--next-day-11:00
+sales window. It supplies 周XNNN match number, sales-row ID, unique Nowscore
+match ID, kickoff, home/away, league, cansale. Kickoff calendar date is
+provenance only and never derives business date.
+
+SetLevel(3) / A[j][32] == 1 remains previously proven but optional
+corroboration. Missing/not-yet-synchronized live ft1/scN rows do not reject a
+direct sales-page fixture. Paired replay accepted 12 for 2026-08-31 and 10 for
+2026-09-01; duplicates, ambiguous rows, cross-date ID overlap all zero.
+
+Current chain: Nowscore JC sales page -> canonical fixture / identity ->
+existing Nowscore market/analysis evidence -> BASE. Sporttery/500 retired from
+current-universe blocking roles but retained for independent optional evidence.
+No model/identity/frozen/prospective/settlement change.
+
+Evidence: docs/data-foundation/NOWSCORE-JC-SALES-PAGE-1_PROBE_REPORT.md.
+STOP at READY_FOR_ACCEPTANCE; do not merge and do not start Challenger Promotion
+Review.
+
+# Historical D-036 - NOWSCORE-JC-BUSINESS-DATE-1 business-day gate
+
+Status: READY_FOR_ACCEPTANCE / NO_CODE
+
+Decision: NOWSCORE-JC-BUSINESS-DATE-1 = NO_CODE.
+
+The public Nowscore JC sales page proves a deterministic business-day
+contract without credentials: selected SelDate, the matching niDate
+header date/group, the explicit 11:00--??11:00 sales window, and the
+group-plus-row match number. The paired replay keeps the existing membership
+authority unchanged at SetLevel(3) / A[j][32] == 1.
+
+The 2026-08-31 public group has 12 rows, all kicking off on 2026-09-01,
+and all 12 joined explicit A32 schedule rows. The nonempty 2026-09-01
+public group has 10 rows, all kicking off on 2026-09-02, but the live sc1
+surface has zero matching IDs. Because the full gate requires nonzero
+explicit current rows when the public JC page is nonzero, production
+business-date code is not authorized. No membership guessing or fixed
+kickoff cutoff is allowed.
+
+Exact evidence: docs/data-foundation/NOWSCORE-JC-BUSINESS-DATE-1_PROBE_RUN_33470293458.json;
+report: docs/data-foundation/NOWSCORE-JC-BUSINESS-DATE-1_PROBE_REPORT.md.
+This supersedes the current-pointer role of D-035 for this business-date
+milestone without rewriting D-035's historical Nowscore source evidence.
+STOP at READY_FOR_ACCEPTANCE; do not merge and do not start Challenger
+Promotion Review.
+
+# D-035 - NOWSCORE-JC-UNIVERSE-1 public JC source gate
+
+Status: READY_FOR_ACCEPTANCE
+
+Decision: For business date `2026-09-01`, the public Nowscore current JC
+contract is `PASS`. The public `ft1` page exposes `SetLevel(3)` and its
+backing data uses the exact predicate `A[j][32] == 1`. The GitHub-hosted runner
+received HTTP 200 for both surfaces and accepted 12 deterministic Nowscore
+fixtures with duplicate IDs `0` and ambiguous IDs `0`.
+
+This supersedes the current-pointer role of D-034 without rewriting its
+historical WAF evidence. Current-universe intake now uses Nowscore JC as the
+schedule authority, keeps Sporttery/500 only for independent optional evidence,
+and prevents their failure from zeroing the current universe. No new provider,
+credential, heuristic membership mapping, Champion/model change, identity
+threshold change, frozen-history rewrite, prospective-ledger rewrite, or
+settlement change is authorized.
+
+Evidence: `docs/data-foundation/NOWSCORE-JC-UNIVERSE-1_PROBE_REPORT.md` and
+`docs/data-foundation/NOWSCORE-JC-UNIVERSE-1_PROBE_RUN_33466072890.json`.
+STOP at `READY_FOR_ACCEPTANCE`; do not merge and do not start Challenger
+Promotion Review.
+
+# Historical decision: D-034 - CURRENT-UNIVERSE-ROLLOVER-1 WAF evidence gate
+
+Historical status: READY_FOR_ACCEPTANCE / NO CODE
+
+Historical decision: For business date 2026-09-01, the bounded production-surface probe is classified WAF_BLOCK and the decision gate is NO_CODE. The official Sporttery routes were not observably empty schedules: they returned HTTP 567 EdgeOne/WAF challenge HTML. The current 500 trade page was also not an empty schedule: it returned HTTP 200 access-denied challenge HTML with zero raw rows.
+
+The exact GitHub-runner response summaries and raw response metadata are durable in docs/data-foundation/CURRENT-UNIVERSE-ROLLOVER-1_PROBE_RUN_33455183881.json. This decision does not authorize endpoint migration, header changes, parser changes, fixture injection, third-party providers, Champion changes, identity changes, provenance reopening, or Challenger review. A later valid target-date response requires a new bounded decision gate.
 
 # D-033 — PRED-INPUT-PROVENANCE-1 deterministic error-stage classification
 
-Status: `ACCEPTANCE PASS / MERGE AUTHORIZED`
+Status: `DEPLOYED / SEALED / PRODUCTION ACCEPTANCE PASS`
 
-Decision: `PRED-INPUT-PROVENANCE-1 = ACCEPTANCE PASS / MERGE AUTHORIZED`. The
+Decision: `PRED-INPUT-PROVENANCE-1 = DEPLOYED / SEALED / PRODUCTION ACCEPTANCE PASS`. The
 general BASE runner classification rule was corrected because source fetch failures were being collapsed into
 `INPUT_TIMESTAMP_UNVERIFIED` when recent form was unavailable. The correction
 must classify by deterministic source/validation stage, persist bounded
@@ -19,8 +103,8 @@ revision-level umbrella failures lack enough durable causal evidence for
 retroactive relabeling. Production run `33399507542` proves 18 500 deep page
 fetch failures across three fallback attempts, but not their fixture mapping.
 No timestamp, source status, model output, frozen record, or prospective row
-was fabricated or rewritten. Engineering acceptance is PASS, merge is
-authorized, and real production verification follows merge.
+was fabricated or rewritten. Production acceptance is PASS, the milestone is
+deployed and sealed, and the post-merge production verification is recorded.
 
 Evidence: `docs/data-foundation/PRED-INPUT-PROVENANCE-1_IMPLEMENTATION_REPORT.md`.
 
