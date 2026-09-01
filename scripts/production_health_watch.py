@@ -632,6 +632,110 @@ def _recursive_integrity_reasons(value: Any) -> set[str]:
     return found
 
 
+def _prediction_is_after_kickoff(record: dict[str, Any]) -> bool:
+    kickoff = _parse_at(record.get("kickoff_at"))
+    created = _parse_at(record.get("prediction_created_at"))
+    freeze = _parse_at(record.get("freeze_created_at"))
+    return bool(
+        record.get("prediction_after_kickoff") is True
+        or (
+            kickoff is not None
+            and ((created is not None and created >= kickoff) or (freeze is not None and freeze >= kickoff))
+        )
+    )
+
+
+def select_current_serving_predictions(
+    records: list[dict[str, Any]],
+    *,
+    business_date: str,
+    excluded_ids: set[str] | None = None,
+) -> dict[str, Any]:
+    """Select one legal FROZEN prematch version per current match.
+
+    Historical/version rows remain available to the audit evaluator.  This
+    selector narrows only the serving cohort: one runtime business date, one
+    legal FROZEN prediction per match, and no excluded or integrity-invalid
+    rows.
+    """
+    current_business_date = str(business_date or "").strip()
+    excluded = {_duplicate_text(value) for value in (excluded_ids or set()) if _duplicate_text(value)}
+    current_date_records = [
+        record
+        for record in records
+        if isinstance(record, dict)
+        and str(record.get("business_date") or "").strip() == current_business_date
+    ]
+    frozen_records = [
+        record
+        for record in current_date_records
+        if _duplicate_text(record.get("prediction_status")) in FROZEN_STATUSES
+    ]
+
+    selected_records: list[dict[str, Any]] = []
+    groups: list[dict[str, Any]] = []
+    excluded_counts: Counter[str] = Counter()
+    for group_key, rows in _duplicate_identity_groups(frozen_records):
+        candidates: list[dict[str, Any]] = []
+        for record in rows:
+            prediction_id = _duplicate_text(record.get("prediction_id"))
+            if prediction_id in excluded:
+                excluded_counts["excluded_or_pilot"] += 1
+                continue
+            if _recursive_conflict_reasons(record) or _recursive_integrity_reasons(record):
+                excluded_counts["integrity_invalid"] += 1
+                continue
+            if _prediction_is_after_kickoff(record):
+                excluded_counts["post_kickoff"] += 1
+                continue
+            if not _duplicate_formally_eligible(record):
+                excluded_counts["not_formally_eligible"] += 1
+                continue
+            candidates.append(record)
+
+        expected_identity = _duplicate_selection_identity(candidates[0]) if candidates else {}
+        selection = (
+            select_latest_legal_prematch(candidates, identity=expected_identity)
+            if candidates
+            else {
+                "status": "NO_LEGAL_PREMATCH_VERSION",
+                "reason": "NO_CURRENT_SERVING_CANDIDATE",
+                "selected_record": None,
+                "selected_prediction_id": None,
+                "candidate_count": 0,
+                "superseded_count": 0,
+            }
+        )
+        selected = selection.get("selected_record")
+        if selection.get("status") == "SELECTED" and isinstance(selected, dict):
+            selected_records.append(selected)
+        groups.append({
+            "group_key": group_key,
+            "raw_record_count": len(rows),
+            "candidate_count": len(candidates),
+            "selected_prediction_id": selection.get("selected_prediction_id"),
+            "selection_status": selection.get("status"),
+            "selection_reason": selection.get("reason"),
+            "superseded_count": selection.get("superseded_count", 0),
+        })
+
+    return {
+        "schema_version": "production_health.current_serving.v1",
+        "current_business_date": current_business_date or None,
+        "current_date_record_count": len(current_date_records),
+        "frozen_record_count": len(frozen_records),
+        "selected_record_count": len(selected_records),
+        "selected_prediction_ids": sorted(
+            _duplicate_text(record.get("prediction_id"))
+            for record in selected_records
+            if _duplicate_text(record.get("prediction_id"))
+        ),
+        "excluded_record_counts": dict(sorted(excluded_counts.items())),
+        "groups": groups,
+        "selected_records": selected_records,
+    }
+
+
 def _load_active_dates(runtime: dict[str, Any]) -> list[str]:
     dates = [str(runtime.get("business_date") or "").strip()]
     dates.extend(str(value).strip() for value in runtime.get("carryover_business_dates") or [])
@@ -804,11 +908,35 @@ def _check_prediction_integrity(
         payload for _, payload in predictions
         if str(payload.get("prediction_status") or "").strip() in FROZEN_STATUSES
     ]
-    exact_score_health = evaluate_exact_score_health(formal_records)
-    details["production_exact_score_health"] = exact_score_health
-    for exact_score_reason in exact_score_health["reasons"]:
-        _reason_once(reasons, exact_score_reason)
+    historical_exact_score_health = evaluate_exact_score_health(formal_records)
+    historical_exact_score_health = {
+        **historical_exact_score_health,
+        "scope": "historical_audit",
+    }
     exclusion_ids = _excluded_prediction_ids(exclusion_rows)
+    current_selection = select_current_serving_predictions(
+        formal_records,
+        business_date=str(runtime.get("business_date") or "").strip(),
+        excluded_ids=exclusion_ids,
+    )
+    current_exact_score_health = {
+        **evaluate_exact_score_health(current_selection["selected_records"]),
+        "scope": "current_serving",
+        "business_date": current_selection["current_business_date"],
+    }
+    selection_details = {
+        key: value for key, value in current_selection.items() if key != "selected_records"
+    }
+    details["production_current_serving_selection"] = selection_details
+    details["production_exact_score_health"] = current_exact_score_health
+    details["production_exact_score_health_current_serving"] = current_exact_score_health
+    details["production_exact_score_health_historical_audit"] = historical_exact_score_health
+    details["production_exact_score_health_scopes"] = {
+        "current_serving": current_exact_score_health,
+        "historical_audit": historical_exact_score_health,
+    }
+    for exact_score_reason in current_exact_score_health["reasons"]:
+        _reason_once(reasons, exact_score_reason)
     duplicate_health = classify_frozen_prediction_duplicates(
         formal_records,
         excluded_ids=exclusion_ids,
@@ -817,12 +945,7 @@ def _check_prediction_integrity(
     if duplicate_health["duplicate_alert"]:
         _reason_once(reasons, "DUPLICATE_FROZEN_PREDICTION")
     for record in formal_records:
-        kickoff = _parse_at(record.get("kickoff_at"))
-        created = _parse_at(record.get("prediction_created_at"))
-        freeze = _parse_at(record.get("freeze_created_at"))
-        if record.get("prediction_after_kickoff") is True or (
-            kickoff is not None and ((created is not None and created >= kickoff) or (freeze is not None and freeze >= kickoff))
-        ):
+        if _prediction_is_after_kickoff(record):
             _reason_once(reasons, "PREDICTION_AFTER_KICKOFF")
         for conflict_reason in _recursive_conflict_reasons(record):
             _reason_once(reasons, conflict_reason)
