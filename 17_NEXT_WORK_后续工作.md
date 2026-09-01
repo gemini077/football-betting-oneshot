@@ -4,6 +4,26 @@
 
 # Current Sole Pointer
 
+# PRED-AVAILABILITY-NOWSCORE-IDENTITY-GATE-1 - Current implementation stop state
+
+Status: READY_FOR_INDEPENDENT_ACCEPTANCE
+Decision: Keep the direct Nowscore JC sales-page route and existing Champion;
+close only the explicit-ID identity false-negative.
+
+The BASE call now carries its matched Universe fixture into the Nowscore
+adapter. The trusted same-provider path requires exact JC match status and
+confidence, matching Nowscore IDs, complete nowscore_public_jc_sales
+sales/business-date provenance, compatible kickoff, and no orientation or
+identity conflict. It bypasses only the page team-name fuzzy rejection;
+ordinary explicit IDs remain fail-closed.
+
+Local replay of the four 2026-09-01 failures and one 2026-09-02 failure
+returned Nowscore market OK with complete analysis recent-form under translated
+page names. This replay used synthetic page identity because the five current
+raw pages are absent from the local cache; no durable data was rewritten.
+Focused identity/BASE/Universe tests, 95 total, plus py_compile and diff-check
+passed. STOP at READY_FOR_INDEPENDENT_ACCEPTANCE; do not merge or start the
+next blocker.
 # CHALLENGER-C-UNIQUE-COHORT-SEMANTICS-1 - Current implementation stop state
 
 Status: INDEPENDENT_ACCEPTANCE_PASS / READY_FOR_MERGE

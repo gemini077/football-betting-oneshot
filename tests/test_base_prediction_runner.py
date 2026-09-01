@@ -492,6 +492,45 @@ def test_nowscore_fetch_failure_is_not_classified_as_timestamp_failure():
     assert diagnostic["error_code"] == "SOURCE_FETCH_FAILED"
 
 
+def test_base_passes_universe_fixture_to_nowscore_identity_gate():
+    with tempfile.TemporaryDirectory() as temp:
+        root = Path(temp)
+        row = fixture(1, spf=limited_spf(), nowscore=True)
+        write_case(root, [row])
+        calls = []
+
+        def fetch_markets(home, away, kickoff, *, explicit_id=None, no_cache=False, fixture=None):
+            calls.append({
+                "home": home,
+                "away": away,
+                "kickoff": kickoff,
+                "explicit_id": explicit_id,
+                "fixture": fixture,
+            })
+            return nowscore_source()
+
+        with ExitStack() as stack:
+            stack.enter_context(patch.object(runner, "ANALYSIS_INPUT_ROOT", root / "analysis_inputs"))
+            stack.enter_context(patch.object(runner, "fetch_trade_matches", return_value=trade_payload()))
+            stack.enter_context(patch.object(runner, "fetch_and_parse", return_value=parsed_source()))
+            stack.enter_context(patch.object(runner, "fetch_match_markets", side_effect=fetch_markets))
+            stack.enter_context(patch.object(runner, "build_automatic_model", return_value=champion_result()))
+            summary = runner.run_base_prediction_jobs(
+                DATE,
+                universe_root=root / "prediction_universe",
+                jobs_root=root / "base_prediction_jobs",
+                now=NOW,
+                record_root=root / "model_governance" / "predictions",
+                input_snapshot_root=root / "model_governance" / "input_snapshots",
+            )
+
+    assert summary["frozen"] == 1
+    assert len(calls) == 1
+    assert calls[0]["explicit_id"] == 100001
+    assert calls[0]["fixture"]["nowscoreId"] == 100001
+    assert calls[0]["fixture"]["nowscoreMatchStatus"] == "EXACT_MATCH"
+
+
 def test_existing_form_timestamp_failure_is_distinguished_from_source_failure():
     with tempfile.TemporaryDirectory() as temp:
         root = Path(temp)

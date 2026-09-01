@@ -736,6 +736,7 @@ def _nowscore_source(
             job.get("kickoff"),
             explicit_id=nowscore_numeric_id,
             no_cache=False,
+            fixture=fixture,
         )
     except Exception as error:
         return None, _provenance_diagnostic(
