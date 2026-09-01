@@ -1,6 +1,11 @@
 name: Current universe rollover probe
 
 on:
+  pull_request:
+    paths:
+      - ".github/workflows/current-universe-rollover-probe.yml"
+      - "scripts/probe_current_universe_rollover.py"
+      - "tests/test_probe_current_universe_rollover.py"
   workflow_dispatch:
     inputs:
       business_date:
@@ -18,7 +23,7 @@ jobs:
       - name: Check out the dispatched ref
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.ref }}
+          ref: ${{ github.event.pull_request.head.sha || github.ref }}
 
       - name: Set up Python
         uses: actions/setup-python@v5
