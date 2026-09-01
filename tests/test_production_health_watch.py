@@ -207,6 +207,13 @@ def test_evaluate_health_alerts_on_current_score_and_lambda_collapse(tmp_path):
     assert health["dominant_share"] == round(8 / 9, 6)
     assert health["compressed_share"] == round(7 / 9, 6)
     assert health["gap_threshold"] == 0.5
+    assert result["prediction_quality_health"]["status"] == "ALERT"
+    assert result["prediction_quality_health"]["scope"] == "current_serving"
+    assert result["prediction_quality_health"]["business_date"] == "2026-08-12"
+    assert result["prediction_quality_health"]["runtime_cycle_finished_at"] == "2026-08-12T10:01:00+08:00"
+    state = json.loads((root / "data" / "product_runtime" / "health_watch.json").read_text(encoding="utf-8"))
+    assert state["business_date"] == "2026-08-12"
+    assert state["prediction_quality_health"] == result["prediction_quality_health"]
 
 
 def test_current_serving_selector_uses_latest_legal_version_once_per_match():

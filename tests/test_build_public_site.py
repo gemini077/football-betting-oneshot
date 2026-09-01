@@ -168,3 +168,23 @@ def test_build_fails_loudly_when_linked_public_report_is_missing(tmp_path, monke
 
     with pytest.raises(FileNotFoundError, match="postmatch_reports/review.html"):
         build_public_site.build(tmp_path / "site")
+
+
+def test_build_propagates_current_prediction_quality_warning_to_linked_detail(tmp_path, monkeypatch):
+    make_source_tree(tmp_path)
+    dashboard_path = tmp_path / "data" / "prediction_dashboard" / "latest.json"
+    dashboard = json.loads(dashboard_path.read_text(encoding="utf-8"))
+    dashboard["prediction_quality_health"] = {
+        "status": "ALERT",
+        "scope": "current_serving",
+        "business_date": "2026-08-25",
+        "runtime_cycle_finished_at": "2026-08-25T12:01:00+08:00",
+    }
+    write_json(dashboard_path, dashboard)
+    monkeypatch.setattr(build_public_site, "ROOT", tmp_path)
+
+    build_public_site.build(tmp_path / "site")
+
+    detail = (tmp_path / "site" / "matches/1001/index.html").read_text(encoding="utf-8")
+    assert "\u9884\u6d4b\u8d28\u91cf\u5f02\u5e38" in detail
+    assert "\u4eca\u65e5\u6bd4\u5206\u9884\u6d4b\u51fa\u73b0\u5f02\u5e38\u96c6\u4e2d\uff0c\u5f53\u524d\u9884\u6d4b\u4ecd\u4fdd\u7559\u4f9b\u89c2\u5bdf\u3002" in detail

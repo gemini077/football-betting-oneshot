@@ -17,6 +17,11 @@ try:
 except ImportError:  # package import used by tests
     from scripts.prematch_versioning import select_latest_legal_prematch
 
+try:
+    from production_health_watch import evaluate_exact_score_health, select_current_serving_predictions
+except ImportError:  # package import used by tests
+    from scripts.production_health_watch import evaluate_exact_score_health, select_current_serving_predictions
+
 
 BASE_DIR = Path(__file__).resolve().parents[1]
 UNIVERSE_ROOT = BASE_DIR / "data" / "prediction_universe"
@@ -26,6 +31,7 @@ EXCLUSION_ROOT = BASE_DIR / "data" / "model_governance" / "prediction_exclusions
 RESULT_ROOT = BASE_DIR / "data" / "postmatch_automation" / "results"
 PROSPECTIVE_ROOT = BASE_DIR / "data" / "prospective"
 RUNTIME_PATH = BASE_DIR / "data" / "product_runtime" / "latest_cycle.json"
+HEALTH_WATCH_PATH = BASE_DIR / "data" / "product_runtime" / "health_watch.json"
 DASHBOARD_ROOT = BASE_DIR / "data" / "prediction_dashboard"
 WORKSPACE_LATEST = BASE_DIR / "data" / "match_workspace" / "latest.json"
 SHANGHAI = timezone(timedelta(hours=8))
@@ -52,6 +58,16 @@ REASON_LABELS = {
     "BASE_JOB_MISSING": "基础预测任务尚未生成",
     "PREDICTION_ARTIFACT_MISSING": "预测任务已冻结但正式记录缺失",
 }
+
+_CURRENT_FORMAL_STATUSES = {"formal", "frozen", "FROZEN"}
+_QUALITY_STATUS_LABELS = {
+    "HEALTHY": "正常",
+    "ALERT": "异常",
+    "INSUFFICIENT_SAMPLE": "样本不足",
+    "WATCH": "观察中",
+    "UNKNOWN": "暂不可用",
+}
+_QUALITY_ALERT_COPY = "今日比分预测出现异常集中，当前预测仍保留供观察。"
 
 
 def _read_json(path: Path, errors: list[str], label: str, default: Any) -> Any:
@@ -449,7 +465,8 @@ button { font: inherit; }
 h1 { margin: 8px 0 4px; font-size: clamp(32px, 5vw, 54px); line-height: 1.02; letter-spacing: -.045em; }
 .date-line { color: var(--muted); font-size: 15px; }
 .refresh-line { color: var(--quiet); font-size: 12px; text-align: right; }
-.health-alert { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; margin: 20px 0 0; padding: 11px 14px; border: 1px solid rgba(240, 184, 106, .35); background: var(--warning-soft); color: #f7d49d; }
+.health-stack { display: grid; gap: 8px; margin: 20px 0 0; }
+.health-alert { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; margin: 0; padding: 11px 14px; border: 1px solid rgba(240, 184, 106, .35); background: var(--warning-soft); color: #f7d49d; }
 .health-alert.alert { border-color: rgba(241, 123, 133, .4); background: var(--danger-soft); color: #ffc1c6; }
 .health-alert strong { color: inherit; }
 .day-summary { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 12px; margin: 28px 0 20px; color: var(--muted); }
@@ -537,6 +554,106 @@ def _format_updated_at(value: Any) -> str:
         return parsed.strftime("%Y-%m-%d %H:%M")
     except ValueError:
         return text[:16].replace("T", " ")
+
+
+def _health_watch_quality_for_cycle(
+    health_watch: dict[str, Any],
+    runtime: dict[str, Any],
+    business_date: str,
+) -> tuple[dict[str, Any] | None, str]:
+    persisted = health_watch.get("prediction_quality_health")
+    if not isinstance(persisted, dict):
+        return None, "UNAVAILABLE"
+    runtime_business_date = str(runtime.get("business_date") or "").strip()
+    runtime_finished_at = str(runtime.get("finished_at") or "").strip()
+    persisted_date = str(persisted.get("business_date") or "").strip()
+    persisted_cycle = str(persisted.get("runtime_cycle_finished_at") or "").strip()
+    top_level_date = str(health_watch.get("business_date") or "").strip()
+    top_level_cycle = str(health_watch.get("last_cycle_generated_at") or "").strip()
+    if (
+        not business_date
+        or runtime_business_date != business_date
+        or not runtime_finished_at
+        or persisted.get("scope") != "current_serving"
+        or persisted_date != business_date
+        or persisted_cycle != runtime_finished_at
+        or (top_level_date and top_level_date != business_date)
+        or (top_level_cycle and top_level_cycle != runtime_finished_at)
+    ):
+        return None, "MISMATCHED"
+    return persisted, "MATCHED"
+
+
+def _current_prediction_quality_health(
+    records: dict[str, dict[str, Any]],
+    exclusions: dict[str, dict[str, Any]],
+    runtime: dict[str, Any],
+    health_watch: dict[str, Any],
+    business_date: str,
+) -> dict[str, Any]:
+    runtime_finished_at = str(runtime.get("finished_at") or "").strip() or None
+    persisted, provenance_status = _health_watch_quality_for_cycle(
+        health_watch,
+        runtime,
+        business_date,
+    )
+    base: dict[str, Any] = {
+        "schema_version": "prediction_quality_health.v1",
+        "status": "UNKNOWN",
+        "overall_status": "UNKNOWN",
+        "scope": "current_serving",
+        "business_date": business_date or None,
+        "runtime_cycle_finished_at": runtime_finished_at,
+        "reasons": [],
+        "available": False,
+        "provenance_status": provenance_status,
+        "source": "unavailable",
+        "display_status": _QUALITY_STATUS_LABELS["UNKNOWN"],
+    }
+    if (
+        not business_date
+        or str(runtime.get("business_date") or "").strip() != business_date
+        or not runtime_finished_at
+    ):
+        return base
+
+    formal_records = [
+        record
+        for record in records.values()
+        if str(record.get("prediction_status") or "").strip() in _CURRENT_FORMAL_STATUSES
+    ]
+    try:
+        selection = select_current_serving_predictions(
+            formal_records,
+            business_date=business_date,
+            excluded_ids=set(exclusions),
+        )
+        evaluated = evaluate_exact_score_health(selection["selected_records"])
+    except (KeyError, TypeError, ValueError):
+        return base
+
+    quality = {
+        **evaluated,
+        "scope": "current_serving",
+        "business_date": business_date,
+        "runtime_cycle_finished_at": runtime_finished_at,
+        "selected_prediction_ids": selection.get("selected_prediction_ids", []),
+        "available": True,
+        "provenance_status": provenance_status,
+        "source": "current_serving_projection",
+    }
+    quality["overall_status"] = quality["status"]
+    quality["display_status"] = _QUALITY_STATUS_LABELS.get(
+        quality["status"],
+        quality["status"],
+    )
+    if persisted is not None:
+        if (
+            str(persisted.get("status") or "") != quality["status"]
+            or list(persisted.get("reasons") or []) != list(quality.get("reasons") or [])
+        ):
+            quality["provenance_status"] = "MISMATCHED"
+    return quality
 
 
 def _score_label(value: Any) -> str:
@@ -677,17 +794,27 @@ STATIC_REFRESH_SCRIPT = """<script>
 def render_dashboard(payload: dict[str, Any]) -> str:
     summary = payload["summary"]
     health = payload.get("health") or {}
-    health_overall = str(health.get("overall_status") or "UNKNOWN")
+    system_health = payload.get("system_runtime_health") or health
+    quality_health = payload.get("prediction_quality_health") or {}
+    health_overall = str(system_health.get("overall_status") or system_health.get("status") or "UNKNOWN")
     health_errors = payload.get("data_errors") or []
-    health_html = ""
-    if health_overall != "HEALTHY" or health_errors:
-        css = "alert" if health_overall in {"FAILED", "ALERT"} else ""
-        reason_parts = [
-            *(str(value) for value in health_errors),
-            *(str(value) for value in health.get("failed_steps") or []),
-        ]
-        reasons = ", ".join(dict.fromkeys(reason_parts)) or "待检查"
-        health_html = f'<div class="health-alert {css}"><strong>系统状态 · {html.escape(health_overall)}</strong><span>{html.escape(reasons)}</span></div>'
+    system_display = str(system_health.get("display_status") or health_overall)
+    system_css = "alert" if health_overall in {"FAILED", "ALERT"} else ""
+    reason_parts = [
+        *(str(value) for value in health_errors),
+        *(str(value) for value in system_health.get("failed_steps") or []),
+    ]
+    reasons = ", ".join(dict.fromkeys(reason_parts))
+    system_reason_html = f'<span>{html.escape(reasons)}</span>' if reasons else ""
+    system_html = f'<div class="health-alert {system_css}"><strong>系统运行 · {html.escape(system_display)}</strong>{system_reason_html}</div>'
+
+    quality_status = str(quality_health.get("status") or "UNKNOWN")
+    quality_display = str(quality_health.get("display_status") or _QUALITY_STATUS_LABELS.get(quality_status, quality_status))
+    if quality_status == "ALERT":
+        quality_html = f'<div class="health-alert alert" role="status"><strong>预测质量异常</strong><span>{html.escape(_QUALITY_ALERT_COPY)}</span></div>'
+    else:
+        quality_html = f'<div class="health-alert"><strong>预测质量 · {html.escape(quality_display)}</strong></div>'
+    health_html = f'<div class="health-stack" aria-label="系统与预测质量状态">{system_html}{quality_html}</div>'
     overview = (
         f'<strong>{html.escape(_text(summary.get("fixture_count"), "0"))}</strong>'
         '<span>场比赛 · 今日全部赛程</span>'
@@ -706,7 +833,7 @@ def render_dashboard(payload: dict[str, Any]) -> str:
 <title>今日比赛 · {html.escape(str(payload.get('business_date')))}</title><style>{MODERN_CSS}</style></head>
 <body><main class="shell">
 <header class="topbar"><div><div class="brand-kicker">PRE-MATCH FOOTBALL INTELLIGENCE</div><h1>今日比赛</h1><div class="date-line">{html.escape(str(payload.get('business_date')))} · 今日全部赛事</div></div>
-<div class="refresh-line">数据更新时间<br><strong>{html.escape(_format_updated_at(health.get('updated_at') or payload.get('generated_at')))}</strong></div></header>
+<div class="refresh-line">数据更新时间<br><strong>{html.escape(_format_updated_at(system_health.get('updated_at') or payload.get('generated_at')))}</strong></div></header>
 {health_html}<section class="day-summary" aria-label="今日比赛摘要">{overview}</section>
 <nav class="toolbar" aria-label="比赛筛选"><span class="toolbar-label">查看</span>
 <button class="filter" type="button" data-filter="ALL" aria-pressed="true">全部</button>
@@ -757,6 +884,7 @@ def build_dashboard(
     result_root: Path = RESULT_ROOT,
     prospective_root: Path = PROSPECTIVE_ROOT,
     runtime_path: Path = RUNTIME_PATH,
+    health_watch_path: Path = HEALTH_WATCH_PATH,
     workspace_path: Path = WORKSPACE_LATEST,
     output_root: Path = DASHBOARD_ROOT,
     now: datetime | None = None,
@@ -785,6 +913,9 @@ def build_dashboard(
     runtime = _read_optional_json(Path(runtime_path), errors, "runtime", {})
     if not isinstance(runtime, dict):
         runtime = {}
+    health_watch = _read_optional_json(Path(health_watch_path), [], "health_watch", {})
+    if not isinstance(health_watch, dict):
+        health_watch = {}
     completed, history = _workspace_history(Path(workspace_path), errors)
     job_lookup = _job_index(jobs, business_date)
     cards: list[dict[str, Any]] = []
@@ -823,17 +954,28 @@ def build_dashboard(
     display_status = {"HEALTHY": "正常", "DEGRADED": "部分异常", "FAILED": "失败", "RUNNING": "运行中", "UNKNOWN": "尚未运行"}.get(health_overall, health_overall)
     css_class = {"HEALTHY": "normal", "DEGRADED": "degraded", "FAILED": "failed", "RUNNING": "degraded"}.get(health_overall, "unknown")
     failed_steps = [name for name, value in (runtime.get("steps") or {}).items() if isinstance(value, dict) and value.get("status") not in {"SUCCESS", "SKIPPED"}]
+    system_runtime_health = {
+        "status": health_overall,
+        "overall_status": health_overall,
+        "display_status": display_status,
+        "css_class": css_class,
+        "updated_at": runtime.get("finished_at") or runtime.get("started_at"),
+        "failed_steps": failed_steps,
+    }
+    prediction_quality_health = _current_prediction_quality_health(
+        records,
+        exclusions,
+        runtime,
+        health_watch,
+        business_date,
+    )
     payload = {
         "schema_version": "1.0",
         "generated_at": (now or datetime.now(SHANGHAI)).isoformat(),
         "business_date": business_date,
-        "health": {
-            "overall_status": health_overall,
-            "display_status": display_status,
-            "css_class": css_class,
-            "updated_at": runtime.get("finished_at") or runtime.get("started_at"),
-            "failed_steps": failed_steps,
-        },
+        "system_runtime_health": system_runtime_health,
+        "prediction_quality_health": prediction_quality_health,
+        "health": system_runtime_health,
         "universe": {
             "status": universe.get("status") or "UNAVAILABLE",
             "source": universe.get("source"),

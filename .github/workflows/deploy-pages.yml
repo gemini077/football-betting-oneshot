@@ -84,6 +84,12 @@ jobs:
             --runtime-snapshot-health "$FOOTBALL_DATA_RUNTIME_SNAPSHOT_HEALTH" \
             | tee health_watch_result.json
 
+      - name: Regenerate current dashboard
+        shell: bash
+        run: |
+          business_date="$(python -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["business_date"])' data/product_runtime/latest_cycle.json)"
+          python scripts/prediction_dashboard.py --date "$business_date"
+
       - name: Save generated public data
         if: ${{ !cancelled() && steps.generated_data_gate.outputs.ready == 'true' }}
         shell: bash

@@ -183,6 +183,10 @@ def _build_match_pages(data_root: Path, output: Path, match_ids: set[str], dashb
         contract = contracts.get(match_id)
         if contract is None:
             raise FileNotFoundError(f"missing canonical match detail contract for linked match: {match_id}")
+        contract = {
+            **contract,
+            "prediction_quality_health": dashboard.get("prediction_quality_health"),
+        }
         target = output / "matches" / match_id / "index.html"
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(render_match_detail(contract), encoding="utf-8")
