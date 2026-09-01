@@ -22,6 +22,11 @@ try:
 except ImportError:  # package import used by tests
     from scripts.production_health_watch import evaluate_exact_score_health, select_current_serving_predictions
 
+try:
+    from exact_score_serving_policy import DEGRADED, exact_score_serving_presentation
+except ImportError:  # package import used by tests
+    from scripts.exact_score_serving_policy import DEGRADED, exact_score_serving_presentation
+
 
 BASE_DIR = Path(__file__).resolve().parents[1]
 UNIVERSE_ROOT = BASE_DIR / "data" / "prediction_universe"
@@ -508,6 +513,8 @@ h1 { margin: 8px 0 4px; font-size: clamp(32px, 5vw, 54px); line-height: 1.02; le
 .prediction-panel { margin-top: 16px; padding: 15px 0 0; border-top: 1px solid var(--line); }
 .prediction-topline { display: flex; justify-content: space-between; gap: 15px; align-items: flex-end; }
 .prediction-label { color: var(--muted); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; }
+.score-serving-note { margin-top: 10px; padding: 8px 10px; border-left: 2px solid var(--warning); color: #f6d29a; background: var(--warning-soft); font-size: 12px; }
+.score-serving-note.degraded { border-left-color: var(--danger); color: #ffc1c6; background: var(--danger-soft); }
 .score-focus { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: flex-start; gap: 7px; }
 .score-focus strong { color: var(--accent); font-size: 36px; line-height: .95; letter-spacing: -.06em; }
 .score-focus .neighbors { color: var(--muted); font-size: 12px; }
@@ -666,7 +673,13 @@ def _signal(label: str, value: Any, css: str = "") -> str:
     return f'<span class="signal {css}">{html.escape(label)} · {html.escape(_text(value))}</span>'
 
 
-def _modern_prediction_html(prediction: dict[str, Any], *, pilot_excluded: bool = False) -> str:
+def _modern_prediction_html(
+    prediction: dict[str, Any],
+    *,
+    pilot_excluded: bool = False,
+    exact_score_serving: dict[str, str] | None = None,
+) -> str:
+    serving = exact_score_serving or exact_score_serving_presentation(None)
     primary = prediction.get("primary_score") or prediction.get("unique_score")
     neighbors = prediction.get("neighbor_scores") or []
     market = prediction.get("market_summary") or {}
@@ -690,14 +703,20 @@ def _modern_prediction_html(prediction: dict[str, Any], *, pilot_excluded: bool 
         market_html = f'<div class="market-strip">{"".join(items)}</div>'
     neighbor_text = " · ".join(_score_label(score) for score in neighbors)
     pilot_note = '<div class="pilot-note"><strong>试运行预测</strong><span>不纳入正式验证</span></div>' if pilot_excluded else ""
+    serving_note = (
+        f'<div class="score-serving-note {html.escape(serving["state"].lower())}" role="status">'
+        f'{html.escape(serving["note"])}</div>'
+        if serving.get("note")
+        else ""
+    )
     return (
         '<section class="prediction-panel">'
         '<div class="prediction-topline">'
-        '<div><div class="prediction-label">系统首推比分</div>'
+        f'<div><div class="prediction-label">{html.escape(serving["label"])}</div>'
         '<div class="score-focus">'
         f'<strong>{html.escape(_score_label(primary) if primary else "—")}</strong>'
         f'<span class="neighbors">{html.escape(neighbor_text) if neighbor_text else ""}</span></div></div></div>'
-        f'{pilot_note}'
+        f'{serving_note}{pilot_note}'
         f'<div class="signal-row">{signal_html}</div>'
         f'{market_html}'
         '</section>'
@@ -735,7 +754,11 @@ def _historical_results_html(rows: list[dict[str, Any]]) -> str:
     return f'<section id="historical-results" class="historical-results"><h2>{title}</h2>{"".join(cards)}</section>'
 
 
-def _modern_card_html(card: dict[str, Any]) -> str:
+def _modern_card_html(
+    card: dict[str, Any],
+    *,
+    exact_score_serving: dict[str, str] | None = None,
+) -> str:
     status = str(card.get("status") or "PENDING")
     match_id = str(card.get("match_id") or "")
     pilot_excluded = bool(card.get("pilot_excluded") and card.get("prediction"))
@@ -743,7 +766,15 @@ def _modern_card_html(card: dict[str, Any]) -> str:
     reason_html = ""
     if card.get("reason_code"):
         reason_html = f'<div class="reason"><strong>{html.escape(str(card.get("reason_text") or "数据暂不可用"))}</strong></div>'
-    prediction_html = _modern_prediction_html(card["prediction"], pilot_excluded=pilot_excluded) if card.get("prediction") else ""
+    prediction_html = (
+        _modern_prediction_html(
+            card["prediction"],
+            pilot_excluded=pilot_excluded,
+            exact_score_serving=exact_score_serving,
+        )
+        if card.get("prediction")
+        else ""
+    )
     return (
         f'<article class="fixture-card status-{html.escape(status.lower())} prediction-{prediction_kind}" data-status="{html.escape(status)}" data-result="{"yes" if card.get("result") else "no"}" data-prediction-kind="{prediction_kind}">'
         '<div class="fixture-main">'
@@ -810,8 +841,11 @@ def render_dashboard(payload: dict[str, Any]) -> str:
 
     quality_status = str(quality_health.get("status") or "UNKNOWN")
     quality_display = str(quality_health.get("display_status") or _QUALITY_STATUS_LABELS.get(quality_status, quality_status))
-    if quality_status == "ALERT":
+    exact_score_serving = exact_score_serving_presentation(quality_health)
+    if exact_score_serving["state"] == DEGRADED:
         quality_html = f'<div class="health-alert alert" role="status"><strong>预测质量异常</strong><span>{html.escape(_QUALITY_ALERT_COPY)}</span></div>'
+    elif exact_score_serving["state"] != "NORMAL":
+        quality_html = '<div class="health-alert" role="status"><strong>预测质量状态待确认</strong><span>当前周期质量来源未完成匹配，模型原始比分继续保留。</span></div>'
     else:
         quality_html = f'<div class="health-alert"><strong>预测质量 · {html.escape(quality_display)}</strong></div>'
     health_html = f'<div class="health-stack" aria-label="系统与预测质量状态">{system_html}{quality_html}</div>'
@@ -820,7 +854,10 @@ def render_dashboard(payload: dict[str, Any]) -> str:
         '<span>场比赛 · 今日全部赛程</span>'
         f'<span class="summary-date">{html.escape(str(payload.get("business_date")))}</span>'
     )
-    cards_html = "".join(_modern_card_html(card) for card in payload.get("fixtures") or [])
+    cards_html = "".join(
+        _modern_card_html(card, exact_score_serving=exact_score_serving)
+        for card in payload.get("fixtures") or []
+    )
     if not cards_html:
         cards_html = '<div class="empty">今天没有可展示的比赛。</div>'
     data_warning = ""

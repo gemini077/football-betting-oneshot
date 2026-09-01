@@ -14,6 +14,11 @@ try:  # Support both ``python scripts/match_detail.py`` and package imports.
 except ImportError:  # pragma: no cover - exercised by the direct CLI path.
     from match_analysis import MATCH_ANALYSIS_ROOT, build_match_contracts, match_url
 
+try:  # Keep dashboard and match-detail exact-score semantics identical.
+    from .exact_score_serving_policy import DEGRADED, exact_score_serving_presentation
+except ImportError:  # pragma: no cover - exercised by the direct CLI path.
+    from exact_score_serving_policy import DEGRADED, exact_score_serving_presentation
+
 
 def _esc(value: Any, fallback: str = "") -> str:
     if value is None or value == "":
@@ -330,13 +335,27 @@ def render_match_detail(contract: dict[str, Any]) -> str:
     evidence = contract.get("evidence") or {}
     source_quality = contract.get("source_quality") or evidence.get("source_quality") or {}
     prediction_quality = contract.get("prediction_quality_health") or {}
+    exact_score_serving = exact_score_serving_presentation(prediction_quality)
     pilot = bool(governance.get("pilot_excluded"))
     primary = hero.get("primary_score")
     status_class = _status_class(contract)
     status_note = '<span class="pilot-note">试运行预测 · 不纳入正式验证</span>' if pilot else f'<span class="status-badge">{_esc(_user_status_label(status), "状态待确认")}</span>'
     quality_warning_html = ""
-    if prediction_quality.get("status") == "ALERT" and prediction_quality.get("scope") == "current_serving":
-        quality_warning_html = f'<div class="quality-alert" role="status"><strong>预测质量异常</strong><span>{_esc(_QUALITY_ALERT_COPY)}</span></div>'
+    if exact_score_serving["state"] == DEGRADED:
+        quality_warning_html = (
+            '<div class="quality-alert serving-degraded" role="status">'
+            '<strong>预测质量异常</strong>'
+            f'<span>{_esc(_QUALITY_ALERT_COPY)}</span>'
+            f'<span>{_esc(exact_score_serving["note"])}</span>'
+            '</div>'
+        )
+    elif exact_score_serving["state"] != "NORMAL":
+        quality_warning_html = (
+            '<div class="quality-alert serving-unverified" role="status">'
+            '<strong>预测质量状态待确认</strong>'
+            '<span>当前周期质量来源未完成匹配，模型原始比分继续保留。</span>'
+            '</div>'
+        )
     status_explanation = _status_explanation(status)
     status_explanation_html = f'<div class="status-explanation"><strong>{_esc(status_explanation)}</strong><span>当前证据不足，暂不扩展判断。</span></div>' if status_explanation and not primary else ""
     hero_score = f'<div class="hero-score">{_display_score(primary)}</div>' if primary else '<div class="hero-score empty-score">—</div>'
@@ -496,7 +515,7 @@ def render_match_detail(contract: dict[str, Any]) -> str:
       <div class="hero-head"><div><div class="match-meta"><span>{_esc(identity.get("competition"), "赛事未记录")}</span><span>{_esc(identity.get("match_num"), "")}</span><span>开球 · {_esc(identity.get("kickoff_at"), "时间未记录")}</span></div><h1>{_esc(identity.get("home"), "主队未记录")} <span>vs</span> {_esc(identity.get("away"), "客队未记录")}</h1></div><div>{status_note}</div></div>
       {quality_warning_html}
       {status_explanation_html}
-      <div class="hero-score-wrap"><div><div class="eyebrow">30秒结论</div><div class="eyebrow">首推比分</div>{hero_score}{neighbor_html}</div><div class="hero-score-label">{_esc(_user_copy(hero.get("summary")))}</div></div>
+      <div class="hero-score-wrap"><div><div class="eyebrow">30秒结论</div><div class="eyebrow">{_esc(exact_score_serving["label"])}</div>{hero_score}{neighbor_html}</div><div class="hero-score-label">{_esc(_user_copy(hero.get("summary"))) if exact_score_serving["state"] == "NORMAL" else ""}</div></div>
       {one_x_two}
       {result_html}
       {script_html}
