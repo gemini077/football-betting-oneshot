@@ -19,6 +19,8 @@ permissions:
 jobs:
   bounded-probe:
     runs-on: ubuntu-latest
+    env:
+      PROBE_DATE: ${{ inputs.business_date || '2026-09-01' }}
     steps:
       - name: Check out the dispatched ref
         uses: actions/checkout@v4
@@ -33,13 +35,13 @@ jobs:
       - name: Run one-shot current-universe probe
         run: >-
           python scripts/probe_current_universe_rollover.py
-          --date "${{ inputs.business_date }}"
+          --date "$PROBE_DATE"
           --output current-universe-rollover-probe.json
 
       - name: Upload exact probe evidence
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
-          name: current-universe-rollover-probe-${{ inputs.business_date }}
+          name: current-universe-rollover-probe-${{ inputs.business_date || '2026-09-01' }}
           path: current-universe-rollover-probe.json
           if-no-files-found: error
