@@ -1,79 +1,13 @@
 {
   "schema_version": "1.0",
-  "started_at": "2026-09-01T23:26:29.966314+08:00",
-  "finished_at": "2026-09-01T23:33:06.108684+08:00",
-  "business_date": "2026-09-01",
+  "started_at": "2026-09-02T00:35:43.270274+08:00",
+  "finished_at": "2026-09-02T00:38:01.059511+08:00",
+  "business_date": "2026-09-02",
   "carryover_business_dates": [
-    "2026-08-31"
+    "2026-09-01"
   ],
   "steps": {
     "carryover_base_jobs": {
-      "status": "SUCCESS",
-      "returncode": 0,
-      "summary": {
-        "status": "READY",
-        "fixture_count": 12,
-        "job_count": 12
-      },
-      "command": [
-        "/opt/hostedtoolcache/Python/3.12.14/x64/bin/python",
-        "scripts/base_prediction_jobs.py",
-        "--date",
-        "2026-08-31"
-      ]
-    },
-    "carryover_base_prediction": {
-      "status": "SUCCESS",
-      "returncode": 0,
-      "summary": {
-        "frozen": 9,
-        "insufficient_data": 0,
-        "prediction_failed": 0,
-        "missed_prematch": 3,
-        "pending": 0,
-        "failure_reasons": {},
-        "input_provenance_failure_stages": {},
-        "shadow_attempted": 0,
-        "shadow_created": 0,
-        "shadow_existing": 0,
-        "shadow_failed": 0,
-        "shadow_failure_reasons": {}
-      },
-      "command": [
-        "/opt/hostedtoolcache/Python/3.12.14/x64/bin/python",
-        "scripts/base_prediction_runner.py",
-        "--date",
-        "2026-08-31"
-      ]
-    },
-    "carryover_result_schedule": {
-      "status": "SUCCESS",
-      "returncode": 0,
-      "summary": {},
-      "command": [
-        "/opt/hostedtoolcache/Python/3.12.14/x64/bin/python",
-        "scripts/sync_result_schedules.py",
-        "--date",
-        "2026-08-31"
-      ]
-    },
-    "universe": {
-      "status": "SUCCESS",
-      "returncode": 0,
-      "summary": {
-        "match_count": 17,
-        "refresh_status": "success"
-      },
-      "command": [
-        "/opt/hostedtoolcache/Python/3.12.14/x64/bin/python",
-        "scripts/daily_schedule_workspace.py",
-        "--date",
-        "2026-09-01",
-        "--no-cache",
-        "--fetch-only"
-      ]
-    },
-    "base_jobs": {
       "status": "SUCCESS",
       "returncode": 0,
       "summary": {
@@ -88,7 +22,7 @@
         "2026-09-01"
       ]
     },
-    "base_prediction": {
+    "carryover_base_prediction": {
       "status": "SUCCESS",
       "returncode": 0,
       "summary": {
@@ -110,6 +44,61 @@
         "scripts/base_prediction_runner.py",
         "--date",
         "2026-09-01"
+      ]
+    },
+    "carryover_result_schedule": {
+      "status": "SUCCESS",
+      "returncode": 0,
+      "summary": {},
+      "command": [
+        "/opt/hostedtoolcache/Python/3.12.14/x64/bin/python",
+        "scripts/sync_result_schedules.py",
+        "--date",
+        "2026-09-01"
+      ]
+    },
+    "universe": {
+      "status": "SUCCESS",
+      "returncode": 0,
+      "summary": {
+        "match_count": 7,
+        "refresh_status": "partial_success"
+      },
+      "command": [
+        "/opt/hostedtoolcache/Python/3.12.14/x64/bin/python",
+        "scripts/daily_schedule_workspace.py",
+        "--date",
+        "2026-09-02",
+        "--no-cache",
+        "--fetch-only"
+      ]
+    },
+    "base_jobs": {
+      "status": "SUCCESS",
+      "returncode": 0,
+      "summary": {
+        "status": "READY",
+        "fixture_count": 7,
+        "job_count": 7
+      },
+      "command": [
+        "/opt/hostedtoolcache/Python/3.12.14/x64/bin/python",
+        "scripts/base_prediction_jobs.py",
+        "--date",
+        "2026-09-02"
+      ]
+    },
+    "base_prediction": {
+      "status": "SUCCESS",
+      "returncode": 0,
+      "summary": {
+        "output": "[FETCH] ouzhi ... FAILED: URL Error: [Errno 111] Connection refused\n  [FETCH] yazhi ... FAILED: URL Error: [Errno 111] Connection refused\n  [FETCH] rangqiu ... FAILED: URL Error: [Errno 111] Connection refused\n  [FETCH] daxiao ... FAILED: URL Error: [Errno 111] Connection refused\n  [FETCH] shuju ... FAILED: URL Error: [Errno 111] Connection refused\n  [FETCH] touzhu ... FAILED: URL Error: [Errno 111] Connection refused\n{\n  \"business_date\": \"2026-09-02\",\n  \"universe\": 7,\n  \"jobs\": 7,\n  \"attempted\": 7,\n  \"frozen\": 7,\n  \"predicted\": 0,\n  \"insufficient_data\": 0,\n  \"prediction_failed\": 0,\n  \"missed_prematch\": 0,\n  \"pending\": 0,\n  \"failure_reasons\": {},\n  \"input_provenance_failure_stages\": {},\n  \"shadow_attempted\": 7,\n  \"shadow_created\": 7,\n  \"shadow_existing\": 0,\n  \"shadow_failed\": 0,\n  \"shadow_failure_reasons\": {},\n  \"market_side_shadow_attempted\": 7,\n  \"market_side_shadow_created\": 7,\n  \"market_side_shadow_existing\": 0,\n  \"market_side_shadow_paired\": 7,\n  \"market_side_shadow_abstain\": 0,\n  \"market_side_shadow_failed\": 0,\n  \"market_side_shadow_failure_reasons\": {}\n}"
+      },
+      "command": [
+        "/opt/hostedtoolcache/Python/3.12.14/x64/bin/python",
+        "scripts/base_prediction_runner.py",
+        "--date",
+        "2026-09-02"
       ]
     },
     "postmatch": {
@@ -137,7 +126,7 @@
         "/opt/hostedtoolcache/Python/3.12.14/x64/bin/python",
         "scripts/sync_result_schedules.py",
         "--date",
-        "2026-09-01",
+        "2026-09-02",
         "/opt/hostedtoolcache/Python/3.12.14/x64/bin/python",
         "scripts/postmatch_result.py",
         "/opt/hostedtoolcache/Python/3.12.14/x64/bin/python",
@@ -153,7 +142,7 @@
         "failure_reasons": {},
         "formal_prospective_total": 629,
         "formal_samples_added": 0,
-        "pending_results": 66,
+        "pending_results": 48,
         "pilot_excluded_settled": 0,
         "results_found": 0,
         "shadow_failure_reasons": {},
@@ -165,7 +154,7 @@
         "/opt/hostedtoolcache/Python/3.12.14/x64/bin/python",
         "scripts/prospective_settlement.py",
         "--date",
-        "2026-09-01"
+        "2026-09-02"
       ]
     },
     "market_side_shadow_evaluation": {
@@ -180,9 +169,9 @@
         "extra_version_rows": 83,
         "latest_status": "REPLACED",
         "market_side_shadow_status": "REFRESHED",
-        "paired_count": 219,
-        "promotion_eligible_pair_version_rows": 218,
-        "promotion_eligible_pairs": 218,
+        "paired_count": 242,
+        "promotion_eligible_pair_version_rows": 241,
+        "promotion_eligible_pairs": 241,
         "promotion_eligible_unique_matches": 47,
         "result_files_accepted": 416,
         "result_files_rejected": 0,
@@ -190,8 +179,8 @@
         "result_identity_conflicts": 0,
         "result_identity_mismatches": 0,
         "status": "SUCCESS",
-        "total_pair_version_rows": 219,
-        "unmatched_pair_count": 106,
+        "total_pair_version_rows": 242,
+        "unmatched_pair_count": 129,
         "verified_pair_version_rows": 112,
         "verified_paired_count": 112,
         "verified_unique_matches": 29,
@@ -203,47 +192,53 @@
       ]
     },
     "next_universe": {
-      "status": "SUCCESS",
-      "returncode": 0,
+      "status": "DEGRADED",
+      "returncode": 1,
       "summary": {
-        "match_count": 7,
-        "refresh_status": "partial_success"
+        "match_count": 0,
+        "refresh_status": "failed_kept_previous_workspace"
       },
       "command": [
         "/opt/hostedtoolcache/Python/3.12.14/x64/bin/python",
         "scripts/daily_schedule_workspace.py",
         "--date",
-        "2026-09-02",
+        "2026-09-03",
         "--no-cache",
         "--fetch-only"
       ]
     },
     "next_base_jobs": {
-      "status": "SUCCESS",
-      "returncode": 0,
+      "status": "DEGRADED",
+      "returncode": 1,
       "summary": {
-        "status": "READY",
-        "fixture_count": 7,
-        "job_count": 7
+        "status": "BLOCKED_UNIVERSE",
+        "fixture_count": 0,
+        "job_count": 0
       },
       "command": [
         "/opt/hostedtoolcache/Python/3.12.14/x64/bin/python",
         "scripts/base_prediction_jobs.py",
         "--date",
-        "2026-09-02"
+        "2026-09-03"
       ]
     },
     "next_base_prediction": {
-      "status": "SUCCESS",
-      "returncode": 0,
+      "status": "DEGRADED",
+      "returncode": 1,
       "summary": {
-        "output": "[FETCH] ouzhi ... FAILED: URL Error: [Errno 111] Connection refused\n  [FETCH] yazhi ... FAILED: URL Error: [Errno 111] Connection refused\n  [FETCH] rangqiu ... FAILED: URL Error: [Errno 111] Connection refused\n  [FETCH] daxiao ... FAILED: URL Error: [Errno 111] Connection refused\n  [FETCH] shuju ... FAILED: URL Error: [Errno 111] Connection refused\n  [FETCH] touzhu ... FAILED: URL Error: [Errno 111] Connection refused\n{\n  \"business_date\": \"2026-09-02\",\n  \"universe\": 7,\n  \"jobs\": 7,\n  \"attempted\": 7,\n  \"frozen\": 7,\n  \"predicted\": 0,\n  \"insufficient_data\": 0,\n  \"prediction_failed\": 0,\n  \"missed_prematch\": 0,\n  \"pending\": 0,\n  \"failure_reasons\": {},\n  \"input_provenance_failure_stages\": {},\n  \"shadow_attempted\": 7,\n  \"shadow_created\": 6,\n  \"shadow_existing\": 1,\n  \"shadow_failed\": 0,\n  \"shadow_failure_reasons\": {},\n  \"market_side_shadow_attempted\": 7,\n  \"market_side_shadow_created\": 6,\n  \"market_side_shadow_existing\": 1,\n  \"market_side_shadow_paired\": 7,\n  \"market_side_shadow_abstain\": 0,\n  \"market_side_shadow_failed\": 0,\n  \"market_side_shadow_failure_reasons\": {}\n}"
+        "frozen": 0,
+        "insufficient_data": 0,
+        "prediction_failed": 0,
+        "missed_prematch": 0,
+        "failure_reasons": {
+          "BLOCKED_UNIVERSE": 1
+        }
       },
       "command": [
         "/opt/hostedtoolcache/Python/3.12.14/x64/bin/python",
         "scripts/base_prediction_runner.py",
         "--date",
-        "2026-09-02"
+        "2026-09-03"
       ]
     },
     "carryover_prospective": {
@@ -253,27 +248,27 @@
         "failure_reasons": {},
         "formal_prospective_total": 629,
         "formal_samples_added": 0,
-        "pending_results": 0,
+        "pending_results": 76,
         "pilot_excluded_settled": 0,
-        "results_found": 57,
+        "results_found": 0,
         "shadow_failure_reasons": {},
         "shadow_settlement_failures": 0,
         "shadow_settlements_added": 0,
-        "shadow_settlements_existing": 57
+        "shadow_settlements_existing": 0
       },
       "command": [
         "/opt/hostedtoolcache/Python/3.12.14/x64/bin/python",
         "scripts/prospective_settlement.py",
         "--date",
-        "2026-08-31"
+        "2026-09-01"
       ]
     },
     "workspace": {
       "status": "SUCCESS",
       "returncode": 0,
       "summary": {
-        "target_date": "2026-09-01",
-        "match_count": 37,
+        "target_date": "2026-09-02",
+        "match_count": 27,
         "completed_count": 20,
         "published_as_latest": true,
         "latest_only": true
@@ -282,7 +277,7 @@
         "/opt/hostedtoolcache/Python/3.12.14/x64/bin/python",
         "scripts/match_workspace.py",
         "--date",
-        "2026-09-01",
+        "2026-09-02",
         "--latest-only"
       ]
     },
@@ -290,8 +285,8 @@
       "status": "SUCCESS",
       "returncode": 0,
       "summary": {
-        "fixture_count": 10,
-        "frozen": 10,
+        "fixture_count": 7,
+        "frozen": 7,
         "pending": 0,
         "insufficient_data": 0,
         "formal_prospective_total": 629
@@ -300,7 +295,7 @@
         "/opt/hostedtoolcache/Python/3.12.14/x64/bin/python",
         "scripts/prediction_dashboard.py",
         "--date",
-        "2026-09-01"
+        "2026-09-02"
       ]
     },
     "site": {
@@ -315,6 +310,10 @@
       ]
     }
   },
-  "overall_status": "HEALTHY",
-  "failed_steps": []
+  "overall_status": "DEGRADED",
+  "failed_steps": [
+    "next_universe",
+    "next_base_jobs",
+    "next_base_prediction"
+  ]
 }
