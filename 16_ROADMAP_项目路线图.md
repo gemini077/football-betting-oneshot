@@ -1,19 +1,31 @@
 # 16_ROADMAP_项目路线图.md
 
-最后更新：2026-08-31
+最后更新：2026-09-01
 路线原则：Gate 驱动，不使用虚假日期承诺。
 
 # Current Route Pointer
 
-# PRED-INPUT-PROVENANCE-1 - Deterministic Prematch Input Provenance
+# CURRENT-UNIVERSE-ROLLOVER-1 - Current route gate
 
-CURRENT ACTIVE MILESTONE:
+CURRENT ROUTE MILESTONE: CURRENT-UNIVERSE-ROLLOVER-1
 
-`PRED-INPUT-PROVENANCE-1`
+CURRENT ROUTE STATUS: READY_FOR_ACCEPTANCE / NO CODE
 
-CURRENT STATUS: `ACCEPTANCE PASS / MERGE AUTHORIZED`
+CURRENT ROUTE DECISION: WAF_BLOCK / NO_CODE
 
-CURRENT DECISION: `PRED-INPUT-PROVENANCE-1 = ACCEPTANCE PASS / MERGE AUTHORIZED`
+The route gate is a bounded production-source probe for the 2026-09-01 business date. It keeps Sporttery primary, preserves the existing 2026-08-31 path, and does not authorize a production change because every official Sporttery route and the 500 fallback surface was blocked or challenged before target rows could be observed. The exact runner artifact and classification are recorded in docs/data-foundation/CURRENT-UNIVERSE-ROLLOVER-1_PROBE_REPORT.md and the paired JSON evidence file.
+
+No later model, identity, provenance, or promotion route is opened by this milestone.
+
+# Historical milestone: PRED-INPUT-PROVENANCE-1 - Deterministic Prematch Input Provenance
+
+HISTORICAL ACTIVE MILESTONE:
+
+`HISTORICAL-PRED-INPUT-PROVENANCE-1`
+
+HISTORICAL STATUS: `ACCEPTANCE PASS / MERGE AUTHORIZED`
+
+HISTORICAL DECISION: `PRED-INPUT-PROVENANCE-1 = ACCEPTANCE PASS / MERGE AUTHORIZED`
 
 The milestone closes the general error-classification gap between source
 fetch, observation timestamp, cache/form provenance, official market timing,

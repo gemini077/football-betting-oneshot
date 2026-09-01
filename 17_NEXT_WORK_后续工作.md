@@ -1,16 +1,26 @@
 # 17_NEXT_WORK_后续工作.md
 
-最后更新：2026-08-31
+最后更新：2026-09-01
 
 # Current Sole Pointer
 
-# PRED-INPUT-PROVENANCE-1 — Deterministic Prematch Input Provenance
+# CURRENT-UNIVERSE-ROLLOVER-1 - Sole current execution pointer
 
-Status: `ACCEPTANCE PASS / MERGE AUTHORIZED`
+Status: READY_FOR_ACCEPTANCE / NO CODE
 
-Decision: `PRED-INPUT-PROVENANCE-1 = ACCEPTANCE PASS / MERGE AUTHORIZED`
+Decision: WAF_BLOCK / NO_CODE
 
-`CURRENT = PRED-INPUT-PROVENANCE-1`.
+Scope closed in this milestone: bounded GitHub-runner probes for the repository Sporttery endpoint, official getMatchListV1 routes, official calculator channel/pool contracts, and the current 500 trade page for 2026-09-01. All observed production surfaces were blocked or challenged and returned zero target rows. Preserve the exact artifact, do not inject fixtures, do not add a third-party provider, and do not modify the production Champion or downstream model work.
+
+Next required action is independent acceptance of the evidence gate. If a later run obtains a valid same-provider response, open a new bounded source/request/parser investigation rather than silently changing this result.
+
+# Historical pointer: PRED-INPUT-PROVENANCE-1 — Deterministic Prematch Input Provenance
+
+Historical status: `ACCEPTANCE PASS / MERGE AUTHORIZED`
+
+Historical decision: `PRED-INPUT-PROVENANCE-1 = ACCEPTANCE PASS / MERGE AUTHORIZED`
+
+`HISTORICAL = PRED-INPUT-PROVENANCE-1`.
 
 The bounded audit found a general source-fetch-to-timestamp umbrella bug in
 the BASE runner. The current two target jobs remain historically

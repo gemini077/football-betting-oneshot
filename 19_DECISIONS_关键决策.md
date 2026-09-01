@@ -1,7 +1,15 @@
 # 19_DECISIONS_关键决策.md
 
-最后更新：2026-08-31
+最后更新：2026-09-01
 角色：记录不能因换对话 / 换 Codex 而重复推翻的关键决定。若新证据足以改变决定，必须新增 superseding decision，不得静默改历史。
+
+# D-034 - CURRENT-UNIVERSE-ROLLOVER-1 WAF evidence gate
+
+Status: READY_FOR_ACCEPTANCE / NO CODE
+
+Decision: For business date 2026-09-01, the bounded production-surface probe is classified WAF_BLOCK and the decision gate is NO_CODE. The official Sporttery routes were not observably empty schedules: they returned HTTP 567 EdgeOne/WAF challenge HTML. The current 500 trade page was also not an empty schedule: it returned HTTP 200 access-denied challenge HTML with zero raw rows.
+
+The exact GitHub-runner response summaries and raw response metadata are durable in docs/data-foundation/CURRENT-UNIVERSE-ROLLOVER-1_PROBE_RUN_33455183881.json. This decision does not authorize endpoint migration, header changes, parser changes, fixture injection, third-party providers, Champion changes, identity changes, provenance reopening, or Challenger review. A later valid target-date response requires a new bounded decision gate.
 
 # D-033 — PRED-INPUT-PROVENANCE-1 deterministic error-stage classification
 

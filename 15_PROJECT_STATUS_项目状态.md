@@ -1,15 +1,27 @@
 # 15_PROJECT_STATUS_项目状态.md
 
-最后更新：2026-08-31
+最后更新：2026-09-01
 角色：项目当前唯一人类可读状态真相。只记录当前事实，不承担完整历史档案职责。
 
-# PRED-INPUT-PROVENANCE-1 — Deterministic Prematch Input Provenance
+# CURRENT-UNIVERSE-ROLLOVER-1 - Production current-day universe rollover gate
 
-Status: `ACCEPTANCE PASS / MERGE AUTHORIZED`
+Status: READY_FOR_ACCEPTANCE / NO CODE
 
-Decision: `PRED-INPUT-PROVENANCE-1 = ACCEPTANCE PASS / MERGE AUTHORIZED`
+Decision: WAF_BLOCK / NO_CODE
 
-`CURRENT = PRED-INPUT-PROVENANCE-1`.
+The bounded one-shot probe ran on the GitHub-hosted production runner for business date 2026-09-01. The repository Sporttery calculator, both official getMatchListV1 routes, both official calculator contracts, and the current 500 trade page returned no target-date rows. Sporttery returned HTTP 567 HTML EdgeOne/WAF challenge responses; the 500 page returned HTTP 200 HTML but only an access-denied challenge with zero raw match rows.
+
+Exact evidence is preserved in docs/data-foundation/CURRENT-UNIVERSE-ROLLOVER-1_PROBE_RUN_33455183881.json, with SHA-256 C7CE80D034630105B9DDB21083013CB48F2BF61BDF6BEC38E9226AC14FC34B03. The resulting classification is WAF_BLOCK and the decision gate is NO_CODE. No production source, request, parser, provider, model, identity, frozen prediction, or prospective ledger was changed.
+
+The production runs 33431411824 and 33450251359 remain explained only at the upstream generation boundary: current universe count zero, BLOCKED_UNIVERSE downstream, and UPSTREAM_GENERATION_NOT_COMPLETE durability. The evidence does not prove stale endpoint contract, wrong channel or pool contract, source rollover lag, or a deterministic business-date parser bug.
+
+# Historical milestone: PRED-INPUT-PROVENANCE-1 — Deterministic Prematch Input Provenance
+
+Historical status: `ACCEPTANCE PASS / MERGE AUTHORIZED`
+
+Historical decision: `PRED-INPUT-PROVENANCE-1 = ACCEPTANCE PASS / MERGE AUTHORIZED`
+
+`HISTORICAL = PRED-INPUT-PROVENANCE-1`.
 
 The audit against main `c0a30839867eefd83d822643e54eecc15cafec7f` and
 production run `33399507542` proves a general boolean-to-umbrella

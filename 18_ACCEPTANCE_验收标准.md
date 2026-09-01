@@ -1,6 +1,6 @@
 # 18_ACCEPTANCE_验收标准.md
 
-最后更新：2026-08-31
+最后更新：2026-09-01
 角色：定义“什么才算真正做完”。测试全绿不等于验收通过。
 
 # 1. 通用验收原则
@@ -17,6 +17,19 @@
 8. 是否改变了不该改变的 durable production state；
 9. 如果声称“上线”，远端是否真的部署；
 10. 是否产生下一阶段需要的可复用证据。
+
+# CURRENT-UNIVERSE-ROLLOVER-1 Acceptance Gate
+
+Status: READY_FOR_ACCEPTANCE / NO CODE
+
+Acceptance evidence:
+- GitHub-runner probe run 33455183881 completed successfully for 2026-09-01.
+- All six official Sporttery probe routes returned HTTP 567 HTML WAF/challenge responses with zero target rows.
+- The 500 trade page returned HTTP 200 HTML access-denied challenge content, zero raw match rows, and zero target business-date or match-date rows.
+- Classification is WAF_BLOCK and the decision gate is NO_CODE.
+- Focused tests, py_compile, and git diff --check passed; the unrelated full-suite collection failure remains documented in the task handoff.
+
+Acceptance boundary: this milestone does not claim a production fix or a current-day universe recovery. Independent acceptance may mark only the evidence gate; no merge or Challenger Promotion Review is authorized here.
 
 # 2Z. PRED-INPUT-PROVENANCE-1 Acceptance
 
