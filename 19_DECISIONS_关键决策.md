@@ -3,6 +3,26 @@
 最后更新：2026-09-01
 角色：记录不能因换对话 / 换 Codex 而重复推翻的关键决定。若新证据足以改变决定，必须新增 superseding decision，不得静默改历史。
 
+# D-040 - PRED-AVAILABILITY-NOWSCORE-IDENTITY-GATE-1
+
+Status: READY_FOR_INDEPENDENT_ACCEPTANCE
+Decision: Permit a narrow trusted same-provider identity path for BASE
+explicit Nowscore IDs whose Prediction Universe fixture was strictly verified
+by nowscore_public_jc_sales. The fixture and JC evidence IDs must match;
+JC membership, exact-match status/confidence, sales/business-date provenance,
+kickoff, and orientation/identity checks remain mandatory. Only the existing
+team-name fuzzy rejection may be bypassed for this same-provider path.
+
+Ordinary explicit IDs without trusted JC evidence, mismatched IDs, incomplete
+or unverified provenance, kickoff conflicts, reversed/ambiguous identity, and
+conflicting stored bindings fail closed. BASE forwards the matched fixture to
+the adapter. No fuzzy threshold, time tolerance, provider, 500 fetcher,
+Champion/Challenger, model, frozen history, or prospective history changes.
+Current failure-cohort replay is synthetic because raw current pages are not
+cached; it is not a production mutation or live-source result.
+
+STOP at READY_FOR_INDEPENDENT_ACCEPTANCE; do not merge or start the next
+blocker.
 # D-039 - Challenger C unique-match Promotion cohort semantics
 
 Status: INDEPENDENT_ACCEPTANCE_PASS / READY_FOR_MERGE

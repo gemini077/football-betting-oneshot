@@ -28,6 +28,11 @@ from provider_match_registry import lookup as lookup_provider_binding
 from provider_match_registry import record_binding
 from team_identity import clean_display_name, team_similarity
 
+try:
+    from prediction_universe import trusted_nowscore_jc_fixture
+except ImportError:  # package imports used by tests
+    from scripts.prediction_universe import trusted_nowscore_jc_fixture
+
 
 ROOT = Path(__file__).resolve().parents[1]
 CACHE_ROOT = ROOT / "data" / "source_cache" / "nowscore"
@@ -807,7 +812,9 @@ def _parse_kickoff(value: object) -> datetime | None:
     if not value:
         return None
     try:
-        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        parsed = datetime.fromisoformat(
+            str(value).strip().replace("Z", "+00:00").replace("/", "-")
+        )
     except ValueError:
         return None
     return parsed.replace(tzinfo=SHANGHAI) if parsed.tzinfo is None else parsed.astimezone(SHANGHAI)
@@ -1759,11 +1766,22 @@ def _identity(html: str) -> dict:
     def find(pattern: str) -> str | None:
         found = re.search(pattern, html, re.I | re.S)
         return html_lib.unescape(re.sub(r"<[^>]+>", "", found.group(1))).strip() if found else None
+
+    def find_team_id(container_id: str) -> int | None:
+        found = re.search(
+            rf'<div[^>]+id=["\']{container_id}["\'][^>]*>.*?teamid=(\d+)',
+            html,
+            re.I | re.S,
+        )
+        return int(found.group(1)) if found else None
+
     return {
         "nowscore_id": int(find(r'id=["\']hide_scheduleId["\'][^>]*value=["\'](\d+)') or 0),
         "kickoff_local": find(r'id=["\']hide_matchTime["\'][^>]*value=["\']([^"\']+)'),
         "home_team": find(r'<div[^>]+id=["\']home["\'][^>]*>.*?<a[^>]+class=["\']name["\'][^>]*>(.*?)</a>'),
         "away_team": find(r'<div[^>]+id=["\']guest["\'][^>]*>.*?<a[^>]+class=["\']name["\'][^>]*>(.*?)</a>'),
+        "home_team_id": find_team_id("home"),
+        "away_team_id": find_team_id("guest"),
     }
 
 
@@ -2091,8 +2109,21 @@ def parse_company_trend(text: str, company_id: int, kickoff: object = None, comp
     }
 
 
-def _verified(target: dict, page_identity: dict, maximum_minutes: int = 180) -> tuple[bool, list[str]]:
+def _verified(
+    target: dict,
+    page_identity: dict,
+    maximum_minutes: int = 180,
+    *,
+    expected_provider_id: int | None = None,
+) -> tuple[bool, list[str]]:
     reasons = []
+    if expected_provider_id is not None:
+        try:
+            page_provider_id = int(page_identity.get("nowscore_id") or 0)
+        except (TypeError, ValueError):
+            page_provider_id = 0
+        if page_provider_id != expected_provider_id:
+            reasons.append("PROVIDER_ID_MISMATCH")
     home_score, _ = team_similarity(target.get("home", ""), page_identity.get("home_team", ""))
     away_score, _ = team_similarity(target.get("away", ""), page_identity.get("away_team", ""))
     if home_score < 0.75:
@@ -2103,6 +2134,175 @@ def _verified(target: dict, page_identity: dict, maximum_minutes: int = 180) -> 
     if target_time and page_time and abs((target_time - page_time).total_seconds()) / 60 > maximum_minutes:
         reasons.append("KICKOFF_MISMATCH")
     return not reasons, reasons
+
+
+def _fixture_team_name(fixture: Mapping[str, object], side: str) -> str:
+    if side == "home":
+        keys = ("homeTeam", "home_team", "home")
+    else:
+        keys = ("awayTeam", "away_team", "away")
+    for key in keys:
+        value = fixture.get(key)
+        if value not in (None, ""):
+            return str(value).strip()
+    return ""
+
+
+def _fixture_kickoff(fixture: Mapping[str, object]) -> str:
+    for key in ("kickoff", "kickoff_local"):
+        if fixture.get(key) not in (None, ""):
+            return str(fixture[key])
+    match_date = str(fixture.get("matchDate") or fixture.get("match_date") or "")[:10]
+    match_time = str(fixture.get("matchTime") or fixture.get("match_time") or "")[:8]
+    if len(match_time) == 5:
+        match_time += ":00"
+    return f"{match_date}T{match_time}+08:00" if match_date and match_time else ""
+
+
+def _fixture_team_id(fixture: Mapping[str, object], side: str) -> int | None:
+    keys = (
+        ("home_team_id", "homeTeamId", "nowscore_home_team_id", "nowscoreHomeTeamId")
+        if side == "home"
+        else ("away_team_id", "awayTeamId", "nowscore_away_team_id", "nowscoreAwayTeamId")
+    )
+    for key in keys:
+        value = fixture.get(key)
+        if value in (None, "") or isinstance(value, bool):
+            continue
+        try:
+            parsed = int(str(value).strip())
+        except (TypeError, ValueError):
+            continue
+        if parsed > 0:
+            return parsed
+    return None
+
+
+def _page_team_id(page_identity: Mapping[str, object], side: str) -> int | None:
+    value = page_identity.get(f"{side}_team_id")
+    if value in (None, "") or isinstance(value, bool):
+        return None
+    try:
+        parsed = int(str(value).strip())
+    except (TypeError, ValueError):
+        return None
+    return parsed if parsed > 0 else None
+
+
+def _trusted_jc_page_verification(
+    target: Mapping[str, object],
+    page_identity: Mapping[str, object],
+    fixture: Mapping[str, object],
+    explicit_id: int,
+    maximum_minutes: int = 180,
+) -> dict[str, object]:
+    """Verify non-name identity facts before accepting a trusted JC ID."""
+
+    reasons: list[str] = []
+    try:
+        page_id = int(page_identity.get("nowscore_id") or 0)
+    except (TypeError, ValueError):
+        page_id = 0
+    if page_id != explicit_id:
+        reasons.append("PROVIDER_ID_MISMATCH")
+
+    target_time = _parse_kickoff(target.get("kickoff"))
+    fixture_time = _parse_kickoff(_fixture_kickoff(fixture))
+    page_time = _parse_kickoff(page_identity.get("kickoff_local"))
+    if (
+        target_time is None
+        or fixture_time is None
+        or fixture_time != target_time
+        or page_time is None
+        or abs((target_time - page_time).total_seconds()) / 60 > maximum_minutes
+    ):
+        reasons.append("KICKOFF_MISMATCH")
+
+    page_names = {
+        side: str(page_identity.get(f"{side}_team") or "").strip()
+        for side in ("home", "away")
+    }
+    if not page_names["home"] or not page_names["away"]:
+        reasons.append("PROVIDER_TEAM_IDENTITY_MISSING")
+
+    fixture_names = {
+        side: _fixture_team_name(fixture, side)
+        for side in ("home", "away")
+    }
+    if not fixture_names["home"] or not fixture_names["away"]:
+        reasons.append("FIXTURE_TEAM_IDENTITY_MISSING")
+    elif team_similarity(fixture_names["home"], fixture_names["away"])[0] >= 0.75:
+        reasons.append("AMBIGUOUS_IDENTITY")
+    target_names = {
+        side: str(target.get(side) or "").strip()
+        for side in ("home", "away")
+    }
+    target_scores = {
+        side: team_similarity(target_names[side], fixture_names[side])[0]
+        for side in ("home", "away")
+    }
+    target_reverse_scores = {
+        "home": team_similarity(target_names["home"], fixture_names["away"])[0],
+        "away": team_similarity(target_names["away"], fixture_names["home"])[0],
+    }
+    if not target_names["home"] or not target_names["away"]:
+        reasons.append("TARGET_TEAM_IDENTITY_MISSING")
+    elif all(score >= 0.75 for score in target_reverse_scores.values()) and all(
+        score < 0.75 for score in target_scores.values()
+    ):
+        reasons.append("ORIENTATION_CONFLICT")
+    elif any(score < 0.75 for score in target_scores.values()):
+        reasons.append("TARGET_FIXTURE_IDENTITY_CONFLICT")
+    fixture_ids = {
+        side: _fixture_team_id(fixture, side)
+        for side in ("home", "away")
+    }
+    page_ids = {
+        side: _page_team_id(page_identity, side)
+        for side in ("home", "away")
+    }
+    for side in ("home", "away"):
+        if fixture_ids[side] is not None and page_ids[side] != fixture_ids[side]:
+            reasons.append(f"{side.upper()}_TEAM_ID_MISMATCH")
+    if (
+        fixture_ids["home"] is not None
+        and fixture_ids["away"] is not None
+        and page_ids["home"] == fixture_ids["away"]
+        and page_ids["away"] == fixture_ids["home"]
+    ):
+        reasons.append("ORIENTATION_CONFLICT")
+    if (
+        page_ids["home"] is not None
+        and page_ids["away"] is not None
+        and page_ids["home"] == page_ids["away"]
+    ):
+        reasons.append("AMBIGUOUS_IDENTITY")
+    if clean_display_name(page_names["home"]).casefold() == clean_display_name(page_names["away"]).casefold():
+        reasons.append("AMBIGUOUS_IDENTITY")
+
+    same_scores = {
+        side: team_similarity(fixture_names[side], page_names[side])[0]
+        for side in ("home", "away")
+    }
+    reverse_scores = {
+        "home": team_similarity(fixture_names["away"], page_names["home"])[0],
+        "away": team_similarity(fixture_names["home"], page_names["away"])[0],
+    }
+    for side in ("home", "away"):
+        if reverse_scores[side] >= 0.75 and same_scores[side] < 0.75:
+            reasons.append("ORIENTATION_CONFLICT")
+    return {
+        "trusted": not reasons,
+        "status": "TRUSTED_JC_SAME_PROVIDER" if not reasons else "TRUSTED_JC_REJECTED",
+        "source": "nowscore_public_jc_sales",
+        "nowscore_id": explicit_id,
+        "display_name_mismatch": bool(
+            same_scores["home"] < 0.75 or same_scores["away"] < 0.75
+        ),
+        "same_side_scores": same_scores,
+        "reverse_side_scores": reverse_scores,
+        "reasons": list(dict.fromkeys(reasons)),
+    }
 
 
 def _fetch_cached_page(url: str, cache_path: Path, no_cache: bool, maximum_age: int = 3600) -> bytes:
@@ -2170,7 +2370,15 @@ def fetch_context_bundle(match_id: int, kickoff: object, parsed_markets: dict, n
     return context
 
 
-def fetch_match_markets(home: str, away: str, kickoff: object, explicit_id: int | None = None, no_cache: bool = False) -> dict:
+def fetch_match_markets(
+    home: str,
+    away: str,
+    kickoff: object,
+    explicit_id: int | None = None,
+    no_cache: bool = False,
+    *,
+    fixture: Mapping[str, object] | None = None,
+) -> dict:
     fetched_at = datetime.now(SHANGHAI).isoformat(timespec="seconds")
     try:
         schedule_raw = _fetch_bytes(f"{SCHEDULE_URL}?_={int(time.time())}")
@@ -2221,17 +2429,72 @@ def fetch_match_markets(home: str, away: str, kickoff: object, explicit_id: int 
         cache_path.write_bytes(raw)
     parsed = parse_three_in_one(_decode(raw))
     target = {"home": home, "away": away, "kickoff": kickoff}
-    verified, reasons = _verified(target, parsed["identity"])
+    verified, reasons = _verified(
+        target,
+        parsed["identity"],
+        expected_provider_id=match_id,
+    )
+    trusted_provenance = trusted_nowscore_jc_fixture(
+        fixture,
+        match_id,
+    )
+    if trusted_provenance.get("trusted"):
+        binding = lookup_provider_binding(target, "nowscore")
+        bound_id = str((binding or {}).get("id") or "")
+        if bound_id and (not bound_id.isdigit() or int(bound_id) != match_id):
+            trusted_provenance = {
+                **trusted_provenance,
+                "trusted": False,
+                "reasons": [
+                    *list(trusted_provenance.get("reasons") or []),
+                    "PROVIDER_ID_MISMATCH",
+                ],
+            }
+    identity_verification = None
+    if not verified and trusted_provenance.get("trusted"):
+        identity_verification = _trusted_jc_page_verification(
+            target,
+            parsed["identity"],
+            fixture or {},
+            match_id,
+        )
+        if identity_verification.get("trusted"):
+            verified = True
+            reasons = []
+            resolved = {
+                **resolved,
+                "identity_verification": identity_verification,
+                "trusted_jc_provenance": trusted_provenance,
+            }
     if not verified:
+        if identity_verification is None and trusted_provenance.get("reasons"):
+            identity_verification = {
+                "trusted": False,
+                "status": "TRUSTED_JC_REJECTED",
+                "source": "nowscore_public_jc_sales",
+                "nowscore_id": match_id,
+                "reasons": list(trusted_provenance.get("reasons") or []),
+            }
+        if identity_verification and identity_verification.get("reasons"):
+            reasons = list(dict.fromkeys([
+                *reasons,
+                *list(identity_verification.get("reasons") or []),
+            ]))
         return {
             "source": "nowscore_public_3in1", "status": "IDENTITY_MISMATCH", "fetched_at": fetched_at,
             "nowscore_id": match_id, "target": target, "page_identity": parsed["identity"],
             "identity_errors": reasons, "resolution": resolved,
+            "identity_verification": identity_verification,
+            "trusted_jc_provenance": trusted_provenance,
         }
     confidence = float((resolved or {}).get("match_confidence") or 1.0)
     record_binding(
         target, "nowscore", match_id, confidence=confidence,
-        verification="market_page_identity_verified",
+        verification=(
+            "market_page_identity_verified_trusted_jc"
+            if identity_verification and identity_verification.get("trusted")
+            else "market_page_identity_verified"
+        ),
         provider_home=parsed["identity"].get("home_team", ""),
         provider_away=parsed["identity"].get("away_team", ""),
         provider_kickoff=parsed["identity"].get("kickoff_local", ""),
@@ -2258,6 +2521,8 @@ def fetch_match_markets(home: str, away: str, kickoff: object, explicit_id: int 
         "source": "nowscore_public_3in1", "status": "OK", "fetched_at": fetched_at,
         "nowscore_id": match_id, "target": target, "resolution": resolved,
         "identity": parsed["identity"], "source_url": MARKET_URL.format(match_id=match_id),
+        "identity_verification": identity_verification,
+        "trusted_jc_provenance": trusted_provenance,
         "ouzhi": parsed["ouzhi"], "yazhi": parsed["yazhi"], "daxiao": parsed["daxiao"],
         "shuju": shuju,
         "context": context,

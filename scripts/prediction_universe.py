@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -18,6 +19,8 @@ UNIVERSE_ROOT = PROJECT_ROOT / "data" / "prediction_universe"
 ALLOWED_SOURCES = {"sporttery.cn", "trade.500.com", "nowscore_public_jc"}
 VALID_SNAPSHOT_STATUSES = {"READY", "EMPTY_CONFIRMED"}
 SCHEMA_VERSION = "1.0"
+TRUSTED_NOWSCORE_JC_SOURCE = "nowscore_public_jc_sales"
+TRUSTED_NOWSCORE_JC_SALES_WINDOW = "11:00--次日11:00"
 
 _FIELD_ALIASES = {
     "matchId": ("matchId", "match_id", "id"),
@@ -97,6 +100,143 @@ def _first_value(row: dict[str, Any], aliases: tuple[str, ...]) -> Any:
         if key in row and _present(row[key]):
             return row[key]
     return None
+
+
+def _first_mapping_value(row: Mapping[str, Any] | None, *keys: str) -> Any:
+    if not isinstance(row, Mapping):
+        return None
+    for key in keys:
+        if _present(row.get(key)):
+            return row[key]
+    return None
+
+
+def _numeric_provider_id(value: Any) -> int | None:
+    if isinstance(value, bool) or value in (None, ""):
+        return None
+    text = str(value).strip()
+    if not text.isdigit():
+        return None
+    numeric = int(text)
+    return numeric if numeric > 0 else None
+
+
+def trusted_nowscore_jc_fixture(
+    fixture: Mapping[str, Any] | None,
+    explicit_id: Any,
+) -> dict[str, Any]:
+    """Validate the narrow same-provider bypass contract for a JC fixture.
+
+    The result is intentionally diagnostic rather than a boolean so callers
+    can preserve the reason when a trusted path is not available.  Kickoff and
+    market-page orientation remain separate checks in the Nowscore adapter.
+    """
+
+    reasons: list[str] = []
+    if not isinstance(fixture, Mapping):
+        return {
+            "trusted": False,
+            "source": TRUSTED_NOWSCORE_JC_SOURCE,
+            "nowscore_id": _numeric_provider_id(explicit_id),
+            "reasons": ["MISSING_FIXTURE"],
+        }
+
+    fixture_id = _numeric_provider_id(
+        _first_mapping_value(fixture, "nowscoreId", "nowscore_id")
+    )
+    requested_id = _numeric_provider_id(explicit_id)
+    evidence = fixture.get("jc_membership_evidence")
+    provenance = fixture.get("date_provenance")
+    evidence_id = _numeric_provider_id(
+        evidence.get("nowscore_id") if isinstance(evidence, Mapping) else None
+    )
+    if requested_id is None or fixture_id != requested_id or evidence_id != fixture_id:
+        reasons.append("PROVIDER_ID_MISMATCH")
+
+    if fixture.get("jc_membership") != "VERIFIED":
+        reasons.append("JC_MEMBERSHIP_UNVERIFIED")
+    if fixture.get("jc_membership_source") != TRUSTED_NOWSCORE_JC_SOURCE:
+        reasons.append("JC_MEMBERSHIP_SOURCE_MISMATCH")
+    if str(_first_mapping_value(fixture, "nowscoreMatchStatus", "nowscore_match_status") or "") != "EXACT_MATCH":
+        reasons.append("NOWSCORE_MATCH_NOT_EXACT")
+    try:
+        confidence = float(
+            _first_mapping_value(
+                fixture,
+                "nowscoreMatchConfidence",
+                "nowscore_match_confidence",
+            )
+        )
+    except (TypeError, ValueError):
+        confidence = None
+    if confidence != 1.0:
+        reasons.append("NOWSCORE_MATCH_NOT_CONFIRMED")
+
+    business_date = str(
+        _first_mapping_value(fixture, "businessDate", "business_date") or ""
+    ).strip()
+    if not business_date:
+        reasons.append("BUSINESS_DATE_PROVENANCE_MISSING")
+    if fixture.get("business_date_source") != TRUSTED_NOWSCORE_JC_SOURCE:
+        reasons.append("BUSINESS_DATE_SOURCE_MISMATCH")
+
+    source_values = [
+        fixture.get("source_surface"),
+        fixture.get("source_url"),
+        fixture.get("business_date_source_url"),
+        evidence.get("source_surface") if isinstance(evidence, Mapping) else None,
+        provenance.get("business_date_source_url") if isinstance(provenance, Mapping) else None,
+    ]
+    if any(not _present(value) for value in source_values) or len({str(value).strip() for value in source_values}) != 1:
+        reasons.append("SALES_SOURCE_PROVENANCE_INCOMPLETE")
+    if not _present(_first_mapping_value(fixture, "fetched_at", "captured_at")):
+        reasons.append("SALES_CAPTURE_PROVENANCE_MISSING")
+
+    match_number = _first_mapping_value(fixture, "matchNum", "match_num", "match_number")
+    match_number_source = _first_mapping_value(fixture, "match_number_source")
+    sales_row_id = _first_mapping_value(fixture, "sales_row_id", "salesRowId")
+    if not _present(match_number) or match_number_source != TRUSTED_NOWSCORE_JC_SOURCE:
+        reasons.append("SALES_MATCH_NUMBER_PROVENANCE_INCOMPLETE")
+    if not _present(sales_row_id):
+        reasons.append("SALES_ROW_PROVENANCE_MISSING")
+
+    if not isinstance(evidence, Mapping):
+        reasons.append("JC_MEMBERSHIP_EVIDENCE_MISSING")
+    else:
+        if evidence.get("source") != TRUSTED_NOWSCORE_JC_SOURCE:
+            reasons.append("JC_EVIDENCE_SOURCE_MISMATCH")
+        if evidence.get("selected_date") != business_date or evidence.get("business_date") != business_date:
+            reasons.append("JC_EVIDENCE_DATE_MISMATCH")
+        if evidence.get("sales_window") != TRUSTED_NOWSCORE_JC_SALES_WINDOW:
+            reasons.append("JC_EVIDENCE_WINDOW_MISMATCH")
+        if evidence.get("match_number") != match_number:
+            reasons.append("JC_EVIDENCE_MATCH_NUMBER_MISMATCH")
+        if evidence.get("sales_row_id") != sales_row_id:
+            reasons.append("JC_EVIDENCE_SALES_ROW_MISMATCH")
+        if evidence.get("nowscore_id") not in (fixture_id, str(fixture_id)):
+            reasons.append("PROVIDER_ID_MISMATCH")
+
+    if not isinstance(provenance, Mapping):
+        reasons.append("DATE_PROVENANCE_MISSING")
+    else:
+        if (
+            provenance.get("business_date") != business_date
+            or provenance.get("expected_business_date") != business_date
+            or provenance.get("business_date_source") != TRUSTED_NOWSCORE_JC_SOURCE
+            or provenance.get("sales_window") != TRUSTED_NOWSCORE_JC_SALES_WINDOW
+            or provenance.get("sales_row_id") != sales_row_id
+            or provenance.get("match_number") != match_number
+        ):
+            reasons.append("DATE_PROVENANCE_MISMATCH")
+
+    return {
+        "trusted": not reasons,
+        "source": TRUSTED_NOWSCORE_JC_SOURCE,
+        "nowscore_id": requested_id,
+        "business_date": business_date or None,
+        "source_url": next((str(value).strip() for value in source_values if _present(value)), None),
+        "reasons": list(dict.fromkeys(reasons)),
+    }
 
 
 def _is_authorized_full_schedule_payload(payload: Any) -> bool:

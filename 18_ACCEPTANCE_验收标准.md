@@ -18,6 +18,30 @@
 9. 如果声称“上线”，远端是否真的部署；
 10. 是否产生下一阶段需要的可复用证据。
 
+# PRED-AVAILABILITY-NOWSCORE-IDENTITY-GATE-1 Acceptance Gate
+
+Status: READY_FOR_INDEPENDENT_ACCEPTANCE
+
+Independent acceptance must verify:
+1. The trusted path requires nowscore_public_jc_sales, jc_membership=VERIFIED,
+   exact Nowscore matching, matching fixture/evidence IDs, complete sales and
+   business-date provenance, compatible kickoff, and no identity/orientation
+   conflict.
+2. A translated or otherwise fuzzy-mismatched page name no longer rejects a
+   trusted same-provider explicit ID, and both market evidence and analysis
+   recent-form continue through the existing BASE contract.
+3. Provider-ID mismatch, missing/unverified provenance, kickoff conflict,
+   reversed/ambiguous identity, conflicting binding, and ordinary explicit IDs
+   without trusted JC evidence fail closed.
+4. The current five-job failure-cohort replay is recorded as a synthetic local
+   page-identity replay because those raw current pages are not cached; it must
+   not be reported as live-source or production replay. Durable current,
+   frozen, and prospective data remain unchanged.
+5. Focused tests, py_compile, git diff --check, branch/commit/PR/head-SHA
+   evidence, and REMOTE_DELIVERY_CHECK pass.
+
+Acceptance boundary: stop at READY_FOR_INDEPENDENT_ACCEPTANCE. Do not merge,
+change the Champion, or start the next blocker.
 # NOWSCORE-JC-SALES-PAGE-1 Acceptance Gate
 
 Status: DEPLOYED / SEALED / PRODUCTION ACCEPTANCE READY

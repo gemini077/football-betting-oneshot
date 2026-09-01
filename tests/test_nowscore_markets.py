@@ -60,6 +60,97 @@ var next_value = [];
 """
 
 
+def _trusted_jc_fixture() -> dict:
+    sales_url = (
+        "https://cp.nowscore.com/buy/jingcai.aspx"
+        "?typeID=101&oddstype=2&date=2026-09-01"
+    )
+    return {
+        "homeTeam": "Fixture Home",
+        "awayTeam": "Fixture Away",
+        "businessDate": "2026-09-01",
+        "matchDate": "2026-09-01",
+        "matchTime": "01:00:00",
+        "matchNum": "周二001",
+        "nowscoreId": 123,
+        "nowscore_id": 123,
+        "nowscoreMatchStatus": "EXACT_MATCH",
+        "nowscoreMatchConfidence": 1.0,
+        "jc_membership": "VERIFIED",
+        "jc_membership_source": "nowscore_public_jc_sales",
+        "source_surface": sales_url,
+        "source_url": sales_url,
+        "business_date_source": "nowscore_public_jc_sales",
+        "business_date_source_url": sales_url,
+        "match_number_source": "nowscore_public_jc_sales",
+        "sales_row_id": "5510001",
+        "fetched_at": "2026-09-01T12:00:00+08:00",
+        "jc_membership_evidence": {
+            "source": "nowscore_public_jc_sales",
+            "source_surface": sales_url,
+            "selected_date": "2026-09-01",
+            "business_date": "2026-09-01",
+            "nowscore_id": 123,
+            "match_number": "周二001",
+            "sales_row_id": "5510001",
+            "sales_window": "11:00--次日11:00",
+        },
+        "date_provenance": {
+            "source_date_value": "2026-09-01 01:00",
+            "expected_business_date": "2026-09-01",
+            "business_date": "2026-09-01",
+            "business_date_source": "nowscore_public_jc_sales",
+            "business_date_source_url": sales_url,
+            "sales_window": "11:00--次日11:00",
+            "match_number": "周二001",
+            "sales_row_id": "5510001",
+        },
+    }
+
+
+def _fetch_explicit_market(
+    page_identity: dict,
+    *,
+    fixture: dict | None = None,
+    kickoff: str = "2026-09-01T01:00:00+08:00",
+    binding: dict | None = None,
+    home: str = "Fixture Home",
+    away: str = "Fixture Away",
+) -> dict:
+    parsed = {
+        "identity": page_identity,
+        "ouzhi": {"bookmakers": [], "total": 0},
+        "yazhi": {"companies": [], "total": 0},
+        "daxiao": {"companies": [], "total": 0},
+    }
+
+    def fetch(url, timeout=30):
+        if "bf1.js" in url:
+            return b""
+        if "odds/match" in url:
+            return b"market"
+        if "analysisJs" in url:
+            return b"analysis"
+        raise AssertionError(url)
+
+    with tempfile.TemporaryDirectory() as directory, \
+            patch.object(nowscore_markets, "CACHE_ROOT", Path(directory)), \
+            patch.object(nowscore_markets, "_fetch_bytes", side_effect=fetch), \
+            patch.object(nowscore_markets, "parse_three_in_one", return_value=parsed), \
+            patch.object(nowscore_markets, "parse_analysis_data", return_value={"recent_form": {"ready": True}}), \
+            patch.object(nowscore_markets, "fetch_context_bundle", return_value={}), \
+            patch.object(nowscore_markets, "lookup_provider_binding", return_value=binding), \
+            patch.object(nowscore_markets, "record_binding"):
+        return nowscore_markets.fetch_match_markets(
+            home,
+            away,
+            kickoff,
+            explicit_id=123,
+            no_cache=True,
+            fixture=fixture,
+        )
+
+
 class NowscoreMarketTests(unittest.TestCase):
     def test_verified_binding_survives_schedule_outage(self):
         parsed = {
@@ -314,6 +405,190 @@ A[0]=[3001,1,777,888,'跨年主队',0,'Year End Home','跨年客队',0,'New Year
         self.assertFalse(accepted)
         self.assertIn("HOME_TEAM_MISMATCH", reasons)
         self.assertIn("AWAY_TEAM_MISMATCH", reasons)
+
+    def test_trusted_jc_explicit_id_allows_translated_market_names(self):
+        result = _fetch_explicit_market(
+            {
+                "nowscore_id": 123,
+                "kickoff_local": "2026/09/01 01:00",
+                "home_team": "Home Translation",
+                "away_team": "Away Translation",
+            },
+            fixture=_trusted_jc_fixture(),
+        )
+
+        self.assertEqual("OK", result["status"])
+        self.assertEqual(123, result["nowscore_id"])
+        self.assertEqual("TRUSTED_JC_SAME_PROVIDER", result["identity_verification"]["status"])
+        self.assertTrue(result["quality"]["recent_form_complete"])
+
+    def test_explicit_id_without_trusted_jc_provenance_still_rejects_name_mismatch(self):
+        result = _fetch_explicit_market(
+            {
+                "nowscore_id": 123,
+                "kickoff_local": "2026/09/01 01:00",
+                "home_team": "Home Translation",
+                "away_team": "Away Translation",
+            }
+        )
+
+        self.assertEqual("IDENTITY_MISMATCH", result["status"])
+        self.assertIn("HOME_TEAM_MISMATCH", result["identity_errors"])
+        self.assertIn("AWAY_TEAM_MISMATCH", result["identity_errors"])
+
+    def test_trusted_jc_path_fails_closed_on_provenance_id_mismatch(self):
+        fixture = _trusted_jc_fixture()
+        fixture["jc_membership_evidence"]["nowscore_id"] = 999
+        result = _fetch_explicit_market(
+            {
+                "nowscore_id": 123,
+                "kickoff_local": "2026/09/01 01:00",
+                "home_team": "Home Translation",
+                "away_team": "Away Translation",
+            },
+            fixture=fixture,
+        )
+
+        self.assertEqual("IDENTITY_MISMATCH", result["status"])
+        self.assertIn("PROVIDER_ID_MISMATCH", result["identity_errors"])
+
+    def test_trusted_jc_path_fails_closed_on_market_page_id_mismatch(self):
+        result = _fetch_explicit_market(
+            {
+                "nowscore_id": 999,
+                "kickoff_local": "2026/09/01 01:00",
+                "home_team": "Home Translation",
+                "away_team": "Away Translation",
+            },
+            fixture=_trusted_jc_fixture(),
+        )
+
+        self.assertEqual("IDENTITY_MISMATCH", result["status"])
+        self.assertIn("PROVIDER_ID_MISMATCH", result["identity_errors"])
+
+    def test_trusted_jc_path_fails_closed_when_membership_evidence_is_missing(self):
+        fixture = _trusted_jc_fixture()
+        fixture.pop("jc_membership_evidence")
+        result = _fetch_explicit_market(
+            {
+                "nowscore_id": 123,
+                "kickoff_local": "2026/09/01 01:00",
+                "home_team": "Home Translation",
+                "away_team": "Away Translation",
+            },
+            fixture=fixture,
+        )
+
+        self.assertEqual("IDENTITY_MISMATCH", result["status"])
+        self.assertIn("JC_MEMBERSHIP_EVIDENCE_MISSING", result["identity_errors"])
+
+    def test_trusted_jc_path_fails_closed_on_conflicting_stored_binding(self):
+        result = _fetch_explicit_market(
+            {
+                "nowscore_id": 123,
+                "kickoff_local": "2026/09/01 01:00",
+                "home_team": "Home Translation",
+                "away_team": "Away Translation",
+            },
+            fixture=_trusted_jc_fixture(),
+            binding={"id": "999"},
+        )
+
+        self.assertEqual("IDENTITY_MISMATCH", result["status"])
+        self.assertIn("PROVIDER_ID_MISMATCH", result["identity_errors"])
+
+    def test_trusted_jc_path_fails_closed_on_ambiguous_match_status(self):
+        fixture = _trusted_jc_fixture()
+        fixture["nowscoreMatchStatus"] = "AMBIGUOUS_MATCH"
+        result = _fetch_explicit_market(
+            {
+                "nowscore_id": 123,
+                "kickoff_local": "2026/09/01 01:00",
+                "home_team": "Home Translation",
+                "away_team": "Away Translation",
+            },
+            fixture=fixture,
+        )
+
+        self.assertEqual("IDENTITY_MISMATCH", result["status"])
+        self.assertIn("NOWSCORE_MATCH_NOT_EXACT", result["identity_errors"])
+
+    def test_trusted_jc_path_fails_closed_on_ambiguous_page_identity(self):
+        result = _fetch_explicit_market(
+            {
+                "nowscore_id": 123,
+                "kickoff_local": "2026/09/01 01:00",
+                "home_team": "Same Team",
+                "away_team": "Same Team",
+            },
+            fixture=_trusted_jc_fixture(),
+        )
+
+        self.assertEqual("IDENTITY_MISMATCH", result["status"])
+        self.assertIn("AMBIGUOUS_IDENTITY", result["identity_errors"])
+
+    def test_trusted_jc_path_fails_closed_when_target_and_fixture_are_reversed(self):
+        result = _fetch_explicit_market(
+            {
+                "nowscore_id": 123,
+                "kickoff_local": "2026/09/01 01:00",
+                "home_team": "Home Translation",
+                "away_team": "Away Translation",
+            },
+            fixture=_trusted_jc_fixture(),
+            home="Fixture Away",
+            away="Fixture Home",
+        )
+
+        self.assertEqual("IDENTITY_MISMATCH", result["status"])
+        self.assertIn("ORIENTATION_CONFLICT", result["identity_errors"])
+
+    def test_trusted_jc_path_fails_closed_on_reversed_orientation(self):
+        result = _fetch_explicit_market(
+            {
+                "nowscore_id": 123,
+                "kickoff_local": "2026/09/01 01:00",
+                "home_team": "Fixture Away",
+                "away_team": "Fixture Home",
+            },
+            fixture=_trusted_jc_fixture(),
+        )
+
+        self.assertEqual("IDENTITY_MISMATCH", result["status"])
+        self.assertIn("ORIENTATION_CONFLICT", result["identity_errors"])
+
+    def test_trusted_jc_path_uses_provider_team_ids_for_reversed_translations(self):
+        fixture = _trusted_jc_fixture()
+        fixture.update({"home_team_id": 10, "away_team_id": 20})
+        result = _fetch_explicit_market(
+            {
+                "nowscore_id": 123,
+                "home_team_id": 20,
+                "away_team_id": 10,
+                "kickoff_local": "2026/09/01 01:00",
+                "home_team": "Home Translation",
+                "away_team": "Away Translation",
+            },
+            fixture=fixture,
+        )
+
+        self.assertEqual("IDENTITY_MISMATCH", result["status"])
+        self.assertIn("ORIENTATION_CONFLICT", result["identity_errors"])
+
+    def test_trusted_jc_path_fails_closed_on_fixture_kickoff_conflict(self):
+        result = _fetch_explicit_market(
+            {
+                "nowscore_id": 123,
+                "kickoff_local": "2026/09/01 02:00",
+                "home_team": "Home Translation",
+                "away_team": "Away Translation",
+            },
+            fixture=_trusted_jc_fixture(),
+            kickoff="2026-09-01T02:00:00+08:00",
+        )
+
+        self.assertEqual("IDENTITY_MISMATCH", result["status"])
+        self.assertIn("KICKOFF_MISMATCH", result["identity_errors"])
 
     def test_analysis_recent_form_is_oriented_to_each_target_team(self):
         result = parse_analysis_data(ANALYSIS_JS)

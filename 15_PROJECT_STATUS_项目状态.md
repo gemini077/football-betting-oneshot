@@ -3,6 +3,32 @@
 最后更新：2026-09-01
 角色：项目当前唯一人类可读状态真相。只记录当前事实，不承担完整历史档案职责。
 
+# PRED-AVAILABILITY-NOWSCORE-IDENTITY-GATE-1 - Trusted same-provider identity gate
+
+Status: READY_FOR_INDEPENDENT_ACCEPTANCE
+Decision: KEEP CHAMPION / KEEP existing production and research boundaries.
+
+BASE now passes the complete Prediction Universe fixture into the Nowscore
+market adapter. An explicit Nowscore ID may use the trusted path only when the
+fixture has exact Nowscore matching, jc_membership=VERIFIED from
+nowscore_public_jc_sales, matching fixture/evidence IDs, complete sales and
+business-date provenance, compatible kickoff, and no identity/orientation
+conflict. Team display-name fuzzy mismatch alone is not a rejection on that
+path. Ordinary explicit IDs without trusted JC evidence still use the existing
+name gate and fail closed.
+
+Negative coverage includes provider-ID mismatch, missing provenance, ambiguous
+match status, conflicting stored binding, kickoff conflict, reversed team
+orientation, ambiguous page identity, and target/fixture reversal. The current
+2026-09-01 four-job failure cohort plus the 2026-09-02 one-job failure cohort
+passed a local synthetic page-identity replay: market status OK and analysis
+recent-form complete. The raw current pages for those five IDs are not present
+in the local cache, so this is a gate/integration replay, not a live-source
+claim; durable production data was not modified.
+
+Focused tests: 95 passed. py_compile and git diff --check passed. No provider,
+500 fetcher, Champion/Challenger, model, frozen history, or prospective history
+was changed. STOP at READY_FOR_INDEPENDENT_ACCEPTANCE.
 # CHALLENGER-C-UNIQUE-COHORT-SEMANTICS-1 - Promotion cohort semantics
 
 Status: INDEPENDENT_ACCEPTANCE_PASS / READY_FOR_MERGE
