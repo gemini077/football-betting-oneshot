@@ -91,3 +91,10 @@ def test_membership_replay_accepts_only_explicit_row_32_flag():
     rejected = probe._join_membership(page, surfaces)
     assert rejected["accepted_fixture_count"] == 0
     assert rejected["not_flagged_count"] == 1
+
+
+def test_gate_rejects_nonempty_public_jc_page_without_explicit_schedule_rows():
+    page = probe.parse_jc_page(_page(), business_date="2026-08-31")
+    page["membership_replay"] = {"accepted_fixture_count": 0}
+
+    assert probe._current_target_rows_available([page]) is False

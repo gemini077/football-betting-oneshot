@@ -483,6 +483,17 @@ def _join_membership(
     }
 
 
+def _current_target_rows_available(pages: list[dict[str, Any]]) -> bool:
+    """Require an explicit schedule row when the public JC page is nonempty."""
+    for page in pages:
+        if int(page.get("row_count") or 0) <= 0:
+            continue
+        replay = page.get("membership_replay") or {}
+        if int(replay.get("accepted_fixture_count") or 0) <= 0:
+            return False
+    return True
+
+
 def run_probe(dates: tuple[str, ...] = DEFAULT_DATES, *, today: object = "2026-09-01") -> dict[str, Any]:
     replay_today = _date(today)
     if replay_today is None:
@@ -546,10 +557,17 @@ def run_probe(dates: tuple[str, ...] = DEFAULT_DATES, *, today: object = "2026-0
         for page in pages
         for fixture in page.get("membership_replay", {}).get("accepted_fixtures") or []
     )
+    current_target_rows_available = _current_target_rows_available(pages)
+    gate_pass = bool(
+        pages_pass
+        and schedule_pass
+        and explicit_membership_only
+        and current_target_rows_available
+    )
     return {
         "probe": "NOWSCORE-JC-BUSINESS-DATE-1",
-        "status": "PASS" if pages_pass and schedule_pass and explicit_membership_only else "FAIL",
-        "decision_gate": "PASS" if pages_pass and schedule_pass and explicit_membership_only else "NO_CODE",
+        "status": "PASS" if gate_pass else "FAIL",
+        "decision_gate": "PASS" if gate_pass else "NO_CODE",
         "today": replay_today.isoformat(),
         "fetched_at": fetched_at,
         "business_date_contract": {
@@ -579,6 +597,7 @@ def run_probe(dates: tuple[str, ...] = DEFAULT_DATES, *, today: object = "2026-0
             for fixture_id in values
         }),
         "membership_contract_preserved": explicit_membership_only,
+        "current_target_rows_available": current_target_rows_available,
     }
 
 
