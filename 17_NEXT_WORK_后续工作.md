@@ -4,11 +4,34 @@
 
 # Current Sole Pointer
 
-# CURRENT-UNIVERSE-ROLLOVER-1 - Sole current execution pointer
+# NOWSCORE-JC-UNIVERSE-1 - Sole current execution pointer
 
-Status: READY_FOR_ACCEPTANCE / NO CODE
+Status: READY_FOR_ACCEPTANCE
 
-Decision: WAF_BLOCK / NO_CODE
+Decision: PASS / Nowscore public JC
+
+Current execution pointer: preserve the exact GitHub runner evidence in
+`docs/data-foundation/NOWSCORE-JC-UNIVERSE-1_PROBE_RUN_33466072890.json` and
+independently accept the Nowscore public JC gate. The runner reached the public
+`ft1` page and backing data with HTTP 200, observed 12 target-date JC rows from
+the exact `SetLevel(3)` / `A[j][32] == 1` contract, and found duplicate IDs `0`
+and ambiguous IDs `0`.
+
+The implementation is the smallest current-universe path:
+Nowscore JC → canonical fixture / identity → existing evidence → BASE.
+Sporttery and 500 are not current-universe blocking dependencies. Keep their
+independent optional evidence consumers, but do not restore them as schedule
+fallbacks. No Champion, model, identity threshold, frozen history,
+prospective ledger, or settlement semantics are in scope.
+
+STOP at `READY_FOR_ACCEPTANCE`: do not merge and do not start Challenger
+Promotion Review.
+
+# Historical milestone: CURRENT-UNIVERSE-ROLLOVER-1 - Sole current execution pointer
+
+Historical status: READY_FOR_ACCEPTANCE / NO CODE
+
+Historical decision: WAF_BLOCK / NO_CODE
 
 Scope closed in this milestone: bounded GitHub-runner probes for the repository Sporttery endpoint, official getMatchListV1 routes, official calculator channel/pool contracts, and the current 500 trade page for 2026-09-01. All observed production surfaces were blocked or challenged and returned zero target rows. Preserve the exact artifact, do not inject fixtures, do not add a third-party provider, and do not modify the production Champion or downstream model work.
 

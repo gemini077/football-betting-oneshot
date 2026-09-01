@@ -5,13 +5,35 @@
 
 # Current Route Pointer
 
-# CURRENT-UNIVERSE-ROLLOVER-1 - Current route gate
+# NOWSCORE-JC-UNIVERSE-1 - Current route gate
 
-CURRENT ROUTE MILESTONE: CURRENT-UNIVERSE-ROLLOVER-1
+CURRENT ROUTE MILESTONE: NOWSCORE-JC-UNIVERSE-1
 
-CURRENT ROUTE STATUS: READY_FOR_ACCEPTANCE / NO CODE
+CURRENT ROUTE STATUS: READY_FOR_ACCEPTANCE
 
-CURRENT ROUTE DECISION: WAF_BLOCK / NO_CODE
+CURRENT ROUTE DECISION: PASS / Nowscore public JC
+
+The bounded GitHub-runner gate proved the public Nowscore current `ft1` page
+and backing data contract for `2026-09-01`: `SetLevel(3)` maps to
+`A[j][32] == 1`, yielding 12 deterministic fixtures with duplicate IDs `0`
+and ambiguous IDs `0`. Exact evidence is recorded in
+`docs/data-foundation/NOWSCORE-JC-UNIVERSE-1_PROBE_RUN_33466072890.json`.
+
+The route is now Nowscore JC → canonical fixture / identity → existing
+evidence → BASE. Sporttery and 500 are retired from current-universe schedule
+dependency, while independent optional market/corroboration and 500 deep
+evidence capabilities remain. No model or historical/prospective state is
+changed.
+
+STOP at `READY_FOR_ACCEPTANCE`; no merge and no Challenger Promotion Review.
+
+# Historical milestone: CURRENT-UNIVERSE-ROLLOVER-1 - Current route gate
+
+HISTORICAL ROUTE MILESTONE: CURRENT-UNIVERSE-ROLLOVER-1
+
+HISTORICAL ROUTE STATUS: READY_FOR_ACCEPTANCE / NO CODE
+
+HISTORICAL ROUTE DECISION: WAF_BLOCK / NO_CODE
 
 The route gate is a bounded production-source probe for the 2026-09-01 business date. It keeps Sporttery primary, preserves the existing 2026-08-31 path, and does not authorize a production change because every official Sporttery route and the 500 fallback surface was blocked or challenged before target rows could be observed. The exact runner artifact and classification are recorded in docs/data-foundation/CURRENT-UNIVERSE-ROLLOVER-1_PROBE_REPORT.md and the paired JSON evidence file.
 

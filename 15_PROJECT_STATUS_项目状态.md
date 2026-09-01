@@ -3,11 +3,44 @@
 最后更新：2026-09-01
 角色：项目当前唯一人类可读状态真相。只记录当前事实，不承担完整历史档案职责。
 
-# CURRENT-UNIVERSE-ROLLOVER-1 - Production current-day universe rollover gate
+# NOWSCORE-JC-UNIVERSE-1 - Current JC universe restoration
 
-Status: READY_FOR_ACCEPTANCE / NO CODE
+Status: READY_FOR_ACCEPTANCE
 
-Decision: WAF_BLOCK / NO_CODE
+Decision: PASS / Nowscore public JC
+
+The public Nowscore football schedule page and its backing `ft1.js` data
+surface provide a deterministic, credential-free current JC contract:
+`SetLevel(3)` selects rows where `A[j][32] == 1`. The GitHub-hosted runner
+proved HTTP 200 page/data access for business date `2026-09-01`, accepted 12
+current JC fixtures, and recorded duplicate Nowscore IDs `0` and ambiguous IDs
+`0`. No JC membership was guessed from league, team, kickoff, odds, or another
+flag.
+
+Exact evidence is preserved in
+`docs/data-foundation/NOWSCORE-JC-UNIVERSE-1_PROBE_RUN_33466072890.json` with
+SHA-256 `7162B858F11F5C8117C78504AD10A13991D69038E0186D4987C2CAB0B1C71536`.
+The runner is [33466072890](https://github.com/gemini077/football-betting-oneshot/actions/runs/33466072890),
+from PR #141 head `c662d27c047dd0d6e6638b7c3c563fd6d22ff8f1`.
+
+Current schedule intake now converges on Nowscore JC → canonical schedule and
+identity → existing Nowscore market/analysis evidence → BASE. Sporttery and
+500 no longer block the current fixture universe; their independent optional
+market/corroboration and 500 deep evidence paths remain. The existing `bf1`
+comparison returned 102 target-date rows with `intersection_ids=[]`; the
+explicit JC page filter, not that comparison, is the membership authority.
+
+No Champion, model, identity threshold, frozen prediction, prospective ledger,
+or result-settlement semantics changed. The focused suite passed with
+`90 passed, 6 warnings`; `py_compile` and `git diff --check` passed. STOP at
+`READY_FOR_ACCEPTANCE`; do not merge and do not start Challenger Promotion
+Review.
+
+# Historical milestone: CURRENT-UNIVERSE-ROLLOVER-1 - Production current-day universe rollover gate
+
+Historical status: READY_FOR_ACCEPTANCE / NO CODE
+
+Historical decision: WAF_BLOCK / NO_CODE
 
 The bounded one-shot probe ran on the GitHub-hosted production runner for business date 2026-09-01. The repository Sporttery calculator, both official getMatchListV1 routes, both official calculator contracts, and the current 500 trade page returned no target-date rows. Sporttery returned HTTP 567 HTML EdgeOne/WAF challenge responses; the 500 page returned HTTP 200 HTML but only an access-denied challenge with zero raw match rows.
 

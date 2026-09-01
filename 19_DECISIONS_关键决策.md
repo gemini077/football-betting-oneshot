@@ -3,11 +3,34 @@
 最后更新：2026-09-01
 角色：记录不能因换对话 / 换 Codex 而重复推翻的关键决定。若新证据足以改变决定，必须新增 superseding decision，不得静默改历史。
 
-# D-034 - CURRENT-UNIVERSE-ROLLOVER-1 WAF evidence gate
+# D-035 - NOWSCORE-JC-UNIVERSE-1 public JC source gate
 
-Status: READY_FOR_ACCEPTANCE / NO CODE
+Status: READY_FOR_ACCEPTANCE
 
-Decision: For business date 2026-09-01, the bounded production-surface probe is classified WAF_BLOCK and the decision gate is NO_CODE. The official Sporttery routes were not observably empty schedules: they returned HTTP 567 EdgeOne/WAF challenge HTML. The current 500 trade page was also not an empty schedule: it returned HTTP 200 access-denied challenge HTML with zero raw rows.
+Decision: For business date `2026-09-01`, the public Nowscore current JC
+contract is `PASS`. The public `ft1` page exposes `SetLevel(3)` and its
+backing data uses the exact predicate `A[j][32] == 1`. The GitHub-hosted runner
+received HTTP 200 for both surfaces and accepted 12 deterministic Nowscore
+fixtures with duplicate IDs `0` and ambiguous IDs `0`.
+
+This supersedes the current-pointer role of D-034 without rewriting its
+historical WAF evidence. Current-universe intake now uses Nowscore JC as the
+schedule authority, keeps Sporttery/500 only for independent optional evidence,
+and prevents their failure from zeroing the current universe. No new provider,
+credential, heuristic membership mapping, Champion/model change, identity
+threshold change, frozen-history rewrite, prospective-ledger rewrite, or
+settlement change is authorized.
+
+Evidence: `docs/data-foundation/NOWSCORE-JC-UNIVERSE-1_PROBE_REPORT.md` and
+`docs/data-foundation/NOWSCORE-JC-UNIVERSE-1_PROBE_RUN_33466072890.json`.
+STOP at `READY_FOR_ACCEPTANCE`; do not merge and do not start Challenger
+Promotion Review.
+
+# Historical decision: D-034 - CURRENT-UNIVERSE-ROLLOVER-1 WAF evidence gate
+
+Historical status: READY_FOR_ACCEPTANCE / NO CODE
+
+Historical decision: For business date 2026-09-01, the bounded production-surface probe is classified WAF_BLOCK and the decision gate is NO_CODE. The official Sporttery routes were not observably empty schedules: they returned HTTP 567 EdgeOne/WAF challenge HTML. The current 500 trade page was also not an empty schedule: it returned HTTP 200 access-denied challenge HTML with zero raw rows.
 
 The exact GitHub-runner response summaries and raw response metadata are durable in docs/data-foundation/CURRENT-UNIVERSE-ROLLOVER-1_PROBE_RUN_33455183881.json. This decision does not authorize endpoint migration, header changes, parser changes, fixture injection, third-party providers, Champion changes, identity changes, provenance reopening, or Challenger review. A later valid target-date response requires a new bounded decision gate.
 

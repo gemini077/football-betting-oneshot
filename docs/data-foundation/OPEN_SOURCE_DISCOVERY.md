@@ -88,3 +88,18 @@ Club Elo 的 [`Data`](https://clubelo.com/Data) 和 [`System`](https://clubelo.c
 - Raw evidence、normalized records 和 future validated features 分层保存；任何新 feature 的 `validated_for_model` 都是 `false`。
 - 所有 xG 只保存 provider-specific observation 和定义，不跨 provider 求平均；opponent adjustment 字段先保留 `null`。
 - 所有身份无法确认的记录保持 `unresolved`，不会通过字符串相似度自动串队。
+
+## NOWSCORE-JC-UNIVERSE-1 source discovery addendum
+
+检查日期：2026-09-01。针对 current JC universe，先复查了现有
+`bf1.js` / `sc1..sc7` parser、官方 Nowscore schedule page、page-embedded
+filter code、backing JavaScript feeds 和现有 Nowscore ID/evidence path；并用
+公开 GitHub repository/code search 扩展检查了可复用的 Nowscore scraper 或
+provider adapter。没有发现比官方公开页面 + backing feed 更稳定、无需
+credential 且可直接采用的 OSS implementation，因此没有新增 provider、
+scraper 或运行时依赖。
+
+最终采用的是仓库内的 bounded adapter：只接受 Nowscore 公共页面明确实现的
+`SetLevel(3)` / `A[j][32] == 1`，并保留 page/data URL、capture time、raw
+response hash、Nowscore ID 和 date provenance。详细 runner evidence 见
+`NOWSCORE-JC-UNIVERSE-1_PROBE_REPORT.md`。
