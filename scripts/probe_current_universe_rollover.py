@@ -411,6 +411,7 @@ def _fetch_probe(spec: dict[str, Any], target_date: str) -> dict[str, Any]:
     except (OSError, TimeoutError, urllib.error.URLError) as error:
         result["error"] = f"{type(error).__name__}: {error}"
     finally:
+        result["http_success"] = result["http_status"] == 200
         result["duration_ms"] = round((time.monotonic() - started) * 1000, 1)
 
     result["response_bytes"] = len(raw)
