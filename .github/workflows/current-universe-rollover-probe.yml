@@ -1,0 +1,40 @@
+name: Current universe rollover probe
+
+on:
+  workflow_dispatch:
+    inputs:
+      business_date:
+        description: Target Sporttery business date (YYYY-MM-DD)
+        required: true
+        default: "2026-09-01"
+
+permissions:
+  contents: read
+
+jobs:
+  bounded-probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the dispatched ref
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run one-shot current-universe probe
+        run: >-
+          python scripts/probe_current_universe_rollover.py
+          --date "${{ inputs.business_date }}"
+          --output current-universe-rollover-probe.json
+
+      - name: Upload exact probe evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: current-universe-rollover-probe-${{ inputs.business_date }}
+          path: current-universe-rollover-probe.json
+          if-no-files-found: error
