@@ -356,6 +356,8 @@ def summarize_trade_page(
     )
     target_process_rows = [row for row in raw_rows if row["data_processdate"] == target_date]
     target_match_rows = [row for row in raw_rows if row["data_matchdate"] == target_date]
+    sample_ids = [row["shuju_id"] for row in raw_rows if row["shuju_id"]][:5]
+    sample_numbers = [row["match_num"] for row in raw_rows if row["match_num"]][:5]
     summary: dict[str, Any] = {
         "available_business_dates": sorted(set(process_dates) | set(page_headers)),
         "available_match_dates": match_dates,
@@ -366,6 +368,8 @@ def summarize_trade_page(
         "target_business_date_rows": target_process_rows,
         "target_match_date_rows": target_match_rows,
         "raw_match_rows": raw_rows,
+        "sample_match_ids": sample_ids,
+        "sample_match_numbers": sample_numbers,
     }
     if parser_target_row_count is not None:
         summary["current_parser_target_row_count"] = parser_target_row_count
@@ -386,6 +390,13 @@ def _base_record(spec: dict[str, Any]) -> dict[str, Any]:
         "response_sha256": None,
         "waf_blocked": False,
         "waf_block_evidence": [],
+        "available_business_dates": [],
+        "available_match_dates": [],
+        "business_date_row_count": 0,
+        "target_business_date_row_count": 0,
+        "target_match_date_row_count": 0,
+        "sample_match_ids": [],
+        "sample_match_numbers": [],
     }
 
 
