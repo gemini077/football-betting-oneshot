@@ -66,6 +66,8 @@ _MISSING_LABELS = {
     "IDENTITY_UNRESOLVED": "比赛身份",
 }
 
+_QUALITY_ALERT_COPY = "今日比分预测出现异常集中，当前预测仍保留供观察。"
+
 
 def _user_status_label(status: dict[str, Any]) -> str:
     code = str(status.get("code") or "")
@@ -327,10 +329,14 @@ def render_match_detail(contract: dict[str, Any]) -> str:
     result = contract.get("result") or {}
     evidence = contract.get("evidence") or {}
     source_quality = contract.get("source_quality") or evidence.get("source_quality") or {}
+    prediction_quality = contract.get("prediction_quality_health") or {}
     pilot = bool(governance.get("pilot_excluded"))
     primary = hero.get("primary_score")
     status_class = _status_class(contract)
     status_note = '<span class="pilot-note">试运行预测 · 不纳入正式验证</span>' if pilot else f'<span class="status-badge">{_esc(_user_status_label(status), "状态待确认")}</span>'
+    quality_warning_html = ""
+    if prediction_quality.get("status") == "ALERT" and prediction_quality.get("scope") == "current_serving":
+        quality_warning_html = f'<div class="quality-alert" role="status"><strong>预测质量异常</strong><span>{_esc(_QUALITY_ALERT_COPY)}</span></div>'
     status_explanation = _status_explanation(status)
     status_explanation_html = f'<div class="status-explanation"><strong>{_esc(status_explanation)}</strong><span>当前证据不足，暂不扩展判断。</span></div>' if status_explanation and not primary else ""
     hero_score = f'<div class="hero-score">{_display_score(primary)}</div>' if primary else '<div class="hero-score empty-score">—</div>'
@@ -396,6 +402,7 @@ def render_match_detail(contract: dict[str, Any]) -> str:
     .status-badge {{ background:rgba(112,214,176,.12); color:var(--accent); }}
     .pilot-note {{ background:rgba(226,181,110,.15); color:var(--amber); }}
     .status-explanation {{ display:flex; flex-wrap:wrap; gap:5px 10px; margin-top:16px; padding:10px 12px; border-left:3px solid var(--amber); background:rgba(226,181,110,.08); color:#e7c996; font-size:13px; }}
+    .quality-alert {{ display:flex; flex-wrap:wrap; gap:5px 10px; margin-top:16px; padding:10px 12px; border-left:3px solid var(--danger); background:rgba(241,143,143,.10); color:#f4c6c6; font-size:13px; }}
     .status-explanation span {{ color:var(--muted); }}
     .hero-score-wrap {{ display:flex; align-items:baseline; gap:18px; margin:28px 0 18px; }}
     .hero-score {{ font-variant-numeric:tabular-nums; font-size:clamp(72px,13vw,148px); line-height:.9; letter-spacing:-.08em; color:var(--accent); font-weight:800; }}
@@ -487,6 +494,7 @@ def render_match_detail(contract: dict[str, Any]) -> str:
     <nav class="detail-nav" aria-label="页面导航"><a href="#conclusion">结论</a><a href="#analysis">比赛分析</a><a href="#evidence">市场变化</a><a href="#forecast">预测依据</a><a href="#sources">数据来源</a></nav>
     <section class="hero" id="conclusion">
       <div class="hero-head"><div><div class="match-meta"><span>{_esc(identity.get("competition"), "赛事未记录")}</span><span>{_esc(identity.get("match_num"), "")}</span><span>开球 · {_esc(identity.get("kickoff_at"), "时间未记录")}</span></div><h1>{_esc(identity.get("home"), "主队未记录")} <span>vs</span> {_esc(identity.get("away"), "客队未记录")}</h1></div><div>{status_note}</div></div>
+      {quality_warning_html}
       {status_explanation_html}
       <div class="hero-score-wrap"><div><div class="eyebrow">30秒结论</div><div class="eyebrow">首推比分</div>{hero_score}{neighbor_html}</div><div class="hero-score-label">{_esc(_user_copy(hero.get("summary")))}</div></div>
       {one_x_two}

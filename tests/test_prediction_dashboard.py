@@ -514,6 +514,148 @@ def test_canonical_market_summary_and_score_concentration_are_display_only(tmp_p
     assert "O/U · 2.25" in html
 
 
+def _serving_prediction(index: int, score: str) -> dict:
+    match_id = str(2000 + index)
+    home = f"Home {index}"
+    away = f"Away {index}"
+    prediction_id = f"FBOS-PRED-quality-{index}"
+    record = frozen_prediction(
+        prediction_id,
+        home=home,
+        away=away,
+        match_id=match_id,
+        job_id=f"BASE-{DATE}-{match_id}",
+        match_key=f"FBOS-QUALITY-{index}",
+        unique_score=score,
+    )
+    record["business_date"] = DATE
+    record.update({
+        "model_input_snapshot_ref": f"data/model_governance/input_snapshots/{prediction_id}.json",
+        "input_sha256": f"input-{prediction_id}",
+        "model_source_fingerprint": "champion-fingerprint",
+        "critical_missing_fields": [],
+        "missing_critical_fields": [],
+        "formal_eligibility_policy": "base_prediction_minimum.v1",
+        "analysis_output": {"report_type": "base_prediction_minimal"},
+    })
+    record["match_identity"] = {
+        "match_id": match_id,
+        "match_key": f"FBOS-QUALITY-{index}",
+        "home": home,
+        "away": away,
+        "kickoff_at": record["kickoff_at"],
+    }
+    return record
+
+
+def _quality_roots(tmp_path, scores: list[str]):
+    fixtures = []
+    jobs = []
+    predictions = []
+    for index, score in enumerate(scores, 1):
+        match_id = str(2000 + index)
+        home = f"Home {index}"
+        away = f"Away {index}"
+        fixture_row = fixture(index)
+        fixture_row.update({"matchId": match_id, "homeTeam": home, "awayTeam": away})
+        fixtures.append(fixture_row)
+        prediction = _serving_prediction(index, score)
+        predictions.append(prediction)
+        jobs.append({
+            **frozen_job(match_id, prediction["prediction_id"]),
+            "match_num": f"T{index:03d}",
+            "home": home,
+            "away": away,
+        })
+    roots = make_roots(tmp_path, fixtures, jobs, predictions)
+    runtime = json.loads(roots["runtime_path"].read_text(encoding="utf-8"))
+    runtime["business_date"] = DATE
+    write_json(roots["runtime_path"], runtime)
+    roots["health_watch_path"] = tmp_path / "runtime" / "health_watch.json"
+    return roots, runtime
+
+
+def test_dashboard_separates_system_runtime_and_current_prediction_quality_alert(tmp_path):
+    roots, runtime = _quality_roots(tmp_path, ["1-1"] * 9 + ["2-1"])
+    write_json(roots["health_watch_path"], {
+        "schema_version": "1.0",
+        "updated_at": "2026-08-12T12:06:00+08:00",
+        "current_status": "ALERT",
+        "business_date": DATE,
+        "last_cycle_generated_at": runtime["finished_at"],
+        "prediction_quality_health": {
+            "status": "ALERT",
+            "scope": "current_serving",
+            "business_date": DATE,
+            "runtime_cycle_finished_at": runtime["finished_at"],
+            "reasons": ["SCORE_SELECTOR_COLLAPSE", "LAMBDA_COMPRESSION"],
+        },
+    })
+
+    payload = build_dashboard(DATE, **roots)
+    html = (roots["output_root"] / "latest.html").read_text(encoding="utf-8")
+
+    assert payload["system_runtime_health"]["status"] == "HEALTHY"
+    assert payload["prediction_quality_health"]["status"] == "ALERT"
+    assert payload["prediction_quality_health"]["scope"] == "current_serving"
+    assert payload["prediction_quality_health"]["business_date"] == DATE
+    assert "\u7cfb\u7edf\u8fd0\u884c \u00b7 \u6b63\u5e38" in html
+    assert "\u9884\u6d4b\u8d28\u91cf\u5f02\u5e38" in html
+    assert "\u4eca\u65e5\u6bd4\u5206\u9884\u6d4b\u51fa\u73b0\u5f02\u5e38\u96c6\u4e2d\uff0c\u5f53\u524d\u9884\u6d4b\u4ecd\u4fdd\u7559\u4f9b\u89c2\u5bdf\u3002" in html
+
+
+def test_dashboard_does_not_use_mismatched_health_watch_as_current_quality(tmp_path):
+    roots, runtime = _quality_roots(tmp_path, [f"{index}-{index + 1}" for index in range(1, 11)])
+    write_json(roots["health_watch_path"], {
+        "schema_version": "1.0",
+        "updated_at": "2026-08-12T12:06:00+08:00",
+        "current_status": "ALERT",
+        "business_date": "2026-08-11",
+        "last_cycle_generated_at": "2026-08-11T12:05:00+08:00",
+        "prediction_quality_health": {
+            "status": "ALERT",
+            "scope": "current_serving",
+            "business_date": "2026-08-11",
+            "runtime_cycle_finished_at": "2026-08-11T12:05:00+08:00",
+            "reasons": ["SCORE_SELECTOR_COLLAPSE"],
+        },
+    })
+
+    payload = build_dashboard(DATE, **roots)
+    html = (roots["output_root"] / "latest.html").read_text(encoding="utf-8")
+
+    assert payload["system_runtime_health"]["status"] == "HEALTHY"
+    assert payload["prediction_quality_health"]["status"] == "HEALTHY"
+    assert payload["prediction_quality_health"]["provenance_status"] == "MISMATCHED"
+    assert "\u9884\u6d4b\u8d28\u91cf\u5f02\u5e38" not in html
+    assert "\u4eca\u65e5\u6bd4\u5206\u9884\u6d4b\u51fa\u73b0\u5f02\u5e38\u96c6\u4e2d" not in html
+
+
+def test_dashboard_rejects_health_watch_from_previous_cycle_even_on_same_business_date(tmp_path):
+    roots, runtime = _quality_roots(tmp_path, [f"{index}-{index + 1}" for index in range(1, 11)])
+    previous_cycle = "2026-08-12T12:04:59+08:00"
+    write_json(roots["health_watch_path"], {
+        "schema_version": "1.0",
+        "updated_at": "2026-08-12T12:05:00+08:00",
+        "current_status": "ALERT",
+        "business_date": DATE,
+        "last_cycle_generated_at": previous_cycle,
+        "prediction_quality_health": {
+            "status": "ALERT",
+            "scope": "current_serving",
+            "business_date": DATE,
+            "runtime_cycle_finished_at": previous_cycle,
+            "reasons": ["SCORE_SELECTOR_COLLAPSE"],
+        },
+    })
+
+    payload = build_dashboard(DATE, **roots)
+
+    assert payload["prediction_quality_health"]["status"] == "HEALTHY"
+    assert payload["prediction_quality_health"]["provenance_status"] == "MISMATCHED"
+    assert payload["prediction_quality_health"]["runtime_cycle_finished_at"] == runtime["finished_at"]
+
+
 def test_abnormal_runtime_shows_warning_without_normal_kpi_grid(tmp_path):
     roots = make_roots(tmp_path, [fixture(1)], [{"match_id": "1001", "status": "PENDING"}])
     write_json(roots["runtime_path"], {
@@ -525,6 +667,6 @@ def test_abnormal_runtime_shows_warning_without_normal_kpi_grid(tmp_path):
     build_dashboard(DATE, **roots)
     html = (roots["output_root"] / "latest.html").read_text(encoding="utf-8")
 
-    assert "系统状态 · FAILED" in html
+    assert "系统运行 · 失败" in html
     assert "base_prediction" in html
     assert "预测已冻结" not in html

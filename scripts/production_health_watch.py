@@ -1007,6 +1007,24 @@ def _check_prediction_integrity(
         details["settlement_stuck_prediction_ids"] = sorted(stuck_ids)
 
 
+def _prediction_quality_health_payload(
+    runtime: dict[str, Any],
+    details: dict[str, Any],
+) -> dict[str, Any]:
+    current = details.get("production_exact_score_health_current_serving")
+    current = current if isinstance(current, dict) else {}
+    business_date = str(runtime.get("business_date") or "").strip() or None
+    cycle_finished_at = str(runtime.get("finished_at") or "").strip() or None
+    return {
+        "schema_version": "prediction_quality_health.v1",
+        "status": str(current.get("status") or "UNKNOWN"),
+        "scope": str(current.get("scope") or "unknown"),
+        "business_date": str(current.get("business_date") or business_date or "").strip() or None,
+        "runtime_cycle_finished_at": cycle_finished_at,
+        "reasons": [str(reason) for reason in current.get("reasons") or [] if reason],
+    }
+
+
 def evaluate_health(
     *,
     root: Path = BASE_DIR,
@@ -1067,6 +1085,7 @@ def evaluate_health(
     for integrity_reason in _recursive_integrity_reasons(summary):
         _reason_once(reasons, integrity_reason)
     _check_prediction_integrity(predictions, exclusions, results, ledger, runtime, reasons, details)
+    prediction_quality_health = _prediction_quality_health_payload(runtime, details)
 
     immediate_reasons = [
         reason for reason in reasons if reason in {
@@ -1100,16 +1119,19 @@ def evaluate_health(
 
     previous_reasons = list(previous_state.get("active_reasons") or [])
     timestamp = current_time.isoformat()
+    last_cycle_generated_at = runtime.get("finished_at") or runtime.get("started_at")
     state = {
         "schema_version": "1.0",
         "updated_at": timestamp,
+        "business_date": runtime.get("business_date"),
         "current_status": status,
         "consecutive_problem_cycles": consecutive,
         "last_healthy_at": timestamp if status == HEALTHY else previous_state.get("last_healthy_at"),
         "last_alert_at": timestamp if status == ALERT else previous_state.get("last_alert_at"),
         "active_reasons": reasons,
         "previous_reasons": previous_reasons,
-        "last_cycle_generated_at": runtime.get("finished_at") or runtime.get("started_at"),
+        "last_cycle_generated_at": last_cycle_generated_at,
+        "prediction_quality_health": prediction_quality_health,
     }
     state_path.parent.mkdir(parents=True, exist_ok=True)
     state_path.write_text(json.dumps(state, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
@@ -1123,6 +1145,7 @@ def evaluate_health(
         "consecutive_problem_cycles": consecutive,
         "business_date": runtime.get("business_date"),
         "last_cycle_generated_at": state["last_cycle_generated_at"],
+        "prediction_quality_health": prediction_quality_health,
         "runtime_data_snapshot": runtime_data_snapshot,
         "details": details,
     }
