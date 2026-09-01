@@ -7,7 +7,9 @@ on:
       - "scripts/probe_current_universe_rollover.py"
       - "tests/test_probe_current_universe_rollover.py"
       - "scripts/probe_nowscore_jc.py"
+      - "scripts/probe_nowscore_business_date.py"
       - "tests/test_probe_nowscore_jc.py"
+      - "tests/test_probe_nowscore_business_date.py"
       - "scripts/nowscore_markets.py"
       - "scripts/daily_schedule_workspace.py"
       - "scripts/prediction_universe.py"
@@ -54,6 +56,14 @@ jobs:
           --date "$PROBE_DATE"
           --output nowscore-jc-probe.json
 
+      - name: Replay Nowscore JC business-date contract
+        run: >-
+          python scripts/probe_nowscore_business_date.py
+          --today 2026-09-01
+          --date 2026-08-31
+          --date 2026-09-01
+          --output nowscore-business-date-probe.json
+
       - name: Upload exact probe evidence
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
@@ -62,4 +72,5 @@ jobs:
           path: |
             current-universe-rollover-probe.json
             nowscore-jc-probe.json
+            nowscore-business-date-probe.json
           if-no-files-found: error
