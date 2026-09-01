@@ -15,7 +15,7 @@ except ImportError:  # package imports used by tests
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 UNIVERSE_ROOT = PROJECT_ROOT / "data" / "prediction_universe"
-ALLOWED_SOURCES = {"sporttery.cn", "trade.500.com"}
+ALLOWED_SOURCES = {"sporttery.cn", "trade.500.com", "nowscore_public_jc"}
 VALID_SNAPSHOT_STATUSES = {"READY", "EMPTY_CONFIRMED"}
 SCHEMA_VERSION = "1.0"
 
@@ -28,9 +28,23 @@ _FIELD_ALIASES = {
     "league": ("league", "competition"),
     "homeTeam": ("homeTeam", "home_team", "home"),
     "awayTeam": ("awayTeam", "away_team", "away"),
+    "homeTeamEn": ("homeTeamEn", "home_team_en"),
+    "awayTeamEn": ("awayTeamEn", "away_team_en"),
     "nowscoreId": ("nowscoreId", "nowscore_id"),
+    "nowscore_id": ("nowscore_id", "nowscoreId"),
     "nowscoreMatchStatus": ("nowscoreMatchStatus", "nowscore_match_status"),
     "nowscoreMatchConfidence": ("nowscoreMatchConfidence", "nowscore_match_confidence"),
+    "jc_membership": ("jc_membership", "jcMembership"),
+    "jc_membership_source": ("jc_membership_source", "jcMembershipSource"),
+    "jc_membership_evidence": ("jc_membership_evidence", "jcMembershipEvidence"),
+    "source_surface": ("source_surface", "sourceSurface"),
+    "source_url": ("source_url", "sourceUrl"),
+    "fetched_at": ("fetched_at", "fetchedAt"),
+    "date_provenance": ("date_provenance", "dateProvenance"),
+    "schedule_source_date": ("schedule_source_date", "scheduleSourceDate"),
+    "schedule_source_date_format": (
+        "schedule_source_date_format", "scheduleSourceDateFormat"
+    ),
     "shujuId": ("shujuId", "shuju_id"),
     "singleMatchAvailable": ("singleMatchAvailable", "single_match_available"),
     "spf": ("spf",),
@@ -74,10 +88,58 @@ def _first_value(row: dict[str, Any], aliases: tuple[str, ...]) -> Any:
 def _is_authorized_full_schedule_payload(payload: Any) -> bool:
     if not isinstance(payload, dict):
         return False
-    if str(payload.get("source") or "") not in ALLOWED_SOURCES:
+    source = str(payload.get("source") or "")
+    if source not in ALLOWED_SOURCES:
         return False
     if _is_true(payload.get("analysis_input_only")):
         return False
+    if source == "nowscore_public_jc":
+        if str(payload.get("schedule_scope") or "").casefold() != "jc":
+            return False
+        rows = payload.get("matches")
+        if payload.get("success") is not True:
+            return isinstance(rows, list) and not rows
+        if not isinstance(rows, list) or not rows:
+            return False
+        try:
+            if int(payload.get("duplicate_nowscore_id_count") or 0) != 0:
+                return False
+            if int(payload.get("ambiguous_nowscore_id_count") or 0) != 0:
+                return False
+        except (TypeError, ValueError):
+            return False
+        contract = payload.get("jc_contract")
+        if not isinstance(contract, dict):
+            return False
+        if (
+            contract.get("valid") is not True
+            or contract.get("filter_function") != "SetLevel(3)"
+            or contract.get("row_index") != 32
+            or contract.get("predicate") != "A[j][32] == 1"
+        ):
+            return False
+        for row in rows:
+            if not isinstance(row, dict):
+                return False
+            if row.get("jc_membership") != "VERIFIED":
+                return False
+            if row.get("jc_membership_source") != "nowscore_public_jc":
+                return False
+            if row.get("nowscore_id", row.get("nowscoreId")) in (None, ""):
+                return False
+            if row.get("source_surface") in (None, ""):
+                return False
+            if row.get("source_url") in (None, ""):
+                return False
+            provenance = row.get("date_provenance")
+            if not isinstance(provenance, dict):
+                return False
+            evidence = row.get("jc_membership_evidence")
+            if not isinstance(evidence, dict):
+                return False
+            if evidence.get("row_index") != 32 or evidence.get("raw_value") != 1:
+                return False
+        return True
     if payload.get("match_filter") not in (None, ""):
         return False
     for key in ("single_match", "singleMatch", "match_specific", "filtered", "deep"):
@@ -187,6 +249,13 @@ def _attempt_record(
     fallback_provenance = payload.get("fallback_provenance") if isinstance(payload, dict) else None
     if isinstance(fallback_provenance, dict):
         record["fallback_provenance"] = dict(fallback_provenance)
+    if isinstance(payload, dict):
+        for key in (
+            "url", "source_surface", "backing_data_url", "surface",
+            "jc_contract", "jc_membership_source", "date_provenance",
+        ):
+            if key in payload and payload[key] not in (None, ""):
+                record[key] = payload[key]
     return record
 
 

@@ -39,6 +39,67 @@ def full_schedule(
 
 
 class PredictionUniverseTests(unittest.TestCase):
+    def test_verified_nowscore_jc_payload_creates_deterministic_universe(self):
+        payload = {
+            "source": "nowscore_public_jc",
+            "schedule_scope": "jc",
+            "date": "2026-09-01",
+            "fetch_time": "2026-09-01T12:00:00+08:00",
+            "success": True,
+            "status": "OK",
+            "source_surface": "https://live.nowscore.com/schedule.aspx?f=ft1",
+            "backing_data_url": "https://live.nowscore.com/data/ft1.js",
+            "jc_contract": {
+                "valid": True,
+                "filter_function": "SetLevel(3)",
+                "row_index": 32,
+                "predicate": "A[j][32] == 1",
+            },
+            "matches": [{
+                "matchId": "2913701",
+                "nowscoreId": 2913701,
+                "nowscore_id": 2913701,
+                "homeTeam": "主队",
+                "awayTeam": "客队",
+                "businessDate": "2026-09-01",
+                "matchDate": "2026-09-01",
+                "matchTime": "00:30",
+                "jc_membership": "VERIFIED",
+                "jc_membership_source": "nowscore_public_jc",
+                "jc_membership_evidence": {
+                    "filter_function": "SetLevel(3)",
+                    "row_index": 32,
+                    "raw_value": 1,
+                },
+                "source_surface": "https://live.nowscore.com/schedule.aspx?f=ft1",
+                "source_url": "https://live.nowscore.com/data/ft1.js",
+                "fetched_at": "2026-09-01T12:00:00+08:00",
+                "date_provenance": {
+                    "expected_business_date": "2026-09-01",
+                    "source_date_value": "09-01",
+                },
+            }],
+        }
+
+        with tempfile.TemporaryDirectory() as temp:
+            snapshot = update_prediction_universe(
+                "2026-09-01", payload, root=Path(temp)
+            )
+
+        assert snapshot["status"] == "READY"
+        assert snapshot["source"] == "nowscore_public_jc"
+        assert snapshot["fixture_count"] == 1
+        saved = snapshot["fixtures"][0]
+        assert saved["matchId"] == "2913701"
+        assert saved["nowscoreId"] == 2913701
+        assert saved["nowscore_id"] == 2913701
+        assert saved["jc_membership"] == "VERIFIED"
+        assert saved["jc_membership_source"] == "nowscore_public_jc"
+        assert saved["jc_membership_evidence"]["row_index"] == 32
+        assert saved["jc_membership_evidence"]["raw_value"] == 1
+        assert saved["source_surface"].endswith("f=ft1")
+        assert saved["date_provenance"]["expected_business_date"] == "2026-09-01"
+
     def test_full_schedule_creates_fourteen_fixture_universe(self):
         with tempfile.TemporaryDirectory() as temp:
             snapshot = update_prediction_universe(
@@ -119,6 +180,63 @@ class PredictionUniverseTests(unittest.TestCase):
             )
 
         self.assertEqual(fallback_provenance, snapshot["last_fetch"]["fallback_provenance"])
+
+    def test_failed_nowscore_jc_refresh_preserves_ready_universe_and_records_attempt(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            update_prediction_universe("2026-08-12", full_schedule(), root=root)
+
+            failed = update_prediction_universe(
+                "2026-08-12",
+                {
+                    "source": "nowscore_public_jc",
+                    "schedule_scope": "jc",
+                    "success": False,
+                    "status": "FETCH_ERROR",
+                    "matches": [],
+                    "fetch_time": "2026-08-12T13:00:00+08:00",
+                },
+                root=root,
+            )
+
+        self.assertEqual("READY", failed["status"])
+        self.assertEqual(14, failed["fixture_count"])
+        self.assertEqual("FETCH_FAILED", failed["last_fetch"]["status"])
+        self.assertEqual("nowscore_public_jc", failed["last_fetch"]["source"])
+
+    def test_successful_nowscore_jc_without_verified_membership_is_rejected(self):
+        payload = {
+            "source": "nowscore_public_jc",
+            "schedule_scope": "jc",
+            "success": True,
+            "status": "OK",
+            "jc_contract": {
+                "valid": True,
+                "filter_function": "SetLevel(3)",
+                "row_index": 32,
+                "predicate": "A[j][32] == 1",
+            },
+            "matches": [{
+                "matchId": "1",
+                "nowscoreId": 1,
+                "homeTeam": "主队",
+                "awayTeam": "客队",
+                "businessDate": "2026-08-12",
+                "jc_membership_source": "nowscore_public_jc",
+                "source_surface": "surface",
+                "source_url": "data",
+                "date_provenance": {"expected_business_date": "2026-08-12"},
+                "jc_membership_evidence": {"row_index": 32, "raw_value": 1},
+            }],
+        }
+
+        with tempfile.TemporaryDirectory() as temp:
+            snapshot = update_prediction_universe(
+                "2026-08-12", payload, root=Path(temp)
+            )
+
+        self.assertEqual("FETCH_FAILED", snapshot["status"])
+        self.assertEqual(0, snapshot["fixture_count"])
 
     def test_successful_empty_full_schedule_is_confirmed_empty(self):
         with tempfile.TemporaryDirectory() as temp:

@@ -14,10 +14,9 @@ import hashlib
 import json
 import re
 import time
-from collections import defaultdict
 from datetime import date, datetime
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 from zoneinfo import ZoneInfo
 
 try:
@@ -54,113 +53,6 @@ def _surface_for_date(target: date, today: date) -> tuple[str | None, str | None
     return None, None
 
 
-def _strip_tags(value: str) -> str:
-    return re.sub(r"<[^>]+>", "", value).strip()
-
-
-def _page_contract(page_text: str, surface: str) -> dict[str, Any]:
-    filename_match = re.search(
-        r"\bfilename2\s*=\s*[\"'](?P<filename>[^\"']+)[\"']",
-        page_text,
-        re.IGNORECASE,
-    )
-    filename = filename_match.group("filename") if filename_match else ""
-    expected_filename = f"{surface}.js"
-    function_match = re.search(
-        r"function\s+SetLevel\s*\(\s*l\s*\)\s*\{(?P<body>.*?)(?:\n\s*Config\.getCookie|\Z)",
-        page_text,
-        re.IGNORECASE | re.DOTALL,
-    )
-    function_body = function_match.group("body") if function_match else ""
-    link_match = re.search(
-        r"<a\b[^>]*href\s*=\s*[\"']javascript:SetLevel\(\s*3\s*\)[\"'][^>]*>(?P<label>.*?)</a>",
-        page_text,
-        re.IGNORECASE | re.DOTALL,
-    )
-    has_index = bool(
-        re.search(
-            r"if\s*\(\s*l\s*==\s*3\s*\).*?index\s*=\s*32\s*;",
-            function_body,
-            re.IGNORECASE | re.DOTALL,
-        )
-    )
-    has_predicate = bool(
-        re.search(
-            r"A\s*\[\s*j\s*\]\s*\[\s*index\s*\]\s*==\s*1",
-            function_body,
-            re.IGNORECASE,
-        )
-    )
-    valid_filename = filename == expected_filename
-    return {
-        "surface": surface,
-        "expected_filename": expected_filename,
-        "filename2": filename or None,
-        "jc_filter_link_present": link_match is not None,
-        "jc_filter_label": _strip_tags(link_match.group("label")) if link_match else None,
-        "function_present": function_match is not None,
-        "row_index": 32,
-        "filter_function": "SetLevel(3)",
-        "predicate": "A[j][32] == 1",
-        "row_index_contract_present": has_index,
-        "predicate_contract_present": has_predicate,
-        "valid": bool(
-            valid_filename
-            and link_match
-            and function_match
-            and has_index
-            and has_predicate
-        ),
-    }
-
-
-def _raw_rows(js_text: str) -> list[dict[str, Any]]:
-    rows = []
-    for found in ROW_PATTERN.finditer(js_text.lstrip("\ufeff")):
-        rows.append({
-            "array_index": int(found.group("index")),
-            "values": nowscore._split_js_values(found.group("body")),
-        })
-    return rows
-
-
-def _signature(row: dict[str, Any]) -> tuple[Any, ...]:
-    return (
-        row.get("home_team"),
-        row.get("home_team_en"),
-        row.get("away_team"),
-        row.get("away_team_en"),
-        row.get("kickoff_local"),
-    )
-
-
-def _empty_result(
-    *,
-    contract: dict[str, Any],
-    expected_date: date,
-    source_url: str,
-    backing_data_url: str,
-    fetched_at: str,
-    diagnostics: dict[str, int] | None = None,
-) -> dict[str, Any]:
-    return {
-        "status": "FAIL" if not contract.get("valid") else "PASS",
-        "contract": contract,
-        "expected_business_date": expected_date.isoformat(),
-        "source_url": source_url,
-        "backing_data_url": backing_data_url,
-        "fetched_at": fetched_at,
-        "raw_match_count": 0,
-        "target_row_count": 0,
-        "jc_flagged_row_count": 0,
-        "accepted_fixture_count": 0,
-        "duplicate_nowscore_id_count": 0,
-        "ambiguous_nowscore_id_count": 0,
-        "diagnostics": diagnostics or {},
-        "fixtures": [],
-    }
-
-
 def inspect_jc_surface(
     page_text: str,
     js_text: str,
@@ -171,121 +63,16 @@ def inspect_jc_surface(
     fetched_at: str | None = None,
     surface: str | None = None,
 ) -> dict[str, Any]:
-    """Validate and normalize one Nowscore public schedule surface.
-
-    A row is accepted only when the page's explicit ``SetLevel(3)`` contract
-    maps to a numeric ``A[j][32] == 1`` value on that same row.
-    """
-    target = _target_date(expected_date)
-    surface_name = surface or (
-        re.search(r"[?&]f=([^&]+)", source_url, re.IGNORECASE).group(1)
-        if re.search(r"[?&]f=([^&]+)", source_url, re.IGNORECASE)
-        else "unknown"
+    """Use the production parser for the exact JC contract probe."""
+    return nowscore.parse_nowscore_jc_surface(
+        page_text,
+        js_text,
+        expected_date=expected_date,
+        source_url=source_url,
+        backing_data_url=backing_data_url,
+        fetched_at=fetched_at,
+        surface=surface,
     )
-    contract = _page_contract(page_text, surface_name)
-    rows = _raw_rows(js_text)
-    normalized, parse_diagnostics = nowscore._parse_schedule_js(
-        js_text.lstrip("\ufeff"), expected_date=target
-    )
-    normalized_by_id: dict[int, list[dict[str, Any]]] = defaultdict(list)
-    for row in normalized:
-        normalized_by_id[int(row["nowscore_id"])].append(row)
-
-    target_rows: list[tuple[dict[str, Any], list[Any]]] = []
-    for raw in rows:
-        values = raw["values"]
-        if len(values) < 12:
-            continue
-        match_id = nowscore._integer(values[0])
-        if match_id is None:
-            continue
-        parsed_rows = normalized_by_id.get(match_id, [])
-        if parsed_rows:
-            target_rows.append((raw, parsed_rows))
-
-    target_raw_by_id: dict[int, list[dict[str, Any]]] = defaultdict(list)
-    raw_jc_rows: list[tuple[dict[str, Any], dict[str, Any]]] = []
-    for raw, parsed_rows in target_rows:
-        values = raw["values"]
-        match_id = nowscore._integer(values[0])
-        if match_id is None:
-            continue
-        target_raw_by_id[match_id].append(raw)
-        if len(values) > 32 and values[32] == 1 and len(parsed_rows) == 1:
-            raw_jc_rows.append((raw, parsed_rows[0]))
-
-    duplicate_count = sum(
-        max(0, len(raw_rows_for_id) - 1)
-        for raw_rows_for_id in target_raw_by_id.values()
-    )
-    by_id = {
-        match_id: normalized_by_id.get(match_id, [])
-        for match_id in target_raw_by_id
-    }
-    ambiguous_count = sum(
-        1
-        for rows_for_id in by_id.values()
-        if len({_signature(row) for row in rows_for_id}) > 1
-    )
-    fixture_by_id: dict[int, dict[str, Any]] = {}
-    for raw, parsed in raw_jc_rows:
-        match_id = int(parsed["nowscore_id"])
-        if match_id in fixture_by_id:
-            continue
-        fixture_by_id[match_id] = {
-            "nowscore_id": match_id,
-            "home": parsed.get("home_team"),
-            "away": parsed.get("away_team"),
-            "home_en": parsed.get("home_team_en"),
-            "away_en": parsed.get("away_team_en"),
-            "kickoff_local": parsed.get("kickoff_local"),
-            "match_number": None,
-            "match_number_source": "not_present_in_schedule_row",
-            "source_date": parsed.get("schedule_source_date"),
-            "source_date_format": parsed.get("schedule_source_date_format"),
-            "business_date": target.isoformat(),
-            "date_provenance": {
-                "source_date_value": raw["values"][11],
-                "source_date_format": parsed.get("schedule_source_date_format"),
-                "expected_business_date": target.isoformat(),
-                "rule": "source date equals supplied business date; year is never inferred",
-            },
-            "jc_membership": "VERIFIED",
-            "jc_membership_source": "nowscore_public_jc",
-            "jc_membership_evidence": {
-                "filter_function": "SetLevel(3)",
-                "row_index": 32,
-                "raw_value": raw["values"][32],
-                "source_surface": source_url,
-                "backing_data_url": backing_data_url,
-                "array_index": raw["array_index"],
-            },
-            "source_surface": source_url,
-            "source_url": backing_data_url,
-            "fetched_at": fetched_at or _now(),
-        }
-
-    result = {
-        "status": "PASS" if contract.get("valid") else "FAIL",
-        "contract": contract,
-        "expected_business_date": target.isoformat(),
-        "source_url": source_url,
-        "backing_data_url": backing_data_url,
-        "fetched_at": fetched_at or _now(),
-        "raw_match_count": len(rows),
-        "target_row_count": len(target_rows),
-        "jc_flagged_row_count": len(raw_jc_rows),
-        "accepted_fixture_count": len(fixture_by_id),
-        "duplicate_nowscore_id_count": duplicate_count,
-        "ambiguous_nowscore_id_count": ambiguous_count,
-        "diagnostics": parse_diagnostics,
-        "fixtures": list(fixture_by_id.values()),
-    }
-    if duplicate_count or ambiguous_count:
-        result["status"] = "FAIL"
-        result["fixtures"] = []
-        result["accepted_fixture_count"] = 0
-    return result
 
 
 def _fetch(url: str, *, referer: str) -> tuple[bytes, dict[str, Any]]:

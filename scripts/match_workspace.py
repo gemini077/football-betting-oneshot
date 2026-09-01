@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build one read-only workspace for Sporttery schedule, pre-match reports and reviews."""
+"""Build one read-only workspace for Nowscore JC schedule, reports and reviews."""
 
 from __future__ import annotations
 
@@ -250,16 +250,19 @@ def latest_schedule(target_date: str) -> tuple[Path | None, dict]:
     schedule_candidates = list((DATA / "schedule_updates").glob(f"**/*{target_date}*.json"))
     fetch_candidates = list((DATA / "fetch_runs").glob(f"**/*sporttery_{target_date}.json"))
     candidates = schedule_candidates + fetch_candidates
-    rows: list[tuple[int, int, float, Path, dict]] = []
+    rows: list[tuple[int, int, int, float, Path, dict]] = []
     for path in candidates:
         payload = load_json(path, {})
-        if payload.get("source") not in {"sporttery.cn", "trade.500.com"} or not payload.get("success"):
+        if payload.get("source") not in {
+            "nowscore_public_jc", "sporttery.cn", "trade.500.com"
+        } or not payload.get("success"):
             continue
         matches = payload.get("matches") or []
         if not matches:
             continue
         unfiltered = 0 if payload.get("match_filter") or payload.get("analysis_input_only") else 1
-        rows.append((len(matches), unfiltered, path.stat().st_mtime, path, payload))
+        source_priority = 2 if payload.get("source") == "nowscore_public_jc" else 1
+        rows.append((source_priority, len(matches), unfiltered, path.stat().st_mtime, path, payload))
     if not rows:
         return None, {
             "matches": [],
@@ -267,10 +270,10 @@ def latest_schedule(target_date: str) -> tuple[Path | None, dict]:
             "success": False,
             "universe_source": "LEGACY_FALLBACK",
         }
-    # The newest successful Sporttery response is the source of truth.  An old
-    # file with more rows must not keep the workbench stuck on yesterday's
-    # schedule after the official feed has changed.
-    _, _, _, path, payload = max(rows, key=lambda row: (row[0], row[1], row[2]))
+    # The newest successful full schedule response is the source of truth. An
+    # old file with more rows must not keep the workbench stuck on yesterday's
+    # schedule after the public source has changed.
+    _, _, _, _, path, payload = max(rows, key=lambda row: (row[0], row[1], row[2], row[3]))
     return path, {**payload, "universe_source": "LEGACY_FALLBACK"}
 
 

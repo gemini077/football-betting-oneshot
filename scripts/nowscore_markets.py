@@ -34,6 +34,8 @@ CACHE_ROOT = ROOT / "data" / "source_cache" / "nowscore"
 SCHEDULE_URL = "https://live.nowscore.com/data/bf1.js"
 FUTURE_SCHEDULE_URL = "https://live.nowscore.com/data/sc{offset}.js"
 MAX_FUTURE_SCHEDULE_OFFSET = 7
+JC_SCHEDULE_PAGE_URL = "https://live.nowscore.com/schedule.aspx?f={surface}"
+JC_SCHEDULE_DATA_URL = "https://live.nowscore.com/data/{filename}"
 MARKET_URL = "https://live.nowscore.com/odds/match/{match_id}.htm"
 ANALYSIS_DATA_URL = "https://live.nowscore.com/analysisJs/data{match_id}.js"
 COACH_URL = "https://live.nowscore.com/info/coach/{match_id}.htm?l=1"
@@ -262,6 +264,223 @@ def _parse_schedule_js(
             "schedule_total_line": row[29] if len(row) > 29 else None,
         })
     return matches, dict(diagnostics)
+
+
+def _public_jc_page_contract(page_text: str, surface: str) -> dict:
+    """Read the explicit public schedule-page contract for the JC filter."""
+    filename_match = re.search(
+        r"\bfilename2\s*=\s*[\"'](?P<filename>[^\"']+)[\"']",
+        page_text,
+        re.IGNORECASE,
+    )
+    filename = filename_match.group("filename") if filename_match else ""
+    function_match = re.search(
+        r"function\s+SetLevel\s*\(\s*l\s*\)\s*\{(?P<body>.*?)(?:\n\s*Config\.getCookie|\Z)",
+        page_text,
+        re.IGNORECASE | re.DOTALL,
+    )
+    function_body = function_match.group("body") if function_match else ""
+    link_match = re.search(
+        r"<a\b[^>]*href\s*=\s*[\"']javascript:SetLevel\(\s*3\s*\)[\"'][^>]*>(?P<label>.*?)</a>",
+        page_text,
+        re.IGNORECASE | re.DOTALL,
+    )
+    row_index_contract = bool(
+        re.search(
+            r"if\s*\(\s*l\s*==\s*3\s*\).*?index\s*=\s*32\s*;",
+            function_body,
+            re.IGNORECASE | re.DOTALL,
+        )
+    )
+    predicate_contract = bool(
+        re.search(
+            r"A\s*\[\s*j\s*\]\s*\[\s*index\s*\]\s*==\s*1",
+            function_body,
+            re.IGNORECASE,
+        )
+    )
+    return {
+        "surface": surface,
+        "expected_filename": f"{surface}.js",
+        "filename2": filename or None,
+        "jc_filter_link_present": link_match is not None,
+        "jc_filter_label": (
+            re.sub(r"<[^>]+>", "", link_match.group("label")).strip()
+            if link_match
+            else None
+        ),
+        "function_present": function_match is not None,
+        "row_index": 32,
+        "filter_function": "SetLevel(3)",
+        "predicate": "A[j][32] == 1",
+        "row_index_contract_present": row_index_contract,
+        "predicate_contract_present": predicate_contract,
+        "valid": bool(
+            filename == f"{surface}.js"
+            and link_match
+            and function_match
+            and row_index_contract
+            and predicate_contract
+        ),
+    }
+
+
+def _raw_schedule_rows(text: str) -> list[tuple[int, list[object]]]:
+    rows: list[tuple[int, list[object]]] = []
+    for found in re.finditer(r"(?m)^A\[(\d+)\]=\[(.*?)\];\s*$", text.lstrip("\ufeff")):
+        rows.append((int(found.group(1)), _split_js_values(found.group(2))))
+    return rows
+
+
+def parse_nowscore_jc_surface(
+    page_text: str,
+    schedule_text: str,
+    *,
+    expected_date: object,
+    source_url: str,
+    backing_data_url: str,
+    fetched_at: str | None = None,
+    surface: str | None = None,
+) -> dict:
+    """Normalize one public Nowscore schedule page's explicit JC subset.
+
+    The membership decision is intentionally limited to the page contract's
+    numeric ``A[j][32] == 1`` value.  League, team name, odds, and kickoff
+    similarity are never used to infer JC membership.
+    """
+    expected = _normalise_expected_date(expected_date)
+    surface_name = surface or (
+        re.search(r"[?&]f=([^&]+)", source_url, re.IGNORECASE).group(1)
+        if re.search(r"[?&]f=([^&]+)", source_url, re.IGNORECASE)
+        else "unknown"
+    )
+    contract = _public_jc_page_contract(page_text, surface_name)
+    captured_at = fetched_at or datetime.now(SHANGHAI).isoformat(timespec="seconds")
+    if expected is None:
+        return {
+            "status": "FAIL",
+            "contract": contract,
+            "expected_business_date": str(expected_date or ""),
+            "source_url": source_url,
+            "backing_data_url": backing_data_url,
+            "fetched_at": captured_at,
+            "raw_match_count": 0,
+            "target_row_count": 0,
+            "jc_flagged_row_count": 0,
+            "accepted_fixture_count": 0,
+            "duplicate_nowscore_id_count": 0,
+            "ambiguous_nowscore_id_count": 0,
+            "diagnostics": {"invalid_expected_date": 1},
+            "fixtures": [],
+        }
+
+    raw_rows = _raw_schedule_rows(schedule_text)
+    normalized, diagnostics = _parse_schedule_js(
+        schedule_text.lstrip("\ufeff"), expected_date=expected
+    )
+    normalized_by_id: dict[int, list[dict]] = {}
+    for row in normalized:
+        normalized_by_id.setdefault(int(row["nowscore_id"]), []).append(row)
+
+    target_raw_by_id: dict[int, list[tuple[int, list[object]]]] = {}
+    target_rows: list[tuple[int, list[object], list[dict]]] = []
+    for array_index, values in raw_rows:
+        if len(values) < 12:
+            continue
+        match_id = _integer(values[0])
+        if match_id is None:
+            continue
+        parsed_rows = normalized_by_id.get(match_id, [])
+        if not parsed_rows:
+            continue
+        target_raw_by_id.setdefault(match_id, []).append((array_index, values))
+        target_rows.append((array_index, values, parsed_rows))
+
+    duplicate_count = sum(
+        max(0, len(rows_for_id) - 1)
+        for rows_for_id in target_raw_by_id.values()
+    )
+    ambiguous_count = sum(
+        1
+        for match_id in target_raw_by_id
+        if len({
+            (
+                row.get("home_team"), row.get("home_team_en"),
+                row.get("away_team"), row.get("away_team_en"),
+                row.get("kickoff_local"),
+            )
+            for row in normalized_by_id.get(match_id, [])
+        }) > 1
+    )
+
+    fixtures_by_id: dict[int, dict] = {}
+    jc_flagged_count = 0
+    for array_index, values, parsed_rows in target_rows:
+        if len(values) <= 32 or values[32] != 1:
+            continue
+        jc_flagged_count += 1
+        if len(parsed_rows) != 1:
+            continue
+        parsed = parsed_rows[0]
+        match_id = int(parsed["nowscore_id"])
+        if match_id in fixtures_by_id:
+            continue
+        fixtures_by_id[match_id] = {
+            "nowscore_id": match_id,
+            "home_team_id": parsed.get("home_team_id"),
+            "away_team_id": parsed.get("away_team_id"),
+            "home_team": parsed.get("home_team"),
+            "away_team": parsed.get("away_team"),
+            "home_team_en": parsed.get("home_team_en"),
+            "away_team_en": parsed.get("away_team_en"),
+            "kickoff_local": parsed.get("kickoff_local"),
+            "match_number": None,
+            "match_number_source": "not_present_in_schedule_row",
+            "schedule_source_date": parsed.get("schedule_source_date"),
+            "schedule_source_date_format": parsed.get("schedule_source_date_format"),
+            "business_date": expected.isoformat(),
+            "date_provenance": {
+                "source_date_value": values[11],
+                "source_date_format": parsed.get("schedule_source_date_format"),
+                "expected_business_date": expected.isoformat(),
+                "rule": "source date equals supplied business date; year is never inferred",
+            },
+            "jc_membership": "VERIFIED",
+            "jc_membership_source": "nowscore_public_jc",
+            "jc_membership_evidence": {
+                "filter_function": "SetLevel(3)",
+                "row_index": 32,
+                "raw_value": values[32],
+                "source_surface": source_url,
+                "backing_data_url": backing_data_url,
+                "array_index": array_index,
+            },
+            "source_surface": source_url,
+            "source_url": backing_data_url,
+            "fetched_at": captured_at,
+        }
+
+    accepted = list(fixtures_by_id.values())
+    status = "PASS" if contract.get("valid") else "FAIL"
+    if duplicate_count or ambiguous_count:
+        status = "FAIL"
+        accepted = []
+    return {
+        "status": status,
+        "contract": contract,
+        "expected_business_date": expected.isoformat(),
+        "source_url": source_url,
+        "backing_data_url": backing_data_url,
+        "fetched_at": captured_at,
+        "raw_match_count": len(raw_rows),
+        "target_row_count": len(target_rows),
+        "jc_flagged_row_count": jc_flagged_count,
+        "accepted_fixture_count": len(accepted),
+        "duplicate_nowscore_id_count": duplicate_count,
+        "ambiguous_nowscore_id_count": ambiguous_count,
+        "diagnostics": diagnostics,
+        "fixtures": accepted,
+    }
 
 
 def parse_schedule_js(text: str, expected_date: object = None) -> list[dict]:
@@ -754,6 +973,123 @@ def fetch_schedule(
 ) -> list[dict]:
     """Backward-compatible schedule list API backed by the bounded bundle."""
     return fetch_schedule_bundle(required_dates, now=now)["matches"]
+
+
+def fetch_nowscore_jc_schedule(
+    business_date: object,
+    *,
+    now: object = None,
+) -> dict:
+    """Fetch the credential-free Nowscore public JC subset for one date.
+
+    The schedule page is the source of the membership contract; its backing
+    ``ft1/scN.js`` row flag is the only accepted JC predicate.  A missing or
+    malformed page/data response returns no fixtures and never falls back to
+    Sporttery or 500.com.
+    """
+    expected = _normalise_expected_date(business_date)
+    fetched_at = datetime.now(SHANGHAI).isoformat(timespec="seconds")
+    source_url = ""
+    if expected is None:
+        return {
+            "source": "nowscore_public_jc",
+            "success": False,
+            "status": "INVALID_BUSINESS_DATE",
+            "date": str(business_date or ""),
+            "fetch_time": fetched_at,
+            "fetched_at": fetched_at,
+            "matches": [],
+        }
+
+    today = _now_shanghai_date(now)
+    offset = (expected - today).days
+    if offset == 0:
+        surface = "ft1"
+    elif 1 <= offset <= MAX_FUTURE_SCHEDULE_OFFSET:
+        surface = f"sc{offset}"
+    else:
+        return {
+            "source": "nowscore_public_jc",
+            "success": False,
+            "status": "TARGET_DATE_OUTSIDE_BOUNDED_SURFACE",
+            "date": expected.isoformat(),
+            "fetch_time": fetched_at,
+            "fetched_at": fetched_at,
+            "surface": None,
+            "source_surface": None,
+            "matches": [],
+            "error": "TARGET_DATE_OUTSIDE_CURRENT_OR_FUTURE_SCN_RANGE",
+        }
+
+    source_url = JC_SCHEDULE_PAGE_URL.format(surface=surface)
+    data_base_url = JC_SCHEDULE_DATA_URL.format(filename=f"{surface}.js")
+    try:
+        page_text = _decode(_fetch_bytes(source_url))
+        contract = _public_jc_page_contract(page_text, surface)
+        filename = contract.get("filename2")
+        if filename != f"{surface}.js":
+            raise ValueError("PAGE_BACKING_FILENAME_MISMATCH")
+
+        # Match the browser surface's Date.parse(new Date()) cache-buster, but
+        # keep it second-aligned to avoid rapid random query variants.
+        data_url = f"{data_base_url}?{int(time.time()) * 1000}"
+        schedule_text = _decode(_fetch_bytes(data_url))
+        parsed = parse_nowscore_jc_surface(
+            page_text,
+            schedule_text,
+            expected_date=expected,
+            source_url=source_url,
+            backing_data_url=data_base_url,
+            fetched_at=fetched_at,
+            surface=surface,
+        )
+        matches = list(parsed.get("fixtures") or [])
+        success = bool(
+            parsed.get("status") == "PASS"
+            and matches
+            and parsed.get("duplicate_nowscore_id_count", 0) == 0
+            and parsed.get("ambiguous_nowscore_id_count", 0) == 0
+        )
+        return {
+            "source": "nowscore_public_jc",
+            "primary_source": "nowscore_public_jc",
+            "success": success,
+            "status": "OK" if success else (
+                "NO_JC_ROWS_FOR_DATE" if parsed.get("status") == "PASS" else "CONTRACT_REJECTED"
+            ),
+            "date": expected.isoformat(),
+            "business_date": expected.isoformat(),
+            "fetch_time": fetched_at,
+            "fetched_at": fetched_at,
+            "url": source_url,
+            "source_surface": source_url,
+            "backing_data_url": data_base_url,
+            "surface": surface,
+            "matches": matches,
+            "jc_contract": parsed.get("contract", contract),
+            "target_row_count": parsed.get("target_row_count", 0),
+            "jc_flagged_row_count": parsed.get("jc_flagged_row_count", 0),
+            "duplicate_nowscore_id_count": parsed.get("duplicate_nowscore_id_count", 0),
+            "ambiguous_nowscore_id_count": parsed.get("ambiguous_nowscore_id_count", 0),
+            "diagnostics": parsed.get("diagnostics", {}),
+        }
+    except Exception as error:
+        return {
+            "source": "nowscore_public_jc",
+            "primary_source": "nowscore_public_jc",
+            "success": False,
+            "status": "FETCH_ERROR",
+            "date": expected.isoformat(),
+            "business_date": expected.isoformat(),
+            "fetch_time": fetched_at,
+            "fetched_at": fetched_at,
+            "url": source_url,
+            "source_surface": source_url,
+            "backing_data_url": data_base_url,
+            "surface": surface,
+            "matches": [],
+            "error": f"{type(error).__name__}: {error}",
+        }
 
 
 def prebind_match(
