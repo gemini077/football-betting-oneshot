@@ -4,7 +4,27 @@
 
 # Current Sole Pointer
 
-# NOWSCORE-JC-UNIVERSE-1 - Sole current execution pointer
+# NOWSCORE-JC-BUSINESS-DATE-1 - Sole current execution pointer
+
+Status: READY_FOR_ACCEPTANCE / NO_CODE
+
+Decision: NO_CODE
+
+The bounded public replay found a deterministic Nowscore sales-day contract:
+selected SelDate, matching niDate date/group, and 11:00--??11:00. The
+required paired dates proved that the known 2026-08-31 12-row JC set belongs
+to 2026-08-31 despite all kickoffs being on 2026-09-01, and that the
+2026-09-01 group contains 10 2026-09-02 early-kickoff rows. The unchanged
+explicit membership join, SetLevel(3) / A[j][32] == 1, found 12 rows for
+the first date and 0 for the second date because the live sc1 data had none
+of the public-group IDs.
+
+This fails the full current-target availability gate. No production
+business-date fix or heuristic fallback is authorized. Exact evidence is
+docs/data-foundation/NOWSCORE-JC-BUSINESS-DATE-1_PROBE_RUN_33470293458.json; the report is docs/data-foundation/NOWSCORE-JC-BUSINESS-DATE-1_PROBE_REPORT.md. STOP at READY_FOR_ACCEPTANCE: do not
+merge and do not start Challenger Promotion Review.
+
+# Historical milestone: NOWSCORE-JC-UNIVERSE-1 - Sole current execution pointer
 
 Status: READY_FOR_ACCEPTANCE
 

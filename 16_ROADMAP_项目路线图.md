@@ -5,7 +5,28 @@
 
 # Current Route Pointer
 
-# NOWSCORE-JC-UNIVERSE-1 - Current route gate
+# NOWSCORE-JC-BUSINESS-DATE-1 - Current route gate
+
+CURRENT ROUTE MILESTONE: NOWSCORE-JC-BUSINESS-DATE-1
+
+CURRENT ROUTE STATUS: READY_FOR_ACCEPTANCE / NO_CODE
+
+CURRENT ROUTE DECISION: NO_CODE
+
+The public Nowscore JC sales page exposes the deterministic anchor
+SelDate + niDate header date and the explicit 11:00--??11:00 sales
+window. The paired replay preserved the exact existing membership contract
+SetLevel(3) -> A[j][32] == 1: 12/12 public rows for 2026-08-31 joined
+explicitly, while the nonempty 2026-09-01 public group had 0/10 explicit
+live sc1 joins. The full decision gate is therefore NO_CODE, not a
+permission to guess membership.
+
+Exact evidence is recorded in docs/data-foundation/NOWSCORE-JC-BUSINESS-DATE-1_PROBE_RUN_33470293458.json and the report
+docs/data-foundation/NOWSCORE-JC-BUSINESS-DATE-1_PROBE_REPORT.md. No current-universe business-date production code was changed in
+this milestone. STOP at READY_FOR_ACCEPTANCE; no merge and no Challenger
+Promotion Review.
+
+# Historical milestone: NOWSCORE-JC-UNIVERSE-1 - Current route gate
 
 CURRENT ROUTE MILESTONE: NOWSCORE-JC-UNIVERSE-1
 

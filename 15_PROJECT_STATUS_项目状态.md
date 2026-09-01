@@ -3,7 +3,39 @@
 最后更新：2026-09-01
 角色：项目当前唯一人类可读状态真相。只记录当前事实，不承担完整历史档案职责。
 
-# NOWSCORE-JC-UNIVERSE-1 - Current JC universe restoration
+# NOWSCORE-JC-BUSINESS-DATE-1 - China JC business-date anchor
+
+Status: READY_FOR_ACCEPTANCE / NO_CODE
+
+Decision: NO_CODE
+
+The Nowscore public JC sales page provides a deterministic, credential-free
+business-day anchor: selected SelDate plus the matching niDate header date,
+with the explicit 11:00--??11:00 sales window. Match numbers are the
+niDate group name plus the row number cell. This fixes the date semantics in
+evidence, but does not authorize production code in this milestone.
+
+The paired GitHub replay for 2026-08-31 and 2026-09-01 passed page/data
+access and preserved the existing SetLevel(3) / A[j][32] == 1 membership
+contract. It accepted 12 explicit rows for 2026-08-31, all with
+2026-09-01 kickoff dates. The 2026-09-01 public page had 10 rows, all with
+2026-09-02 kickoff dates, but the corresponding live sc1 replay had zero
+of those ten IDs, so explicit accepted rows were zero. The full gate therefore
+failed the requirement that a nonempty public current JC page have nonzero
+explicit current rows.
+
+Exact evidence is docs/data-foundation/NOWSCORE-JC-BUSINESS-DATE-1_PROBE_RUN_33470293458.json with SHA-256
+186361AFCD01D884DD1B50BF901CAC54C1DC967F0D04FA3860D6B281FC6665B9; the
+runner is [33470293458](https://github.com/gemini077/football-betting-oneshot/actions/runs/33470293458).
+The detailed report is docs/data-foundation/NOWSCORE-JC-BUSINESS-DATE-1_PROBE_REPORT.md.
+
+No kickoff cutoff, weekday/league/team rule, fixture-ID exception, membership
+guess, Sporttery/500 change, Champion/model change, identity-threshold change,
+frozen-history rewrite, prospective-ledger rewrite, or settlement change was
+made. STOP at READY_FOR_ACCEPTANCE; do not merge and do not start Challenger
+Promotion Review.
+
+# Historical milestone: NOWSCORE-JC-UNIVERSE-1 - Current JC universe restoration
 
 Status: READY_FOR_ACCEPTANCE
 

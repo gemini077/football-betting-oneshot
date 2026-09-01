@@ -3,6 +3,33 @@
 最后更新：2026-09-01
 角色：记录不能因换对话 / 换 Codex 而重复推翻的关键决定。若新证据足以改变决定，必须新增 superseding decision，不得静默改历史。
 
+# D-036 - NOWSCORE-JC-BUSINESS-DATE-1 business-day gate
+
+Status: READY_FOR_ACCEPTANCE / NO_CODE
+
+Decision: NOWSCORE-JC-BUSINESS-DATE-1 = NO_CODE.
+
+The public Nowscore JC sales page proves a deterministic business-day
+contract without credentials: selected SelDate, the matching niDate
+header date/group, the explicit 11:00--??11:00 sales window, and the
+group-plus-row match number. The paired replay keeps the existing membership
+authority unchanged at SetLevel(3) / A[j][32] == 1.
+
+The 2026-08-31 public group has 12 rows, all kicking off on 2026-09-01,
+and all 12 joined explicit A32 schedule rows. The nonempty 2026-09-01
+public group has 10 rows, all kicking off on 2026-09-02, but the live sc1
+surface has zero matching IDs. Because the full gate requires nonzero
+explicit current rows when the public JC page is nonzero, production
+business-date code is not authorized. No membership guessing or fixed
+kickoff cutoff is allowed.
+
+Exact evidence: docs/data-foundation/NOWSCORE-JC-BUSINESS-DATE-1_PROBE_RUN_33470293458.json;
+report: docs/data-foundation/NOWSCORE-JC-BUSINESS-DATE-1_PROBE_REPORT.md.
+This supersedes the current-pointer role of D-035 for this business-date
+milestone without rewriting D-035's historical Nowscore source evidence.
+STOP at READY_FOR_ACCEPTANCE; do not merge and do not start Challenger
+Promotion Review.
+
 # D-035 - NOWSCORE-JC-UNIVERSE-1 public JC source gate
 
 Status: READY_FOR_ACCEPTANCE

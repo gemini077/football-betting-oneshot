@@ -18,7 +18,36 @@
 9. 如果声称“上线”，远端是否真的部署；
 10. 是否产生下一阶段需要的可复用证据。
 
-# NOWSCORE-JC-UNIVERSE-1 Acceptance Gate
+# NOWSCORE-JC-BUSINESS-DATE-1 Acceptance Gate
+
+Status: READY_FOR_ACCEPTANCE / NO_CODE
+
+Acceptance evidence:
+- GitHub runner [33470293458](https://github.com/gemini077/football-betting-oneshot/actions/runs/33470293458) completed the paired 2026-08-31 / 2026-09-01 replay.
+- The public Nowscore JC page contract is deterministic and credential-free:
+  selected SelDate, matching niDate header date/group, and the explicit
+  11:00--??11:00 sales window.
+- The existing JC membership contract is unchanged and exact:
+  SetLevel(3) -> A[j][32] == 1.
+- 2026-08-31: 12 public rows, 12 next-calendar-day kickoff rows, 12
+  explicit accepted rows, duplicate/ambiguous 0/0.
+- 2026-09-01: 10 public rows, 10 next-calendar-day kickoff rows, 0 explicit
+  accepted rows because live sc1 contained none of the ten public IDs.
+- Business-date ID overlap and accepted-ID overlap are both empty.
+- Exact JSON evidence is
+  docs/data-foundation/NOWSCORE-JC-BUSINESS-DATE-1_PROBE_RUN_33470293458.json
+  with SHA-256
+  186361AFCD01D884DD1B50BF901CAC54C1DC967F0D04FA3860D6B281FC6665B.
+- The full gate is NO_CODE; no production code or durable prediction/history
+  state was changed.
+
+The detailed report is
+docs/data-foundation/NOWSCORE-JC-BUSINESS-DATE-1_PROBE_REPORT.md.
+
+Acceptance boundary: this milestone is READY_FOR_ACCEPTANCE / NO_CODE only.
+Do not merge and do not start Challenger Promotion Review.
+
+# Historical acceptance gate: NOWSCORE-JC-UNIVERSE-1
 
 Status: READY_FOR_ACCEPTANCE
 
