@@ -206,6 +206,97 @@ def test_production_cycle_processes_today_and_yesterday_without_refetching_yeste
     assert payload["overall_status"] == "HEALTHY"
 
 
+def test_production_cycle_skips_future_jobs_when_next_universe_is_not_yet_published(
+    tmp_path, monkeypatch
+):
+    universe_dir, jobs_dir = _write_carryover_state(tmp_path)
+    monkeypatch.setattr(automation_cycle, "PREDICTION_UNIVERSE_DIR", universe_dir, raising=False)
+    monkeypatch.setattr(automation_cycle, "BASE_JOBS_DIR", jobs_dir, raising=False)
+    calls = []
+
+    def fake_run(command, *, optional=False):
+        calls.append(list(command))
+        if _has_script(command, "daily_schedule_workspace.py") and _command_date(command) == "2026-08-14":
+            return {
+                "returncode": 0,
+                "status": "NOT_YET_PUBLISHED",
+                "refresh_status": "not_yet_published",
+                "business_dates": ["2026-08-14", "2026-08-15"],
+                "source_states": [
+                    {"business_date": "2026-08-14", "status": "NOT_YET_PUBLISHED"},
+                    {"business_date": "2026-08-15", "status": "NOT_YET_PUBLISHED"},
+                ],
+            }
+        return {"returncode": 0, "status": "SUCCESS"}
+
+    monkeypatch.setattr(automation_cycle, "run", fake_run)
+    payload = automation_cycle.production_cycle(
+        now=datetime.fromisoformat("2026-08-13T00:30:00+08:00"),
+        runtime_path=tmp_path / "runtime.json",
+    )
+
+    assert payload["steps"]["next_universe"]["status"] == "SKIPPED"
+    assert payload["steps"]["next_universe"]["summary"]["status"] == "NOT_YET_PUBLISHED"
+    assert payload["steps"]["next_universe"]["summary"]["refresh_status"] == "not_yet_published"
+    assert payload["steps"]["next_universe"]["summary"]["business_dates"] == [
+        "2026-08-14", "2026-08-15"
+    ]
+    assert payload["steps"]["next_universe"]["summary"]["source_states"][0]["status"] == "NOT_YET_PUBLISHED"
+    assert payload["steps"]["next_universe"]["summary"]["reason"] == "NOT_YET_PUBLISHED"
+    assert payload["steps"]["next_base_jobs"]["status"] == "SKIPPED"
+    assert payload["steps"]["next_base_jobs"]["summary"]["reason"] == "NEXT_UNIVERSE_NOT_YET_PUBLISHED"
+    assert payload["steps"]["next_base_prediction"]["status"] == "SKIPPED"
+    assert payload["steps"]["next_base_prediction"]["summary"]["reason"] == "NEXT_UNIVERSE_NOT_YET_PUBLISHED"
+    assert payload["overall_status"] == "HEALTHY"
+    assert not any(
+        _has_script(command, script)
+        and _command_date(command) == "2026-08-14"
+        for command in calls
+        for script in ("base_prediction_jobs.py", "base_prediction_runner.py")
+    )
+
+
+def test_production_cycle_keeps_real_next_universe_fetch_failure_degraded(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setattr(automation_cycle, "PREDICTION_UNIVERSE_DIR", tmp_path / "universe", raising=False)
+    monkeypatch.setattr(automation_cycle, "BASE_JOBS_DIR", tmp_path / "jobs", raising=False)
+
+    def fake_run(command, *, optional=False):
+        if _has_script(command, "daily_schedule_workspace.py") and _command_date(command) == "2026-08-14":
+            return {"returncode": 1, "status": "FETCH_FAILED"}
+        return {"returncode": 0, "status": "SUCCESS"}
+
+    monkeypatch.setattr(automation_cycle, "run", fake_run)
+    payload = automation_cycle.production_cycle(
+        now=datetime.fromisoformat("2026-08-13T00:30:00+08:00"),
+        runtime_path=tmp_path / "runtime.json",
+    )
+
+    assert payload["steps"]["next_universe"]["status"] == "DEGRADED"
+    assert payload["overall_status"] == "DEGRADED"
+
+
+def test_current_universe_not_yet_published_remains_degraded(tmp_path, monkeypatch):
+    def fake_run(command, *, optional=False):
+        if _has_script(command, "daily_schedule_workspace.py"):
+            return {
+                "returncode": 0,
+                "status": "NOT_YET_PUBLISHED",
+                "refresh_status": "not_yet_published",
+            }
+        return {"returncode": 0, "status": "SUCCESS"}
+
+    monkeypatch.setattr(automation_cycle, "run", fake_run)
+    payload = automation_cycle.cycle(
+        "2026-08-13", runtime_path=tmp_path / "runtime.json"
+    )
+
+    assert payload["steps"]["universe"]["status"] == "DEGRADED"
+    assert payload["steps"]["universe"]["summary"]["status"] == "NOT_YET_PUBLISHED"
+    assert payload["overall_status"] == "DEGRADED"
+
+
 def test_missing_carryover_state_is_skipped_without_degrading_cycle(tmp_path, monkeypatch):
     monkeypatch.setattr(automation_cycle, "PREDICTION_UNIVERSE_DIR", tmp_path / "universe", raising=False)
     monkeypatch.setattr(automation_cycle, "BASE_JOBS_DIR", tmp_path / "jobs", raising=False)

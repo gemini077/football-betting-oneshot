@@ -26,6 +26,9 @@ except ImportError:  # package imports used by tests
     from scripts.base_prediction_jobs import sync_base_prediction_jobs
 
 
+NOT_YET_PUBLISHED = "NOT_YET_PUBLISHED"
+
+
 def _kickoff(row: dict) -> str:
     match_date = str(row.get("matchDate") or row.get("businessDate") or "")[:10]
     match_time = str(row.get("matchTime") or "")[:5]
@@ -39,6 +42,31 @@ def _payload_is_successful(payload: dict) -> bool:
     rows = payload.get("matches") or payload.get("fixtures")
     return bool(rows) and str(payload.get("status") or "").upper() in {
         "READY", "OK",
+    }
+
+
+def _payload_is_not_yet_published(payload: dict) -> bool:
+    contract = payload.get("business_date_contract")
+    return (
+        payload.get("source") == "nowscore_public_jc"
+        and payload.get("success") is False
+        and payload.get("status") == NOT_YET_PUBLISHED
+        and payload.get("matches") == []
+        and isinstance(contract, dict)
+        and contract.get("publication_status") == NOT_YET_PUBLISHED
+    )
+
+
+def _source_state(payload: dict) -> dict:
+    return {
+        "business_date": payload.get("business_date") or payload.get("date"),
+        "source": payload.get("source"),
+        "status": payload.get("status"),
+        "success": payload.get("success") is True,
+        "fetched_at": payload.get("fetched_at") or payload.get("fetch_time"),
+        "error": payload.get("error"),
+        "business_date_contract": payload.get("business_date_contract"),
+        "diagnostics": payload.get("diagnostics", {}),
     }
 
 
@@ -186,6 +214,7 @@ def _nowscore_schedule_payload(business_date: str, fetched: dict) -> dict:
         "fetched_at": fetched_at,
         "success": success,
         "status": "OK" if success else str(fetched.get("status") or "CONTRACT_REJECTED"),
+        "publication_status": fetched.get("publication_status"),
         "error": "INVALID_NOWSCORE_JC_ROW" if invalid_rows else fetched.get("error"),
         "matches": matches if success else [],
         "jc_contract": fetched.get("jc_contract"),
@@ -313,7 +342,17 @@ def main() -> int:
         business_date = (base_date + timedelta(days=offset)).isoformat()
         payload["nowscore_binding"] = nowscore_binding
         universe = update_prediction_universe(business_date, payload)
-        base_jobs = sync_base_prediction_jobs(business_date)
+        if payload.get("status") == NOT_YET_PUBLISHED:
+            base_jobs = {
+                "status": "SKIPPED",
+                "reason": "UNIVERSE_NOT_YET_PUBLISHED",
+                "fixture_count": 0,
+                "job_count": 0,
+                "pending_count": 0,
+                "missed_prematch_count": 0,
+            }
+        else:
+            base_jobs = sync_base_prediction_jobs(business_date)
         universe_snapshots.append({
             "date": business_date,
             "path": str(ROOT / "data" / "prediction_universe" / f"{business_date}.json"),
@@ -327,6 +366,7 @@ def main() -> int:
         base_job_snapshots.append({
             "date": business_date,
             "status": base_jobs.get("status"),
+            "reason": base_jobs.get("reason"),
             "fixture_count": base_jobs.get("fixture_count", 0),
             "job_count": base_jobs.get("job_count", 0),
             "pending_count": base_jobs.get("pending_count", 0),
@@ -343,11 +383,37 @@ def main() -> int:
         for row in payload.get("matches") or []
     }
     successful_payloads = [payload for payload in payloads if _payload_is_successful(payload)]
+    business_dates = [
+        str(payload.get("business_date") or payload.get("date") or "")
+        for payload in payloads
+    ]
+    source_states = [_source_state(payload) for payload in payloads]
+    if payloads and not successful_payloads and all(
+        _payload_is_not_yet_published(payload) for payload in payloads
+    ):
+        print(json.dumps({
+            "date": args.date,
+            "status": NOT_YET_PUBLISHED,
+            "business_dates": business_dates,
+            "source_states": source_states,
+            "schedules": [str(path) for path in schedule_paths],
+            "match_count": 0,
+            "refresh_status": "not_yet_published",
+            "workspace_rebuilt": False,
+            "automatic_analysis": False,
+            "automatic_betting": False,
+            "lock_state_changed": False,
+            "prediction_universe": universe_snapshots,
+            "base_prediction_jobs": base_job_snapshots,
+        }, ensure_ascii=False, indent=2))
+        return 0
     # 抓取全部失败时保留旧工作台。失败诊断文件可以落盘，但绝不能用新的页面
     # 生成时间伪装成赛程已更新。
     if not successful_payloads:
         print(json.dumps({
             "date": args.date,
+            "business_dates": business_dates,
+            "source_states": source_states,
             "schedules": [str(path) for path in schedule_paths],
             "match_count": 0,
             "refresh_status": "failed_kept_previous_workspace",
@@ -364,7 +430,9 @@ def main() -> int:
     if not args.fetch_only:
         index, latest = build(args.date)
     print(json.dumps({
-        "date": args.date, "schedule": str(schedule_paths[0]),
+        "date": args.date, "business_dates": business_dates,
+        "source_states": source_states,
+        "schedule": str(schedule_paths[0]),
         "schedules": [str(path) for path in schedule_paths], "match_count": len(match_ids),
         "workspace": str(latest), "workspace_snapshot": str(index), "latest": str(latest),
         "user_entry": str(latest), "automatic_analysis": False,

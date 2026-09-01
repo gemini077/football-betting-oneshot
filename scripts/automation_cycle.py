@@ -17,6 +17,7 @@ SHANGHAI = ZoneInfo("Asia/Shanghai")
 RUNTIME_PATH = ROOT / "data" / "product_runtime" / "latest_cycle.json"
 PREDICTION_UNIVERSE_DIR = ROOT / "data" / "prediction_universe"
 BASE_JOBS_DIR = ROOT / "data" / "base_prediction_jobs"
+NOT_YET_PUBLISHED = "NOT_YET_PUBLISHED"
 
 
 def run(command: list[str], *, optional: bool = False) -> dict:
@@ -72,11 +73,19 @@ def _summary(payload: dict) -> dict:
         "latest_status", "result_files_scanned", "result_files_accepted",
         "result_files_rejected", "result_identity_conflicts", "result_identity_mismatches",
         "unmatched_pair_count", "auto_promote",
+        "business_dates", "source_states",
     }
     return {key: value for key, value in payload.items() if key in allowed}
 
 
-def _step(name: str, command: list[str], *, optional: bool, executor=None) -> dict:
+def _step(
+    name: str,
+    command: list[str],
+    *,
+    optional: bool,
+    executor=None,
+    allow_not_yet_published: bool = False,
+) -> dict:
     executor = executor or run
     try:
         payload = executor(command, optional=optional)
@@ -88,10 +97,21 @@ def _step(name: str, command: list[str], *, optional: bool, executor=None) -> di
             "command": command,
         }
     code = int(payload.get("returncode") or 0)
+    summary = _summary(payload)
+    status = "SUCCESS" if code == 0 else "FAILED" if not optional else "DEGRADED"
+    if (
+        code == 0
+        and summary.get("status") == NOT_YET_PUBLISHED
+        and not (
+            allow_not_yet_published
+            and summary.get("refresh_status") == "not_yet_published"
+        )
+    ):
+        status = "FAILED" if not optional else "DEGRADED"
     return {
-        "status": "SUCCESS" if code == 0 else "FAILED" if not optional else "DEGRADED",
+        "status": status,
         "returncode": code,
-        "summary": _summary(payload),
+        "summary": summary,
         "command": command,
     }
 
@@ -106,6 +126,15 @@ def _group(name: str, commands: list[list[str]], *, optional: bool, executor=Non
         "summary": [{"step": index, "status": row["status"], **row["summary"]} for index, row in enumerate(results, 1)],
         "command": [part for command in commands for part in command],
     }
+
+
+def _is_expected_future_not_yet_published(step: dict) -> bool:
+    summary = step.get("summary") or {}
+    return (
+        step.get("returncode") == 0
+        and summary.get("status") == NOT_YET_PUBLISHED
+        and summary.get("refresh_status") == "not_yet_published"
+    )
 
 
 def _overall_status(steps: dict[str, dict]) -> str:
@@ -316,13 +345,23 @@ def production_cycle(
     steps["next_universe"] = _step("next_universe", [
         sys.executable, "scripts/daily_schedule_workspace.py", "--date", next_date,
         "--no-cache", "--fetch-only",
-    ], optional=True)
-    steps["next_base_jobs"] = _step("next_base_jobs", [
-        sys.executable, "scripts/base_prediction_jobs.py", "--date", next_date,
-    ], optional=True)
-    steps["next_base_prediction"] = _step("next_base_prediction", [
-        sys.executable, "scripts/base_prediction_runner.py", "--date", next_date,
-    ], optional=True)
+    ], optional=True, allow_not_yet_published=True)
+    if _is_expected_future_not_yet_published(steps["next_universe"]):
+        steps["next_universe"]["status"] = "SKIPPED"
+        steps["next_universe"].setdefault("summary", {})["reason"] = NOT_YET_PUBLISHED
+        steps["next_base_jobs"] = _carryover_marker(
+            "SKIPPED", "NEXT_UNIVERSE_NOT_YET_PUBLISHED"
+        )
+        steps["next_base_prediction"] = _carryover_marker(
+            "SKIPPED", "NEXT_UNIVERSE_NOT_YET_PUBLISHED"
+        )
+    else:
+        steps["next_base_jobs"] = _step("next_base_jobs", [
+            sys.executable, "scripts/base_prediction_jobs.py", "--date", next_date,
+        ], optional=True)
+        steps["next_base_prediction"] = _step("next_base_prediction", [
+            sys.executable, "scripts/base_prediction_runner.py", "--date", next_date,
+        ], optional=True)
     if carryover_state == "READY":
         steps["carryover_prospective"] = _step("carryover_prospective", [
             sys.executable, "scripts/prospective_settlement.py", "--date", carryover_date,

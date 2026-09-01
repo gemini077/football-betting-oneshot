@@ -41,6 +41,7 @@ FUTURE_SCHEDULE_URL = "https://live.nowscore.com/data/sc{offset}.js"
 MAX_FUTURE_SCHEDULE_OFFSET = 7
 JC_SCHEDULE_PAGE_URL = "https://live.nowscore.com/schedule.aspx?f={surface}"
 JC_SCHEDULE_DATA_URL = "https://live.nowscore.com/data/{filename}"
+NOT_YET_PUBLISHED = "NOT_YET_PUBLISHED"
 JC_BUSINESS_PAGE_URL = (
     "https://cp.nowscore.com/buy/jingcai.aspx"
     "?typeID=101&oddstype=2&date={business_date}"
@@ -423,6 +424,46 @@ def _nowscore_jc_group_name(row: Mapping[str, object]) -> str | None:
     return None
 
 
+def _classify_nowscore_jc_publication(
+    contract: Mapping[str, object], expected: date | None
+) -> str | None:
+    """Classify a missing sales-day header without weakening the page contract."""
+    if expected is None:
+        return None
+    if contract.get("surface") != "nowscore_public_jc_sales":
+        return None
+    if contract.get("date_selector_present") is not True:
+        return None
+    headers = contract.get("headers")
+    if not isinstance(headers, list) or not headers:
+        return None
+    conflicting_groups = contract.get("conflicting_groups")
+    if not isinstance(conflicting_groups, Mapping) or conflicting_groups:
+        return None
+
+    published_dates: list[date] = []
+    groups_by_date: dict[date, set[str]] = {}
+    for header in headers:
+        if not isinstance(header, Mapping):
+            return None
+        header_date = _normalise_expected_date(header.get("date"))
+        group = str(header.get("group") or "").strip()
+        if header_date is None or not group:
+            return None
+        if header.get("sales_window") != "11:00--次日11:00":
+            return None
+        published_dates.append(header_date)
+        groups_by_date.setdefault(header_date, set()).add(group)
+
+    if any(len(groups) > 1 for groups in groups_by_date.values()):
+        return None
+    if expected in published_dates:
+        return None
+    if expected <= max(published_dates):
+        return None
+    return NOT_YET_PUBLISHED
+
+
 def parse_nowscore_jc_business_page(
     page_text: str,
     *,
@@ -431,8 +472,9 @@ def parse_nowscore_jc_business_page(
     """Parse one selected Nowscore JC sales-day group.
 
     The page's selected ``SelDate`` and matching ``niDate`` header are the
-    business-date contract.  Kickoff is checked against the page's explicit
-    sales window, but never used to derive the business date.
+    published business-date contract.  A missing requested header is classified
+    separately from a malformed contract.  Kickoff is checked against the
+    page's explicit sales window, but never used to derive the business date.
     """
     expected = _normalise_expected_date(business_date)
     if expected is None:
@@ -609,6 +651,7 @@ def parse_nowscore_jc_business_page(
             and not conflicting_groups
         ),
     }
+    publication_status = _classify_nowscore_jc_publication(contract, expected)
     status = "PASS" if bool(
         contract["valid"]
         and fixtures
@@ -619,6 +662,17 @@ def parse_nowscore_jc_business_page(
         and invalid_match_numbers == 0
         and outside_window == 0
     ) else "FAIL"
+    if publication_status and not (
+        fixtures
+        or duplicate_count
+        or duplicate_sales_row_count
+        or duplicate_match_number_count
+        or ambiguous_count
+        or invalid_match_numbers
+        or outside_window
+    ):
+        status = publication_status
+        contract["publication_status"] = publication_status
     return {
         "status": status,
         "contract": contract,
@@ -1343,10 +1397,19 @@ def fetch_nowscore_jc_schedule(
             business_date=expected,
         )
         if business_page.get("status") != "PASS":
+            page_status = str(business_page.get("status") or "")
+            status = (
+                NOT_YET_PUBLISHED
+                if page_status == NOT_YET_PUBLISHED
+                else "BUSINESS_DATE_CONTRACT_REJECTED"
+            )
             return {
                 **base_result,
                 "success": False,
-                "status": "BUSINESS_DATE_CONTRACT_REJECTED",
+                "status": status,
+                "publication_status": (
+                    NOT_YET_PUBLISHED if status == NOT_YET_PUBLISHED else None
+                ),
                 "matches": [],
                 "business_date_contract": business_page.get("contract"),
                 "jc_contract": business_page.get("contract"),
