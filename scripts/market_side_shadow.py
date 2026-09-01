@@ -1168,6 +1168,8 @@ def evaluate_paired_cohort(
     counts = representative_selection["counts"]
     return {
         "schema_version": EVALUATION_SCHEMA_VERSION,
+        "metric_unit": "unique_match",
+        "version_row_metric_unit": "immutable_pair_version_row_audit_only",
         # Legacy names remain as raw version-row audit aliases.  Promotion
         # checkpointing and canonical metrics use the explicit unique count.
         "verified_paired_count": verified_version_count,
@@ -1252,6 +1254,7 @@ def checkpoint_status(
         next_threshold = MIN_PAIRED_VERIFIED
     return {
         "status": status,
+        "observation_unit": "unique_match",
         "verified_unique_matches": count,
         "verified_pair_version_rows": (
             max(0, int(verified_pair_version_rows))
