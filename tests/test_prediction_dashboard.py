@@ -394,6 +394,86 @@ def test_dashboard_preserves_data_shortage_pending_and_missed_reasons(tmp_path):
     assert "错过赛前窗口" in html
 
 
+def test_dashboard_hides_retained_recommendation_for_insufficient_current_job(tmp_path):
+    served_id = "FBOS-PRED-served"
+    retained_id = "FBOS-PRED-retained"
+    served = {**frozen_prediction(served_id), "business_date": DATE}
+    retained = {
+        **frozen_prediction(
+            retained_id,
+            home="主队2",
+            away="客队2",
+            match_id="1002",
+            job_id=f"BASE-{DATE}-1002",
+            match_key="FBOS-TEST-2",
+            kickoff="2026-08-13T05:00:00+08:00",
+            source_cutoff="2026-08-12T12:00:00+08:00",
+            prediction_created="2026-08-12T14:00:00+08:00",
+            freeze_created="2026-08-12T14:01:00+08:00",
+            unique_score="2-2",
+        ),
+        "business_date": DATE,
+    }
+    for record in (served, retained):
+        record.update({
+            "model_input_snapshot_ref": "data/model_governance/input_snapshots/test.json",
+            "input_sha256": "a" * 64,
+            "model_source_fingerprint": "champion-fingerprint",
+            "formal_eligibility_policy": "base_prediction_minimum.v1",
+            "analysis_output": {"report_type": "base_prediction_minimal"},
+        })
+    roots = make_roots(
+        tmp_path,
+        [fixture(1), fixture(2)],
+        [
+            frozen_job("1001", served_id),
+            {
+                **frozen_job("1002", retained_id),
+                "home": "主队2",
+                "away": "客队2",
+                "kickoff": "2026-08-13T05:00:00+08:00",
+                "status": "INSUFFICIENT_DATA",
+                "last_error": "SOURCE_FETCH_FAILED",
+            },
+        ],
+        [served, retained],
+    )
+    runtime = json.loads(roots["runtime_path"].read_text(encoding="utf-8"))
+    runtime["business_date"] = DATE
+    write_json(roots["runtime_path"], runtime)
+
+    payload = build_dashboard(DATE, **roots)
+    by_id = {card["match_id"]: card for card in payload["fixtures"]}
+    insufficient = by_id["1002"]
+    frozen = by_id["1001"]
+    html = (roots["output_root"] / "latest.html").read_text(encoding="utf-8")
+    insufficient_html = re.search(
+        r'<article[^>]*data-status="INSUFFICIENT_DATA"[^>]*>.*?</article>',
+        html,
+        re.S,
+    ).group(0)
+
+    assert insufficient["prediction_id"] == retained_id
+    assert insufficient["status"] == "INSUFFICIENT_DATA"
+    assert insufficient["reason_code"] == "SOURCE_FETCH_FAILED"
+    assert insufficient["reason_text"]
+    assert insufficient["prediction"] is None
+    assert "prediction-panel" not in insufficient_html
+    assert "1X2" not in insufficient_html
+    assert "\u7cfb\u7edf\u9996\u63a8\u6bd4\u5206" not in insufficient_html
+    assert insufficient["reason_text"] in insufficient_html
+    assert frozen["prediction"]["primary_score"] == "1-0"
+    frozen_html = re.search(
+        r'<article[^>]*data-status="FROZEN"[^>]*>.*?</article>',
+        html,
+        re.S,
+    ).group(0)
+    assert "prediction-panel" in frozen_html
+    assert payload["prediction_quality_health"]["current_job_count"] == 2
+    assert payload["prediction_quality_health"]["current_frozen_job_count"] == 1
+    assert payload["prediction_quality_health"]["selected_record_count"] == 1
+
+
 def test_pilot_exclusion_and_formal_sample_are_distinguished(tmp_path):
     fixtures = [fixture(1), fixture(2)]
     excluded_id = "FBOS-PRED-pilot"

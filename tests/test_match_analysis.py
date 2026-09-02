@@ -248,6 +248,19 @@ def test_non_prediction_statuses_have_safe_detail_contracts(tmp_path, status):
     assert all(section["conclusion"] == "当前证据不足，暂不扩展判断。" for section in contract["analysis_sections"])
 
 
+def test_insufficient_status_with_retained_prediction_keeps_hero_fail_closed(tmp_path):
+    contract = assemble(roots(tmp_path, status="INSUFFICIENT_DATA", with_prediction=True))
+    html = render_match_detail(contract)
+
+    assert contract["status"]["code"] == "INSUFFICIENT_DATA"
+    assert contract["governance"]["prediction_id"] == "FBOS-PRED-test"
+    assert contract["hero"]["primary_score"] is None
+    assert contract["hero"]["probabilities"] == {}
+    assert contract["model"]["probabilities"] == {}
+    assert '<div class="hero-probabilities">' not in html
+    assert "1-0" not in html
+
+
 def test_assembler_does_not_fabricate_market_direction_or_script(tmp_path):
     contract = assemble(roots(tmp_path))
 

@@ -645,18 +645,57 @@ def _prediction_is_after_kickoff(record: dict[str, Any]) -> bool:
     )
 
 
+def _serving_job_identity(job: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "job_id": job.get("job_id") or job.get("jobId"),
+        "match_id": job.get("match_id") or job.get("matchId"),
+        "match_key": job.get("match_key") or job.get("canonical_match_id"),
+        "home": job.get("home") or job.get("home_team") or job.get("homeTeam"),
+        "away": job.get("away") or job.get("away_team") or job.get("awayTeam"),
+        "kickoff_at": job.get("kickoff") or job.get("kickoff_at") or job.get("kickoff_local"),
+    }
+
+
+def _record_matches_serving_job(record: dict[str, Any], job_identity: dict[str, Any]) -> bool:
+    record_identity = _prematch_record_identity(record)
+    expected_durable_identity = any(
+        _duplicate_text(job_identity.get(field))
+        for field in ("job_id", "match_id", "match_key")
+    )
+    for field in ("job_id", "match_id", "match_key"):
+        actual = _duplicate_text(record_identity.get(field))
+        expected = _duplicate_text(job_identity.get(field))
+        if actual and expected and actual == expected:
+            return True
+    if expected_durable_identity:
+        return False
+    actual_kickoff = _parse_at(record_identity.get("kickoff_at"))
+    expected_kickoff = _parse_at(job_identity.get("kickoff_at"))
+    return bool(
+        actual_kickoff
+        and expected_kickoff
+        and actual_kickoff == expected_kickoff
+        and _duplicate_normalise_text(record_identity.get("home"))
+        == _duplicate_normalise_text(job_identity.get("home"))
+        and _duplicate_normalise_text(record_identity.get("away"))
+        == _duplicate_normalise_text(job_identity.get("away"))
+    )
+
+
 def select_current_serving_predictions(
     records: list[dict[str, Any]],
     *,
     business_date: str,
+    current_jobs: list[dict[str, Any]] | None = None,
     excluded_ids: set[str] | None = None,
 ) -> dict[str, Any]:
-    """Select one legal FROZEN prematch version per current match.
+    """Select one legal prematch version for each current FROZEN base job.
 
     Historical/version rows remain available to the audit evaluator.  This
-    selector narrows only the serving cohort: one runtime business date, one
-    legal FROZEN prediction per match, and no excluded or integrity-invalid
-    rows.
+    selector narrows only the serving cohort: one runtime business date, the
+    explicit current base-job state, one legal FROZEN prediction per match,
+    and no excluded or integrity-invalid rows.  Missing job state is an empty
+    serving cohort; prediction records are never a fallback for it.
     """
     current_business_date = str(business_date or "").strip()
     excluded = {_duplicate_text(value) for value in (excluded_ids or set()) if _duplicate_text(value)}
@@ -671,47 +710,83 @@ def select_current_serving_predictions(
         for record in current_date_records
         if _duplicate_text(record.get("prediction_status")) in FROZEN_STATUSES
     ]
+    current_job_rows = [
+        job
+        for job in (current_jobs or [])
+        if isinstance(job, dict)
+        and (
+            not _duplicate_text(job.get("business_date"))
+            or _duplicate_text(job.get("business_date")) == current_business_date
+        )
+    ]
+    current_frozen_jobs = [
+        job for job in current_job_rows
+        if _duplicate_text(job.get("status")) == "FROZEN"
+    ]
 
     selected_records: list[dict[str, Any]] = []
+    selected_job_ids: list[str] = []
+    selected_match_ids: list[str] = []
     groups: list[dict[str, Any]] = []
     excluded_counts: Counter[str] = Counter()
-    for group_key, rows in _duplicate_identity_groups(frozen_records):
-        candidates: list[dict[str, Any]] = []
-        for record in rows:
-            prediction_id = _duplicate_text(record.get("prediction_id"))
-            if prediction_id in excluded:
-                excluded_counts["excluded_or_pilot"] += 1
-                continue
-            if _recursive_conflict_reasons(record) or _recursive_integrity_reasons(record):
-                excluded_counts["integrity_invalid"] += 1
-                continue
-            if _prediction_is_after_kickoff(record):
-                excluded_counts["post_kickoff"] += 1
-                continue
-            if not _duplicate_formally_eligible(record):
-                excluded_counts["not_formally_eligible"] += 1
-                continue
-            candidates.append(record)
+    eligible_records: list[dict[str, Any]] = []
+    for record in frozen_records:
+        prediction_id = _duplicate_text(record.get("prediction_id"))
+        if prediction_id in excluded:
+            excluded_counts["excluded_or_pilot"] += 1
+            continue
+        if _recursive_conflict_reasons(record) or _recursive_integrity_reasons(record):
+            excluded_counts["integrity_invalid"] += 1
+            continue
+        if _prediction_is_after_kickoff(record):
+            excluded_counts["post_kickoff"] += 1
+            continue
+        if not _duplicate_formally_eligible(record):
+            excluded_counts["not_formally_eligible"] += 1
+            continue
+        eligible_records.append(record)
 
-        expected_identity = _duplicate_selection_identity(candidates[0]) if candidates else {}
-        selection = (
-            select_latest_legal_prematch(candidates, identity=expected_identity)
-            if candidates
-            else {
-                "status": "NO_LEGAL_PREMATCH_VERSION",
-                "reason": "NO_CURRENT_SERVING_CANDIDATE",
-                "selected_record": None,
-                "selected_prediction_id": None,
-                "candidate_count": 0,
-                "superseded_count": 0,
-            }
-        )
+    for job in current_frozen_jobs:
+        job_identity = _serving_job_identity(job)
+        raw_rows = [
+            record for record in frozen_records
+            if _record_matches_serving_job(record, job_identity)
+        ]
+        candidates = [
+            record for record in eligible_records
+            if _record_matches_serving_job(record, job_identity)
+        ]
+        selection = select_latest_legal_prematch(
+            candidates,
+            identity=job_identity,
+        ) if candidates else {
+            "status": "NO_LEGAL_PREMATCH_VERSION",
+            "reason": "NO_CURRENT_SERVING_CANDIDATE",
+            "selected_record": None,
+            "selected_prediction_id": None,
+            "candidate_count": 0,
+            "superseded_count": 0,
+        }
         selected = selection.get("selected_record")
         if selection.get("status") == "SELECTED" and isinstance(selected, dict):
             selected_records.append(selected)
+            job_id = _duplicate_text(job_identity.get("job_id"))
+            match_id = _duplicate_text(job_identity.get("match_id"))
+            if job_id:
+                selected_job_ids.append(job_id)
+            if match_id:
+                selected_match_ids.append(match_id)
+        group_key = ";".join(
+            f"{field}:{_duplicate_text(job_identity.get(field))}"
+            for field in ("job_id", "match_id", "match_key")
+            if _duplicate_text(job_identity.get(field))
+        ) or "UNRESOLVED_CURRENT_JOB"
         groups.append({
             "group_key": group_key,
-            "raw_record_count": len(rows),
+            "job_id": job_identity.get("job_id"),
+            "match_id": job_identity.get("match_id"),
+            "job_status": _duplicate_text(job.get("status")),
+            "raw_record_count": len(raw_rows),
             "candidate_count": len(candidates),
             "selected_prediction_id": selection.get("selected_prediction_id"),
             "selection_status": selection.get("status"),
@@ -724,12 +799,26 @@ def select_current_serving_predictions(
         "current_business_date": current_business_date or None,
         "current_date_record_count": len(current_date_records),
         "frozen_record_count": len(frozen_records),
+        "current_job_count": len(current_job_rows),
+        "current_frozen_job_count": len(current_frozen_jobs),
+        "current_frozen_job_ids": sorted({
+            _duplicate_text(job.get("job_id"))
+            for job in current_frozen_jobs
+            if _duplicate_text(job.get("job_id"))
+        }),
+        "current_frozen_match_ids": sorted({
+            _duplicate_text(job.get("match_id"))
+            for job in current_frozen_jobs
+            if _duplicate_text(job.get("match_id"))
+        }),
         "selected_record_count": len(selected_records),
         "selected_prediction_ids": sorted(
             _duplicate_text(record.get("prediction_id"))
             for record in selected_records
             if _duplicate_text(record.get("prediction_id"))
         ),
+        "selected_job_ids": sorted(set(selected_job_ids)),
+        "selected_match_ids": sorted(set(selected_match_ids)),
         "excluded_record_counts": dict(sorted(excluded_counts.items())),
         "groups": groups,
         "selected_records": selected_records,
@@ -760,10 +849,16 @@ def _carryover_missing_is_expected(runtime: dict[str, Any], business_date: str) 
     return False
 
 
-def _check_universe_and_jobs(root: Path, runtime: dict[str, Any], reasons: list[str], details: dict[str, Any]) -> None:
+def _check_universe_and_jobs(
+    root: Path,
+    runtime: dict[str, Any],
+    reasons: list[str],
+    details: dict[str, Any],
+) -> dict[str, list[dict[str, Any]]]:
     universe_root = root / "data" / "prediction_universe"
     jobs_root = root / "data" / "base_prediction_jobs"
     active_dates = _load_active_dates(runtime)
+    jobs_by_date: dict[str, list[dict[str, Any]]] = {}
     for business_date in active_dates:
         universe, universe_error = _json(
             universe_root / f"{business_date}.json",
@@ -816,6 +911,7 @@ def _check_universe_and_jobs(root: Path, runtime: dict[str, Any], reasons: list[
         if not isinstance(job_rows, list):
             _reason_once(reasons, "DURABLE_ARTIFACT_INVALID")
             continue
+        jobs_by_date[business_date] = [row for row in job_rows if isinstance(row, dict)]
         if status == "READY":
             expected = {_identity(row, fixture=True) for row in fixtures if isinstance(row, dict)}
             actual = {_identity(row) for row in job_rows if isinstance(row, dict)}
@@ -824,6 +920,7 @@ def _check_universe_and_jobs(root: Path, runtime: dict[str, Any], reasons: list[
                 _reason_once(reasons, "SILENT_MISSING_FIXTURES")
                 details.setdefault("silent_missing_fixtures", 0)
                 details["silent_missing_fixtures"] += max(len(missing), fixture_count - len(job_rows), 0)
+    return jobs_by_date
 
 
 def _check_workspace_freshness(
@@ -901,6 +998,7 @@ def _check_prediction_integrity(
     result_rows: list[tuple[Path, dict[str, Any]]],
     ledger: list[dict[str, Any]],
     runtime: dict[str, Any],
+    current_jobs: list[dict[str, Any]],
     reasons: list[str],
     details: dict[str, Any],
 ) -> None:
@@ -917,6 +1015,7 @@ def _check_prediction_integrity(
     current_selection = select_current_serving_predictions(
         formal_records,
         business_date=str(runtime.get("business_date") or "").strip(),
+        current_jobs=current_jobs,
         excluded_ids=exclusion_ids,
     )
     current_exact_score_health = {
@@ -1013,6 +1112,8 @@ def _prediction_quality_health_payload(
 ) -> dict[str, Any]:
     current = details.get("production_exact_score_health_current_serving")
     current = current if isinstance(current, dict) else {}
+    selection = details.get("production_current_serving_selection")
+    selection = selection if isinstance(selection, dict) else {}
     business_date = str(runtime.get("business_date") or "").strip() or None
     cycle_finished_at = str(runtime.get("finished_at") or "").strip() or None
     return {
@@ -1022,6 +1123,11 @@ def _prediction_quality_health_payload(
         "business_date": str(current.get("business_date") or business_date or "").strip() or None,
         "runtime_cycle_finished_at": cycle_finished_at,
         "reasons": [str(reason) for reason in current.get("reasons") or [] if reason],
+        "current_job_count": int(selection.get("current_job_count") or 0),
+        "current_frozen_job_count": int(selection.get("current_frozen_job_count") or 0),
+        "selected_record_count": int(selection.get("selected_record_count") or 0),
+        "selected_job_ids": list(selection.get("selected_job_ids") or []),
+        "selected_prediction_ids": list(selection.get("selected_prediction_ids") or []),
     }
 
 
@@ -1080,11 +1186,24 @@ def evaluate_health(
             _reason_once(reasons, "DURABLE_ARTIFACT_INVALID")
 
     _check_workspace_freshness(root, runtime, reasons, details)
-    _check_universe_and_jobs(root, runtime, reasons, details)
+    current_jobs_by_date = _check_universe_and_jobs(root, runtime, reasons, details)
     predictions, exclusions, results, ledger, summary = _load_durable_assets(root, reasons, details)
     for integrity_reason in _recursive_integrity_reasons(summary):
         _reason_once(reasons, integrity_reason)
-    _check_prediction_integrity(predictions, exclusions, results, ledger, runtime, reasons, details)
+    current_jobs = current_jobs_by_date.get(
+        str(runtime.get("business_date") or "").strip(),
+        [],
+    )
+    _check_prediction_integrity(
+        predictions,
+        exclusions,
+        results,
+        ledger,
+        runtime,
+        current_jobs,
+        reasons,
+        details,
+    )
     prediction_quality_health = _prediction_quality_health_payload(runtime, details)
 
     immediate_reasons = [

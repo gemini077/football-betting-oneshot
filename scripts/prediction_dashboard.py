@@ -387,9 +387,15 @@ def _card(
     card = _fixture_projection(fixture)
     status = str((job or {}).get("status") or "PENDING")
     selection = prematch_selection or {}
-    if prematch_selection is not None:
+    current_selection = status == "FROZEN" and prematch_selection is not None
+    if current_selection:
         record = selection.get("selected_record")
         prediction_id = str(selection.get("selected_prediction_id") or "") or None
+    elif status != "FROZEN":
+        # A retained prediction pointer is audit identity only until the
+        # current base job is FROZEN; never project it as a live recommendation.
+        record = None
+        prediction_id = str((job or {}).get("prediction_id") or "") or None
     else:
         prediction_id = str((job or {}).get("prediction_id") or "") or None
     reason_code, reason_text = _status_reason(status, job, record)
@@ -404,20 +410,20 @@ def _card(
         "reason_text": reason_text,
         "job_id": (job or {}).get("job_id"),
         "prediction_id": prediction_id,
-        "selected_prediction_id": selection.get("selected_prediction_id") if prematch_selection is not None else prediction_id,
-        "current_prediction_id": selection.get("selected_prediction_id") if prematch_selection is not None else prediction_id,
-        "final_prematch_prediction_id": selection.get("selected_prediction_id") if prematch_selection is not None else prediction_id,
-        "selected_freeze_created_at": selection.get("selected_freeze_created_at") if prematch_selection is not None else (record or {}).get("freeze_created_at"),
-        "selected_source_cutoff_at": selection.get("selected_source_cutoff_at") if prematch_selection is not None else (record or {}).get("source_cutoff_at"),
-        "superseded_count": int(selection.get("superseded_count") or 0) if prematch_selection is not None else 0,
+        "selected_prediction_id": selection.get("selected_prediction_id") if current_selection else None,
+        "current_prediction_id": selection.get("selected_prediction_id") if current_selection else None,
+        "final_prematch_prediction_id": selection.get("selected_prediction_id") if current_selection else None,
+        "selected_freeze_created_at": selection.get("selected_freeze_created_at") if current_selection else None,
+        "selected_source_cutoff_at": selection.get("selected_source_cutoff_at") if current_selection else None,
+        "superseded_count": int(selection.get("superseded_count") or 0) if current_selection else 0,
         "prematch_selection": {
-            "status": selection.get("status") if prematch_selection is not None else "LEGACY_POINTER",
-            "reason": selection.get("reason") if prematch_selection is not None else "JOB_POINTER",
-            "candidate_count": int(selection.get("candidate_count") or 0) if prematch_selection is not None else int(bool(record)),
-            "selected_prediction_id": selection.get("selected_prediction_id") if prematch_selection is not None else prediction_id,
-            "selected_freeze_created_at": selection.get("selected_freeze_created_at") if prematch_selection is not None else (record or {}).get("freeze_created_at"),
-            "selected_source_cutoff_at": selection.get("selected_source_cutoff_at") if prematch_selection is not None else (record or {}).get("source_cutoff_at"),
-            "superseded_count": int(selection.get("superseded_count") or 0) if prematch_selection is not None else 0,
+            "status": selection.get("status") if current_selection else "NOT_SERVING" if status != "FROZEN" else "LEGACY_POINTER",
+            "reason": selection.get("reason") if current_selection else "CURRENT_JOB_NOT_FROZEN" if status != "FROZEN" else "JOB_POINTER",
+            "candidate_count": int(selection.get("candidate_count") or 0) if current_selection else 0,
+            "selected_prediction_id": selection.get("selected_prediction_id") if current_selection else None,
+            "selected_freeze_created_at": selection.get("selected_freeze_created_at") if current_selection else None,
+            "selected_source_cutoff_at": selection.get("selected_source_cutoff_at") if current_selection else None,
+            "superseded_count": int(selection.get("superseded_count") or 0) if current_selection else 0,
         },
         "prediction": _prediction_projection(record) if record else None,
         "result": {
@@ -599,6 +605,7 @@ def _health_watch_quality_for_cycle(
 def _current_prediction_quality_health(
     records: dict[str, dict[str, Any]],
     exclusions: dict[str, dict[str, Any]],
+    jobs: list[dict[str, Any]],
     runtime: dict[str, Any],
     health_watch: dict[str, Any],
     business_date: str,
@@ -638,6 +645,7 @@ def _current_prediction_quality_health(
         selection = select_current_serving_predictions(
             formal_records,
             business_date=business_date,
+            current_jobs=jobs,
             excluded_ids=set(exclusions),
         )
         evaluated = evaluate_exact_score_health(selection["selected_records"])
@@ -649,6 +657,10 @@ def _current_prediction_quality_health(
         "scope": "current_serving",
         "business_date": business_date,
         "runtime_cycle_finished_at": runtime_finished_at,
+        "current_job_count": selection.get("current_job_count", 0),
+        "current_frozen_job_count": selection.get("current_frozen_job_count", 0),
+        "selected_record_count": selection.get("selected_record_count", 0),
+        "selected_job_ids": selection.get("selected_job_ids", []),
         "selected_prediction_ids": selection.get("selected_prediction_ids", []),
         "available": True,
         "provenance_status": provenance_status,
@@ -966,11 +978,14 @@ def build_dashboard(
         projected = _fixture_projection(fixture)
         match_id = projected["match_id"]
         job = job_lookup.get(f"match_id:{match_id}") or job_lookup.get(f"job_id:BASE-{business_date}-{match_id}")
-        selection = select_latest_legal_prematch(
-            records.values(),
-            identity=_prematch_identity(fixture, job),
-        )
-        record = selection.get("selected_record")
+        selection = None
+        record = None
+        if str((job or {}).get("status") or "PENDING") == "FROZEN":
+            selection = select_latest_legal_prematch(
+                records.values(),
+                identity=_prematch_identity(fixture, job),
+            )
+            record = selection.get("selected_record")
         cards.append(_card(
             fixture,
             job,
@@ -1008,6 +1023,7 @@ def build_dashboard(
     prediction_quality_health = _current_prediction_quality_health(
         records,
         exclusions,
+        jobs,
         runtime,
         health_watch,
         business_date,
