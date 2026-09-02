@@ -441,110 +441,166 @@ def _esc(value: Any) -> str:
 
 MODERN_CSS = r"""
 :root {
-  --bg: #0b1118;
-  --surface: #121b25;
-  --surface-2: #172331;
-  --line: #263646;
-  --text: #f3f7fa;
-  --muted: #91a2b3;
-  --quiet: #6f8192;
-  --accent: #43d3a5;
-  --accent-soft: rgba(67, 211, 165, .13);
-  --warning: #f0b86a;
-  --warning-soft: rgba(240, 184, 106, .14);
-  --danger: #f17b85;
-  --danger-soft: rgba(241, 123, 133, .14);
-  --blue: #79a8ff;
+  --bg: #081117;
+  --surface: #101b23;
+  --surface-raised: #16252e;
+  --surface-soft: #0c151c;
+  --line: #273b45;
+  --text: #f1f7f5;
+  --muted: #9aadb3;
+  --quiet: #71858d;
+  --accent: #69dfb9;
+  --accent-soft: rgba(105, 223, 185, .12);
+  --warning: #e9b567;
+  --warning-soft: rgba(233, 181, 103, .12);
+  --danger: #ef8b91;
+  --danger-soft: rgba(239, 139, 145, .13);
+  --blue: #8aaeff;
+  --max: 1240px;
 }
 * { box-sizing: border-box; }
-html { background: var(--bg); }
+html { background: var(--bg); scroll-behavior: smooth; }
 body {
   margin: 0;
   color: var(--text);
-  background:
-    radial-gradient(circle at 12% -10%, rgba(67, 211, 165, .11), transparent 32rem),
-    var(--bg);
-  font: 14px/1.5 "Segoe UI", "Microsoft YaHei", sans-serif;
+  background: radial-gradient(circle at 12% -10%, rgba(105, 223, 185, .10), transparent 30rem), var(--bg);
+  font: 15px/1.55 "Segoe UI", "Microsoft YaHei", sans-serif;
 }
 a { color: var(--accent); text-decoration: none; }
 a:hover { text-decoration: underline; }
 button { font: inherit; }
-.shell { max-width: 1440px; margin: 0 auto; padding: 28px 28px 52px; }
-.topbar { display: flex; justify-content: space-between; gap: 24px; align-items: flex-start; }
-.brand-kicker { color: var(--accent); font-size: 11px; font-weight: 700; letter-spacing: .18em; text-transform: uppercase; }
-h1 { margin: 8px 0 4px; font-size: clamp(32px, 5vw, 54px); line-height: 1.02; letter-spacing: -.045em; }
+.shell { width: min(calc(100% - 32px), var(--max)); margin: 0 auto; padding: 24px 0 56px; }
+.topbar { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 16px; align-items: end; padding-bottom: 24px; border-bottom: 1px solid var(--line); }
+.brand-kicker { color: var(--accent); font-size: 11px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; }
+h1 { margin: 8px 0 4px; font-size: clamp(32px, 5vw, 46px); line-height: 1.05; letter-spacing: -.045em; }
 .date-line { color: var(--muted); font-size: 15px; }
-.refresh-line { color: var(--quiet); font-size: 12px; text-align: right; }
-.health-stack { display: grid; gap: 8px; margin: 20px 0 0; }
-.health-alert { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; margin: 0; padding: 11px 14px; border: 1px solid rgba(240, 184, 106, .35); background: var(--warning-soft); color: #f7d49d; }
-.health-alert.alert { border-color: rgba(241, 123, 133, .4); background: var(--danger-soft); color: #ffc1c6; }
+.current-date { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: baseline; margin-top: 16px; color: var(--muted); }
+.current-date .date-label { color: var(--quiet); font-size: 12px; }
+.current-date strong { color: var(--text); font-size: 16px; }
+.current-date .date-context { color: var(--accent); font-size: 13px; }
+.refresh-line { color: var(--quiet); font-size: 12px; line-height: 1.45; text-align: right; }
+.refresh-line strong { color: var(--muted); font-weight: 600; }
+.health-stack { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0 0; }
+.health-alert { display: inline-flex; flex: 1 1 auto; min-height: 44px; flex-wrap: wrap; gap: 6px 12px; align-items: center; margin: 0; padding: 8px 12px; border: 1px solid rgba(233, 181, 103, .34); border-radius: 12px; background: var(--warning-soft); color: #f4d39d; font-size: 13px; }
+.health-alert.alert { border-color: rgba(239, 139, 145, .42); background: var(--danger-soft); color: #ffc3c7; }
+.health-alert.normal { border-color: rgba(105, 223, 185, .24); background: var(--accent-soft); color: var(--muted); }
 .health-alert strong { color: inherit; }
-.day-summary { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 12px; margin: 28px 0 20px; color: var(--muted); }
-.day-summary strong { color: var(--accent); font-size: 26px; line-height: 1; letter-spacing: -.04em; }
-.day-summary .summary-date { color: var(--quiet); font-size: 12px; }
-.toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 24px 0 15px; }
-.toolbar-label { margin-right: 4px; color: var(--muted); font-size: 12px; }
-.filter { border: 1px solid var(--line); border-radius: 999px; padding: 7px 13px; color: var(--muted); background: transparent; cursor: pointer; }
-.filter:hover, .filter[aria-pressed="true"] { border-color: var(--accent); color: var(--bg); background: var(--accent); }
-.page-footer { margin-top: 28px; padding-top: 14px; border-top: 1px solid var(--line); }
-.legacy-link { color: var(--quiet); font-size: 11px; }
-.fixture-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
-.fixture-card { min-width: 0; overflow: hidden; border: 1px solid var(--line); border-left: 3px solid var(--quiet); background: var(--surface); }
+.health-alert span { color: var(--muted); }
+.day-summary { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px 20px; align-items: end; margin: 28px 0 18px; }
+.day-summary h2 { margin: 0; font-size: 24px; letter-spacing: -.025em; }
+.day-summary p { margin: 4px 0 0; color: var(--muted); font-size: 14px; }
+.summary-count { display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; color: var(--muted); }
+.summary-count strong { color: var(--accent); font-size: 30px; line-height: 1; letter-spacing: -.05em; }
+.summary-count .summary-date { color: var(--quiet); font-size: 12px; }
+.summary-stats { display: flex; flex-wrap: wrap; gap: 6px 12px; color: var(--quiet); font-size: 13px; }
+.summary-stats span + span { padding-left: 12px; border-left: 1px solid var(--line); }
+.toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 20px 0 18px; }
+.toolbar-label { margin-right: 4px; color: var(--muted); font-size: 13px; }
+.filter { min-height: 44px; padding: 8px 14px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); background: transparent; cursor: pointer; }
+.filter:hover, .filter:focus-visible, .filter[aria-pressed="true"] { border-color: var(--accent); color: var(--bg); background: var(--accent); }
+.current-day { margin-top: 4px; }
+.section-heading { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 16px; align-items: baseline; }
+.section-heading h2 { margin: 0; font-size: 22px; letter-spacing: -.025em; }
+.section-heading p { margin: 0; color: var(--muted); font-size: 13px; }
+.competition-list { display: grid; gap: 24px; margin-top: 16px; }
+.competition-group { min-width: 0; }
+.competition-heading { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 12px; margin-bottom: 9px; }
+.competition-heading h3 { margin: 0; font-size: 16px; letter-spacing: -.01em; }
+.competition-heading span { color: var(--quiet); font-size: 12px; }
+.fixture-list { display: grid; grid-template-columns: 1fr; gap: 12px; }
+.fixture-card-link { display: block; min-width: 0; color: inherit; text-decoration: none; border-radius: 16px; }
+.fixture-card-link:hover { text-decoration: none; }
+.fixture-card-link:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+.fixture-card { min-width: 0; height: 100%; overflow: hidden; border: 1px solid var(--line); border-left: 3px solid var(--quiet); border-radius: 16px; background: var(--surface); transition: border-color .18s ease, background .18s ease, transform .18s ease; }
+.fixture-card-link:hover .fixture-card { border-color: rgba(105, 223, 185, .46); background: var(--surface-raised); transform: translateY(-1px); }
 .fixture-card.status-frozen { border-left-color: var(--accent); }
 .fixture-card.status-insufficient_data { border-left-color: var(--warning); }
 .fixture-card.status-prediction_failed, .fixture-card.status-missed_prematch_window { border-left-color: var(--danger); }
 .fixture-card.status-pending { border-left-color: var(--blue); }
-.fixture-main { padding: 18px 19px 15px; }
-.fixture-meta { display: flex; justify-content: space-between; gap: 12px; align-items: center; color: var(--muted); font-size: 12px; }
+.fixture-main { padding: 16px; }
+.fixture-meta { display: flex; justify-content: space-between; gap: 12px; align-items: center; color: var(--muted); font-size: 13px; }
 .fixture-meta .competition { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .match-number { color: var(--quiet); white-space: nowrap; }
-.teams { margin: 12px 0 5px; font-size: clamp(20px, 2.3vw, 28px); font-weight: 650; line-height: 1.18; letter-spacing: -.035em; overflow-wrap: anywhere; }
-.teams .versus { display: inline-block; margin: 0 6px; color: var(--quiet); font-size: .48em; font-weight: 500; letter-spacing: 0; vertical-align: middle; }
-.kickoff { color: var(--muted); font-size: 12px; }
-.status-badge { display: inline-flex; align-items: center; border-radius: 999px; padding: 4px 9px; color: var(--muted); background: var(--surface-2); font-size: 11px; font-weight: 700; white-space: nowrap; }
-.detail-link { color: var(--muted); font-size: 11px; text-decoration: none; white-space: nowrap; }
-.detail-link:hover { color: var(--accent); }
+.teams { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 10px; align-items: center; margin: 16px 0 12px; font-size: clamp(20px, 2.4vw, 27px); font-weight: 700; line-height: 1.18; letter-spacing: -.035em; }
+.team { min-width: 0; overflow-wrap: anywhere; }
+.team.away { text-align: right; }
+.teams .versus { color: var(--quiet); font-size: 12px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; }
+.fixture-subline { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 12px; align-items: center; }
+.kickoff { color: var(--muted); font-size: 13px; }
+.status-badge { display: inline-flex; min-height: 30px; align-items: center; border-radius: 999px; padding: 4px 9px; color: var(--muted); background: var(--surface-raised); font-size: 12px; font-weight: 700; white-space: nowrap; }
+.detail-link { color: var(--muted); font-size: 12px; white-space: nowrap; }
 .status-frozen .status-badge { color: var(--accent); background: var(--accent-soft); }
 .fixture-card.prediction-pilot { border-left-color: var(--warning); }
 .prediction-pilot .status-badge { color: var(--warning); background: var(--warning-soft); }
 .prediction-pilot .score-focus strong { color: var(--warning); }
-.prediction-pilot .signal.accent { border-color: rgba(240, 184, 106, .35); color: var(--warning); background: var(--warning-soft); }
+.prediction-pilot .signal.accent { border-color: rgba(233, 181, 103, .35); color: var(--warning); background: var(--warning-soft); }
 .status-insufficient_data .status-badge { color: var(--warning); background: var(--warning-soft); }
 .status-prediction_failed .status-badge, .status-missed_prematch_window .status-badge { color: var(--danger); background: var(--danger-soft); }
-.reason { display: flex; flex-wrap: wrap; gap: 5px 10px; align-items: baseline; margin-top: 14px; padding: 10px 12px; border: 1px solid rgba(240, 184, 106, .25); background: var(--warning-soft); color: #f6d29a; }
+.reason { display: flex; flex-wrap: wrap; gap: 5px 10px; align-items: baseline; margin-top: 14px; padding: 10px 12px; border: 1px solid rgba(233, 181, 103, .25); border-radius: 10px; background: var(--warning-soft); color: #f4d39d; }
 .reason strong { font-size: 13px; }
-.pilot-note { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: baseline; margin-top: 12px; color: var(--warning); font-size: 12px; }
-.pilot-note span { color: var(--muted); font-size: 11px; }
-.prediction-panel { margin-top: 16px; padding: 15px 0 0; border-top: 1px solid var(--line); }
-.prediction-topline { display: flex; justify-content: space-between; gap: 15px; align-items: flex-end; }
-.prediction-label { color: var(--muted); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; }
-.score-serving-note { margin-top: 10px; padding: 8px 10px; border-left: 2px solid var(--warning); color: #f6d29a; background: var(--warning-soft); font-size: 12px; }
-.score-serving-note.degraded { border-left-color: var(--danger); color: #ffc1c6; background: var(--danger-soft); }
-.score-focus { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: flex-start; gap: 7px; }
-.score-focus strong { color: var(--accent); font-size: 36px; line-height: .95; letter-spacing: -.06em; }
-.score-focus .neighbors { color: var(--muted); font-size: 12px; }
-.signal-row { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 15px; }
-.signal { display: inline-flex; align-items: center; min-height: 27px; padding: 4px 8px; border: 1px solid var(--line); color: var(--muted); background: var(--surface-2); font-size: 12px; }
-.signal.accent { border-color: rgba(67, 211, 165, .35); color: var(--accent); background: var(--accent-soft); }
-.market-strip { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
-.market-item { min-width: 0; padding: 8px 10px; border: 1px solid var(--line); color: var(--muted); background: rgba(11, 17, 24, .48); font-size: 12px; }
+.pilot-note { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: baseline; margin-top: 12px; color: var(--warning); font-size: 13px; }
+.pilot-note span { color: var(--muted); font-size: 12px; }
+.prediction-panel { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--line); }
+.prediction-topline { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
+.prediction-label { color: var(--muted); font-size: 12px; letter-spacing: .04em; }
+.score-serving-note { margin-top: 10px; padding: 8px 10px; border-left: 2px solid var(--warning); border-radius: 0 8px 8px 0; color: #f4d39d; background: var(--warning-soft); font-size: 12px; }
+.score-serving-note.degraded { border-left-color: var(--danger); color: #ffc3c7; background: var(--danger-soft); }
+.probability-distribution { margin-top: 12px; }
+.probability-heading { display: flex; justify-content: space-between; gap: 8px; color: var(--muted); font-size: 12px; }
+.probability-heading span { color: var(--quiet); }
+.probability-track { display: flex; gap: 2px; height: 10px; margin-top: 7px; overflow: hidden; border-radius: 999px; background: var(--surface-soft); }
+.probability-segment { min-width: 2px; height: 100%; }
+.probability-segment.home { background: #5fcda9; }
+.probability-segment.draw { background: #91a6ac; }
+.probability-segment.away { background: #7d9fec; }
+.probability-cells { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin-top: 8px; }
+.probability-cell { min-width: 0; padding: 8px; border: 1px solid rgba(154, 173, 179, .18); border-radius: 10px; background: var(--surface-soft); }
+.probability-cell.is-leading { border-color: rgba(105, 223, 185, .42); background: var(--accent-soft); }
+.probability-cell span { display: block; color: var(--muted); font-size: 12px; }
+.probability-cell strong { display: block; margin-top: 2px; color: var(--text); font-size: 16px; font-variant-numeric: tabular-nums; }
+.signal-row { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 12px; }
+.signal { display: inline-flex; min-height: 30px; align-items: center; padding: 5px 9px; border: 1px solid var(--line); border-radius: 9px; color: var(--muted); background: var(--surface-raised); font-size: 13px; }
+.signal.accent { border-color: rgba(105, 223, 185, .35); color: var(--accent); background: var(--accent-soft); }
+.score-focus { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; margin-top: 14px; }
+.score-focus strong { color: var(--accent); font-size: 30px; line-height: 1; letter-spacing: -.06em; }
+.score-focus .score-label { color: var(--muted); font-size: 13px; }
+.score-focus .score-prob { color: var(--text); font-size: 14px; font-variant-numeric: tabular-nums; }
+.score-focus .score-mode { color: var(--quiet); font-size: 12px; }
+.score-focus .neighbors { flex-basis: 100%; color: var(--muted); font-size: 12px; }
+.score-context { margin: 5px 0 0; color: var(--quiet); font-size: 12px; }
+.market-strip { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 12px; }
+.market-item { min-width: 0; padding: 7px 9px; border: 1px solid var(--line); border-radius: 9px; color: var(--muted); background: rgba(8, 17, 23, .5); font-size: 13px; }
 .market-item strong { color: var(--text); font-weight: 600; }
 .market-item small { display: block; margin-top: 2px; color: var(--quiet); }
 .market-item .movement { color: var(--warning); }
-.result-line { display: flex; flex-wrap: wrap; gap: 8px 13px; align-items: baseline; margin: 16px -1px -1px; padding: 11px 12px; border: 1px solid rgba(67, 211, 165, .24); background: var(--accent-soft); color: var(--accent); }
-.historical-results { margin: 24px 0 16px; padding: 18px; border: 1px solid var(--line); background: var(--surface); }
-.historical-results h2 { margin: 0 0 14px; font-size: 18px; }
-.historical-result { display: grid; grid-template-columns: 190px minmax(180px, 1fr) 70px minmax(150px, auto); gap: 12px; align-items: center; padding: 10px 0; border-top: 1px solid var(--line); }
+.data-line { display: flex; flex-wrap: wrap; gap: 6px 12px; margin-top: 12px; color: var(--quiet); font-size: 12px; }
+.data-line strong { color: var(--muted); font-weight: 600; }
+.prediction-empty, .compact-empty { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: baseline; margin-top: 14px; padding: 10px 12px; border: 1px dashed rgba(154, 173, 179, .28); border-radius: 10px; color: var(--muted); background: var(--surface-soft); font-size: 13px; }
+.prediction-empty strong { color: var(--text); }
+.result-line { display: flex; flex-wrap: wrap; gap: 8px 13px; align-items: baseline; margin: 14px -1px -1px; padding: 10px 12px; border: 1px solid rgba(105, 223, 185, .24); border-radius: 10px; background: var(--accent-soft); color: var(--accent); }
+.history-surface { margin-top: 32px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); }
+.history-surface summary { display: flex; min-height: 56px; justify-content: space-between; gap: 12px; align-items: center; padding: 14px 16px; cursor: pointer; list-style: none; font-size: 16px; font-weight: 700; }
+.history-surface summary::-webkit-details-marker { display: none; }
+.history-surface summary::after { content: "+"; color: var(--accent); font-size: 20px; font-weight: 400; }
+.history-surface[open] summary::after { content: "–"; }
+.history-count { color: var(--quiet); font-size: 12px; font-weight: 500; }
+.history-content { padding: 0 16px 16px; }
+.historical-result { display: grid; grid-template-columns: 190px minmax(160px, 1fr) 70px minmax(140px, auto); gap: 12px; align-items: center; padding: 12px 0; border-top: 1px solid var(--line); }
 .historical-meta { color: var(--muted); font-size: 12px; }
-.historical-teams { font-weight: 600; }
+.historical-teams { font-weight: 600; overflow-wrap: anywhere; }
 .historical-teams span { color: var(--quiet); font-weight: 400; }
-.historical-score { color: var(--accent); font-size: 20px; }
+.historical-score { color: var(--accent); font-size: 20px; font-variant-numeric: tabular-nums; }
 .historical-links { display: flex; gap: 10px; flex-wrap: wrap; font-size: 12px; }
-@media (max-width: 760px) { .historical-result { grid-template-columns: 1fr auto; } .historical-meta, .historical-links { grid-column: 1 / -1; } }
-.empty { grid-column: 1 / -1; padding: 44px 20px; border: 1px dashed var(--line); color: var(--muted); text-align: center; }
-.data-warning { margin: 18px 0 0; padding: 10px 13px; border: 1px solid rgba(241, 123, 133, .32); background: var(--danger-soft); color: #ffc1c6; font-size: 12px; }
-@media (max-width: 880px) { .fixture-list { grid-template-columns: 1fr; } }
-@media (max-width: 560px) { .shell { padding: 20px 12px 38px; } .topbar { display: block; } .refresh-line { margin-top: 10px; text-align: left; } .day-summary { margin-top: 22px; } .fixture-main { padding: 15px 14px 13px; } .fixture-meta { align-items: flex-start; } .teams { font-size: 22px; } .prediction-topline { display: block; } .score-focus { margin-top: 11px; } }
+.historical-links a { min-height: 32px; display: inline-flex; align-items: center; }
+.data-warning { margin: 16px 0 0; padding: 10px 12px; border: 1px solid rgba(239, 139, 145, .32); border-radius: 10px; background: var(--danger-soft); color: #ffc3c7; font-size: 13px; }
+.page-footer { display: grid; gap: 12px; margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--line); }
+.legacy-link { color: var(--quiet); font-size: 12px; }
+.page-footer .health-alert.closed-beta-notice { display: grid; flex: none; gap: 3px 12px; min-height: 0; padding: 12px 0 0; border: 0; border-top: 1px solid var(--line); border-radius: 0; background: transparent; color: var(--quiet); font-size: 12px; }
+.page-footer .closed-beta-notice strong { color: var(--muted); font-size: 12px; }
+.page-footer .closed-beta-notice span { color: var(--quiet); }
+@media (min-width: 760px) { .fixture-list { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 700px) { .topbar { display: block; } .refresh-line { margin-top: 12px; text-align: left; } .current-date { margin-top: 12px; } .historical-result { grid-template-columns: 1fr auto; } .historical-meta, .historical-links { grid-column: 1 / -1; } }
+@media (max-width: 560px) { .shell { width: min(calc(100% - 24px), var(--max)); padding: 20px 0 40px; } h1 { font-size: 36px; } .day-summary { margin-top: 22px; } .summary-stats span + span { padding-left: 8px; } .fixture-main { padding: 14px; } .teams { font-size: 21px; } .probability-cell { padding: 7px 6px; } .probability-cell strong { font-size: 15px; } .history-content { padding-inline: 12px; } }
 """
 
 
@@ -678,6 +734,75 @@ def _signal(label: str, value: Any, css: str = "") -> str:
     return f'<span class="signal {css}">{html.escape(label)} · {html.escape(_text(value))}</span>'
 
 
+def _percent(value: Any, fallback: str = "—") -> str:
+    number = _number(value)
+    if number is None:
+        return fallback
+    return f"{number * 100:.1f}%"
+
+
+def _score_probability(prediction: dict[str, Any], score: Any) -> float | None:
+    target = str(score or "").strip()
+    if not target:
+        return None
+    for row in prediction.get("score_distribution") or []:
+        if not isinstance(row, dict):
+            continue
+        if str(row.get("score") or row.get("value") or "").strip() == target:
+            return _number(row.get("probability"))
+    for row in prediction.get("score_top3") or []:
+        if not isinstance(row, dict):
+            continue
+        if str(row.get("score") or row.get("value") or "").strip() == target:
+            return _number(row.get("probability"))
+    return None
+
+
+def _top_total_goal(prediction: dict[str, Any]) -> tuple[str, float] | None:
+    candidates = []
+    for row in prediction.get("totals") or []:
+        if not isinstance(row, dict):
+            continue
+        probability = _number(row.get("probability"))
+        if probability is not None and row.get("goals") not in (None, ""):
+            candidates.append((str(row["goals"]), probability))
+    return max(candidates, key=lambda item: item[1]) if candidates else None
+
+
+def _probability_distribution_html(probabilities: dict[str, Any]) -> str:
+    keys = ("home", "draw", "away")
+    labels = {"home": "主胜", "draw": "平局", "away": "客胜"}
+    values = {key: _number(probabilities.get(key)) for key in keys}
+    if any(value is None for value in values.values()):
+        return '<div class="prediction-empty"><strong>胜平负概率</strong><span>当前字段不足，暂不展示分布。</span></div>'
+    numeric = {key: float(values[key]) for key in keys}
+    total = sum(max(value, 0.0) for value in numeric.values())
+    if total <= 0:
+        return '<div class="prediction-empty"><strong>胜平负概率</strong><span>当前字段不足，暂不展示分布。</span></div>'
+    leader = max(numeric, key=numeric.get)
+    segments = "".join(
+        f'<span class="probability-segment {key}" style="width:{max(numeric[key], 0.0) / total * 100:.1f}%"></span>'
+        for key in keys
+    )
+    cells = "".join(
+        f'<div class="probability-cell{" is-leading" if key == leader else ""}"><span>{labels[key]}</span><strong>{_percent(numeric[key])}</strong></div>'
+        for key in keys
+    )
+    aria = "、".join(f"{labels[key]} {_percent(numeric[key])}" for key in keys)
+    return (
+        f'<div class="probability-distribution" role="img" aria-label="胜平负概率分布：{html.escape(aria)}">'
+        '<div class="probability-heading"><strong>胜平负概率</strong><span>三项合计按现有数值展示</span></div>'
+        f'<div class="probability-track" aria-hidden="true">{segments}</div>'
+        f'<div class="probability-cells">{cells}</div>'
+        '</div>'
+    )
+
+
+def _data_completeness_label(prediction: dict[str, Any]) -> str:
+    grade = str(prediction.get("data_grade") or "").strip().upper()
+    return {"A": "较完整", "B": "已记录", "C": "有限"}.get(grade, "待补充")
+
+
 def _modern_prediction_html(
     prediction: dict[str, Any],
     *,
@@ -688,25 +813,42 @@ def _modern_prediction_html(
     primary = prediction.get("primary_score") or prediction.get("unique_score")
     neighbors = prediction.get("neighbor_scores") or []
     market = prediction.get("market_summary") or {}
-    signal_html = "".join([
-        _signal("1X2", prediction.get("one_x_two_direction"), "accent"),
-        _signal("比分分布", prediction.get("score_concentration")),
-    ])
-    market_html = ""
+    probabilities = prediction.get("probabilities") or {}
+    signal_html = _signal("1X2", prediction.get("one_x_two_direction"), "accent")
+    score_probability = _score_probability(prediction, primary)
+    neighbor_text = " · ".join(_score_label(score) for score in neighbors)
+    score_probability_html = (
+        f'<span class="score-prob">{html.escape(_percent(score_probability))}</span>'
+        if score_probability is not None
+        else '<span class="score-prob">概率暂未提供</span>'
+    )
+    market_items = []
+    btts = prediction.get("btts") or {}
+    btts_yes = _number(btts.get("yes")) if isinstance(btts, dict) else None
+    btts_no = _number(btts.get("no")) if isinstance(btts, dict) else None
+    if btts_yes is not None or btts_no is not None:
+        btts_parts = []
+        if btts_yes is not None:
+            btts_parts.append(f"是 {_percent(btts_yes)}")
+        if btts_no is not None:
+            btts_parts.append(f"否 {_percent(btts_no)}")
+        market_items.append(f'<div class="market-item"><strong>双方进球</strong><small>{html.escape(" · ".join(btts_parts))}</small></div>')
+    top_total = _top_total_goal(prediction)
+    if top_total:
+        goals, probability = top_total
+        market_items.append(f'<div class="market-item"><strong>总进球 mode</strong><small>{html.escape(goals)}球 · {_percent(probability)}</small></div>')
     asian = market.get("asian_handicap")
     total = market.get("total_line")
     if asian or total:
-        items = []
         if asian:
             movement = f'<small class="movement">{html.escape(str(asian.get("movement")))}</small>' if asian.get("movement") else ""
-            items.append(f'<div class="market-item"><strong>AH · 主 {html.escape(str(asian.get("line")))}</strong>{movement}</div>')
+            market_items.append(f'<div class="market-item"><strong>AH · 主 {html.escape(str(asian.get("line")))}</strong>{movement}</div>')
         if total:
             direction = total.get("direction") or market.get("total_direction")
             direction_text = f" · {html.escape(str(direction))}" if direction else ""
             movement = f'<small class="movement">{html.escape(str(total.get("movement")))}</small>' if total.get("movement") else ""
-            items.append(f'<div class="market-item"><strong>O/U · {html.escape(str(total.get("line")))}{direction_text}</strong>{movement}</div>')
-        market_html = f'<div class="market-strip">{"".join(items)}</div>'
-    neighbor_text = " · ".join(_score_label(score) for score in neighbors)
+            market_items.append(f'<div class="market-item"><strong>O/U · {html.escape(str(total.get("line")))}{direction_text}</strong>{movement}</div>')
+    market_html = f'<div class="market-strip">{"".join(market_items)}</div>' if market_items else ""
     pilot_note = '<div class="pilot-note"><strong>试运行预测</strong><span>不纳入正式验证</span></div>' if pilot_excluded else ""
     serving_note = (
         f'<div class="score-serving-note {html.escape(serving["state"].lower())}" role="status">'
@@ -717,13 +859,21 @@ def _modern_prediction_html(
     return (
         '<section class="prediction-panel">'
         '<div class="prediction-topline">'
-        f'<div><div class="prediction-label">{html.escape(serving["label"])}</div>'
-        '<div class="score-focus">'
-        f'<strong>{html.escape(_score_label(primary) if primary else "—")}</strong>'
-        f'<span class="neighbors">{html.escape(neighbor_text) if neighbor_text else ""}</span></div></div></div>'
+        f'<div class="prediction-label">{html.escape(serving["label"])}</div>'
+        f'<span class="prediction-state">{html.escape(_data_completeness_label(prediction))} 数据</span>'
+        '</div>'
         f'{serving_note}{pilot_note}'
+        f'{_probability_distribution_html(probabilities)}'
         f'<div class="signal-row">{signal_html}</div>'
+        '<div class="score-focus">'
+        f'<span class="score-label">最可能比分 · <span class="score-mode">概率 mode</span></span>'
+        f'<strong>{html.escape(_score_label(primary) if primary else "—")}</strong>'
+        f'{score_probability_html}'
+        f'<span class="neighbors">{("候选 Top2/3 · " + html.escape(neighbor_text)) if neighbor_text else ""}</span>'
+        '</div>'
+        '<p class="score-context">单格概率最高，不是确定答案。</p>'
         f'{market_html}'
+        f'<div class="data-line"><span>数据完整度</span><strong>{html.escape(_data_completeness_label(prediction))}</strong></div>'
         '</section>'
     )
 
@@ -737,9 +887,14 @@ def _modern_result_html(card: dict[str, Any]) -> str:
 
 
 def _historical_results_html(rows: list[dict[str, Any]]) -> str:
-    title = "\u5df2\u5b8c\u8d5b / \u5386\u53f2\u590d\u76d8"
+    title = "赛后与历史复盘"
     if not rows:
-        return f'<section id="historical-results" class="historical-results"><h2>{title}</h2><div class="empty">\u6682\u65e0\u5df2\u5b8c\u8d5b\u8bb0\u5f55</div></section>'
+        return (
+            f'<details id="historical-results" class="history-surface">'
+            f'<summary><span>{title}</span><span class="history-count">暂无可展示记录</span></summary>'
+            '<div class="history-content"><div class="compact-empty">赛后复盘将在结果核验后进入这里。</div></div>'
+            '</details>'
+        )
     cards = []
     for row in rows:
         status = row.get("historical_status") or ("\u5df2\u5b8c\u8d5b" if row.get("result_90m") else "\u5f85\u590d\u76d8")
@@ -756,7 +911,12 @@ def _historical_results_html(rows: list[dict[str, Any]]) -> str:
             f'<div class="historical-links">{" · ".join(links) if links else ""}</div>'
             '</article>'
         )
-    return f'<section id="historical-results" class="historical-results"><h2>{title}</h2>{"".join(cards)}</section>'
+    return (
+        f'<details id="historical-results" class="history-surface">'
+        f'<summary><span>{title}</span><span class="history-count">{len(cards)} 条</span></summary>'
+        f'<div class="history-content">{"".join(cards)}</div>'
+        '</details>'
+    )
 
 
 def _modern_card_html(
@@ -778,23 +938,52 @@ def _modern_card_html(
             exact_score_serving=exact_score_serving,
         )
         if card.get("prediction")
-        else ""
+        else f'<div class="prediction-empty"><strong>{html.escape(str(card.get("status_label") or status))}</strong><span>当前只展示比赛身份与状态。</span></div>'
     )
+    detail_url = f'../matches/{html.escape(match_id, quote=True)}/'
+    card_label = f'查看 {_text(card.get("home"), "主队")} 对阵 {_text(card.get("away"), "客队")} 详情'
     return (
+        f'<a class="fixture-card-link" href="{detail_url}" aria-label="{html.escape(card_label, quote=True)}">'
         f'<article class="fixture-card status-{html.escape(status.lower())} prediction-{prediction_kind}" data-status="{html.escape(status)}" data-result="{"yes" if card.get("result") else "no"}" data-prediction-kind="{prediction_kind}">'
         '<div class="fixture-main">'
         '<div class="fixture-meta">'
         f'<span class="competition">{_esc(card.get("competition"))}</span>'
         f'<span class="match-number">{_esc(card.get("match_num"))}</span>'
         '</div>'
-        f'<div class="teams">{_esc(card.get("home"))}<span class="versus">vs</span>{_esc(card.get("away"))}</div>'
-        f'<div class="fixture-meta"><span class="kickoff">开球 · {html.escape(_format_kickoff(card.get("kickoff")))}</span>'
-        f'<span><span class="status-badge">{html.escape(str(card.get("status_label") or status))}</span>'
-        f'<a class="detail-link" href="../matches/{html.escape(match_id)}/">查看详情</a></span></div>'
+        f'<div class="teams"><span class="team home">{_esc(card.get("home"))}</span><span class="versus">vs</span><span class="team away">{_esc(card.get("away"))}</span></div>'
+        f'<div class="fixture-subline"><span class="kickoff">开球 · {html.escape(_format_kickoff(card.get("kickoff")))}</span>'
+        f'<span><span class="status-badge">{html.escape(str(card.get("status_label") or status))}</span> <span class="detail-link">查看详情</span></span></div>'
         f'{reason_html}{prediction_html}{_modern_result_html(card)}'
         '</div>'
         '</article>'
+        '</a>'
     )
+
+
+def _competition_sections_html(
+    cards: list[dict[str, Any]],
+    *,
+    exact_score_serving: dict[str, str],
+) -> str:
+    groups: dict[str, list[dict[str, Any]]] = {}
+    for card in cards:
+        competition = str(card.get("competition") or "赛事待补充")
+        groups.setdefault(competition, []).append(card)
+    sections = []
+    for competition, grouped_cards in groups.items():
+        cards_html = "".join(
+            _modern_card_html(card, exact_score_serving=exact_score_serving)
+            for card in grouped_cards
+        )
+        sections.append(
+            '<section class="competition-group" '
+            f'data-competition="{html.escape(competition, quote=True)}">'
+            f'<div class="competition-heading"><h3>{html.escape(competition)}</h3>'
+            f'<span>{len(grouped_cards)} 场</span></div>'
+            f'<div class="fixture-list" aria-label="{html.escape(competition)}比赛">{cards_html}</div>'
+            '</section>'
+        )
+    return "".join(sections)
 
 
 STATIC_REFRESH_SCRIPT = """<script>
@@ -835,14 +1024,14 @@ def render_dashboard(payload: dict[str, Any]) -> str:
     health_overall = str(system_health.get("overall_status") or system_health.get("status") or "UNKNOWN")
     health_errors = payload.get("data_errors") or []
     system_display = str(system_health.get("display_status") or health_overall)
-    system_css = "alert" if health_overall in {"FAILED", "ALERT"} else ""
+    system_css = "alert" if health_overall in {"FAILED", "ALERT"} else "normal" if health_overall == "HEALTHY" else ""
     reason_parts = [
         *(str(value) for value in health_errors),
         *(str(value) for value in system_health.get("failed_steps") or []),
     ]
     reasons = ", ".join(dict.fromkeys(reason_parts))
     system_reason_html = f'<span>{html.escape(reasons)}</span>' if reasons else ""
-    system_html = f'<div class="health-alert {system_css}"><strong>系统运行 · {html.escape(system_display)}</strong>{system_reason_html}</div>'
+    system_html = f'<div class="health-alert {system_css}" role="status"><strong>系统运行 · {html.escape(system_display)}</strong>{system_reason_html}</div>'
 
     quality_status = str(quality_health.get("status") or "UNKNOWN")
     quality_display = str(quality_health.get("display_status") or _QUALITY_STATUS_LABELS.get(quality_status, quality_status))
@@ -852,30 +1041,35 @@ def render_dashboard(payload: dict[str, Any]) -> str:
     elif exact_score_serving["state"] != "NORMAL":
         quality_html = '<div class="health-alert" role="status"><strong>预测质量状态待确认</strong><span>当前周期质量来源未完成匹配，模型原始比分继续保留。</span></div>'
     else:
-        quality_html = f'<div class="health-alert"><strong>预测质量 · {html.escape(quality_display)}</strong></div>'
-    health_html = f'<div class="health-stack" aria-label="系统与预测质量状态">{system_html}{quality_html}</div>'
-    health_html += render_closed_beta_notice("health-alert")
-    overview = (
-        f'<strong>{html.escape(_text(summary.get("fixture_count"), "0"))}</strong>'
-        '<span>场比赛 · 今日全部赛程</span>'
-        f'<span class="summary-date">{html.escape(str(payload.get("business_date")))}</span>'
-    )
-    cards_html = "".join(
-        _modern_card_html(card, exact_score_serving=exact_score_serving)
-        for card in payload.get("fixtures") or []
-    )
-    if not cards_html:
-        cards_html = '<div class="empty">今天没有可展示的比赛。</div>'
+        quality_html = f'<div class="health-alert normal" role="status"><strong>预测质量 · {html.escape(quality_display)}</strong></div>'
+    health_html = f'<section class="health-stack" aria-label="系统与预测质量状态">{system_html}{quality_html}</section>'
+    fixtures = [card for card in payload.get("fixtures") or [] if isinstance(card, dict)]
+    grouped_html = _competition_sections_html(fixtures, exact_score_serving=exact_score_serving)
+    if not grouped_html:
+        grouped_html = '<div class="compact-empty"><strong>今日赛程</strong><span>暂时没有可展示的比赛。</span></div>'
     data_warning = ""
     if summary.get("silent_missing_fixture"):
         data_warning = f'<div class="data-warning">数据完整性提醒：当天 {html.escape(str(summary.get("fixture_count")))} 场，页面仅生成 {html.escape(str(summary.get("card_count")))} 张卡片。</div>'
     historical_html = _historical_results_html(payload.get("completed") or [])
+    beta_notice_html = render_closed_beta_notice("health-alert")
+    fixture_count = _text(summary.get("fixture_count"), "0")
+    competition_count = len({str(card.get("competition") or "赛事待补充") for card in fixtures})
+    overview = (
+        '<div><h2 id="current-day-title">今日赛程</h2>'
+        '<p>按赛事分组 · 今日全部赛事</p></div>'
+        f'<div class="summary-count"><strong>{html.escape(fixture_count)}</strong><span>场比赛</span>'
+        f'<span class="summary-date">{html.escape(str(payload.get("business_date")))}</span></div>'
+        f'<div class="summary-stats"><span>{competition_count} 项赛事</span>'
+        f'<span>{int(summary.get("frozen") or 0)} 已预测</span>'
+        f'<span>{int(summary.get("insufficient_data") or 0)} 数据不足</span></div>'
+    )
     page = f"""<!doctype html>
 <html lang="zh-CN">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>今日比赛 · {html.escape(str(payload.get('business_date')))}</title><style>{MODERN_CSS}</style></head>
 <body><main class="shell">
-<header class="topbar"><div><div class="brand-kicker">PRE-MATCH FOOTBALL INTELLIGENCE</div><h1>今日比赛</h1><div class="date-line">{html.escape(str(payload.get('business_date')))} · 今日全部赛事</div></div>
+<header class="topbar"><div><div class="brand-kicker">PRE-MATCH FOOTBALL INTELLIGENCE</div><h1>今日比赛</h1><div class="date-line">赛前决策视图 · 先看今天，再看赛后</div>
+<div class="current-date" aria-label="当前日期"><span class="date-label">北京时间</span><time datetime="{html.escape(str(payload.get('business_date')), quote=True)}"><strong>今天 · {html.escape(str(payload.get('business_date')))}</strong></time><span class="date-context">当前日期</span></div></div>
 <div class="refresh-line">数据更新时间<br><strong>{html.escape(_format_updated_at(system_health.get('updated_at') or payload.get('generated_at')))}</strong></div></header>
 {health_html}<section class="day-summary" aria-label="今日比赛摘要">{overview}</section>
 <nav class="toolbar" aria-label="比赛筛选"><span class="toolbar-label">查看</span>
@@ -884,8 +1078,9 @@ def render_dashboard(payload: dict[str, Any]) -> str:
 <button class="filter" type="button" data-filter="INSUFFICIENT_DATA" aria-pressed="false">数据不足</button>
 <button class="filter" type="button" data-filter="RESULT" aria-pressed="false">已完赛</button>
  </nav>
-{data_warning}<section id="fixture-list" class="fixture-list" aria-label="今日比赛列表">{cards_html}</section>
-<footer class="page-footer"><a class="legacy-link" href="../match_workspace/latest.html">Legacy 工作台</a></footer>
+{data_warning}<section id="current-day" class="current-day" aria-labelledby="current-day-title"><div class="section-heading"><h2>当前比赛</h2><p>每张卡片可打开完整赛前详情</p></div><div class="competition-list">{grouped_html}</div></section>
+{historical_html}
+<footer class="page-footer"><a class="legacy-link" href="../match_workspace/latest.html">Legacy 工作台</a>{beta_notice_html}</footer>
 </main><script>
 const buttons = Array.from(document.querySelectorAll('[data-filter]'));
 const cards = Array.from(document.querySelectorAll('.fixture-card'));
@@ -896,12 +1091,16 @@ buttons.forEach(button => button.addEventListener('click', () => {{
   cards.forEach(card => {{
     const match = filter === 'ALL' || card.dataset.status === filter || (filter === 'RESULT' && card.dataset.result === 'yes');
     card.hidden = !match;
+    const link = card.closest('.fixture-card-link');
+    if (link) link.hidden = !match;
   }});
-  if (historicalResults) historicalResults.hidden = filter !== 'ALL' && filter !== 'RESULT';
+  if (historicalResults) {{
+    historicalResults.hidden = filter !== 'ALL' && filter !== 'RESULT';
+    if (filter === 'RESULT') historicalResults.open = true;
+  }}
 }}));
 </script></body></html>"""
     result_count = int(summary.get("completed_count") or 0)
-    page = page.replace('<section id="fixture-list"', historical_html + '<section id="fixture-list"', 1)
     page = page.replace(
         'data-filter="RESULT" aria-pressed="false"',
         f'data-filter="RESULT" data-result-count="{result_count}" aria-pressed="false"',

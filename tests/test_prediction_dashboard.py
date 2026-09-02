@@ -712,3 +712,65 @@ def test_abnormal_runtime_shows_warning_without_normal_kpi_grid(tmp_path):
     assert "系统运行 · 失败" in html
     assert "base_prediction" in html
     assert "预测已冻结" not in html
+
+
+def test_dashboard_prioritizes_current_competition_groups_and_full_decision_surface(tmp_path):
+    prediction_id = "FBOS-PRED-vnext-dashboard"
+    roots = make_roots(
+        tmp_path,
+        [fixture(1), {**fixture(2), "league": "另一项赛事"}],
+        [
+            frozen_job("1001", prediction_id),
+            {**frozen_job("1002", prediction_id), "match_num": "T002", "home": "主队2", "away": "客队2"},
+        ],
+        [frozen_prediction(prediction_id)],
+    )
+    record = json.loads((roots["prediction_root"] / f"{prediction_id}.json").read_text(encoding="utf-8"))
+    record.update({
+        "match_id": "1001",
+        "home": "主队1",
+        "away": "客队1",
+        "btts": {"yes": 0.45, "no": 0.55},
+        "totals": [{"goals": "2", "probability": 0.3}],
+        "score_distribution": [
+            {"score": "1-0", "probability": 0.2},
+            {"score": "1-1", "probability": 0.16},
+            {"score": "2-0", "probability": 0.12},
+        ],
+    })
+    write_json(roots["prediction_root"] / f"{prediction_id}.json", record)
+
+    build_dashboard(DATE, **roots)
+    html = (roots["output_root"] / "latest.html").read_text(encoding="utf-8")
+
+    assert 'id="current-day"' in html
+    assert 'id="historical-results"' in html
+    assert html.index('id="current-day"') < html.index('id="historical-results"')
+    assert '<details id="historical-results"' in html
+    assert 'class="competition-group"' in html
+    assert "另一项赛事" in html
+    assert 'class="probability-track"' in html
+    assert "最可能比分" in html
+    assert "概率 mode" in html
+    assert "双方进球" in html
+    assert "总进球" in html
+    assert "数据完整度" in html
+    assert 'class="fixture-card-link"' in html
+    assert "市场覆盖 · 0" not in html
+    assert "当前没有可追溯" not in html
+
+
+def test_dashboard_compact_empty_states_do_not_create_blank_cards(tmp_path):
+    roots = make_roots(
+        tmp_path,
+        [fixture(1)],
+        [{"match_id": "1001", "status": "INSUFFICIENT_DATA", "last_error": "MISSING_RECENT_FORM"}],
+    )
+
+    build_dashboard(DATE, **roots)
+    html = (roots["output_root"] / "latest.html").read_text(encoding="utf-8")
+
+    assert 'class="prediction-empty"' in html
+    assert 'class="empty"' not in html
+    assert "未记录" not in html
+    assert "当前没有可追溯" not in html

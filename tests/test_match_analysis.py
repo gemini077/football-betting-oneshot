@@ -499,8 +499,8 @@ def test_detail_renderer_has_three_layers_and_uses_same_contract_for_statuses(tm
     assert "得分路径" in html
     assert "关键分叉" in html
     assert "最终收敛" in html
-    assert "当前没有可追溯的比赛剧本" in html
-    assert "当前没有可追溯的历史分析来源" in html
+    assert "比赛剧本暂不可用" in html
+    assert "历史分析素材暂不可用" in html
 
     pending = assemble(roots(tmp_path / "pending", status="PENDING", with_prediction=False))
     pending_html = render_match_detail(pending)
@@ -511,6 +511,32 @@ def test_detail_renderer_has_three_layers_and_uses_same_contract_for_statuses(tm
     insufficient_html = render_match_detail(insufficient)
     assert "当前数据不足" in insufficient_html
     assert "当前证据不足，暂不扩展判断" in insufficient_html
+
+
+def test_detail_uses_probabilistic_hero_order_and_named_product_sections(tmp_path):
+    html = render_match_detail(assemble(roots(tmp_path)))
+
+    order = [
+        'class="match-meta"',
+        'class="hero-teams"',
+        'class="hero-state"',
+        'class="probability-distribution"',
+        'class="thirty-second-summary"',
+        'class="score-top3"',
+    ]
+    positions = [html.index(marker) for marker in order]
+    assert positions == sorted(positions)
+    assert "最可能比分" in html
+    assert "概率 mode · 单格最高，不是确定答案" in html
+    assert "1–0 · 15.5%" in html
+    assert "2–0 · 12.6%" in html
+    assert "1–1 · 11.2%" in html
+    for section in ("概览", "模型", "市场", "基本面", "来源", "赛后"):
+        assert section in html
+    assert "主队 1.40" in html
+    assert "客队 0.80" in html
+    assert "font-size:clamp(72px" not in html
+    assert "当前没有可追溯" not in html
 
 
 def test_detail_renderer_uses_user_facing_terms_and_hides_internal_metadata(tmp_path):
