@@ -101,6 +101,13 @@ def _cycle(tmp_path, status):
     _write_json(tmp_path / "data" / "product_runtime" / "latest_cycle.json", _base_cycle(status))
 
 
+def _align_universe_fixture(root, match_id):
+    path = root / "data" / "prediction_universe" / "2026-08-12.json"
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload["fixtures"][0]["matchId"] = match_id
+    _write_json(path, payload)
+
+
 def _formal_champion_base_record(
     prediction_id,
     score,
@@ -176,6 +183,21 @@ def _versioned_prediction(
     return record
 
 
+def _current_job(record, *, status="FROZEN", last_error=None):
+    return {
+        "job_id": record.get("job_id"),
+        "business_date": "2026-08-12",
+        "match_id": record.get("match_id"),
+        "match_key": record.get("match_key"),
+        "home": "Home",
+        "away": "Away",
+        "kickoff": record.get("kickoff_at"),
+        "status": status,
+        "prediction_id": record.get("prediction_id"),
+        "last_error": last_error,
+    }
+
+
 def test_evaluate_health_alerts_on_current_score_and_lambda_collapse(tmp_path):
     root = _healthy_tree(tmp_path)
     records = [
@@ -187,6 +209,24 @@ def test_evaluate_health_alerts_on_current_score_and_lambda_collapse(tmp_path):
         )
         for index in range(9)
     ]
+    jobs_path = root / "data" / "base_prediction_jobs" / "2026-08-12.json"
+    jobs_payload = json.loads(jobs_path.read_text(encoding="utf-8"))
+    jobs_payload["jobs"].extend([
+        {
+            "job_id": f"HEALTH-JOB-{index}",
+            "business_date": "2026-08-12",
+            "match_id": f"HEALTH-M-{index}",
+            "match_key": record["match_key"],
+            "home": "Home",
+            "away": "Away",
+            "kickoff": record["kickoff_at"],
+            "status": "FROZEN",
+            "prediction_id": record["prediction_id"],
+        }
+        for index, record in enumerate(records)
+    ])
+    jobs_payload["job_count"] = len(jobs_payload["jobs"])
+    _write_json(jobs_path, jobs_payload)
     for record in records:
         _write_json(
             root / "data" / "model_governance" / "predictions" / f"{record['prediction_id']}.json",
@@ -281,6 +321,17 @@ def test_current_serving_selector_uses_latest_legal_version_once_per_match():
     selection = select_current_serving_predictions(
         records,
         business_date="2026-08-12",
+        current_jobs=[
+            _current_job(
+                _versioned_prediction(
+                    f"JOB-SEED-{index}",
+                    match_id=f"SERVING-M-{index}",
+                    job_id=f"SERVING-JOB-{index}",
+                    match_key=f"SERVING-MATCH-{index}",
+                )
+            )
+            for index in range(10)
+        ],
         excluded_ids={"PILOT-1"},
     )
 
@@ -291,8 +342,218 @@ def test_current_serving_selector_uses_latest_legal_version_once_per_match():
     assert selection["current_business_date"] == "2026-08-12"
 
 
+def test_current_serving_selector_fails_closed_without_current_job_state():
+    record = _versioned_prediction("NO-JOB-RECORD")
+
+    selection = select_current_serving_predictions(
+        [record],
+        business_date="2026-08-12",
+    )
+
+    assert selection["current_job_count"] == 0
+    assert selection["current_frozen_job_count"] == 0
+    assert selection["selected_record_count"] == 0
+    assert selection["selected_prediction_ids"] == []
+
+
+def test_current_serving_selector_uses_only_frozen_current_jobs_with_retained_predictions():
+    records = []
+    current_jobs = []
+    frozen_ids = []
+    frozen_job_ids = []
+    for index in range(13):
+        match_id = f"CURRENT-M-{index}"
+        job_id = f"CURRENT-JOB-{index}"
+        prediction_id = f"CURRENT-PRED-{index}"
+        record = _versioned_prediction(
+            prediction_id,
+            match_id=match_id,
+            job_id=job_id,
+            match_key=f"CURRENT-MATCH-{index}",
+        )
+        status = "FROZEN" if index < 8 else "INSUFFICIENT_DATA"
+        records.append(record)
+        current_jobs.append(_current_job(record, status=status, last_error="SOURCE_FETCH_FAILED" if index >= 8 else None))
+        if status == "FROZEN":
+            frozen_ids.append(prediction_id)
+            frozen_job_ids.append(job_id)
+
+    selection = select_current_serving_predictions(
+        records,
+        business_date="2026-08-12",
+        current_jobs=current_jobs,
+    )
+
+    assert selection["current_job_count"] == 13
+    assert selection["current_frozen_job_count"] == 8
+    assert selection["selected_record_count"] == 8
+    assert selection["selected_prediction_ids"] == sorted(frozen_ids)
+    assert selection["selected_job_ids"] == sorted(frozen_job_ids)
+    assert selection["unique_current_match_count"] == 13
+    assert selection["duplicate_current_job_count"] == 0
+    assert selection["conflicted_current_match_count"] == 0
+
+
+def test_current_serving_selector_deduplicates_duplicate_frozen_job_group_and_health_fails_closed(tmp_path):
+    record = _versioned_prediction(
+        "DUPLICATE-PRED",
+        match_id="DUPLICATE-MATCH",
+        job_id="DUPLICATE-JOB-1",
+        match_key="DUPLICATE-MATCH-KEY",
+    )
+    jobs = [
+        _current_job(record),
+        {**_current_job(record), "job_id": "DUPLICATE-JOB-2"},
+    ]
+
+    selection = select_current_serving_predictions(
+        [record],
+        business_date="2026-08-12",
+        current_jobs=jobs,
+    )
+
+    assert selection["unique_current_match_count"] == 1
+    assert selection["duplicate_current_job_count"] == 1
+    assert selection["duplicate_current_job_keys"] == ["match_id:DUPLICATE-MATCH"]
+    assert selection["conflicted_current_match_count"] == 1
+    assert selection["current_frozen_job_count"] == 0
+    assert selection["selected_record_count"] == 0
+    assert len(selection["selected_records"]) == 0
+    assert selection["selected_prediction_ids"] == []
+    assert len(selection["selected_prediction_ids"]) == len(set(selection["selected_prediction_ids"]))
+
+    root = _healthy_tree(tmp_path, jobs=jobs)
+    _align_universe_fixture(root, "DUPLICATE-MATCH")
+    _write_json(
+        root / "data" / "model_governance" / "predictions" / f"{record['prediction_id']}.json",
+        record,
+    )
+    result = evaluate_health(root=root)
+    selection_details = result["details"]["production_current_serving_selection"]
+
+    assert result["status"] != "HEALTHY"
+    assert "DURABLE_ARTIFACT_INVALID" in result["reasons"]
+    assert result["details"]["production_current_serving_job_integrity"]["status"] == "INVALID"
+    assert selection_details["duplicate_current_job_count"] == 1
+    assert selection_details["duplicate_current_job_keys"] == ["match_id:DUPLICATE-MATCH"]
+    assert selection_details["selected_record_count"] == 0
+
+
+def test_current_serving_selector_fails_closed_on_conflicting_current_job_state(tmp_path):
+    record = _versioned_prediction(
+        "CONFLICT-PRED",
+        match_id="CONFLICT-MATCH",
+        job_id="CONFLICT-JOB-1",
+        match_key="CONFLICT-MATCH-KEY",
+    )
+    jobs = [
+        _current_job(record),
+        {**_current_job(record), "job_id": "CONFLICT-JOB-2", "status": "INSUFFICIENT_DATA", "last_error": "SOURCE_FETCH_FAILED"},
+    ]
+
+    selection = select_current_serving_predictions(
+        [record],
+        business_date="2026-08-12",
+        current_jobs=jobs,
+    )
+
+    assert selection["unique_current_match_count"] == 1
+    assert selection["duplicate_current_job_count"] == 1
+    assert selection["conflicted_current_match_count"] == 1
+    assert selection["current_frozen_job_count"] == 0
+    assert selection["selected_record_count"] == 0
+    assert selection["selected_prediction_ids"] == []
+    assert selection["selected_records"] == []
+
+    root = _healthy_tree(tmp_path, jobs=jobs)
+    _align_universe_fixture(root, "CONFLICT-MATCH")
+    _write_json(
+        root / "data" / "model_governance" / "predictions" / f"{record['prediction_id']}.json",
+        record,
+    )
+    result = evaluate_health(root=root)
+    selection_details = result["details"]["production_current_serving_selection"]
+
+    assert result["status"] != "HEALTHY"
+    assert "DURABLE_ARTIFACT_INVALID" in result["reasons"]
+    assert result["details"]["production_current_serving_job_integrity"]["status"] == "INVALID"
+    assert selection_details["conflicted_current_match_count"] == 1
+    assert selection_details["duplicate_current_job_keys"] == ["match_id:CONFLICT-MATCH"]
+
+
+def test_current_serving_health_alerts_on_served_collapse_without_nonserved_dilution(tmp_path):
+    root = _healthy_tree(tmp_path)
+    jobs_path = root / "data" / "base_prediction_jobs" / "2026-08-12.json"
+    jobs_payload = json.loads(jobs_path.read_text(encoding="utf-8"))
+    records = []
+    current_jobs = []
+    for index in range(13):
+        match_id = f"COHORT-M-{index}"
+        record = _versioned_prediction(
+            f"COHORT-PRED-{index}",
+            match_id=match_id,
+            job_id=f"COHORT-JOB-{index}",
+            match_key=f"COHORT-MATCH-{index}",
+            score="1-1" if index < 8 else f"{index % 3}-{(index + 1) % 4}",
+        )
+        record["lambda_away"] = 1.2 if index < 8 else 2.0
+        records.append(record)
+        current_jobs.append(_current_job(
+            record,
+            status="FROZEN" if index < 8 else "INSUFFICIENT_DATA",
+            last_error="SOURCE_FETCH_FAILED" if index >= 8 else None,
+        ))
+        _write_json(
+            root / "data" / "model_governance" / "predictions" / f"{record['prediction_id']}.json",
+            record,
+        )
+    jobs_payload["jobs"].extend(current_jobs)
+    jobs_payload["job_count"] = len(jobs_payload["jobs"])
+    _write_json(jobs_path, jobs_payload)
+
+    result = evaluate_health(root=root)
+    selection = result["details"]["production_current_serving_selection"]
+    health = result["details"]["production_exact_score_health"]
+
+    assert selection["selected_record_count"] == 8
+    assert health["sample_count"] == 8
+    assert health["dominant_score"] == "1-1"
+    assert health["dominant_count"] == 8
+    assert health["status"] == "ALERT"
+    assert "SCORE_SELECTOR_COLLAPSE" in health["reasons"]
+    assert result["prediction_quality_health"]["status"] == "ALERT"
+
+
+def test_current_serving_match_key_groups_rows_without_match_id_even_with_distinct_job_ids():
+    record = _versioned_prediction(
+        "MATCH-KEY-DUPLICATE-PRED",
+        match_id="MATCH-KEY-DROPPED",
+        job_id="MATCH-KEY-JOB-1",
+        match_key="MATCH-KEY-SAME",
+    )
+    record.pop("match_id", None)
+    record["match_identity"].pop("match_id", None)
+    first = _current_job(record)
+    first.pop("match_id", None)
+    second = {**first, "job_id": "MATCH-KEY-JOB-2"}
+
+    selection = select_current_serving_predictions(
+        [record],
+        business_date="2026-08-12",
+        current_jobs=[first, second],
+    )
+
+    assert selection["unique_current_match_count"] == 1
+    assert selection["duplicate_current_job_count"] == 1
+    assert selection["duplicate_current_job_keys"] == ["match_key:MATCH-KEY-SAME"]
+    assert selection["conflicted_current_match_count"] == 1
+    assert selection["selected_record_count"] == 0
+    assert selection["selected_prediction_ids"] == []
+
+
 def test_evaluate_health_gates_on_current_serving_and_keeps_historical_audit(tmp_path):
     root = _healthy_tree(tmp_path)
+    current_jobs = []
     for index in range(10):
         match_id = f"AUDIT-M-{index}"
         match_key = f"AUDIT-MATCH-{index}"
@@ -323,10 +584,17 @@ def test_evaluate_health_gates_on_current_serving_and_keeps_historical_audit(tmp
                 freeze=freeze,
             )
             record["lambda_away"] = 2.0
+            if prediction_id.startswith("AUDIT-LATEST"):
+                current_jobs.append(_current_job(record))
             _write_json(
                 root / "data" / "model_governance" / "predictions" / f"{prediction_id}.json",
                 record,
             )
+    jobs_path = root / "data" / "base_prediction_jobs" / "2026-08-12.json"
+    jobs_payload = json.loads(jobs_path.read_text(encoding="utf-8"))
+    jobs_payload["jobs"].extend(current_jobs)
+    jobs_payload["job_count"] = len(jobs_payload["jobs"])
+    _write_json(jobs_path, jobs_payload)
 
     result = evaluate_health(root=root)
     current = result["details"]["production_exact_score_health"]

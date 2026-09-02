@@ -22,6 +22,11 @@ try:  # Keep direct ``python scripts/match_analysis.py`` execution working.
 except ImportError:  # pragma: no cover - exercised by the direct CLI path.
     from legacy_analysis_mapper import LegacyStructuredAnalysisMapper
 
+try:
+    from .current_serving_state import resolve_current_job_for_match
+except ImportError:  # pragma: no cover - exercised by the direct CLI path.
+    from current_serving_state import resolve_current_job_for_match
+
 
 ROOT = Path(__file__).resolve().parents[1]
 DATA_ROOT = ROOT / "data"
@@ -41,6 +46,7 @@ ANALYSIS_CONTRACT_VERSION = "1.0"
 SHANGHAI = timezone(timedelta(hours=8))
 
 STATUS_LABELS = {
+    "CURRENT_JOB_STATE_CONFLICT": "\u5f53\u524d\u6bd4\u8d5b\u72b6\u6001\u51b2\u7a81",
     "FROZEN": "已预测",
     "PENDING": "预测尚未冻结",
     "INSUFFICIENT_DATA": "数据不足",
@@ -50,6 +56,8 @@ STATUS_LABELS = {
 }
 
 STATUS_REASON_LABELS = {
+    "DUPLICATE_CURRENT_JOB_STATE": "\u5f53\u524d\u6bd4\u8d5b\u72b6\u6001\u51b2\u7a81\uff0c\u6682\u4e0d\u5f62\u6210\u9884\u6d4b",
+    "MULTIPLE_CURRENT_MATCH_GROUPS": "\u5f53\u524d\u6bd4\u8d5b\u8eab\u4efd\u5b58\u5728\u51b2\u7a81\uff0c\u6682\u4e0d\u5f62\u6210\u9884\u6d4b",
     "MISSING_RECENT_FORM": "近期比赛数据不足",
     "MISSING_MARKET_INTELLIGENCE": "缺少最低市场情报",
     "INPUT_TIMESTAMP_UNVERIFIED": "赛前数据时间无法验证",
@@ -209,16 +217,84 @@ def _load_universe(universe_root: Path, business_date: str) -> tuple[dict[str, A
 def _job_items(jobs_root: Path, business_date: str) -> list[dict[str, Any]]:
     payload = _read_json(jobs_root / f"{business_date}.json") or {}
     values = payload.get("jobs") or payload.get("items") or []
-    return [item for item in values if isinstance(item, dict)]
+    return [
+        item
+        for item in values
+        if isinstance(item, dict)
+        and (
+            not _string(_first(item, "business_date", "businessDate"))
+            or _string(_first(item, "business_date", "businessDate")) == business_date
+        )
+    ]
 
 
-def _job_for_fixture(jobs: list[dict[str, Any]], match_id: str, match_key: str | None) -> dict[str, Any] | None:
-    for job in jobs:
-        if _string(_first(job, "match_id", "matchId")) == match_id:
-            return job
-        if match_key and _string(_first(job, "match_key", "matchKey")) == match_key:
-            return job
-    return None
+def _public_job_resolution(resolution: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not isinstance(resolution, dict):
+        return None
+    return {
+        key: resolution.get(key)
+        for key in (
+            "status",
+            "row_count",
+            "job_ids",
+            "statuses",
+            "match_key",
+            "conflict_reason",
+        )
+    }
+
+
+def _conflict_job(
+    match_id: str,
+    match_key: str | None,
+    resolution: dict[str, Any],
+    fixture_identity: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    identity = fixture_identity or {}
+    conflict_reason = str(resolution.get("conflict_reason") or "DUPLICATE_CURRENT_JOB_STATE")
+    return {
+        "job_id": None,
+        "match_id": match_id,
+        "match_key": match_key,
+        "home": _first(identity, "home", "homeTeam", "home_team"),
+        "away": _first(identity, "away", "awayTeam", "away_team"),
+        "kickoff": _first(identity, "kickoff_at", "kickoff", "kickoff_local"),
+        "status": "CURRENT_JOB_STATE_CONFLICT",
+        "last_error": conflict_reason,
+        "prediction_id": None,
+        "current_job_resolution": _public_job_resolution(resolution),
+    }
+
+
+def _job_for_fixture(
+    jobs: list[dict[str, Any]],
+    match_id: str,
+    match_key: str | None,
+    *,
+    fixture_identity: dict[str, Any] | None = None,
+) -> dict[str, Any] | None:
+    identity = fixture_identity or {
+        "match_id": match_id,
+        "match_key": match_key,
+    }
+    resolution = resolve_current_job_for_match(jobs, identity)
+    if resolution["status"] == "UNIQUE":
+        return resolution.get("selected_job")
+    if resolution["status"] == "CONFLICT":
+        return _conflict_job(match_id, match_key, resolution, fixture_identity)
+    identity = fixture_identity or {}
+    return {
+        "job_id": None,
+        "match_id": match_id,
+        "match_key": match_key,
+        "home": _first(identity, "home", "homeTeam", "home_team"),
+        "away": _first(identity, "away", "awayTeam", "away_team"),
+        "kickoff": _first(identity, "kickoff_at", "kickoff", "kickoff_local"),
+        "status": "PENDING",
+        "last_error": "BASE_JOB_MISSING",
+        "prediction_id": None,
+        "current_job_resolution": _public_job_resolution(resolution),
+    }
 
 
 def _prediction_files(prediction_root: Path) -> list[Path]:
@@ -967,37 +1043,72 @@ def assemble_match_analysis(
             "source_fixture": {},
         }
     jobs = _job_items(Path(jobs_root), business_date)
-    job = _job_for_fixture(jobs, fixture["match_id"], fixture.get("match_key"))
-    prediction = _find_prediction(Path(prediction_root), fixture, job)
+    job = _job_for_fixture(
+        jobs,
+        fixture["match_id"],
+        fixture.get("match_key"),
+        fixture_identity=fixture,
+    )
+    audit_prediction = _find_prediction(Path(prediction_root), fixture, job)
     if not fixture.get("match_key"):
-        fixture["match_key"] = _first(job or {}, "match_key", "matchKey") or _first(prediction or {}, "match_key", "matchKey")
-    if not fixture.get("home") and prediction:
-        identity = prediction.get("match_identity") or {}
+        fixture["match_key"] = _first(job or {}, "match_key", "matchKey") or _first(audit_prediction or {}, "match_key", "matchKey")
+    if not fixture.get("home") and audit_prediction:
+        identity = audit_prediction.get("match_identity") or {}
         fixture["home"] = _first(identity, "home", "home_team")
         fixture["away"] = _first(identity, "away", "away_team")
-    status = _status(job, prediction)
+    status = _status(job, audit_prediction)
+    serving_prediction = audit_prediction if status == "FROZEN" else None
     excluded_ids = _load_excluded_ids(Path(exclusion_root))
-    prediction_id = _string(_first(prediction or {}, "prediction_id", "predictionId")) or None
+    prediction_id = _string(_first(audit_prediction or {}, "prediction_id", "predictionId")) or None
     pilot_excluded = bool(prediction_id and prediction_id in excluded_ids)
-    if pilot_excluded:
+    if pilot_excluded and serving_prediction:
         status_label = "试运行预测"
     else:
         status_label = STATUS_LABELS.get(status, status)
-    snapshot_ref = _first(prediction or {}, "input_snapshot_ref", "model_input_snapshot_ref")
+    snapshot_ref = _first(serving_prediction or {}, "input_snapshot_ref", "model_input_snapshot_ref")
     snapshot, snapshot_path = _find_snapshot(Path(snapshot_root), snapshot_ref)
     snapshot_input = _snapshot_input(snapshot)
     recent_form, form_captured_at, form_source = _recent_form(snapshot_input)
-    model = _prediction_model(prediction or {}) if prediction and status == "FROZEN" else _prediction_model({})
-    market = _market_facts(snapshot_input, prediction or {})
-    result = _find_verified_result(Path(result_root), fixture, prediction)
-    legacy_report_material = discover_legacy_analysis_material(
-        business_date,
-        fixture,
-        frozen_prediction=prediction,
-        workspace_root=Path(workspace_root),
-        analysis_reports_root=Path(analysis_reports_root),
-        postmatch_reports_root=Path(postmatch_reports_root),
-    )
+    if not serving_prediction:
+        recent_form, form_captured_at, form_source = {}, None, None
+    model = _prediction_model(serving_prediction or {})
+    market = _market_facts(snapshot_input, serving_prediction or {})
+    if not serving_prediction:
+        market["model_comparison"]["source_refs"] = []
+    result = _find_verified_result(Path(result_root), fixture, audit_prediction)
+    if serving_prediction:
+        legacy_report_material = discover_legacy_analysis_material(
+            business_date,
+            fixture,
+            frozen_prediction=serving_prediction,
+            workspace_root=Path(workspace_root),
+            analysis_reports_root=Path(analysis_reports_root),
+            postmatch_reports_root=Path(postmatch_reports_root),
+        )
+    else:
+        legacy_report_material = {
+            "status": "NOT_PROJECTED_NON_SERVING",
+            "consistency_checked": True,
+            "candidate_files_checked": 0,
+            "checked_paths": [],
+            "items": [],
+            "interpretations": [],
+            "sections": [],
+            "candidate_labels": {},
+            "candidate_reasoning": {},
+            "hero_script": None,
+            "biggest_failure_point": None,
+            "attention_tag": None,
+            "market_interpretation": None,
+            "risk_evidence": [],
+            "decision_evolution": None,
+            "analysis_origin": None,
+            "lineage": [],
+            "source_keys": [],
+            "trace_coverage": 0,
+            "convergence_complete": False,
+            "source_refs": [],
+        }
     analysis_material = {
         "status": legacy_report_material.get("status"),
         "consistency_checked": legacy_report_material.get("consistency_checked"),
@@ -1026,12 +1137,12 @@ def assemble_match_analysis(
             item["script_label"] = label
     supports, conflicts = _supports_and_conflicts(fixture, model, market, recent_form, snapshot_input, analysis_material)
     sections = _section_payloads(fixture, model, market, recent_form, supports, conflicts, analysis_material)
-    sources = _source_refs(prediction or {}, snapshot)
-    reason_code = _reason_code(job, prediction)
-    formal_eligible = _formal_eligible(prediction, pilot_excluded)
-    freeze_at = _iso(_first(prediction or {}, "freeze_created_at", "freeze_at"))
-    prediction_created_at = _iso(_first(prediction or {}, "prediction_created_at", "created_at"))
-    source_cutoff_at = _iso(_first(prediction or {}, "source_cutoff_at", "model_input_as_of_at"))
+    sources = _source_refs(serving_prediction or {}, snapshot)
+    reason_code = _reason_code(job, audit_prediction)
+    formal_eligible = _formal_eligible(serving_prediction, pilot_excluded)
+    freeze_at = _iso(_first(serving_prediction or {}, "freeze_created_at", "freeze_at"))
+    prediction_created_at = _iso(_first(serving_prediction or {}, "prediction_created_at", "created_at"))
+    source_cutoff_at = _iso(_first(serving_prediction or {}, "source_cutoff_at", "model_input_as_of_at"))
     evidence_updated_at = _iso(
         _first(
             snapshot or {},
@@ -1043,17 +1154,17 @@ def assemble_match_analysis(
     if snapshot is None:
         evidence_updated_at = None
     missing_evidence = []
-    if not prediction:
+    if not serving_prediction:
         missing_evidence.append(reason_code or "NO_FROZEN_PREDICTION")
-    if prediction and not snapshot:
+    if serving_prediction and not snapshot:
         missing_evidence.append("INPUT_SNAPSHOT_UNAVAILABLE")
-    if prediction and not recent_form:
+    if serving_prediction and not recent_form:
         missing_evidence.append("RECENT_FORM_UNAVAILABLE")
     source_quality = {
-        "data_grade": prediction.get("data_grade") if prediction else None,
-        "base_input_quality": prediction.get("base_input_quality") if prediction else None,
-        "market_intelligence_quality": prediction.get("market_intelligence_quality") if prediction else None,
-        "missing": _unique([*missing_evidence, *(_as_list((prediction or {}).get("missing_fields")))]) ,
+        "data_grade": serving_prediction.get("data_grade") if serving_prediction else None,
+        "base_input_quality": serving_prediction.get("base_input_quality") if serving_prediction else None,
+        "market_intelligence_quality": serving_prediction.get("market_intelligence_quality") if serving_prediction else None,
+        "missing": _unique([*missing_evidence, *(_as_list((serving_prediction or {}).get("missing_fields")))]) ,
         "source_references": sources,
         "input_snapshot_ref": snapshot_ref or (snapshot_path.as_posix() if snapshot_path else None),
         "recent_form_source": form_source,
@@ -1088,6 +1199,7 @@ def assemble_match_analysis(
             "reason_code": reason_code,
             "reason_text": STATUS_REASON_LABELS.get(reason_code or "", reason_code),
         },
+        "current_job_resolution": _public_job_resolution((job or {}).get("current_job_resolution")),
         "timestamps": {
             "prediction_created_at": prediction_created_at,
             "prediction_frozen_at": freeze_at,
@@ -1098,8 +1210,8 @@ def assemble_match_analysis(
             "primary_score": model.get("unique_score"),
             "neighbor_scores": [item.get("score") for item in model.get("top_scores", [])[1:3]],
             "summary": hero_summary,
-            "script": (prediction or {}).get("short_match_script") or legacy_report_material.get("hero_script"),
-            "attention_tag": (prediction or {}).get("attention_tag") or legacy_report_material.get("attention_tag"),
+            "script": (serving_prediction or {}).get("short_match_script") or legacy_report_material.get("hero_script"),
+            "attention_tag": (serving_prediction or {}).get("attention_tag") or legacy_report_material.get("attention_tag"),
             "supports": supports,
             "conflicts": conflicts,
             "biggest_failure_point": legacy_report_material.get("biggest_failure_point") or model.get("uncertainty", {}).get("main_risk"),
@@ -1130,12 +1242,12 @@ def assemble_match_analysis(
             "prediction_id": prediction_id,
             "pilot_excluded": pilot_excluded,
             "formal_prospective_eligible": formal_eligible,
-            "formal_eligibility_policy": (prediction or {}).get("formal_eligibility_policy"),
-            "data_grade": (prediction or {}).get("data_grade"),
-            "base_input_quality": (prediction or {}).get("base_input_quality"),
-            "prediction_variant": (prediction or {}).get("prediction_variant"),
-            "model_role": (prediction or {}).get("model_role"),
-            "product_role": (prediction or {}).get("product_role"),
+            "formal_eligibility_policy": (audit_prediction or {}).get("formal_eligibility_policy"),
+            "data_grade": (audit_prediction or {}).get("data_grade"),
+            "base_input_quality": (audit_prediction or {}).get("base_input_quality"),
+            "prediction_variant": (audit_prediction or {}).get("prediction_variant"),
+            "model_role": (audit_prediction or {}).get("model_role"),
+            "product_role": (audit_prediction or {}).get("product_role"),
             "prediction_record_ref": prediction_id,
             "input_snapshot_ref": snapshot_ref,
         },
