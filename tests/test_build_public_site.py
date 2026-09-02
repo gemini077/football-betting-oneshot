@@ -120,7 +120,16 @@ def test_build_is_a_selective_read_only_projection(tmp_path, monkeypatch):
     assert (output / "postmatch_reports/review.html").is_file()
     detail = output / "matches/1001/index.html"
     assert detail.is_file()
-    assert "Home FC" in detail.read_text(encoding="utf-8")
+    detail_html = detail.read_text(encoding="utf-8")
+    assert "Home FC" in detail_html
+    for copy in (
+        "Closed Beta / \u6d4b\u8bd5\u9636\u6bb5",
+        "\u9884\u6d4b\u4ec5\u4f9b\u6bd4\u8d5b\u5206\u6790\u4e0e\u7814\u7a76\u53c2\u8003\uff0c\u53ef\u80fd\u51fa\u9519\u3002",
+        "\u672c\u4ea7\u54c1\u4e0d\u63d0\u4f9b\u8d2d\u5f69\u3001\u4ee3\u8d2d\u3001\u6536\u6b3e\u3001\u4e0b\u6ce8\u6216\u51fa\u7968\u670d\u52a1\u3002",
+        "\u5982\u53c2\u4e0e\u5408\u6cd5\u5f69\u7968\u8d2d\u4e70\uff0c\u8bf7\u901a\u8fc7\u5408\u6cd5\u6b63\u89c4\u6e20\u9053\u5e76\u7406\u6027\u53c2\u4e0e\uff1b\u672a\u6210\u5e74\u4eba\u4e0d\u5f97\u8d2d\u4e70\u5f69\u7968\u3002",
+    ):
+        assert copy in detail_html
+    assert 'class="status-explanation closed-beta-notice"' in detail_html
     assert not (output / "match_workspace/old/raw.json").exists()
     assert not (output / "postmatch_dashboard/old/raw.json").exists()
     assert not (output / "analysis_reports/old/raw.json").exists()
