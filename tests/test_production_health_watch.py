@@ -416,9 +416,10 @@ def test_current_serving_selector_deduplicates_duplicate_frozen_job_group_and_he
     assert selection["duplicate_current_job_count"] == 1
     assert selection["duplicate_current_job_keys"] == ["match_id:DUPLICATE-MATCH"]
     assert selection["conflicted_current_match_count"] == 1
-    assert selection["selected_record_count"] == 1
-    assert len(selection["selected_records"]) == 1
-    assert selection["selected_prediction_ids"] == ["DUPLICATE-PRED"]
+    assert selection["current_frozen_job_count"] == 0
+    assert selection["selected_record_count"] == 0
+    assert len(selection["selected_records"]) == 0
+    assert selection["selected_prediction_ids"] == []
     assert len(selection["selected_prediction_ids"]) == len(set(selection["selected_prediction_ids"]))
 
     root = _healthy_tree(tmp_path, jobs=jobs)
@@ -435,6 +436,7 @@ def test_current_serving_selector_deduplicates_duplicate_frozen_job_group_and_he
     assert result["details"]["production_current_serving_job_integrity"]["status"] == "INVALID"
     assert selection_details["duplicate_current_job_count"] == 1
     assert selection_details["duplicate_current_job_keys"] == ["match_id:DUPLICATE-MATCH"]
+    assert selection_details["selected_record_count"] == 0
 
 
 def test_current_serving_selector_fails_closed_on_conflicting_current_job_state(tmp_path):
@@ -520,6 +522,33 @@ def test_current_serving_health_alerts_on_served_collapse_without_nonserved_dilu
     assert health["status"] == "ALERT"
     assert "SCORE_SELECTOR_COLLAPSE" in health["reasons"]
     assert result["prediction_quality_health"]["status"] == "ALERT"
+
+
+def test_current_serving_match_key_groups_rows_without_match_id_even_with_distinct_job_ids():
+    record = _versioned_prediction(
+        "MATCH-KEY-DUPLICATE-PRED",
+        match_id="MATCH-KEY-DROPPED",
+        job_id="MATCH-KEY-JOB-1",
+        match_key="MATCH-KEY-SAME",
+    )
+    record.pop("match_id", None)
+    record["match_identity"].pop("match_id", None)
+    first = _current_job(record)
+    first.pop("match_id", None)
+    second = {**first, "job_id": "MATCH-KEY-JOB-2"}
+
+    selection = select_current_serving_predictions(
+        [record],
+        business_date="2026-08-12",
+        current_jobs=[first, second],
+    )
+
+    assert selection["unique_current_match_count"] == 1
+    assert selection["duplicate_current_job_count"] == 1
+    assert selection["duplicate_current_job_keys"] == ["match_key:MATCH-KEY-SAME"]
+    assert selection["conflicted_current_match_count"] == 1
+    assert selection["selected_record_count"] == 0
+    assert selection["selected_prediction_ids"] == []
 
 
 def test_evaluate_health_gates_on_current_serving_and_keeps_historical_audit(tmp_path):

@@ -62,6 +62,7 @@ def _status_class(contract: dict[str, Any]) -> str:
 
 
 _USER_STATUS_LABELS = {
+    "CURRENT_JOB_STATE_CONFLICT": "\u5f53\u524d\u6bd4\u8d5b\u72b6\u6001\u51b2\u7a81",
     "FROZEN": "已预测",
     "PENDING": "预测尚未记录",
     "INSUFFICIENT_DATA": "数据不足",
@@ -148,6 +149,7 @@ def _result_scope_label(value: Any) -> str:
 def _status_explanation(status: dict[str, Any]) -> str:
     code = str(status.get("code") or "")
     fallback = {
+        "CURRENT_JOB_STATE_CONFLICT": "\u5f53\u524d\u6bd4\u8d5b\u72b6\u6001\u51b2\u7a81\uff0c\u6682\u4e0d\u5f62\u6210\u9884\u6d4b",
         "PENDING": "预测尚未记录，当前不显示正式比分。",
         "INSUFFICIENT_DATA": "当前数据不足，暂不形成正式预测。",
         "PREDICTION_FAILED": "预测未成功，当前不显示正式比分。",
@@ -342,7 +344,9 @@ def render_match_detail(contract: dict[str, Any]) -> str:
     prediction_quality = contract.get("prediction_quality_health") or {}
     exact_score_serving = exact_score_serving_presentation(prediction_quality)
     pilot = bool(governance.get("pilot_excluded"))
-    primary = hero.get("primary_score")
+    serving_status = str(status.get("code") or "") == "FROZEN"
+    primary = hero.get("primary_score") if serving_status else None
+    model_for_render = model if serving_status else {}
     status_class = _status_class(contract)
     status_note = '<span class="pilot-note">试运行预测 · 不纳入正式验证</span>' if pilot else f'<span class="status-badge">{_esc(_user_status_label(status), "状态待确认")}</span>'
     quality_warning_html = ""
@@ -366,7 +370,7 @@ def render_match_detail(contract: dict[str, Any]) -> str:
     hero_score = f'<div class="hero-score">{_display_score(primary)}</div>' if primary else '<div class="hero-score empty-score">—</div>'
     neighbors = hero.get("neighbor_scores") or []
     neighbor_html = f'<div class="hero-neighbors">候选比分 · {" · ".join(_display_score(value) for value in neighbors)}</div>' if neighbors else ""
-    probabilities = hero.get("probabilities") or {}
+    probabilities = (hero.get("probabilities") or {}) if serving_status else {}
     one_x_two = ""
     if primary and probabilities:
         one_x_two = (
@@ -530,7 +534,7 @@ def render_match_detail(contract: dict[str, Any]) -> str:
     </section>
     {post_html}
     <section class="layer" id="analysis"><div class="layer-heading"><div><div class="eyebrow">核心分析</div><h2>候选比分与比赛分析</h2></div><p>候选比分来自赛前预测记录。</p></div>{_render_candidates(contract)}<div class="analysis-list">{sections_html}</div></section>
-    <section class="layer" id="evidence"><div class="layer-heading"><div><div class="eyebrow">分析依据</div><h2>比赛数据与分析依据</h2></div><p>比赛数据、预测依据与来源分开呈现。</p></div><div class="evidence-columns"><details open><summary id="fundamentals">比赛数据</summary>{_render_form((evidence.get("fundamentals") or {}).get("recent_form") or {})}</details><details><summary id="market">市场变化</summary>{_render_market(contract.get("market") or {})}</details><details><summary id="forecast">预测依据</summary>{_render_model(model)}</details><details><summary id="sources">数据来源</summary>{_render_sources(source_quality, legacy_material)}</details></div></section>
+    <section class="layer" id="evidence"><div class="layer-heading"><div><div class="eyebrow">分析依据</div><h2>比赛数据与分析依据</h2></div><p>比赛数据、预测依据与来源分开呈现。</p></div><div class="evidence-columns"><details open><summary id="fundamentals">比赛数据</summary>{_render_form((evidence.get("fundamentals") or {}).get("recent_form") or {})}</details><details><summary id="market">市场变化</summary>{_render_market(contract.get("market") or {})}</details><details><summary id="forecast">预测依据</summary>{_render_model(model_for_render)}</details><details><summary id="sources">数据来源</summary>{_render_sources(source_quality, legacy_material)}</details></div></section>
     <footer><span>稳定地址：{_esc(route)}</span><span>赛前预测记录与当时依据保持不变；新增事实若存在，将单独列为赛前后更新。</span></footer>
   </main>
 </body>

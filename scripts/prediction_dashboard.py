@@ -23,6 +23,11 @@ except ImportError:  # package import used by tests
     from scripts.production_health_watch import evaluate_exact_score_health, select_current_serving_predictions
 
 try:
+    from current_serving_state import resolve_current_job_for_match
+except ImportError:  # package import used by tests
+    from scripts.current_serving_state import resolve_current_job_for_match
+
+try:
     from exact_score_serving_policy import DEGRADED, exact_score_serving_presentation
 except ImportError:  # package import used by tests
     from scripts.exact_score_serving_policy import DEGRADED, exact_score_serving_presentation
@@ -47,6 +52,7 @@ WORKSPACE_LATEST = BASE_DIR / "data" / "match_workspace" / "latest.json"
 SHANGHAI = timezone(timedelta(hours=8))
 
 STATUS_LABELS = {
+    "CURRENT_JOB_STATE_CONFLICT": "\u5f53\u524d\u6bd4\u8d5b\u72b6\u6001\u51b2\u7a81",
     "FROZEN": "已预测",
     "PENDING": "等待预测",
     "INSUFFICIENT_DATA": "数据不足",
@@ -55,6 +61,8 @@ STATUS_LABELS = {
     "REMOVED_FROM_CURRENT_UNIVERSE": "已移出当前赛程",
 }
 REASON_LABELS = {
+    "DUPLICATE_CURRENT_JOB_STATE": "\u5f53\u524d\u6bd4\u8d5b\u72b6\u6001\u51b2\u7a81\uff0c\u6682\u4e0d\u5f62\u6210\u9884\u6d4b",
+    "MULTIPLE_CURRENT_MATCH_GROUPS": "\u5f53\u524d\u6bd4\u8d5b\u8eab\u4efd\u5b58\u5728\u51b2\u7a81\uff0c\u6682\u4e0d\u5f62\u6210\u9884\u6d4b",
     "MISSING_RECENT_FORM": "近期比赛数据不足",
     "MISSING_MARKET_INTELLIGENCE": "缺少最低市场情报",
     "INPUT_TIMESTAMP_UNVERIFIED": "赛前数据时间无法验证",
@@ -162,20 +170,6 @@ def _fixture_projection(fixture: dict[str, Any]) -> dict[str, Any]:
         "away": _pick(fixture, "awayTeam", "away_team", "away"),
         "kickoff": kickoff,
     }
-
-
-def _job_index(jobs: list[dict[str, Any]], business_date: str) -> dict[str, dict[str, Any]]:
-    index: dict[str, dict[str, Any]] = {}
-    for job in jobs:
-        match_id = str(job.get("match_id") or "").strip()
-        if match_id:
-            index[f"match_id:{match_id}"] = job
-        job_id = str(job.get("job_id") or "").strip()
-        if job_id:
-            index[f"job_id:{job_id}"] = job
-        if match_id:
-            index[f"job_id:BASE-{business_date}-{match_id}"] = job
-    return index
 
 
 def _score_focus(record: dict[str, Any]) -> tuple[str | None, list[str], str | None]:
@@ -367,10 +361,43 @@ def _prematch_identity(fixture: dict[str, Any], job: dict[str, Any] | None) -> d
     return {
         "job_id": job.get("job_id"),
         "match_id": job.get("match_id") or projected.get("match_id"),
-        "match_key": job.get("match_key") or job.get("canonical_match_id"),
+        "match_key": job.get("match_key") or job.get("canonical_match_id") or _pick(fixture, "match_key", "matchKey"),
         "home": job.get("home") or projected.get("home"),
         "away": job.get("away") or projected.get("away"),
         "kickoff_at": job.get("kickoff") or projected.get("kickoff"),
+    }
+
+
+def _public_job_resolution(resolution: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not isinstance(resolution, dict):
+        return None
+    return {
+        key: resolution.get(key)
+        for key in (
+            "status",
+            "row_count",
+            "job_ids",
+            "statuses",
+            "match_key",
+            "conflict_reason",
+        )
+    }
+
+
+def _conflict_job(fixture: dict[str, Any], resolution: dict[str, Any]) -> dict[str, Any]:
+    projected = _fixture_projection(fixture)
+    conflict_reason = str(resolution.get("conflict_reason") or "DUPLICATE_CURRENT_JOB_STATE")
+    return {
+        "job_id": None,
+        "match_id": projected.get("match_id"),
+        "match_key": _pick(fixture, "match_key", "matchKey"),
+        "home": projected.get("home"),
+        "away": projected.get("away"),
+        "kickoff": projected.get("kickoff"),
+        "status": "CURRENT_JOB_STATE_CONFLICT",
+        "prediction_id": None,
+        "last_error": conflict_reason,
+        "current_job_resolution": _public_job_resolution(resolution),
     }
 
 
@@ -383,14 +410,24 @@ def _card(
     formal_samples: dict[str, dict[str, Any]],
     exploratory_samples: dict[str, dict[str, Any]],
     prematch_selection: dict[str, Any] | None = None,
+    current_job_resolution: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    resolution_status = (current_job_resolution or {}).get("status")
+    if resolution_status == "CONFLICT":
+        job = _conflict_job(fixture, current_job_resolution or {})
+    elif resolution_status == "MISSING":
+        job = None
     card = _fixture_projection(fixture)
     status = str((job or {}).get("status") or "PENDING")
     selection = prematch_selection or {}
     current_selection = status == "FROZEN" and prematch_selection is not None
+    is_conflict = status == "CURRENT_JOB_STATE_CONFLICT"
     if current_selection:
         record = selection.get("selected_record")
         prediction_id = str(selection.get("selected_prediction_id") or "") or None
+    elif is_conflict:
+        record = None
+        prediction_id = None
     elif status != "FROZEN":
         # A retained prediction pointer is audit identity only until the
         # current base job is FROZEN; never project it as a live recommendation.
@@ -398,6 +435,18 @@ def _card(
         prediction_id = str((job or {}).get("prediction_id") or "") or None
     else:
         prediction_id = str((job or {}).get("prediction_id") or "") or None
+    if current_selection:
+        serving_selection_status = selection.get("status")
+        serving_selection_reason = selection.get("reason")
+    elif is_conflict:
+        serving_selection_status = "CONFLICT"
+        serving_selection_reason = (current_job_resolution or {}).get("conflict_reason") or "DUPLICATE_CURRENT_JOB_STATE"
+    elif status != "FROZEN":
+        serving_selection_status = "NOT_SERVING"
+        serving_selection_reason = "CURRENT_JOB_NOT_FROZEN"
+    else:
+        serving_selection_status = "LEGACY_POINTER"
+        serving_selection_reason = "JOB_POINTER"
     reason_code, reason_text = _status_reason(status, job, record)
     result = _find_result(card, record, result_index)
     sample = formal_samples.get(prediction_id or "") or exploratory_samples.get(prediction_id or "")
@@ -417,8 +466,8 @@ def _card(
         "selected_source_cutoff_at": selection.get("selected_source_cutoff_at") if current_selection else None,
         "superseded_count": int(selection.get("superseded_count") or 0) if current_selection else 0,
         "prematch_selection": {
-            "status": selection.get("status") if current_selection else "NOT_SERVING" if status != "FROZEN" else "LEGACY_POINTER",
-            "reason": selection.get("reason") if current_selection else "CURRENT_JOB_NOT_FROZEN" if status != "FROZEN" else "JOB_POINTER",
+            "status": serving_selection_status,
+            "reason": serving_selection_reason,
             "candidate_count": int(selection.get("candidate_count") or 0) if current_selection else 0,
             "selected_prediction_id": selection.get("selected_prediction_id") if current_selection else None,
             "selected_freeze_created_at": selection.get("selected_freeze_created_at") if current_selection else None,
@@ -437,6 +486,7 @@ def _card(
             "kind": "formal" if formal_prospective else "pilot_excluded" if prediction_id in exploratory_samples else None,
             "metrics": sample.get("metrics") if isinstance(sample, dict) else {},
         } if sample else None,
+        "current_job_resolution": _public_job_resolution(current_job_resolution),
     })
     return card
 
@@ -959,7 +1009,15 @@ def build_dashboard(
     if not isinstance(jobs_payload, dict):
         jobs_payload = {}
     fixtures = [row for row in (universe.get("fixtures") or []) if isinstance(row, dict)]
-    jobs = [row for row in (jobs_payload.get("jobs") or []) if isinstance(row, dict)]
+    jobs = [
+        row
+        for row in (jobs_payload.get("jobs") or [])
+        if isinstance(row, dict)
+        and (
+            not str(_pick(row, "business_date", "businessDate") or "").strip()
+            or str(_pick(row, "business_date", "businessDate") or "").strip() == business_date
+        )
+    ]
     records = _read_records(Path(prediction_root), errors)
     exclusions = _exclusion_index(Path(exclusion_root), errors)
     result_index = _result_index(Path(result_root), errors)
@@ -977,15 +1035,24 @@ def build_dashboard(
     if not isinstance(health_watch, dict):
         health_watch = {}
     completed, history = _workspace_history(Path(workspace_path), errors)
-    job_lookup = _job_index(jobs, business_date)
     cards: list[dict[str, Any]] = []
     for fixture in fixtures:
-        projected = _fixture_projection(fixture)
-        match_id = projected["match_id"]
-        job = job_lookup.get(f"match_id:{match_id}") or job_lookup.get(f"job_id:BASE-{business_date}-{match_id}")
+        current_job_resolution = resolve_current_job_for_match(
+            jobs,
+            _prematch_identity(fixture, None),
+        )
+        if current_job_resolution["status"] == "UNIQUE":
+            job = current_job_resolution.get("selected_job")
+        elif current_job_resolution["status"] == "CONFLICT":
+            job = _conflict_job(fixture, current_job_resolution)
+        else:
+            job = None
         selection = None
         record = None
-        if str((job or {}).get("status") or "PENDING") == "FROZEN":
+        if (
+            current_job_resolution["status"] == "UNIQUE"
+            and str((job or {}).get("status") or "PENDING") == "FROZEN"
+        ):
             selection = select_latest_legal_prematch(
                 records.values(),
                 identity=_prematch_identity(fixture, job),
@@ -1000,6 +1067,7 @@ def build_dashboard(
             formal_samples,
             exploratory_samples,
             selection,
+            current_job_resolution,
         ))
     cards.sort(key=lambda item: (_iso_sort(item.get("kickoff")), _text(item.get("match_num"))))
     counts = Counter(card.get("status") for card in cards)

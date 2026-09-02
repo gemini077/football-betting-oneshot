@@ -261,6 +261,69 @@ def test_insufficient_status_with_retained_prediction_keeps_hero_fail_closed(tmp
     assert "1-0" not in html
 
 
+def test_missing_current_job_with_retained_prediction_stays_pending_and_fail_closed(tmp_path):
+    payload = roots(tmp_path)
+    write_json(payload["jobs_root"] / f"{DATE}.json", {"business_date": DATE, "jobs": []})
+
+    contract = assemble(payload)
+
+    assert contract["status"]["code"] == "PENDING"
+    assert contract["status"]["reason_code"] == "BASE_JOB_MISSING"
+    assert contract["current_job_resolution"]["status"] == "MISSING"
+    assert contract["governance"]["prediction_id"] == "FBOS-PRED-test"
+    assert contract["hero"]["primary_score"] is None
+    assert contract["hero"]["probabilities"] == {}
+    assert contract["model"]["probabilities"] == {}
+
+
+def test_conflicting_current_jobs_are_order_invariant_and_detail_fails_closed(tmp_path):
+    for index, ordered_jobs in enumerate((
+        [job("2040820", "FBOS-PRED-test"), {**job("2040820", "FBOS-PRED-test"), "job_id": "BASE-CONFLICT-2", "status": "INSUFFICIENT_DATA", "last_error": "SOURCE_FETCH_FAILED"}],
+        [{**job("2040820", "FBOS-PRED-test"), "job_id": "BASE-CONFLICT-2", "status": "INSUFFICIENT_DATA", "last_error": "SOURCE_FETCH_FAILED"}, job("2040820", "FBOS-PRED-test")],
+    )):
+        payload = roots(tmp_path / f"order-{index}")
+        write_json(payload["jobs_root"] / f"{DATE}.json", {"business_date": DATE, "jobs": ordered_jobs})
+
+        contract = assemble(payload)
+        detail_html = render_match_detail(contract)
+
+        assert contract["status"]["code"] == "CURRENT_JOB_STATE_CONFLICT"
+        assert contract["status"]["reason_code"] == "DUPLICATE_CURRENT_JOB_STATE"
+        assert contract["current_job_resolution"]["status"] == "CONFLICT"
+        assert contract["current_job_resolution"]["row_count"] == 2
+        assert contract["governance"]["prediction_id"] == "FBOS-PRED-test"
+        assert contract["hero"]["primary_score"] is None
+        assert contract["hero"]["probabilities"] == {}
+        assert contract["model"]["probabilities"] == {}
+        assert contract["candidate_scores"] == []
+        assert '<div class="hero-probabilities">' not in detail_html
+        assert "1-0" not in detail_html
+        assert "当前比赛状态冲突" in detail_html
+        assert "当前比赛状态冲突，暂不形成预测" in detail_html
+        if index == 0:
+            first_projection = (contract["status"], contract["hero"], contract["model"], contract["governance"]["prediction_id"])
+        else:
+            second_projection = (contract["status"], contract["hero"], contract["model"], contract["governance"]["prediction_id"])
+
+    assert first_projection == second_projection
+
+
+def test_duplicate_frozen_jobs_keep_detail_fail_closed(tmp_path):
+    payload = roots(tmp_path)
+    first = job("2040820", "FBOS-PRED-test")
+    second = {**first, "job_id": "BASE-DUPLICATE-2"}
+    write_json(payload["jobs_root"] / f"{DATE}.json", {"business_date": DATE, "jobs": [first, second]})
+
+    contract = assemble(payload)
+    detail_html = render_match_detail(contract)
+
+    assert contract["status"]["code"] == "CURRENT_JOB_STATE_CONFLICT"
+    assert contract["hero"]["primary_score"] is None
+    assert contract["hero"]["probabilities"] == {}
+    assert contract["model"]["probabilities"] == {}
+    assert "1-0" not in detail_html
+
+
 def test_assembler_does_not_fabricate_market_direction_or_script(tmp_path):
     contract = assemble(roots(tmp_path))
 

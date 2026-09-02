@@ -338,6 +338,80 @@ def test_dashboard_fails_closed_on_same_job_identity_conflict(tmp_path):
     assert card["selected_prediction_id"] is None
 
 
+def test_dashboard_current_job_conflict_is_order_invariant_and_abstains(tmp_path):
+    retained = frozen_prediction("FBOS-PRED-retained")
+    frozen = frozen_job("1001", retained["prediction_id"])
+    insufficient = {
+        **frozen,
+        "job_id": "BASE-2026-08-12-1001-retry",
+        "status": "INSUFFICIENT_DATA",
+        "last_error": "SOURCE_FETCH_FAILED",
+    }
+    projections = []
+    article_html = []
+    for index, ordered_jobs in enumerate(([frozen, insufficient], [insufficient, frozen])):
+        roots = make_roots(
+            tmp_path / f"order-{index}",
+            [fixture(1)],
+            ordered_jobs,
+            [retained],
+        )
+        payload = build_dashboard(DATE, **roots)
+        card = payload["fixtures"][0]
+        html = (roots["output_root"] / "latest.html").read_text(encoding="utf-8")
+        article = re.search(
+            r'<article[^>]*data-status="CURRENT_JOB_STATE_CONFLICT"[^>]*>.*?</article>',
+            html,
+            re.S,
+        ).group(0)
+        projections.append({
+            "status": card["status"],
+            "reason_code": card["reason_code"],
+            "prediction": card["prediction"],
+            "prematch_selection": card["prematch_selection"],
+            "current_job_resolution": card["current_job_resolution"],
+        })
+        article_html.append(article)
+
+    assert projections[0] == projections[1]
+    card = projections[0]
+    assert card["status"] == "CURRENT_JOB_STATE_CONFLICT"
+    assert card["reason_code"] == "DUPLICATE_CURRENT_JOB_STATE"
+    assert card["prediction"] is None
+    assert card["prematch_selection"]["status"] == "CONFLICT"
+    assert card["current_job_resolution"]["status"] == "CONFLICT"
+    assert card["current_job_resolution"]["row_count"] == 2
+    for article in article_html:
+        assert "prediction-panel" not in article
+        assert "1X2" not in article
+        assert "系统首推比分" not in article
+        assert "当前比赛状态冲突" in article
+        assert "当前比赛状态冲突，暂不形成预测" in article
+
+
+def test_dashboard_duplicate_frozen_rows_fail_closed_without_double_serving(tmp_path):
+    retained = frozen_prediction("FBOS-PRED-duplicate")
+    frozen = frozen_job("1001", retained["prediction_id"])
+    duplicate = {**frozen, "job_id": "BASE-2026-08-12-1001-duplicate"}
+    roots = make_roots(tmp_path, [fixture(1)], [frozen, duplicate], [retained])
+
+    payload = build_dashboard(DATE, **roots)
+
+    card = payload["fixtures"][0]
+    html = (roots["output_root"] / "latest.html").read_text(encoding="utf-8")
+    article = re.search(
+        r'<article[^>]*data-status="CURRENT_JOB_STATE_CONFLICT"[^>]*>.*?</article>',
+        html,
+        re.S,
+    ).group(0)
+    assert card["status"] == "CURRENT_JOB_STATE_CONFLICT"
+    assert card["prediction"] is None
+    assert card["current_job_resolution"]["row_count"] == 2
+    assert "prediction-panel" not in article
+    assert "系统首推比分" not in article
+    assert "1X2" not in article
+
+
 def test_completed_filter_controls_historical_rows_and_real_count(tmp_path):
     roots = make_roots(tmp_path, [fixture(1)], [{"match_id": "1001", "status": "PENDING"}])
     workspace_path = tmp_path / "workspace" / "latest.json"
@@ -661,6 +735,46 @@ def _quality_roots(tmp_path, scores: list[str]):
     write_json(roots["runtime_path"], runtime)
     roots["health_watch_path"] = tmp_path / "runtime" / "health_watch.json"
     return roots, runtime
+
+
+def test_dashboard_normal_current_job_cohort_has_eight_serving_and_five_reason_only(tmp_path):
+    fixtures = []
+    jobs = []
+    predictions = []
+    for index in range(13):
+        match_id = str(2001 + index)
+        home = f"Home {index + 1}"
+        away = f"Away {index + 1}"
+        fixture_row = fixture(index + 1)
+        fixture_row.update({"matchId": match_id, "homeTeam": home, "awayTeam": away})
+        record = _serving_prediction(index + 1, "1-1" if index < 8 else f"{index % 3}-{(index + 1) % 4}")
+        predictions.append(record)
+        fixtures.append(fixture_row)
+        jobs.append({
+            **frozen_job(match_id, record["prediction_id"]),
+            "match_num": f"T{index + 1:03d}",
+            "home": home,
+            "away": away,
+            "status": "FROZEN" if index < 8 else "INSUFFICIENT_DATA",
+            "last_error": None if index < 8 else "SOURCE_FETCH_FAILED",
+        })
+
+    roots = make_roots(tmp_path, fixtures, jobs, predictions)
+    runtime = json.loads(roots["runtime_path"].read_text(encoding="utf-8"))
+    runtime["business_date"] = DATE
+    write_json(roots["runtime_path"], runtime)
+
+    payload = build_dashboard(DATE, **roots)
+    serving = [card for card in payload["fixtures"] if card["prediction"] is not None]
+    insufficient = [card for card in payload["fixtures"] if card["status"] == "INSUFFICIENT_DATA"]
+
+    assert payload["summary"]["card_count"] == 13
+    assert len(serving) == 8
+    assert len(insufficient) == 5
+    assert all(card["prediction"] is None for card in insufficient)
+    assert payload["prediction_quality_health"]["unique_current_match_count"] == 13
+    assert payload["prediction_quality_health"]["duplicate_current_job_count"] == 0
+    assert payload["prediction_quality_health"]["selected_record_count"] == 8
 
 
 def test_dashboard_separates_system_runtime_and_current_prediction_quality_alert(tmp_path):

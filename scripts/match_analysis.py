@@ -22,6 +22,11 @@ try:  # Keep direct ``python scripts/match_analysis.py`` execution working.
 except ImportError:  # pragma: no cover - exercised by the direct CLI path.
     from legacy_analysis_mapper import LegacyStructuredAnalysisMapper
 
+try:
+    from .current_serving_state import resolve_current_job_for_match
+except ImportError:  # pragma: no cover - exercised by the direct CLI path.
+    from current_serving_state import resolve_current_job_for_match
+
 
 ROOT = Path(__file__).resolve().parents[1]
 DATA_ROOT = ROOT / "data"
@@ -41,6 +46,7 @@ ANALYSIS_CONTRACT_VERSION = "1.0"
 SHANGHAI = timezone(timedelta(hours=8))
 
 STATUS_LABELS = {
+    "CURRENT_JOB_STATE_CONFLICT": "\u5f53\u524d\u6bd4\u8d5b\u72b6\u6001\u51b2\u7a81",
     "FROZEN": "已预测",
     "PENDING": "预测尚未冻结",
     "INSUFFICIENT_DATA": "数据不足",
@@ -50,6 +56,8 @@ STATUS_LABELS = {
 }
 
 STATUS_REASON_LABELS = {
+    "DUPLICATE_CURRENT_JOB_STATE": "\u5f53\u524d\u6bd4\u8d5b\u72b6\u6001\u51b2\u7a81\uff0c\u6682\u4e0d\u5f62\u6210\u9884\u6d4b",
+    "MULTIPLE_CURRENT_MATCH_GROUPS": "\u5f53\u524d\u6bd4\u8d5b\u8eab\u4efd\u5b58\u5728\u51b2\u7a81\uff0c\u6682\u4e0d\u5f62\u6210\u9884\u6d4b",
     "MISSING_RECENT_FORM": "近期比赛数据不足",
     "MISSING_MARKET_INTELLIGENCE": "缺少最低市场情报",
     "INPUT_TIMESTAMP_UNVERIFIED": "赛前数据时间无法验证",
@@ -209,16 +217,84 @@ def _load_universe(universe_root: Path, business_date: str) -> tuple[dict[str, A
 def _job_items(jobs_root: Path, business_date: str) -> list[dict[str, Any]]:
     payload = _read_json(jobs_root / f"{business_date}.json") or {}
     values = payload.get("jobs") or payload.get("items") or []
-    return [item for item in values if isinstance(item, dict)]
+    return [
+        item
+        for item in values
+        if isinstance(item, dict)
+        and (
+            not _string(_first(item, "business_date", "businessDate"))
+            or _string(_first(item, "business_date", "businessDate")) == business_date
+        )
+    ]
 
 
-def _job_for_fixture(jobs: list[dict[str, Any]], match_id: str, match_key: str | None) -> dict[str, Any] | None:
-    for job in jobs:
-        if _string(_first(job, "match_id", "matchId")) == match_id:
-            return job
-        if match_key and _string(_first(job, "match_key", "matchKey")) == match_key:
-            return job
-    return None
+def _public_job_resolution(resolution: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not isinstance(resolution, dict):
+        return None
+    return {
+        key: resolution.get(key)
+        for key in (
+            "status",
+            "row_count",
+            "job_ids",
+            "statuses",
+            "match_key",
+            "conflict_reason",
+        )
+    }
+
+
+def _conflict_job(
+    match_id: str,
+    match_key: str | None,
+    resolution: dict[str, Any],
+    fixture_identity: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    identity = fixture_identity or {}
+    conflict_reason = str(resolution.get("conflict_reason") or "DUPLICATE_CURRENT_JOB_STATE")
+    return {
+        "job_id": None,
+        "match_id": match_id,
+        "match_key": match_key,
+        "home": _first(identity, "home", "homeTeam", "home_team"),
+        "away": _first(identity, "away", "awayTeam", "away_team"),
+        "kickoff": _first(identity, "kickoff_at", "kickoff", "kickoff_local"),
+        "status": "CURRENT_JOB_STATE_CONFLICT",
+        "last_error": conflict_reason,
+        "prediction_id": None,
+        "current_job_resolution": _public_job_resolution(resolution),
+    }
+
+
+def _job_for_fixture(
+    jobs: list[dict[str, Any]],
+    match_id: str,
+    match_key: str | None,
+    *,
+    fixture_identity: dict[str, Any] | None = None,
+) -> dict[str, Any] | None:
+    identity = fixture_identity or {
+        "match_id": match_id,
+        "match_key": match_key,
+    }
+    resolution = resolve_current_job_for_match(jobs, identity)
+    if resolution["status"] == "UNIQUE":
+        return resolution.get("selected_job")
+    if resolution["status"] == "CONFLICT":
+        return _conflict_job(match_id, match_key, resolution, fixture_identity)
+    identity = fixture_identity or {}
+    return {
+        "job_id": None,
+        "match_id": match_id,
+        "match_key": match_key,
+        "home": _first(identity, "home", "homeTeam", "home_team"),
+        "away": _first(identity, "away", "awayTeam", "away_team"),
+        "kickoff": _first(identity, "kickoff_at", "kickoff", "kickoff_local"),
+        "status": "PENDING",
+        "last_error": "BASE_JOB_MISSING",
+        "prediction_id": None,
+        "current_job_resolution": _public_job_resolution(resolution),
+    }
 
 
 def _prediction_files(prediction_root: Path) -> list[Path]:
@@ -967,7 +1043,12 @@ def assemble_match_analysis(
             "source_fixture": {},
         }
     jobs = _job_items(Path(jobs_root), business_date)
-    job = _job_for_fixture(jobs, fixture["match_id"], fixture.get("match_key"))
+    job = _job_for_fixture(
+        jobs,
+        fixture["match_id"],
+        fixture.get("match_key"),
+        fixture_identity=fixture,
+    )
     prediction = _find_prediction(Path(prediction_root), fixture, job)
     if not fixture.get("match_key"):
         fixture["match_key"] = _first(job or {}, "match_key", "matchKey") or _first(prediction or {}, "match_key", "matchKey")
@@ -1088,6 +1169,7 @@ def assemble_match_analysis(
             "reason_code": reason_code,
             "reason_text": STATUS_REASON_LABELS.get(reason_code or "", reason_code),
         },
+        "current_job_resolution": _public_job_resolution((job or {}).get("current_job_resolution")),
         "timestamps": {
             "prediction_created_at": prediction_created_at,
             "prediction_frozen_at": freeze_at,
