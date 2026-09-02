@@ -682,6 +682,34 @@ def _record_matches_serving_job(record: dict[str, Any], job_identity: dict[str, 
     )
 
 
+def _current_job_match_key(job: dict[str, Any]) -> str:
+    identity = _serving_job_identity(job)
+    for field in ("match_id", "job_id", "match_key"):
+        value = _duplicate_text(identity.get(field))
+        if value:
+            return f"{field}:{value}"
+    kickoff = _parse_at(identity.get("kickoff_at"))
+    home = _duplicate_normalise_text(identity.get("home"))
+    away = _duplicate_normalise_text(identity.get("away"))
+    if kickoff and home and away:
+        return f"fallback:{kickoff.isoformat()}|{home}|{away}"
+    return "UNRESOLVED_CURRENT_JOB"
+
+
+def _common_current_job_identity(jobs: list[dict[str, Any]]) -> dict[str, Any]:
+    identities = [_serving_job_identity(job) for job in jobs]
+    common: dict[str, Any] = {}
+    for field in ("job_id", "match_id", "match_key", "home", "away", "kickoff_at"):
+        values = {
+            _duplicate_text(identity.get(field))
+            for identity in identities
+            if _duplicate_text(identity.get(field))
+        }
+        if len(values) == 1:
+            common[field] = next(iter(values))
+    return common
+
+
 def select_current_serving_predictions(
     records: list[dict[str, Any]],
     *,
@@ -689,13 +717,15 @@ def select_current_serving_predictions(
     current_jobs: list[dict[str, Any]] | None = None,
     excluded_ids: set[str] | None = None,
 ) -> dict[str, Any]:
-    """Select one legal prematch version for each current FROZEN base job.
+    """Select one legal prematch version for each current match observation.
 
     Historical/version rows remain available to the audit evaluator.  This
     selector narrows only the serving cohort: one runtime business date, the
-    explicit current base-job state, one legal FROZEN prediction per match,
-    and no excluded or integrity-invalid rows.  Missing job state is an empty
-    serving cohort; prediction records are never a fallback for it.
+    explicit current base-job state, one legal FROZEN prediction per unique
+    match, and no excluded or integrity-invalid rows.  Duplicate current-job
+    state is reported separately and never silently treated as healthy.
+    Missing job state is an empty serving cohort; prediction records are never
+    a fallback for it.
     """
     current_business_date = str(business_date or "").strip()
     excluded = {_duplicate_text(value) for value in (excluded_ids or set()) if _duplicate_text(value)}
@@ -715,13 +745,19 @@ def select_current_serving_predictions(
         for job in (current_jobs or [])
         if isinstance(job, dict)
         and (
-            not _duplicate_text(job.get("business_date"))
-            or _duplicate_text(job.get("business_date")) == current_business_date
+            not _duplicate_text(job.get("business_date") or job.get("businessDate"))
+            or _duplicate_text(job.get("business_date") or job.get("businessDate")) == current_business_date
         )
     ]
-    current_frozen_jobs = [
-        job for job in current_job_rows
-        if _duplicate_text(job.get("status")) == "FROZEN"
+    current_job_groups: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for job in current_job_rows:
+        current_job_groups[_current_job_match_key(job)].append(job)
+    grouped_jobs = [
+        (key, current_job_groups[key])
+        for key in sorted(current_job_groups)
+    ]
+    duplicate_groups = [
+        (key, jobs) for key, jobs in grouped_jobs if len(jobs) > 1
     ]
 
     selected_records: list[dict[str, Any]] = []
@@ -746,8 +782,11 @@ def select_current_serving_predictions(
             continue
         eligible_records.append(record)
 
-    for job in current_frozen_jobs:
-        job_identity = _serving_job_identity(job)
+    for group_key, job_rows in grouped_jobs:
+        job_identity = _common_current_job_identity(job_rows)
+        statuses = {_duplicate_text(job.get("status")) for job in job_rows}
+        duplicate_current_state = len(job_rows) > 1
+        all_frozen = statuses == {"FROZEN"}
         raw_rows = [
             record for record in frozen_records
             if _record_matches_serving_job(record, job_identity)
@@ -756,36 +795,69 @@ def select_current_serving_predictions(
             record for record in eligible_records
             if _record_matches_serving_job(record, job_identity)
         ]
-        selection = select_latest_legal_prematch(
-            candidates,
-            identity=job_identity,
-        ) if candidates else {
-            "status": "NO_LEGAL_PREMATCH_VERSION",
-            "reason": "NO_CURRENT_SERVING_CANDIDATE",
-            "selected_record": None,
-            "selected_prediction_id": None,
-            "candidate_count": 0,
-            "superseded_count": 0,
-        }
+        if duplicate_current_state and not all_frozen:
+            selection = {
+                "status": "CURRENT_JOB_STATE_CONFLICT",
+                "reason": "DUPLICATE_CURRENT_JOB_STATE",
+                "selected_record": None,
+                "selected_prediction_id": None,
+                "candidate_count": 0,
+                "superseded_count": 0,
+            }
+        elif statuses != {"FROZEN"}:
+            selection = {
+                "status": "NOT_SERVING",
+                "reason": "CURRENT_JOB_NOT_FROZEN",
+                "selected_record": None,
+                "selected_prediction_id": None,
+                "candidate_count": 0,
+                "superseded_count": 0,
+            }
+        else:
+            selection = select_latest_legal_prematch(
+                candidates,
+                identity=job_identity,
+            ) if candidates else {
+                "status": "NO_LEGAL_PREMATCH_VERSION",
+                "reason": "NO_CURRENT_SERVING_CANDIDATE",
+                "selected_record": None,
+                "selected_prediction_id": None,
+                "candidate_count": 0,
+                "superseded_count": 0,
+            }
         selected = selection.get("selected_record")
         if selection.get("status") == "SELECTED" and isinstance(selected, dict):
             selected_records.append(selected)
-            job_id = _duplicate_text(job_identity.get("job_id"))
+            selected_job_ids.extend(
+                _duplicate_text(job.get("job_id") or job.get("jobId"))
+                for job in job_rows
+                if _duplicate_text(job.get("job_id") or job.get("jobId"))
+            )
             match_id = _duplicate_text(job_identity.get("match_id"))
-            if job_id:
-                selected_job_ids.append(job_id)
             if match_id:
                 selected_match_ids.append(match_id)
-        group_key = ";".join(
-            f"{field}:{_duplicate_text(job_identity.get(field))}"
-            for field in ("job_id", "match_id", "match_key")
-            if _duplicate_text(job_identity.get(field))
-        ) or "UNRESOLVED_CURRENT_JOB"
+        if duplicate_current_state and all_frozen and selection.get("status") == "SELECTED":
+            selection = {
+                **selection,
+                "status": "SELECTED_WITH_DUPLICATE_CURRENT_JOBS",
+                "reason": "DUPLICATE_CURRENT_JOB_STATE",
+            }
         groups.append({
             "group_key": group_key,
             "job_id": job_identity.get("job_id"),
             "match_id": job_identity.get("match_id"),
-            "job_status": _duplicate_text(job.get("status")),
+            "job_ids": sorted({
+                _duplicate_text(job.get("job_id") or job.get("jobId"))
+                for job in job_rows
+                if _duplicate_text(job.get("job_id") or job.get("jobId"))
+            }),
+            "job_status": (
+                _duplicate_text(job_rows[0].get("status"))
+                if len(statuses) == 1
+                else "CURRENT_JOB_STATE_CONFLICT"
+            ),
+            "job_statuses": sorted(statuses),
+            "current_job_count": len(job_rows),
             "raw_record_count": len(raw_rows),
             "candidate_count": len(candidates),
             "selected_prediction_id": selection.get("selected_prediction_id"),
@@ -800,16 +872,35 @@ def select_current_serving_predictions(
         "current_date_record_count": len(current_date_records),
         "frozen_record_count": len(frozen_records),
         "current_job_count": len(current_job_rows),
-        "current_frozen_job_count": len(current_frozen_jobs),
+        "raw_current_frozen_job_count": sum(
+            1 for job in current_job_rows
+            if _duplicate_text(job.get("status")) == "FROZEN"
+        ),
+        "unique_current_match_count": len(grouped_jobs),
+        "duplicate_current_job_count": sum(len(jobs) - 1 for _, jobs in duplicate_groups),
+        "duplicate_current_job_keys": [key for key, _ in duplicate_groups],
+        "conflicted_current_match_count": len(duplicate_groups),
+        "conflicted_current_match_keys": [key for key, _ in duplicate_groups],
+        "current_frozen_job_count": sum(
+            1 for _, jobs in grouped_jobs
+            if {_duplicate_text(job.get("status")) for job in jobs} == {"FROZEN"}
+        ),
+        "unambiguous_current_frozen_job_count": sum(
+            1 for _, jobs in grouped_jobs
+            if len(jobs) == 1 and _duplicate_text(jobs[0].get("status")) == "FROZEN"
+        ),
         "current_frozen_job_ids": sorted({
-            _duplicate_text(job.get("job_id"))
-            for job in current_frozen_jobs
-            if _duplicate_text(job.get("job_id"))
+            _duplicate_text(job.get("job_id") or job.get("jobId"))
+            for _, jobs in grouped_jobs
+            if {_duplicate_text(job.get("status")) for job in jobs} == {"FROZEN"}
+            for job in jobs
+            if _duplicate_text(job.get("job_id") or job.get("jobId"))
         }),
         "current_frozen_match_ids": sorted({
-            _duplicate_text(job.get("match_id"))
-            for job in current_frozen_jobs
-            if _duplicate_text(job.get("match_id"))
+            _duplicate_text(_common_current_job_identity(jobs).get("match_id"))
+            for _, jobs in grouped_jobs
+            if {_duplicate_text(job.get("status")) for job in jobs} == {"FROZEN"}
+            if _duplicate_text(_common_current_job_identity(jobs).get("match_id"))
         }),
         "selected_record_count": len(selected_records),
         "selected_prediction_ids": sorted(
@@ -1018,6 +1109,16 @@ def _check_prediction_integrity(
         current_jobs=current_jobs,
         excluded_ids=exclusion_ids,
     )
+    current_job_integrity = {
+        "status": "INVALID" if current_selection.get("duplicate_current_job_count") else "VALID",
+        "duplicate_current_job_count": current_selection.get("duplicate_current_job_count", 0),
+        "duplicate_current_job_keys": current_selection.get("duplicate_current_job_keys", []),
+        "conflicted_current_match_count": current_selection.get("conflicted_current_match_count", 0),
+        "conflicted_current_match_keys": current_selection.get("conflicted_current_match_keys", []),
+    }
+    details["production_current_serving_job_integrity"] = current_job_integrity
+    if current_job_integrity["status"] == "INVALID":
+        _reason_once(reasons, "DURABLE_ARTIFACT_INVALID")
     current_exact_score_health = {
         **evaluate_exact_score_health(current_selection["selected_records"]),
         "scope": "current_serving",
@@ -1124,7 +1225,12 @@ def _prediction_quality_health_payload(
         "runtime_cycle_finished_at": cycle_finished_at,
         "reasons": [str(reason) for reason in current.get("reasons") or [] if reason],
         "current_job_count": int(selection.get("current_job_count") or 0),
+        "unique_current_match_count": int(selection.get("unique_current_match_count") or 0),
         "current_frozen_job_count": int(selection.get("current_frozen_job_count") or 0),
+        "duplicate_current_job_count": int(selection.get("duplicate_current_job_count") or 0),
+        "duplicate_current_job_keys": list(selection.get("duplicate_current_job_keys") or []),
+        "conflicted_current_match_count": int(selection.get("conflicted_current_match_count") or 0),
+        "conflicted_current_match_keys": list(selection.get("conflicted_current_match_keys") or []),
         "selected_record_count": int(selection.get("selected_record_count") or 0),
         "selected_job_ids": list(selection.get("selected_job_ids") or []),
         "selected_prediction_ids": list(selection.get("selected_prediction_ids") or []),

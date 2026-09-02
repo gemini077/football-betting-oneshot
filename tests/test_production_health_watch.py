@@ -101,6 +101,13 @@ def _cycle(tmp_path, status):
     _write_json(tmp_path / "data" / "product_runtime" / "latest_cycle.json", _base_cycle(status))
 
 
+def _align_universe_fixture(root, match_id):
+    path = root / "data" / "prediction_universe" / "2026-08-12.json"
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload["fixtures"][0]["matchId"] = match_id
+    _write_json(path, payload)
+
+
 def _formal_champion_base_record(
     prediction_id,
     score,
@@ -382,6 +389,94 @@ def test_current_serving_selector_uses_only_frozen_current_jobs_with_retained_pr
     assert selection["selected_record_count"] == 8
     assert selection["selected_prediction_ids"] == sorted(frozen_ids)
     assert selection["selected_job_ids"] == sorted(frozen_job_ids)
+    assert selection["unique_current_match_count"] == 13
+    assert selection["duplicate_current_job_count"] == 0
+    assert selection["conflicted_current_match_count"] == 0
+
+
+def test_current_serving_selector_deduplicates_duplicate_frozen_job_group_and_health_fails_closed(tmp_path):
+    record = _versioned_prediction(
+        "DUPLICATE-PRED",
+        match_id="DUPLICATE-MATCH",
+        job_id="DUPLICATE-JOB-1",
+        match_key="DUPLICATE-MATCH-KEY",
+    )
+    jobs = [
+        _current_job(record),
+        {**_current_job(record), "job_id": "DUPLICATE-JOB-2"},
+    ]
+
+    selection = select_current_serving_predictions(
+        [record],
+        business_date="2026-08-12",
+        current_jobs=jobs,
+    )
+
+    assert selection["unique_current_match_count"] == 1
+    assert selection["duplicate_current_job_count"] == 1
+    assert selection["duplicate_current_job_keys"] == ["match_id:DUPLICATE-MATCH"]
+    assert selection["conflicted_current_match_count"] == 1
+    assert selection["selected_record_count"] == 1
+    assert len(selection["selected_records"]) == 1
+    assert selection["selected_prediction_ids"] == ["DUPLICATE-PRED"]
+    assert len(selection["selected_prediction_ids"]) == len(set(selection["selected_prediction_ids"]))
+
+    root = _healthy_tree(tmp_path, jobs=jobs)
+    _align_universe_fixture(root, "DUPLICATE-MATCH")
+    _write_json(
+        root / "data" / "model_governance" / "predictions" / f"{record['prediction_id']}.json",
+        record,
+    )
+    result = evaluate_health(root=root)
+    selection_details = result["details"]["production_current_serving_selection"]
+
+    assert result["status"] != "HEALTHY"
+    assert "DURABLE_ARTIFACT_INVALID" in result["reasons"]
+    assert result["details"]["production_current_serving_job_integrity"]["status"] == "INVALID"
+    assert selection_details["duplicate_current_job_count"] == 1
+    assert selection_details["duplicate_current_job_keys"] == ["match_id:DUPLICATE-MATCH"]
+
+
+def test_current_serving_selector_fails_closed_on_conflicting_current_job_state(tmp_path):
+    record = _versioned_prediction(
+        "CONFLICT-PRED",
+        match_id="CONFLICT-MATCH",
+        job_id="CONFLICT-JOB-1",
+        match_key="CONFLICT-MATCH-KEY",
+    )
+    jobs = [
+        _current_job(record),
+        {**_current_job(record), "job_id": "CONFLICT-JOB-2", "status": "INSUFFICIENT_DATA", "last_error": "SOURCE_FETCH_FAILED"},
+    ]
+
+    selection = select_current_serving_predictions(
+        [record],
+        business_date="2026-08-12",
+        current_jobs=jobs,
+    )
+
+    assert selection["unique_current_match_count"] == 1
+    assert selection["duplicate_current_job_count"] == 1
+    assert selection["conflicted_current_match_count"] == 1
+    assert selection["current_frozen_job_count"] == 0
+    assert selection["selected_record_count"] == 0
+    assert selection["selected_prediction_ids"] == []
+    assert selection["selected_records"] == []
+
+    root = _healthy_tree(tmp_path, jobs=jobs)
+    _align_universe_fixture(root, "CONFLICT-MATCH")
+    _write_json(
+        root / "data" / "model_governance" / "predictions" / f"{record['prediction_id']}.json",
+        record,
+    )
+    result = evaluate_health(root=root)
+    selection_details = result["details"]["production_current_serving_selection"]
+
+    assert result["status"] != "HEALTHY"
+    assert "DURABLE_ARTIFACT_INVALID" in result["reasons"]
+    assert result["details"]["production_current_serving_job_integrity"]["status"] == "INVALID"
+    assert selection_details["conflicted_current_match_count"] == 1
+    assert selection_details["duplicate_current_job_keys"] == ["match_id:CONFLICT-MATCH"]
 
 
 def test_current_serving_health_alerts_on_served_collapse_without_nonserved_dilution(tmp_path):
