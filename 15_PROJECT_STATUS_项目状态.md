@@ -1,3 +1,10 @@
+## FE-DC-1 current-state sync - 2026-08-29
+
+- `FE-ID-BRIDGE-1`: independent acceptance **PASS**. Retain only the durable current-match identity and verified provider crosswalk evidence required by later work; do not merge the two research-audit bundles wholesale.
+- `FE-DC-1 - Sweden League Dixon-Coles Baseline`: **READY_FOR_ACCEPTANCE** on branch `codex/fe-dc-1`; research/shadow-only. Champion remains `recent_form_market_calibrated_poisson_v2`.
+- GitHub PR #114 is open from `codex/fe-dc-1` to `main`; PR #112 and stacked PR #113 remain open and are not merged by this task.
+- FE-DC-1 uses the authoritative Sweden Allsvenskan historical network, strict pre-match chronology, full score distributions, and a fixed `rho=0` internal control. It does not change production, frozen predictions, or the shared historical database.
+
 # 15_PROJECT_STATUS_项目状态.md
 
 最后更新：2026-09-01

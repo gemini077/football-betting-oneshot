@@ -576,3 +576,12 @@ Freeze-time replay 有效，但 Formal 14：Exact Top1=0%，selection outcome=28
 - calibration artifact 当前 `shadow_only / active=false`
 - current production `rho=0.0`
 - PA-2 historical Challenger Brier/LogLoss 优于 uniform，但 exact-score 1-1 仍过度集中。
+
+
+# D-024 - FE-DC-1 pre-registered Sweden network baseline
+
+Status: `LOCKED FOR THIS MILESTONE`
+
+FE-DC-1 uses the authoritative `competition:sweden-allsvenskan` eligible club league records, a 32-match warm-up, fixed 365-day exponential time weighting, attack/defense sum-to-zero log-rates, fitted Dixon-Coles `rho` bounded to `[-0.10, 0.10]`, and an identical `rho=0` internal control. The score grid is fixed at `0..12 x 0..12`; no parameter sweep, new provider, xG, lineup, Elo, or production connection is allowed.
+
+The milestone is research/shadow-only and can only be marked `READY_FOR_ACCEPTANCE` by the implementation agent; independent acceptance controls any later sealing or promotion decision.

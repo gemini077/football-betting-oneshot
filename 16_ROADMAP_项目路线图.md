@@ -1,3 +1,10 @@
+## FE-DC-1 current phase override - 2026-08-29
+
+- Current milestone: `FE-DC-1 - Sweden League Dixon-Coles Baseline`
+- Status: `READY_FOR_ACCEPTANCE`
+- Role: research/shadow-only; no Champion, production, frozen-prediction, or provider mutation.
+- The older `PA-2-R1` current-pointer lines below are retained as historical context and are superseded by this block for the present task.
+
 # 16_ROADMAP_项目路线图.md
 
 最后更新：2026-09-01
