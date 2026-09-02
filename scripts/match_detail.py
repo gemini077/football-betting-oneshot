@@ -299,8 +299,8 @@ def _render_sources(source_quality: dict[str, Any], legacy_material: dict[str, A
     ])
 
 
-def _render_candidates(contract: dict[str, Any]) -> str:
-    candidates = contract.get("candidate_scores") or []
+def _render_candidates(contract: dict[str, Any], *, serving: bool = True) -> str:
+    candidates = (contract.get("candidate_scores") or []) if serving else []
     if not candidates:
         return '<p class="muted">当前没有合法冻结候选比分。</p>'
     cards = []
@@ -340,17 +340,22 @@ def render_match_detail(contract: dict[str, Any]) -> str:
     model = contract.get("model") or {}
     result = contract.get("result") or {}
     evidence = contract.get("evidence") or {}
-    source_quality = contract.get("source_quality") or evidence.get("source_quality") or {}
+    serving_status = str(status.get("code") or "") == "FROZEN"
+    pilot = bool(governance.get("pilot_excluded") and serving_status)
+    hero_for_render = hero if serving_status else {}
+    evidence_for_render = evidence if serving_status else {}
+    source_quality = (contract.get("source_quality") or evidence.get("source_quality") or {}) if serving_status else {}
+    timestamps_for_render = timestamps if serving_status else {}
     prediction_quality = contract.get("prediction_quality_health") or {}
     exact_score_serving = exact_score_serving_presentation(prediction_quality)
-    pilot = bool(governance.get("pilot_excluded"))
-    serving_status = str(status.get("code") or "") == "FROZEN"
-    primary = hero.get("primary_score") if serving_status else None
+    exact_score_label = exact_score_serving["label"] if serving_status else ""
+    primary = hero_for_render.get("primary_score")
     model_for_render = model if serving_status else {}
+    model_html = _render_model(model_for_render) if serving_status else '<p class="muted">当前没有合法冻结预测依据。</p>'
     status_class = _status_class(contract)
     status_note = '<span class="pilot-note">试运行预测 · 不纳入正式验证</span>' if pilot else f'<span class="status-badge">{_esc(_user_status_label(status), "状态待确认")}</span>'
     quality_warning_html = ""
-    if exact_score_serving["state"] == DEGRADED:
+    if serving_status and exact_score_serving["state"] == DEGRADED:
         quality_warning_html = (
             '<div class="quality-alert serving-degraded" role="status">'
             '<strong>预测质量异常</strong>'
@@ -358,7 +363,7 @@ def render_match_detail(contract: dict[str, Any]) -> str:
             f'<span>{_esc(exact_score_serving["note"])}</span>'
             '</div>'
         )
-    elif exact_score_serving["state"] != "NORMAL":
+    elif serving_status and exact_score_serving["state"] != "NORMAL":
         quality_warning_html = (
             '<div class="quality-alert serving-unverified" role="status">'
             '<strong>预测质量状态待确认</strong>'
@@ -368,9 +373,9 @@ def render_match_detail(contract: dict[str, Any]) -> str:
     status_explanation = _status_explanation(status)
     status_explanation_html = f'<div class="status-explanation"><strong>{_esc(status_explanation)}</strong><span>当前证据不足，暂不扩展判断。</span></div>' if status_explanation and not primary else ""
     hero_score = f'<div class="hero-score">{_display_score(primary)}</div>' if primary else '<div class="hero-score empty-score">—</div>'
-    neighbors = hero.get("neighbor_scores") or []
+    neighbors = hero_for_render.get("neighbor_scores") or []
     neighbor_html = f'<div class="hero-neighbors">候选比分 · {" · ".join(_display_score(value) for value in neighbors)}</div>' if neighbors else ""
-    probabilities = (hero.get("probabilities") or {}) if serving_status else {}
+    probabilities = hero_for_render.get("probabilities") or {}
     one_x_two = ""
     if primary and probabilities:
         one_x_two = (
@@ -378,12 +383,12 @@ def render_match_detail(contract: dict[str, Any]) -> str:
             '</strong></span><span>平 <strong>' + _probability(probabilities.get("draw")) +
             '</strong></span><span>客胜 <strong>' + _probability(probabilities.get("away")) + '</strong></span></div>'
         )
-    script = hero.get("script")
+    script = hero_for_render.get("script")
     script_html = f'<p class="script">{_esc(script)}</p>' if script else '<p class="muted">当前没有可追溯的比赛剧本，暂不扩展判断。</p>'
-    supports_html = _render_support_list(hero.get("supports") or [])
-    conflicts_html = _render_support_list(hero.get("conflicts") or [], css="evidence-list conflict-list")
+    supports_html = _render_support_list(hero_for_render.get("supports") or [])
+    conflicts_html = _render_support_list(hero_for_render.get("conflicts") or [], css="evidence-list conflict-list")
     status_explanation_html += render_closed_beta_notice("status-explanation")
-    risk_html = f'<div class="risk"><span>最大不确定性</span><strong>{_esc(hero.get("biggest_failure_point"))}</strong></div>' if hero.get("biggest_failure_point") else ""
+    risk_html = f'<div class="risk"><span>最大不确定性</span><strong>{_esc(hero_for_render.get("biggest_failure_point"))}</strong></div>' if hero_for_render.get("biggest_failure_point") else ""
     result_html = f'<div class="result-banner"><span>90分钟赛果</span><strong>{_esc(result.get("score_90m"))}</strong><small>{_esc(_result_scope_label(result.get("scope")))} · {_esc(result.get("verified_at"))}</small></div>' if result.get("score_90m") else ""
     post_updates = contract.get("post_freeze_updates") or {}
     update_items = post_updates.get("items") or []
@@ -394,13 +399,14 @@ def render_match_detail(contract: dict[str, Any]) -> str:
             for item in update_items if isinstance(item, dict)
         ) + '<p class="muted">以上信息不参与原预测记录。</p></section>'
     freeze_html = "".join([
-        f'<span>预测记录时间 {_esc(timestamps.get("prediction_frozen_at"), "未记录")}</span>',
-        f'<span>依据更新时间 {_esc(timestamps.get("evidence_updated_at"), "未记录")}</span>',
+        f'<span>预测记录时间 {_esc(timestamps_for_render.get("prediction_frozen_at"), "未记录")}</span>',
+        f'<span>依据更新时间 {_esc(timestamps_for_render.get("evidence_updated_at"), "未记录")}</span>',
     ])
     route = match_url(identity.get("match_id"))
     page_title = f'{_esc(identity.get("home"), "比赛")} vs {_esc(identity.get("away"), "")} · 详情'
-    sections_html = "".join(_render_section(section) for section in contract.get("analysis_sections") or [])
-    legacy_material = evidence.get("legacy_report_material") or {}
+    analysis_sections_for_render = (contract.get("analysis_sections") or []) if serving_status else []
+    sections_html = "".join(_render_section(section) for section in analysis_sections_for_render)
+    legacy_material = evidence_for_render.get("legacy_report_material") or {}
     return f'''<!doctype html>
 <html lang="zh-CN">
 <head>
@@ -525,7 +531,7 @@ def render_match_detail(contract: dict[str, Any]) -> str:
       <div class="hero-head"><div><div class="match-meta"><span>{_esc(identity.get("competition"), "赛事未记录")}</span><span>{_esc(identity.get("match_num"), "")}</span><span>开球 · {_esc(identity.get("kickoff_at"), "时间未记录")}</span></div><h1>{_esc(identity.get("home"), "主队未记录")} <span>vs</span> {_esc(identity.get("away"), "客队未记录")}</h1></div><div>{status_note}</div></div>
       {quality_warning_html}
       {status_explanation_html}
-      <div class="hero-score-wrap"><div><div class="eyebrow">30秒结论</div><div class="eyebrow">{_esc(exact_score_serving["label"])}</div>{hero_score}{neighbor_html}</div><div class="hero-score-label">{_esc(_user_copy(hero.get("summary"))) if exact_score_serving["state"] == "NORMAL" else ""}</div></div>
+      <div class="hero-score-wrap"><div><div class="eyebrow">30秒结论</div><div class="eyebrow">{_esc(exact_score_label)}</div>{hero_score}{neighbor_html}</div><div class="hero-score-label">{_esc(_user_copy(hero_for_render.get("summary"))) if exact_score_serving["state"] == "NORMAL" else ""}</div></div>
       {one_x_two}
       {result_html}
       {script_html}
@@ -533,8 +539,8 @@ def render_match_detail(contract: dict[str, Any]) -> str:
       <div class="record-line">{freeze_html}<span>业务日 {_esc(identity.get("business_date"), "未记录")}</span></div>
     </section>
     {post_html}
-    <section class="layer" id="analysis"><div class="layer-heading"><div><div class="eyebrow">核心分析</div><h2>候选比分与比赛分析</h2></div><p>候选比分来自赛前预测记录。</p></div>{_render_candidates(contract)}<div class="analysis-list">{sections_html}</div></section>
-    <section class="layer" id="evidence"><div class="layer-heading"><div><div class="eyebrow">分析依据</div><h2>比赛数据与分析依据</h2></div><p>比赛数据、预测依据与来源分开呈现。</p></div><div class="evidence-columns"><details open><summary id="fundamentals">比赛数据</summary>{_render_form((evidence.get("fundamentals") or {}).get("recent_form") or {})}</details><details><summary id="market">市场变化</summary>{_render_market(contract.get("market") or {})}</details><details><summary id="forecast">预测依据</summary>{_render_model(model_for_render)}</details><details><summary id="sources">数据来源</summary>{_render_sources(source_quality, legacy_material)}</details></div></section>
+    <section class="layer" id="analysis"><div class="layer-heading"><div><div class="eyebrow">核心分析</div><h2>候选比分与比赛分析</h2></div><p>候选比分来自赛前预测记录。</p></div>{_render_candidates(contract, serving=serving_status)}<div class="analysis-list">{sections_html}</div></section>
+    <section class="layer" id="evidence"><div class="layer-heading"><div><div class="eyebrow">分析依据</div><h2>比赛数据与分析依据</h2></div><p>比赛数据、预测依据与来源分开呈现。</p></div><div class="evidence-columns"><details open><summary id="fundamentals">比赛数据</summary>{_render_form((evidence_for_render.get("fundamentals") or {}).get("recent_form") or {})}</details><details><summary id="market">市场变化</summary>{_render_market(contract.get("market") if serving_status else {})}</details><details><summary id="forecast">预测依据</summary>{model_html}</details><details><summary id="sources">数据来源</summary>{_render_sources(source_quality, legacy_material)}</details></div></section>
     <footer><span>稳定地址：{_esc(route)}</span><span>赛前预测记录与当时依据保持不变；新增事实若存在，将单独列为赛前后更新。</span></footer>
   </main>
 </body>

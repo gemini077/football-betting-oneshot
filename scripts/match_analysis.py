@@ -1049,36 +1049,66 @@ def assemble_match_analysis(
         fixture.get("match_key"),
         fixture_identity=fixture,
     )
-    prediction = _find_prediction(Path(prediction_root), fixture, job)
+    audit_prediction = _find_prediction(Path(prediction_root), fixture, job)
     if not fixture.get("match_key"):
-        fixture["match_key"] = _first(job or {}, "match_key", "matchKey") or _first(prediction or {}, "match_key", "matchKey")
-    if not fixture.get("home") and prediction:
-        identity = prediction.get("match_identity") or {}
+        fixture["match_key"] = _first(job or {}, "match_key", "matchKey") or _first(audit_prediction or {}, "match_key", "matchKey")
+    if not fixture.get("home") and audit_prediction:
+        identity = audit_prediction.get("match_identity") or {}
         fixture["home"] = _first(identity, "home", "home_team")
         fixture["away"] = _first(identity, "away", "away_team")
-    status = _status(job, prediction)
+    status = _status(job, audit_prediction)
+    serving_prediction = audit_prediction if status == "FROZEN" else None
     excluded_ids = _load_excluded_ids(Path(exclusion_root))
-    prediction_id = _string(_first(prediction or {}, "prediction_id", "predictionId")) or None
+    prediction_id = _string(_first(audit_prediction or {}, "prediction_id", "predictionId")) or None
     pilot_excluded = bool(prediction_id and prediction_id in excluded_ids)
-    if pilot_excluded:
+    if pilot_excluded and serving_prediction:
         status_label = "试运行预测"
     else:
         status_label = STATUS_LABELS.get(status, status)
-    snapshot_ref = _first(prediction or {}, "input_snapshot_ref", "model_input_snapshot_ref")
+    snapshot_ref = _first(serving_prediction or {}, "input_snapshot_ref", "model_input_snapshot_ref")
     snapshot, snapshot_path = _find_snapshot(Path(snapshot_root), snapshot_ref)
     snapshot_input = _snapshot_input(snapshot)
     recent_form, form_captured_at, form_source = _recent_form(snapshot_input)
-    model = _prediction_model(prediction or {}) if prediction and status == "FROZEN" else _prediction_model({})
-    market = _market_facts(snapshot_input, prediction or {})
-    result = _find_verified_result(Path(result_root), fixture, prediction)
-    legacy_report_material = discover_legacy_analysis_material(
-        business_date,
-        fixture,
-        frozen_prediction=prediction,
-        workspace_root=Path(workspace_root),
-        analysis_reports_root=Path(analysis_reports_root),
-        postmatch_reports_root=Path(postmatch_reports_root),
-    )
+    if not serving_prediction:
+        recent_form, form_captured_at, form_source = {}, None, None
+    model = _prediction_model(serving_prediction or {})
+    market = _market_facts(snapshot_input, serving_prediction or {})
+    if not serving_prediction:
+        market["model_comparison"]["source_refs"] = []
+    result = _find_verified_result(Path(result_root), fixture, audit_prediction)
+    if serving_prediction:
+        legacy_report_material = discover_legacy_analysis_material(
+            business_date,
+            fixture,
+            frozen_prediction=serving_prediction,
+            workspace_root=Path(workspace_root),
+            analysis_reports_root=Path(analysis_reports_root),
+            postmatch_reports_root=Path(postmatch_reports_root),
+        )
+    else:
+        legacy_report_material = {
+            "status": "NOT_PROJECTED_NON_SERVING",
+            "consistency_checked": True,
+            "candidate_files_checked": 0,
+            "checked_paths": [],
+            "items": [],
+            "interpretations": [],
+            "sections": [],
+            "candidate_labels": {},
+            "candidate_reasoning": {},
+            "hero_script": None,
+            "biggest_failure_point": None,
+            "attention_tag": None,
+            "market_interpretation": None,
+            "risk_evidence": [],
+            "decision_evolution": None,
+            "analysis_origin": None,
+            "lineage": [],
+            "source_keys": [],
+            "trace_coverage": 0,
+            "convergence_complete": False,
+            "source_refs": [],
+        }
     analysis_material = {
         "status": legacy_report_material.get("status"),
         "consistency_checked": legacy_report_material.get("consistency_checked"),
@@ -1107,12 +1137,12 @@ def assemble_match_analysis(
             item["script_label"] = label
     supports, conflicts = _supports_and_conflicts(fixture, model, market, recent_form, snapshot_input, analysis_material)
     sections = _section_payloads(fixture, model, market, recent_form, supports, conflicts, analysis_material)
-    sources = _source_refs(prediction or {}, snapshot)
-    reason_code = _reason_code(job, prediction)
-    formal_eligible = _formal_eligible(prediction, pilot_excluded)
-    freeze_at = _iso(_first(prediction or {}, "freeze_created_at", "freeze_at"))
-    prediction_created_at = _iso(_first(prediction or {}, "prediction_created_at", "created_at"))
-    source_cutoff_at = _iso(_first(prediction or {}, "source_cutoff_at", "model_input_as_of_at"))
+    sources = _source_refs(serving_prediction or {}, snapshot)
+    reason_code = _reason_code(job, audit_prediction)
+    formal_eligible = _formal_eligible(serving_prediction, pilot_excluded)
+    freeze_at = _iso(_first(serving_prediction or {}, "freeze_created_at", "freeze_at"))
+    prediction_created_at = _iso(_first(serving_prediction or {}, "prediction_created_at", "created_at"))
+    source_cutoff_at = _iso(_first(serving_prediction or {}, "source_cutoff_at", "model_input_as_of_at"))
     evidence_updated_at = _iso(
         _first(
             snapshot or {},
@@ -1124,17 +1154,17 @@ def assemble_match_analysis(
     if snapshot is None:
         evidence_updated_at = None
     missing_evidence = []
-    if not prediction:
+    if not serving_prediction:
         missing_evidence.append(reason_code or "NO_FROZEN_PREDICTION")
-    if prediction and not snapshot:
+    if serving_prediction and not snapshot:
         missing_evidence.append("INPUT_SNAPSHOT_UNAVAILABLE")
-    if prediction and not recent_form:
+    if serving_prediction and not recent_form:
         missing_evidence.append("RECENT_FORM_UNAVAILABLE")
     source_quality = {
-        "data_grade": prediction.get("data_grade") if prediction else None,
-        "base_input_quality": prediction.get("base_input_quality") if prediction else None,
-        "market_intelligence_quality": prediction.get("market_intelligence_quality") if prediction else None,
-        "missing": _unique([*missing_evidence, *(_as_list((prediction or {}).get("missing_fields")))]) ,
+        "data_grade": serving_prediction.get("data_grade") if serving_prediction else None,
+        "base_input_quality": serving_prediction.get("base_input_quality") if serving_prediction else None,
+        "market_intelligence_quality": serving_prediction.get("market_intelligence_quality") if serving_prediction else None,
+        "missing": _unique([*missing_evidence, *(_as_list((serving_prediction or {}).get("missing_fields")))]) ,
         "source_references": sources,
         "input_snapshot_ref": snapshot_ref or (snapshot_path.as_posix() if snapshot_path else None),
         "recent_form_source": form_source,
@@ -1180,8 +1210,8 @@ def assemble_match_analysis(
             "primary_score": model.get("unique_score"),
             "neighbor_scores": [item.get("score") for item in model.get("top_scores", [])[1:3]],
             "summary": hero_summary,
-            "script": (prediction or {}).get("short_match_script") or legacy_report_material.get("hero_script"),
-            "attention_tag": (prediction or {}).get("attention_tag") or legacy_report_material.get("attention_tag"),
+            "script": (serving_prediction or {}).get("short_match_script") or legacy_report_material.get("hero_script"),
+            "attention_tag": (serving_prediction or {}).get("attention_tag") or legacy_report_material.get("attention_tag"),
             "supports": supports,
             "conflicts": conflicts,
             "biggest_failure_point": legacy_report_material.get("biggest_failure_point") or model.get("uncertainty", {}).get("main_risk"),
@@ -1212,12 +1242,12 @@ def assemble_match_analysis(
             "prediction_id": prediction_id,
             "pilot_excluded": pilot_excluded,
             "formal_prospective_eligible": formal_eligible,
-            "formal_eligibility_policy": (prediction or {}).get("formal_eligibility_policy"),
-            "data_grade": (prediction or {}).get("data_grade"),
-            "base_input_quality": (prediction or {}).get("base_input_quality"),
-            "prediction_variant": (prediction or {}).get("prediction_variant"),
-            "model_role": (prediction or {}).get("model_role"),
-            "product_role": (prediction or {}).get("product_role"),
+            "formal_eligibility_policy": (audit_prediction or {}).get("formal_eligibility_policy"),
+            "data_grade": (audit_prediction or {}).get("data_grade"),
+            "base_input_quality": (audit_prediction or {}).get("base_input_quality"),
+            "prediction_variant": (audit_prediction or {}).get("prediction_variant"),
+            "model_role": (audit_prediction or {}).get("model_role"),
+            "product_role": (audit_prediction or {}).get("product_role"),
             "prediction_record_ref": prediction_id,
             "input_snapshot_ref": snapshot_ref,
         },

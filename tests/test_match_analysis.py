@@ -415,6 +415,133 @@ def legacy_report(*, score: str = "1-0", sections: list[dict] | None = None) -> 
     }
 
 
+R4_LEAK_SENTINELS = (
+    "SHOULD_NOT_LEAK_SCRIPT",
+    "SHOULD_NOT_LEAK_ATTENTION",
+    "SHOULD_NOT_LEAK_SUPPORT",
+    "SHOULD_NOT_LEAK_CONFLICT",
+    "SHOULD_NOT_LEAK_RISK",
+    "SHOULD_NOT_LEAK_MARKET",
+)
+
+
+def r4_rich_retained_payload(tmp_path: Path, *, status: str) -> dict:
+    legacy_root = tmp_path / "analysis_reports"
+    payload = roots(tmp_path, status=status, with_prediction=True, legacy_root=legacy_root)
+    retained = prediction("FBOS-PRED-test")
+    retained.update({
+        "short_match_script": "SHOULD_NOT_LEAK_SCRIPT",
+        "attention_tag": "SHOULD_NOT_LEAK_ATTENTION",
+    })
+    retained["uncertainty"] = {"confidence_label": "HIGH", "main_risk": "SHOULD_NOT_LEAK_RISK"}
+    write_json(payload["prediction_root"] / "FBOS-PRED-test.json", retained)
+
+    legacy = legacy_report()
+    legacy["decisions"].update({
+        "match_story": "SHOULD_NOT_LEAK_SCRIPT",
+        "maximum_error_points": ["SHOULD_NOT_LEAK_RISK"],
+        "market_conflict": "SHOULD_NOT_LEAK_MARKET",
+    })
+    legacy["market"] = {
+        "interpretation": {
+            "impact_code": "confirm",
+            "direction": "home",
+            "model_impact": "SHOULD_NOT_LEAK_MARKET",
+        }
+    }
+    legacy_sections = legacy["analysis_material"]["sections"]
+    legacy_sections[0]["supports"][0]["text"] = "SHOULD_NOT_LEAK_SUPPORT"
+    legacy_sections[3]["conflicts"][0]["text"] = "SHOULD_NOT_LEAK_CONFLICT"
+    write_json(legacy_root / "legacy.json", legacy)
+    return payload
+
+
+@pytest.mark.parametrize("status", ["INSUFFICIENT_DATA", "PREDICTION_FAILED", "MISSED_PREMATCH_WINDOW", "PENDING"])
+def test_non_serving_retained_prediction_narrative_is_not_projected(tmp_path, status):
+    contract = assemble(r4_rich_retained_payload(tmp_path, status=status))
+    html = render_match_detail(contract)
+    serialized = json.dumps(contract, ensure_ascii=False)
+
+    assert contract["status"]["code"] == status
+    assert contract["governance"]["prediction_id"] == "FBOS-PRED-test"
+    assert contract["hero"]["primary_score"] is None
+    assert contract["hero"]["probabilities"] == {}
+    assert contract["hero"]["script"] is None
+    assert contract["hero"]["attention_tag"] is None
+    assert contract["hero"]["supports"] == []
+    assert contract["hero"]["conflicts"] == []
+    assert contract["hero"]["biggest_failure_point"] is None
+    assert contract["candidate_scores"] == []
+    assert contract["model"]["probabilities"] == {}
+    assert contract["model"]["top_scores"] == []
+    assert contract["market"]["model_comparison"]["model_home_probability"] is None
+    assert contract["market"]["model_comparison"]["source_refs"] == []
+    assert contract["market"]["source_refs"] == []
+    assert contract["source_quality"]["source_references"] == []
+    assert contract["source_quality"]["recent_form_source"] is None
+    assert all(sentinel not in serialized for sentinel in R4_LEAK_SENTINELS)
+    assert all(sentinel not in html for sentinel in R4_LEAK_SENTINELS)
+    assert "\u9884\u6d4b\u6982\u7387" not in html
+    assert "\u6a21\u578b\u539f\u59cb\u6bd4\u5206\u7ee7\u7eed\u4fdd\u7559" not in html
+
+
+def test_conflict_retained_prediction_narrative_is_not_projected_in_either_order(tmp_path):
+    projections = []
+    for index, ordered_jobs in enumerate((
+        [job("2040820", "FBOS-PRED-test"), {**job("2040820", "FBOS-PRED-test"), "job_id": "BASE-CONFLICT-2", "status": "INSUFFICIENT_DATA", "last_error": "SOURCE_FETCH_FAILED"}],
+        [{**job("2040820", "FBOS-PRED-test"), "job_id": "BASE-CONFLICT-2", "status": "INSUFFICIENT_DATA", "last_error": "SOURCE_FETCH_FAILED"}, job("2040820", "FBOS-PRED-test")],
+    )):
+        payload = r4_rich_retained_payload(tmp_path / f"order-{index}", status="FROZEN")
+        write_json(payload["jobs_root"] / f"{DATE}.json", {"business_date": DATE, "jobs": ordered_jobs})
+        contract = assemble(payload)
+        html = render_match_detail(contract)
+        serialized = json.dumps(contract, ensure_ascii=False)
+
+        assert contract["status"]["code"] == "CURRENT_JOB_STATE_CONFLICT"
+        assert contract["governance"]["prediction_id"] == "FBOS-PRED-test"
+        assert contract["hero"]["script"] is None
+        assert contract["hero"]["attention_tag"] is None
+        assert contract["hero"]["supports"] == []
+        assert contract["hero"]["conflicts"] == []
+        assert contract["hero"]["biggest_failure_point"] is None
+        assert contract["candidate_scores"] == []
+        assert all(sentinel not in serialized for sentinel in R4_LEAK_SENTINELS)
+        assert all(sentinel not in html for sentinel in R4_LEAK_SENTINELS)
+        assert "\u6a21\u578b\u539f\u59cb\u6bd4\u5206\u7ee7\u7eed\u4fdd\u7559" not in html
+        projections.append((contract["status"], contract["hero"], contract["model"], contract["market"], html))
+
+    assert projections[0] == projections[1]
+
+
+def test_duplicate_frozen_retained_prediction_narrative_is_not_projected(tmp_path):
+    payload = r4_rich_retained_payload(tmp_path, status="FROZEN")
+    first = job("2040820", "FBOS-PRED-test")
+    second = {**first, "job_id": "BASE-DUPLICATE-2"}
+    write_json(payload["jobs_root"] / f"{DATE}.json", {"business_date": DATE, "jobs": [first, second]})
+
+    contract = assemble(payload)
+    html = render_match_detail(contract)
+    serialized = json.dumps(contract, ensure_ascii=False)
+
+    assert contract["status"]["code"] == "CURRENT_JOB_STATE_CONFLICT"
+    assert contract["current_job_resolution"]["status"] == "CONFLICT"
+    assert contract["hero"]["script"] is None
+    assert contract["hero"]["supports"] == []
+    assert contract["hero"]["conflicts"] == []
+    assert contract["hero"]["biggest_failure_point"] is None
+    assert all(sentinel not in serialized for sentinel in R4_LEAK_SENTINELS)
+    assert all(sentinel not in html for sentinel in R4_LEAK_SENTINELS)
+
+
+def test_non_frozen_quality_warning_is_not_rendered(tmp_path):
+    contract = assemble(roots(tmp_path, status="INSUFFICIENT_DATA", with_prediction=True))
+    contract["prediction_quality_health"] = {"status": "UNVERIFIED", "scope": "current_serving"}
+
+    html = render_match_detail(contract)
+
+    assert "\u6a21\u578b\u539f\u59cb\u6bd4\u5206\u7ee7\u7eed\u4fdd\u7559" not in html
+
+
 @pytest.mark.parametrize("host_timezone", [timezone.utc, timezone(timedelta(hours=8))])
 def test_legacy_material_is_really_discovered_and_consistency_checked(tmp_path, monkeypatch, host_timezone):
     monkeypatch.setattr(legacy_mapper_module, "datetime", _host_datetime(host_timezone))
