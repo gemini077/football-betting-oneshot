@@ -13,10 +13,12 @@ from scripts.nowscore_markets import (
     handicap_number,
     parse_coach_page,
     parse_company_trend,
+    parse_nowscore_jc_business_page,
     parse_panlu_page,
     parse_referee_page,
     parse_analysis_data,
     parse_schedule_js,
+    fetch_nowscore_jc_schedule,
     fetch_schedule_bundle,
     parse_three_in_one,
     resolve_match,
@@ -40,6 +42,49 @@ A[1]=[2002,1,555,666,'第二主队',0,'Second Home','第二客队',0,'Second Awa
 SC2_FUTURE_SCHEDULE = """var A=Array(2);
 A[0]=[2002,1,555,666,'第二主队',0,'Second Home','第二客队',0,'Second Away','02:00','09-02',0,0,0,,,0,0,0,0,'','','',0,'','','',0,0,0,0];
 A[1]=[2002,1,555,666,'第二主队',0,'Second Home','第二客队',0,'Second Away','02:00','09-02',0,0,0,,,0,0,0,0,'','','',0,'','','',0,0,0,0];"""
+
+
+def _jc_business_page(
+    headers: list[tuple[str, str]],
+    selected_date: str,
+    *,
+    row: str = "",
+    selector: bool = True,
+) -> str:
+    header_rows = "".join(
+        f'<tr class="niDate"><td><span id="ah_{group}"></span>{header_date} '
+        f'(11:00--\u6b21\u65e511:00)</td></tr>'
+        for group, header_date in headers
+    )
+    selector_html = (
+        '<select onchange="location.href=\'?date=\'+this.options['
+        'this.selectedIndex].value"><option value="2026-09-03">03</option>'
+        '</select>'
+        if selector
+        else ""
+    )
+    return (
+        f'<script>var SelDate = "{selected_date}";</script>{selector_html}'
+        f"<table>{header_rows}{row}</table>"
+    )
+
+
+def _jc_business_row(group: str = "周三", kickoff: str = "2026-09-03 12:00") -> str:
+    return (
+        f'<tr id="row_1" name="{group}" matchid="sales-1" gamename="League">'
+        '<td>001</td><td></td><td></td><td></td>'
+        '<td><a id="HomeTeam_123">Home</a></td><td></td><td></td>'
+        '<td>Away</td>'
+        f'<td title="{kickoff}"></td></tr>'
+    )
+
+
+def _fetch_jc_business_page(page: str, business_date: str) -> dict:
+    with patch.object(nowscore_markets, "_fetch_bytes", return_value=page.encode("utf-8")):
+        return fetch_nowscore_jc_schedule(
+            business_date,
+            now=date(2026, 9, 1),
+        )
 
 
 MARKET_HTML = """
@@ -168,6 +213,98 @@ def _current_universe_fixture(match_id: int) -> dict:
 
 
 class NowscoreMarketTests(unittest.TestCase):
+    def test_future_unpublished_date_is_classified_from_published_headers(self):
+        page = _jc_business_page(
+            [("周一", "2026-09-01"), ("周二", "2026-09-02")],
+            "2026-09-03",
+        )
+
+        result = _fetch_jc_business_page(page, "2026-09-03")
+
+        self.assertFalse(result["success"])
+        self.assertEqual("NOT_YET_PUBLISHED", result["status"])
+        self.assertIsNone(result["business_date_contract"]["requested_header"])
+        self.assertEqual(
+            ["2026-09-01", "2026-09-02"],
+            [header["date"] for header in result["business_date_contract"]["headers"]],
+        )
+
+    def test_farther_future_date_is_also_not_yet_published(self):
+        page = _jc_business_page(
+            [("周一", "2026-09-01"), ("周二", "2026-09-02")],
+            "2026-09-04",
+        )
+
+        result = _fetch_jc_business_page(page, "2026-09-04")
+
+        self.assertEqual("NOT_YET_PUBLISHED", result["status"])
+
+    def test_future_publication_uses_headers_not_selected_date_echo(self):
+        page = _jc_business_page(
+            [("\u5468\u4e00", "2026-09-01"), ("\u5468\u4e8c", "2026-09-02")],
+            "2026-09-02",
+        )
+
+        result = _fetch_jc_business_page(page, "2026-09-03")
+
+        self.assertEqual("NOT_YET_PUBLISHED", result["status"])
+
+    def test_network_failure_is_not_not_yet_published(self):
+        with patch.object(nowscore_markets, "_fetch_bytes", side_effect=OSError("down")):
+            result = fetch_nowscore_jc_schedule(
+                "2026-09-03",
+                now=date(2026, 9, 1),
+            )
+
+        self.assertFalse(result["success"])
+        self.assertEqual("FETCH_ERROR", result["status"])
+
+    def test_missing_already_published_date_is_contract_failure(self):
+        page = _jc_business_page(
+            [("周一", "2026-09-01"), ("周三", "2026-09-03")],
+            "2026-09-02",
+        )
+
+        result = _fetch_jc_business_page(page, "2026-09-02")
+
+        self.assertEqual("BUSINESS_DATE_CONTRACT_REJECTED", result["status"])
+        self.assertNotEqual("NOT_YET_PUBLISHED", result["status"])
+
+    def test_malformed_or_conflicting_publication_headers_fail_closed(self):
+        cases = (
+            _jc_business_page(
+                [("周一", "2026-09-01"), ("周一", "2026-09-02")],
+                "2026-09-03",
+            ),
+            _jc_business_page(
+                [("周一", "not-a-date")],
+                "2026-09-03",
+            ),
+            _jc_business_page(
+                [("周一", "2026-09-01")],
+                "2026-09-03",
+                selector=False,
+            ),
+        )
+
+        for page in cases:
+            with self.subTest(page=page):
+                result = _fetch_jc_business_page(page, "2026-09-03")
+                self.assertEqual("BUSINESS_DATE_CONTRACT_REJECTED", result["status"])
+
+    def test_published_date_with_valid_rows_keeps_success_contract(self):
+        page = _jc_business_page(
+            [("周三", "2026-09-03")],
+            "2026-09-03",
+            row=_jc_business_row(),
+        )
+
+        result = _fetch_jc_business_page(page, "2026-09-03")
+
+        self.assertTrue(result["success"])
+        self.assertEqual("OK", result["status"])
+        self.assertEqual(1, len(result["matches"]))
+
     def test_verified_binding_survives_schedule_outage(self):
         parsed = {
             "identity": {"home_team": "A", "away_team": "B", "kickoff_local": "2026-07-20 03:00"},

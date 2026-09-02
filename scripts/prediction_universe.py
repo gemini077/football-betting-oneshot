@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Mapping
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 from typing import Any
 
@@ -21,6 +21,7 @@ VALID_SNAPSHOT_STATUSES = {"READY", "EMPTY_CONFIRMED"}
 SCHEMA_VERSION = "1.0"
 TRUSTED_NOWSCORE_JC_SOURCE = "nowscore_public_jc_sales"
 TRUSTED_NOWSCORE_JC_SALES_WINDOW = "11:00--次日11:00"
+NOT_YET_PUBLISHED = "NOT_YET_PUBLISHED"
 
 _FIELD_ALIASES = {
     "matchId": ("matchId", "match_id", "id"),
@@ -469,11 +470,73 @@ def _attempt_record(
             "url", "source_surface", "backing_data_url", "surface",
             "primary_source", "business_date_source", "business_date_source_url",
             "jc_contract", "business_date_contract",
-            "jc_membership_source", "date_provenance",
+            "jc_membership_source", "date_provenance", "publication_status",
+            "diagnostics",
         ):
+            if key == "diagnostics" and status != NOT_YET_PUBLISHED:
+                continue
             if key in payload and payload[key] not in (None, ""):
                 record[key] = payload[key]
     return record
+
+
+def _is_authorized_not_yet_published_payload(
+    payload: Any, business_date: str
+) -> bool:
+    if not isinstance(payload, dict):
+        return False
+    if (
+        payload.get("source") != "nowscore_public_jc"
+        or payload.get("primary_source") != TRUSTED_NOWSCORE_JC_SOURCE
+        or str(payload.get("schedule_scope") or "").casefold() != "jc"
+        or payload.get("success") is not False
+        or payload.get("status") != NOT_YET_PUBLISHED
+        or payload.get("matches") != []
+        or str(payload.get("date") or "") != business_date
+        or str(payload.get("business_date") or "") != business_date
+    ):
+        return False
+
+    contract = payload.get("business_date_contract")
+    if not isinstance(contract, dict):
+        return False
+    if (
+        contract.get("publication_status") != NOT_YET_PUBLISHED
+        or contract.get("valid") is not False
+        or contract.get("surface") != "nowscore_public_jc_sales"
+        or contract.get("date_anchor") != "SelDate + niDate header date"
+        or contract.get("sales_window") != TRUSTED_NOWSCORE_JC_SALES_WINDOW
+        or contract.get("requested_date") != business_date
+        or contract.get("date_selector_present") is not True
+        or contract.get("requested_header") is not None
+        or contract.get("conflicting_groups") != {}
+    ):
+        return False
+
+    headers = contract.get("headers")
+    if not isinstance(headers, list) or not headers:
+        return False
+    published_dates: list[date] = []
+    groups_by_date: dict[date, set[str]] = {}
+    for header in headers:
+        if not isinstance(header, dict):
+            return False
+        try:
+            published_date = date.fromisoformat(str(header.get("date") or ""))
+        except ValueError:
+            return False
+        group = str(header.get("group") or "").strip()
+        if (
+            not group
+            or header.get("sales_window") != TRUSTED_NOWSCORE_JC_SALES_WINDOW
+        ):
+            return False
+        published_dates.append(published_date)
+        groups_by_date.setdefault(published_date, set()).add(group)
+    if any(len(groups) > 1 for groups in groups_by_date.values()):
+        return False
+    expected = date.fromisoformat(business_date)
+    return expected not in published_dates and expected > max(published_dates)
 
 
 def _write(path: Path, payload: dict[str, Any]) -> None:
@@ -496,6 +559,35 @@ def update_prediction_universe(
         or (payload.get("fetch_time") if isinstance(payload, dict) else None)
         or _now()
     )
+
+    if _is_authorized_not_yet_published_payload(payload, business_date):
+        attempt = _attempt_record(
+            payload,
+            NOT_YET_PUBLISHED,
+            attempt_at,
+            source_fixture_count=0,
+            fixture_count=0,
+            excluded_cross_date_count=0,
+        )
+        if isinstance(existing, dict) and existing.get("status") in VALID_SNAPSHOT_STATUSES:
+            preserved = dict(existing)
+            preserved["last_fetch"] = attempt
+            _write(path, preserved)
+            return preserved
+        snapshot = {
+            "schema_version": SCHEMA_VERSION,
+            "business_date": business_date,
+            "status": NOT_YET_PUBLISHED,
+            "source": attempt["source"],
+            "fetched_at": attempt_at,
+            "source_fixture_count": 0,
+            "fixture_count": 0,
+            "excluded_cross_date_count": 0,
+            "fixtures": [],
+            "last_fetch": attempt,
+        }
+        _write(path, snapshot)
+        return snapshot
 
     source_fixture_count = len(payload.get("matches") or []) if isinstance(payload, dict) and isinstance(payload.get("matches"), list) else 0
     fixtures: list[dict[str, Any]] = []

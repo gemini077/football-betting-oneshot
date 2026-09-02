@@ -104,6 +104,32 @@ def _fetched_success(business_date: str = "2026-09-01") -> dict:
     }
 
 
+def _fetched_not_yet_published(business_date: str = "2026-09-03") -> dict:
+    payload = _fetched_success(business_date)
+    payload.update({
+        "success": False,
+        "status": "NOT_YET_PUBLISHED",
+        "matches": [],
+    })
+    contract = payload["business_date_contract"]
+    contract.update({
+        "valid": False,
+        "selected_date": business_date,
+        "requested_date": business_date,
+        "date_selector_present": True,
+        "headers": [
+            {"group": "\u5468\u4e00", "date": "2026-09-01", "sales_window": "11:00--\u6b21\u65e511:00"},
+            {"group": "\u5468\u4e8c", "date": "2026-09-02", "sales_window": "11:00--\u6b21\u65e511:00"},
+        ],
+        "requested_header": None,
+        "conflicting_groups": {},
+        "publication_status": "NOT_YET_PUBLISHED",
+    })
+    payload["jc_contract"] = dict(contract)
+    payload["diagnostics"] = {"business_date_page_status": "NOT_YET_PUBLISHED"}
+    return payload
+
+
 def test_nowscore_schedule_payload_preserves_verified_fixture_provenance():
     payload = daily_schedule_workspace._nowscore_schedule_payload(
         "2026-09-01", _fetched_success()
@@ -121,6 +147,18 @@ def test_nowscore_schedule_payload_preserves_verified_fixture_provenance():
     assert payload["matches"][0]["cansale"] == "true"
     assert payload["matches"][0]["matchDate"] == "2026-09-02"
     assert payload["matches"][0]["source_surface"].startswith("https://cp.nowscore.com/buy/")
+
+
+def test_nowscore_schedule_payload_preserves_not_yet_published_state_and_provenance():
+    payload = daily_schedule_workspace._nowscore_schedule_payload(
+        "2026-09-03", _fetched_not_yet_published()
+    )
+
+    assert payload["success"] is False
+    assert payload["status"] == "NOT_YET_PUBLISHED"
+    assert payload["matches"] == []
+    assert payload["business_date_contract"]["requested_header"] is None
+    assert payload["diagnostics"]["business_date_page_status"] == "NOT_YET_PUBLISHED"
 
 
 def test_nowscore_schedule_payload_accepts_next_calendar_day_kickoff():
@@ -198,3 +236,84 @@ def test_main_keeps_both_universe_snapshots_failed_without_secondary_schedule_pr
         assert saved["source"] == "nowscore_public_jc"
         assert saved["status"] == "FETCH_ERROR"
         assert saved["matches"] == []
+
+
+def test_main_reports_all_future_dates_not_yet_published_without_rebuilding_workspace(
+    tmp_path, capsys
+):
+    fetched = [
+        _fetched_not_yet_published("2026-09-03"),
+        _fetched_not_yet_published("2026-09-04"),
+    ]
+
+    with patch.object(daily_schedule_workspace, "ROOT", tmp_path), \
+        patch.object(daily_schedule_workspace, "fetch_nowscore_jc_schedule", side_effect=fetched), \
+        patch.object(daily_schedule_workspace, "attach_nowscore_bindings", return_value={"status": "NO_PUBLIC_JC_ROWS"}), \
+        patch.object(daily_schedule_workspace, "update_prediction_universe", side_effect=lambda business_date, payload: {
+            "status": payload["status"],
+            "source": payload["source"],
+            "fetched_at": payload["fetched_at"],
+            "fixture_count": 0,
+            "source_fixture_count": 0,
+        }), \
+        patch.object(daily_schedule_workspace, "sync_base_prediction_jobs", return_value={"status": "BLOCKED_UNIVERSE"}) as mocked_sync, \
+        patch.object(daily_schedule_workspace, "build", side_effect=AssertionError("workspace rebuild")), \
+        patch.object(sys, "argv", [
+            "daily_schedule_workspace.py", "--date", "2026-09-03"
+        ]):
+        assert daily_schedule_workspace.main() == 0
+
+    output = json.loads(capsys.readouterr().out)
+    assert output["status"] == "NOT_YET_PUBLISHED"
+    assert output["refresh_status"] == "not_yet_published"
+    assert output["workspace_rebuilt"] is False
+    assert output["business_dates"] == ["2026-09-03", "2026-09-04"]
+    assert [row["status"] for row in output["source_states"]] == [
+        "NOT_YET_PUBLISHED", "NOT_YET_PUBLISHED"
+    ]
+    assert [row["status"] for row in output["base_prediction_jobs"]] == [
+        "SKIPPED", "SKIPPED"
+    ]
+    assert not mocked_sync.called
+    snapshots = sorted((tmp_path / "data" / "schedule_updates").glob("*/*.json"))
+    assert len(snapshots) == 2
+    assert all(
+        json.loads(path.read_text(encoding="utf-8"))["status"] == "NOT_YET_PUBLISHED"
+        for path in snapshots
+    )
+
+
+def test_main_keeps_usable_data_on_mixed_ready_and_not_yet_published_dates(
+    tmp_path, capsys
+):
+    fetched = [
+        _fetched_success("2026-09-03"),
+        _fetched_not_yet_published("2026-09-04"),
+    ]
+
+    with patch.object(daily_schedule_workspace, "ROOT", tmp_path), \
+        patch.object(daily_schedule_workspace, "fetch_nowscore_jc_schedule", side_effect=fetched), \
+        patch.object(daily_schedule_workspace, "attach_nowscore_bindings", return_value={"status": "OK_PUBLIC_JC"}), \
+        patch.object(daily_schedule_workspace, "update_prediction_universe", side_effect=lambda business_date, payload: {
+            "status": "READY" if payload["success"] else payload["status"],
+            "source": payload["source"],
+            "fetched_at": payload["fetched_at"],
+            "fixture_count": len(payload["matches"]),
+            "source_fixture_count": len(payload["matches"]),
+        }), \
+        patch.object(daily_schedule_workspace, "sync_base_prediction_jobs", return_value={"status": "READY"}) as mocked_sync, \
+        patch.object(daily_schedule_workspace, "build", side_effect=AssertionError("fetch-only expected")), \
+        patch.object(sys, "argv", [
+            "daily_schedule_workspace.py", "--date", "2026-09-03", "--fetch-only"
+        ]):
+        assert daily_schedule_workspace.main() == 0
+
+    output = json.loads(capsys.readouterr().out)
+    assert output["refresh_status"] == "partial_success"
+    assert output["workspace_rebuilt"] is False
+    assert output["source_states"][0]["status"] == "OK"
+    assert output["source_states"][1]["status"] == "NOT_YET_PUBLISHED"
+    assert [row["status"] for row in output["base_prediction_jobs"]] == [
+        "READY", "SKIPPED"
+    ]
+    assert mocked_sync.call_count == 1

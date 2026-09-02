@@ -38,7 +38,110 @@ def full_schedule(
     }
 
 
+def not_yet_published(business_date: str = "2026-09-03") -> dict:
+    sales_url = (
+        "https://cp.nowscore.com/buy/jingcai.aspx"
+        f"?typeID=101&oddstype=2&date={business_date}"
+    )
+    return {
+        "source": "nowscore_public_jc",
+        "primary_source": "nowscore_public_jc_sales",
+        "schedule_scope": "jc",
+        "date": business_date,
+        "business_date": business_date,
+        "url": sales_url,
+        "source_surface": sales_url,
+        "business_date_source": "nowscore_public_jc_sales",
+        "business_date_source_url": sales_url,
+        "fetch_time": "2026-09-02T12:00:00+08:00",
+        "fetched_at": "2026-09-02T12:00:00+08:00",
+        "success": False,
+        "status": "NOT_YET_PUBLISHED",
+        "publication_status": "NOT_YET_PUBLISHED",
+        "matches": [],
+        "business_date_contract": {
+            "valid": False,
+            "surface": "nowscore_public_jc_sales",
+            "date_anchor": "SelDate + niDate header date",
+            "sales_window": "11:00--\u6b21\u65e511:00",
+            "selected_date": business_date,
+            "requested_date": business_date,
+            "date_selector_present": True,
+            "headers": [
+                {"group": "\u5468\u4e00", "date": "2026-09-01", "sales_window": "11:00--\u6b21\u65e511:00"},
+                {"group": "\u5468\u4e8c", "date": "2026-09-02", "sales_window": "11:00--\u6b21\u65e511:00"},
+            ],
+            "requested_header": None,
+            "conflicting_groups": {},
+            "publication_status": "NOT_YET_PUBLISHED",
+        },
+        "diagnostics": {"business_date_page_status": "NOT_YET_PUBLISHED"},
+    }
+
+
 class PredictionUniverseTests(unittest.TestCase):
+    def test_not_yet_published_future_fetch_persists_explicit_snapshot(self):
+        with tempfile.TemporaryDirectory() as temp:
+            snapshot = update_prediction_universe(
+                "2026-09-03", not_yet_published(), root=Path(temp)
+            )
+
+            saved = json.loads(
+                (Path(temp) / "2026-09-03.json").read_text(encoding="utf-8")
+            )
+
+        self.assertEqual("NOT_YET_PUBLISHED", snapshot["status"])
+        self.assertEqual("nowscore_public_jc", snapshot["source"])
+        self.assertEqual(0, snapshot["fixture_count"])
+        self.assertEqual([], snapshot["fixtures"])
+        self.assertEqual("NOT_YET_PUBLISHED", snapshot["last_fetch"]["status"])
+        self.assertEqual("NOT_YET_PUBLISHED", snapshot["last_fetch"]["publication_status"])
+        self.assertEqual(
+            "NOT_YET_PUBLISHED",
+            snapshot["last_fetch"]["diagnostics"]["business_date_page_status"],
+        )
+        self.assertEqual(
+            "NOT_YET_PUBLISHED",
+            snapshot["last_fetch"]["business_date_contract"]["publication_status"],
+        )
+        self.assertEqual(snapshot, saved)
+
+    def test_not_yet_published_refresh_preserves_existing_valid_snapshot(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            update_prediction_universe("2026-09-03", full_schedule("2026-09-03"), root=root)
+
+            snapshot = update_prediction_universe(
+                "2026-09-03", not_yet_published(), root=root
+            )
+
+        self.assertEqual("READY", snapshot["status"])
+        self.assertEqual(14, snapshot["fixture_count"])
+        self.assertEqual("NOT_YET_PUBLISHED", snapshot["last_fetch"]["status"])
+
+    def test_not_yet_published_does_not_depend_on_selected_date_echo(self):
+        payload = not_yet_published()
+        payload["business_date_contract"]["selected_date"] = "2026-09-02"
+
+        with tempfile.TemporaryDirectory() as temp:
+            snapshot = update_prediction_universe(
+                "2026-09-03", payload, root=Path(temp)
+            )
+
+        self.assertEqual("NOT_YET_PUBLISHED", snapshot["status"])
+
+    def test_unverified_not_yet_published_claim_fails_closed(self):
+        payload = not_yet_published()
+        payload["business_date_contract"].pop("publication_status")
+
+        with tempfile.TemporaryDirectory() as temp:
+            snapshot = update_prediction_universe(
+                "2026-09-03", payload, root=Path(temp)
+            )
+
+        self.assertEqual("FETCH_FAILED", snapshot["status"])
+        self.assertEqual("FETCH_FAILED", snapshot["last_fetch"]["status"])
+
     def test_verified_nowscore_jc_payload_creates_deterministic_universe(self):
         payload = {
             "source": "nowscore_public_jc",
