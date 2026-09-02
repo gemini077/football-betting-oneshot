@@ -19,6 +19,11 @@ try:  # Keep dashboard and match-detail exact-score semantics identical.
 except ImportError:  # pragma: no cover - exercised by the direct CLI path.
     from exact_score_serving_policy import DEGRADED, exact_score_serving_presentation
 
+try:
+    from .closed_beta_copy import render_closed_beta_notice
+except ImportError:  # pragma: no cover - exercised by the direct CLI path.
+    from closed_beta_copy import render_closed_beta_notice
+
 
 def _esc(value: Any, fallback: str = "") -> str:
     if value is None or value == "":
@@ -373,6 +378,7 @@ def render_match_detail(contract: dict[str, Any]) -> str:
     script_html = f'<p class="script">{_esc(script)}</p>' if script else '<p class="muted">当前没有可追溯的比赛剧本，暂不扩展判断。</p>'
     supports_html = _render_support_list(hero.get("supports") or [])
     conflicts_html = _render_support_list(hero.get("conflicts") or [], css="evidence-list conflict-list")
+    status_explanation_html += render_closed_beta_notice("status-explanation")
     risk_html = f'<div class="risk"><span>最大不确定性</span><strong>{_esc(hero.get("biggest_failure_point"))}</strong></div>' if hero.get("biggest_failure_point") else ""
     result_html = f'<div class="result-banner"><span>90分钟赛果</span><strong>{_esc(result.get("score_90m"))}</strong><small>{_esc(_result_scope_label(result.get("scope")))} · {_esc(result.get("verified_at"))}</small></div>' if result.get("score_90m") else ""
     post_updates = contract.get("post_freeze_updates") or {}

@@ -27,6 +27,11 @@ try:
 except ImportError:  # package import used by tests
     from scripts.exact_score_serving_policy import DEGRADED, exact_score_serving_presentation
 
+try:
+    from closed_beta_copy import render_closed_beta_notice
+except ImportError:  # package import used by tests
+    from scripts.closed_beta_copy import render_closed_beta_notice
+
 
 BASE_DIR = Path(__file__).resolve().parents[1]
 UNIVERSE_ROOT = BASE_DIR / "data" / "prediction_universe"
@@ -849,6 +854,7 @@ def render_dashboard(payload: dict[str, Any]) -> str:
     else:
         quality_html = f'<div class="health-alert"><strong>预测质量 · {html.escape(quality_display)}</strong></div>'
     health_html = f'<div class="health-stack" aria-label="系统与预测质量状态">{system_html}{quality_html}</div>'
+    health_html += render_closed_beta_notice("health-alert")
     overview = (
         f'<strong>{html.escape(_text(summary.get("fixture_count"), "0"))}</strong>'
         '<span>场比赛 · 今日全部赛程</span>'
