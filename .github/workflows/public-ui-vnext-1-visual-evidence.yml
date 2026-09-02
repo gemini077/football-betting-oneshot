@@ -1,0 +1,24 @@
+﻿name: PUBLIC-UI-VNEXT-1 visual evidence
+
+on:
+  push:
+    branches:
+      - codex/public-ui-vnext-1-visual-evidence
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout evidence branch
+        uses: actions/checkout@v4
+      - name: Upload visual evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: PUBLIC-UI-VNEXT-1-visual-evidence
+          path: .visual-evidence/PUBLIC-UI-VNEXT-1
+          if-no-files-found: error
+          retention-days: 14
