@@ -222,7 +222,8 @@ def _render_form(form: dict[str, Any]) -> str:
     return "".join(rows) or '<p class="muted">当前没有可追溯的近期比赛数据。</p>'
 
 
-def _render_market(market: dict[str, Any]) -> str:
+def _render_market(market: Any) -> str:
+    market = market if isinstance(market, dict) else {}
     facts = market.get("facts") or {}
     bookmakers = market.get("observed_1x2_bookmakers") or []
     ah_lines = market.get("observed_ah_lines") or []
@@ -345,6 +346,7 @@ def render_match_detail(contract: dict[str, Any]) -> str:
     hero_for_render = hero if serving_status else {}
     evidence_for_render = evidence if serving_status else {}
     source_quality = (contract.get("source_quality") or evidence.get("source_quality") or {}) if serving_status else {}
+    market_for_render = (contract.get("market") or {}) if serving_status else {}
     timestamps_for_render = timestamps if serving_status else {}
     prediction_quality = contract.get("prediction_quality_health") or {}
     exact_score_serving = exact_score_serving_presentation(prediction_quality)
@@ -540,7 +542,7 @@ def render_match_detail(contract: dict[str, Any]) -> str:
     </section>
     {post_html}
     <section class="layer" id="analysis"><div class="layer-heading"><div><div class="eyebrow">核心分析</div><h2>候选比分与比赛分析</h2></div><p>候选比分来自赛前预测记录。</p></div>{_render_candidates(contract, serving=serving_status)}<div class="analysis-list">{sections_html}</div></section>
-    <section class="layer" id="evidence"><div class="layer-heading"><div><div class="eyebrow">分析依据</div><h2>比赛数据与分析依据</h2></div><p>比赛数据、预测依据与来源分开呈现。</p></div><div class="evidence-columns"><details open><summary id="fundamentals">比赛数据</summary>{_render_form((evidence_for_render.get("fundamentals") or {}).get("recent_form") or {})}</details><details><summary id="market">市场变化</summary>{_render_market(contract.get("market") if serving_status else {})}</details><details><summary id="forecast">预测依据</summary>{model_html}</details><details><summary id="sources">数据来源</summary>{_render_sources(source_quality, legacy_material)}</details></div></section>
+    <section class="layer" id="evidence"><div class="layer-heading"><div><div class="eyebrow">分析依据</div><h2>比赛数据与分析依据</h2></div><p>比赛数据、预测依据与来源分开呈现。</p></div><div class="evidence-columns"><details open><summary id="fundamentals">比赛数据</summary>{_render_form((evidence_for_render.get("fundamentals") or {}).get("recent_form") or {})}</details><details><summary id="market">市场变化</summary>{_render_market(market_for_render)}</details><details><summary id="forecast">预测依据</summary>{model_html}</details><details><summary id="sources">数据来源</summary>{_render_sources(source_quality, legacy_material)}</details></div></section>
     <footer><span>稳定地址：{_esc(route)}</span><span>赛前预测记录与当时依据保持不变；新增事实若存在，将单独列为赛前后更新。</span></footer>
   </main>
 </body>

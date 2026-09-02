@@ -716,6 +716,18 @@ def test_detail_renderer_has_three_layers_and_uses_same_contract_for_statuses(tm
     assert "当前证据不足，暂不扩展判断" in insufficient_html
 
 
+def test_serving_detail_with_null_market_renders_safely(tmp_path):
+    contract = assemble(roots(tmp_path))
+    contract["market"] = None
+
+    html = render_match_detail(contract)
+
+    assert "<html" in html
+    assert 'class="hero-score">1' in html
+    assert 'class="hero-probabilities"' in html
+    assert 'id="market"' in html
+
+
 def test_detail_renderer_uses_user_facing_terms_and_hides_internal_metadata(tmp_path):
     html = render_match_detail(assemble(roots(tmp_path, pilot=True)))
 
