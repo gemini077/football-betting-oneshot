@@ -28,9 +28,9 @@ except ImportError:  # package import used by tests
     from scripts.current_serving_state import resolve_current_job_for_match
 
 try:
-    from exact_score_serving_policy import DEGRADED, exact_score_serving_presentation
+    from exact_score_serving_policy import exact_score_serving_presentation
 except ImportError:  # package import used by tests
-    from scripts.exact_score_serving_policy import DEGRADED, exact_score_serving_presentation
+    from scripts.exact_score_serving_policy import exact_score_serving_presentation
 
 try:
     from closed_beta_copy import render_closed_beta_notice
@@ -851,6 +851,11 @@ button, a { -webkit-tap-highlight-color: transparent; }
   color: var(--muted);
   text-align: center;
 }
+.filter-empty {
+  padding: 46px 20px;
+  color: var(--muted);
+  text-align: center;
+}
 .history {
   margin-top: 22px;
   border-top: 1px solid var(--line);
@@ -1257,7 +1262,7 @@ def _score_summary_html(
     local_context = ""
     if serving_state != "NORMAL":
         local_context = (
-            f'<div class="score-serving-note">\u6a21\u578b\u539f\u59cb\u6bd4\u5206 \u00b7 {html.escape(str((exact_score_serving or {}).get("label") or ""))}</div>'
+            f'<div class="score-serving-note">\u6a21\u578b\u539f\u59cb\u6bd4\u5206 \u00b7 {html.escape(str((exact_score_serving or {}).get("local_label") or (exact_score_serving or {}).get("label") or ""))}</div>'
         )
     return (
         f'<div class="score-cell{" score-unverified" if serving_state != "NORMAL" else ""}" '
@@ -1474,21 +1479,14 @@ def _runtime_warning_html(system_health: dict[str, Any], errors: list[Any]) -> s
 
 def _quality_warning_html(quality_health: dict[str, Any]) -> str:
     exact_score_serving = exact_score_serving_presentation(quality_health)
-    if exact_score_serving["state"] == DEGRADED:
-        return (
-            '<div class="quality-warning" role="status">'
-            '<strong>\u6bd4\u5206\u9884\u6d4b\u8d28\u91cf\u964d\u7ea7\uff0c\u4ec5\u4f9b\u89c2\u5bdf</strong>'
-            '<span>\u5f71\u54cd\u7684\u662f\u6bd4\u5206\u9884\u6d4b\u63a8\u8350\u8bed\u4e49\uff1b\u539f\u59cb\u6bd4\u5206\u6982\u7387\u7ee7\u7eed\u4fdd\u7559\u3002\u0031\u0058\u0032\u3001\u53cc\u65b9\u8fdb\u7403\u3001\u5927\u5c0f\u0032.5 \u6309\u5404\u81ea\u6982\u7387\u5c55\u793a\u3002</span>'
-            '</div>'
-        )
-    if exact_score_serving["state"] != "NORMAL":
-        return (
-            '<div class="quality-warning" role="status">'
-            '<strong>\u6bd4\u5206\u9884\u6d4b\u8d28\u91cf\u5f85\u786e\u8ba4\uff0c\u4e0d\u4f5c\u4e3a\u6b63\u5e38\u63a8\u8350</strong>'
-            '<span>\u5f71\u54cd\u7684\u662f\u6bd4\u5206\u9884\u6d4b\u63a8\u8350\u8bed\u4e49\uff1b\u5f53\u524d\u4ec5\u5c55\u793a\u539f\u59cb\u6bd4\u5206\u6982\u7387\u3002\u0031\u0058\u0032\u3001\u53cc\u65b9\u8fdb\u7403\u3001\u5927\u5c0f\u0032.5 \u6309\u5404\u81ea\u6982\u7387\u5c55\u793a\u3002</span>'
-            '</div>'
-        )
-    return ""
+    if exact_score_serving["state"] == "NORMAL":
+        return ""
+    return (
+        '<div class="quality-warning" role="status">'
+        f'<strong>{html.escape(exact_score_serving["label"])}</strong>'
+        f'<span>{html.escape(exact_score_serving["note"])}</span>'
+        '</div>'
+    )
 
 
 STATIC_REFRESH_SCRIPT = """<script>
@@ -1534,15 +1532,23 @@ def render_dashboard(payload: dict[str, Any]) -> str:
     )
     business_date_label = f"\u7ade\u5f69\u65e5 {date_label}"
     fixture_count = int(summary.get("fixture_count") or len(payload.get("fixtures") or []))
-    completed_count = int(summary.get("completed_count") or 0)
+    verified_results = int(summary.get("verified_results") or 0)
     exact_score_serving = exact_score_serving_presentation(quality_health)
     cards_html = "".join(
         _modern_card_html(card, exact_score_serving=exact_score_serving)
         for card in payload.get("fixtures") or []
         if isinstance(card, dict)
     )
-    if not cards_html:
-        cards_html = '<div class="empty">\u4eca\u5929\u6ca1\u6709\u53ef\u5c55\u793a\u7684\u6bd4\u8d5b\u3002</div>'
+    overall_empty_html = (
+        '<div class="filter-empty" data-filter-empty="ALL">\u4eca\u5929\u6ca1\u6709\u53ef\u5c55\u793a\u7684\u6bd4\u8d5b\u3002</div>'
+        if fixture_count == 0
+        else ""
+    )
+    filter_empty_html = (
+        f"{overall_empty_html}"
+        '<div class="filter-empty" data-filter-empty="UPCOMING" hidden>\u5f53\u524d\u7ade\u5f69\u65e5\u6682\u65e0\u672a\u5f00\u8d5b\u6bd4\u8d5b</div>'
+        '<div class="filter-empty" data-filter-empty="RESULT" hidden>\u5f53\u524d\u7ade\u5f69\u65e5\u6682\u65e0\u5df2\u7ed3\u675f\u5e76\u6838\u9a8c\u7684\u6bd4\u8d5b</div>'
+    )
     runtime_warning = _runtime_warning_html(system_health, payload.get("data_errors") or [])
     quality_warning = _quality_warning_html(quality_health)
     historical_html = _historical_results_html(payload.get("completed") or [])
@@ -1574,7 +1580,7 @@ def render_dashboard(payload: dict[str, Any]) -> str:
   <div class="filters" aria-label="\u6bd4\u8d5b\u7b5b\u9009">
     <button class="filter" type="button" data-filter="ALL" aria-pressed="true">\u5168\u90e8</button>
     <button class="filter" type="button" data-filter="UPCOMING" aria-pressed="false">\u672a\u5f00\u8d5b</button>
-  <button class="filter" type="button" data-filter="RESULT" data-result-count="{completed_count}" aria-pressed="false">\u5df2\u7ed3\u675f</button>
+  <button class="filter" type="button" data-filter="RESULT" data-result-count="{verified_results}" aria-pressed="false">\u5df2\u7ed3\u675f</button>
   </div>
 </section>
 {runtime_warning}{quality_warning}{data_warning}
@@ -1582,9 +1588,10 @@ def render_dashboard(payload: dict[str, Any]) -> str:
   <div class="table-header" aria-hidden="true">
     <span>\u7ade\u5f69\u7f16\u53f7 / \u8d5b\u4e8b</span><span>\u5f00\u7403</span><span>\u5bf9\u9635 / \u8d5b\u679c</span>
     <span>1X2 \u6982\u7387</span><span>\u6bd4\u5206\u6982\u7387 Top3</span><span>\u8fdb\u7403\u4fe1\u53f7</span>
-  </div>
-  {cards_html}
-</section>
+   </div>
+   {cards_html}
+   {filter_empty_html}
+ </section>
 {historical_html}
 {dashboard_trust}
 <footer class="page-footer">
@@ -1596,6 +1603,7 @@ def render_dashboard(payload: dict[str, Any]) -> str:
 const buttons = Array.from(document.querySelectorAll('[data-filter]'));
 const cards = Array.from(document.querySelectorAll('.fixture-row'));
 const historicalResults = document.querySelector('#historical-results');
+const emptyStates = Array.from(document.querySelectorAll('[data-filter-empty]'));
 buttons.forEach(button => button.addEventListener('click', () => {{
   const filter = button.dataset.filter;
   buttons.forEach(item => item.setAttribute('aria-pressed', String(item === button)));
@@ -1605,9 +1613,13 @@ buttons.forEach(button => button.addEventListener('click', () => {{
     const match = filter === 'ALL'
       || (filter === 'UPCOMING' && isUpcoming)
       || (filter === 'RESULT' && card.dataset.result === 'yes');
-    card.hidden = !match;
-  }});
-  if (historicalResults) historicalResults.hidden = filter !== 'ALL';
+     card.hidden = !match;
+   }});
+   const visibleCount = cards.filter(card => !card.hidden).length;
+   emptyStates.forEach(empty => {{
+     empty.hidden = empty.dataset.filterEmpty !== filter || visibleCount !== 0;
+   }});
+   if (historicalResults) historicalResults.hidden = filter !== 'ALL';
 }}));
 </script>
 {STATIC_REFRESH_SCRIPT.replace("__PAGE_VERSION__", json.dumps(page_version, ensure_ascii=False))}

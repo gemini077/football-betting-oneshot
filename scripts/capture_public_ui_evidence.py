@@ -71,6 +71,7 @@ def _fixture_with_status(payload: dict[str, Any], status: str) -> dict[str, Any]
         **(result.get("summary") or {}),
         "fixture_count": len(fixtures),
         "card_count": len(fixtures),
+        "verified_results": 0,
         "completed_count": 0,
     }
     return result
@@ -82,10 +83,33 @@ def _quality_fixture(payload: dict[str, Any], status: str) -> dict[str, Any]:
         **(result.get("prediction_quality_health") or {}),
         "status": status,
         "scope": "current_serving",
-        "available": status == "DEGRADED",
-        "provenance_status": "MATCHED" if status == "DEGRADED" else "MISMATCHED",
+        "available": status in {"DEGRADED", "ALERT", "INSUFFICIENT_SAMPLE"},
+        "provenance_status": "MATCHED" if status in {"DEGRADED", "ALERT", "INSUFFICIENT_SAMPLE"} else "MISMATCHED",
     }
     result["prediction_quality_health"] = quality
+    return result
+
+
+def _result_empty_fixture(payload: dict[str, Any]) -> dict[str, Any]:
+    result = copy.deepcopy(payload)
+    for card in result.get("fixtures") or []:
+        if isinstance(card, dict):
+            card["result"] = None
+    result["completed"] = []
+    result["summary"] = {
+        **(result.get("summary") or {}),
+        "verified_results": 0,
+        "completed_count": 0,
+    }
+    return result
+
+
+def _upcoming_empty_fixture(payload: dict[str, Any]) -> dict[str, Any]:
+    result = copy.deepcopy(payload)
+    for card in result.get("fixtures") or []:
+        if isinstance(card, dict):
+            card["kickoff_timestamp"] = "2000-01-01T00:00:00Z"
+            card["kickoff"] = "2000-01-01T08:00:00+08:00"
     return result
 
 
@@ -114,8 +138,8 @@ def _write_fixture_pages(site_root: Path, payload: dict[str, Any], current: dict
 
     pages = {
         "dashboard-insufficient.html": _mark_test_fixture(
-            render_dashboard(_fixture_with_status(payload, "INSUFFICIENT_DATA")),
-            "INSUFFICIENT_DATA",
+            render_dashboard(_quality_fixture(payload, "INSUFFICIENT_SAMPLE")),
+            "INSUFFICIENT_SAMPLE",
         ),
         "dashboard-degraded.html": _mark_test_fixture(
             render_dashboard(_quality_fixture(payload, "DEGRADED")),
@@ -124,6 +148,14 @@ def _write_fixture_pages(site_root: Path, payload: dict[str, Any], current: dict
         "dashboard-unverified.html": _mark_test_fixture(
             render_dashboard(_quality_fixture(payload, "UNVERIFIED")),
             "UNVERIFIED",
+        ),
+        "dashboard-result-empty.html": _mark_test_fixture(
+            render_dashboard(_result_empty_fixture(payload)),
+            "RESULT=0",
+        ),
+        "dashboard-upcoming-empty.html": _mark_test_fixture(
+            render_dashboard(_upcoming_empty_fixture(payload)),
+            "UPCOMING=0",
         ),
     }
 
@@ -255,16 +287,50 @@ def _check_interactions(browser: Any, base_url: str) -> dict[str, str]:
             raise RuntimeError("RESULT filter did not isolate current verified fixtures")
         if _visible_count(page, "#historical-results"):
             raise RuntimeError("RESULT filter mixed in historical validation")
+        if expected_results == 0 and _visible_count(page, '[data-filter-empty="RESULT"]') != 1:
+            raise RuntimeError("RESULT=0 did not show the current-day empty state")
+        if expected_results > 0 and _visible_count(page, '[data-filter-empty="RESULT"]'):
+            raise RuntimeError("RESULT filter left a stale empty state")
         page.locator('[data-filter="ALL"]').click()
         if _visible_count(page, ".fixture-row") != total:
             raise RuntimeError("ALL filter did not restore current fixtures")
+        if _visible_count(page, "[data-filter-empty]"):
+            raise RuntimeError("ALL filter left a stale empty state")
         href = page.locator(".fixture-row-target").first.get_attribute("href")
         if not href:
             raise RuntimeError("dashboard has no real detail route")
         page.goto(urljoin(f"{base_url}/prediction_dashboard/", href), wait_until="networkidle", timeout=30_000)
         if page.locator("h1").count() != 1:
             raise RuntimeError("dashboard detail route did not resolve")
-        return {"filters": "VERIFIED", "dashboard_to_detail": "VERIFIED"}
+
+        page.goto(f"{base_url}/visual-fixtures/dashboard-result-empty.html", wait_until="networkidle", timeout=30_000)
+        result_total = page.locator(".fixture-row").count()
+        page.locator('[data-filter="RESULT"]').click()
+        if _visible_count(page, ".fixture-row") != 0:
+            raise RuntimeError("synthetic RESULT=0 still showed fixture rows")
+        if _visible_count(page, '[data-filter-empty="RESULT"]') != 1:
+            raise RuntimeError("synthetic RESULT=0 did not show the current-day empty state")
+        page.locator('[data-filter="ALL"]').click()
+        if _visible_count(page, ".fixture-row") != result_total or _visible_count(page, "[data-filter-empty]"):
+            raise RuntimeError("synthetic RESULT=0 did not recover on ALL")
+
+        page.goto(f"{base_url}/visual-fixtures/dashboard-upcoming-empty.html", wait_until="networkidle", timeout=30_000)
+        upcoming_total = page.locator(".fixture-row").count()
+        page.locator('[data-filter="UPCOMING"]').click()
+        if _visible_count(page, ".fixture-row") != 0:
+            raise RuntimeError("synthetic UPCOMING=0 still showed fixture rows")
+        if _visible_count(page, '[data-filter-empty="UPCOMING"]') != 1:
+            raise RuntimeError("synthetic UPCOMING=0 did not show the current-day empty state")
+        page.locator('[data-filter="ALL"]').click()
+        if _visible_count(page, ".fixture-row") != upcoming_total or _visible_count(page, "[data-filter-empty]"):
+            raise RuntimeError("synthetic UPCOMING=0 did not recover on ALL")
+        return {
+            "filters": "VERIFIED",
+            "dashboard_to_detail": "VERIFIED",
+            "result_zero_state": "VERIFIED",
+            "upcoming_zero_state": "VERIFIED",
+            "all_recovers_after_empty": "VERIFIED",
+        }
     finally:
         context.close()
 
@@ -286,9 +352,11 @@ def _capture_all(
         ("dashboard-320x800.png", "prediction_dashboard/latest.html", (320, 800), "production-current", "PRODUCTION_TRUTH"),
         ("detail-current-frozen-1440x1000.png", "visual-fixtures/detail-current-frozen.html", (1440, 1000), str(current.get("match_id") or "current-frozen"), "PRODUCTION_TRUTH"),
         ("detail-current-frozen-390x844.png", "visual-fixtures/detail-current-frozen.html", (390, 844), str(current.get("match_id") or "current-frozen"), "PRODUCTION_TRUTH"),
-        ("insufficient-evidence-390x844.png", "visual-fixtures/dashboard-insufficient.html", (390, 844), "TEST FIXTURE · INSUFFICIENT_DATA", "TEST_FIXTURE"),
+        ("insufficient-evidence-390x844.png", "visual-fixtures/dashboard-insufficient.html", (390, 844), "TEST FIXTURE · INSUFFICIENT_SAMPLE", "TEST_FIXTURE"),
         ("degraded-evidence-1440x1000.png", "visual-fixtures/dashboard-degraded.html", (1440, 1000), "TEST FIXTURE · DEGRADED", "TEST_FIXTURE"),
         ("unverified-evidence-390x844.png", "visual-fixtures/dashboard-unverified.html", (390, 844), "TEST FIXTURE · UNVERIFIED", "TEST_FIXTURE"),
+        ("result-empty-evidence-390x844.png", "visual-fixtures/dashboard-result-empty.html", (390, 844), "TEST FIXTURE · RESULT=0", "TEST_FIXTURE"),
+        ("upcoming-empty-evidence-390x844.png", "visual-fixtures/dashboard-upcoming-empty.html", (390, 844), "TEST FIXTURE · UPCOMING=0", "TEST_FIXTURE"),
         ("completed-evidence-1440x1000.png", "visual-fixtures/detail-completed-verified.html", (1440, 1000), "TEST FIXTURE · completed-verified", "TEST_FIXTURE"),
         ("completed-evidence-390x844.png", "visual-fixtures/detail-completed-verified.html", (390, 844), "TEST FIXTURE · completed-verified", "TEST_FIXTURE"),
     ]

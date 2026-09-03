@@ -7,7 +7,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
-from scripts.prediction_dashboard import build_dashboard  # noqa: E402
+from scripts.prediction_dashboard import build_dashboard, render_dashboard  # noqa: E402
 
 
 DATE = "2026-08-12"
@@ -346,6 +346,64 @@ def test_completed_filter_is_current_verified_only_and_history_is_independent(tm
     assert "\u5386\u53f2\u9a8c\u8bc1" in html
     assert "filter !== 'ALL'" in html
     assert "filter !== 'ALL' && filter !== 'RESULT'" not in html
+
+
+def test_dashboard_filter_empty_states_use_current_verified_count_and_restore_all():
+    payload = {
+        "business_date": DATE,
+        "summary": {
+            "fixture_count": 1,
+            "verified_results": 0,
+            "completed_count": 99,
+        },
+        "prediction_quality_health": {
+            "status": "HEALTHY",
+            "scope": "current_serving",
+            "available": True,
+            "provenance_status": "MATCHED",
+        },
+        "system_runtime_health": {"overall_status": "HEALTHY"},
+        "fixtures": [{
+            "match_id": "1001",
+            "match_num": "T001",
+            "competition": "Fixture League",
+            "home": "Home FC",
+            "away": "Away FC",
+            "kickoff": "2099-08-12T20:00:00+08:00",
+            "kickoff_timestamp": "2099-08-12T12:00:00Z",
+            "status": "PENDING",
+            "prediction": None,
+            "result": None,
+        }],
+        "completed": [{"home": "Historical FC", "away": "Archive FC", "result_90m": "4-0"}],
+        "history": [],
+    }
+
+    html = render_dashboard(payload)
+
+    assert 'data-result-count="0"' in html
+    assert 'data-filter-empty="UPCOMING"' in html
+    assert 'data-filter-empty="RESULT"' in html
+    assert "\u5f53\u524d\u7ade\u5f69\u65e5\u6682\u65e0\u672a\u5f00\u8d5b\u6bd4\u8d5b" in html
+    assert "\u5f53\u524d\u7ade\u5f69\u65e5\u6682\u65e0\u5df2\u7ed3\u675f\u5e76\u6838\u9a8c\u7684\u6bd4\u8d5b" in html
+    assert 'data-filter-empty="ALL"' not in html
+
+
+def test_dashboard_overall_empty_state_requires_zero_current_fixture_count():
+    payload = {
+        "business_date": DATE,
+        "summary": {"fixture_count": 0, "verified_results": 0, "completed_count": 12},
+        "prediction_quality_health": {},
+        "system_runtime_health": {"overall_status": "HEALTHY"},
+        "fixtures": [],
+        "completed": [{"home": "Historical FC", "away": "Archive FC", "result_90m": "1-0"}],
+        "history": [],
+    }
+
+    html = render_dashboard(payload)
+
+    assert 'data-filter-empty="ALL"' in html
+    assert "\u4eca\u5929\u6ca1\u6709\u53ef\u5c55\u793a\u7684\u6bd4\u8d5b\u3002" in html
 
 
 def test_dashboard_selects_latest_legal_prematch_version_and_excludes_post_kickoff_record(tmp_path):
@@ -929,8 +987,8 @@ def test_dashboard_separates_system_runtime_and_current_prediction_quality_alert
     assert payload["prediction_quality_health"]["scope"] == "current_serving"
     assert payload["prediction_quality_health"]["business_date"] == DATE
     assert "系统运行" not in html
-    assert "\u6bd4\u5206\u9884\u6d4b\u8d28\u91cf\u964d\u7ea7\uff0c\u4ec5\u4f9b\u89c2\u5bdf" in html
-    assert "\u5f71\u54cd\u7684\u662f\u6bd4\u5206\u9884\u6d4b\u63a8\u8350\u8bed\u4e49\uff1b\u539f\u59cb\u6bd4\u5206\u6982\u7387\u7ee7\u7eed\u4fdd\u7559\u3002\u0031X2\u3001\u53cc\u65b9\u8fdb\u7403\u3001\u5927\u5c0f\u0032.5 \u6309\u5404\u81ea\u6982\u7387\u5c55\u793a\u3002" in html
+    assert "\u6bd4\u5206\u9884\u6d4b\u8d28\u91cf\u5f02\u5e38\uff0c\u4ec5\u4f9b\u89c2\u5bdf" in html
+    assert "\u5f53\u524d\u8d28\u91cf\u5f02\u5e38\uff0c\u6682\u4e0d\u4f5c\u4e3a\u6b63\u5e38\u6bd4\u5206\u63a8\u8350\uff1b\u539f\u59cb\u6bd4\u5206\u6982\u7387\u7ee7\u7eed\u4fdd\u7559\u3002\u0031X2\u3001\u53cc\u65b9\u8fdb\u7403\u3001\u5927\u5c0f\u0032.5\u6309\u5404\u81ea\u6982\u7387\u5c55\u793a\u3002" in html
     assert "系统首推比分" not in html
 
 
@@ -953,7 +1011,7 @@ def test_dashboard_keeps_exact_score_state_visible_inside_each_score_cell(tmp_pa
 
     assert 'data-score-serving-state="DEGRADED"' in html
     assert "\u6a21\u578b\u539f\u59cb\u6bd4\u5206" in html
-    assert "\u6bd4\u5206\u9884\u6d4b\u8d28\u91cf\u964d\u7ea7\uff0c\u4ec5\u4f9b\u89c2\u5bdf" in html
+    assert "\u8d28\u91cf\u5f02\u5e38\uff0c\u4ec5\u4f9b\u89c2\u5bdf" in html
 
 
 def test_dashboard_uses_normal_exact_score_copy_only_for_healthy_matched_current_serving(tmp_path):

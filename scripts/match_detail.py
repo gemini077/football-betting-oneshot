@@ -17,9 +17,9 @@ except ImportError:
     from match_analysis import MATCH_ANALYSIS_ROOT, build_match_contracts, match_url
 
 try:
-    from .exact_score_serving_policy import DEGRADED, exact_score_serving_presentation
+    from .exact_score_serving_policy import exact_score_serving_presentation
 except ImportError:
-    from exact_score_serving_policy import DEGRADED, exact_score_serving_presentation
+    from exact_score_serving_policy import exact_score_serving_presentation
 
 try:
     from .closed_beta_copy import render_closed_beta_notice
@@ -227,9 +227,13 @@ def _render_score_distribution(contract: dict[str, Any]) -> str:
             f'<strong class="score-probability">{_percent(number)}</strong>'
             "</div>"
         )
-    section_title = "\u6a21\u578b\u539f\u59cb\u6bd4\u5206" if local_warning else "\u6bd4\u5206\u6982\u7387 \u00b7 \u4e0d\u662f\u786e\u5b9a\u7b54\u6848"
+    section_title = (
+        f'\u6a21\u578b\u539f\u59cb\u6bd4\u5206 \u00b7 {serving.get("local_label") or serving["label"]}'
+        if local_warning
+        else "\u6bd4\u5206\u6982\u7387 \u00b7 \u4e0d\u662f\u786e\u5b9a\u7b54\u6848"
+    )
     section_note = (
-        f'{serving["label"]}\uff1b{serving["note"]}'
+        serving["note"]
         if local_warning
         else "\u6bcf\u4e00\u884c\u90fd\u662f\u8d5b\u524d\u6982\u7387\uff0c\u4e0d\u4ee3\u8868\u786e\u5b9a\u8d5b\u679c\u3002"
     )
@@ -768,15 +772,10 @@ def render_match_detail(contract: dict[str, Any]) -> str:
         else {"state": "NORMAL", "label": "", "note": ""}
     )
     quality_warning = ""
-    if serving and exact_score_serving["state"] == DEGRADED:
+    if serving and exact_score_serving["state"] != "NORMAL":
         quality_warning = (
-            '<div class="quality-warning" role="status"><strong>\u6bd4\u5206\u9884\u6d4b\u8d28\u91cf\u964d\u7ea7\uff0c\u4ec5\u4f9b\u89c2\u5bdf</strong>'
-            '<span>\u5f71\u54cd\u7684\u662f\u6bd4\u5206\u9884\u6d4b\u63a8\u8350\u8bed\u4e49\uff1b\u539f\u59cb\u6bd4\u5206\u6982\u7387\u7ee7\u7eed\u4fdd\u7559\u3002\u0031X2\u3001\u53cc\u65b9\u8fdb\u7403\u3001\u5927\u5c0f\u0032.5 \u6309\u5404\u81ea\u6982\u7387\u5c55\u793a\u3002</span></div>'
-        )
-    elif serving and exact_score_serving["state"] == "UNVERIFIED":
-        quality_warning = (
-            '<div class="quality-warning" role="status"><strong>\u6bd4\u5206\u9884\u6d4b\u8d28\u91cf\u5f85\u786e\u8ba4\uff0c\u4e0d\u4f5c\u4e3a\u6b63\u5e38\u63a8\u8350</strong>'
-            '<span>\u5f71\u54cd\u7684\u662f\u6bd4\u5206\u9884\u6d4b\u63a8\u8350\u8bed\u4e49\uff1b\u5f53\u524d\u4ec5\u5c55\u793a\u539f\u59cb\u6bd4\u5206\u6982\u7387\u3002\u0031X2\u3001\u53cc\u65b9\u8fdb\u7403\u3001\u5927\u5c0f\u0032.5 \u6309\u5404\u81ea\u6982\u7387\u5c55\u793a\u3002</span></div>'
+            f'<div class="quality-warning" role="status"><strong>{_esc(exact_score_serving["label"])}</strong>'
+            f'<span>{_esc(exact_score_serving["note"])}</span></div>'
         )
     pilot_note = (
         '<div class="pilot-note">\u8bd5\u8fd0\u884c\u9884\u6d4b \u00b7 \u4ec5\u4f9b\u89c2\u5bdf</div>'
@@ -791,7 +790,6 @@ def render_match_detail(contract: dict[str, Any]) -> str:
     )
     title = f"{home} vs {away} \u00b7 \u6bd4\u8d5b\u8be6\u60c5"
     result_html = _render_completed_result(contract) if serving else ""
-    verification_html = _render_verification(contract) if serving else ""
     probability_html = _render_probability_cards(contract) if serving else ""
     score_html = _render_score_distribution(contract) if serving else ""
     goals_html = _render_goals(contract) if serving else ""
@@ -856,7 +854,6 @@ def render_match_detail(contract: dict[str, Any]) -> str:
     </section>
     {result_html}
     {forecast_html}
-    {verification_html}
     {deeper_html}
   </div>
   {trust_html}

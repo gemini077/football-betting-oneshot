@@ -751,13 +751,17 @@ def test_completed_detail_leads_with_verified_90m_result_and_compares_frozen_for
     assert html.index("\u5b9e\u9645\u8d5b\u679c") < html.index("\u8d5b\u524d\u9884\u6d4b")
     assert "0-2" in html
     assert "90\u5206\u949f\u8d5b\u679c" in html
-    assert "\u9884\u6d4b vs \u5b9e\u9645" in html
     assert "\u6bd4\u5206" in html and "\u672a\u547d\u4e2d" in html
     assert "1X2\u65b9\u5411" in html and "\u547d\u4e2d" in html
     assert "\u8d5b\u524d\u9884\u6d4b\u5df2\u9501\u5b9a" in html
     assert html.index("\u5b9e\u9645\u8d5b\u679c") < html.index("\u80dc\u5e73\u8d1f\u6982\u7387")
-    assert html.index("\u80dc\u5e73\u8d1f\u6982\u7387") < html.index("\u9884\u6d4b vs \u5b9e\u9645")
-    assert html.index("\u9884\u6d4b vs \u5b9e\u9645") < html.index('id="evidence"')
+    assert html.count("\u9884\u6d4b vs \u5b9e\u9645") == 0
+    assert 'id="verification"' not in html
+    result_start = html.index('id="result"')
+    deeper_start = html.index('id="evidence"')
+    result_panel = html[result_start:deeper_start]
+    assert result_panel.index("\u5b9e\u9645\u6bd4\u5206") < result_panel.index("\u6bd4\u5206")
+    assert result_panel.index("\u65b9\u5411") < result_panel.index("\u5b9e\u9645\u65b9\u5411")
     assert 'data-probability="0.155000"' in html
     assert 'style="width:15.5%"' in html
     assert 'style="width:100.0%"' not in html
@@ -776,11 +780,49 @@ def test_degraded_detail_keeps_exact_score_scope_and_local_context(tmp_path):
 
     html = render_match_detail(contract)
 
-    assert "\u6bd4\u5206\u9884\u6d4b\u8d28\u91cf\u964d\u7ea7\uff0c\u4ec5\u4f9b\u89c2\u5bdf" in html
-    assert "\u5f71\u54cd\u7684\u662f\u6bd4\u5206\u9884\u6d4b\u63a8\u8350\u8bed\u4e49" in html
+    assert "\u6bd4\u5206\u9884\u6d4b\u8d28\u91cf\u5f02\u5e38\uff0c\u4ec5\u4f9b\u89c2\u5bdf" in html
+    assert "\u5f53\u524d\u8d28\u91cf\u5f02\u5e38\uff0c\u6682\u4e0d\u4f5c\u4e3a\u6b63\u5e38\u6bd4\u5206\u63a8\u8350" in html
     assert "\u6a21\u578b\u539f\u59cb\u6bd4\u5206" in html
     assert 'data-score-serving-state="DEGRADED"' in html
     assert 'style="width:15.5%"' in html
+
+
+@pytest.mark.parametrize(
+    "status, provenance, label, local_label",
+    [
+        (
+            "INSUFFICIENT_SAMPLE",
+            "MATCHED",
+            "\u6bd4\u5206\u9884\u6d4b\u5f53\u524d\u6837\u672c\u4e0d\u8db3\uff0c\u4ec5\u4f9b\u89c2\u5bdf",
+            "\u5f53\u524d\u6837\u672c\u4e0d\u8db3\uff0c\u4ec5\u4f9b\u89c2\u5bdf",
+        ),
+        (
+            "ALERT",
+            "MATCHED",
+            "\u6bd4\u5206\u9884\u6d4b\u8d28\u91cf\u5f02\u5e38\uff0c\u4ec5\u4f9b\u89c2\u5bdf",
+            "\u8d28\u91cf\u5f02\u5e38\uff0c\u4ec5\u4f9b\u89c2\u5bdf",
+        ),
+        (
+            "HEALTHY",
+            "MISMATCHED",
+            "\u6bd4\u5206\u9884\u6d4b\u8d28\u91cf\u5f85\u786e\u8ba4\uff0c\u4e0d\u4f5c\u4e3a\u6b63\u5e38\u63a8\u8350",
+            "\u8d28\u91cf\u5f85\u786e\u8ba4\uff0c\u4e0d\u4f5c\u4e3a\u6b63\u5e38\u63a8\u8350",
+        ),
+    ],
+)
+def test_detail_quality_copy_matches_raw_health_status(tmp_path, status, provenance, label, local_label):
+    contract = assemble(roots(tmp_path))
+    contract["prediction_quality_health"] = {
+        "status": status,
+        "scope": "current_serving",
+        "available": True,
+        "provenance_status": provenance,
+    }
+
+    html = render_match_detail(contract)
+
+    assert label in html
+    assert f"模型原始比分 · {local_label}" in html
 
 
 def test_trust_title_changes_when_only_freeze_and_cutoff_are_visible(tmp_path):
