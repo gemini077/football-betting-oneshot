@@ -52,15 +52,28 @@ def _result(
     *,
     scope: str = "regulation_90m_plus_stoppage",
     result_90m: str | None = "2-1",
+    home_score: int | None = None,
+    away_score: int | None = None,
     verified_at: str | None = "2026-09-02T13:00:00+08:00",
     kickoff_at: str = "2026-09-02T12:00:00+08:00",
 ):
+    if home_score is None and away_score is None and result_90m and "-" in result_90m:
+        left, right = result_90m.split("-", 1)
+        try:
+            home_score, away_score = int(left), int(right)
+        except ValueError:
+            pass
     return {
         "match_key": match_key,
         "kickoff_local": kickoff_at,
         "verified_at": verified_at,
         "result_90m": result_90m,
+        "home_score": home_score,
+        "away_score": away_score,
         "scope": scope,
+        "source": "test-authoritative-source",
+        "source_url": "https://example.test/result",
+        "verification_quality": "test-strict",
     }
 
 
@@ -70,6 +83,21 @@ def _write_evidence(root: Path, record: dict):
 
 def _write_result(root: Path, record: dict):
     _write_json(root / f"{record['match_key']}.json", record)
+
+
+def _write_ledger(path: Path, rows: list[dict]):
+    path.write_text(
+        "".join(json.dumps(row, ensure_ascii=False) + "\n" for row in rows),
+        encoding="utf-8",
+    )
+
+
+def _ledger_row(prediction_id: str, match_key: str, home: int = 2, away: int = 1):
+    return {
+        "prediction_id": prediction_id,
+        "actual": {"home_score": home, "away_score": away},
+        "match_identity": {"match_key": match_key},
+    }
 
 
 def test_authoritative_match_key_settlement_does_not_need_review(tmp_path):
@@ -117,7 +145,7 @@ def test_authoritative_match_key_settlement_does_not_need_review(tmp_path):
     assert result["coverage"]["settled_with_any_evidence"] == 52
     assert result["coverage"]["all_prospective"]["settled_usable_unique_matches"] == 51
     assert result["coverage"]["pinned_verified_with_usable_evidence"] == 50
-    assert result["integrity_contract"]["postmatch_review_used_for_readiness"] is False
+    assert result["coverage"]["postmatch_reviews_used_for_readiness"] is False
     assert result["failure_reasons"]["EVIDENCE_NOT_PREMATCH"] == 1
 
 
@@ -232,30 +260,60 @@ def test_report_contains_corrected_settlement_and_gate_fields(tmp_path):
         "settled_usable_unique_matches",
         "PINNED_COHORT_ONLY",
         "final Gate decision",
+        "strict_rejected_authoritative_results",
     ):
         assert field in report
 
 
-def test_sanity_reference_mismatch_fails_closed_without_changing_settlement_truth(tmp_path):
+def test_strict_invalid_results_fully_explain_sanity_delta(tmp_path):
     evidence_root = tmp_path / "evidence"
     result_root = tmp_path / "results"
     ledger_path = tmp_path / "ledger.jsonl"
-    evidence = _evidence("P-sanity")
+    evidence = _evidence("P-explained")
     _write_evidence(evidence_root, evidence)
-    # The filename is present for the independent reference, but the
-    # authoritative record fails the required result_90m gate.
     _write_result(result_root, _result(evidence["match_key"], result_90m=None))
-    ledger_path.write_text(
-        json.dumps(
-            {
-                "prediction_id": "P-sanity",
-                "actual": {"home_score": 2, "away_score": 1},
-                "match_identity": {"match_key": evidence["match_key"]},
-            }
-        )
-        + "\n",
-        encoding="utf-8",
+    _write_ledger(ledger_path, [_ledger_row("P-explained", evidence["match_key"])])
+    manifest_path = tmp_path / "manifest.json"
+    _write_json(manifest_path, {"selected_records": [], "verified_prediction_ids": []})
+
+    result = run(
+        evidence_root=evidence_root,
+        result_root=result_root,
+        pinned_manifest=manifest_path,
+        ledger_path=ledger_path,
     )
+
+    reconciliation = result["reconciliation"]
+    rejected = reconciliation["strict_rejected_authoritative_results"]
+    assert len(rejected) == 1
+    assert rejected[0]["match_key"] == evidence["match_key"]
+    assert rejected[0]["raw_result_90m"] == {"type": "NoneType", "value": None}
+    assert rejected[0]["home_score"] is None
+    assert rejected[0]["away_score"] is None
+    assert rejected[0]["scope"] == "regulation_90m_plus_stoppage"
+    assert rejected[0]["source"] == "test-authoritative-source"
+    assert rejected[0]["source_url"] == "https://example.test/result"
+    assert rejected[0]["verification_quality"] == "test-strict"
+    assert rejected[0]["evidence_snapshot_count"] == 1
+    assert rejected[0]["evidence_ledger_intersection_snapshot_count"] == 1
+    assert rejected[0]["ledger_actual"] == [{"away_score": 1, "home_score": 2}]
+    assert reconciliation["sanity_unique_minus_strict_unique"] == 1
+    assert reconciliation["sanity_snapshots_minus_strict_snapshots"] == 1
+    assert reconciliation["explained_unique_delta"] == 1
+    assert reconciliation["explained_snapshot_delta"] == 1
+    assert reconciliation["residual_unique_mismatch"] == 0
+    assert reconciliation["residual_snapshot_mismatch"] == 0
+    assert result["gate"]["fail_closed"] is False
+
+
+def test_residual_mismatch_stays_fail_closed(tmp_path):
+    evidence_root = tmp_path / "evidence"
+    result_root = tmp_path / "results"
+    ledger_path = tmp_path / "ledger.jsonl"
+    late = _evidence("P-residual", captured="2026-09-02T12:01:00+08:00")
+    _write_evidence(evidence_root, late)
+    _write_result(result_root, _result(late["match_key"]))
+    _write_ledger(ledger_path, [_ledger_row("P-residual", late["match_key"])])
     manifest_path = tmp_path / "manifest.json"
     _write_json(manifest_path, {"selected_records": [], "verified_prediction_ids": []})
 
@@ -268,5 +326,60 @@ def test_sanity_reference_mismatch_fails_closed_without_changing_settlement_trut
 
     assert result["coverage"]["settled_usable_prediction_snapshots"] == 0
     assert result["coverage"]["settled_usable_unique_matches"] == 0
+    assert result["reconciliation"]["residual_unique_mismatch"] == 1
+    assert result["reconciliation"]["residual_snapshot_mismatch"] == 1
     assert result["gate"]["fail_closed"] is True
     assert result["status"] == "FAIL_CLOSED"
+
+
+def test_home_away_score_fallback_uses_existing_repo_contract(tmp_path):
+    evidence_root = tmp_path / "evidence"
+    result_root = tmp_path / "results"
+    evidence = _evidence("P-fallback")
+    _write_evidence(evidence_root, evidence)
+    _write_result(
+        result_root,
+        _result(evidence["match_key"], result_90m=None, home_score=2, away_score=1),
+    )
+    manifest_path = tmp_path / "manifest.json"
+    _write_json(manifest_path, {"selected_records": [], "verified_prediction_ids": []})
+
+    result = run(
+        evidence_root=evidence_root,
+        result_root=result_root,
+        pinned_manifest=manifest_path,
+    )
+
+    assert result["result_score_fallback_contract"]["status"] == "SUPPORTED"
+    assert result["coverage"]["canonical_score_fallbacks"] == 1
+    assert result["coverage"]["settled_usable_prediction_snapshots"] == 1
+    assert result["authoritative_result_failure_reasons"] == {}
+
+
+def test_home_away_score_fallback_conflict_with_ledger_fails_closed(tmp_path):
+    evidence_root = tmp_path / "evidence"
+    result_root = tmp_path / "results"
+    ledger_path = tmp_path / "ledger.jsonl"
+    evidence = _evidence("P-fallback-conflict")
+    _write_evidence(evidence_root, evidence)
+    _write_result(
+        result_root,
+        _result(evidence["match_key"], result_90m=None, home_score=2, away_score=1),
+    )
+    _write_ledger(
+        ledger_path,
+        [_ledger_row("P-fallback-conflict", evidence["match_key"], home=0, away=0)],
+    )
+    manifest_path = tmp_path / "manifest.json"
+    _write_json(manifest_path, {"selected_records": [], "verified_prediction_ids": []})
+
+    result = run(
+        evidence_root=evidence_root,
+        result_root=result_root,
+        pinned_manifest=manifest_path,
+        ledger_path=ledger_path,
+    )
+
+    assert result["authoritative_result_failure_reasons"]["RESULT_SCORE_CONFLICTS_WITH_LEDGER_ACTUAL"] == 1
+    assert result["reconciliation"]["residual_unique_mismatch"] == 0
+    assert result["gate"]["fail_closed"] is True
