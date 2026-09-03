@@ -238,18 +238,27 @@ def _check_interactions(browser: Any, base_url: str) -> dict[str, str]:
     try:
         page.goto(f"{base_url}/prediction_dashboard/latest.html", wait_until="networkidle", timeout=30_000)
         total = page.locator(".fixture-row").count()
+        expected_upcoming = page.locator(".fixture-row").evaluate_all(
+            """rows => rows.filter(row => {
+              const kickoffTimestamp = Date.parse(row.dataset.kickoff || '');
+              return Number.isFinite(kickoffTimestamp) && Date.now() < kickoffTimestamp;
+            }).length"""
+        )
+        expected_results = page.locator('.fixture-row[data-result="yes"]').count()
         page.locator('[data-filter="UPCOMING"]').click()
-        if _visible_count(page, ".fixture-row") != total:
-            raise RuntimeError("UPCOMING filter did not retain current fixtures")
+        if _visible_count(page, ".fixture-row") != expected_upcoming:
+            raise RuntimeError("UPCOMING filter did not use future kickoff timestamps")
         if _visible_count(page, "#historical-results"):
             raise RuntimeError("UPCOMING filter did not hide history")
         page.locator('[data-filter="RESULT"]').click()
-        if _visible_count(page, "#historical-results") != 1:
-            raise RuntimeError("RESULT filter did not reveal history")
+        if _visible_count(page, ".fixture-row") != expected_results:
+            raise RuntimeError("RESULT filter did not isolate current verified fixtures")
+        if _visible_count(page, "#historical-results"):
+            raise RuntimeError("RESULT filter mixed in historical validation")
         page.locator('[data-filter="ALL"]').click()
         if _visible_count(page, ".fixture-row") != total:
             raise RuntimeError("ALL filter did not restore current fixtures")
-        href = page.locator(".detail-link").first.get_attribute("href")
+        href = page.locator(".fixture-row-target").first.get_attribute("href")
         if not href:
             raise RuntimeError("dashboard has no real detail route")
         page.goto(urljoin(f"{base_url}/prediction_dashboard/", href), wait_until="networkidle", timeout=30_000)
@@ -281,6 +290,7 @@ def _capture_all(
         ("degraded-evidence-1440x1000.png", "visual-fixtures/dashboard-degraded.html", (1440, 1000), "TEST FIXTURE · DEGRADED", "TEST_FIXTURE"),
         ("unverified-evidence-390x844.png", "visual-fixtures/dashboard-unverified.html", (390, 844), "TEST FIXTURE · UNVERIFIED", "TEST_FIXTURE"),
         ("completed-evidence-1440x1000.png", "visual-fixtures/detail-completed-verified.html", (1440, 1000), "TEST FIXTURE · completed-verified", "TEST_FIXTURE"),
+        ("completed-evidence-390x844.png", "visual-fixtures/detail-completed-verified.html", (390, 844), "TEST FIXTURE · completed-verified", "TEST_FIXTURE"),
     ]
     records: list[dict[str, Any]] = []
     try:

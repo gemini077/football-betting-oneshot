@@ -151,6 +151,32 @@ def test_build_renders_missing_contract_from_current_dashboard_fixture_without_w
     assert not (tmp_path / "data" / "match_analysis").exists()
 
 
+def test_fixture_contract_prefers_selected_freeze_and_cutoff_timestamps(tmp_path):
+    fixture = {
+        "match_id": "1001",
+        "home": "Home FC",
+        "away": "Away FC",
+        "kickoff": "2026-08-25T20:00:00+08:00",
+        "selected_freeze_created_at": "2026-08-25T12:34:00+08:00",
+        "selected_source_cutoff_at": "2026-08-25T12:30:00+08:00",
+        "prediction_frozen_at": "legacy-freeze",
+        "source_cutoff_at": "legacy-cutoff",
+        "prediction": {
+            "freeze_created_at": "prediction-freeze",
+            "source_cutoff_at": "prediction-cutoff",
+            "source_references": ["data/source-cache.json"],
+        },
+    }
+
+    result = build_public_site._fixture_contract(fixture, "2026-08-25")
+
+    assert result["timestamps"] == {
+        "prediction_frozen_at": "2026-08-25T12:34:00+08:00",
+        "source_cutoff_at": "2026-08-25T12:30:00+08:00",
+    }
+    assert result["evidence"]["source_quality"]["source_references"] == ["data/source-cache.json"]
+
+
 def test_contract_lookup_reads_only_linked_match_ids(tmp_path, monkeypatch):
     make_source_tree(tmp_path)
     unrelated = tmp_path / "data" / "match_analysis" / "2026-08-25" / "9999" / "latest.json"
@@ -197,6 +223,6 @@ def test_build_propagates_current_prediction_quality_warning_to_linked_detail(tm
     build_public_site.build(tmp_path / "site")
 
     detail = (tmp_path / "site" / "matches/1001/index.html").read_text(encoding="utf-8")
-    assert "\u9884\u6d4b\u8d28\u91cf\u964d\u7ea7\uff0c\u4ec5\u4f9b\u89c2\u5bdf" in detail
-    assert "\u5f53\u524d\u5206\u5e03\u4ecd\u4fdd\u7559\uff0c\u4f46\u4e0d\u4f5c\u4e3a\u6b63\u5e38\u63a8\u8350\u3002" in detail
+    assert "\u6bd4\u5206\u9884\u6d4b\u8d28\u91cf\u964d\u7ea7\uff0c\u4ec5\u4f9b\u89c2\u5bdf" in detail
+    assert "\u5f71\u54cd\u7684\u662f\u6bd4\u5206\u9884\u6d4b\u63a8\u8350\u8bed\u4e49\uff1b\u539f\u59cb\u6bd4\u5206\u6982\u7387\u7ee7\u7eed\u4fdd\u7559\u3002\u0031X2\u3001\u53cc\u65b9\u8fdb\u7403\u3001\u5927\u5c0f\u0032.5 \u6309\u5404\u81ea\u6982\u7387\u5c55\u793a\u3002" in detail
     assert "首推比分" not in detail

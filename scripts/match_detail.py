@@ -199,31 +199,46 @@ def _render_probability_cards(contract: dict[str, Any]) -> str:
     )
 
 
+def _score_serving_context(contract: dict[str, Any]) -> dict[str, str]:
+    quality = contract.get("prediction_quality_health")
+    if isinstance(quality, dict):
+        return exact_score_serving_presentation(quality)
+    return {"state": "NORMAL", "label": "", "note": ""}
+
+
 def _render_score_distribution(contract: dict[str, Any]) -> str:
     rows = _score_rows(contract)
     if not rows:
         return ""
-    maximum = max(row["probability"] for row in rows)
+    serving = _score_serving_context(contract)
+    local_warning = serving["state"] != "NORMAL"
     rendered = []
     for index, row in enumerate(rows):
         score = _display_score(row["score"])
         number = row["probability"]
-        primary = " score-primary" if index == 0 else ""
+        primary = " score-primary" if index == 0 and not local_warning else ""
         label = "\u6700\u9ad8\u6982\u7387" if index == 0 else "\u66ff\u4ee3\u6bd4\u5206"
-        width = number / maximum * 100 if maximum else 0
+        width = number * 100
         rendered.append(
-            f'<div class="score-row{primary}" data-probability="{number:.6f}">'
+            f'<div class="score-row{primary}" data-probability="{number:.6f}" '
+            f'data-score-serving-state="{html.escape(serving["state"], quote=True)}">'
             f'<div class="score-name"><strong>{score}</strong><span>{label}</span></div>'
             f'<div class="score-bar" aria-hidden="true"><span style="width:{width:.1f}%"></span></div>'
             f'<strong class="score-probability">{_percent(number)}</strong>'
             "</div>"
         )
+    section_title = "\u6a21\u578b\u539f\u59cb\u6bd4\u5206" if local_warning else "\u6bd4\u5206\u6982\u7387 \u00b7 \u4e0d\u662f\u786e\u5b9a\u7b54\u6848"
+    section_note = (
+        f'{serving["label"]}\uff1b{serving["note"]}'
+        if local_warning
+        else "\u6bcf\u4e00\u884c\u90fd\u662f\u8d5b\u524d\u6982\u7387\uff0c\u4e0d\u4ee3\u8868\u786e\u5b9a\u8d5b\u679c\u3002"
+    )
     return (
         '<section class="detail-section score-section" id="score-distribution">'
         '<div class="section-heading"><div><div class="section-kicker">\u7ed3\u679c\u5206\u5e03</div>'
-        '<h2>\u6bd4\u5206\u6982\u7387 \u00b7 \u4e0d\u662f\u786e\u5b9a\u7b54\u6848</h2></div><p>\u6700\u9ad8\u6982\u7387\u7ed3\u679c\u4e0e\u66ff\u4ee3\u6bd4\u5206</p></div>'
+        f'<h2>{section_title}</h2></div><p>\u6bcf\u4e00\u884c\u4e3a\u7edd\u5bf9\u6bd4\u5206\u6982\u7387</p></div>'
         '<div class="score-list">' + "".join(rendered) + "</div>"
-        '<p class="section-note">\u6bcf\u4e00\u884c\u90fd\u662f\u8d5b\u524d\u6982\u7387\uff0c\u4e0d\u4ee3\u8868\u786e\u5b9a\u8d5b\u679c\u3002</p></section>'
+        f'<p class="section-note">{section_note}</p></section>'
     )
 
 
@@ -260,7 +275,7 @@ def _render_goals(contract: dict[str, Any]) -> str:
         )
     if totals:
         cards.append(
-            '<article class="goal-card"><span class="goal-card-label">O/U 2.5</span>'
+            '<article class="goal-card"><span class="goal-card-label">\u5927\u5c0f2.5（O/U）</span>'
             f"<strong>\u5c0f {_percent(totals[0])} / \u5927 {_percent(totals[1])}</strong></article>"
         )
     if not cards:
@@ -428,6 +443,7 @@ def _render_market_comparison(contract: dict[str, Any]) -> str:
 def _source_items(contract: dict[str, Any]) -> list[str]:
     source_quality = contract.get("source_quality") or (contract.get("evidence") or {}).get("source_quality") or {}
     refs = list(source_quality.get("source_references") or [])
+    refs.extend((_model(contract).get("source_references") or []) if isinstance(_model(contract), dict) else [])
     market = contract.get("market") or (contract.get("evidence") or {}).get("market") or {}
     if isinstance(market, dict):
         refs.extend(market.get("source_refs") or [])
@@ -498,7 +514,9 @@ def _render_trust(contract: dict[str, Any]) -> str:
         rows.append(technical)
     if not rows:
         return ""
-    return '<aside class="trust-panel" id="sources"><div class="section-kicker">\u53ef\u4fe1\u5ea6</div><h2>\u53ef\u4fe1\u5ea6\u4e0e\u6765\u6e90</h2>' + "".join(rows) + "</aside>"
+    title = "\u53ef\u4fe1\u5ea6\u4e0e\u6765\u6e90" if references else "\u8d5b\u524d\u8bb0\u5f55"
+    kicker = "\u53ef\u4fe1\u5ea6" if references else "\u8bb0\u5f55"
+    return f'<aside class="trust-panel" id="sources"><div class="section-kicker">{kicker}</div><h2>{title}</h2>' + "".join(rows) + "</aside>"
 
 
 def _result_score(result: dict[str, Any]) -> tuple[int, int] | None:
@@ -514,19 +532,54 @@ def _outcome(score: tuple[int, int]) -> str:
     return "\u4e3b\u80dc" if score[0] > score[1] else "\u5ba2\u80dc" if score[0] < score[1] else "\u5e73"
 
 
+def _completed_comparison(contract: dict[str, Any]) -> dict[str, str]:
+    result = contract.get("result") or {}
+    score = _result_score(result) if isinstance(result, dict) else None
+    primary = str((contract.get("hero") or {}).get("primary_score") or _model(contract).get("unique_score") or "").strip()
+    probabilities = _probabilities(contract)
+    choices = (
+        ("\u4e3b\u80dc", _percent_number(probabilities.get("home"))),
+        ("\u5e73", _percent_number(probabilities.get("draw"))),
+        ("\u5ba2\u80dc", _percent_number(probabilities.get("away"))),
+    )
+    predicted = max(choices, key=lambda item: item[1] if item[1] is not None else -1)[0] if any(value is not None for _, value in choices) else ""
+    actual_score = f"{score[0]}-{score[1]}" if score else ""
+    actual_outcome = _outcome(score) if score else ""
+    exact_status = "\u547d\u4e2d" if primary and actual_score and primary == actual_score else "\u672a\u547d\u4e2d" if primary and actual_score else "\u5f85\u786e\u8ba4"
+    direction_status = "\u547d\u4e2d" if predicted and actual_outcome and predicted == actual_outcome else "\u672a\u547d\u4e2d" if predicted and actual_outcome else "\u5f85\u786e\u8ba4"
+    return {
+        "actual_score": actual_score,
+        "primary_score": primary,
+        "exact_status": exact_status,
+        "predicted_direction": predicted,
+        "actual_direction": actual_outcome,
+        "direction_status": direction_status,
+    }
+
+
 def _render_completed_result(contract: dict[str, Any]) -> str:
     result = contract.get("result") or {}
     if not isinstance(result, dict) or not result.get("score_90m"):
         return ""
-    score = _result_score(result)
     verified = _format_datetime(result.get("verified_at"), include_date=True)
     verified_html = f"<span>\u6838\u9a8c\u4e8e {verified}</span>" if verified else ""
-    actual = _outcome(score) if score else ""
+    comparison = _completed_comparison(contract)
+    value = lambda key: _esc(comparison.get(key) or "\u2014")
+    facts = (
+        '<div class="completed-facts">'
+        f'<div><span>\u5b9e\u9645\u6bd4\u5206</span><strong>{value("actual_score")}</strong></div>'
+        f'<div><span>\u5f53\u65f6\u6700\u9ad8\u6982\u7387\u6bd4\u5206</span><strong>{value("primary_score")}</strong></div>'
+        f'<div><span>\u6bd4\u5206</span><strong>{value("exact_status")}</strong></div>'
+        f'<div><span>\u5f53\u65f6\u0031X2\u65b9\u5411</span><strong>{value("predicted_direction")}</strong></div>'
+        f'<div><span>\u5b9e\u9645\u65b9\u5411</span><strong>{value("actual_direction")}</strong></div>'
+        f'<div><span>\u65b9\u5411</span><strong>{value("direction_status")}</strong></div>'
+        '</div>'
+    )
     return (
         '<section class="result-panel" id="result"><div class="section-kicker">\u8d5b\u540e\u9a8c\u8bc1</div><h2>\u5b9e\u9645\u8d5b\u679c</h2>'
         f'<div class="actual-score">{_display_score(result.get("score_90m"))}</div>'
         f'<div class="actual-meta"><strong>90\u5206\u949f\u8d5b\u679c</strong>{verified_html}</div>'
-        + (f"<p>\u5b9e\u9645\u65b9\u5411\uff1a{actual}</p>" if actual else "")
+        + facts
         + "</section>"
     )
 
@@ -536,22 +589,11 @@ def _render_verification(contract: dict[str, Any]) -> str:
     score = _result_score(result) if isinstance(result, dict) else None
     if score is None:
         return ""
-    primary = str((contract.get("hero") or {}).get("primary_score") or _model(contract).get("unique_score") or "").strip()
-    probabilities = _probabilities(contract)
-    choices = (
-        ("\u4e3b\u80dc", _percent_number(probabilities.get("home"))),
-        ("\u5e73", _percent_number(probabilities.get("draw"))),
-        ("\u5ba2\u80dc", _percent_number(probabilities.get("away"))),
-    )
-    predicted = max(choices, key=lambda item: item[1] if item[1] is not None else -1)[0] if any(value is not None for _, value in choices) else ""
-    actual_score = f"{score[0]}-{score[1]}"
-    actual_outcome = _outcome(score)
-    exact_status = "\u547d\u4e2d" if primary and primary == actual_score else "\u672a\u547d\u4e2d"
-    direction_status = "\u547d\u4e2d" if predicted and predicted == actual_outcome else "\u672a\u547d\u4e2d"
+    comparison = _completed_comparison(contract)
     placeholder = "\u2014"
     rows = [
-        f'<div class="verification-row"><span>\u6bd4\u5206</span><strong>{_esc(exact_status)}</strong><em>\u8d5b\u524d\u6700\u9ad8\u6982\u7387 {_display_score(primary) if primary else placeholder}</em></div>',
-        f'<div class="verification-row"><span>1X2\u65b9\u5411</span><strong>{_esc(direction_status)}</strong><em>\u8d5b\u524d\u5224\u65ad {_esc(predicted or placeholder)} \u00b7 \u5b9e\u9645 {_esc(actual_outcome)}</em></div>',
+        f'<div class="verification-row"><span>\u6bd4\u5206</span><strong>{_esc(comparison["exact_status"])}</strong><em>\u8d5b\u524d\u6700\u9ad8\u6982\u7387 {_display_score(comparison["primary_score"]) if comparison["primary_score"] else placeholder}</em></div>',
+        f'<div class="verification-row"><span>1X2\u65b9\u5411</span><strong>{_esc(comparison["direction_status"])}</strong><em>\u8d5b\u524d\u5224\u65ad {_esc(comparison["predicted_direction"] or placeholder)} \u00b7 \u5b9e\u9645 {_esc(comparison["actual_direction"] or placeholder)}</em></div>',
     ]
     return (
         '<section class="detail-section verification-section" id="verification">'
@@ -604,6 +646,11 @@ DETAIL_CSS = """
     .actual-score { margin:12px 0 1px; font-size:56px; line-height:1; font-weight:850; letter-spacing:-.08em; }
     .actual-meta { display:flex; flex-wrap:wrap; gap:8px 12px; color:var(--muted); font-size:12px; }
     .result-panel p { margin:10px 0 0; color:var(--muted); }
+    .completed-facts { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:7px; margin-top:16px; }
+    .completed-facts > div { padding:9px 10px; border:1px solid var(--line); background:var(--surface); }
+    .completed-facts span,.completed-facts strong { display:block; }
+    .completed-facts span { color:var(--muted); font-size:11px; }
+    .completed-facts strong { margin-top:3px; font-size:14px; font-variant-numeric:tabular-nums; }
     .status-panel { display:flex; gap:13px; align-items:flex-start; border-top-color:var(--line); }
     .status-mark { display:grid; place-items:center; width:25px; height:25px; border-radius:50%; background:var(--soft); color:var(--accent); font-weight:800; }
     .status-panel p { margin:7px 0 0; color:var(--muted); }
@@ -687,6 +734,8 @@ DETAIL_CSS = """
       .hero-probabilities { gap:5px; }
       .probability-card { padding:11px 9px; }
       .probability-card strong { font-size:23px; }
+      .completed-facts { grid-template-columns:repeat(2,minmax(0,1fr)); gap:5px; }
+      .completed-facts > div { padding:8px; }
       .score-row { grid-template-columns:40px minmax(45px,1fr) 44px; gap:8px; min-height:29px; }
       .score-name { display:flex; align-items:baseline; gap:6px; }
       .score-name strong { font-size:15px; }
@@ -721,13 +770,13 @@ def render_match_detail(contract: dict[str, Any]) -> str:
     quality_warning = ""
     if serving and exact_score_serving["state"] == DEGRADED:
         quality_warning = (
-            '<div class="quality-warning" role="status"><strong>\u9884\u6d4b\u8d28\u91cf\u964d\u7ea7\uff0c\u4ec5\u4f9b\u89c2\u5bdf</strong>'
-            '<span>\u5f53\u524d\u5206\u5e03\u4ecd\u4fdd\u7559\uff0c\u4f46\u4e0d\u4f5c\u4e3a\u6b63\u5e38\u63a8\u8350\u3002</span></div>'
+            '<div class="quality-warning" role="status"><strong>\u6bd4\u5206\u9884\u6d4b\u8d28\u91cf\u964d\u7ea7\uff0c\u4ec5\u4f9b\u89c2\u5bdf</strong>'
+            '<span>\u5f71\u54cd\u7684\u662f\u6bd4\u5206\u9884\u6d4b\u63a8\u8350\u8bed\u4e49\uff1b\u539f\u59cb\u6bd4\u5206\u6982\u7387\u7ee7\u7eed\u4fdd\u7559\u3002\u0031X2\u3001\u53cc\u65b9\u8fdb\u7403\u3001\u5927\u5c0f\u0032.5 \u6309\u5404\u81ea\u6982\u7387\u5c55\u793a\u3002</span></div>'
         )
     elif serving and exact_score_serving["state"] == "UNVERIFIED":
         quality_warning = (
-            '<div class="quality-warning" role="status"><strong>\u8d28\u91cf\u5f85\u786e\u8ba4\uff0c\u4e0d\u4f5c\u4e3a\u6b63\u5e38\u63a8\u8350</strong>'
-            '<span>\u5f53\u524d\u8d28\u91cf\u6765\u6e90\u5c1a\u672a\u5b8c\u6210\u786e\u8ba4\u3002</span></div>'
+            '<div class="quality-warning" role="status"><strong>\u6bd4\u5206\u9884\u6d4b\u8d28\u91cf\u5f85\u786e\u8ba4\uff0c\u4e0d\u4f5c\u4e3a\u6b63\u5e38\u63a8\u8350</strong>'
+            '<span>\u5f71\u54cd\u7684\u662f\u6bd4\u5206\u9884\u6d4b\u63a8\u8350\u8bed\u4e49\uff1b\u5f53\u524d\u4ec5\u5c55\u793a\u539f\u59cb\u6bd4\u5206\u6982\u7387\u3002\u0031X2\u3001\u53cc\u65b9\u8fdb\u7403\u3001\u5927\u5c0f\u0032.5 \u6309\u5404\u81ea\u6982\u7387\u5c55\u793a\u3002</span></div>'
         )
     pilot_note = (
         '<div class="pilot-note">\u8bd5\u8fd0\u884c\u9884\u6d4b \u00b7 \u4ec5\u4f9b\u89c2\u5bdf</div>'
@@ -755,13 +804,17 @@ def render_match_detail(contract: dict[str, Any]) -> str:
                 probability_html,
                 score_html,
                 goals_html,
-                evidence_html,
-                market_html,
                 "</section>",
             ]
         )
+        deeper_html = (
+            f'<div class="deeper-details" id="deeper-analysis">{evidence_html}{market_html}</div>'
+            if evidence_html or market_html
+            else ""
+        )
     else:
         forecast_html = _render_status_panel(contract)
+        deeper_html = ""
     trust_html = _render_trust(contract) if serving else ""
     nav_items = []
     if serving:
@@ -804,6 +857,7 @@ def render_match_detail(contract: dict[str, Any]) -> str:
     {result_html}
     {forecast_html}
     {verification_html}
+    {deeper_html}
   </div>
   {trust_html}
 </div>

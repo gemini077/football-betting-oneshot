@@ -119,6 +119,21 @@ def _copy_linked_public_pages(data_root: Path, output: Path) -> set[str]:
 def _fixture_contract(fixture: dict[str, Any], business_date: str) -> dict[str, Any]:
     prediction = fixture.get("prediction") if isinstance(fixture.get("prediction"), dict) else {}
     result = fixture.get("result") if isinstance(fixture.get("result"), dict) else {}
+    source_quality = fixture.get("source_quality") if isinstance(fixture.get("source_quality"), dict) else {}
+    if not source_quality and prediction.get("source_references"):
+        source_quality = {"source_references": prediction.get("source_references")}
+    prediction_frozen_at = (
+        fixture.get("selected_freeze_created_at")
+        or fixture.get("prediction_frozen_at")
+        or prediction.get("freeze_created_at")
+        or prediction.get("freeze_at")
+    )
+    source_cutoff_at = (
+        fixture.get("selected_source_cutoff_at")
+        or fixture.get("source_cutoff_at")
+        or prediction.get("source_cutoff_at")
+        or prediction.get("model_input_as_of_at")
+    )
     return {
         "identity": {
             "match_id": fixture.get("match_id"),
@@ -143,9 +158,12 @@ def _fixture_contract(fixture: dict[str, Any], business_date: str) -> dict[str, 
         },
         "model": prediction,
         "result": result,
-        "evidence": {"source_quality": fixture.get("source_quality") or {}},
+        "evidence": {"source_quality": source_quality},
         "governance": {"pilot_excluded": fixture.get("pilot_excluded", False)},
-        "timestamps": {"prediction_frozen_at": fixture.get("prediction_frozen_at")},
+        "timestamps": {
+            "prediction_frozen_at": prediction_frozen_at,
+            "source_cutoff_at": source_cutoff_at,
+        },
         "analysis_sections": [],
     }
 

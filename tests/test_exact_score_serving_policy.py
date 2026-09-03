@@ -20,7 +20,7 @@ NORMAL_HEALTH = {
 def test_healthy_matched_current_serving_is_normal():
     assert exact_score_serving_state(NORMAL_HEALTH) == NORMAL
     presentation = exact_score_serving_presentation(NORMAL_HEALTH)
-    assert presentation["label"] == "系统首推比分"
+    assert presentation["label"] == "\u7cfb\u7edf\u9996\u63a8\u6bd4\u5206"
     assert presentation["note"] == ""
 
 
@@ -30,8 +30,8 @@ def test_alert_matched_current_serving_is_degraded_without_hiding_score():
     presentation = exact_score_serving_presentation(health)
 
     assert exact_score_serving_state(health) == DEGRADED
-    assert presentation["label"] == "模型原始比分 · 当前不作为推荐"
-    assert presentation["note"] == "当前比分推荐能力处于质量降级状态"
+    assert presentation["label"] == "\u6bd4\u5206\u9884\u6d4b\u8d28\u91cf\u964d\u7ea7\uff0c\u4ec5\u4f9b\u89c2\u5bdf"
+    assert presentation["note"] == "\u5f71\u54cd\u6bd4\u5206\u9884\u6d4b\u63a8\u8350\u8bed\u4e49\uff1b\u4fdd\u7559\u539f\u59cb\u6bd4\u5206\u6982\u7387\uff0c\u4e0d\u4ee3\u8868\u786e\u5b9a\u7ed3\u679c\u3002"
 
 
 @pytest.mark.parametrize(
@@ -47,8 +47,8 @@ def test_unverified_quality_never_becomes_normal_or_degraded(health):
     presentation = exact_score_serving_presentation(health)
 
     assert exact_score_serving_state(health) == UNVERIFIED
-    assert presentation["label"] == "预测质量状态待确认 · 模型原始输出"
-    assert presentation["note"] == ""
+    assert presentation["label"] == "\u6bd4\u5206\u9884\u6d4b\u8d28\u91cf\u5f85\u786e\u8ba4\uff0c\u4e0d\u4f5c\u4e3a\u6b63\u5e38\u63a8\u8350"
+    assert presentation["note"] == "\u5f71\u54cd\u6bd4\u5206\u9884\u6d4b\u63a8\u8350\u8bed\u4e49\uff1b\u4fdd\u7559\u539f\u59cb\u6bd4\u5206\u6982\u7387\uff0c\u5f85\u5b8c\u6210\u8d28\u91cf\u786e\u8ba4\u3002"
 
 
 def test_stale_previous_cycle_alert_is_unverified_not_current_degradation():

@@ -203,9 +203,15 @@ def test_universe_three_produces_three_accountable_cards_and_frozen_fields(tmp_p
     assert "最高概率比分" in html
     assert "1-0 15.5%" in html
     assert "1X2 概率" in html
-    assert "BTTS 否 55.0%" in html
+    assert "\u53cc\u65b9\u8fdb\u7403 \u662f 45.0%" in html
+    assert "\u53cc\u65b9\u8fdb\u7403 \u5426 55.0%" in html
     assert "查看详情" in html
     assert 'href="../matches/1001/"' in html
+    assert 'class="fixture-row-target"' in html
+    assert '<a class="detail-link"' not in html
+    assert "\u7ade\u5f69\u65e5" in html
+    assert "\u4eca\u5929" not in html
+    assert '\u6d4b\u8bd5\u9636\u6bb5 \u00b7 \u4ec5\u4f9b\u8d5b\u524d\u5206\u6790' in html
     assert "Prediction Universe" not in html
     assert "MISSING_RECENT_FORM" not in html
     assert "近期比赛数据不足" in html
@@ -253,13 +259,93 @@ def test_dashboard_publishes_workspace_completed_history_when_current_cards_have
 
     payload = build_dashboard(DATE, workspace_path=workspace_path, **roots)
 
-    assert payload["summary"]["completed_count"] == 1
+    assert payload["summary"]["completed_count"] == 0
+    assert payload["summary"]["historical_validation_count"] == 1
     assert payload["summary"]["history_count"] == 1
     assert payload["completed"][0]["result_90m"] == "3-0"
     html = (roots["output_root"] / "latest.html").read_text(encoding="utf-8")
     assert "historical-results" in html
+    assert "\u5386\u53f2\u9a8c\u8bc1" in html
     assert "Lyon" in html
     assert "3-0" in html
+
+
+def test_upcoming_filter_requires_a_future_parseable_kickoff_not_result_absence(tmp_path):
+    future = fixture(1)
+    future.update({"matchDate": DATE, "matchTime": "23:00:00"})
+    past_without_result = fixture(2)
+    past_without_result.update({"matchDate": DATE, "matchTime": "01:00:00"})
+    past_with_result = fixture(3)
+    past_with_result["kickoff"] = "2026-08-11T23:00:00+08:00"
+    invalid = fixture(4)
+    invalid["kickoff"] = "not-a-kickoff"
+    roots = make_roots(
+        tmp_path,
+        [future, past_without_result, past_with_result, invalid],
+        [
+            {"match_id": "1001", "status": "PENDING"},
+            {"match_id": "1002", "status": "PENDING"},
+            {"match_id": "1003", "status": "PENDING"},
+            {"match_id": "1004", "status": "PENDING"},
+        ],
+    )
+    write_json(roots["result_root"] / "past.json", {
+        "match_id": "1003",
+        "result_90m": "1-0",
+        "verified_at": "2026-08-12T12:00:00+08:00",
+    })
+
+    payload = build_dashboard(
+        DATE,
+        now=datetime.fromisoformat("2026-08-12T12:00:00+08:00"),
+        **roots,
+    )
+    html = (roots["output_root"] / "latest.html").read_text(encoding="utf-8")
+    by_id = {card["match_id"]: card for card in payload["fixtures"]}
+
+    assert by_id["1001"]["kickoff_timestamp"] == "2026-08-12T15:00:00Z"
+    assert by_id["1002"]["kickoff_timestamp"] == "2026-08-11T17:00:00Z"
+    assert by_id["1003"]["result"]["score_90m"] == "1-0"
+    assert by_id["1004"]["kickoff_timestamp"] is None
+    assert 'data-kickoff="2026-08-12T15:00:00Z"' in html
+    assert 'data-kickoff="2026-08-11T17:00:00Z"' in html
+    assert 'data-kickoff=""' in html
+    assert "Number.isFinite(kickoffTimestamp) && Date.now() < kickoffTimestamp" in html
+    assert "card.dataset.result !== 'yes'" not in html
+
+
+def test_completed_filter_is_current_verified_only_and_history_is_independent(tmp_path):
+    current = fixture(1)
+    roots = make_roots(tmp_path, [current], [{"match_id": "1001", "status": "PENDING"}])
+    write_json(roots["result_root"] / "current.json", {
+        "match_id": "1001",
+        "result_90m": "2-1",
+        "verified_at": "2026-08-12T12:00:00+08:00",
+    })
+    workspace_path = tmp_path / "workspace" / "latest.json"
+    write_json(workspace_path, {
+        "completed": [{
+            "id": "H-1",
+            "home": "Historical FC",
+            "away": "Archive FC",
+            "kickoff": "2026-08-10T03:00+08:00",
+            "result_90m": "0-0",
+            "review_available": True,
+        }],
+        "history": [],
+    })
+
+    payload = build_dashboard(DATE, workspace_path=workspace_path, **roots)
+    html = (roots["output_root"] / "latest.html").read_text(encoding="utf-8")
+
+    assert payload["summary"]["completed_count"] == 1
+    assert payload["summary"]["historical_validation_count"] == 1
+    assert 'data-result-count="1"' in html
+    assert "2-1" in html
+    assert "Historical FC" in html
+    assert "\u5386\u53f2\u9a8c\u8bc1" in html
+    assert "filter !== 'ALL'" in html
+    assert "filter !== 'ALL' && filter !== 'RESULT'" not in html
 
 
 def test_dashboard_selects_latest_legal_prematch_version_and_excludes_post_kickoff_record(tmp_path):
@@ -424,11 +510,13 @@ def test_completed_filter_controls_historical_rows_and_real_count(tmp_path):
     payload = build_dashboard(DATE, workspace_path=workspace_path, **roots)
     html = (roots["output_root"] / "latest.html").read_text(encoding="utf-8")
 
-    assert payload["summary"]["completed_count"] == 2
+    assert payload["summary"]["completed_count"] == 0
+    assert payload["summary"]["historical_validation_count"] == 2
     assert 'data-filter="RESULT"' in html
-    assert 'data-result-count="2"' in html
+    assert 'data-result-count="0"' in html
     assert "historicalResults" in html
-    assert "filter !== 'ALL' && filter !== 'RESULT'" in html
+    assert "\u5386\u53f2\u9a8c\u8bc1" in html
+    assert "filter !== 'ALL' && filter !== 'RESULT'" not in html
     assert html.count('class="history-row"') == 2
 
 
@@ -691,6 +779,30 @@ def test_canonical_market_summary_and_score_concentration_are_display_only(tmp_p
     assert "1X2 概率" in html
 
 
+def test_dashboard_goal_signals_keep_both_sides_visible(tmp_path):
+    prediction_id = "FBOS-PRED-two-sided-goals"
+    record = frozen_prediction(prediction_id)
+    record["btts"] = {"yes": 0.537, "no": 0.463}
+    record["totals"] = [
+        {"goals": "0", "probability": 0.120},
+        {"goals": "1", "probability": 0.180},
+        {"goals": "2", "probability": 0.206},
+        {"goals": "3", "probability": 0.180},
+        {"goals": "4", "probability": 0.160},
+        {"goals": "5", "probability": 0.154},
+    ]
+    roots = make_roots(tmp_path, [fixture(1)], [frozen_job("1001", prediction_id)], [record])
+
+    build_dashboard(DATE, **roots)
+    html = (roots["output_root"] / "latest.html").read_text(encoding="utf-8")
+
+    assert "\u53cc\u65b9\u8fdb\u7403 \u662f 53.7%" in html
+    assert "\u53cc\u65b9\u8fdb\u7403 \u5426 46.3%" in html
+    assert "\u5927\u5c0f2.5 \u5c0f 50.6%" in html
+    assert "\u5927\u5c0f2.5 \u5927 49.4%" in html
+    assert "BTTS \u5426 53.7%" not in html
+
+
 def _serving_prediction(index: int, score: str) -> dict:
     match_id = str(2000 + index)
     home = f"Home {index}"
@@ -817,9 +929,31 @@ def test_dashboard_separates_system_runtime_and_current_prediction_quality_alert
     assert payload["prediction_quality_health"]["scope"] == "current_serving"
     assert payload["prediction_quality_health"]["business_date"] == DATE
     assert "系统运行" not in html
-    assert "预测质量降级，仅供观察" in html
-    assert "比分概率保留原始模型输出，不作为确定答案。" in html
+    assert "\u6bd4\u5206\u9884\u6d4b\u8d28\u91cf\u964d\u7ea7\uff0c\u4ec5\u4f9b\u89c2\u5bdf" in html
+    assert "\u5f71\u54cd\u7684\u662f\u6bd4\u5206\u9884\u6d4b\u63a8\u8350\u8bed\u4e49\uff1b\u539f\u59cb\u6bd4\u5206\u6982\u7387\u7ee7\u7eed\u4fdd\u7559\u3002\u0031X2\u3001\u53cc\u65b9\u8fdb\u7403\u3001\u5927\u5c0f\u0032.5 \u6309\u5404\u81ea\u6982\u7387\u5c55\u793a\u3002" in html
     assert "系统首推比分" not in html
+
+
+def test_dashboard_keeps_exact_score_state_visible_inside_each_score_cell(tmp_path):
+    roots, runtime = _quality_roots(tmp_path, ["1-1"] * 9 + ["2-1"])
+    write_json(roots["health_watch_path"], {
+        "business_date": DATE,
+        "last_cycle_generated_at": runtime["finished_at"],
+        "prediction_quality_health": {
+            "status": "ALERT",
+            "scope": "current_serving",
+            "business_date": DATE,
+            "runtime_cycle_finished_at": runtime["finished_at"],
+            "reasons": ["SCORE_SELECTOR_COLLAPSE"],
+        },
+    })
+
+    build_dashboard(DATE, **roots)
+    html = (roots["output_root"] / "latest.html").read_text(encoding="utf-8")
+
+    assert 'data-score-serving-state="DEGRADED"' in html
+    assert "\u6a21\u578b\u539f\u59cb\u6bd4\u5206" in html
+    assert "\u6bd4\u5206\u9884\u6d4b\u8d28\u91cf\u964d\u7ea7\uff0c\u4ec5\u4f9b\u89c2\u5bdf" in html
 
 
 def test_dashboard_uses_normal_exact_score_copy_only_for_healthy_matched_current_serving(tmp_path):

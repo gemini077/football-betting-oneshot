@@ -149,6 +149,21 @@ def _iso_sort(value: Any) -> str:
     return str(value or "9999-12-31T23:59:59+08:00")
 
 
+def _kickoff_timestamp(value: Any) -> str | None:
+    """Return a timezone-qualified ISO timestamp suitable for browser comparison."""
+
+    text = str(value or "").strip()
+    if not text:
+        return None
+    try:
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return None
+    return parsed.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
 def _pick(row: dict[str, Any], *keys: str) -> Any:
     for key in keys:
         value = row.get(key)
@@ -171,6 +186,7 @@ def _fixture_projection(fixture: dict[str, Any]) -> dict[str, Any]:
         "home": _pick(fixture, "homeTeam", "home_team", "home"),
         "away": _pick(fixture, "awayTeam", "away_team", "away"),
         "kickoff": kickoff,
+        "kickoff_timestamp": _kickoff_timestamp(kickoff),
     }
 
 
@@ -676,12 +692,16 @@ button, a { -webkit-tap-highlight-color: transparent; }
   font-size: 10px;
 }
 .fixture-row {
+  position: relative;
   min-height: 56px;
   align-items: center;
   border-bottom: 1px solid var(--line);
 }
 .fixture-row:hover { background: #FFFCF9; }
 .fixture-row > * { min-width: 0; }
+.fixture-row > *:not(.fixture-row-target) { position: relative; z-index: 1; pointer-events: none; }
+.fixture-row-target { position: absolute; inset: 0; z-index: 0; border-radius: inherit; }
+.fixture-row-target:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .identity-cell { min-width: 0; }
 .cell-meta,
 .match-number,
@@ -777,6 +797,7 @@ button, a { -webkit-tap-highlight-color: transparent; }
   font-variant-numeric: tabular-nums;
 }
 .score-top3 span { white-space: nowrap; }
+.score-serving-note { margin-top: 4px; color: var(--warning); font-size: 10px; font-weight: 650; }
 .goal-signals {
   display: flex;
   flex-wrap: wrap;
@@ -885,6 +906,7 @@ button, a { -webkit-tap-highlight-color: transparent; }
     display: block;
     padding: 12px 10px 11px;
   }
+  .fixture-row-target:focus-visible { outline-offset: -2px; }
   .fixture-row > * { margin-top: 9px; }
   .fixture-row > .identity-cell { margin-top: 0; }
   .identity-cell {
@@ -1166,10 +1188,10 @@ def _goal_signal_values(prediction: dict[str, Any]) -> list[tuple[str, str]]:
     if isinstance(btts, dict):
         yes = _number(btts.get("yes"))
         no = _number(btts.get("no"))
-        candidates = [(yes, "BTTS \u662f"), (no, "BTTS \u5426")]
-        valid = [(value, label) for value, label in candidates if value is not None and 0 <= value <= 1]
-        if valid:
-            value, label = max(valid, key=lambda item: item[0])
+        candidates = [(yes, "\u53cc\u65b9\u8fdb\u7403 \u662f"), (no, "\u53cc\u65b9\u8fdb\u7403 \u5426")]
+        for value, label in candidates:
+            if value is None or not 0 <= value <= 1:
+                continue
             percent = _format_percent(value)
             if percent:
                 signals.append((label, percent))
@@ -1193,10 +1215,10 @@ def _goal_signal_values(prediction: dict[str, Any]) -> list[tuple[str, str]]:
                 over += probability
                 has_over = True
         if has_under and has_over:
-            value, label = (under, "\u5c0f2.5") if under >= over else (over, "\u59272.5")
-            percent = _format_percent(value)
-            if percent:
-                signals.append((label, percent))
+            for value, label in ((under, "\u5927\u5c0f2.5 \u5c0f"), (over, "\u5927\u5c0f2.5 \u5927")):
+                percent = _format_percent(value)
+                if percent:
+                    signals.append((label, percent))
     return signals
 
 
@@ -1210,7 +1232,11 @@ def _goal_signals_html(prediction: dict[str, Any]) -> str:
     ) + "</div>"
 
 
-def _score_summary_html(prediction: dict[str, Any]) -> str:
+def _score_summary_html(
+    prediction: dict[str, Any],
+    *,
+    exact_score_serving: dict[str, Any] | None = None,
+) -> str:
     rows = [
         row for row in _score_rows(prediction, limit=5)
         if row.get("probability") is not None
@@ -1227,10 +1253,18 @@ def _score_summary_html(prediction: dict[str, Any]) -> str:
         f'{(" " + html.escape(percent)) if (percent := _format_percent(row.get("probability"))) else ""}</span>'
         for row in rows[:3]
     )
+    serving_state = str((exact_score_serving or {}).get("state") or "NORMAL")
+    local_context = ""
+    if serving_state != "NORMAL":
+        local_context = (
+            f'<div class="score-serving-note">\u6a21\u578b\u539f\u59cb\u6bd4\u5206 \u00b7 {html.escape(str((exact_score_serving or {}).get("label") or ""))}</div>'
+        )
     return (
-        '<div class="score-cell"><div class="score-caption">\u6700\u9ad8\u6982\u7387\u6bd4\u5206</div>'
+        f'<div class="score-cell{" score-unverified" if serving_state != "NORMAL" else ""}" '
+        f'data-score-serving-state="{html.escape(serving_state, quote=True)}">'
+        '<div class="score-caption">\u6700\u9ad8\u6982\u7387\u6bd4\u5206</div>'
         f'<div class="score-primary"><strong>{html.escape(primary["score"])}</strong>{primary_probability_html}</div>'
-        f'<div class="score-top3">{top3}</div></div>'
+        f'<div class="score-top3">{top3}</div>{local_context}</div>'
     )
 
 
@@ -1281,7 +1315,6 @@ def _modern_card_html(
     *,
     exact_score_serving: dict[str, str] | None = None,
 ) -> str:
-    del exact_score_serving
     status = str(card.get("status") or "PENDING")
     match_id = str(card.get("match_id") or "")
     prediction = card.get("prediction") if status == "FROZEN" else None
@@ -1291,11 +1324,7 @@ def _modern_card_html(
     prediction_kind = "pilot" if card.get("pilot_excluded") and prediction else "formal" if prediction else "none"
     status_class = html.escape(status.lower(), quote=True)
     match_id_html = html.escape(match_id, quote=True)
-    detail_link = (
-        f'<a class="detail-link" href="../matches/{match_id_html}/">\u67e5\u770b\u8be6\u60c5</a>'
-        if match_id
-        else ""
-    )
+    detail_link = '<span class="detail-link" aria-hidden="true">\u67e5\u770b\u8be6\u60c5</span>' if match_id else ""
     if has_result:
         action_html = f'<span class="completed-note">{_card_status_copy(card)}</span>{detail_link}'
     elif prediction:
@@ -1337,7 +1366,7 @@ def _modern_card_html(
         teams_html += f'<div class="result-inline">90\u5206\u949f\u8d5b\u679c {html.escape(str(result.get("score_90m")))}</div>'
     probability_html = _one_x_two_html(prediction) if prediction else '<div class="prediction-unavailable">\u2014</div>'
     score_html = (
-        _score_summary_html(prediction)
+        _score_summary_html(prediction, exact_score_serving=exact_score_serving)
         if prediction
         else '<div class="score-cell empty-score-cell" aria-hidden="true"></div>'
     )
@@ -1348,11 +1377,26 @@ def _modern_card_html(
     )
     match_number_text = _esc(card.get("match_num"), "\u2014")
     competition_text = _esc(card.get("competition"), "\u8d5b\u4e8b\u5f85\u5b9a")
+    kickoff_timestamp = html.escape(str(card.get("kickoff_timestamp") or _kickoff_timestamp(card.get("kickoff")) or ""), quote=True)
+    detail_target = ""
+    if match_id:
+        detail_home = _text(card.get("home"), "\u4e3b\u961f\u5f85\u5b9a")
+        detail_away = _text(card.get("away"), "\u5ba2\u961f\u5f85\u5b9a")
+        detail_label = html.escape(
+            f'{detail_home} vs {detail_away} \u00b7 \u67e5\u770b\u8be6\u60c5',
+            quote=True,
+        )
+        detail_target = (
+            f'<a class="fixture-row-target" href="../matches/{match_id_html}/" '
+            f'aria-label="{detail_label}"></a>'
+        )
     return (
         f'<article class="fixture-row status-{status_class} prediction-{prediction_kind}" '
         f'data-status="{html.escape(status, quote=True)}" '
         f'data-result="{"yes" if has_result else "no"}" '
+        f'data-kickoff="{kickoff_timestamp}" '
         f'data-prediction-kind="{prediction_kind}">'
+        f'{detail_target}'
         '<div class="identity-cell">'
         f'<span class="match-number">{match_number_text}</span>'
         f'<span class="identity-competition">{competition_text}</span>'
@@ -1401,8 +1445,8 @@ def _historical_results_html(rows: list[dict[str, Any]]) -> str:
         return ""
     return (
         '<section id="historical-results" class="history">'
-        '<div class="history-heading"><h2>\u5df2\u7ed3\u675f \u00b7 \u8d5b\u540e\u9a8c\u8bc1</h2>'
-        f'<span>{len(cards)} \u573a\u5df2\u8bb0\u5f55</span></div>'
+        '<div class="history-heading"><h2>\u5386\u53f2\u9a8c\u8bc1</h2>'
+        f'<span>{len(cards)} \u573a\u72ec\u7acb\u8bb0\u5f55\uff0c\u4e0d\u53c2\u4e0e\u5f53\u524d\u7b5b\u9009</span></div>'
         f'{"".join(cards)}</section>'
     )
 
@@ -1433,15 +1477,15 @@ def _quality_warning_html(quality_health: dict[str, Any]) -> str:
     if exact_score_serving["state"] == DEGRADED:
         return (
             '<div class="quality-warning" role="status">'
-            '<strong>\u9884\u6d4b\u8d28\u91cf\u964d\u7ea7\uff0c\u4ec5\u4f9b\u89c2\u5bdf</strong>'
-            '<span>\u6bd4\u5206\u6982\u7387\u4fdd\u7559\u539f\u59cb\u6a21\u578b\u8f93\u51fa\uff0c\u4e0d\u4f5c\u4e3a\u786e\u5b9a\u7b54\u6848\u3002</span>'
+            '<strong>\u6bd4\u5206\u9884\u6d4b\u8d28\u91cf\u964d\u7ea7\uff0c\u4ec5\u4f9b\u89c2\u5bdf</strong>'
+            '<span>\u5f71\u54cd\u7684\u662f\u6bd4\u5206\u9884\u6d4b\u63a8\u8350\u8bed\u4e49\uff1b\u539f\u59cb\u6bd4\u5206\u6982\u7387\u7ee7\u7eed\u4fdd\u7559\u3002\u0031\u0058\u0032\u3001\u53cc\u65b9\u8fdb\u7403\u3001\u5927\u5c0f\u0032.5 \u6309\u5404\u81ea\u6982\u7387\u5c55\u793a\u3002</span>'
             '</div>'
         )
     if exact_score_serving["state"] != "NORMAL":
         return (
             '<div class="quality-warning" role="status">'
-            '<strong>\u8d28\u91cf\u5f85\u786e\u8ba4\uff0c\u4e0d\u4f5c\u4e3a\u6b63\u5e38\u63a8\u8350</strong>'
-            '<span>\u5f53\u524d\u53ea\u5c55\u793a\u5df2\u6709\u6982\u7387\uff0c\u4e0d\u6269\u5c55\u63a8\u8350\u5224\u65ad\u3002</span>'
+            '<strong>\u6bd4\u5206\u9884\u6d4b\u8d28\u91cf\u5f85\u786e\u8ba4\uff0c\u4e0d\u4f5c\u4e3a\u6b63\u5e38\u63a8\u8350</strong>'
+            '<span>\u5f71\u54cd\u7684\u662f\u6bd4\u5206\u9884\u6d4b\u63a8\u8350\u8bed\u4e49\uff1b\u5f53\u524d\u4ec5\u5c55\u793a\u539f\u59cb\u6bd4\u5206\u6982\u7387\u3002\u0031\u0058\u0032\u3001\u53cc\u65b9\u8fdb\u7403\u3001\u5927\u5c0f\u0032.5 \u6309\u5404\u81ea\u6982\u7387\u5c55\u793a\u3002</span>'
             '</div>'
         )
     return ""
@@ -1488,6 +1532,7 @@ def render_dashboard(payload: dict[str, Any]) -> str:
         if len(date_parts) == 3 and date_parts[1].isdigit() and date_parts[2].isdigit()
         else date_value or "\u6bd4\u8d5b\u65e5"
     )
+    business_date_label = f"\u7ade\u5f69\u65e5 {date_label}"
     fixture_count = int(summary.get("fixture_count") or len(payload.get("fixtures") or []))
     completed_count = int(summary.get("completed_count") or 0)
     exact_score_serving = exact_score_serving_presentation(quality_health)
@@ -1522,10 +1567,10 @@ def render_dashboard(payload: dict[str, Any]) -> str:
 <main class="site">
 <header class="site-header">
   <div class="brand"><span class="brand-name">FBOS</span><span class="brand-subtitle">Football betting \u00b7 one shot</span></div>
-  <div class="header-note">Closed Beta \u00b7 \u6982\u7387\u5206\u6790\uff0c\u4e0d\u63d0\u4f9b\u8d2d\u5f69/\u4e0b\u6ce8\u670d\u52a1</div>
+  <div class="header-note">\u6d4b\u8bd5\u9636\u6bb5 \u00b7 \u4ec5\u4f9b\u8d5b\u524d\u5206\u6790</div>
 </header>
 <section class="dashboard-heading">
-  <h1><span class="date-day">{html.escape(date_label)}</span><span>\u00b7</span><span class="today">\u4eca\u5929</span><span class="fixture-count">{fixture_count} \u573a</span></h1>
+  <h1><span class="date-day">{html.escape(business_date_label)}</span><span class="fixture-count">{fixture_count} \u573a</span></h1>
   <div class="filters" aria-label="\u6bd4\u8d5b\u7b5b\u9009">
     <button class="filter" type="button" data-filter="ALL" aria-pressed="true">\u5168\u90e8</button>
     <button class="filter" type="button" data-filter="UPCOMING" aria-pressed="false">\u672a\u5f00\u8d5b</button>
@@ -1533,7 +1578,7 @@ def render_dashboard(payload: dict[str, Any]) -> str:
   </div>
 </section>
 {runtime_warning}{quality_warning}{data_warning}
-<section class="fixture-table" id="fixture-list" aria-label="\u4eca\u65e5\u6bd4\u8d5b\u5217\u8868">
+<section class="fixture-table" id="fixture-list" aria-label="\u7ade\u5f69\u65e5\u6bd4\u8d5b\u5217\u8868">
   <div class="table-header" aria-hidden="true">
     <span>\u7ade\u5f69\u7f16\u53f7 / \u8d5b\u4e8b</span><span>\u5f00\u7403</span><span>\u5bf9\u9635 / \u8d5b\u679c</span>
     <span>1X2 \u6982\u7387</span><span>\u6bd4\u5206\u6982\u7387 Top3</span><span>\u8fdb\u7403\u4fe1\u53f7</span>
@@ -1555,12 +1600,14 @@ buttons.forEach(button => button.addEventListener('click', () => {{
   const filter = button.dataset.filter;
   buttons.forEach(item => item.setAttribute('aria-pressed', String(item === button)));
   cards.forEach(card => {{
+    const kickoffTimestamp = Date.parse(card.dataset.kickoff || '');
+    const isUpcoming = Number.isFinite(kickoffTimestamp) && Date.now() < kickoffTimestamp;
     const match = filter === 'ALL'
-      || (filter === 'UPCOMING' && card.dataset.result !== 'yes')
+      || (filter === 'UPCOMING' && isUpcoming)
       || (filter === 'RESULT' && card.dataset.result === 'yes');
     card.hidden = !match;
   }});
-  if (historicalResults) historicalResults.hidden = filter !== 'ALL' && filter !== 'RESULT';
+  if (historicalResults) historicalResults.hidden = filter !== 'ALL';
 }}));
 </script>
 {STATIC_REFRESH_SCRIPT.replace("__PAGE_VERSION__", json.dumps(page_version, ensure_ascii=False))}
@@ -1655,7 +1702,11 @@ def build_dashboard(
         ))
     cards.sort(key=lambda item: (_iso_sort(item.get("kickoff")), _text(item.get("match_num"))))
     counts = Counter(card.get("status") for card in cards)
-    verified_results = sum(1 for card in cards if card.get("result"))
+    verified_results = sum(
+        1
+        for card in cards
+        if isinstance(card.get("result"), dict) and card["result"].get("score_90m")
+    )
     formal_total = summary_payload.get("formal_sample_count_total")
     if formal_total is None:
         formal_total = len(formal_rows)
@@ -1707,7 +1758,10 @@ def build_dashboard(
             "prediction_failed": counts.get("PREDICTION_FAILED", 0),
             "missed": counts.get("MISSED_PREMATCH_WINDOW", 0),
             "verified_results": verified_results,
-            "completed_count": len(completed),
+            # This count powers the current business-day RESULT filter.  The
+            # workspace's cross-date rows remain an independent history view.
+            "completed_count": verified_results,
+            "historical_validation_count": len(completed),
             "history_count": len(history),
             "formal_prospective_total": int(formal_total or 0),
             "samples_added_today": int(samples_added or 0),

@@ -755,6 +755,46 @@ def test_completed_detail_leads_with_verified_90m_result_and_compares_frozen_for
     assert "\u6bd4\u5206" in html and "\u672a\u547d\u4e2d" in html
     assert "1X2\u65b9\u5411" in html and "\u547d\u4e2d" in html
     assert "\u8d5b\u524d\u9884\u6d4b\u5df2\u9501\u5b9a" in html
+    assert html.index("\u5b9e\u9645\u8d5b\u679c") < html.index("\u80dc\u5e73\u8d1f\u6982\u7387")
+    assert html.index("\u80dc\u5e73\u8d1f\u6982\u7387") < html.index("\u9884\u6d4b vs \u5b9e\u9645")
+    assert html.index("\u9884\u6d4b vs \u5b9e\u9645") < html.index('id="evidence"')
+    assert 'data-probability="0.155000"' in html
+    assert 'style="width:15.5%"' in html
+    assert 'style="width:100.0%"' not in html
+    for label in ("\u5f53\u65f6\u6700\u9ad8\u6982\u7387\u6bd4\u5206", "\u5f53\u65f6\u0031X2\u65b9\u5411", "\u5b9e\u9645\u65b9\u5411"):
+        assert label in html
+
+
+def test_degraded_detail_keeps_exact_score_scope_and_local_context(tmp_path):
+    contract = assemble(roots(tmp_path))
+    contract["prediction_quality_health"] = {
+        "status": "ALERT",
+        "scope": "current_serving",
+        "available": True,
+        "provenance_status": "MATCHED",
+    }
+
+    html = render_match_detail(contract)
+
+    assert "\u6bd4\u5206\u9884\u6d4b\u8d28\u91cf\u964d\u7ea7\uff0c\u4ec5\u4f9b\u89c2\u5bdf" in html
+    assert "\u5f71\u54cd\u7684\u662f\u6bd4\u5206\u9884\u6d4b\u63a8\u8350\u8bed\u4e49" in html
+    assert "\u6a21\u578b\u539f\u59cb\u6bd4\u5206" in html
+    assert 'data-score-serving-state="DEGRADED"' in html
+    assert 'style="width:15.5%"' in html
+
+
+def test_trust_title_changes_when_only_freeze_and_cutoff_are_visible(tmp_path):
+    contract = assemble(roots(tmp_path))
+    contract["source_quality"]["source_references"] = []
+    contract["evidence"]["source_quality"]["source_references"] = []
+    contract["model"]["source_references"] = []
+    contract["market"] = {}
+    contract["evidence"]["market"] = {}
+
+    html = render_match_detail(contract)
+
+    assert "\u8d5b\u524d\u8bb0\u5f55" in html
+    assert "\u53ef\u4fe1\u5ea6\u4e0e\u6765\u6e90" not in html
 
 
 def test_detail_renderer_uses_user_facing_terms_and_hides_internal_metadata(tmp_path):
