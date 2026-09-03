@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
 """Audit whether current immutable football evidence can support a structural-lambda experiment.
 
-Research-only. Reads existing prospective football evidence and verified
-postmatch reviews. It never changes production prediction data.
+Research-only. Reads existing prospective football evidence and authoritative
+90m result records. It never changes production prediction data.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import re
 from collections import Counter
 from datetime import datetime
 from pathlib import Path
@@ -18,12 +19,15 @@ from typing import Any, Iterable
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_EVIDENCE_ROOT = ROOT / "data" / "prospective" / "football_evidence"
-DEFAULT_REVIEW_ROOT = ROOT / "data" / "postmatch_reviews"
+DEFAULT_RESULT_ROOT = ROOT / "data" / "postmatch_automation" / "results"
+DEFAULT_LEDGER = ROOT / "data" / "prospective" / "ledger.jsonl"
 DEFAULT_PINNED_MANIFEST = (
     ROOT / "data" / "prediction_quality" / "pred_trust_2" / "pinned_cohort_manifest.json"
 )
 MIN_ROWS_PER_TEAM = 10
 MIN_SETTLED_USABLE = 50
+RESULT_SCOPE = "regulation_90m_plus_stoppage"
+SCORE_90M_RE = re.compile(r"^\s*(\d+)\s*-\s*(\d+)\s*$")
 
 
 def _display_path(path: Path) -> str:
@@ -130,42 +134,199 @@ def _evidence_status(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _load_reviews(root: Path) -> dict[str, dict[str, Any]]:
-    reviews: dict[str, dict[str, Any]] = {}
-    for path in sorted(root.glob("*.json")):
-        if path.name == "calibration_status.json":
-            continue
+def _parse_score_90m(value: Any) -> tuple[int, int] | None:
+    match = SCORE_90M_RE.fullmatch(str(value or "").strip())
+    if match is None:
+        return None
+    return int(match.group(1)), int(match.group(2))
+
+
+def _is_after(later: datetime | None, earlier: datetime | None) -> bool:
+    if later is None or earlier is None:
+        return False
+    try:
+        return later > earlier
+    except TypeError:
+        return False
+
+
+def _authoritative_result_status(payload: dict[str, Any]) -> dict[str, Any]:
+    match_key = str(payload.get("match_key") or "").strip()
+    scope = str(payload.get("scope") or "").strip()
+    kickoff = _parse_time(payload.get("kickoff_at") or payload.get("kickoff_local"))
+    verified = _parse_time(payload.get("verified_at"))
+    score = _parse_score_90m(payload.get("result_90m"))
+
+    reasons: list[str] = []
+    if not match_key:
+        reasons.append("RESULT_MISSING_MATCH_KEY")
+    if scope != RESULT_SCOPE:
+        reasons.append("RESULT_SCOPE_NOT_REGULATION_90M")
+    if score is None:
+        reasons.append("RESULT_90M_UNPARSEABLE")
+    if verified is None:
+        reasons.append("INVALID_RESULT_VERIFIED_AT")
+    if kickoff is None:
+        reasons.append("INVALID_RESULT_KICKOFF")
+    elif verified is not None and not _is_after(verified, kickoff):
+        reasons.append("VERIFIED_AT_NOT_AFTER_KICKOFF")
+
+    return {
+        "valid": not reasons,
+        "reasons": reasons,
+        "match_key": match_key,
+        "kickoff_at": payload.get("kickoff_at") or payload.get("kickoff_local"),
+        "verified_at": payload.get("verified_at"),
+        "result_90m": payload.get("result_90m"),
+    }
+
+
+def _load_authoritative_results(
+    root: Path,
+) -> tuple[dict[str, dict[str, Any]], int, dict[str, int]]:
+    results: dict[str, dict[str, Any]] = {}
+    failure_reasons: Counter[str] = Counter()
+    result_files = sorted(root.glob("*.json"))
+    for path in result_files:
         try:
             payload = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
+            failure_reasons["INVALID_RESULT_JSON"] += 1
             continue
         if not isinstance(payload, dict):
+            failure_reasons["INVALID_RESULT_OBJECT"] += 1
+            continue
+        status = _authoritative_result_status(payload)
+        for reason in status["reasons"]:
+            failure_reasons[reason] += 1
+        if not status["valid"]:
+            continue
+        match_key = status["match_key"]
+        if match_key in results:
+            failure_reasons["DUPLICATE_RESULT_MATCH_KEY"] += 1
+            continue
+        results[match_key] = {
+            "path": _display_path(path),
+            **status,
+        }
+    return results, len(result_files), dict(sorted(failure_reasons.items()))
+
+def _ledger_row_is_settled(payload: dict[str, Any]) -> bool:
+    actual = payload.get("actual") if isinstance(payload.get("actual"), dict) else {}
+    try:
+        home_score = int(actual.get("home_score"))
+        away_score = int(actual.get("away_score"))
+    except (TypeError, ValueError):
+        return False
+    match_identity = (
+        payload.get("match_identity")
+        if isinstance(payload.get("match_identity"), dict)
+        else {}
+    )
+    return (
+        home_score >= 0
+        and away_score >= 0
+        and bool(str(match_identity.get("match_key") or "").strip())
+    )
+
+
+def _load_ledger_sanity_reference(
+    ledger_path: Path | None,
+    evidence_records: dict[str, dict[str, Any]],
+    result_root: Path,
+) -> dict[str, Any]:
+    reference: dict[str, Any] = {
+        "available": False,
+        "scope": "SANITY_REFERENCE_ONLY_NOT_READINESS_SETTLEMENT_TRUTH",
+        "basis": "ledger settled rows joined to authoritative result filenames only",
+        "source": _display_path(ledger_path) if ledger_path is not None else None,
+    }
+    if ledger_path is None:
+        reference["reason"] = "LEDGER_REFERENCE_NOT_REQUESTED_FOR_EXTERNAL_FIXTURE"
+        return reference
+    if not ledger_path.is_file():
+        reference["reason"] = "LEDGER_REFERENCE_NOT_FOUND"
+        return reference
+
+    ledger_rows: dict[str, dict[str, Any]] = {}
+    invalid_rows = 0
+    duplicate_rows = 0
+    try:
+        lines = ledger_path.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        reference["reason"] = "LEDGER_REFERENCE_UNREADABLE"
+        return reference
+    for line in lines:
+        if not line.strip():
+            continue
+        try:
+            payload = json.loads(line)
+        except json.JSONDecodeError:
+            invalid_rows += 1
+            continue
+        if not isinstance(payload, dict):
+            invalid_rows += 1
             continue
         prediction_id = str(payload.get("prediction_id") or "").strip()
-        result = payload.get("result") if isinstance(payload.get("result"), dict) else {}
-        score = str(result.get("score_90m") or payload.get("实际90分钟比分") or "").strip()
-        if prediction_id and "-" in score:
-            reviews[prediction_id] = {
-                "path": _display_path(path),
-                "score_90m": score,
-                "generated_at": payload.get("generated_at"),
-            }
-    return reviews
+        if not prediction_id:
+            invalid_rows += 1
+            continue
+        if prediction_id in ledger_rows:
+            duplicate_rows += 1
+            continue
+        ledger_rows[prediction_id] = payload
+
+    result_file_keys = {path.stem for path in result_root.glob("*.json")}
+    represented_ids = set(evidence_records) & set(ledger_rows)
+    settled_ids = {
+        prediction_id
+        for prediction_id in represented_ids
+        if _ledger_row_is_settled(ledger_rows[prediction_id])
+    }
+    settled_with_result_files = {
+        prediction_id
+        for prediction_id in settled_ids
+        if evidence_records[prediction_id]["match_key"] in result_file_keys
+    }
+    unique_matches = {
+        evidence_records[prediction_id]["match_key"]
+        for prediction_id in settled_with_result_files
+        if evidence_records[prediction_id]["match_key"]
+    }
+    reference.update(
+        {
+            "available": True,
+            "ledger_rows": len(ledger_rows),
+            "invalid_ledger_rows": invalid_rows,
+            "duplicate_ledger_rows": duplicate_rows,
+            "evidence_prediction_ids_in_ledger": len(represented_ids),
+            "settled_prediction_snapshots_in_ledger_with_result_files": len(
+                settled_with_result_files
+            ),
+            "settled_unique_matches_in_ledger_with_result_files": len(unique_matches),
+        }
+    )
+    return reference
 
 
 def run(
     *,
     evidence_root: Path = DEFAULT_EVIDENCE_ROOT,
-    review_root: Path = DEFAULT_REVIEW_ROOT,
+    result_root: Path = DEFAULT_RESULT_ROOT,
     pinned_manifest: Path = DEFAULT_PINNED_MANIFEST,
+    ledger_path: Path | None = None,
 ) -> dict[str, Any]:
-    reviews = _load_reviews(review_root)
+    authoritative_results, result_file_count, result_failure_reasons = (
+        _load_authoritative_results(result_root)
+    )
     reason_counts: Counter[str] = Counter()
+    settlement_failure_reasons: Counter[str] = Counter()
     evidence_records: dict[str, dict[str, Any]] = {}
     valid_row_counts: list[int] = []
     provider_counts: Counter[str] = Counter()
+    evidence_paths = sorted(evidence_root.glob("*.json"))
 
-    for path in sorted(evidence_root.glob("*.json")):
+    for path in evidence_paths:
         try:
             payload = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
@@ -189,16 +350,31 @@ def run(
         evidence_records[prediction_id] = {
             "path": _display_path(path),
             "match_id": str(payload.get("match_id") or ""),
-            "match_key": str(payload.get("match_key") or ""),
+            "match_key": str(payload.get("match_key") or "").strip(),
             "kickoff_at": payload.get("kickoff_at"),
             "usable": status["usable"],
             **status,
         }
 
     usable_ids = {pid for pid, row in evidence_records.items() if row["usable"]}
-    settled_ids = set(reviews)
-    settled_with_any_evidence = settled_ids & set(evidence_records)
+    settled_ids: set[str] = set()
+    for prediction_id, row in evidence_records.items():
+        result = authoritative_results.get(row["match_key"])
+        if result is None:
+            continue
+        if not _is_after(
+            _parse_time(result["verified_at"]),
+            _parse_time(row["kickoff_at"]),
+        ):
+            settlement_failure_reasons["RESULT_NOT_AFTER_EVIDENCE_KICKOFF"] += 1
+            continue
+        settled_ids.add(prediction_id)
     settled_usable = settled_ids & usable_ids
+    settled_usable_match_keys = {
+        evidence_records[prediction_id]["match_key"]
+        for prediction_id in settled_usable
+        if evidence_records[prediction_id]["match_key"]
+    }
 
     pinned = json.loads(pinned_manifest.read_text(encoding="utf-8"))
     pinned_ids = {
@@ -209,57 +385,139 @@ def run(
         str(value) for value in pinned.get("verified_prediction_ids") or []
     }
 
-    decision = (
-        "STRUCTURAL_OFFLINE_EXPERIMENT_READY"
-        if len(settled_usable) >= MIN_SETTLED_USABLE
-        else "STRUCTURAL_EVIDENCE_SAMPLE_INSUFFICIENT"
-    )
-
     all_prospective = {
-        "football_evidence_files": len(evidence_records),
+        "total_evidence_files": len(evidence_paths),
+        "football_evidence_files": len(evidence_paths),
+        "evidence_records": len(evidence_records),
         "usable_structural_evidence": len(usable_ids),
-        "verified_postmatch_reviews": len(settled_ids),
-        "settled_with_any_evidence": len(settled_with_any_evidence),
+        "authoritative_result_files": result_file_count,
+        "valid_authoritative_results": len(authoritative_results),
+        "settled_prediction_snapshots": len(settled_ids),
+        "settled_usable_prediction_snapshots": len(settled_usable),
+        "settled_usable_unique_matches": len(settled_usable_match_keys),
+        "settled_with_any_evidence": len(settled_ids),
         "settled_with_usable_structural_evidence": len(settled_usable),
     }
 
+    threshold_decision = (
+        "STRUCTURAL_OFFLINE_EXPERIMENT_READY"
+        if len(settled_usable_match_keys) >= MIN_SETTLED_USABLE
+        else "STRUCTURAL_EVIDENCE_SAMPLE_INSUFFICIENT"
+    )
+    if ledger_path is None:
+        same_default_roots = (
+            evidence_root.resolve() == DEFAULT_EVIDENCE_ROOT.resolve()
+            and result_root.resolve() == DEFAULT_RESULT_ROOT.resolve()
+        )
+        ledger_path = DEFAULT_LEDGER if same_default_roots else None
+    sanity_reference = _load_ledger_sanity_reference(
+        ledger_path, evidence_records, result_root
+    )
+    sanity_mismatches: list[dict[str, int | str]] = []
+    if sanity_reference["available"]:
+        comparisons = (
+            (
+                "settled_usable_prediction_snapshots",
+                "settled_prediction_snapshots_in_ledger_with_result_files",
+            ),
+            (
+                "settled_usable_unique_matches",
+                "settled_unique_matches_in_ledger_with_result_files",
+            ),
+        )
+        for formal_key, reference_key in comparisons:
+            formal_value = int(all_prospective[formal_key])
+            reference_value = int(sanity_reference[reference_key])
+            if formal_value != reference_value:
+                sanity_mismatches.append(
+                    {
+                        "metric": formal_key,
+                        "formal_value": formal_value,
+                        "reference_value": reference_value,
+                        "difference": formal_value - reference_value,
+                    }
+                )
+    sanity_reference["material_mismatch"] = bool(sanity_mismatches)
+    sanity_reference["mismatches"] = sanity_mismatches
+    fail_closed = bool(sanity_mismatches)
+    decision = (
+        "STRUCTURAL_EVIDENCE_SAMPLE_INSUFFICIENT"
+        if fail_closed
+        else threshold_decision
+    )
+
+    pinned_verified_usable_ids = pinned_verified_ids & usable_ids
+    pinned_verified_settled_usable_ids = pinned_verified_ids & settled_usable
+    pinned_verified_settled_usable_match_keys = {
+        evidence_records[prediction_id]["match_key"]
+        for prediction_id in pinned_verified_settled_usable_ids
+        if evidence_records[prediction_id]["match_key"]
+    }
+    coverage = {
+        **all_prospective,
+        "all_prospective": all_prospective,
+        "gate_scope": "ALL_PROSPECTIVE_EVIDENCE_NOT_PINNED_COHORT_LIMITED",
+        "settlement_truth_source": "data/postmatch_automation/results/*.json",
+        "postmatch_reviews_used_for_readiness": False,
+        "pinned_unique": len(pinned_ids),
+        "pinned_with_any_evidence": len(pinned_ids & set(evidence_records)),
+        "pinned_verified": len(pinned_verified_ids),
+        "pinned_verified_with_usable_evidence": len(pinned_verified_usable_ids),
+        "pinned_verified_with_settled_usable_snapshots": len(
+            pinned_verified_settled_usable_ids
+        ),
+        "pinned_verified_with_settled_usable_unique_matches": len(
+            pinned_verified_settled_usable_match_keys
+        ),
+        "median_valid_rows_per_team_side": (
+            median(valid_row_counts) if valid_row_counts else None
+        ),
+        "provider_counts_for_usable": dict(sorted(provider_counts.items())),
+    }
     return {
-        "schema_version": "structural_football_evidence_coverage.v1",
-        "status": "READY_FOR_ACCEPTANCE",
+        "schema_version": "structural_football_evidence_coverage.v2",
+        "status": "FAIL_CLOSED" if fail_closed else "READY_FOR_ACCEPTANCE",
         "decision": decision,
+        "threshold_decision": threshold_decision,
         "minimum_settled_usable_required": MIN_SETTLED_USABLE,
-        "coverage": {
-            **all_prospective,
-            "all_prospective": all_prospective,
-            "gate_scope": "ALL_PROSPECTIVE_EVIDENCE_AND_SETTLED_REVIEWS",
-            "pinned_unique": len(pinned_ids),
-            "pinned_with_any_evidence": len(pinned_ids & set(evidence_records)),
-            "pinned_verified": len(pinned_verified_ids),
-            "pinned_verified_with_usable_evidence": len(
-                pinned_verified_ids & usable_ids
-            ),
-            "median_valid_rows_per_team_side": (
-                median(valid_row_counts) if valid_row_counts else None
-            ),
-            "provider_counts_for_usable": dict(sorted(provider_counts.items())),
-        },
+        "coverage": coverage,
         "failure_reasons": dict(sorted(reason_counts.items())),
+        "authoritative_result_failure_reasons": result_failure_reasons,
+        "settlement_failure_reasons": dict(sorted(settlement_failure_reasons.items())),
+        "independent_sanity_reference": sanity_reference,
+        "gate": {
+            "settled_usable_unique_matches": len(settled_usable_match_keys),
+            "threshold_passed": threshold_decision
+            == "STRUCTURAL_OFFLINE_EXPERIMENT_READY",
+            "fail_closed": fail_closed,
+            "fail_closed_reason": (
+                "FORMAL_STRICT_AUTHORITATIVE_RESULT_GATE_DIFFERS_FROM_SANITY_REFERENCE"
+                if fail_closed
+                else None
+            ),
+            "final_decision": decision,
+        },
         "integrity_contract": {
             "evidence_capture_must_be_prematch": True,
             "source_cutoff_must_be_prematch": True,
             "minimum_valid_rows_per_team": MIN_ROWS_PER_TEAM,
             "subject_team_id_share_minimum": 0.8,
+            "authoritative_result_scope": RESULT_SCOPE,
+            "authoritative_result_90m_parse_required": True,
+            "authoritative_verified_at_must_be_after_kickoff": True,
+            "postmatch_review_used_for_readiness": False,
             "postmatch_result_used_for_generation": False,
         },
         "next_step": (
-            "build one bounded dynamic attack/defence challenger on the settled usable cohort; no production change"
+            "FAIL CLOSED: reconcile authoritative result records with the independent ledger/result-filename sanity reference before any offline experiment; no model change"
+            if fail_closed
+            else "settled usable unique-match threshold evaluated from authoritative results; no model change in this PR"
             if decision == "STRUCTURAL_OFFLINE_EXPERIMENT_READY"
-            else "do not backfill or fabricate history; keep prospective structural evidence capture and wait for >=50 settled usable matches"
+            else "do not backfill or fabricate history; keep prospective structural evidence capture and wait for >=50 settled usable unique matches"
         ),
         "production_changes": "NO",
         "promotion": "NO",
     }
-
 
 def build_report(result: dict[str, Any]) -> str:
     """Build a concise, recoverable report from one audit result."""
@@ -273,6 +531,12 @@ def build_report(result: dict[str, Any]) -> str:
         if isinstance(coverage.get("all_prospective"), dict)
         else coverage
     )
+    gate = result.get("gate") if isinstance(result.get("gate"), dict) else {}
+    sanity = (
+        result.get("independent_sanity_reference")
+        if isinstance(result.get("independent_sanity_reference"), dict)
+        else {}
+    )
     integrity = (
         result.get("integrity_contract")
         if isinstance(result.get("integrity_contract"), dict)
@@ -281,24 +545,34 @@ def build_report(result: dict[str, Any]) -> str:
     lines = [
         "# Structural football evidence coverage audit",
         "",
-        f"- decision: `{result.get('decision')}`",
-        f"- minimum settled usable required: `{result.get('minimum_settled_usable_required')}`",
+        f"- status: `{result.get('status')}`",
+        f"- threshold decision: `{result.get('threshold_decision')}`",
+        f"- final Gate decision: `{result.get('decision')}`",
+        f"- minimum settled usable unique matches required: `{result.get('minimum_settled_usable_required')}`",
         "",
         "## ALL_PROSPECTIVE",
         "",
-        "The readiness gate uses the full current prospective evidence set and settled review set; it is not limited to the pinned cohort.",
+        "The readiness gate uses all current prospective evidence and authoritative results; it is not limited to the pinned cohort.",
     ]
     for key in (
-        "football_evidence_files",
+        "total_evidence_files",
         "usable_structural_evidence",
-        "verified_postmatch_reviews",
-        "settled_with_any_evidence",
-        "settled_with_usable_structural_evidence",
+        "authoritative_result_files",
+        "valid_authoritative_results",
+        "settled_usable_prediction_snapshots",
+        "settled_usable_unique_matches",
     ):
         lines.append(f"- {key}: `{all_prospective.get(key)}`")
 
     lines.extend(
         [
+            "",
+            "## Authoritative settlement",
+            "",
+            f"- source: `{coverage.get('settlement_truth_source')}`",
+            f"- postmatch_reviews_used_for_readiness: `{coverage.get('postmatch_reviews_used_for_readiness')}`",
+            f"- authoritative_result_failure_reasons: `{json.dumps(result.get('authoritative_result_failure_reasons', {}), ensure_ascii=False, sort_keys=True)}`",
+            f"- settlement_failure_reasons: `{json.dumps(result.get('settlement_failure_reasons', {}), ensure_ascii=False, sort_keys=True)}`",
             "",
             "## PINNED_COHORT_ONLY",
             "",
@@ -306,6 +580,15 @@ def build_report(result: dict[str, Any]) -> str:
             f"- pinned_with_any_evidence: `{coverage.get('pinned_with_any_evidence')}`",
             f"- pinned_verified: `{coverage.get('pinned_verified')}`",
             f"- pinned_verified_with_usable_evidence: `{coverage.get('pinned_verified_with_usable_evidence')}`",
+            f"- pinned_verified_with_settled_usable_unique_matches: `{coverage.get('pinned_verified_with_settled_usable_unique_matches')}`",
+            "",
+            "## Gate and independent sanity reference",
+            "",
+            f"- threshold_passed: `{gate.get('threshold_passed')}`",
+            f"- fail_closed: `{gate.get('fail_closed')}`",
+            f"- fail_closed_reason: `{gate.get('fail_closed_reason')}`",
+            "- mismatch explanation: the sanity reference uses ledger settlement plus result filenames only; readiness uses the strict authoritative result scope, score, timestamp, and kickoff gates. Any mismatch remains fail closed.",
+            f"- sanity_reference: `{json.dumps(sanity, ensure_ascii=False, sort_keys=True)}`",
             "",
             "## Prematch evidence integrity",
             "",
@@ -320,7 +603,6 @@ def build_report(result: dict[str, Any]) -> str:
         ]
     )
     return "\n".join(lines) + "\n"
-
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
