@@ -1,6 +1,11 @@
 name: Exact-score error decomposition audit
 
 on:
+  pull_request:
+    paths:
+      - scripts/exact_score_error_decomposition_audit.py
+      - tests/test_exact_score_error_decomposition_audit.py
+      - .github/workflows/exact-score-error-decomposition-audit.yml
   workflow_dispatch:
 
 permissions:
@@ -18,8 +23,20 @@ jobs:
         with:
           python-version: "3.10"
 
+      - name: Install focused test dependency
+        run: python -m pip install pytest==8.4.1
+
+      - name: Compile audit script
+        run: python -m py_compile scripts/exact_score_error_decomposition_audit.py
+
+      - name: Run focused audit tests
+        run: python -m pytest tests/test_exact_score_error_decomposition_audit.py -q
+
       - name: Generate audit artifact
         run: python scripts/exact_score_error_decomposition_audit.py --output-dir audit-artifact
+
+      - name: Check diff whitespace
+        run: git diff --check
 
       - name: Upload summary and report
         uses: actions/upload-artifact@v4
@@ -28,3 +45,4 @@ jobs:
           path: |
             audit-artifact/summary.json
             audit-artifact/report.md
+          if-no-files-found: error

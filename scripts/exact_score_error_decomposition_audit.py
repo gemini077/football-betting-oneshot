@@ -15,6 +15,7 @@ import re
 import sys
 from collections import Counter, defaultdict
 from datetime import datetime, timezone
+from itertools import combinations
 from pathlib import Path
 from typing import Any, Callable, Iterable, Mapping
 
@@ -27,7 +28,7 @@ DEFAULT_PREDICTION_ROOT = PROJECT_ROOT / "data" / "model_governance" / "predicti
 DEFAULT_RESULT_ROOT = PROJECT_ROOT / "data" / "postmatch_automation" / "results"
 DEFAULT_OUTPUT_DIR = PROJECT_ROOT / "audit-artifact"
 
-MILESTONE = "EXACT-SCORE-ERROR-DECOMPOSITION-1"
+MILESTONE = "EXACT-SCORE-ERROR-DECOMPOSITION-1-CORRECTION"
 CHAMPION_MODEL_FAMILY = "recent_form_market_calibrated_poisson_v2"
 BOOTSTRAP_SEED = 20260903
 DEFAULT_BOOTSTRAP_REPLICATES = 4000
@@ -35,8 +36,9 @@ MIN_UNIVERSE_SAMPLE = 20
 SCORE_RE = re.compile(r"^(\d+)\s*-\s*(\d+)$")
 
 UNIVERSES = (
-    "CLUB_TOP_LEAGUE",
-    "CLUB_LOWER_OR_SMALL_LEAGUE",
+    "CLUB_BIG5_TOP_LEAGUE",
+    "CLUB_OTHER_TOP_LEAGUE",
+    "CLUB_LOWER_DIVISION",
     "CLUB_DOMESTIC_CUP",
     "CLUB_CONTINENTAL",
     "NATIONAL_TEAM",
@@ -78,25 +80,51 @@ LAMBDA_TOTAL_BINS = (
     ("[4,+)", 4.0, math.inf, True),
 )
 
-# These are competition labels already present in the repository's league
-# metadata.  No team name, country inference, or external lookup is used.
-TOP_LEAGUE_NAMES = frozenset(
+# These are competition labels already present in the repository's pinned
+# cohort metadata.  No team name, country inference, or external lookup is
+# used.  Keep the sets explicit so an unfamiliar label remains unknown.
+BIG5_TOP_LEAGUE_NAMES = frozenset(
     {
         "\u897f\u73ed\u7259\u7532\u7ea7\u8054\u8d5b",
-        "\u8377\u5170\u7532\u7ea7\u8054\u8d5b",
         "\u82f1\u683c\u5170\u8d85\u7ea7\u8054\u8d5b",
         "\u610f\u5927\u5229\u7532\u7ea7\u8054\u8d5b",
+        "\u5fb7\u56fd\u7532\u7ea7\u8054\u8d5b",
+        "\u6cd5\u56fd\u7532\u7ea7\u8054\u8d5b",
+    }
+)
+
+OTHER_TOP_LEAGUE_NAMES = frozenset(
+    {
+        "\u8377\u5170\u7532\u7ea7\u8054\u8d5b",
         "\u97e9\u56fd\u804c\u4e1a\u8054\u8d5b",
         "\u745e\u5178\u8d85\u7ea7\u8054\u8d5b",
         "\u65e5\u672c\u804c\u4e1a\u8054\u8d5b",
         "\u8461\u8404\u7259\u8d85\u7ea7\u8054\u8d5b",
-        "\u6cd5\u56fd\u7532\u7ea7\u8054\u8d5b",
         "\u632a\u5a01\u8d85\u7ea7\u8054\u8d5b",
-        "\u5fb7\u56fd\u7532\u7ea7\u8054\u8d5b",
         "\u5df4\u897f\u7532\u7ea7\u8054\u8d5b",
         "\u82ac\u5170\u8d85\u7ea7\u8054\u8d5b",
         "\u6c99\u7279\u804c\u4e1a\u8054\u8d5b",
         "\u7f8e\u56fd\u804c\u4e1a\u5927\u8054\u76df",
+    }
+)
+
+LOWER_DIVISION_NAMES = frozenset(
+    {
+        "\u82f1\u683c\u5170\u51a0\u519b\u8054\u8d5b",
+        "\u5fb7\u56fd\u4e59\u7ea7\u8054\u8d5b",
+        "\u65e5\u672c\u4e59\u7ea7\u8054\u8d5b",
+        "\u6cd5\u56fd\u4e59\u7ea7\u8054\u8d5b",
+        "\u8377\u5170\u4e59\u7ea7\u8054\u8d5b",
+    }
+)
+
+DOMESTIC_CUP_NAMES = frozenset(
+    {
+        "\u5df4\u897f\u676f",
+        "\u5fb7\u56fd\u8d85\u7ea7\u676f",
+        "\u97e9\u56fd\u676f",
+        "\u82f1\u683c\u5170\u8054\u8d5b\u676f",
+        "\u82f1\u683c\u5170\u793e\u533a\u76fe\u676f",
     }
 )
 
@@ -188,16 +216,18 @@ def classify_competition(competition: str | None) -> str:
     name = _text(competition)
     if not name:
         return "UNKNOWN_OR_MIXED"
-    if name in NATIONAL_TEAM_NAMES or "\u56fd\u5bb6\u961f" in name:
+    if name in NATIONAL_TEAM_NAMES:
         return "NATIONAL_TEAM"
     if name in CONTINENTAL_NAMES:
         return "CLUB_CONTINENTAL"
-    if name in TOP_LEAGUE_NAMES:
-        return "CLUB_TOP_LEAGUE"
-    if "\u676f" in name:
+    if name in BIG5_TOP_LEAGUE_NAMES:
+        return "CLUB_BIG5_TOP_LEAGUE"
+    if name in OTHER_TOP_LEAGUE_NAMES:
+        return "CLUB_OTHER_TOP_LEAGUE"
+    if name in LOWER_DIVISION_NAMES:
+        return "CLUB_LOWER_DIVISION"
+    if name in DOMESTIC_CUP_NAMES:
         return "CLUB_DOMESTIC_CUP"
-    if "\u8054\u8d5b" in name or "\u5927\u8054\u76df" in name:
-        return "CLUB_LOWER_OR_SMALL_LEAGUE"
     return "UNKNOWN_OR_MIXED"
 
 
@@ -447,8 +477,8 @@ def expected_shape_probabilities(lambda_home: float, lambda_away: float) -> dict
 
     lambda_home = _finite_float(lambda_home, "lambda_home")
     lambda_away = _finite_float(lambda_away, "lambda_away")
-    if lambda_home <= 0 or lambda_away <= 0:
-        raise ValueError("lambda values must be positive")
+    if lambda_home < 0 or lambda_away < 0:
+        raise ValueError("lambda values must be non-negative")
     lambda_total = lambda_home + lambda_away
     total_probabilities = [_poisson_pmf(lambda_total, goals) for goals in range(7)]
     return {
@@ -516,13 +546,24 @@ def run_parametric_shape_bootstrap(
     seed: int = BOOTSTRAP_SEED,
     replicates: int = DEFAULT_BOOTSTRAP_REPLICATES,
 ) -> dict[str, Any]:
-    """Compare observed shape counts to model expectations under a fixed seed."""
+    """Run the raw frozen-lambda shape diagnostic under a fixed seed.
+
+    This intentionally keeps the original lambdas unchanged.  Its residuals
+    describe the complete frozen distribution, but are not used on their own
+    to classify ``DISTRIBUTION_SHAPE``.
+    """
 
     if replicates < 1:
         raise ValueError("bootstrap replicates must be positive")
     materialized = list(rows)
     if not materialized:
-        return {"sample_count": 0, "seed": seed, "replicates": replicates, "metrics": {}}
+        return {
+            "diagnostic": "RAW_SHAPE_DIAGNOSTIC",
+            "sample_count": 0,
+            "seed": seed,
+            "replicates": replicates,
+            "metrics": {},
+        }
 
     expected_counts = Counter()
     observed_counts = Counter()
@@ -569,15 +610,201 @@ def run_parametric_shape_bootstrap(
             "parametric_bootstrap_null_ci_95_rate": [
                 value / sample_count if value is not None else None for value in null_ci
             ],
+            "raw_p_value": p_value,
             "two_sided_p_value": p_value,
         }
     return {
+        "diagnostic": "RAW_SHAPE_DIAGNOSTIC",
         "sample_count": sample_count,
         "seed": seed,
         "replicates": replicates,
         "distribution": "independent_poisson_lambda_home_lambda_away_rho_0",
         "metrics": metrics,
     }
+
+
+def _holm_bonferroni(p_values: Mapping[str, float]) -> dict[str, float]:
+    """Return Holm-Bonferroni adjusted p-values in the original metric order."""
+
+    ordered = sorted(p_values.items(), key=lambda item: (item[1], item[0]))
+    adjusted: dict[str, float] = {}
+    running_max = 0.0
+    metric_count = len(ordered)
+    for rank, (metric, p_value) in enumerate(ordered):
+        candidate = min(1.0, float(p_value) * (metric_count - rank))
+        running_max = max(running_max, candidate)
+        adjusted[metric] = running_max
+    return adjusted
+
+
+def estimate_mean_conditioning_scales(rows: Iterable[Mapping[str, Any]]) -> dict[str, float]:
+    """Estimate the postmatch-only home/away nuisance scales from a cohort."""
+
+    materialized = list(rows)
+    if not materialized:
+        return {"scale_home": 1.0, "scale_away": 1.0}
+    original_home_sum = sum(_finite_float(row["lambda_home"], "lambda_home") for row in materialized)
+    original_away_sum = sum(_finite_float(row["lambda_away"], "lambda_away") for row in materialized)
+    if original_home_sum <= 0 or original_away_sum <= 0:
+        raise ValueError("original lambda sums must be positive")
+    actual_home_sum = sum(int(row["actual_home"]) for row in materialized)
+    actual_away_sum = sum(int(row["actual_away"]) for row in materialized)
+    return {
+        "scale_home": actual_home_sum / original_home_sum,
+        "scale_away": actual_away_sum / original_away_sum,
+    }
+
+
+def run_mean_conditioned_shape_bootstrap(
+    rows: Iterable[Mapping[str, Any]],
+    *,
+    seed: int = BOOTSTRAP_SEED,
+    replicates: int = DEFAULT_BOOTSTRAP_REPLICATES,
+) -> dict[str, Any]:
+    """Audit shape after removing the observed mean/intensity bias.
+
+    The observed nuisance scales are estimated only for this postmatch
+    diagnostic.  Every parametric bootstrap replicate simulates from the
+    observed conditioned lambdas, re-estimates both scales against the
+    original frozen lambdas, and recomputes its own conditioned expectations.
+    """
+
+    if replicates < 1:
+        raise ValueError("bootstrap replicates must be positive")
+    materialized = list(rows)
+    if not materialized:
+        return {
+            "diagnostic": "MEAN_CONDITIONED_SHAPE",
+            "sample_count": 0,
+            "seed": seed,
+            "replicates": replicates,
+            "metrics": {},
+        }
+
+    scales = estimate_mean_conditioning_scales(materialized)
+    scale_home = scales["scale_home"]
+    scale_away = scales["scale_away"]
+    original_home = [
+        _finite_float(row["lambda_home"], "lambda_home") for row in materialized
+    ]
+    original_away = [
+        _finite_float(row["lambda_away"], "lambda_away") for row in materialized
+    ]
+    original_home_sum = sum(original_home)
+    original_away_sum = sum(original_away)
+    conditioned_pairs = [
+        (lambda_home * scale_home, lambda_away * scale_away)
+        for lambda_home, lambda_away in zip(original_home, original_away)
+    ]
+
+    expected_counts = Counter()
+    observed_counts = Counter()
+    for row, (conditioned_home, conditioned_away) in zip(materialized, conditioned_pairs):
+        probabilities = expected_shape_probabilities(conditioned_home, conditioned_away)
+        actuals = _actual_shape_flags(int(row["actual_home"]), int(row["actual_away"]))
+        for metric in SHAPE_METRICS:
+            expected_counts[metric] += probabilities[metric]
+            observed_counts[metric] += int(actuals[metric])
+
+    rng = random.Random(seed)
+    bootstrap_differences = {metric: [] for metric in SHAPE_METRICS}
+    for _ in range(replicates):
+        simulated_scores: list[tuple[int, int]] = []
+        simulated_home_sum = 0
+        simulated_away_sum = 0
+        for conditioned_home, conditioned_away in conditioned_pairs:
+            simulated_home = _sample_poisson(conditioned_home, rng)
+            simulated_away = _sample_poisson(conditioned_away, rng)
+            simulated_scores.append((simulated_home, simulated_away))
+            simulated_home_sum += simulated_home
+            simulated_away_sum += simulated_away
+
+        replicate_scale_home = simulated_home_sum / original_home_sum
+        replicate_scale_away = simulated_away_sum / original_away_sum
+        replicate_expected_counts = Counter()
+        simulated_counts = Counter()
+        for index, (simulated_home, simulated_away) in enumerate(simulated_scores):
+            replicate_probabilities = expected_shape_probabilities(
+                original_home[index] * replicate_scale_home,
+                original_away[index] * replicate_scale_away,
+            )
+            flags = _actual_shape_flags(simulated_home, simulated_away)
+            for metric in SHAPE_METRICS:
+                replicate_expected_counts[metric] += replicate_probabilities[metric]
+                simulated_counts[metric] += int(flags[metric])
+        for metric in SHAPE_METRICS:
+            bootstrap_differences[metric].append(
+                simulated_counts[metric] - replicate_expected_counts[metric]
+            )
+
+    sample_count = len(materialized)
+    raw_p_values: dict[str, float] = {}
+    null_intervals: dict[str, list[float | None]] = {}
+    for metric in SHAPE_METRICS:
+        observed_count = int(observed_counts[metric])
+        residual_count = observed_count - float(expected_counts[metric])
+        null_values = bootstrap_differences[metric]
+        raw_p_values[metric] = (
+            1.0 + sum(abs(value) >= abs(residual_count) for value in null_values)
+        ) / (len(null_values) + 1.0)
+        null_intervals[metric] = [_quantile(null_values, 0.025), _quantile(null_values, 0.975)]
+    adjusted_p_values = _holm_bonferroni(raw_p_values)
+
+    metrics: dict[str, dict[str, Any]] = {}
+    for metric in SHAPE_METRICS:
+        observed_count = int(observed_counts[metric])
+        conditioned_expected_count = float(expected_counts[metric])
+        residual_count = observed_count - conditioned_expected_count
+        null_ci = null_intervals[metric]
+        raw_p_value = raw_p_values[metric]
+        adjusted_p_value = adjusted_p_values[metric]
+        metrics[metric] = {
+            "observed_count": observed_count,
+            "observed_rate": observed_count / sample_count,
+            "conditioned_expected_count": conditioned_expected_count,
+            "conditioned_expected_rate": conditioned_expected_count / sample_count,
+            "residual_count_observed_minus_conditioned_expected": residual_count,
+            "residual_rate_observed_minus_conditioned_expected": residual_count / sample_count,
+            # These aliases keep the metric shape easy to consume while the
+            # conditioned names make the nuisance adjustment explicit.
+            "expected_count": conditioned_expected_count,
+            "expected_rate": conditioned_expected_count / sample_count,
+            "residual_count_observed_minus_expected": residual_count,
+            "residual_rate_observed_minus_expected": residual_count / sample_count,
+            "parametric_bootstrap_null_ci_95_count": null_ci,
+            "parametric_bootstrap_null_ci_95_rate": [
+                value / sample_count if value is not None else None for value in null_ci
+            ],
+            "raw_p_value": raw_p_value,
+            "adjusted_p_value": adjusted_p_value,
+            "holm_bonferroni_adjusted_p_value": adjusted_p_value,
+            "two_sided_p_value": raw_p_value,
+        }
+    return {
+        "diagnostic": "MEAN_CONDITIONED_SHAPE",
+        "sample_count": sample_count,
+        "seed": seed,
+        "replicates": replicates,
+        "distribution": "independent_poisson_conditioned_lambda_home_lambda_away_rho_0",
+        "conditioning": "postmatch_diagnostic_nuisance_adjustment_only_not_written_to_predictions",
+        "scale_home": scale_home,
+        "scale_away": scale_away,
+        "original_lambda_home_sum": original_home_sum,
+        "original_lambda_away_sum": original_away_sum,
+        "conditioned_lambda_home_mean": sum(pair[0] for pair in conditioned_pairs) / sample_count,
+        "conditioned_lambda_away_mean": sum(pair[1] for pair in conditioned_pairs) / sample_count,
+        "multiple_testing": {
+            "method": "Holm-Bonferroni",
+            "family_wise_alpha": 0.05,
+            "metric_count": len(SHAPE_METRICS),
+        },
+        "metrics": metrics,
+    }
+
+
+# Explicit alias for callers that describe the same output as an audit rather
+# than a bootstrap implementation.
+run_mean_conditioned_shape_audit = run_mean_conditioned_shape_bootstrap
 
 
 def _intensity_point(rows: list[Mapping[str, Any]]) -> dict[str, float]:
@@ -707,6 +934,72 @@ def run_intensity_analysis(
     return intensity
 
 
+def run_pairwise_total_bias_bootstrap(
+    rows_a: Iterable[Mapping[str, Any]],
+    rows_b: Iterable[Mapping[str, Any]],
+    *,
+    universe_a: str,
+    universe_b: str,
+    seed: int,
+    replicates: int,
+) -> dict[str, Any]:
+    """Bootstrap the difference in total intensity bias for two universes."""
+
+    if replicates < 1:
+        raise ValueError("bootstrap replicates must be positive")
+    materialized_a = list(rows_a)
+    materialized_b = list(rows_b)
+    if not materialized_a or not materialized_b:
+        return {
+            "universe_a": universe_a,
+            "universe_b": universe_b,
+            "sample_count_a": len(materialized_a),
+            "sample_count_b": len(materialized_b),
+            "seed": seed,
+            "replicates": replicates,
+            "point_estimate": None,
+            "point_estimate_bias_a_minus_bias_b": None,
+            "bootstrap_ci_95": [None, None],
+            "bootstrap_ci_95_bias_difference": [None, None],
+            "ci_excludes_zero": False,
+        }
+
+    def total_bias(row: Mapping[str, Any]) -> float:
+        lambda_total = row.get("lambda_total")
+        if lambda_total is None:
+            lambda_total = float(row["lambda_home"]) + float(row["lambda_away"])
+        actual_total = row.get("actual_total")
+        if actual_total is None:
+            actual_total = int(row["actual_home"]) + int(row["actual_away"])
+        return float(lambda_total) - int(actual_total)
+
+    bias_values_a = [total_bias(row) for row in materialized_a]
+    bias_values_b = [total_bias(row) for row in materialized_b]
+    point_estimate = sum(bias_values_a) / len(bias_values_a) - sum(bias_values_b) / len(bias_values_b)
+    rng = random.Random(seed)
+    bootstrap_differences: list[float] = []
+    for _ in range(replicates):
+        bootstrap_a = sum(bias_values_a[rng.randrange(len(bias_values_a))] for _ in bias_values_a) / len(bias_values_a)
+        bootstrap_b = sum(bias_values_b[rng.randrange(len(bias_values_b))] for _ in bias_values_b) / len(bias_values_b)
+        bootstrap_differences.append(bootstrap_a - bootstrap_b)
+    interval = [_quantile(bootstrap_differences, 0.025), _quantile(bootstrap_differences, 0.975)]
+    return {
+        "universe_a": universe_a,
+        "universe_b": universe_b,
+        "sample_count_a": len(materialized_a),
+        "sample_count_b": len(materialized_b),
+        "seed": seed,
+        "replicates": replicates,
+        "method": "independent_nonparametric_bootstrap_of_total_bias_difference",
+        "bias_convention": "predicted_minus_actual",
+        "point_estimate": point_estimate,
+        "point_estimate_bias_a_minus_bias_b": point_estimate,
+        "bootstrap_ci_95": interval,
+        "bootstrap_ci_95_bias_difference": interval,
+        "ci_excludes_zero": _ci_excludes_zero(interval),
+    }
+
+
 def _scope_payload(
     name: str,
     rows: list[Mapping[str, Any]],
@@ -725,9 +1018,16 @@ def _scope_payload(
         "intensity": run_intensity_analysis(rows, seed=_stable_seed(seed, f"{name}:intensity"), replicates=replicates)
         if rows
         else None,
-        "shape": run_parametric_shape_bootstrap(
+        "raw_shape_diagnostic": run_parametric_shape_bootstrap(
             rows,
-            seed=_stable_seed(seed, f"{name}:shape"),
+            seed=_stable_seed(seed, f"{name}:raw_shape_diagnostic"),
+            replicates=replicates,
+        )
+        if rows
+        else None,
+        "mean_conditioned_shape": run_mean_conditioned_shape_bootstrap(
+            rows,
+            seed=_stable_seed(seed, f"{name}:mean_conditioned_shape"),
             replicates=replicates,
         )
         if rows
@@ -753,10 +1053,16 @@ def _ci_excludes_zero(interval: list[float | None]) -> bool:
     return len(interval) == 2 and interval[0] is not None and interval[1] is not None and (interval[0] > 0 or interval[1] < 0)
 
 
-def _shape_p_value(scope: Mapping[str, Any], metric: str) -> float | None:
-    shape = scope.get("shape") or {}
+def _shape_p_value(
+    scope: Mapping[str, Any],
+    metric: str,
+    *,
+    diagnostic: str,
+    value_key: str,
+) -> float | None:
+    shape = scope.get(diagnostic) or {}
     entry = (shape.get("metrics") or {}).get(metric) or {}
-    value = entry.get("two_sided_p_value")
+    value = entry.get(value_key)
     return float(value) if value is not None else None
 
 
@@ -764,6 +1070,7 @@ def _classification(
     global_scope: Mapping[str, Any],
     universe_scopes: Mapping[str, Mapping[str, Any]],
     coverage: list[Mapping[str, Any]],
+    universe_rows: Mapping[str, list[Mapping[str, Any]]] | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     global_count = int(global_scope.get("sample_count") or 0)
     total_bias_ci = _metric_ci(global_scope, "lambda_total_mean_bias_predicted_minus_actual")
@@ -774,24 +1081,55 @@ def _classification(
     )
     intensity_status = "SUPPORTED" if intensity_supported else "NOT_ESTABLISHED" if global_count < MIN_UNIVERSE_SAMPLE else "NOT_SUPPORTED"
 
-    core_signals = [
+    mean_conditioned_shape = global_scope.get("mean_conditioned_shape") or {}
+    conditioned_signals = [
         metric
-        for metric in CORE_SHAPE_METRICS
-        if (_shape_p_value(global_scope, metric) is not None and _shape_p_value(global_scope, metric) <= 0.05)
+        for metric in SHAPE_METRICS
+        if (
+            _shape_p_value(
+                global_scope,
+                metric,
+                diagnostic="mean_conditioned_shape",
+                value_key="adjusted_p_value",
+            )
+            is not None
+            and _shape_p_value(
+                global_scope,
+                metric,
+                diagnostic="mean_conditioned_shape",
+                value_key="adjusted_p_value",
+            )
+            <= 0.05
+        )
     ]
-    tail_signals = [
+    raw_tail_signals = [
         metric
         for metric in TAIL_SHAPE_METRICS
-        if (_shape_p_value(global_scope, metric) is not None and _shape_p_value(global_scope, metric) <= 0.05)
+        if (
+            _shape_p_value(
+                global_scope,
+                metric,
+                diagnostic="raw_shape_diagnostic",
+                value_key="raw_p_value",
+            )
+            is not None
+            and _shape_p_value(
+                global_scope,
+                metric,
+                diagnostic="raw_shape_diagnostic",
+                value_key="raw_p_value",
+            )
+            <= 0.05
+        )
     ]
+    conditioned_tail_signals = [metric for metric in conditioned_signals if metric in TAIL_SHAPE_METRICS]
+    tail_error_explained_by_mean_bias = bool(raw_tail_signals) and not conditioned_tail_signals
     if global_count < MIN_UNIVERSE_SAMPLE:
         shape_status = "NOT_ESTABLISHED"
-    elif core_signals:
+    elif not mean_conditioned_shape.get("metrics"):
+        shape_status = "NOT_ESTABLISHED"
+    elif conditioned_signals:
         shape_status = "SUPPORTED"
-    elif tail_signals and not intensity_supported:
-        shape_status = "SUPPORTED"
-    elif tail_signals and intensity_supported:
-        shape_status = "NOT_SUPPORTED"
     else:
         shape_status = "NOT_SUPPORTED"
 
@@ -806,6 +1144,7 @@ def _classification(
     }
     component_directions: dict[str, dict[str, float | None]] = {}
     component_reversals: dict[str, bool] = {}
+    bias_evidence_by_universe: dict[str, dict[str, Any]] = {}
     for metric in (
         "lambda_total_mean_bias_predicted_minus_actual",
         "lambda_home_bias_predicted_minus_actual",
@@ -815,13 +1154,27 @@ def _classification(
         component_directions[metric] = values
         signs = {1 if value > 0 else -1 if value < 0 else 0 for value in values.values() if value is not None}
         component_reversals[metric] = len(signs - {0}) > 1
+    for universe in sufficient_universes:
+        bias_evidence_by_universe[universe] = {
+            metric: {
+                "value": _metric_value(universe_scopes[universe], metric),
+                "bootstrap_ci_95": _metric_ci(universe_scopes[universe], metric),
+            }
+            for metric in (
+                "lambda_home_bias_predicted_minus_actual",
+                "lambda_away_bias_predicted_minus_actual",
+                "lambda_total_mean_bias_predicted_minus_actual",
+            )
+        }
 
     shape_reversals: dict[str, bool] = {}
     for metric in CORE_SHAPE_METRICS:
         values = {
             universe: float(
-                ((universe_scopes[universe].get("shape") or {}).get("metrics") or {}).get(metric, {}).get(
-                    "residual_rate_observed_minus_expected", 0.0
+                (
+                    (universe_scopes[universe].get("mean_conditioned_shape") or {}).get("metrics") or {}
+                ).get(metric, {}).get(
+                    "residual_rate_observed_minus_conditioned_expected", 0.0
                 )
             )
             for universe in sufficient_universes
@@ -829,14 +1182,30 @@ def _classification(
         signs = {1 if value > 0 else -1 if value < 0 else 0 for value in values.values()}
         shape_reversals[metric] = len(signs - {0}) > 1
 
-    total_signs = {1 if value > 0 else -1 if value < 0 else 0 for value in total_directions.values() if value is not None}
-    total_reversal = len(total_signs - {0}) > 1
+    pairwise_total_bias_differences: list[dict[str, Any]] = []
+    if universe_rows is not None:
+        pairwise_seed = int(global_scope.get("bootstrap_seed") or BOOTSTRAP_SEED)
+        pairwise_replicates = int(global_scope.get("bootstrap_replicates") or DEFAULT_BOOTSTRAP_REPLICATES)
+        for universe_a, universe_b in combinations(sufficient_universes, 2):
+            pairwise_total_bias_differences.append(
+                run_pairwise_total_bias_bootstrap(
+                    universe_rows.get(universe_a, []),
+                    universe_rows.get(universe_b, []),
+                    universe_a=universe_a,
+                    universe_b=universe_b,
+                    seed=_stable_seed(pairwise_seed, f"{universe_a}:{universe_b}:total_bias"),
+                    replicates=pairwise_replicates,
+                )
+            )
+    material_heterogeneity_pairs = [
+        pair for pair in pairwise_total_bias_differences if pair.get("ci_excludes_zero") is True
+    ]
     if len(sufficient_universes) < 2:
         heterogeneity_status = "NOT_ESTABLISHED"
-    elif total_reversal:
-        heterogeneity_status = "SUPPORTED"
-    elif any(shape_reversals.values()) or any(component_reversals.values()):
+    elif not pairwise_total_bias_differences:
         heterogeneity_status = "NOT_ESTABLISHED"
+    elif material_heterogeneity_pairs:
+        heterogeneity_status = "SUPPORTED"
     else:
         heterogeneity_status = "NOT_SUPPORTED"
 
@@ -863,15 +1232,17 @@ def _classification(
         "DISTRIBUTION_SHAPE": {
             "status": shape_status,
             "evidence": {
-                "global_core_shape_signals_p_le_0_05": core_signals,
-                "global_tail_signals_p_le_0_05": tail_signals,
-                "core_shape_metrics": list(CORE_SHAPE_METRICS),
-                "tail_shape_metrics": list(TAIL_SHAPE_METRICS),
+                "mean_conditioned_shape_signals_adjusted_p_le_0_05": conditioned_signals,
+                "mean_conditioned_tail_signals_adjusted_p_le_0_05": conditioned_tail_signals,
+                "raw_shape_tail_signals_p_le_0_05": raw_tail_signals,
+                "tail_error_explained_by_mean_bias": tail_error_explained_by_mean_bias,
+                "mean_conditioned_shape_metrics": list(SHAPE_METRICS),
+                "multiple_testing": (mean_conditioned_shape.get("multiple_testing") or {}),
             },
             "reason": (
-                "A core draw/BTTS/1-1 mismatch rejects the independent-Poisson shape."
-                if core_signals
-                else "Tail residuals are recorded, but core draw/BTTS/1-1 shape signals do not reject; the tail direction is concordant with the established mean underprediction."
+                "At least one mean-conditioned shape metric remains significant after Holm-Bonferroni correction."
+                if conditioned_signals
+                else "Mean-conditioned diagnostics do not provide independent shape evidence after Holm-Bonferroni correction; raw tail residuals are not used for this decision."
             ),
         },
         "COMPETITION_UNIVERSE_HETEROGENEITY": {
@@ -879,14 +1250,19 @@ def _classification(
             "evidence": {
                 "sufficient_universes": sufficient_universes,
                 "lambda_bias_by_universe": component_directions,
+                "lambda_bias_evidence_by_universe": bias_evidence_by_universe,
+                "pairwise_total_bias_differences": pairwise_total_bias_differences,
+                "material_pairwise_total_bias_differences": material_heterogeneity_pairs,
                 "component_direction_reversals": component_reversals,
                 "core_shape_direction_reversals": shape_reversals,
                 "global_total_bias_cancellation_detected": global_total_cancellation,
             },
             "reason": (
-                "Sufficient universes show opposite total-intensity directions."
+                "A predefined sufficient-universe pair has a total-bias difference bootstrap CI excluding zero."
                 if heterogeneity_status == "SUPPORTED"
-                else "Only exploratory component/shape direction reversals remain; no opposite total-intensity direction is established across sufficient universes."
+                else "At least two predefined sufficient universes were compared and no total-bias difference bootstrap CI excludes zero."
+                if heterogeneity_status == "NOT_SUPPORTED"
+                else "Fewer than two predefined sufficient universes or pairwise total-bias evidence is available."
             ),
         },
     }
@@ -904,6 +1280,9 @@ def _classification(
         "status": heterogeneity_status,
         "sufficient_universes": sufficient_universes,
         "total_intensity_bias_by_universe": total_directions,
+        "lambda_bias_evidence_by_universe": bias_evidence_by_universe,
+        "pairwise_total_bias_differences": pairwise_total_bias_differences,
+        "material_pairwise_total_bias_differences": material_heterogeneity_pairs,
         "component_direction_reversals": component_reversals,
         "core_shape_direction_reversals": shape_reversals,
         "global_total_bias_cancellation_detected": global_total_cancellation,
@@ -963,11 +1342,40 @@ def build_summary(
         )
         for universe in UNIVERSES
     }
-    classifications, heterogeneity = _classification(global_scope, universe_scope_payloads, coverage)
+    universe_rows = {
+        universe: [row for row in verified_rows if row["universe"] == universe]
+        for universe in UNIVERSES
+    }
+    classifications, heterogeneity = _classification(
+        global_scope,
+        universe_scope_payloads,
+        coverage,
+        universe_rows,
+    )
     manifest = cohort["manifest"]
     audit = cohort["audit"]
+    national_team_verified_n = sum(1 for row in verified_rows if row["universe"] == "NATIONAL_TEAM")
+    if national_team_verified_n == 0:
+        national_team_applicability = "NOT_ESTABLISHED"
+    elif national_team_verified_n < MIN_UNIVERSE_SAMPLE:
+        national_team_applicability = "INSUFFICIENT_SAMPLE"
+    else:
+        national_team_applicability = "ESTABLISHED"
+    raw_shape_summary = {
+        "global": global_scope["raw_shape_diagnostic"],
+        "by_universe": {
+            universe: payload["raw_shape_diagnostic"] for universe, payload in universe_scope_payloads.items()
+        },
+    }
+    mean_conditioned_shape_summary = {
+        "global": global_scope["mean_conditioned_shape"],
+        "by_universe": {
+            universe: payload["mean_conditioned_shape"]
+            for universe, payload in universe_scope_payloads.items()
+        },
+    }
     return {
-        "schema_version": "exact_score_error_decomposition_audit.v1",
+        "schema_version": "exact_score_error_decomposition_audit.v2",
         "milestone": MILESTONE,
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "source": {
@@ -995,16 +1403,21 @@ def build_summary(
             "seed": seed,
             "replicates": replicates,
             "intensity_method": "paired nonparametric bootstrap over unique matches",
-            "shape_method": "parametric independent-Poisson bootstrap with each frozen lambda pair",
+            "raw_shape_method": "parametric independent-Poisson bootstrap with each original frozen lambda pair",
+            "mean_conditioned_shape_method": "conditioned independent-Poisson bootstrap; each replicate re-estimates home/away scales against original frozen lambdas",
+            "shape_multiple_testing": "Holm-Bonferroni over 11 mean-conditioned metrics; family-wise alpha 0.05",
+            "universe_heterogeneity_method": "independent nonparametric bootstrap of predefined sufficient-universe total-bias differences",
         },
         "competition_universe_coverage": coverage,
+        "NATIONAL_TEAM_APPLICABILITY": national_team_applicability,
         "mean_intensity": {
             "global": global_scope["intensity"],
             "by_universe": {universe: payload["intensity"] for universe, payload in universe_scope_payloads.items()},
         },
         "distribution_shape": {
-            "global": global_scope["shape"],
-            "by_universe": {universe: payload["shape"] for universe, payload in universe_scope_payloads.items()},
+            "raw_shape_diagnostic": raw_shape_summary,
+            "mean_conditioned_shape": mean_conditioned_shape_summary,
+            "mean_conditioned": mean_conditioned_shape_summary,
         },
         "universe_heterogeneity": heterogeneity,
         "defect_classification": classifications,
@@ -1061,26 +1474,47 @@ def _intensity_table(scope: Mapping[str, Any]) -> list[str]:
     return lines
 
 
-def _shape_table(scope: Mapping[str, Any]) -> list[str]:
+def _shape_table(scope: Mapping[str, Any], *, conditioned: bool) -> list[str]:
     metrics = scope.get("metrics") or {}
-    lines = [
-        "| metric | observed | expected | observed−expected | observed rate | expected rate | p-value |",
-        "|---|---:|---:|---:|---:|---:|---:|",
-    ]
+    if conditioned:
+        lines = [
+            "| metric | observed | conditioned expected | observed - conditioned expected | observed rate | conditioned expected rate | raw p-value | adjusted p-value |",
+            "|---|---:|---:|---:|---:|---:|---:|---:|",
+        ]
+    else:
+        lines = [
+            "| metric | observed | expected | observed - expected | observed rate | expected rate | raw p-value |",
+            "|---|---:|---:|---:|---:|---:|---:|",
+        ]
     for metric in SHAPE_METRICS:
         entry = metrics.get(metric) or {}
-        lines.append(
-            "| `{metric}` | {observed} | {expected} | {residual} | {observed_rate} | {expected_rate} | {p_value} |".format(
-                metric=metric,
-                observed=_fmt_number(entry.get("observed_count")),
-                expected=_fmt_number(entry.get("expected_count")),
-                residual=_fmt_number(entry.get("residual_count_observed_minus_expected")),
-                observed_rate=_fmt_number(entry.get("observed_rate"), 4),
-                expected_rate=_fmt_number(entry.get("expected_rate"), 4),
-                p_value=_fmt_number(entry.get("two_sided_p_value"), 4),
+        if conditioned:
+            lines.append(
+                "| `{metric}` | {observed} | {expected} | {residual} | {observed_rate} | {expected_rate} | {raw_p_value} | {adjusted_p_value} |".format(
+                    metric=metric,
+                    observed=_fmt_number(entry.get("observed_count")),
+                    expected=_fmt_number(entry.get("conditioned_expected_count")),
+                    residual=_fmt_number(entry.get("residual_count_observed_minus_conditioned_expected")),
+                    observed_rate=_fmt_number(entry.get("observed_rate"), 4),
+                    expected_rate=_fmt_number(entry.get("conditioned_expected_rate"), 4),
+                    raw_p_value=_fmt_number(entry.get("raw_p_value"), 4),
+                    adjusted_p_value=_fmt_number(entry.get("adjusted_p_value"), 4),
+                )
             )
-        )
+        else:
+            lines.append(
+                "| `{metric}` | {observed} | {expected} | {residual} | {observed_rate} | {expected_rate} | {raw_p_value} |".format(
+                    metric=metric,
+                    observed=_fmt_number(entry.get("observed_count")),
+                    expected=_fmt_number(entry.get("expected_count")),
+                    residual=_fmt_number(entry.get("residual_count_observed_minus_expected")),
+                    observed_rate=_fmt_number(entry.get("observed_rate"), 4),
+                    expected_rate=_fmt_number(entry.get("expected_rate"), 4),
+                    raw_p_value=_fmt_number(entry.get("raw_p_value", entry.get("two_sided_p_value")), 4),
+                )
+            )
     return lines
+
 
 
 def build_report(summary: Mapping[str, Any]) -> str:
@@ -1088,6 +1522,14 @@ def build_report(summary: Mapping[str, Any]) -> str:
     mean_intensity = summary["mean_intensity"]
     distribution_shape = summary["distribution_shape"]
     classifications = summary["defect_classification"]
+    raw_shape = distribution_shape["raw_shape_diagnostic"]
+    mean_conditioned_shape = distribution_shape["mean_conditioned_shape"]
+    global_sample_status = (
+        "SUFFICIENT"
+        if summary["cohort"]["verified_n"] >= MIN_UNIVERSE_SAMPLE
+        else "INSUFFICIENT_SAMPLE"
+    )
+    national_team_applicability = summary.get("NATIONAL_TEAM_APPLICABILITY", "NOT_ESTABLISHED")
     lines = [
         f"# {summary['milestone']}",
         "",
@@ -1097,6 +1539,7 @@ def build_report(summary: Mapping[str, Any]) -> str:
         f"- Cohort: pinned `{summary['cohort']['pinned_n']}`; verified `{summary['cohort']['verified_n']}`; unique-match observations `{summary['cohort']['unique_match_observation_n']}`.",
         f"- Results: `{summary['cohort']['result_scope']}` only; frozen prematch lambdas are never rebuilt from results.",
         f"- Bootstrap: seed `{summary['bootstrap']['seed']}`, replicates `{summary['bootstrap']['replicates']}`.",
+        f"- `NATIONAL_TEAM_APPLICABILITY={national_team_applicability}`.",
         "- Sign convention for intensity bias: predicted minus actual; negative means underprediction.",
         "",
         "## Competition universe coverage",
@@ -1105,7 +1548,7 @@ def build_report(summary: Mapping[str, Any]) -> str:
         "|---|---:|---:|---|---|",
     ]
     for row in coverage:
-        examples = ", ".join(row["competition_examples"]) or "—"
+        examples = ", ".join(row["competition_examples"]) or "-"
         lines.append(
             f"| `{row['universe']}` | {row['pinned_n']} | {row['verified_n']} | `{row['sample_status']}` | {examples} |"
         )
@@ -1116,54 +1559,161 @@ def build_report(summary: Mapping[str, Any]) -> str:
             lines.append("No observations.")
             return
         lines.extend(_intensity_table(scope["intensity"]))
-        lines.extend(["", "λ_total bins: ", "", "| bin | n | status | expected λ_total | observed total | observed−expected | 95% CI |", "|---|---:|---|---:|---:|---:|---:|"])
+        lines.extend(
+            [
+                "",
+                "lambda_total bins:",
+                "",
+                "| bin | n | status | expected lambda_total | observed total | observed - expected | 95% CI |",
+                "|---|---:|---|---:|---:|---:|---:|",
+            ]
+        )
         for bucket in scope["intensity"].get("lambda_total_bins") or []:
             lines.append(
                 f"| `{bucket['bin']}` | {bucket['sample_count']} | `{bucket['sample_status']}` | {_fmt_number(bucket.get('expected_lambda_total_mean'))} | {_fmt_number(bucket.get('observed_total_goals_mean'))} | {_fmt_number(bucket.get('observed_minus_expected_mean'))} | {_fmt_ci(bucket.get('observed_minus_expected_nonparametric_bootstrap_ci_95'))} |"
             )
 
     lines.extend(["", "## MEAN_INTENSITY", ""])
-    add_intensity_scope("GLOBAL", {"sample_count": summary["cohort"]["verified_n"], "sample_status": "SUFFICIENT", "intensity": mean_intensity["global"]})
-    for row in coverage:
-        universe = row["universe"]
-        scope = {"sample_count": row["verified_n"], "sample_status": row["sample_status"], "intensity": mean_intensity["by_universe"].get(universe)}
-        if row["verified_n"]:
-            add_intensity_scope(universe, scope)
-
-    lines.extend(["", "## DISTRIBUTION_SHAPE", ""])
-
-    def add_shape_scope(title: str, scope: Mapping[str, Any]) -> None:
-        lines.extend(["", f"### {title} (n={scope.get('sample_count', 0)}; {scope.get('sample_status')})", ""])
-        if not scope.get("shape"):
-            lines.append("No observations.")
-            return
-        lines.extend(_shape_table(scope["shape"]))
-        lines.extend(["", "The p-value is the deterministic two-sided parametric-bootstrap null probability for the observed-minus-expected count."])
-
-    add_shape_scope("GLOBAL", {"sample_count": summary["cohort"]["verified_n"], "sample_status": "SUFFICIENT", "shape": distribution_shape["global"]})
+    add_intensity_scope(
+        "GLOBAL",
+        {
+            "sample_count": summary["cohort"]["verified_n"],
+            "sample_status": global_sample_status,
+            "intensity": mean_intensity["global"],
+        },
+    )
     for row in coverage:
         universe = row["universe"]
         if row["verified_n"]:
-            add_shape_scope(
+            add_intensity_scope(
                 universe,
                 {
                     "sample_count": row["verified_n"],
                     "sample_status": row["sample_status"],
-                    "shape": distribution_shape["by_universe"].get(universe),
+                    "intensity": mean_intensity["by_universe"].get(universe),
                 },
             )
 
+    def add_shape_scope(title: str, shape: Mapping[str, Any] | None, *, conditioned: bool, sample_count: int, sample_status: str) -> None:
+        lines.extend(["", f"### {title} (n={sample_count}; {sample_status})", ""])
+        if not shape:
+            lines.append("No observations.")
+            return
+        if conditioned:
+            lines.extend(
+                [
+                    f"- `scale_home={_fmt_number(shape.get('scale_home'))}`; `scale_away={_fmt_number(shape.get('scale_away'))}`.",
+                    "- Scales are postmatch diagnostic nuisance adjustments only; they are not written to predictions, serving, or production data.",
+                ]
+            )
+        lines.extend(_shape_table(shape, conditioned=conditioned))
+        if conditioned:
+            lines.extend(
+                [
+                    "",
+                    "`raw p-value` is the deterministic two-sided parametric-bootstrap probability; `adjusted p-value` is Holm-Bonferroni over all 11 mean-conditioned metrics with family-wise alpha 0.05.",
+                ]
+            )
+        else:
+            lines.extend(
+                [
+                    "",
+                    "The raw p-value is the deterministic two-sided parametric-bootstrap probability for the observed-minus-expected count.",
+                ]
+            )
+
+    lines.extend(
+        [
+            "",
+            "## RAW_SHAPE_DIAGNOSTIC",
+            "",
+            "Raw frozen-lambda residuals are descriptive and do not determine `DISTRIBUTION_SHAPE`.",
+        ]
+    )
+    add_shape_scope(
+        "GLOBAL",
+        raw_shape["global"],
+        conditioned=False,
+        sample_count=summary["cohort"]["verified_n"],
+        sample_status=global_sample_status,
+    )
+    for row in coverage:
+        if row["verified_n"]:
+            add_shape_scope(
+                row["universe"],
+                raw_shape["by_universe"].get(row["universe"]),
+                conditioned=False,
+                sample_count=row["verified_n"],
+                sample_status=row["sample_status"],
+            )
+
+    lines.extend(
+        [
+            "",
+            "## MEAN_CONDITIONED_SHAPE",
+            "",
+            "The observed home/away scales remove the established mean/intensity bias for this diagnostic only. Each bootstrap replicate simulates under the conditioned null, re-estimates both scales against the original frozen lambdas, and recomputes its own conditioned expectations.",
+        ]
+    )
+    add_shape_scope(
+        "GLOBAL",
+        mean_conditioned_shape["global"],
+        conditioned=True,
+        sample_count=summary["cohort"]["verified_n"],
+        sample_status=global_sample_status,
+    )
+    for row in coverage:
+        if row["verified_n"]:
+            add_shape_scope(
+                row["universe"],
+                mean_conditioned_shape["by_universe"].get(row["universe"]),
+                conditioned=True,
+                sample_count=row["verified_n"],
+                sample_status=row["sample_status"],
+            )
+
     heterogeneity = summary["universe_heterogeneity"]
+    coverage_by_universe = {row["universe"]: row for row in coverage}
     lines.extend(
         [
             "",
             "## UNIVERSE_HETEROGENEITY",
             "",
             f"- Classification: `{heterogeneity['status']}`.",
-            f"- Sufficient universes used for cross-universe direction checks: `{', '.join(heterogeneity['sufficient_universes']) or 'none'}`.",
-            f"- Global total-bias cancellation detected: `{heterogeneity['global_total_bias_cancellation_detected']}`.",
-            f"- Component direction reversals: `{json.dumps(heterogeneity['component_direction_reversals'], ensure_ascii=False, sort_keys=True)}`.",
-            f"- Core shape direction reversals: `{json.dumps(heterogeneity['core_shape_direction_reversals'], ensure_ascii=False, sort_keys=True)}`.",
+            f"- Predefined sufficient universes: `{', '.join(heterogeneity['sufficient_universes']) or 'none'}`.",
+            f"- `NATIONAL_TEAM_APPLICABILITY={national_team_applicability}`.",
+            f"- Global total-bias cancellation detected (descriptive only): `{heterogeneity['global_total_bias_cancellation_detected']}`.",
+            "",
+            "### Bias by sufficient universe",
+            "",
+            "| universe | verified n | home bias | 95% CI | away bias | 95% CI | total bias | 95% CI |",
+            "|---|---:|---:|---|---:|---|---:|---|",
+        ]
+    )
+    bias_evidence = heterogeneity.get("lambda_bias_evidence_by_universe") or {}
+    for universe in heterogeneity["sufficient_universes"]:
+        evidence = bias_evidence.get(universe) or {}
+        home = evidence.get("lambda_home_bias_predicted_minus_actual") or {}
+        away = evidence.get("lambda_away_bias_predicted_minus_actual") or {}
+        total = evidence.get("lambda_total_mean_bias_predicted_minus_actual") or {}
+        lines.append(
+            f"| `{universe}` | {coverage_by_universe[universe]['verified_n']} | {_fmt_number(home.get('value'))} | {_fmt_ci(home.get('bootstrap_ci_95'))} | {_fmt_number(away.get('value'))} | {_fmt_ci(away.get('bootstrap_ci_95'))} | {_fmt_number(total.get('value'))} | {_fmt_ci(total.get('bootstrap_ci_95'))} |"
+        )
+    lines.extend(
+        [
+            "",
+            "### Pairwise total-bias difference bootstrap",
+            "",
+            "| universe A | universe B | A bias - B bias | 95% CI | CI excludes 0 |",
+            "|---|---|---:|---|---|",
+        ]
+    )
+    for pair in heterogeneity.get("pairwise_total_bias_differences") or []:
+        lines.append(
+            f"| `{pair['universe_a']}` | `{pair['universe_b']}` | {_fmt_number(pair.get('point_estimate_bias_a_minus_bias_b'))} | {_fmt_ci(pair.get('bootstrap_ci_95_bias_difference'))} | `{pair.get('ci_excludes_zero')}` |"
+        )
+    lines.extend(
+        [
             "",
             "## Final classification",
             "",
@@ -1187,7 +1737,6 @@ def build_report(summary: Mapping[str, Any]) -> str:
         ]
     )
     return "\n".join(lines)
-
 
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
@@ -1224,6 +1773,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     (args.output_dir / "report.md").write_text(report, encoding="utf-8")
     print(f"PRIMARY_DEFECT={summary['primary_defect']}")
+    print(f"NATIONAL_TEAM_APPLICABILITY={summary['NATIONAL_TEAM_APPLICABILITY']}")
     print(f"COHORT=pinned:{summary['cohort']['pinned_n']} verified:{summary['cohort']['verified_n']}")
     print(f"ARTIFACT={args.output_dir / 'summary.json'}")
     return 0
