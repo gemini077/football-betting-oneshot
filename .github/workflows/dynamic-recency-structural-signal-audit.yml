@@ -1,0 +1,75 @@
+name: Dynamic recency structural signal offline
+
+on:
+  pull_request:
+    paths:
+      - "scripts/dynamic_recency_structural_signal_audit.py"
+      - "tests/test_dynamic_recency_structural_signal_audit.py"
+      - ".github/workflows/dynamic-recency-structural-signal-audit.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the PR
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install test dependencies
+        run: python -m pip install -r requirements.txt
+
+      - name: Run focused tests
+        run: python -m pytest tests/test_dynamic_recency_structural_signal_audit.py -q
+
+      - name: Compile audit script
+        run: python -m py_compile scripts/dynamic_recency_structural_signal_audit.py
+
+      - name: Run the real current-data audit
+        run: |
+          rm -rf audit-artifact
+          python scripts/dynamic_recency_structural_signal_audit.py --output-dir audit-artifact
+
+      - name: Verify recoverable artifact
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          artifact = Path("audit-artifact")
+          assert (artifact / "summary.json").is_file()
+          assert (artifact / "report.md").is_file()
+          summary = json.loads((artifact / "summary.json").read_text(encoding="utf-8"))
+          assert summary["cohort"]["one_match_one_observation"] is True
+          assert summary["source"]["postmatch_reviews_used"] is False
+          assert summary["source"]["provider_added"] is False
+          assert summary["decision"] in {
+              "STRONG_OFFLINE_SURVIVOR",
+              "OFFLINE_SURVIVOR",
+              "INCONCLUSIVE",
+              "REJECTED",
+              "SAMPLE_INSUFFICIENT",
+              "FAIL_CLOSED",
+          }
+          print(json.dumps({
+              "decision": summary["decision"],
+              "cohort": summary["cohort"],
+              "decision_evidence": summary["decision_evidence"],
+          }, ensure_ascii=False, sort_keys=True))
+          PY
+
+      - name: Upload research artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dynamic-recency-structural-signal-offline-${{ github.event.pull_request.number || github.run_id }}
+          path: audit-artifact
+          if-no-files-found: error
+          retention-days: 14
