@@ -167,6 +167,70 @@ def _sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
+def _canonical_json_sha256(value: Any) -> str:
+    """Hash JSON semantics independently of file formatting or line endings."""
+
+    payload = json.dumps(
+        value,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
+
+
+def _prediction_record_hash(record: Mapping[str, Any]) -> str:
+    """Hash a pinned prediction record using the PR #157 canonical scheme."""
+
+    return _canonical_json_sha256(dict(record))
+
+
+def _validate_snapshot_integrity(
+    prediction_id: str,
+    prediction: Mapping[str, Any],
+    snapshot: Mapping[str, Any],
+) -> None:
+    """Validate portable semantic integrity for a frozen model-input snapshot."""
+
+    canonical_input = snapshot.get("input")
+    if not isinstance(canonical_input, dict):
+        raise ValueError(f"input snapshot has no canonical input object for {prediction_id}")
+
+    recomputed_digest = _canonical_json_sha256(canonical_input)
+    snapshot_digest = _text(
+        snapshot.get("canonical_model_input_sha256") or snapshot.get("canonical_input_sha256")
+    )
+    prediction_digest = _text(
+        prediction.get("canonical_model_input_sha256") or prediction.get("input_sha256")
+    )
+    embedded_snapshot = prediction.get("input_snapshot")
+    if not isinstance(embedded_snapshot, Mapping):
+        raise ValueError(f"embedded input snapshot missing for {prediction_id}")
+    embedded_digest = _text(
+        embedded_snapshot.get("canonical_model_input_sha256")
+        or embedded_snapshot.get("canonical_input_sha256")
+    )
+    if not snapshot_digest or recomputed_digest != snapshot_digest:
+        raise ValueError(f"snapshot canonical input digest mismatch for {prediction_id}")
+    if prediction_digest != snapshot_digest or embedded_digest != snapshot_digest:
+        raise ValueError(f"snapshot/record canonical digest mismatch for {prediction_id}")
+
+    snapshot_id = _text(snapshot.get("snapshot_id"))
+    embedded_snapshot_id = _text(embedded_snapshot.get("snapshot_id"))
+    if not snapshot_id or embedded_snapshot_id != snapshot_id:
+        raise ValueError(f"snapshot ID mismatch for {prediction_id}")
+
+    source_cutoff_at = _text(snapshot.get("source_cutoff_at"))
+    prediction_source_cutoff_at = _text(prediction.get("source_cutoff_at"))
+    embedded_source_cutoff_at = _text(embedded_snapshot.get("source_cutoff_at"))
+    if (
+        not source_cutoff_at
+        or prediction_source_cutoff_at != source_cutoff_at
+        or embedded_source_cutoff_at != source_cutoff_at
+    ):
+        raise ValueError(f"snapshot source cutoff mismatch for {prediction_id}")
+
+
 def _text(value: Any) -> str:
     return " ".join(str(value or "").split())
 
@@ -280,6 +344,8 @@ def _validate_frozen_prediction(
     prediction_id = _text(record.get("prediction_id"))
     if _text(prediction.get("prediction_id")) != prediction_id:
         raise ValueError(f"prediction ID mismatch for {prediction_id}")
+    if _text(prediction.get("match_id")) != _text(record.get("match_id")):
+        raise ValueError(f"match ID mismatch for {prediction_id}")
     if _text(prediction.get("match_key")) != _text(record.get("match_key")):
         raise ValueError(f"match key mismatch for {prediction_id}")
     if _text(prediction.get("input_snapshot_ref") or prediction.get("model_input_snapshot_ref")) != snapshot_reference:
@@ -368,6 +434,11 @@ def _load_cohort(
     competition_metadata = _load_competition_metadata(jobs_root, selected_match_ids)
     selected_rows: list[dict[str, Any]] = []
     verified_rows: list[dict[str, Any]] = []
+    raw_snapshot_hash_status = {
+        "matched_n": 0,
+        "mismatched_n": 0,
+        "missing_manifest_hash_n": 0,
+    }
 
     for record in selected_records:
         prediction_id = _text(record.get("prediction_id"))
@@ -377,11 +448,23 @@ def _load_cohort(
         if not snapshot_reference:
             raise ValueError(f"missing input snapshot reference for {prediction_id}")
         snapshot_path = _repo_relative_path(root, snapshot_reference)
-        if _sha256_file(snapshot_path) != _text(record.get("input_snapshot_sha256")):
-            raise ValueError(f"input snapshot hash mismatch for {prediction_id}")
+        expected_raw_snapshot_hash = _text(record.get("input_snapshot_sha256"))
+        actual_raw_snapshot_hash = _sha256_file(snapshot_path)
+        if not expected_raw_snapshot_hash:
+            raw_snapshot_hash_status["missing_manifest_hash_n"] += 1
+        elif actual_raw_snapshot_hash == expected_raw_snapshot_hash:
+            raw_snapshot_hash_status["matched_n"] += 1
+        else:
+            raw_snapshot_hash_status["mismatched_n"] += 1
         snapshot = _read_json(snapshot_path)
         prediction_path = prediction_root / f"{prediction_id}.json"
         prediction = _read_json(prediction_path)
+        expected_record_hash = _text(record.get("record_sha256"))
+        if not expected_record_hash:
+            raise ValueError(f"missing pinned prediction record hash for {prediction_id}")
+        if _prediction_record_hash(prediction) != expected_record_hash:
+            raise ValueError(f"pinned prediction content changed for {prediction_id}")
+        _validate_snapshot_integrity(prediction_id, prediction, snapshot)
         lambda_home, lambda_away = _validate_frozen_prediction(record, prediction, snapshot, snapshot_reference)
 
         metadata = competition_metadata[match_id]
@@ -449,6 +532,30 @@ def _load_cohort(
         "selected_rows": selected_rows,
         "verified_rows": verified_rows,
         "competition_metadata": competition_metadata,
+        "snapshot_integrity": {
+            "method": "canonical_json_semantic_integrity",
+            "canonical_json_sha256": {
+                "serialization": "json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(',', ':')) encoded as UTF-8",
+                "snapshot_fields": ["canonical_model_input_sha256", "canonical_input_sha256"],
+                "prediction_record_fields": ["canonical_model_input_sha256", "input_sha256"],
+                "embedded_input_snapshot_fields": ["canonical_model_input_sha256", "canonical_input_sha256"],
+            },
+            "pinned_prediction_record_content_hash": "manifest record_sha256 versus canonical prediction JSON",
+            "identity_fields": [
+                "prediction_id",
+                "match_id",
+                "match_key",
+                "input_snapshot_ref",
+                "snapshot_id",
+                "source_cutoff_at",
+            ],
+            "raw_file_sha256": {
+                "manifest_field": "input_snapshot_sha256",
+                "status": "legacy_non_portable_evidence_only",
+                "mismatch_is_fail_condition": False,
+                **raw_snapshot_hash_status,
+            },
+        },
         "manifest_path": str(manifest_path.relative_to(root)).replace("\\", "/"),
         "audit_path": str(audit_path.relative_to(root)).replace("\\", "/"),
     }
@@ -1390,6 +1497,7 @@ def build_summary(
             "accepted_production_run": manifest.get("accepted_production_run"),
             "accepted_writeback_commit": manifest.get("accepted_writeback_commit"),
         },
+        "snapshot_integrity": cohort["snapshot_integrity"],
         "cohort": {
             "pinned_n": len(selected_rows),
             "verified_n": len(verified_rows),
@@ -1540,6 +1648,8 @@ def build_report(summary: Mapping[str, Any]) -> str:
         f"- Results: `{summary['cohort']['result_scope']}` only; frozen prematch lambdas are never rebuilt from results.",
         f"- Bootstrap: seed `{summary['bootstrap']['seed']}`, replicates `{summary['bootstrap']['replicates']}`.",
         f"- `NATIONAL_TEAM_APPLICABILITY={national_team_applicability}`.",
+        "- Snapshot integrity uses canonical JSON semantic SHA256 for the snapshot input, pinned prediction record, and embedded input snapshot; snapshot ID and source cutoff are cross-checked.",
+        f"- Raw snapshot-file SHA256 is legacy/non-portable evidence only: `{summary['snapshot_integrity']['raw_file_sha256']['matched_n']}` matched, `{summary['snapshot_integrity']['raw_file_sha256']['mismatched_n']}` mismatched, `{summary['snapshot_integrity']['raw_file_sha256']['missing_manifest_hash_n']}` missing; mismatch is not a fail condition.",
         "- Sign convention for intensity bias: predicted minus actual; negative means underprediction.",
         "",
         "## Competition universe coverage",

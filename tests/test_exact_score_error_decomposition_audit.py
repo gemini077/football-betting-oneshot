@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import json
 import math
 import random
 
 from scripts.exact_score_error_decomposition_audit import (
     BOOTSTRAP_SEED,
     SHAPE_METRICS,
+    _canonical_json_sha256,
+    _prediction_record_hash,
     _sample_poisson,
     _classification,
     classify_competition,
@@ -86,6 +89,11 @@ def test_parametric_shape_bootstrap_is_seeded_and_one_match_is_one_observation()
         entry["adjusted_p_value"] >= entry["raw_p_value"]
         for entry in conditioned_first["metrics"].values()
     )
+
+    canonical_input = {"unicode": "进球", "nested": {"b": 2, "a": 1}}
+    reformatted_input = json.loads(json.dumps(canonical_input, ensure_ascii=False, indent=2))
+    assert _canonical_json_sha256(canonical_input) == _canonical_json_sha256(reformatted_input)
+    assert _prediction_record_hash({"record": canonical_input}) == _canonical_json_sha256({"record": canonical_input})
 
 
 def test_mean_conditioned_shape_diagnostic_does_not_call_mean_error_shape_error():
