@@ -1,0 +1,165 @@
+name: Challenger C current unique checkpoint 2
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/challenger-c-current-unique-checkpoint-2.yml"
+      - "scripts/challenger_c_current_unique_checkpoint_audit.py"
+      - "tests/test_challenger_c_current_unique_checkpoint_audit.py"
+      - "scripts/market_side_shadow.py"
+      - "scripts/market_side_shadow_refresh.py"
+      - "scripts/challenger_c_promotion_review.py"
+      - "scripts/prematch_versioning.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout the PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install focused test dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run Issue #169 focused tests
+        run: pytest -q tests/test_challenger_c_current_unique_checkpoint_audit.py
+
+      - name: Compile the read-only audit wrapper
+        run: python -m py_compile scripts/challenger_c_current_unique_checkpoint_audit.py
+
+      - name: Run current unique-match checkpoint audit
+        env:
+          SOURCE_MAIN_SHA: ${{ github.event.pull_request.base.sha || github.sha }}
+          AUDIT_HEAD_SHA: ${{ github.sha }}
+        run: |
+          rm -rf audit-artifact
+          python scripts/challenger_c_current_unique_checkpoint_audit.py \
+            --output-dir audit-artifact \
+            --source-main-sha "$SOURCE_MAIN_SHA" \
+            --head-sha "$AUDIT_HEAD_SHA"
+
+      - name: Verify current unique truth and non-promoting boundary
+        env:
+          SOURCE_MAIN_SHA: ${{ github.event.pull_request.base.sha || github.sha }}
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          summary = json.loads(Path("audit-artifact/summary.json").read_text(encoding="utf-8"))
+          source = summary["source"]
+          state = summary["current_input_state"]
+          counts = summary["counts"]
+          checkpoint = summary["checkpoint"]
+          controls = summary["controls"]
+          metrics = summary["metrics"]["unique_match"]
+          reproduction = summary["reproduction"]
+          checks = {
+              "schema": summary["schema_version"] == "challenger_c_current_unique_checkpoint_2.v1",
+              "milestone": summary["milestone"] == "CHALLENGER-C-CURRENT-UNIQUE-CHECKPOINT-2",
+              "source_main": source["source_main_sha"] == __import__("os").environ["SOURCE_MAIN_SHA"],
+              "current_pair_set": (
+                  state["latest_json_pair_rows"] == 391
+                  and state["tracked_pair_artifact_files"] == 400
+                  and state["loaded_current_pair_rows"] == 400
+                  and state["tracked_rows_absent_from_latest_json"] == 9
+                  and state["current_pair_set_used_for_review"] is True
+                  and state["pair_artifact_integrity"]["status"] == "PASS"
+              ),
+              "counts": (
+                  counts["total_pair_version_rows"] == 400
+                  and counts["promotion_eligible_pair_version_rows"] == 399
+                  and counts["verified_pair_version_rows"] == 118
+                  and counts["promotion_eligible_unique_matches"] == 70
+                  and counts["verified_unique_matches"] == 30
+                  and counts["version_history_match_groups"] == 27
+                  and counts["extra_version_rows"] == 88
+                  and counts["unmatched_eligible_unique_matches"] == 40
+              ),
+              "ambiguity": (
+                  counts["duplicate_or_equal_final_ambiguity_failures"] == 0
+                  and summary["ambiguity"]["ambiguous_final_chronology_match_groups"] == 0
+                  and summary["ambiguity"]["result_identity_conflicts"] == 0
+                  and summary["ambiguity"]["result_identity_mismatches"] == 0
+              ),
+              "checkpoint": (
+                  checkpoint["status"] == "NOT_REACHED"
+                  and checkpoint["observation_unit"] == "unique_match"
+                  and checkpoint["verified_unique_matches"] == 30
+                  and checkpoint["checkpoint_minimum"] == 50
+                  and checkpoint["promotion_review_minimum"] == 100
+                  and checkpoint["auto_promote"] is False
+              ),
+              "metrics": all(
+                  (metrics.get(candidate) or {}).get("sample_count") == 30
+                  and all(
+                      field in (metrics.get(candidate) or {})
+                      for field in (
+                          "exact_top1",
+                          "exact_top3",
+                          "exact_nll",
+                          "one_x_two_accuracy",
+                          "one_x_two_brier",
+                          "one_x_two_log_loss",
+                          "one_x_two_ece",
+                          "btts_accuracy",
+                          "btts_brier",
+                          "btts_log_loss",
+                          "btts_ece",
+                          "ou_2_5_accuracy",
+                          "ou_2_5_brier",
+                          "ou_2_5_log_loss",
+                          "one_one_top1_share",
+                          "lambda_median_abs_gap",
+                          "lambda_gap_lt_0_5_share",
+                      )
+                  )
+                  for candidate in ("champion", "challenger")
+              ),
+              "reproduction": (
+                  reproduction["current_pair_set_overall"]["status"] == "PASS"
+                  and summary["integrity"]["status"] == "PASS"
+              ),
+              "boundary": (
+                  source["new_matches_fetched"] is False
+                  and source["network_access"] == "NO_NETWORK"
+                  and source["read_only"] is True
+                  and controls["challenger_refit"] is False
+                  and controls["new_challenger_created"] is False
+                  and controls["champion_modified"] is False
+                  and controls["production_modified"] is False
+                  and controls["provider_modified"] is False
+                  and controls["frozen_history_rewritten"] is False
+                  and controls["serving_modified"] is False
+                  and controls["ui_modified"] is False
+                  and controls["auto_promote"] is False
+                  and controls["promotion_attempted"] is False
+              ),
+              "decision": summary["final_decision"] == "NOT_REACHED_KEEP_SHADOW",
+              "compact": "pairs" not in summary and "representative_selector" in summary,
+          }
+          failed = [name for name, passed in checks.items() if not passed]
+          if failed:
+              raise SystemExit(f"Issue #169 verification failed: {failed}")
+          print(json.dumps({"verified": sorted(checks), "final_decision": summary["final_decision"]}, sort_keys=True))
+          PY
+
+      - name: Upload compact checkpoint artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: challenger-c-current-unique-checkpoint-2
+          path: audit-artifact
+          if-no-files-found: error
