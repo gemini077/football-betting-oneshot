@@ -1,0 +1,55 @@
+name: Structural football evidence coverage
+
+on:
+  pull_request:
+    paths:
+      - "scripts/structural_football_evidence_coverage.py"
+      - "tests/test_structural_football_evidence_coverage.py"
+      - ".github/workflows/structural-football-evidence-coverage.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run focused tests
+        run: python -m pytest -q tests/test_structural_football_evidence_coverage.py
+
+      - name: Compile audit
+        run: python -m py_compile scripts/structural_football_evidence_coverage.py
+
+      - name: Run structural coverage audit
+        run: |
+          mkdir -p research-artifact
+          python scripts/structural_football_evidence_coverage.py \
+            --output research-artifact/summary.json \
+            > research-artifact/stdout.json
+
+      - name: Publish concise summary
+        shell: python
+        run: |
+          import json
+          from pathlib import Path
+          data=json.loads(Path("research-artifact/summary.json").read_text(encoding="utf-8"))
+          print("decision=", data.get("decision"))
+          print("coverage=", json.dumps(data.get("coverage"), ensure_ascii=False))
+          print("failure_reasons=", json.dumps(data.get("failure_reasons"), ensure_ascii=False))
+
+      - name: Upload audit artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: structural-football-evidence-coverage-${{ github.event.pull_request.number || github.run_id }}
+          path: research-artifact
+          if-no-files-found: error
+          retention-days: 14
