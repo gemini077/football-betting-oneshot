@@ -1,11 +1,18 @@
 from __future__ import annotations
 
 import inspect
+import sys
+from pathlib import Path
 
 import pytest
 
-from scripts.automatic_model_core import _total_line_pricing
-from scripts.market_calibrated_lambda_shadow import (
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "scripts"))
+
+from automatic_model_core import _total_line_pricing
+from market_calibrated_lambda_shadow import (
     CANDIDATE_ID,
     _devig_multiplicative,
     _devig_power,
