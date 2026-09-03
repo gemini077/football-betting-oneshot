@@ -18,6 +18,11 @@ jobs:
       - name: Check out pinned repository data
         uses: actions/checkout@v4
 
+      - name: Restore frozen snapshot hash line endings
+        run: |
+          git config core.autocrlf true
+          git checkout-index --all --force
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
