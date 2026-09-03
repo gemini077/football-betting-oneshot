@@ -28,9 +28,9 @@ except ImportError:  # package import used by tests
     from scripts.current_serving_state import resolve_current_job_for_match
 
 try:
-    from exact_score_serving_policy import DEGRADED, exact_score_serving_presentation
+    from exact_score_serving_policy import exact_score_serving_presentation
 except ImportError:  # package import used by tests
-    from scripts.exact_score_serving_policy import DEGRADED, exact_score_serving_presentation
+    from scripts.exact_score_serving_policy import exact_score_serving_presentation
 
 try:
     from closed_beta_copy import render_closed_beta_notice
@@ -52,40 +52,42 @@ WORKSPACE_LATEST = BASE_DIR / "data" / "match_workspace" / "latest.json"
 SHANGHAI = timezone(timedelta(hours=8))
 
 STATUS_LABELS = {
-    "CURRENT_JOB_STATE_CONFLICT": "\u5f53\u524d\u6bd4\u8d5b\u72b6\u6001\u51b2\u7a81",
-    "FROZEN": "已预测",
-    "PENDING": "等待预测",
-    "INSUFFICIENT_DATA": "数据不足",
-    "PREDICTION_FAILED": "预测失败",
-    "MISSED_PREMATCH_WINDOW": "错过赛前窗口",
-    "REMOVED_FROM_CURRENT_UNIVERSE": "已移出当前赛程",
+    "CURRENT_JOB_STATE_CONFLICT": "本场状态待确认",
+    "FROZEN": "已形成预测",
+    "PENDING": "预测尚未形成",
+    "INSUFFICIENT_DATA": "数据不足，暂不预测",
+    "PREDICTION_FAILED": "本场未形成有效预测",
+    "MISSED_PREMATCH_WINDOW": "未形成合法赛前预测",
+    "REMOVED_FROM_CURRENT_UNIVERSE": "暂不在当前赛程",
 }
 REASON_LABELS = {
-    "DUPLICATE_CURRENT_JOB_STATE": "\u5f53\u524d\u6bd4\u8d5b\u72b6\u6001\u51b2\u7a81\uff0c\u6682\u4e0d\u5f62\u6210\u9884\u6d4b",
-    "MULTIPLE_CURRENT_MATCH_GROUPS": "\u5f53\u524d\u6bd4\u8d5b\u8eab\u4efd\u5b58\u5728\u51b2\u7a81\uff0c\u6682\u4e0d\u5f62\u6210\u9884\u6d4b",
+    "DUPLICATE_CURRENT_JOB_STATE": "本场状态待确认，暂不形成预测",
+    "MULTIPLE_CURRENT_MATCH_GROUPS": "比赛身份待确认，暂不形成预测",
     "MISSING_RECENT_FORM": "近期比赛数据不足",
-    "MISSING_MARKET_INTELLIGENCE": "缺少最低市场情报",
+    "MISSING_MARKET_INTELLIGENCE": "市场信息不足",
     "INPUT_TIMESTAMP_UNVERIFIED": "赛前数据时间无法验证",
     "SOURCE_FETCH_FAILED": "赛前数据源获取失败",
-    "CACHE_PROVENANCE_INVALID": "近期数据缓存来源无法验证",
+    "CACHE_PROVENANCE_INVALID": "近期数据来源无法验证",
     "INPUT_SNAPSHOT_CONSTRUCTION_FAILED": "赛前输入快照构建失败",
     "INPUT_PROVENANCE_UNVERIFIED": "赛前输入来源无法验证",
     "IDENTITY_UNRESOLVED": "比赛身份无法可靠匹配",
     "PREDICTION_FAILED": "模型运行失败",
-    "MISSED_PREMATCH_WINDOW": "已错过合法赛前预测窗口",
-    "BASE_JOB_MISSING": "基础预测任务尚未生成",
-    "PREDICTION_ARTIFACT_MISSING": "预测任务已冻结但正式记录缺失",
+    "MISSED_PREMATCH_WINDOW": "未形成合法赛前预测",
+    "BASE_JOB_MISSING": "预测任务尚未生成",
+    "PREDICTION_ARTIFACT_MISSING": "预测任务已锁定，但正式记录缺失",
 }
+
 
 _CURRENT_FORMAL_STATUSES = {"formal", "frozen", "FROZEN"}
 _QUALITY_STATUS_LABELS = {
     "HEALTHY": "正常",
     "ALERT": "异常",
     "INSUFFICIENT_SAMPLE": "样本不足",
-    "WATCH": "观察中",
-    "UNKNOWN": "暂不可用",
+    "WATCH": "观察",
+    "UNKNOWN": "待确认",
 }
-_QUALITY_ALERT_COPY = "今日比分预测出现异常集中，当前预测仍保留供观察。"
+_QUALITY_ALERT_COPY = "当前预测质量降级，仅供观察。"
+
 
 
 def _read_json(path: Path, errors: list[str], label: str, default: Any) -> Any:
@@ -147,6 +149,21 @@ def _iso_sort(value: Any) -> str:
     return str(value or "9999-12-31T23:59:59+08:00")
 
 
+def _kickoff_timestamp(value: Any) -> str | None:
+    """Return a timezone-qualified ISO timestamp suitable for browser comparison."""
+
+    text = str(value or "").strip()
+    if not text:
+        return None
+    try:
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return None
+    return parsed.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
 def _pick(row: dict[str, Any], *keys: str) -> Any:
     for key in keys:
         value = row.get(key)
@@ -169,6 +186,7 @@ def _fixture_projection(fixture: dict[str, Any]) -> dict[str, Any]:
         "home": _pick(fixture, "homeTeam", "home_team", "home"),
         "away": _pick(fixture, "awayTeam", "away_team", "away"),
         "kickoff": kickoff,
+        "kickoff_timestamp": _kickoff_timestamp(kickoff),
     }
 
 
@@ -239,6 +257,11 @@ def _prediction_projection(
         "data_grade": record.get("data_grade"),
         "base_input_quality": record.get("base_input_quality"),
         "minutes_to_kickoff_at_freeze": record.get("minutes_to_kickoff_at_freeze"),
+        "prediction_created_at": record.get("prediction_created_at") or record.get("created_at"),
+        "freeze_created_at": record.get("freeze_created_at") or record.get("freeze_at"),
+        "source_cutoff_at": record.get("source_cutoff_at") or record.get("model_input_as_of_at"),
+        "input_snapshot_ref": record.get("input_snapshot_ref") or record.get("model_input_snapshot_ref"),
+        "source_references": record.get("source_references") or [],
     }
 
 
@@ -491,117 +514,476 @@ def _card(
     return card
 
 
-def _esc(value: Any) -> str:
-    return html.escape(_text(value))
+def _esc(value: Any, fallback: str = "\u2014") -> str:
+    return html.escape(_text(value, fallback))
 
 
 MODERN_CSS = r"""
 :root {
-  --bg: #0b1118;
-  --surface: #121b25;
-  --surface-2: #172331;
-  --line: #263646;
-  --text: #f3f7fa;
-  --muted: #91a2b3;
-  --quiet: #6f8192;
-  --accent: #43d3a5;
-  --accent-soft: rgba(67, 211, 165, .13);
-  --warning: #f0b86a;
-  --warning-soft: rgba(240, 184, 106, .14);
-  --danger: #f17b85;
-  --danger-soft: rgba(241, 123, 133, .14);
-  --blue: #79a8ff;
+  --bg: #F7F5F1;
+  --surface: #FFFFFF;
+  --text: #111111;
+  --muted: #6B7280;
+  --quiet: #9CA3AF;
+  --line: #E5E7EB;
+  --accent: #FF6A00;
+  --accent-soft: #FFF1E8;
+  --warning: #B45309;
+  --warning-soft: #FFF7ED;
+  --danger: #B91C1C;
+  --danger-soft: #FEF2F2;
 }
 * { box-sizing: border-box; }
 html { background: var(--bg); }
 body {
+  min-width: 0;
   margin: 0;
+  background: var(--bg);
   color: var(--text);
-  background:
-    radial-gradient(circle at 12% -10%, rgba(67, 211, 165, .11), transparent 32rem),
-    var(--bg);
-  font: 14px/1.5 "Segoe UI", "Microsoft YaHei", sans-serif;
+  font: 14px/1.45 "Inter", "Segoe UI", "Microsoft YaHei", sans-serif;
+  -webkit-font-smoothing: antialiased;
 }
-a { color: var(--accent); text-decoration: none; }
-a:hover { text-decoration: underline; }
+a { color: inherit; }
 button { font: inherit; }
-.shell { max-width: 1440px; margin: 0 auto; padding: 28px 28px 52px; }
-.topbar { display: flex; justify-content: space-between; gap: 24px; align-items: flex-start; }
-.brand-kicker { color: var(--accent); font-size: 11px; font-weight: 700; letter-spacing: .18em; text-transform: uppercase; }
-h1 { margin: 8px 0 4px; font-size: clamp(32px, 5vw, 54px); line-height: 1.02; letter-spacing: -.045em; }
-.date-line { color: var(--muted); font-size: 15px; }
-.refresh-line { color: var(--quiet); font-size: 12px; text-align: right; }
-.health-stack { display: grid; gap: 8px; margin: 20px 0 0; }
-.health-alert { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; margin: 0; padding: 11px 14px; border: 1px solid rgba(240, 184, 106, .35); background: var(--warning-soft); color: #f7d49d; }
-.health-alert.alert { border-color: rgba(241, 123, 133, .4); background: var(--danger-soft); color: #ffc1c6; }
-.health-alert strong { color: inherit; }
-.day-summary { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 12px; margin: 28px 0 20px; color: var(--muted); }
-.day-summary strong { color: var(--accent); font-size: 26px; line-height: 1; letter-spacing: -.04em; }
-.day-summary .summary-date { color: var(--quiet); font-size: 12px; }
-.toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 24px 0 15px; }
-.toolbar-label { margin-right: 4px; color: var(--muted); font-size: 12px; }
-.filter { border: 1px solid var(--line); border-radius: 999px; padding: 7px 13px; color: var(--muted); background: transparent; cursor: pointer; }
-.filter:hover, .filter[aria-pressed="true"] { border-color: var(--accent); color: var(--bg); background: var(--accent); }
-.page-footer { margin-top: 28px; padding-top: 14px; border-top: 1px solid var(--line); }
-.legacy-link { color: var(--quiet); font-size: 11px; }
-.fixture-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
-.fixture-card { min-width: 0; overflow: hidden; border: 1px solid var(--line); border-left: 3px solid var(--quiet); background: var(--surface); }
-.fixture-card.status-frozen { border-left-color: var(--accent); }
-.fixture-card.status-insufficient_data { border-left-color: var(--warning); }
-.fixture-card.status-prediction_failed, .fixture-card.status-missed_prematch_window { border-left-color: var(--danger); }
-.fixture-card.status-pending { border-left-color: var(--blue); }
-.fixture-main { padding: 18px 19px 15px; }
-.fixture-meta { display: flex; justify-content: space-between; gap: 12px; align-items: center; color: var(--muted); font-size: 12px; }
-.fixture-meta .competition { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.match-number { color: var(--quiet); white-space: nowrap; }
-.teams { margin: 12px 0 5px; font-size: clamp(20px, 2.3vw, 28px); font-weight: 650; line-height: 1.18; letter-spacing: -.035em; overflow-wrap: anywhere; }
-.teams .versus { display: inline-block; margin: 0 6px; color: var(--quiet); font-size: .48em; font-weight: 500; letter-spacing: 0; vertical-align: middle; }
-.kickoff { color: var(--muted); font-size: 12px; }
-.status-badge { display: inline-flex; align-items: center; border-radius: 999px; padding: 4px 9px; color: var(--muted); background: var(--surface-2); font-size: 11px; font-weight: 700; white-space: nowrap; }
-.detail-link { color: var(--muted); font-size: 11px; text-decoration: none; white-space: nowrap; }
-.detail-link:hover { color: var(--accent); }
-.status-frozen .status-badge { color: var(--accent); background: var(--accent-soft); }
-.fixture-card.prediction-pilot { border-left-color: var(--warning); }
-.prediction-pilot .status-badge { color: var(--warning); background: var(--warning-soft); }
-.prediction-pilot .score-focus strong { color: var(--warning); }
-.prediction-pilot .signal.accent { border-color: rgba(240, 184, 106, .35); color: var(--warning); background: var(--warning-soft); }
-.status-insufficient_data .status-badge { color: var(--warning); background: var(--warning-soft); }
-.status-prediction_failed .status-badge, .status-missed_prematch_window .status-badge { color: var(--danger); background: var(--danger-soft); }
-.reason { display: flex; flex-wrap: wrap; gap: 5px 10px; align-items: baseline; margin-top: 14px; padding: 10px 12px; border: 1px solid rgba(240, 184, 106, .25); background: var(--warning-soft); color: #f6d29a; }
-.reason strong { font-size: 13px; }
-.pilot-note { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: baseline; margin-top: 12px; color: var(--warning); font-size: 12px; }
-.pilot-note span { color: var(--muted); font-size: 11px; }
-.prediction-panel { margin-top: 16px; padding: 15px 0 0; border-top: 1px solid var(--line); }
-.prediction-topline { display: flex; justify-content: space-between; gap: 15px; align-items: flex-end; }
-.prediction-label { color: var(--muted); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; }
-.score-serving-note { margin-top: 10px; padding: 8px 10px; border-left: 2px solid var(--warning); color: #f6d29a; background: var(--warning-soft); font-size: 12px; }
-.score-serving-note.degraded { border-left-color: var(--danger); color: #ffc1c6; background: var(--danger-soft); }
-.score-focus { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: flex-start; gap: 7px; }
-.score-focus strong { color: var(--accent); font-size: 36px; line-height: .95; letter-spacing: -.06em; }
-.score-focus .neighbors { color: var(--muted); font-size: 12px; }
-.signal-row { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 15px; }
-.signal { display: inline-flex; align-items: center; min-height: 27px; padding: 4px 8px; border: 1px solid var(--line); color: var(--muted); background: var(--surface-2); font-size: 12px; }
-.signal.accent { border-color: rgba(67, 211, 165, .35); color: var(--accent); background: var(--accent-soft); }
-.market-strip { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
-.market-item { min-width: 0; padding: 8px 10px; border: 1px solid var(--line); color: var(--muted); background: rgba(11, 17, 24, .48); font-size: 12px; }
-.market-item strong { color: var(--text); font-weight: 600; }
-.market-item small { display: block; margin-top: 2px; color: var(--quiet); }
-.market-item .movement { color: var(--warning); }
-.result-line { display: flex; flex-wrap: wrap; gap: 8px 13px; align-items: baseline; margin: 16px -1px -1px; padding: 11px 12px; border: 1px solid rgba(67, 211, 165, .24); background: var(--accent-soft); color: var(--accent); }
-.historical-results { margin: 24px 0 16px; padding: 18px; border: 1px solid var(--line); background: var(--surface); }
-.historical-results h2 { margin: 0 0 14px; font-size: 18px; }
-.historical-result { display: grid; grid-template-columns: 190px minmax(180px, 1fr) 70px minmax(150px, auto); gap: 12px; align-items: center; padding: 10px 0; border-top: 1px solid var(--line); }
-.historical-meta { color: var(--muted); font-size: 12px; }
-.historical-teams { font-weight: 600; }
-.historical-teams span { color: var(--quiet); font-weight: 400; }
-.historical-score { color: var(--accent); font-size: 20px; }
-.historical-links { display: flex; gap: 10px; flex-wrap: wrap; font-size: 12px; }
-@media (max-width: 760px) { .historical-result { grid-template-columns: 1fr auto; } .historical-meta, .historical-links { grid-column: 1 / -1; } }
-.empty { grid-column: 1 / -1; padding: 44px 20px; border: 1px dashed var(--line); color: var(--muted); text-align: center; }
-.data-warning { margin: 18px 0 0; padding: 10px 13px; border: 1px solid rgba(241, 123, 133, .32); background: var(--danger-soft); color: #ffc1c6; font-size: 12px; }
-@media (max-width: 880px) { .fixture-list { grid-template-columns: 1fr; } }
-@media (max-width: 560px) { .shell { padding: 20px 12px 38px; } .topbar { display: block; } .refresh-line { margin-top: 10px; text-align: left; } .day-summary { margin-top: 22px; } .fixture-main { padding: 15px 14px 13px; } .fixture-meta { align-items: flex-start; } .teams { font-size: 22px; } .prediction-topline { display: block; } .score-focus { margin-top: 11px; } }
+button, a { -webkit-tap-highlight-color: transparent; }
+[hidden] { display: none !important; }
+
+.site {
+  width: min(calc(100% - 68px), 1372px);
+  margin: 0 auto;
+  padding: 32px 0 44px;
+}
+.site-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 24px;
+  padding-bottom: 17px;
+  border-bottom: 1px solid var(--line);
+}
+.brand {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  min-width: 0;
+}
+.brand-name {
+  flex: 0 0 auto;
+  font-size: 25px;
+  font-weight: 750;
+  letter-spacing: -.055em;
+}
+.brand-subtitle {
+  color: var(--muted);
+  font-size: 10px;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.header-note {
+  color: var(--muted);
+  font-size: 11px;
+  text-align: right;
+  white-space: nowrap;
+}
+.dashboard-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 18px 0 12px;
+}
+.dashboard-heading h1 {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex: 0 1 auto;
+  min-width: 0;
+  margin: 0;
+  font-size: 22px;
+  line-height: 1.15;
+  letter-spacing: -.04em;
+  white-space: nowrap;
+}
+.dashboard-heading h1 .date-day { font-weight: 750; }
+.dashboard-heading h1 .today { color: var(--muted); font-weight: 500; }
+.fixture-count {
+  margin-left: 8px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+.filters {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(120px, 1fr));
+  gap: 7px;
+  width: min(100%, 660px);
+}
+.filter {
+  min-height: 26px;
+  padding: 3px 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 11px;
+}
+.filter:hover,
+.filter[aria-pressed="true"] {
+  border-color: #FFB27F;
+  color: var(--accent);
+}
+.filter[aria-pressed="true"] { background: var(--accent-soft); }
+
+.quality-warning,
+.runtime-warning {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 5px 10px;
+  margin: 0 0 12px;
+  padding: 9px 12px;
+  border-left: 2px solid var(--accent);
+  background: var(--accent-soft);
+  color: var(--muted);
+  font-size: 12px;
+}
+.quality-warning strong,
+.runtime-warning strong { color: var(--text); font-weight: 700; }
+.runtime-warning { border-left-color: var(--danger); background: var(--danger-soft); }
+.runtime-warning strong { color: var(--danger); }
+.closed-beta-notice {
+  margin-top: 9px;
+  border-left-color: var(--line);
+  background: transparent;
+  color: var(--quiet);
+  font-size: 11px;
+}
+.dashboard-trust {
+  padding: 11px 0 0;
+  border-top: 1px solid var(--line);
+}
+.dashboard-trust strong,
+.dashboard-trust span {
+  display: block;
+  margin-top: 3px;
+}
+
+.fixture-table {
+  overflow: hidden;
+  border-top: 1px solid var(--line);
+  background: var(--surface);
+}
+.table-header,
+.fixture-row {
+  display: grid;
+  grid-template-columns: 150px 70px minmax(260px, 1.55fr) minmax(230px, 1.25fr) minmax(235px, 1.3fr) minmax(180px, 1fr);
+  column-gap: 16px;
+  padding-left: 9px;
+  padding-right: 9px;
+}
+.table-header {
+  min-height: 28px;
+  align-items: center;
+  color: var(--muted);
+  background: #FCFBF9;
+  font-size: 10px;
+}
+.fixture-row {
+  position: relative;
+  min-height: 56px;
+  align-items: center;
+  border-bottom: 1px solid var(--line);
+}
+.fixture-row:hover { background: #FFFCF9; }
+.fixture-row > * { min-width: 0; }
+.fixture-row > *:not(.fixture-row-target) { position: relative; z-index: 1; pointer-events: none; }
+.fixture-row-target { position: absolute; inset: 0; z-index: 0; border-radius: inherit; }
+.fixture-row-target:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.identity-cell { min-width: 0; }
+.cell-meta,
+.match-number,
+.kickoff,
+.identity-competition,
+.goal-signal,
+.score-caption,
+.score-top3,
+.action-note {
+  color: var(--muted);
+  font-size: 11px;
+}
+.match-number { white-space: nowrap; }
+.competition {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.identity-competition {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.kickoff { color: var(--text); font-variant-numeric: tabular-nums; }
+.teams-cell { min-width: 0; }
+.team-match {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  min-width: 0;
+  font-weight: 650;
+  letter-spacing: -.015em;
+}
+.team-match .team {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.team-match .home { text-align: right; }
+.team-match .away { text-align: left; }
+.versus {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 400;
+}
+.result-inline {
+  margin-top: 3px;
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 650;
+}
+.probability-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+.probability-cell {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.probability-cell span {
+  color: var(--muted);
+  font-size: 10px;
+}
+.probability-cell strong {
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+  line-height: 1;
+}
+.probability-cell.is-leading strong { color: var(--accent); }
+.score-cell { min-width: 0; }
+.score-caption { margin-bottom: 2px; }
+.score-primary {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.score-primary span {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 400;
+}
+.score-top3 {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px 10px;
+  margin-top: 3px;
+  font-variant-numeric: tabular-nums;
+}
+.score-top3 span { white-space: nowrap; }
+.score-serving-note { margin-top: 4px; color: var(--warning); font-size: 10px; font-weight: 650; }
+.goal-signals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px 10px;
+  min-width: 0;
+}
+.goal-signal {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.row-action {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 5px 9px;
+  text-align: right;
+}
+.prediction-unavailable { display: none; }
+.empty-score-cell { visibility: hidden; }
+.detail-link {
+  color: var(--muted);
+  font-size: 11px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.detail-link:hover { color: var(--accent); text-decoration: underline; }
+.exception-note {
+  color: var(--warning);
+  font-size: 11px;
+  font-weight: 650;
+}
+.exception-note.failed,
+.exception-note.missed { color: var(--danger); }
+.completed-note { color: var(--accent); font-size: 11px; font-weight: 650; }
+.reason-detail {
+  flex-basis: 100%;
+  color: var(--muted);
+  font-size: 10px;
+}
+.data-warning {
+  margin: 12px 0;
+  padding: 9px 12px;
+  border-left: 2px solid var(--warning);
+  background: var(--warning-soft);
+  color: var(--warning);
+  font-size: 11px;
+}
+.empty {
+  padding: 46px 20px;
+  color: var(--muted);
+  text-align: center;
+}
+.filter-empty {
+  padding: 46px 20px;
+  color: var(--muted);
+  text-align: center;
+}
+.history {
+  margin-top: 22px;
+  border-top: 1px solid var(--line);
+}
+.history-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 0 9px;
+}
+.history-heading h2 { margin: 0; font-size: 15px; letter-spacing: -.02em; }
+.history-heading span { color: var(--muted); font-size: 11px; }
+.history-row {
+  display: grid;
+  grid-template-columns: 92px minmax(230px, 1fr) 65px minmax(180px, auto);
+  gap: 14px;
+  align-items: center;
+  min-height: 47px;
+  border-bottom: 1px solid var(--line);
+  font-size: 12px;
+}
+.history-meta { color: var(--muted); font-size: 11px; }
+.history-teams { font-weight: 650; }
+.history-teams span { color: var(--muted); font-weight: 400; }
+.history-score { color: var(--accent); font-size: 16px; font-variant-numeric: tabular-nums; }
+.history-links { display: flex; flex-wrap: wrap; gap: 8px; color: var(--muted); font-size: 11px; }
+.page-footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  margin-top: 19px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  color: var(--quiet);
+  font-size: 10px;
+}
+.page-footer span:last-child { text-align: right; }
+.page-footer a { text-decoration: none; }
+.page-footer a:hover { color: var(--accent); }
+
+@media (max-width: 820px) {
+  .site { width: calc(100% - 32px); padding: 16px 0 28px; }
+  .site-header { align-items: center; padding-bottom: 13px; }
+  .brand-subtitle { display: none; }
+  .header-note { font-size: 10px; }
+  .dashboard-heading { display: flex; align-items: end; padding: 15px 0 10px; }
+  .dashboard-heading h1 { font-size: 19px; }
+  .filters { width: auto; flex: 0 0 auto; margin-top: 0; grid-template-columns: repeat(3, auto); gap: 5px; }
+  .filter { min-height: 27px; }
+  .table-header { display: none; }
+  .fixture-row {
+    display: block;
+    padding: 12px 10px 11px;
+  }
+  .fixture-row-target:focus-visible { outline-offset: -2px; }
+  .fixture-row > * { margin-top: 9px; }
+  .fixture-row > .identity-cell { margin-top: 0; }
+  .identity-cell {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+  }
+  .fixture-row .competition { max-width: 70%; }
+  .teams-cell { margin-top: 7px; }
+  .team-match {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    gap: 8px;
+    font-size: 18px;
+    line-height: 1.18;
+  }
+  .team-match .home,
+  .team-match .away { text-align: left; }
+  .team-match .away { text-align: right; }
+  .versus { align-self: center; font-size: 11px; }
+  .probability-grid { gap: 9px; margin-top: 11px; }
+  .probability-cell span { font-size: 10px; }
+  .probability-cell strong { font-size: 15px; }
+  .score-cell {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    column-gap: 9px;
+    align-items: baseline;
+    padding-top: 9px;
+    border-top: 1px solid var(--line);
+  }
+  .score-caption { margin: 0; }
+  .score-primary { justify-self: end; }
+  .score-top3 {
+    grid-column: 1 / -1;
+    margin-top: 4px;
+    font-size: 10px;
+  }
+  .goal-signals {
+    gap: 3px 12px;
+    padding-top: 1px;
+  }
+  .row-action {
+    justify-content: flex-start;
+    text-align: left;
+  }
+  .empty-score-cell { display: none; }
+  .goals-cell:empty { display: none; }
+  .reason-detail { flex-basis: auto; }
+  .history-row { grid-template-columns: 1fr auto; gap: 5px 12px; padding: 9px 0; }
+  .history-meta, .history-links { grid-column: 1 / -1; }
+  .page-footer { display: block; }
+  .page-footer span { display: block; }
+  .page-footer span:last-child { margin-top: 5px; text-align: left; }
+}
+@media (max-width: 360px) {
+  .site { width: calc(100% - 24px); }
+  .brand-name { font-size: 23px; }
+  .header-note { max-width: 126px; white-space: normal; text-align: right; }
+  .dashboard-heading { gap: 7px; }
+  .dashboard-heading h1 { font-size: 16px; gap: 5px; }
+  .fixture-count { margin-left: 3px; font-size: 11px; }
+  .filter { padding-left: 6px; padding-right: 6px; font-size: 10px; }
+  .fixture-row { padding-left: 7px; padding-right: 7px; }
+  .team-match { font-size: 16px; }
+  .probability-grid { gap: 6px; }
+  .probability-cell strong { font-size: 14px; }
+  .goal-signals { gap: 3px 8px; }
+}
 """
+
 
 
 def _format_kickoff(value: Any) -> str:
@@ -736,94 +1118,201 @@ def _current_prediction_quality_health(
 
 
 def _score_label(value: Any) -> str:
-    return str(value or "").replace("-", "–")
+    return str(value or "").strip()
 
 
-def _signal(label: str, value: Any, css: str = "") -> str:
-    if value in (None, "", []):
+def _format_percent(value: Any) -> str | None:
+    number = _number(value)
+    if number is None or number < 0 or number > 1:
+        return None
+    return f"{number * 100:.1f}%"
+
+
+def _score_rows(prediction: dict[str, Any], limit: int = 5) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    distribution = prediction.get("score_distribution")
+    if isinstance(distribution, list):
+        for item in distribution:
+            if isinstance(item, dict):
+                score = _score_label(item.get("score") or item.get("value"))
+                probability = _number(item.get("probability"))
+            else:
+                score = _score_label(item)
+                probability = None
+            if score and score not in seen:
+                rows.append({"score": score, "probability": probability})
+                seen.add(score)
+    if not rows:
+        for item in prediction.get("score_top3") or prediction.get("top_scores") or []:
+            if isinstance(item, dict):
+                score = _score_label(item.get("score") or item.get("value"))
+                probability = _number(item.get("probability"))
+            else:
+                score = _score_label(item)
+                probability = None
+            if score and score not in seen:
+                rows.append({"score": score, "probability": probability})
+                seen.add(score)
+    primary = _score_label(prediction.get("primary_score") or prediction.get("unique_score"))
+    if primary and primary not in seen:
+        rows.insert(0, {"score": primary, "probability": None})
+    return rows[:limit]
+
+
+def _one_x_two_html(prediction: dict[str, Any]) -> str:
+    probabilities = prediction.get("probabilities") or {}
+    if not isinstance(probabilities, dict):
         return ""
-    return f'<span class="signal {css}">{html.escape(label)} · {html.escape(_text(value))}</span>'
+    values = {
+        "home": _number(probabilities.get("home")),
+        "draw": _number(probabilities.get("draw")),
+        "away": _number(probabilities.get("away")),
+    }
+    valid = {key: value for key, value in values.items() if value is not None and 0 <= value <= 1}
+    if not valid:
+        return ""
+    leader = max(valid, key=lambda key: valid[key])
+    labels = {"home": "\u4e3b\u80dc", "draw": "\u5e73", "away": "\u5ba2\u80dc"}
+    cells = []
+    for key in ("home", "draw", "away"):
+        percent = _format_percent(values.get(key))
+        if percent is None:
+            continue
+        leading = " is-leading" if key == leader else ""
+        cells.append(
+            f'<div class="probability-cell{leading}">'
+            f'<span>{labels[key]}</span><strong>{html.escape(percent)}</strong></div>'
+        )
+    return f'<div class="probability-grid">{"".join(cells)}</div>' if cells else ""
 
 
-def _modern_prediction_html(
+def _goal_signal_values(prediction: dict[str, Any]) -> list[tuple[str, str]]:
+    signals: list[tuple[str, str]] = []
+    btts = prediction.get("btts")
+    if isinstance(btts, dict):
+        yes = _number(btts.get("yes"))
+        no = _number(btts.get("no"))
+        candidates = [(yes, "\u53cc\u65b9\u8fdb\u7403 \u662f"), (no, "\u53cc\u65b9\u8fdb\u7403 \u5426")]
+        for value, label in candidates:
+            if value is None or not 0 <= value <= 1:
+                continue
+            percent = _format_percent(value)
+            if percent:
+                signals.append((label, percent))
+    totals = prediction.get("totals")
+    if isinstance(totals, list):
+        under = 0.0
+        over = 0.0
+        has_under = False
+        has_over = False
+        for item in totals:
+            if not isinstance(item, dict):
+                continue
+            probability = _number(item.get("probability"))
+            goals = str(item.get("goals") or "").strip()
+            if probability is None or probability < 0:
+                continue
+            if goals in {"0", "1", "2"}:
+                under += probability
+                has_under = True
+            elif goals in {"3", "4", "5", "6+"}:
+                over += probability
+                has_over = True
+        if has_under and has_over:
+            for value, label in ((under, "\u5927\u5c0f2.5 \u5c0f"), (over, "\u5927\u5c0f2.5 \u5927")):
+                percent = _format_percent(value)
+                if percent:
+                    signals.append((label, percent))
+    return signals
+
+
+def _goal_signals_html(prediction: dict[str, Any]) -> str:
+    signals = _goal_signal_values(prediction)
+    if not signals:
+        return ""
+    return '<div class="goal-signals">' + "".join(
+        f'<span class="goal-signal">{html.escape(label)} {html.escape(percent)}</span>'
+        for label, percent in signals
+    ) + "</div>"
+
+
+def _score_summary_html(
     prediction: dict[str, Any],
     *,
-    pilot_excluded: bool = False,
-    exact_score_serving: dict[str, str] | None = None,
+    exact_score_serving: dict[str, Any] | None = None,
 ) -> str:
-    serving = exact_score_serving or exact_score_serving_presentation(None)
-    primary = prediction.get("primary_score") or prediction.get("unique_score")
-    neighbors = prediction.get("neighbor_scores") or []
-    market = prediction.get("market_summary") or {}
-    signal_html = "".join([
-        _signal("1X2", prediction.get("one_x_two_direction"), "accent"),
-        _signal("比分分布", prediction.get("score_concentration")),
-    ])
-    market_html = ""
-    asian = market.get("asian_handicap")
-    total = market.get("total_line")
-    if asian or total:
-        items = []
-        if asian:
-            movement = f'<small class="movement">{html.escape(str(asian.get("movement")))}</small>' if asian.get("movement") else ""
-            items.append(f'<div class="market-item"><strong>AH · 主 {html.escape(str(asian.get("line")))}</strong>{movement}</div>')
-        if total:
-            direction = total.get("direction") or market.get("total_direction")
-            direction_text = f" · {html.escape(str(direction))}" if direction else ""
-            movement = f'<small class="movement">{html.escape(str(total.get("movement")))}</small>' if total.get("movement") else ""
-            items.append(f'<div class="market-item"><strong>O/U · {html.escape(str(total.get("line")))}{direction_text}</strong>{movement}</div>')
-        market_html = f'<div class="market-strip">{"".join(items)}</div>'
-    neighbor_text = " · ".join(_score_label(score) for score in neighbors)
-    pilot_note = '<div class="pilot-note"><strong>试运行预测</strong><span>不纳入正式验证</span></div>' if pilot_excluded else ""
-    serving_note = (
-        f'<div class="score-serving-note {html.escape(serving["state"].lower())}" role="status">'
-        f'{html.escape(serving["note"])}</div>'
-        if serving.get("note")
-        else ""
-    )
-    return (
-        '<section class="prediction-panel">'
-        '<div class="prediction-topline">'
-        f'<div><div class="prediction-label">{html.escape(serving["label"])}</div>'
-        '<div class="score-focus">'
-        f'<strong>{html.escape(_score_label(primary) if primary else "—")}</strong>'
-        f'<span class="neighbors">{html.escape(neighbor_text) if neighbor_text else ""}</span></div></div></div>'
-        f'{serving_note}{pilot_note}'
-        f'<div class="signal-row">{signal_html}</div>'
-        f'{market_html}'
-        '</section>'
-    )
-
-
-def _modern_result_html(card: dict[str, Any]) -> str:
-    result = card.get("result") or {}
-    score = result.get("score_90m")
-    if not score:
-        return ""
-    return f'<div class="result-line"><strong>90分钟赛果 · {html.escape(str(score))}</strong></div>'
-
-
-def _historical_results_html(rows: list[dict[str, Any]]) -> str:
-    title = "\u5df2\u5b8c\u8d5b / \u5386\u53f2\u590d\u76d8"
+    rows = [
+        row for row in _score_rows(prediction, limit=5)
+        if row.get("probability") is not None
+    ]
     if not rows:
-        return f'<section id="historical-results" class="historical-results"><h2>{title}</h2><div class="empty">\u6682\u65e0\u5df2\u5b8c\u8d5b\u8bb0\u5f55</div></section>'
-    cards = []
-    for row in rows:
-        status = row.get("historical_status") or ("\u5df2\u5b8c\u8d5b" if row.get("result_90m") else "\u5f85\u590d\u76d8")
-        links = []
-        if row.get("prematch_report_url"):
-            links.append(f'<a href="{html.escape(str(row["prematch_report_url"]), quote=True)}">\u8d5b\u524d\u5feb\u7167</a>')
-        if row.get("postmatch_report_url"):
-            links.append(f'<a href="{html.escape(str(row["postmatch_report_url"]), quote=True)}">\u8d5b\u540e\u590d\u76d8</a>')
-        cards.append(
-            '<article class="historical-result" data-result="yes">'
-            f'<div class="historical-meta">{_esc(row.get("kickoff"))} · {html.escape(str(status))}</div>'
-            f'<div class="historical-teams">{_esc(row.get("home"))}<span> vs </span>{_esc(row.get("away"))}</div>'
-            f'<strong class="historical-score">{_esc(row.get("result_90m"))}</strong>'
-            f'<div class="historical-links">{" · ".join(links) if links else ""}</div>'
-            '</article>'
+        return ""
+    primary = rows[0]
+    primary_probability = _format_percent(primary.get("probability"))
+    primary_probability_html = (
+        f'<span>{html.escape(primary_probability)}</span>' if primary_probability else ""
+    )
+    top3 = "".join(
+        f'<span>{html.escape(row["score"])}'
+        f'{(" " + html.escape(percent)) if (percent := _format_percent(row.get("probability"))) else ""}</span>'
+        for row in rows[:3]
+    )
+    serving_state = str((exact_score_serving or {}).get("state") or "NORMAL")
+    local_context = ""
+    if serving_state != "NORMAL":
+        local_context = (
+            f'<div class="score-serving-note">\u6a21\u578b\u539f\u59cb\u6bd4\u5206 \u00b7 {html.escape(str((exact_score_serving or {}).get("local_label") or (exact_score_serving or {}).get("label") or ""))}</div>'
         )
-    return f'<section id="historical-results" class="historical-results"><h2>{title}</h2>{"".join(cards)}</section>'
+    return (
+        f'<div class="score-cell{" score-unverified" if serving_state != "NORMAL" else ""}" '
+        f'data-score-serving-state="{html.escape(serving_state, quote=True)}">'
+        '<div class="score-caption">\u6700\u9ad8\u6982\u7387\u6bd4\u5206</div>'
+        f'<div class="score-primary"><strong>{html.escape(primary["score"])}</strong>{primary_probability_html}</div>'
+        f'<div class="score-top3">{top3}</div>{local_context}</div>'
+    )
+
+
+def _market_divergence_html(prediction: dict[str, Any]) -> str:
+    market = prediction.get("market_summary")
+    if not isinstance(market, dict):
+        return ""
+    comparison = market.get("model_comparison")
+    if not isinstance(comparison, dict):
+        comparison = market
+    model_probability = _number(
+        comparison.get("model_home_probability") or comparison.get("model_home")
+    )
+    market_probability = _number(
+        comparison.get("market_home_probability") or comparison.get("market_home")
+    )
+    if (
+        model_probability is None
+        or market_probability is None
+        or not (0 <= model_probability <= 1 and 0 <= market_probability <= 1)
+    ):
+        return ""
+    difference = model_probability - market_probability
+    sign = "+" if difference >= 0 else ""
+    difference_text = f"{sign}{difference * 100:.1f} \u4e2a\u767e\u5206\u70b9"
+    return (
+        '<div class="market-divergence"><span>\u6a21\u578b\u4e0e\u5e02\u573a</span>'
+        f'<strong>\u4e3b\u80dc {html.escape(_format_percent(model_probability) or "")}'
+        f' / \u5e02\u573a {html.escape(_format_percent(market_probability) or "")}</strong>'
+        f'<small>\u5dee\u5f02 {html.escape(difference_text)}</small></div>'
+    )
+
+
+def _card_status_copy(card: dict[str, Any]) -> str:
+    if card.get("result"):
+        return "\u5df2\u7ed3\u675f"
+    return {
+        "CURRENT_JOB_STATE_CONFLICT": "\u672c\u573a\u72b6\u6001\u5f85\u786e\u8ba4\uff0c\u6682\u4e0d\u9884\u6d4b",
+        "PENDING": "\u9884\u6d4b\u5c1a\u672a\u5f62\u6210",
+        "INSUFFICIENT_DATA": "\u6570\u636e\u4e0d\u8db3\uff0c\u6682\u4e0d\u9884\u6d4b",
+        "PREDICTION_FAILED": "\u672c\u573a\u672a\u5f62\u6210\u6709\u6548\u9884\u6d4b",
+        "MISSED_PREMATCH_WINDOW": "\u672a\u5f62\u6210\u5408\u6cd5\u8d5b\u524d\u9884\u6d4b",
+    }.get(str(card.get("status") or "PENDING"), "\u5f53\u524d\u6682\u4e0d\u9884\u6d4b")
 
 
 def _modern_card_html(
@@ -833,34 +1322,170 @@ def _modern_card_html(
 ) -> str:
     status = str(card.get("status") or "PENDING")
     match_id = str(card.get("match_id") or "")
-    pilot_excluded = bool(card.get("pilot_excluded") and card.get("prediction"))
-    prediction_kind = "pilot" if pilot_excluded else "formal" if card.get("prediction") else "none"
-    reason_html = ""
-    if card.get("reason_code"):
-        reason_html = f'<div class="reason"><strong>{html.escape(str(card.get("reason_text") or "数据暂不可用"))}</strong></div>'
-    prediction_html = (
-        _modern_prediction_html(
-            card["prediction"],
-            pilot_excluded=pilot_excluded,
-            exact_score_serving=exact_score_serving,
+    prediction = card.get("prediction") if status == "FROZEN" else None
+    prediction = prediction if isinstance(prediction, dict) else None
+    result = card.get("result") if isinstance(card.get("result"), dict) else None
+    has_result = bool(result and result.get("score_90m"))
+    prediction_kind = "pilot" if card.get("pilot_excluded") and prediction else "formal" if prediction else "none"
+    status_class = html.escape(status.lower(), quote=True)
+    match_id_html = html.escape(match_id, quote=True)
+    detail_link = '<span class="detail-link" aria-hidden="true">\u67e5\u770b\u8be6\u60c5</span>' if match_id else ""
+    if has_result:
+        action_html = f'<span class="completed-note">{_card_status_copy(card)}</span>{detail_link}'
+    elif prediction:
+        pilot_html = (
+            '<span class="action-note">\u8bd5\u8fd0\u884c\u9884\u6d4b \u00b7 \u4ec5\u4f9b\u89c2\u5bdf</span>'
+            if card.get("pilot_excluded")
+            else ""
         )
-        if card.get("prediction")
+        action_html = f"{pilot_html}{detail_link}"
+    else:
+        note_class = (
+            " failed"
+            if status == "PREDICTION_FAILED"
+            else " missed"
+            if status == "MISSED_PREMATCH_WINDOW"
+            else ""
+        )
+        reason_text = str(card.get("reason_text") or "").strip()
+        exact_copy = _card_status_copy(card)
+        reason_html = (
+            f'<span class="reason-detail">{html.escape(reason_text)}</span>'
+            if reason_text and reason_text != exact_copy
+            else ""
+        )
+        action_html = (
+            f'<span class="exception-note{note_class}">{html.escape(exact_copy)}</span>'
+            f'{reason_html}{detail_link}'
+        )
+    home_text = _esc(card.get("home"), "\u4e3b\u961f\u5f85\u5b9a")
+    away_text = _esc(card.get("away"), "\u5ba2\u961f\u5f85\u5b9a")
+    teams_html = (
+        '<div class="team-match">'
+        f'<span class="team home">{home_text}</span>'
+        '<span class="versus">vs</span>'
+        f'<span class="team away">{away_text}</span>'
+        '</div>'
+    )
+    if has_result:
+        teams_html += f'<div class="result-inline">90\u5206\u949f\u8d5b\u679c {html.escape(str(result.get("score_90m")))}</div>'
+    probability_html = _one_x_two_html(prediction) if prediction else '<div class="prediction-unavailable">\u2014</div>'
+    score_html = (
+        _score_summary_html(prediction, exact_score_serving=exact_score_serving)
+        if prediction
+        else '<div class="score-cell empty-score-cell" aria-hidden="true"></div>'
+    )
+    goals_html = (
+        f'{_goal_signals_html(prediction)}{_market_divergence_html(prediction)}'
+        if prediction
         else ""
     )
+    match_number_text = _esc(card.get("match_num"), "\u2014")
+    competition_text = _esc(card.get("competition"), "\u8d5b\u4e8b\u5f85\u5b9a")
+    kickoff_timestamp = html.escape(str(card.get("kickoff_timestamp") or _kickoff_timestamp(card.get("kickoff")) or ""), quote=True)
+    detail_target = ""
+    if match_id:
+        detail_home = _text(card.get("home"), "\u4e3b\u961f\u5f85\u5b9a")
+        detail_away = _text(card.get("away"), "\u5ba2\u961f\u5f85\u5b9a")
+        detail_label = html.escape(
+            f'{detail_home} vs {detail_away} \u00b7 \u67e5\u770b\u8be6\u60c5',
+            quote=True,
+        )
+        detail_target = (
+            f'<a class="fixture-row-target" href="../matches/{match_id_html}/" '
+            f'aria-label="{detail_label}"></a>'
+        )
     return (
-        f'<article class="fixture-card status-{html.escape(status.lower())} prediction-{prediction_kind}" data-status="{html.escape(status)}" data-result="{"yes" if card.get("result") else "no"}" data-prediction-kind="{prediction_kind}">'
-        '<div class="fixture-main">'
-        '<div class="fixture-meta">'
-        f'<span class="competition">{_esc(card.get("competition"))}</span>'
-        f'<span class="match-number">{_esc(card.get("match_num"))}</span>'
+        f'<article class="fixture-row status-{status_class} prediction-{prediction_kind}" '
+        f'data-status="{html.escape(status, quote=True)}" '
+        f'data-result="{"yes" if has_result else "no"}" '
+        f'data-kickoff="{kickoff_timestamp}" '
+        f'data-prediction-kind="{prediction_kind}">'
+        f'{detail_target}'
+        '<div class="identity-cell">'
+        f'<span class="match-number">{match_number_text}</span>'
+        f'<span class="identity-competition">{competition_text}</span>'
         '</div>'
-        f'<div class="teams">{_esc(card.get("home"))}<span class="versus">vs</span>{_esc(card.get("away"))}</div>'
-        f'<div class="fixture-meta"><span class="kickoff">开球 · {html.escape(_format_kickoff(card.get("kickoff")))}</span>'
-        f'<span><span class="status-badge">{html.escape(str(card.get("status_label") or status))}</span>'
-        f'<a class="detail-link" href="../matches/{html.escape(match_id)}/">查看详情</a></span></div>'
-        f'{reason_html}{prediction_html}{_modern_result_html(card)}'
-        '</div>'
+        f'<div class="kickoff">{html.escape(_format_kickoff(card.get("kickoff")))}</div>'
+        f'<div class="teams-cell">{teams_html}<div class="row-action">{action_html}</div></div>'
+        f'<div class="probability-cell-group">{probability_html}</div>'
+        f'{score_html}'
+        f'<div class="goals-cell">{goals_html}</div>'
         '</article>'
+    )
+
+
+def _historical_results_html(rows: list[dict[str, Any]]) -> str:
+    if not rows:
+        return ""
+    cards = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        result = row.get("result_90m")
+        if not result:
+            continue
+        kickoff_text = _esc(row.get("kickoff"), "\u65f6\u95f4\u5f85\u5b9a")
+        home_text = _esc(row.get("home"), "\u4e3b\u961f\u5f85\u5b9a")
+        away_text = _esc(row.get("away"), "\u5ba2\u961f\u5f85\u5b9a")
+        links = []
+        if row.get("prematch_report_url"):
+            links.append(
+                f'<a href="{html.escape(str(row["prematch_report_url"]), quote=True)}">\u8d5b\u524d\u5feb\u7167</a>'
+            )
+        if row.get("postmatch_report_url"):
+            links.append(
+                f'<a href="{html.escape(str(row["postmatch_report_url"]), quote=True)}">\u8d5b\u540e\u590d\u76d8</a>'
+            )
+        link_text = " \u00b7 ".join(links)
+        cards.append(
+            '<article class="history-row" data-result="yes">'
+            f'<div class="history-meta">{kickoff_text}</div>'
+            f'<div class="history-teams">{home_text}<span> vs </span>{away_text}</div>'
+            f'<strong class="history-score">{html.escape(str(result))}</strong>'
+            f'<div class="history-links">{link_text}</div>'
+            '</article>'
+        )
+    if not cards:
+        return ""
+    return (
+        '<section id="historical-results" class="history">'
+        '<div class="history-heading"><h2>\u5386\u53f2\u9a8c\u8bc1</h2>'
+        f'<span>{len(cards)} \u573a\u72ec\u7acb\u8bb0\u5f55\uff0c\u4e0d\u53c2\u4e0e\u5f53\u524d\u7b5b\u9009</span></div>'
+        f'{"".join(cards)}</section>'
+    )
+
+
+def _runtime_warning_html(system_health: dict[str, Any], errors: list[Any]) -> str:
+    overall = str(system_health.get("overall_status") or system_health.get("status") or "UNKNOWN").upper()
+    if overall in {"HEALTHY", "SUCCESS"}:
+        return ""
+    if overall in {"FAILED", "ALERT"}:
+        return (
+            '<div class="runtime-warning" role="status">'
+            '<strong>\u5f53\u524d\u6570\u636e\u66f4\u65b0\u5f02\u5e38</strong>'
+            '<span>\u90e8\u5206\u6bd4\u8d5b\u4fe1\u606f\u53ef\u80fd\u6682\u65f6\u4e0d\u53ef\u7528\uff0c\u8bf7\u4ee5\u9875\u9762\u5b9e\u9645\u5185\u5bb9\u4e3a\u51c6\u3002</span>'
+            '</div>'
+        )
+    if overall in {"UNKNOWN", "RUNNING"} or errors:
+        return (
+            '<div class="runtime-warning" role="status">'
+            '<strong>\u5f53\u524d\u6570\u636e\u72b6\u6001\u5f85\u786e\u8ba4</strong>'
+            '<span>\u9875\u9762\u53ea\u5c55\u793a\u5df2\u786e\u8ba4\u7684\u6bd4\u8d5b\u4fe1\u606f\u3002</span>'
+            '</div>'
+        )
+    return ""
+
+
+def _quality_warning_html(quality_health: dict[str, Any]) -> str:
+    exact_score_serving = exact_score_serving_presentation(quality_health)
+    if exact_score_serving["state"] == "NORMAL":
+        return ""
+    return (
+        '<div class="quality-warning" role="status">'
+        f'<strong>{html.escape(exact_score_serving["label"])}</strong>'
+        f'<span>{html.escape(exact_score_serving["note"])}</span>'
+        '</div>'
     )
 
 
@@ -895,93 +1520,111 @@ STATIC_REFRESH_SCRIPT = """<script>
 
 
 def render_dashboard(payload: dict[str, Any]) -> str:
-    summary = payload["summary"]
-    health = payload.get("health") or {}
-    system_health = payload.get("system_runtime_health") or health
+    summary = payload.get("summary") or {}
+    system_health = payload.get("system_runtime_health") or payload.get("health") or {}
     quality_health = payload.get("prediction_quality_health") or {}
-    health_overall = str(system_health.get("overall_status") or system_health.get("status") or "UNKNOWN")
-    health_errors = payload.get("data_errors") or []
-    system_display = str(system_health.get("display_status") or health_overall)
-    system_css = "alert" if health_overall in {"FAILED", "ALERT"} else ""
-    reason_parts = [
-        *(str(value) for value in health_errors),
-        *(str(value) for value in system_health.get("failed_steps") or []),
-    ]
-    reasons = ", ".join(dict.fromkeys(reason_parts))
-    system_reason_html = f'<span>{html.escape(reasons)}</span>' if reasons else ""
-    system_html = f'<div class="health-alert {system_css}"><strong>系统运行 · {html.escape(system_display)}</strong>{system_reason_html}</div>'
-
-    quality_status = str(quality_health.get("status") or "UNKNOWN")
-    quality_display = str(quality_health.get("display_status") or _QUALITY_STATUS_LABELS.get(quality_status, quality_status))
-    exact_score_serving = exact_score_serving_presentation(quality_health)
-    if exact_score_serving["state"] == DEGRADED:
-        quality_html = f'<div class="health-alert alert" role="status"><strong>预测质量异常</strong><span>{html.escape(_QUALITY_ALERT_COPY)}</span></div>'
-    elif exact_score_serving["state"] != "NORMAL":
-        quality_html = '<div class="health-alert" role="status"><strong>预测质量状态待确认</strong><span>当前周期质量来源未完成匹配，模型原始比分继续保留。</span></div>'
-    else:
-        quality_html = f'<div class="health-alert"><strong>预测质量 · {html.escape(quality_display)}</strong></div>'
-    health_html = f'<div class="health-stack" aria-label="系统与预测质量状态">{system_html}{quality_html}</div>'
-    health_html += render_closed_beta_notice("health-alert")
-    overview = (
-        f'<strong>{html.escape(_text(summary.get("fixture_count"), "0"))}</strong>'
-        '<span>场比赛 · 今日全部赛程</span>'
-        f'<span class="summary-date">{html.escape(str(payload.get("business_date")))}</span>'
+    date_value = str(payload.get("business_date") or "")
+    date_parts = date_value.split("-")
+    date_label = (
+        f"{int(date_parts[1])}\u6708{int(date_parts[2])}\u65e5"
+        if len(date_parts) == 3 and date_parts[1].isdigit() and date_parts[2].isdigit()
+        else date_value or "\u6bd4\u8d5b\u65e5"
     )
+    business_date_label = f"\u7ade\u5f69\u65e5 {date_label}"
+    fixture_count = int(summary.get("fixture_count") or len(payload.get("fixtures") or []))
+    verified_results = int(summary.get("verified_results") or 0)
+    exact_score_serving = exact_score_serving_presentation(quality_health)
     cards_html = "".join(
         _modern_card_html(card, exact_score_serving=exact_score_serving)
         for card in payload.get("fixtures") or []
+        if isinstance(card, dict)
     )
-    if not cards_html:
-        cards_html = '<div class="empty">今天没有可展示的比赛。</div>'
+    overall_empty_html = (
+        '<div class="filter-empty" data-filter-empty="ALL">\u4eca\u5929\u6ca1\u6709\u53ef\u5c55\u793a\u7684\u6bd4\u8d5b\u3002</div>'
+        if fixture_count == 0
+        else ""
+    )
+    filter_empty_html = (
+        f"{overall_empty_html}"
+        '<div class="filter-empty" data-filter-empty="UPCOMING" hidden>\u5f53\u524d\u7ade\u5f69\u65e5\u6682\u65e0\u672a\u5f00\u8d5b\u6bd4\u8d5b</div>'
+        '<div class="filter-empty" data-filter-empty="RESULT" hidden>\u5f53\u524d\u7ade\u5f69\u65e5\u6682\u65e0\u5df2\u7ed3\u675f\u5e76\u6838\u9a8c\u7684\u6bd4\u8d5b</div>'
+    )
+    runtime_warning = _runtime_warning_html(system_health, payload.get("data_errors") or [])
+    quality_warning = _quality_warning_html(quality_health)
+    historical_html = _historical_results_html(payload.get("completed") or [])
+    dashboard_trust = render_closed_beta_notice("dashboard-trust")
     data_warning = ""
     if summary.get("silent_missing_fixture"):
-        data_warning = f'<div class="data-warning">数据完整性提醒：当天 {html.escape(str(summary.get("fixture_count")))} 场，页面仅生成 {html.escape(str(summary.get("card_count")))} 张卡片。</div>'
-    historical_html = _historical_results_html(payload.get("completed") or [])
-    page = f"""<!doctype html>
+        data_warning = (
+            '<div class="data-warning">\u90e8\u5206\u6bd4\u8d5b\u4fe1\u606f\u672a\u80fd\u5b8c\u6574\u5448\u73b0\uff0c\u9875\u9762\u53ea\u5c55\u793a\u5df2\u786e\u8ba4\u5185\u5bb9\u3002</div>'
+        )
+    page_version = "|".join(
+        str(payload.get(key) or "") for key in ("business_date", "generated_at")
+    )
+    return f"""<!doctype html>
 <html lang="zh-CN">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>今日比赛 · {html.escape(str(payload.get('business_date')))}</title><style>{MODERN_CSS}</style></head>
-<body><main class="shell">
-<header class="topbar"><div><div class="brand-kicker">PRE-MATCH FOOTBALL INTELLIGENCE</div><h1>今日比赛</h1><div class="date-line">{html.escape(str(payload.get('business_date')))} · 今日全部赛事</div></div>
-<div class="refresh-line">数据更新时间<br><strong>{html.escape(_format_updated_at(system_health.get('updated_at') or payload.get('generated_at')))}</strong></div></header>
-{health_html}<section class="day-summary" aria-label="今日比赛摘要">{overview}</section>
-<nav class="toolbar" aria-label="比赛筛选"><span class="toolbar-label">查看</span>
-<button class="filter" type="button" data-filter="ALL" aria-pressed="true">全部</button>
-<button class="filter" type="button" data-filter="FROZEN" aria-pressed="false">已预测</button>
-<button class="filter" type="button" data-filter="INSUFFICIENT_DATA" aria-pressed="false">数据不足</button>
-<button class="filter" type="button" data-filter="RESULT" aria-pressed="false">已完赛</button>
- </nav>
-{data_warning}<section id="fixture-list" class="fixture-list" aria-label="今日比赛列表">{cards_html}</section>
-<footer class="page-footer"><a class="legacy-link" href="../match_workspace/latest.html">Legacy 工作台</a></footer>
-</main><script>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{html.escape(date_label)} \u00b7 FBOS</title>
+<style>{MODERN_CSS}</style>
+</head>
+<body>
+<main class="site">
+<header class="site-header">
+  <div class="brand"><span class="brand-name">FBOS</span><span class="brand-subtitle">Football betting \u00b7 one shot</span></div>
+  <div class="header-note">\u6d4b\u8bd5\u9636\u6bb5 \u00b7 \u4ec5\u4f9b\u8d5b\u524d\u5206\u6790</div>
+</header>
+<section class="dashboard-heading">
+  <h1><span class="date-day">{html.escape(business_date_label)}</span><span class="fixture-count">{fixture_count} \u573a</span></h1>
+  <div class="filters" aria-label="\u6bd4\u8d5b\u7b5b\u9009">
+    <button class="filter" type="button" data-filter="ALL" aria-pressed="true">\u5168\u90e8</button>
+    <button class="filter" type="button" data-filter="UPCOMING" aria-pressed="false">\u672a\u5f00\u8d5b</button>
+  <button class="filter" type="button" data-filter="RESULT" data-result-count="{verified_results}" aria-pressed="false">\u5df2\u7ed3\u675f</button>
+  </div>
+</section>
+{runtime_warning}{quality_warning}{data_warning}
+<section class="fixture-table" id="fixture-list" aria-label="\u7ade\u5f69\u65e5\u6bd4\u8d5b\u5217\u8868">
+  <div class="table-header" aria-hidden="true">
+    <span>\u7ade\u5f69\u7f16\u53f7 / \u8d5b\u4e8b</span><span>\u5f00\u7403</span><span>\u5bf9\u9635 / \u8d5b\u679c</span>
+    <span>1X2 \u6982\u7387</span><span>\u6bd4\u5206\u6982\u7387 Top3</span><span>\u8fdb\u7403\u4fe1\u53f7</span>
+   </div>
+   {cards_html}
+   {filter_empty_html}
+ </section>
+{historical_html}
+{dashboard_trust}
+<footer class="page-footer">
+  <span>\u6b63\u5e38\u72b6\u6001\u4fdd\u6301\u5b89\u9759\uff1b\u53ea\u6709\u5f71\u54cd\u5224\u65ad\u7684\u5f02\u5e38\u624d\u4f1a\u663e\u793a\u3002</span>
+  <span>Closed Beta \u00b7 \u9884\u6d4b\u53ef\u80fd\u51fa\u9519\uff0c\u4ec5\u4f9b\u6bd4\u8d5b\u5206\u6790\u4e0e\u7814\u7a76\u53c2\u8003\uff1b\u7406\u6027\u53c2\u4e0e\uff0c\u672a\u6210\u5e74\u4eba\u9650\u5236\u3002</span>
+</footer>
+</main>
+<script>
 const buttons = Array.from(document.querySelectorAll('[data-filter]'));
-const cards = Array.from(document.querySelectorAll('.fixture-card'));
+const cards = Array.from(document.querySelectorAll('.fixture-row'));
 const historicalResults = document.querySelector('#historical-results');
+const emptyStates = Array.from(document.querySelectorAll('[data-filter-empty]'));
 buttons.forEach(button => button.addEventListener('click', () => {{
   const filter = button.dataset.filter;
   buttons.forEach(item => item.setAttribute('aria-pressed', String(item === button)));
   cards.forEach(card => {{
-    const match = filter === 'ALL' || card.dataset.status === filter || (filter === 'RESULT' && card.dataset.result === 'yes');
-    card.hidden = !match;
-  }});
-  if (historicalResults) historicalResults.hidden = filter !== 'ALL' && filter !== 'RESULT';
+    const kickoffTimestamp = Date.parse(card.dataset.kickoff || '');
+    const isUpcoming = Number.isFinite(kickoffTimestamp) && Date.now() < kickoffTimestamp;
+    const match = filter === 'ALL'
+      || (filter === 'UPCOMING' && isUpcoming)
+      || (filter === 'RESULT' && card.dataset.result === 'yes');
+     card.hidden = !match;
+   }});
+   const visibleCount = cards.filter(card => !card.hidden).length;
+   emptyStates.forEach(empty => {{
+     empty.hidden = empty.dataset.filterEmpty !== filter || visibleCount !== 0;
+   }});
+   if (historicalResults) historicalResults.hidden = filter !== 'ALL';
 }}));
-</script></body></html>"""
-    result_count = int(summary.get("completed_count") or 0)
-    page = page.replace('<section id="fixture-list"', historical_html + '<section id="fixture-list"', 1)
-    page = page.replace(
-        'data-filter="RESULT" aria-pressed="false"',
-        f'data-filter="RESULT" data-result-count="{result_count}" aria-pressed="false"',
-        1,
-    )
-    page = page.replace('>已完赛</button>', f'>已完赛 ({result_count})</button>', 1)
-    page_version = "|".join(
-        str(payload.get(key) or "") for key in ("business_date", "generated_at")
-    )
-    refresh_script = STATIC_REFRESH_SCRIPT.replace(
-        "__PAGE_VERSION__", json.dumps(page_version, ensure_ascii=False)
-    )
-    return page.replace("</body>", refresh_script + "</body>", 1)
+</script>
+{STATIC_REFRESH_SCRIPT.replace("__PAGE_VERSION__", json.dumps(page_version, ensure_ascii=False))}
+</body>
+</html>"""
 
 
 def build_dashboard(
@@ -1071,7 +1714,11 @@ def build_dashboard(
         ))
     cards.sort(key=lambda item: (_iso_sort(item.get("kickoff")), _text(item.get("match_num"))))
     counts = Counter(card.get("status") for card in cards)
-    verified_results = sum(1 for card in cards if card.get("result"))
+    verified_results = sum(
+        1
+        for card in cards
+        if isinstance(card.get("result"), dict) and card["result"].get("score_90m")
+    )
     formal_total = summary_payload.get("formal_sample_count_total")
     if formal_total is None:
         formal_total = len(formal_rows)
@@ -1123,7 +1770,10 @@ def build_dashboard(
             "prediction_failed": counts.get("PREDICTION_FAILED", 0),
             "missed": counts.get("MISSED_PREMATCH_WINDOW", 0),
             "verified_results": verified_results,
-            "completed_count": len(completed),
+            # This count powers the current business-day RESULT filter.  The
+            # workspace's cross-date rows remain an independent history view.
+            "completed_count": verified_results,
+            "historical_validation_count": len(completed),
             "history_count": len(history),
             "formal_prospective_total": int(formal_total or 0),
             "samples_added_today": int(samples_added or 0),

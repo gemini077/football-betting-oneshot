@@ -571,7 +571,11 @@ def test_legacy_material_is_really_discovered_and_consistency_checked(tmp_path, 
     assert contract["analysis_material"]["analysis_origin"]["type"] == "LEGACY_STRUCTURED_ANALYSIS"
     assert contract["analysis_material"]["lineage"]
     assert contract["candidate_scores"][0]["script_label"] == "主队优势兑现，客队得分路径受限"
-    assert "主队优势兑现，客队得分路径受限" in render_match_detail(contract)
+    html = render_match_detail(contract)
+    assert "最高概率比分" in html
+    assert "1-0</strong>" in html
+    assert "15.5%" in html
+    assert "主队优势兑现，客队得分路径受限" not in html
 
 
 @pytest.mark.parametrize("host_timezone", [timezone.utc, timezone(timedelta(hours=8))])
@@ -694,79 +698,185 @@ def test_detail_renderer_has_three_layers_and_uses_same_contract_for_statuses(tm
     assert 'id="conclusion"' in html
     assert 'id="analysis"' in html
     assert 'id="evidence"' in html
-    assert "试运行预测" in html
-    assert "1–0" in html
-    assert "1–0 · 15.5%" in html
-    assert "强弱与主动权" in html
-    assert "节奏与进球环境" in html
-    assert "得分路径" in html
-    assert "关键分叉" in html
-    assert "最终收敛" in html
-    assert "当前没有可追溯的比赛剧本" in html
-    assert "当前没有可追溯的历史分析来源" in html
+    assert "试运行预测 · 仅供观察" in html
+    assert "1-0" in html
+    assert "1-0</strong>" in html
+    assert "15.5%" in html
+    assert "胜平负概率" in html
+    assert "比分概率 · 不是确定答案" in html
+    assert "进球信号" in html
+    assert "关键依据" in html
+    assert "赛前预测已锁定于" in html
+    assert "首推" not in html
+    assert 'class="status-badge"' not in html
 
     pending = assemble(roots(tmp_path / "pending", status="PENDING", with_prediction=False))
     pending_html = render_match_detail(pending)
-    assert "预测尚未记录" in pending_html
-    assert "1–0" not in pending_html
+    assert "预测尚未形成" in pending_html
+    assert "胜平负概率" not in pending_html
+    assert "1-0" not in pending_html
 
     insufficient = assemble(roots(tmp_path / "insufficient", status="INSUFFICIENT_DATA", with_prediction=False))
     insufficient_html = render_match_detail(insufficient)
-    assert "当前数据不足" in insufficient_html
-    assert "当前证据不足，暂不扩展判断" in insufficient_html
+    assert "数据不足，暂不预测" in insufficient_html
+    assert "胜平负概率" not in insufficient_html
+    assert "score-distribution" not in insufficient_html
 
 
 def test_serving_detail_with_null_market_renders_safely(tmp_path):
     contract = assemble(roots(tmp_path))
     contract["market"] = None
+    contract["evidence"]["market"] = {}
 
     html = render_match_detail(contract)
 
     assert "<html" in html
-    assert 'class="hero-score">1' in html
     assert 'class="hero-probabilities"' in html
-    assert 'id="market"' in html
+    assert "比分概率 · 不是确定答案" in html
+    assert 'id="market"' not in html
+    assert "模型与市场" not in html
+
+
+def test_completed_detail_leads_with_verified_90m_result_and_compares_frozen_forecast(tmp_path):
+    contract = assemble(roots(tmp_path))
+    contract["result"] = {
+        "score_90m": "0-2",
+        "scope": "regulation_90m_plus_stoppage",
+        "verified_at": "2026-08-13T08:10:00+08:00",
+        "source": "TEST FIXTURE",
+    }
+
+    html = render_match_detail(contract)
+
+    assert html.index("\u5b9e\u9645\u8d5b\u679c") < html.index("\u8d5b\u524d\u9884\u6d4b")
+    assert "0-2" in html
+    assert "90\u5206\u949f\u8d5b\u679c" in html
+    assert "\u6bd4\u5206" in html and "\u672a\u547d\u4e2d" in html
+    assert "1X2\u65b9\u5411" in html and "\u547d\u4e2d" in html
+    assert "\u8d5b\u524d\u9884\u6d4b\u5df2\u9501\u5b9a" in html
+    assert html.index("\u5b9e\u9645\u8d5b\u679c") < html.index("\u80dc\u5e73\u8d1f\u6982\u7387")
+    assert html.count("\u9884\u6d4b vs \u5b9e\u9645") == 0
+    assert 'id="verification"' not in html
+    result_start = html.index('id="result"')
+    deeper_start = html.index('id="evidence"')
+    result_panel = html[result_start:deeper_start]
+    assert result_panel.index("\u5b9e\u9645\u6bd4\u5206") < result_panel.index("\u6bd4\u5206")
+    assert result_panel.index("\u65b9\u5411") < result_panel.index("\u5b9e\u9645\u65b9\u5411")
+    assert 'data-probability="0.155000"' in html
+    assert 'style="width:15.5%"' in html
+    assert 'style="width:100.0%"' not in html
+    for label in ("\u5f53\u65f6\u6700\u9ad8\u6982\u7387\u6bd4\u5206", "\u5f53\u65f6\u0031X2\u65b9\u5411", "\u5b9e\u9645\u65b9\u5411"):
+        assert label in html
+
+
+def test_degraded_detail_keeps_exact_score_scope_and_local_context(tmp_path):
+    contract = assemble(roots(tmp_path))
+    contract["prediction_quality_health"] = {
+        "status": "ALERT",
+        "scope": "current_serving",
+        "available": True,
+        "provenance_status": "MATCHED",
+    }
+
+    html = render_match_detail(contract)
+
+    assert "\u6bd4\u5206\u9884\u6d4b\u8d28\u91cf\u5f02\u5e38\uff0c\u4ec5\u4f9b\u89c2\u5bdf" in html
+    assert "\u5f53\u524d\u8d28\u91cf\u5f02\u5e38\uff0c\u6682\u4e0d\u4f5c\u4e3a\u6b63\u5e38\u6bd4\u5206\u63a8\u8350" in html
+    assert "\u6a21\u578b\u539f\u59cb\u6bd4\u5206" in html
+    assert 'data-score-serving-state="DEGRADED"' in html
+    assert 'style="width:15.5%"' in html
+
+
+@pytest.mark.parametrize(
+    "status, provenance, label, local_label",
+    [
+        (
+            "INSUFFICIENT_SAMPLE",
+            "MATCHED",
+            "\u6bd4\u5206\u9884\u6d4b\u5f53\u524d\u6837\u672c\u4e0d\u8db3\uff0c\u4ec5\u4f9b\u89c2\u5bdf",
+            "\u5f53\u524d\u6837\u672c\u4e0d\u8db3\uff0c\u4ec5\u4f9b\u89c2\u5bdf",
+        ),
+        (
+            "ALERT",
+            "MATCHED",
+            "\u6bd4\u5206\u9884\u6d4b\u8d28\u91cf\u5f02\u5e38\uff0c\u4ec5\u4f9b\u89c2\u5bdf",
+            "\u8d28\u91cf\u5f02\u5e38\uff0c\u4ec5\u4f9b\u89c2\u5bdf",
+        ),
+        (
+            "HEALTHY",
+            "MISMATCHED",
+            "\u6bd4\u5206\u9884\u6d4b\u8d28\u91cf\u5f85\u786e\u8ba4\uff0c\u4e0d\u4f5c\u4e3a\u6b63\u5e38\u63a8\u8350",
+            "\u8d28\u91cf\u5f85\u786e\u8ba4\uff0c\u4e0d\u4f5c\u4e3a\u6b63\u5e38\u63a8\u8350",
+        ),
+    ],
+)
+def test_detail_quality_copy_matches_raw_health_status(tmp_path, status, provenance, label, local_label):
+    contract = assemble(roots(tmp_path))
+    contract["prediction_quality_health"] = {
+        "status": status,
+        "scope": "current_serving",
+        "available": True,
+        "provenance_status": provenance,
+    }
+
+    html = render_match_detail(contract)
+
+    assert label in html
+    assert f"模型原始比分 · {local_label}" in html
+
+
+def test_trust_title_changes_when_only_freeze_and_cutoff_are_visible(tmp_path):
+    contract = assemble(roots(tmp_path))
+    contract["source_quality"]["source_references"] = []
+    contract["evidence"]["source_quality"]["source_references"] = []
+    contract["model"]["source_references"] = []
+    contract["market"] = {}
+    contract["evidence"]["market"] = {}
+
+    html = render_match_detail(contract)
+
+    assert "\u8d5b\u524d\u8bb0\u5f55" in html
+    assert "\u53ef\u4fe1\u5ea6\u4e0e\u6765\u6e90" not in html
 
 
 def test_detail_renderer_uses_user_facing_terms_and_hides_internal_metadata(tmp_path):
     html = render_match_detail(assemble(roots(tmp_path, pilot=True)))
 
+    technical_start = html.index('<details class="technical-details">')
+    primary_html = html[:technical_start]
+    technical_html = html[technical_start:]
     for forbidden in (
         "Analysis Contract",
         "analysis_contract_version",
-        "FUSION_BASELINE_V0",
-        "recent_form_market_calibrated_poisson_v2",
-        "Legacy Structured Analysis",
-        "lineage",
         "governance",
         "Frozen Top-K",
         "Frozen Prediction",
         "pilot_excluded",
         "BASE_QUALITY_GATE_BYPASS",
-        "prediction_id",
-        "job_id",
-        "模型版本",
-        "λ",
-        "冻结时间",
-        "冻结后更新",
-        "冻结前",
-        "市场事实",
-        "模型证据",
-        "完整证据审计",
+        "lineage",
+        "Legacy Structured Analysis",
         "Layer 1",
         "Layer 2",
         "Layer 3",
     ):
-        assert forbidden not in html
+        assert forbidden not in primary_html
+    for technical_value in (
+        "recent_form_market_calibrated_poisson_v2",
+        "prediction_id",
+        "status_code",
+    ):
+        assert technical_value in technical_html
 
     for required in (
-        "预测依据",
-        "预测概率",
-        "候选比分",
-        "预测记录时间",
-        "试运行预测",
-        "不纳入正式验证",
-        "数据来源",
+        "胜平负概率",
+        "比分概率 · 不是确定答案",
+        "最高概率",
+        "进球信号",
+        "关键依据",
+        "可信度与来源",
+        "技术详情",
+        "赛前预测已锁定",
+        "试运行预测 · 仅供观察",
     ):
         assert required in html
 
