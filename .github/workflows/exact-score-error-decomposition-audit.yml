@@ -1,0 +1,30 @@
+name: Exact-score error decomposition audit
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out pinned repository data
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Generate audit artifact
+        run: python scripts/exact_score_error_decomposition_audit.py --output-dir audit-artifact
+
+      - name: Upload summary and report
+        uses: actions/upload-artifact@v4
+        with:
+          name: exact-score-error-decomposition-audit
+          path: |
+            audit-artifact/summary.json
+            audit-artifact/report.md
