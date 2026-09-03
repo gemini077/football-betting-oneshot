@@ -1,0 +1,135 @@
+name: Recent-form competition provenance recovery audit
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/recent-form-competition-provenance-recovery-audit.yml"
+      - "scripts/recent_form_competition_provenance_recovery_audit.py"
+      - "tests/test_recent_form_competition_provenance_recovery_audit.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout the PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install focused test dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run Issue #167 focused tests
+        run: pytest -q tests/test_recent_form_competition_provenance_recovery_audit.py
+
+      - name: Compile the research script
+        run: python -m py_compile scripts/recent_form_competition_provenance_recovery_audit.py
+
+      - name: Run the real 61-match audit without raw-evidence download
+        run: |
+          rm -rf audit-artifact
+          python scripts/recent_form_competition_provenance_recovery_audit.py \
+            --output-dir audit-artifact \
+            --execution-label GITHUB_ACTIONS_RUNNER
+
+      - name: Verify the pre-registered closed decision and provenance boundary
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          summary = json.loads(Path("audit-artifact/summary.json").read_text(encoding="utf-8"))
+          cohort = summary["cohort"]
+          reconstruction = summary["frozen_recent_form_reconstruction"]
+          competition = summary["competition_join"]
+          raw = summary["raw_provenance"]
+          eligibility = summary["outcome_blind_eligibility"]
+          settlement = summary["settlement_gate"]
+          source = summary["source"]
+          controls = summary["controls"]
+          legacy_rows = summary["per_match_observations"]
+          checks = {
+              "milestone": summary["milestone"] == "RECENT-FORM-COMPETITION-PROVENANCE-RECOVERY-1",
+              "decision": summary["decision"] == "SCOPE_EVIDENCE_NOT_RECOVERABLE",
+              "status": summary["status"] == "SCOPE_EVIDENCE_NOT_RECOVERABLE",
+              "cohort": (
+                  cohort["expected_unique_matches"] == 61
+                  and cohort["selected_latest_legal_unique_matches"] == 61
+                  and cohort["observed_unique_matches"] == 61
+                  and cohort["one_match_one_observation"] is True
+                  and cohort["identity_match_to_pr163"] is True
+                  and cohort["selection_used_actual_outcome"] is False
+              ),
+              "canonical_recent_form": (
+                  reconstruction["exact_reconstruction_match_count"] == 61
+                  and reconstruction["exact_all_selected"] is True
+              ),
+              "legacy_secondary_corroboration": (
+                  sum(row["legacy_recent_form_corroboration"]["present"] for row in legacy_rows) == 52
+                  and sum(not row["legacy_recent_form_corroboration"]["present"] for row in legacy_rows) == 9
+              ),
+              "competition_join": (
+                  competition["component_rows_total"] == 2440
+                  and competition["joined_rows"] == 2255
+                  and competition["panlu_resolved_rows"] == 2255
+                  and competition["raw_cache_recovered_rows"] == 0
+                  and competition["unresolved_rows"] == 185
+                  and competition["ambiguous_rows"] == 0
+                  and competition["conflict_rows"] == 0
+              ),
+              "runner_raw_cache_boundary": (
+                  raw["execution_label"] == "GITHUB_ACTIONS_RUNNER"
+                  and raw["status"] == "REFERENCED_RAW_CACHE_UNAVAILABLE"
+                  and raw["referenced_count"] == 122
+                  and raw["present_count"] == 0
+                  and raw["hash_valid_count"] == 0
+                  and raw["parsed_analysis_file_count"] == 0
+                  and raw["recovered_component_rows"] == 0
+                  and raw["github_reproducibility"] == "RAW_CACHE_NOT_TRACKED_OR_PRESENT_ON_GITHUB_RUNNER"
+              ),
+              "outcome_gate": (
+                  eligibility["eligible_unique_matches"] < 50
+                  and eligibility["gate_passed"] is False
+                  and eligibility["actual_outcome_read"] is False
+              ),
+              "no_target_results": (
+                  settlement["actual_outcome_read"] is False
+                  and settlement["authoritative_result_files_read"] == 0
+                  and source["target_outcome_used_for_scope_or_eligibility"] is False
+              ),
+              "research_isolation": (
+                  source["network_access"] == "NO_NETWORK"
+                  and source["postmatch_reviews_used"] is False
+                  and source["provider_added"] is False
+                  and controls["production_changes"] == "NO"
+                  and controls["champion_changes"] == "NO"
+                  and controls["provider_changes"] == "NO"
+                  and controls["frozen_prediction_changes"] == "NO"
+                  and controls["serving_changes"] == "NO"
+                  and controls["counterfactual_count"] == 0
+                  and controls["counterfactual_route_retired"] is True
+              ),
+          }
+          failed = [name for name, passed in checks.items() if not passed]
+          if failed:
+              raise SystemExit(f"Issue #167 verification failed: {failed}")
+          print(json.dumps({"verified": sorted(checks), "decision": summary["decision"]}, sort_keys=True))
+          PY
+
+      - name: Upload Issue #167 audit artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: recent-form-competition-provenance-recovery-audit
+          path: audit-artifact
+          if-no-files-found: error
