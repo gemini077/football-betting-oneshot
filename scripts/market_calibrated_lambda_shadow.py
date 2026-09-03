@@ -9,6 +9,7 @@ pre-match market snapshots, and evaluates outcomes only after generation.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import sys
@@ -27,17 +28,19 @@ from automatic_model_core import (  # noqa: E402
     _total_line_pricing,
 )
 from prediction_trust_2_replay import (  # noqa: E402
+    ACCEPTED_WRITEBACK_COMMIT,
     DEFAULT_AUDIT,
     DEFAULT_MANIFEST,
     ROOT,
     _evaluate_candidate,
     _form_and_market_inputs,
-    _load_pinned_records,
     _metric_value,
+    _prediction_record_hash,
     _prepare_row,
     build_score_matrix,
 )
 from prediction_trust_3_replay import derive_market_side_only_lambdas  # noqa: E402
+from prediction_trust_audit import _is_formally_eligible, _load_prediction_records  # noqa: E402
 
 
 MILESTONE = "EXACT-SCORE-MARKET-CALIBRATED-LAMBDA-SHADOW-1"
@@ -56,6 +59,97 @@ def _number(value: Any) -> float | None:
     except (TypeError, ValueError):
         return None
     return result if math.isfinite(result) else None
+
+
+def _canonical_json_sha256(value: Any) -> str:
+    payload = json.dumps(
+        value,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
+
+
+def _load_portable_pinned_records(
+    root: Path,
+    manifest_path: Path,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Load the pinned cohort with cross-platform content integrity.
+
+    The legacy manifest also stores a raw snapshot-file SHA256 generated from
+    a Windows working tree. Git checkout line-ending normalization makes that
+    raw byte digest non-portable even when the Git blob is unchanged. For this
+    research replay we keep the record-content hash guard and additionally
+    recompute the canonical JSON digest of snapshot["input"], matching it
+    against both snapshot and frozen prediction metadata.
+    """
+
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    entries = manifest.get("selected_records") or []
+    if manifest.get("accepted_writeback_commit") != ACCEPTED_WRITEBACK_COMMIT:
+        raise ValueError("cohort manifest accepted write-back pin mismatch")
+    if len(entries) != 217 or manifest.get("selected_match_count") != 217:
+        raise ValueError("market-calibrated replay requires the pinned 217-match cohort")
+
+    raw = {
+        str(record.get("prediction_id")): record
+        for record in _load_prediction_records(root)
+    }
+    selected: list[dict[str, Any]] = []
+    for entry in entries:
+        prediction_id = str(entry.get("prediction_id") or "")
+        record = raw.get(prediction_id)
+        if record is None:
+            raise ValueError(f"pinned prediction is missing: {prediction_id}")
+        if _prediction_record_hash(record) != entry.get("record_sha256"):
+            raise ValueError(f"pinned prediction content changed: {prediction_id}")
+
+        snapshot_ref = str(entry.get("input_snapshot_ref") or "")
+        snapshot_path = root / snapshot_ref
+        if not snapshot_path.is_file():
+            raise ValueError(f"pinned input snapshot is missing: {prediction_id}")
+        snapshot = json.loads(snapshot_path.read_text(encoding="utf-8"))
+        canonical_input = snapshot.get("input")
+        if not isinstance(canonical_input, dict):
+            raise ValueError(f"pinned input snapshot has no canonical input: {prediction_id}")
+        recomputed = _canonical_json_sha256(canonical_input)
+        snapshot_digest = str(
+            snapshot.get("canonical_model_input_sha256")
+            or snapshot.get("canonical_input_sha256")
+            or ""
+        )
+        record_digest = str(
+            record.get("canonical_model_input_sha256")
+            or record.get("input_sha256")
+            or ""
+        )
+        embedded_digest = str(
+            (record.get("input_snapshot") or {}).get("canonical_model_input_sha256")
+            or (record.get("input_snapshot") or {}).get("canonical_input_sha256")
+            or ""
+        )
+        if not snapshot_digest or recomputed != snapshot_digest:
+            raise ValueError(f"snapshot canonical input digest mismatch: {prediction_id}")
+        if record_digest != snapshot_digest or embedded_digest != snapshot_digest:
+            raise ValueError(f"snapshot/record canonical digest mismatch: {prediction_id}")
+        if str((record.get("input_snapshot") or {}).get("snapshot_id") or "") != str(
+            snapshot.get("snapshot_id") or ""
+        ):
+            raise ValueError(f"snapshot identity mismatch: {prediction_id}")
+        if str(record.get("source_cutoff_at") or "") != str(snapshot.get("source_cutoff_at") or ""):
+            raise ValueError(f"snapshot cutoff mismatch: {prediction_id}")
+        if not _is_formally_eligible(record):
+            raise ValueError(f"pinned prediction is no longer formally eligible: {prediction_id}")
+        selected.append(dict(record))
+
+    match_ids = {
+        str(record.get("match_id") or record.get("match_key") or "")
+        for record in selected
+    }
+    if len(match_ids) != len(selected):
+        raise ValueError("pinned selected cohort contains duplicate match identities")
+    return selected, manifest
 
 
 def _devig_multiplicative(odds: Iterable[float]) -> list[float]:
@@ -402,7 +496,7 @@ def run(
     manifest_path: Path = DEFAULT_MANIFEST,
     audit_path: Path = DEFAULT_AUDIT,
 ) -> dict[str, Any]:
-    records, manifest = _load_pinned_records(root, manifest_path)
+    records, manifest = _load_portable_pinned_records(root, manifest_path)
     generation_rows: dict[str, list[dict[str, Any]]] = {
         "champion": [],
         "challenger_c": [],
@@ -534,6 +628,8 @@ def run(
             "pinned_selection_digest": manifest["selected_prediction_digest"],
             "results_loaded_after_generation": True,
             "postmatch_input_used_for_generation": False,
+            "snapshot_integrity": "record canonical hash + recomputed canonical snapshot-input SHA256",
+            "legacy_raw_snapshot_sha256": "not used because Windows/Git line-ending normalization makes it non-portable",
         },
         "coverage": {
             "pinned_unique": len(records),
