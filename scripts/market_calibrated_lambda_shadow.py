@@ -41,6 +41,7 @@ from prediction_trust_2_replay import (  # noqa: E402
 )
 from prediction_trust_3_replay import derive_market_side_only_lambdas  # noqa: E402
 from prediction_trust_audit import _is_formally_eligible, _load_prediction_records  # noqa: E402
+from prediction_trust_audit import _is_formally_eligible, _load_prediction_records  # noqa: E402
 
 
 MILESTONE = "EXACT-SCORE-MARKET-CALIBRATED-LAMBDA-SHADOW-1"
@@ -49,6 +50,74 @@ POWER_ID = "market_calibrated_lambda_v1_power_sensitivity"
 SHIN_ID = "market_calibrated_lambda_v1_shin_sensitivity"
 MIN_VERIFIED_COVERAGE = 50
 OUTCOMES = ("home", "draw", "away")
+
+
+def _load_semantically_pinned_records(
+    root: Path,
+    manifest_path: Path,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Load the pinned cohort without platform-sensitive raw-file hashing.
+
+    The historical manifest contains a raw snapshot-file SHA-256 that can vary
+    across checkouts because of line-ending normalization. We keep the stronger
+    semantic locks instead: canonical prediction content plus canonical JSON
+    hash of snapshot["input"], all cross-checked against the frozen record.
+    """
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    entries = manifest.get("selected_records") or []
+    if len(entries) != 217 or manifest.get("selected_match_count") != 217:
+        raise ValueError("market-calibrated shadow requires the pinned 217-match cohort")
+
+    raw = {
+        str(record.get("prediction_id")): record
+        for record in _load_prediction_records(root)
+    }
+    selected: list[dict[str, Any]] = []
+    for entry in entries:
+        prediction_id = str(entry.get("prediction_id") or "")
+        record = raw.get(prediction_id)
+        if record is None:
+            raise ValueError(f"pinned prediction is missing: {prediction_id}")
+        if _prediction_record_hash(record) != entry.get("record_sha256"):
+            raise ValueError(f"pinned prediction content changed: {prediction_id}")
+        if not _is_formally_eligible(record):
+            raise ValueError(f"pinned prediction is no longer formally eligible: {prediction_id}")
+
+        snapshot_ref = str(entry.get("input_snapshot_ref") or "")
+        snapshot_path = root / snapshot_ref
+        if not snapshot_ref or not snapshot_path.is_file():
+            raise ValueError(f"pinned input snapshot is missing: {prediction_id}")
+        snapshot = json.loads(snapshot_path.read_text(encoding="utf-8"))
+        snapshot_input = snapshot.get("input")
+        if not isinstance(snapshot_input, dict):
+            raise ValueError(f"pinned input snapshot has no input object: {prediction_id}")
+
+        semantic_hash = _sha256_bytes(_json_bytes(snapshot_input))
+        declared = {
+            str(value)
+            for value in (
+                snapshot.get("canonical_input_sha256"),
+                snapshot.get("canonical_model_input_sha256"),
+                record.get("input_sha256"),
+                record.get("canonical_model_input_sha256"),
+                (record.get("input_snapshot") or {}).get("canonical_input_sha256"),
+            )
+            if value
+        }
+        if declared != {semantic_hash}:
+            raise ValueError(
+                f"pinned semantic input digest mismatch: {prediction_id}; "
+                f"declared={sorted(declared)} computed={semantic_hash}"
+            )
+        selected.append(dict(record))
+
+    match_ids = {
+        str(record.get("match_id") or record.get("match_key") or "")
+        for record in selected
+    }
+    if len(match_ids) != len(selected):
+        raise ValueError("pinned cohort contains duplicate match identities")
+    return selected, manifest
 
 
 def _number(value: Any) -> float | None:
