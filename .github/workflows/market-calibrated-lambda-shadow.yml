@@ -1,0 +1,76 @@
+name: Market-calibrated lambda shadow
+
+on:
+  pull_request:
+    paths:
+      - "scripts/market_calibrated_lambda_shadow.py"
+      - "tests/test_market_calibrated_lambda_shadow.py"
+      - "tests/test_pred_trust_2_replay.py"
+      - "tests/test_pred_trust_3_replay.py"
+      - ".github/workflows/market-calibrated-lambda-shadow.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  falsification:
+    runs-on: ubuntu-latest
+    env:
+      SOURCE_COMMIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run focused tests
+        run: |
+          python -m pytest -q \
+            tests/test_market_calibrated_lambda_shadow.py \
+            tests/test_pred_trust_2_replay.py \
+            tests/test_pred_trust_3_replay.py
+
+      - name: Compile research scripts
+        run: |
+          python -m py_compile \
+            scripts/market_calibrated_lambda_shadow.py \
+            scripts/prediction_trust_2_replay.py \
+            scripts/prediction_trust_3_replay.py
+
+      - name: Run offline falsification
+        run: |
+          mkdir -p research-artifact
+          python scripts/market_calibrated_lambda_shadow.py \
+            --output research-artifact/summary.json \
+            > research-artifact/stdout.json
+
+      - name: Publish concise summary
+        shell: python
+        run: |
+          import json
+          from pathlib import Path
+          data = json.loads(Path("research-artifact/summary.json").read_text(encoding="utf-8"))
+          decision = data.get("decision") or {}
+          coverage = data.get("coverage") or {}
+          print("source_commit_sha=${{ env.SOURCE_COMMIT_SHA }}")
+          print(f"status={data.get('status')}")
+          print(f"verified_eligible_unique={coverage.get('verified_eligible_unique')}")
+          print(f"decision={decision.get('status')}")
+          print(f"promotion={decision.get('promotion', data.get('promotion'))}")
+          print(f"production_changes={decision.get('production_changes', data.get('production_changes'))}")
+
+      - name: Upload falsification artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: market-calibrated-lambda-shadow-${{ github.event.pull_request.number || github.run_id }}
+          path: research-artifact
+          if-no-files-found: error
+          retention-days: 14
