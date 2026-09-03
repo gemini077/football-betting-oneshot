@@ -161,6 +161,11 @@ def frozen_prediction(
         "totals": [{"goals": "2", "probability": 0.3}],
         "unique_score": unique_score,
         "score_top3": [unique_score, "1-1", "2-0"],
+        "score_distribution": [
+            {"score": unique_score, "probability": 0.155},
+            {"score": "1-1", "probability": 0.125},
+            {"score": "2-0", "probability": 0.100},
+        ],
         "market_intelligence_quality": "LIMITED",
         "data_grade": "C",
         "base_input_quality": "VERIFIED_MINIMUM",
@@ -193,20 +198,21 @@ def test_universe_three_produces_three_accountable_cards_and_frozen_fields(tmp_p
     assert card["prediction"]["btts"]["yes"] == 0.45
     assert card["prediction"]["score_top3"] == ["1-0", "1-1", "2-0"]
     html = (roots["output_root"] / "latest.html").read_text(encoding="utf-8")
-    assert "已预测" in html
-    assert "预测已冻结" not in html
-    assert "预测质量状态待确认 · 模型原始输出" in html
-    assert "1X2 · 主胜倾向" in html
-    assert "1–0" in html
-    assert "1–1 · 2–0" in html
-    assert "今日全部赛事" in html
+    assert "已形成预测" not in html
+    assert "赛前预测已锁定" not in html
+    assert "最高概率比分" in html
+    assert "1-0 15.5%" in html
+    assert "1X2 概率" in html
+    assert "BTTS 否 55.0%" in html
+    assert "查看详情" in html
     assert 'href="../matches/1001/"' in html
     assert "Prediction Universe" not in html
     assert "MISSING_RECENT_FORM" not in html
     assert "近期比赛数据不足" in html
-    assert "2026-08-12 12:05" in html
-    assert "Legacy 工作台" in html
-    assert html.index('data-prediction-kind="formal"') < html.index("Legacy 工作台")
+    assert 'data-prediction-kind="formal"' in html
+    assert 'class="status-badge"' not in html
+    assert "HEALTHY" not in html
+    assert 'class="dashboard-trust closed-beta-notice"' in html
     for copy in (
         "Closed Beta / \u6d4b\u8bd5\u9636\u6bb5",
         "\u9884\u6d4b\u4ec5\u4f9b\u6bd4\u8d5b\u5206\u6790\u4e0e\u7814\u7a76\u53c2\u8003\uff0c\u53ef\u80fd\u51fa\u9519\u3002",
@@ -214,23 +220,14 @@ def test_universe_three_produces_three_accountable_cards_and_frozen_fields(tmp_p
         "\u5982\u53c2\u4e0e\u5408\u6cd5\u5f69\u7968\u8d2d\u4e70\uff0c\u8bf7\u901a\u8fc7\u5408\u6cd5\u6b63\u89c4\u6e20\u9053\u5e76\u7406\u6027\u53c2\u4e0e\uff1b\u672a\u6210\u5e74\u4eba\u4e0d\u5f97\u8d2d\u4e70\u5f69\u7968\u3002",
     ):
         assert copy in html
-    assert 'class="health-alert closed-beta-notice"' in html
     for forbidden in (
         "今日新增正式样本",
         "试运行样本",
         "silent_missing_fixture = 0",
         "λ 主队",
         "λ 客队",
-        "1X2 概率",
-        "BTTS",
-        "BASE 输入",
         "冻结时距开赛",
         "等待赛果",
-        "模型偏大",
-        "模型偏小",
-        "集中",
-        "中等",
-        "分散",
     ):
         assert forbidden not in html
 
@@ -383,10 +380,11 @@ def test_dashboard_current_job_conflict_is_order_invariant_and_abstains(tmp_path
     assert card["current_job_resolution"]["row_count"] == 2
     for article in article_html:
         assert "prediction-panel" not in article
+        assert "probability-grid" not in article
         assert "1X2" not in article
         assert "系统首推比分" not in article
-        assert "当前比赛状态冲突" in article
-        assert "当前比赛状态冲突，暂不形成预测" in article
+        assert "本场状态待确认" in article
+        assert "本场状态待确认，暂不形成预测" in article
 
 
 def test_dashboard_duplicate_frozen_rows_fail_closed_without_double_serving(tmp_path):
@@ -431,7 +429,28 @@ def test_completed_filter_controls_historical_rows_and_real_count(tmp_path):
     assert 'data-result-count="2"' in html
     assert "historicalResults" in html
     assert "filter !== 'ALL' && filter !== 'RESULT'" in html
-    assert html.count('class="historical-result"') == 2
+    assert html.count('class="history-row"') == 2
+
+
+def test_dashboard_counterexamples_cover_zero_one_and_twenty_five_fixtures(tmp_path):
+    for count in (0, 1, 25):
+        fixture_rows = [fixture(index) for index in range(1, count + 1)]
+        if count == 1:
+            fixture_rows[0]["homeTeam"] = "A team name that is intentionally long for reflow"
+            fixture_rows[0]["awayTeam"] = "Another intentionally long away team name"
+        roots = make_roots(tmp_path / f"count-{count}", fixture_rows, [])
+
+        payload = build_dashboard(DATE, **roots)
+        html = (roots["output_root"] / "latest.html").read_text(encoding="utf-8")
+
+        assert payload["summary"]["card_count"] == count
+        assert html.count('<article class="fixture-row ') == count
+        assert 'class="status-badge"' not in html
+        if count == 0:
+            assert "\u4eca\u5929\u6ca1\u6709\u53ef\u5c55\u793a\u7684\u6bd4\u8d5b" in html
+        if count == 1:
+            assert "A team name that is intentionally long for reflow" in html
+            assert "Another intentionally long away team name" in html
 
 
 def test_universe_fourteen_keeps_every_fixture_without_prediction_artifact(tmp_path):
@@ -465,7 +484,7 @@ def test_dashboard_preserves_data_shortage_pending_and_missed_reasons(tmp_path):
     html = (roots["output_root"] / "latest.html").read_text(encoding="utf-8")
     assert "近期比赛数据不足" in html
     assert "MISSING_RECENT_FORM" not in html
-    assert "错过赛前窗口" in html
+    assert "未形成合法赛前预测" in html
 
 
 def test_dashboard_hides_retained_recommendation_for_insufficient_current_job(tmp_path):
@@ -533,8 +552,9 @@ def test_dashboard_hides_retained_recommendation_for_insufficient_current_job(tm
     assert insufficient["reason_text"]
     assert insufficient["prediction"] is None
     assert "prediction-panel" not in insufficient_html
+    assert "probability-grid" not in insufficient_html
     assert "1X2" not in insufficient_html
-    assert "\u7cfb\u7edf\u9996\u63a8\u6bd4\u5206" not in insufficient_html
+    assert "最高概率比分" not in insufficient_html
     assert insufficient["reason_text"] in insufficient_html
     assert frozen["prediction"]["primary_score"] == "1-0"
     frozen_html = re.search(
@@ -542,7 +562,8 @@ def test_dashboard_hides_retained_recommendation_for_insufficient_current_job(tm
         html,
         re.S,
     ).group(0)
-    assert "prediction-panel" in frozen_html
+    assert "probability-grid" in frozen_html
+    assert "最高概率比分" in frozen_html
     assert payload["prediction_quality_health"]["current_job_count"] == 2
     assert payload["prediction_quality_health"]["current_frozen_job_count"] == 1
     assert payload["prediction_quality_health"]["selected_record_count"] == 1
@@ -591,7 +612,7 @@ def test_pilot_exclusion_and_formal_sample_are_distinguished(tmp_path):
     assert cards[formal_id]["formal_prospective"] is True
     assert cards[formal_id]["evaluation"]["metrics"]["1x2_brier"] == 0.2
     assert cards[excluded_id]["status_label"] == "试运行预测"
-    assert cards[formal_id]["status_label"] == "已预测"
+    assert cards[formal_id]["status_label"] == "已形成预测"
 
     html = (roots["output_root"] / "latest.html").read_text(encoding="utf-8")
     pilot_match = re.search(r'<article[^>]*data-prediction-kind="pilot"[^>]*>.*?</article>', html, re.S)
@@ -600,15 +621,12 @@ def test_pilot_exclusion_and_formal_sample_are_distinguished(tmp_path):
     assert formal_match is not None
     pilot_html = pilot_match.group(0)
     formal_html = formal_match.group(0)
-    assert "试运行预测" in pilot_html
-    assert "不纳入正式验证" in pilot_html
-    assert "已预测" not in pilot_html
-    assert "预测已冻结" not in pilot_html
-    assert "已预测" in formal_html
-    assert "预测已冻结" not in formal_html
-    assert "1–0" in formal_html
-    assert "1–1 · 2–0" in formal_html
-    assert "1X2 · 主胜倾向" in formal_html
+    assert "试运行预测 · 仅供观察" in pilot_html
+    assert "已形成预测" not in pilot_html
+    assert "试运行预测" not in formal_html
+    assert "最高概率比分" in formal_html
+    assert "1-0 15.5%" in formal_html
+    assert "probability-grid" in formal_html
 
 
 def test_dashboard_is_read_only_projection_without_model_or_network_imports():
@@ -647,7 +665,7 @@ def test_noncanonical_snapshot_fields_do_not_become_market_lines(tmp_path):
     assert prediction["score_concentration"] is None
     assert prediction["market_summary"] == {}
     html = (roots["output_root"] / "latest.html").read_text(encoding="utf-8")
-    assert "1–0" in html
+    assert "1-0 20.0%" in html
     assert "Top5" not in html
     assert "AH ·" not in html
     assert "O/U ·" not in html
@@ -668,12 +686,9 @@ def test_canonical_market_summary_and_score_concentration_are_display_only(tmp_p
     payload = build_dashboard(DATE, **roots)
     prediction = payload["fixtures"][0]["prediction"]
     html = (roots["output_root"] / "latest.html").read_text(encoding="utf-8")
-
-    assert prediction["score_concentration"] == "集中度高"
-    assert prediction["market_summary"]["asian_handicap"]["line"] == "-0.75"
-    assert prediction["market_summary"]["total_line"]["line"] == "2.25"
-    assert "AH · 主 -0.75" in html
-    assert "O/U · 2.25" in html
+    assert "AH · 主 -0.75" not in html
+    assert "O/U · 2.25" not in html
+    assert "1X2 概率" in html
 
 
 def _serving_prediction(index: int, score: str) -> dict:
@@ -801,12 +816,10 @@ def test_dashboard_separates_system_runtime_and_current_prediction_quality_alert
     assert payload["prediction_quality_health"]["status"] == "ALERT"
     assert payload["prediction_quality_health"]["scope"] == "current_serving"
     assert payload["prediction_quality_health"]["business_date"] == DATE
-    assert "\u7cfb\u7edf\u8fd0\u884c \u00b7 \u6b63\u5e38" in html
-    assert "\u9884\u6d4b\u8d28\u91cf\u5f02\u5e38" in html
-    assert "\u4eca\u65e5\u6bd4\u5206\u9884\u6d4b\u51fa\u73b0\u5f02\u5e38\u96c6\u4e2d\uff0c\u5f53\u524d\u9884\u6d4b\u4ecd\u4fdd\u7559\u4f9b\u89c2\u5bdf\u3002" in html
+    assert "系统运行" not in html
+    assert "预测质量降级，仅供观察" in html
+    assert "比分概率保留原始模型输出，不作为确定答案。" in html
     assert "系统首推比分" not in html
-    assert "模型原始比分 · 当前不作为推荐" in html
-    assert "当前比分推荐能力处于质量降级状态" in html
 
 
 def test_dashboard_uses_normal_exact_score_copy_only_for_healthy_matched_current_serving(tmp_path):
@@ -832,9 +845,9 @@ def test_dashboard_uses_normal_exact_score_copy_only_for_healthy_matched_current
     assert payload["prediction_quality_health"]["status"] == "HEALTHY"
     assert payload["prediction_quality_health"]["available"] is True
     assert payload["prediction_quality_health"]["provenance_status"] == "MATCHED"
-    assert "系统首推比分" in html
-    assert "模型原始比分 · 当前不作为推荐" not in html
-    assert "预测质量状态待确认 · 模型原始输出" not in html
+    assert "预测质量降级" not in html
+    assert 'class="quality-warning"' not in html
+    assert "最高概率比分" in html
 
 
 def test_dashboard_does_not_use_mismatched_health_watch_as_current_quality(tmp_path):
@@ -860,9 +873,8 @@ def test_dashboard_does_not_use_mismatched_health_watch_as_current_quality(tmp_p
     assert payload["system_runtime_health"]["status"] == "HEALTHY"
     assert payload["prediction_quality_health"]["status"] == "HEALTHY"
     assert payload["prediction_quality_health"]["provenance_status"] == "MISMATCHED"
-    assert "\u9884\u6d4b\u8d28\u91cf\u5f02\u5e38" not in html
-    assert "\u4eca\u65e5\u6bd4\u5206\u9884\u6d4b\u51fa\u73b0\u5f02\u5e38\u96c6\u4e2d" not in html
-    assert "预测质量状态待确认 · 模型原始输出" in html
+    assert "预测质量降级" not in html
+    assert "质量待确认，不作为正常推荐" in html
 
 
 def test_dashboard_rejects_health_watch_from_previous_cycle_even_on_same_business_date(tmp_path):
@@ -889,7 +901,7 @@ def test_dashboard_rejects_health_watch_from_previous_cycle_even_on_same_busines
     assert payload["prediction_quality_health"]["provenance_status"] == "MISMATCHED"
     assert payload["prediction_quality_health"]["runtime_cycle_finished_at"] == runtime["finished_at"]
     html = (roots["output_root"] / "latest.html").read_text(encoding="utf-8")
-    assert "预测质量状态待确认 · 模型原始输出" in html
+    assert "质量待确认，不作为正常推荐" in html
 
 
 def test_abnormal_runtime_shows_warning_without_normal_kpi_grid(tmp_path):
@@ -903,6 +915,6 @@ def test_abnormal_runtime_shows_warning_without_normal_kpi_grid(tmp_path):
     build_dashboard(DATE, **roots)
     html = (roots["output_root"] / "latest.html").read_text(encoding="utf-8")
 
-    assert "系统运行 · 失败" in html
-    assert "base_prediction" in html
+    assert "当前数据更新异常" in html
+    assert "base_prediction" not in html
     assert "预测已冻结" not in html

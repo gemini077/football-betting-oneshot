@@ -129,7 +129,7 @@ def test_build_is_a_selective_read_only_projection(tmp_path, monkeypatch):
         "\u5982\u53c2\u4e0e\u5408\u6cd5\u5f69\u7968\u8d2d\u4e70\uff0c\u8bf7\u901a\u8fc7\u5408\u6cd5\u6b63\u89c4\u6e20\u9053\u5e76\u7406\u6027\u53c2\u4e0e\uff1b\u672a\u6210\u5e74\u4eba\u4e0d\u5f97\u8d2d\u4e70\u5f69\u7968\u3002",
     ):
         assert copy in detail_html
-    assert 'class="status-explanation closed-beta-notice"' in detail_html
+    assert 'class="closed-beta closed-beta-notice"' in detail_html
     assert not (output / "match_workspace/old/raw.json").exists()
     assert not (output / "postmatch_dashboard/old/raw.json").exists()
     assert not (output / "analysis_reports/old/raw.json").exists()
@@ -197,8 +197,6 @@ def test_build_propagates_current_prediction_quality_warning_to_linked_detail(tm
     build_public_site.build(tmp_path / "site")
 
     detail = (tmp_path / "site" / "matches/1001/index.html").read_text(encoding="utf-8")
-    assert "\u9884\u6d4b\u8d28\u91cf\u5f02\u5e38" in detail
-    assert "\u4eca\u65e5\u6bd4\u5206\u9884\u6d4b\u51fa\u73b0\u5f02\u5e38\u96c6\u4e2d\uff0c\u5f53\u524d\u9884\u6d4b\u4ecd\u4fdd\u7559\u4f9b\u89c2\u5bdf\u3002" in detail
-    assert "模型原始比分 · 当前不作为推荐" in detail
-    assert "当前比分推荐能力处于质量降级状态" in detail
+    assert "\u9884\u6d4b\u8d28\u91cf\u964d\u7ea7\uff0c\u4ec5\u4f9b\u89c2\u5bdf" in detail
+    assert "\u5f53\u524d\u5206\u5e03\u4ecd\u4fdd\u7559\uff0c\u4f46\u4e0d\u4f5c\u4e3a\u6b63\u5e38\u63a8\u8350\u3002" in detail
     assert "首推比分" not in detail
