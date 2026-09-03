@@ -26,6 +26,15 @@ MIN_ROWS_PER_TEAM = 10
 MIN_SETTLED_USABLE = 50
 
 
+def _display_path(path: Path) -> str:
+    """Serialize a path without requiring temporary fixtures under ROOT."""
+    resolved = path.resolve()
+    try:
+        return resolved.relative_to(ROOT.resolve()).as_posix()
+    except ValueError:
+        return resolved.as_posix()
+
+
 def _parse_time(value: Any) -> datetime | None:
     text = str(value or "").strip()
     if not text:
@@ -137,7 +146,7 @@ def _load_reviews(root: Path) -> dict[str, dict[str, Any]]:
         score = str(result.get("score_90m") or payload.get("实际90分钟比分") or "").strip()
         if prediction_id and "-" in score:
             reviews[prediction_id] = {
-                "path": str(path.relative_to(ROOT)),
+                "path": _display_path(path),
                 "score_90m": score,
                 "generated_at": payload.get("generated_at"),
             }
@@ -178,7 +187,7 @@ def run(
             )
             provider_counts[str(payload.get("source_provider") or "UNKNOWN")] += 1
         evidence_records[prediction_id] = {
-            "path": str(path.relative_to(ROOT)),
+            "path": _display_path(path),
             "match_id": str(payload.get("match_id") or ""),
             "match_key": str(payload.get("match_key") or ""),
             "kickoff_at": payload.get("kickoff_at"),
@@ -206,17 +215,23 @@ def run(
         else "STRUCTURAL_EVIDENCE_SAMPLE_INSUFFICIENT"
     )
 
+    all_prospective = {
+        "football_evidence_files": len(evidence_records),
+        "usable_structural_evidence": len(usable_ids),
+        "verified_postmatch_reviews": len(settled_ids),
+        "settled_with_any_evidence": len(settled_with_any_evidence),
+        "settled_with_usable_structural_evidence": len(settled_usable),
+    }
+
     return {
         "schema_version": "structural_football_evidence_coverage.v1",
         "status": "READY_FOR_ACCEPTANCE",
         "decision": decision,
         "minimum_settled_usable_required": MIN_SETTLED_USABLE,
         "coverage": {
-            "football_evidence_files": len(evidence_records),
-            "usable_structural_evidence": len(usable_ids),
-            "verified_postmatch_reviews": len(settled_ids),
-            "settled_with_any_evidence": len(settled_with_any_evidence),
-            "settled_with_usable_structural_evidence": len(settled_usable),
+            **all_prospective,
+            "all_prospective": all_prospective,
+            "gate_scope": "ALL_PROSPECTIVE_EVIDENCE_AND_SETTLED_REVIEWS",
             "pinned_unique": len(pinned_ids),
             "pinned_with_any_evidence": len(pinned_ids & set(evidence_records)),
             "pinned_verified": len(pinned_verified_ids),
@@ -246,15 +261,80 @@ def run(
     }
 
 
+def build_report(result: dict[str, Any]) -> str:
+    """Build a concise, recoverable report from one audit result."""
+    coverage = (
+        result.get("coverage")
+        if isinstance(result.get("coverage"), dict)
+        else {}
+    )
+    all_prospective = (
+        coverage.get("all_prospective")
+        if isinstance(coverage.get("all_prospective"), dict)
+        else coverage
+    )
+    integrity = (
+        result.get("integrity_contract")
+        if isinstance(result.get("integrity_contract"), dict)
+        else {}
+    )
+    lines = [
+        "# Structural football evidence coverage audit",
+        "",
+        f"- decision: `{result.get('decision')}`",
+        f"- minimum settled usable required: `{result.get('minimum_settled_usable_required')}`",
+        "",
+        "## ALL_PROSPECTIVE",
+        "",
+        "The readiness gate uses the full current prospective evidence set and settled review set; it is not limited to the pinned cohort.",
+    ]
+    for key in (
+        "football_evidence_files",
+        "usable_structural_evidence",
+        "verified_postmatch_reviews",
+        "settled_with_any_evidence",
+        "settled_with_usable_structural_evidence",
+    ):
+        lines.append(f"- {key}: `{all_prospective.get(key)}`")
+
+    lines.extend(
+        [
+            "",
+            "## PINNED_COHORT_ONLY",
+            "",
+            f"- pinned_unique: `{coverage.get('pinned_unique')}`",
+            f"- pinned_with_any_evidence: `{coverage.get('pinned_with_any_evidence')}`",
+            f"- pinned_verified: `{coverage.get('pinned_verified')}`",
+            f"- pinned_verified_with_usable_evidence: `{coverage.get('pinned_verified_with_usable_evidence')}`",
+            "",
+            "## Prematch evidence integrity",
+            "",
+            f"- contract: `{json.dumps(integrity, ensure_ascii=False, sort_keys=True)}`",
+            f"- failure_reasons: `{json.dumps(result.get('failure_reasons', {}), ensure_ascii=False, sort_keys=True)}`",
+            "",
+            "## Controls",
+            "",
+            f"- production_changes: `{result.get('production_changes')}`",
+            f"- promotion: `{result.get('promotion')}`",
+            f"- next_step: {result.get('next_step')}",
+        ]
+    )
+    return "\n".join(lines) + "\n"
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path)
+    parser.add_argument("--report", type=Path)
     args = parser.parse_args()
     result = run()
     text = json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(text, encoding="utf-8")
+    if args.report:
+        args.report.parent.mkdir(parents=True, exist_ok=True)
+        args.report.write_text(build_report(result), encoding="utf-8")
     print(text)
     return 0
 

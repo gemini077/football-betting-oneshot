@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from scripts.structural_football_evidence_coverage import run
+from scripts.structural_football_evidence_coverage import build_report, run
 
 
 def _write_json(path: Path, value):
@@ -65,6 +65,11 @@ def test_coverage_requires_true_settled_intersection_and_prematch_evidence(tmp_p
     # Has good evidence, but no result -> must not enter settled usable.
     _write_json(evidence_root / "P-pending.json", _evidence("P-pending"))
 
+    # This settled, usable record is outside the old pinned manifest.  The
+    # current prospective gate must still count it.
+    _write_json(evidence_root / "P-outside-pinned.json", _evidence("P-outside-pinned"))
+    _write_json(review_root / "P-outside-pinned.json", _review("P-outside-pinned"))
+
     manifest = {
         "selected_records": [{"prediction_id": prediction_id} for prediction_id in good_ids],
         "verified_prediction_ids": good_ids,
@@ -79,8 +84,10 @@ def test_coverage_requires_true_settled_intersection_and_prematch_evidence(tmp_p
     )
 
     assert result["decision"] == "STRUCTURAL_OFFLINE_EXPERIMENT_READY"
-    assert result["coverage"]["settled_with_usable_structural_evidence"] == 50
-    assert result["coverage"]["settled_with_any_evidence"] == 51
+    assert result["coverage"]["settled_with_usable_structural_evidence"] == 51
+    assert result["coverage"]["settled_with_any_evidence"] == 52
+    assert result["coverage"]["all_prospective"]["settled_with_usable_structural_evidence"] == 51
+    assert result["coverage"]["pinned_verified_with_usable_evidence"] == 50
     assert result["failure_reasons"]["EVIDENCE_NOT_PREMATCH"] == 1
     assert result["integrity_contract"]["postmatch_result_used_for_generation"] is False
 
@@ -109,3 +116,7 @@ def test_short_history_does_not_qualify(tmp_path):
     assert result["coverage"]["settled_with_usable_structural_evidence"] == 0
     assert result["failure_reasons"]["HOME_HISTORY_TOO_SHORT"] == 1
     assert result["failure_reasons"]["AWAY_HISTORY_TOO_SHORT"] == 1
+    report = build_report(result)
+    assert "STRUCTURAL_EVIDENCE_SAMPLE_INSUFFICIENT" in report
+    assert "ALL_PROSPECTIVE" in report
+    assert "PINNED_COHORT_ONLY" in report
