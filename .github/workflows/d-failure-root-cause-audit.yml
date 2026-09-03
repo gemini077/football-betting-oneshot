@@ -1,0 +1,43 @@
+name: D failure root-cause audit
+
+on:
+  pull_request:
+    paths:
+      - "scripts/d_failure_root_cause_audit.py"
+      - ".github/workflows/d-failure-root-cause-audit.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Compile
+        run: python -m py_compile scripts/d_failure_root_cause_audit.py
+      - name: Run read-only audit
+        run: |
+          mkdir -p audit-artifact
+          python scripts/d_failure_root_cause_audit.py > audit-artifact/summary.json
+      - name: Publish key facts
+        shell: python
+        run: |
+          import json
+          from pathlib import Path
+          d=json.loads(Path("audit-artifact/summary.json").read_text(encoding="utf-8"))
+          r=d["result_integrity"]
+          m=d["market_surface"]
+          print("all_results", r["all_verified_result_artifacts"])
+          print("cohort_results", r["pred_trust_verified_cohort"])
+          print("market_surface", m)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: d-failure-root-cause-audit
+          path: audit-artifact/summary.json
+          if-no-files-found: error
+          retention-days: 14
