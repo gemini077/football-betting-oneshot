@@ -1,0 +1,103 @@
+name: Recent-form competition scope offline audit
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/recent-form-competition-scope-audit.yml"
+      - "scripts/recent_form_competition_scope_audit.py"
+      - "tests/test_recent_form_competition_scope_audit.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the exact dispatched or pull-request ref
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install project test dependencies
+        run: python -m pip install -r requirements.txt
+
+      - name: Run focused audit tests
+        run: python -m pytest tests/test_recent_form_competition_scope_audit.py -q
+
+      - name: Compile the research audit
+        run: python -m py_compile scripts/recent_form_competition_scope_audit.py
+
+      - name: Run the real frozen 61-match audit
+        run: python scripts/recent_form_competition_scope_audit.py --output-dir audit-artifact
+
+      - name: Verify the preregistered artifact contract
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          artifact = Path("audit-artifact")
+          summary = json.loads((artifact / "summary.json").read_text(encoding="utf-8"))
+          assert (artifact / "report.md").is_file()
+          assert summary["milestone"] == "RECENT-FORM-COMPETITION-SCOPE-OFFLINE-1"
+          cohort = summary["cohort"]
+          assert cohort["expected_unique_matches"] == 61
+          assert cohort["selected_latest_legal_unique_matches"] == 61
+          assert cohort["observed_unique_matches"] == 61
+          assert cohort["one_match_one_observation"] is True
+          assert cohort["identity_match_to_pr163"] is True
+          assert cohort["selection_used_actual_outcome"] is False
+          assert summary["source"]["postmatch_reviews_used"] is False
+          assert summary["source"]["provider_added"] is False
+          assert summary["source"]["target_outcome_used_for_scope_or_eligibility"] is False
+          assert summary["controls"]["research_only"] is True
+          assert summary["controls"]["production_changes"] == "NO"
+          assert summary["controls"]["champion_changes"] == "NO"
+          assert summary["controls"]["frozen_prediction_changes"] == "NO"
+          assert summary["controls"]["counterfactual_name"] == "FRIENDLY_EXCLUDED"
+          assert summary["decision"] in {
+              "STRONG_SCOPE_SURVIVOR",
+              "SCOPE_SURVIVOR",
+              "INCONCLUSIVE",
+              "REJECTED",
+              "COMPETITION_SCOPE_SAMPLE_INSUFFICIENT",
+              "FAIL_CLOSED",
+          }
+          assert "frozen_recent_form_reconstruction" in summary
+          assert "competition_join" in summary
+          assert "outcome_blind_eligibility" in summary
+          assert "competition_universe" in summary
+          assert "chronology_thirds" in summary
+          if summary["decision"] in {
+              "FAIL_CLOSED",
+              "COMPETITION_SCOPE_SAMPLE_INSUFFICIENT",
+          }:
+              assert summary["controls"]["counterfactual_count"] == 0
+              assert summary["settlement_gate"]["actual_outcome_read"] is False
+          print(json.dumps({
+              "decision": summary["decision"],
+              "status": summary["status"],
+              "exact_reconstruction_match_count": summary["frozen_recent_form_reconstruction"]["exact_reconstruction_match_count"],
+              "eligible_unique_matches": summary["outcome_blind_eligibility"]["eligible_unique_matches"],
+              "component_rows_total": summary["competition_join"]["component_rows_total"],
+              "friendly_component_rows": summary["competition_join"]["club_friendly_component_rows"],
+          }, ensure_ascii=False, sort_keys=True))
+          PY
+
+      - name: Upload research-only audit artifact
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: recent-form-competition-scope-offline-${{ github.event.pull_request.number || github.run_id }}
+          path: audit-artifact
+          if-no-files-found: error
+          retention-days: 14
