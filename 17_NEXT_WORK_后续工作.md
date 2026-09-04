@@ -21,15 +21,13 @@
 
 `预测质量 → prospective proof/trust → serving/product → public-launch gates`
 
-Trust 不替代命中率/概率质量；命中率也不能脱离 coverage、baseline、proper score、sample/uncertainty 单独宣传。
+Trust 不替代命中率/概率质量；命中率也不能脱离 coverage、baseline、proper score、sample/uncertainty、forecast horizon 单独宣传。
 
 ---
 
 # 2. Current Bounded Execution
 
-GitHub Issue #180：
-
-`EXACT-SCORE-REEP-IDENTITY-BRIDGE-PREFLIGHT-1`
+GitHub Issue #180：`EXACT-SCORE-REEP-IDENTITY-BRIDGE-PREFLIGHT-1`
 
 Lane：`Data / Identity / Rights`。
 
@@ -63,15 +61,18 @@ Accepted：`56 verified unique / PROMISING_NOT_ESTABLISHED / shadow-only`。
 
 优先只读回答：
 
-1. current frozen full-time joint score state 已经能数学一致推导哪些玩法？
-2. current 90m result truth 已能合法结算哪些玩法？
-3. current unique prospective cohort 上，各玩法 full-coverage hit rate 是多少？
+1. current frozen FT joint score state 已经能数学一致推导哪些玩法？
+2. current result truth 已能合法结算哪些玩法？
+3. current unique prospective cohort 上，各玩法 full-coverage hit rate / proper score 是多少？
 4. 若已有 selective serving，各玩法 served hit rate / coverage 是多少？
-5. same-market simple/market baseline 已有哪些？
-6. 1X2 / O-U / BTTS / Exact Score 当前谁最强、谁最弱？
-7. 中国竞彩胜平负 / 让球胜平负 / 比分桶 / 0–7+总进球 / 半全场中，哪些只是缺 projection/evaluation，哪些缺 prematch line/truth？
-8. HTFT 是否确实缺 first-half score/outcome truth？
-9. 哪些 failure 是模型本身，哪些只是 evaluation/product/data gap？
+5. same-market strong/simple baseline 已有哪些？
+6. actual freeze lead-time 分布怎样，T-24h / T-6h / T-60m 等是否可公平分层评价？
+7. 1X2 Home/Draw/Away predicted mix、confusion matrix、per-class recall、Draw recall 是否健康？
+8. 中国竞彩胜平负 / 让球胜平负 / 比分桶 / 0–7+总进球 / 半全场中，哪些只是缺 projection/evaluation，哪些缺 prematch line/truth？
+9. HTFT 是否确实缺 first-half score/outcome truth？
+10. 当前有哪些 xG/阵容/球员/伤停等 rich-feature surface 可做 paired incremental-value audit？
+11. strongest / weakest market、competition、horizon 分别是谁？
+12. 哪些 failure 是模型本身，哪些只是 evaluation/product/data/rights gap？
 
 目的：先得到一张真实的“多玩法成绩与缺口地图”，再决定下一模型路线。
 
@@ -79,7 +80,7 @@ Accepted：`56 verified unique / PROMISING_NOT_ESTABLISHED / shadow-only`。
 
 排序：`HIGH`。
 
-低成本验证真实用户看什么玩法、能否理解概率/abstain、是否回看赛果、是否重复使用。
+低成本验证真实用户看什么玩法、能否理解 probability / strongest view / abstain、是否回看赛果、是否重复使用。
 
 ## Candidate C — Data Rights / Source Commercial Inventory
 
@@ -93,7 +94,7 @@ Accepted：`56 verified unique / PROMISING_NOT_ESTABLISHED / shadow-only`。
 
 排序：`NOT BEFORE GAP AUDIT BY DEFAULT`。
 
-只有 per-market gap audit 证明具体 failure mode 后，才研究 Exact Score、handicap、goals、HTFT、market-specific head、xG/lineup 等哪条最值得做。
+只有 Candidate A 证明具体 per-market failure 后，才研究 Exact Score、handicap、goals、HTFT、market-specific head、xG/lineup/player 等哪条最值得做。
 
 最终仍由：
 
@@ -133,6 +134,9 @@ O/U / BTTS / Asian/common handicap / team totals / winning margin / double chanc
 - Trust Center UI 大改而没有逐玩法 scorecard；
 - HTFT 用 90m lambda/2；
 - 只为了“提高总命中率”加入 easy-market mix；
+- T-24h 与 closing market 不公平比较；
+- overall 1X2 accuracy 不查 Draw/class collapse；
+- 因“高级”直接接 xG/球员/GNN；
 - generic news/live-score/community expansion；
 - EV/stake/portfolio。
 
