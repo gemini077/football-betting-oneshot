@@ -9,24 +9,19 @@
 
 ---
 
-# 1. Product-Level Roadmap Rebase
+# 1. Product-Level Direction
 
-状态：`RESEARCH COMPLETE / STRATEGIC REBASE LOCKED`
+状态：`MULTI-MARKET PREDICTION QUALITY REBASE LOCKED`
 
-旧串行路线 `data → model → analysis → product` 不再作为默认执行顺序。
+当前总门=`PUBLIC-LAUNCH-TRUST`。
 
-当前 Program：`PUBLIC-LAUNCH TRUST`。
+当前技术/产品发动机=`MULTI-MARKET-PREDICTION-QUALITY`。
 
-核心新增约束：
+核心关系：
 
-- serving 按 `Market × Competition Support × Evidence Quality × Prediction Quality` 分层；
-- user confidence 必须有 calibration / reliability / sample evidence；
-- Trust Center 不只显示 hit rate；
-- Closed Beta 在模型完美前开始，但先补最小 measurement；
-- Distribution / Business Model 独立 discovery，不复制 VIP/红单逻辑；
-- Advanced Model R&D 只由 measured failure mode 触发。
+`预测质量 → prospective proof/trust → serving/product → public-launch gates`
 
-详细路线见 `16_ROADMAP_项目路线图.md` 与 Memory-Hub Roadmap Rebase research asset。
+Trust 不替代命中率/概率质量；命中率也不能脱离 coverage、baseline、proper score、sample/uncertainty 单独宣传。
 
 ---
 
@@ -38,13 +33,11 @@ GitHub Issue #180：
 
 Lane：`Data / Identity / Rights`。
 
-这是一个 bounded preflight，不是 whole-product ACTIVE tree。
-
 目标：验证 current Reep v1 能否 deterministic 地桥接 FBOS 中文球队与 The Odds API 英文球队；只有身份成立后才 bounded probe `correct_score`。
 
 边界：future-only / exact fail-closed / no fuzzy / no LLM translation / no bulk manual alias / no model or serving change / research-only PR。
 
-**#180 完成后必须回 Project Gate；无论 PASS/FAIL，都不得自动创建下一条 identity/provider Issue。**
+**#180 不因 Roadmap correction 取消。完成后无论 PASS/FAIL，都必须回 Project Gate，不自动继续 identity/provider 子树。**
 
 ---
 
@@ -62,57 +55,73 @@ Accepted：`56 verified unique / PROMISING_NOT_ESTABLISHED / shadow-only`。
 
 ---
 
-# 4. Post-#180 Priority Gate — 候选排序，不是预授权任务
+# 4. Post-#180 Highest-Value Candidate — 不是预授权任务
 
-#180 验收后优先重新比较以下路线：
+## Candidate A — MULTI-MARKET-PREDICTION-COVERAGE-AND-EVALUATION-GAP-AUDIT
 
-## Candidate A — Segmented Serving / Trust Surface Gap Audit
+当前研究排序：`HIGHEST`。
 
-当前研究排序：`HIGH`。
+优先只读回答：
 
-先只读核对：
+1. current frozen full-time joint score state 已经能数学一致推导哪些玩法？
+2. current 90m result truth 已能合法结算哪些玩法？
+3. current unique prospective cohort 上，各玩法 full-coverage hit rate 是多少？
+4. 若已有 selective serving，各玩法 served hit rate / coverage 是多少？
+5. same-market simple/market baseline 已有哪些？
+6. 1X2 / O-U / BTTS / Exact Score 当前谁最强、谁最弱？
+7. 中国竞彩胜平负 / 让球胜平负 / 比分桶 / 0–7+总进球 / 半全场中，哪些只是缺 projection/evaluation，哪些缺 prematch line/truth？
+8. HTFT 是否确实缺 first-half score/outcome truth？
+9. 哪些 failure 是模型本身，哪些只是 evaluation/product/data gap？
 
-- 1X2 / O-U / BTTS / Exact Score 各自已有何种 prospective quality truth；
-- 当前 competition universe 能否分成 SUPPORTED / LIMITED / EXPERIMENTAL；
-- 当前页面已经展示哪些 degraded/abstain/evidence states；
-- 哪些 confidence 仍不可验证；
-- Trust Center 最小数据面是否已经足够。
-
-目的：先定义真正需要工程实现的最小 trust surface，避免再凭感觉改 UI。
+目的：先得到一张真实的“多玩法成绩与缺口地图”，再决定下一模型路线。
 
 ## Candidate B — Closed Beta Measurement Minimum
 
-当前研究排序：`HIGH`。
+排序：`HIGH`。
 
-在不引入重账户系统的前提下，设计最低成本的真实用户测量/反馈机制。
+低成本验证真实用户看什么玩法、能否理解概率/abstain、是否回看赛果、是否重复使用。
 
 ## Candidate C — Data Rights / Source Commercial Inventory
 
-当前研究排序：`HIGH BEFORE PUBLIC SCALE`。
-
-尤其要独立确认 production-critical Nowscore 与所有公开展示/缓存/衍生数据边界。
+排序：`HIGH BEFORE PUBLIC SCALE`。
 
 ## Candidate D — Operations Release-Readiness Audit
 
-当前研究排序：`HIGH BEFORE PUBLIC LAUNCH`。
+排序：`HIGH BEFORE PUBLIC LAUNCH`。
 
-核无人值守 freshness / silent missing / settlement / fail-safe / rollback / monitoring。
+## Candidate E — New Model / New Market Implementation
 
-## Candidate E — New Model Research
+排序：`NOT BEFORE GAP AUDIT BY DEFAULT`。
 
-当前研究排序：`NOT DEFAULT`。
+只有 per-market gap audit 证明具体 failure mode 后，才研究 Exact Score、handicap、goals、HTFT、market-specific head、xG/lineup 等哪条最值得做。
 
-只有新的 serving matrix / prospective evidence 暴露明确 failure mode 后才进入。
-
-最终只能由：
+最终仍由：
 
 `#180 accepted truth → Canonical Evolution Gate → Research-Backed route comparison → highest product information/value`
 
-选出唯一下一项。
+选择唯一下一项。
 
 ---
 
-# 5. Explicitly Not Next By Default
+# 5. Current Market Priority
+
+## Tier A — 中国竞彩
+
+- FT 1X2 / 胜平负
+- 让球胜平负
+- 比分 / official score buckets
+- 总进球 0–7+
+- 半全场（先过 first-half truth gate）
+
+## Tier B
+
+O/U / BTTS / Asian/common handicap / team totals / winning margin / double chance 等。
+
+禁止为了“玩法多”直接实现；先有 truth/evaluation。
+
+---
+
+# 6. Explicitly Not Next By Default
 
 - Challenger E；
 - Dixon-Coles/rho tuning；
@@ -121,14 +130,15 @@ Accepted：`56 verified unique / PROMISING_NOT_ESTABLISHED / shadow-only`。
 - friendlies weighting；
 - provider hopping；
 - bulk alias authoring；
-- generic news/live-score/community feature expansion；
-- EV/stake/portfolio；
-- uncalibrated high/medium/low confidence；
-- 仅为了“看起来完整”造更多玩法。
+- Trust Center UI 大改而没有逐玩法 scorecard；
+- HTFT 用 90m lambda/2；
+- 只为了“提高总命中率”加入 easy-market mix；
+- generic news/live-score/community expansion；
+- EV/stake/portfolio。
 
 ---
 
-# 6. Completion Rule
+# 7. Completion Rule
 
 Founder 回复“已完成”时：
 
@@ -138,7 +148,7 @@ Founder 回复“已完成”时：
 
 ---
 
-# 7. Historical Pointer
+# 8. Historical Pointer
 
 旧 Next Work 从 Git history、Issues/PR/Actions、`docs/*` evidence 与 Memory-Hub 恢复。
 
