@@ -17,8 +17,9 @@
   ],
   "current_program": {
     "name": "PUBLIC-LAUNCH-TRUST",
-    "status": "PRODUCT_ROADMAP_REBASE_IN_PROGRESS",
-    "note": "Prediction Trust remains the largest technical P0, but the product roadmap is no longer a model-first serial pipeline."
+    "status": "PRODUCT_ROADMAP_REBASE_LOCKED",
+    "maturity": "LEVEL_4A_ENGINEERING_CLOSED_BETA_READY_TRUST_BETA_MEASUREMENT_PREP",
+    "note": "Prediction Trust remains the largest technical P0, but product progress is governed by segmented trust and parallel launch gates."
   },
   "current_execution": {
     "issue": 180,
@@ -36,13 +37,27 @@
       "auto_promote": false
     }
   },
+  "segmented_serving_contract": {
+    "dimensions": [
+      "market",
+      "competition_support",
+      "evidence_quality",
+      "prediction_quality"
+    ],
+    "markets": ["1X2", "O_U", "BTTS", "EXACT_SCORE"],
+    "competition_support": ["SUPPORTED", "LIMITED", "EXPERIMENTAL", "UNSUPPORTED"],
+    "evidence_quality": ["FULL", "PARTIAL", "INSUFFICIENT"],
+    "serving_state": ["NORMAL", "CAUTION", "DEGRADED", "ABSTAIN"]
+  },
   "product_lanes": [
     "prediction_trust",
-    "user_trust_product",
+    "user_trust_decision_product",
+    "trust_center_public_track_record",
     "data_identity_rights",
     "operations_reliability",
     "closed_beta_user_validation",
     "compliance_commercial",
+    "distribution_business_model",
     "advanced_model_r_and_d_supporting"
   ],
   "established_capabilities": {
@@ -51,10 +66,21 @@
     "verified_90m_settlement": "active",
     "prospective_evaluation": "active",
     "homepage_match_detail": "active",
+    "exact_score_degraded_serving": "active",
+    "closed_beta_boundary_copy": "active",
+    "single_match_postmatch_verification": "active",
     "automation_pages": "active",
     "champion_prediction_engine": "active",
     "challenger_c": "shadow_only"
   },
+  "current_product_gaps": [
+    "empirically_defensible_user_confidence",
+    "per_market_per_competition_serving_matrix",
+    "aggregate_trust_center",
+    "decision_queue_prioritization_by_trust_not_only_kickoff",
+    "closed_beta_minimum_measurement",
+    "public_launch_rights_operations_compliance_closure"
+  ],
   "downstream_or_optional_capabilities": {
     "betting_decision_layer": "GATED_DOWNSTREAM_NOT_CURRENT_AUTHORITY",
     "live_odds_bridge": "OPTIONAL_LEGACY_CAPABILITY_NOT_PUBLIC_LAUNCH_CORE",
@@ -73,6 +99,8 @@
     "never rewrite legal frozen prematch truth",
     "no postmatch leakage into prematch generation",
     "technical accessibility != commercial reuse permission",
+    "confidence must be empirically defensible or omitted",
+    "a degraded market must not contaminate unrelated market serving truth",
     "degraded/insufficient/abstain must not be presented as normal confidence",
     "bounded task completion returns to project-level gate",
     "do not revive rejected model routes without new applicability evidence",
