@@ -1,578 +1,228 @@
 # 19_DECISIONS_关键决策.md
 
-最后更新：2026-09-01
-角色：记录不能因换对话 / 换 Codex 而重复推翻的关键决定。若新证据足以改变决定，必须新增 superseding decision，不得静默改历史。
-
-# D-041 - PRED-AVAILABILITY-NOWSCORE-IDENTITY-GATE-1-RUNTIME-CORRECTION-1
-
-Status: READY_FOR_INDEPENDENT_ACCEPTANCE
-Decision: Supersede only the page-provider-ID semantics introduced by PR #143.
-Ordinary explicit Nowscore IDs return to the pre-#143 verification contract:
-team identity/name, kickoff, and existing binding safety. A missing, zero, or
-unparsable `hide_scheduleId` is `PAGE_PROVIDER_ID_UNAVAILABLE`, an
-observability state rather than an ordinary false-negative gate.
-
-The trusted JC path remains gated by verified
-`nowscore_public_jc_sales` provenance, exact requested/fixture/evidence ID
-equality, exact match/confidence, complete sales/date provenance, kickoff, and
-orientation/ambiguity safety. A positive equal page ID corroborates; a
-positive unequal page ID fails closed with `PROVIDER_ID_MISMATCH`; unavailable
-page IDs do not alone reject a trusted fixture. BASE must persist the full
-Nowscore rejection context, including nested and flattened verification /
-provenance reasons and page-ID availability state.
-
-This is a bounded runtime correction. It does not change aliases, thresholds,
-kickoff tolerance, providers, the 500 fetcher, Champion/Challenger, model
-parameters, score selection, frozen history, or prospective history. Current
-fixture replay is deterministic/synthetic because raw pages are absent; it is
-not live production proof. STOP at READY_FOR_INDEPENDENT_ACCEPTANCE; do not
-merge or start the next blocker.
-
-# D-040 - PRED-AVAILABILITY-NOWSCORE-IDENTITY-GATE-1
-
-Status: READY_FOR_INDEPENDENT_ACCEPTANCE
-Decision: Permit a narrow trusted same-provider identity path for BASE
-explicit Nowscore IDs whose Prediction Universe fixture was strictly verified
-by nowscore_public_jc_sales. The fixture and JC evidence IDs must match;
-JC membership, exact-match status/confidence, sales/business-date provenance,
-kickoff, and orientation/identity checks remain mandatory. Only the existing
-team-name fuzzy rejection may be bypassed for this same-provider path.
-
-Ordinary explicit IDs without trusted JC evidence, mismatched IDs, incomplete
-or unverified provenance, kickoff conflicts, reversed/ambiguous identity, and
-conflicting stored bindings fail closed. BASE forwards the matched fixture to
-the adapter. No fuzzy threshold, time tolerance, provider, 500 fetcher,
-Champion/Challenger, model, frozen history, or prospective history changes.
-Current failure-cohort replay is synthetic because raw current pages are not
-cached; it is not a production mutation or live-source result.
-
-STOP at READY_FOR_INDEPENDENT_ACCEPTANCE; do not merge or start the next
-blocker.
-# D-039 - Challenger C unique-match Promotion cohort semantics
-
-Status: INDEPENDENT_ACCEPTANCE_PASS / READY_FOR_MERGE
-Decision: Keep the complete immutable version history, but evaluate Promotion
-using one deterministic representative per football match; semantics fix is ready
-for merge.
-
-PR #142 reuses `prematch_versioning.select_latest_legal_prematch` for the
-Promotion representative. A candidate must be promotion-eligible, integrity
-valid, and strictly pre-kickoff; post-kickoff or invalid versions are excluded.
-Equal final chronology fails closed for that match. All pair/version files stay
-unchanged. Formal counters distinguish total/eligible/verified version rows,
-eligible/verified unique matches, verified version-history groups, and extra
-verified version rows.
-
-The synchronized replay is 138/137/112 version rows, 40/29 eligible/verified unique
-matches, 26 verified history groups, and 83 extra verified version rows. The
-checkpoint is `NOT_REACHED` at 29 unique matches with next threshold 50 and no
-automatic promotion. Canonical overall and subgroup metrics use the unique
-representatives; the 112-row reproduction is audit-only. No fitting, parameter,
-rho, score-grid, Champion, frozen-history, or prospective-history change is
-authorized. STOP at `READY_FOR_MERGE`; no C promotion or new Challenger in this
-milestone.
-
-# D-038 - Challenger C promotion review stopped on unique-match integrity
-
-Status: FAIL / STOPPED
-Decision: KEEP CHAMPION / KEEP C SHADOW.
-
-The final review of the existing `market_side_only_hybrid` shadow closure
-uses only the local 112 verified promotion-eligible pair rows and existing
-90-minute result artifacts. The accepted pair-row metrics reproduce exactly;
-pair/freeze integrity is clean; no post-match generation input is present; no
-meaningful checked slice triggers the explicit severe-collapse floors; and
-BTTS ECE is not used as a sole veto.
-
-The formal cohort nevertheless contains only 29 unique match IDs, 26
-duplicate-match groups, and 83 duplicate rows beyond one row per match. The
-configured promotion gate requires at least 50 unique matches, and the
-repository evaluation rule is unique-match based. This is a hard promotion
-gate failure even though the 112 pair-row headline reproduces.
-
-No parameter refit, C formula change, frozen-history rewrite, prospective
-history rewrite, new Challenger, Champion promotion, merge, or production run
-is authorized by this review. Keep the current Champion
-`recent_form_market_calibrated_poisson_v2` and C shadow-only. Evidence:
-`docs/prediction-quality/CHALLENGER-C-PROMOTION-REVIEW-1_FINAL_REPORT.md` and
-`data/prediction_quality/challenger_c_promotion_review_1/review.json`.
-
-# D-037 - NOWSCORE-JC-SALES-PAGE-1 direct current-universe source
-
-Status: DEPLOYED / SEALED / PRODUCTION ACCEPTANCE READY
-Decision: NOWSCORE-JC-SALES-PAGE-1 = DEPLOYED / SEALED / PRODUCTION ACCEPTANCE READY.
-
-The direct Nowscore JC sales page is authoritative current-universe membership
-and China JC business-date source. Deterministic anchor is selected SelDate
-plus matching niDate header date/group and explicit 11:00--next-day-11:00
-sales window. It supplies 周XNNN match number, sales-row ID, unique Nowscore
-match ID, kickoff, home/away, league, cansale. Kickoff calendar date is
-provenance only and never derives business date.
-
-SetLevel(3) / A[j][32] == 1 remains previously proven but optional
-corroboration. Missing/not-yet-synchronized live ft1/scN rows do not reject a
-direct sales-page fixture. Paired replay accepted 12 for 2026-08-31 and 10 for
-2026-09-01; duplicates, ambiguous rows, cross-date ID overlap all zero.
-
-Current chain: Nowscore JC sales page -> canonical fixture / identity ->
-existing Nowscore market/analysis evidence -> BASE. Sporttery/500 retired from
-current-universe blocking roles but retained for independent optional evidence.
-No model/identity/frozen/prospective/settlement change.
-
-Production closure: PR #141 final head
-3eff9c4ea6294a1100c96209e47413dbb7a7ba41 merged at 2026-09-01T05:58:50Z as
-30df0fb3c047e1126ed81766b5371073d61ed024. The first production run containing
-that merge SHA was 33475679629; its durable write is main commit
-7a3d431a856fb2c28e360b8e2a333c87c8277151. Durable current output is direct
-nowscore_public_jc_sales, 10 fixtures/jobs, 周二001--周二010,
-businessDate 2026-09-01, kickoff calendar date 2026-09-02, no Monday ID
-overlap, READY Universe/BASE, and HEALTHY production state. A32 remains
-optional corroboration only.
-
-Evidence: docs/data-foundation/NOWSCORE-JC-SALES-PAGE-1_PROBE_REPORT.md and
-docs/data-foundation/NOWSCORE-JC-SALES-PAGE-1_PROD_CLOSURE_RUN_33475679629.json.
-STOP at DEPLOYED / SEALED / PRODUCTION ACCEPTANCE READY; do not start
-Challenger Promotion Review.
-
-# Historical D-036 - NOWSCORE-JC-BUSINESS-DATE-1 business-day gate
-
-Status: READY_FOR_ACCEPTANCE / NO_CODE
-
-Decision: NOWSCORE-JC-BUSINESS-DATE-1 = NO_CODE.
-
-The public Nowscore JC sales page proves a deterministic business-day
-contract without credentials: selected SelDate, the matching niDate
-header date/group, the explicit 11:00--??11:00 sales window, and the
-group-plus-row match number. The paired replay keeps the existing membership
-authority unchanged at SetLevel(3) / A[j][32] == 1.
-
-The 2026-08-31 public group has 12 rows, all kicking off on 2026-09-01,
-and all 12 joined explicit A32 schedule rows. The nonempty 2026-09-01
-public group has 10 rows, all kicking off on 2026-09-02, but the live sc1
-surface has zero matching IDs. Because the full gate requires nonzero
-explicit current rows when the public JC page is nonzero, production
-business-date code is not authorized. No membership guessing or fixed
-kickoff cutoff is allowed.
-
-Exact evidence: docs/data-foundation/NOWSCORE-JC-BUSINESS-DATE-1_PROBE_RUN_33470293458.json;
-report: docs/data-foundation/NOWSCORE-JC-BUSINESS-DATE-1_PROBE_REPORT.md.
-This supersedes the current-pointer role of D-035 for this business-date
-milestone without rewriting D-035's historical Nowscore source evidence.
-STOP at READY_FOR_ACCEPTANCE; do not merge and do not start Challenger
-Promotion Review.
-
-# D-035 - NOWSCORE-JC-UNIVERSE-1 public JC source gate
-
-Status: READY_FOR_ACCEPTANCE
-
-Decision: For business date `2026-09-01`, the public Nowscore current JC
-contract is `PASS`. The public `ft1` page exposes `SetLevel(3)` and its
-backing data uses the exact predicate `A[j][32] == 1`. The GitHub-hosted runner
-received HTTP 200 for both surfaces and accepted 12 deterministic Nowscore
-fixtures with duplicate IDs `0` and ambiguous IDs `0`.
-
-This supersedes the current-pointer role of D-034 without rewriting its
-historical WAF evidence. Current-universe intake now uses Nowscore JC as the
-schedule authority, keeps Sporttery/500 only for independent optional evidence,
-and prevents their failure from zeroing the current universe. No new provider,
-credential, heuristic membership mapping, Champion/model change, identity
-threshold change, frozen-history rewrite, prospective-ledger rewrite, or
-settlement change is authorized.
-
-Evidence: `docs/data-foundation/NOWSCORE-JC-UNIVERSE-1_PROBE_REPORT.md` and
-`docs/data-foundation/NOWSCORE-JC-UNIVERSE-1_PROBE_RUN_33466072890.json`.
-STOP at `READY_FOR_ACCEPTANCE`; do not merge and do not start Challenger
-Promotion Review.
-
-# Historical decision: D-034 - CURRENT-UNIVERSE-ROLLOVER-1 WAF evidence gate
-
-Historical status: READY_FOR_ACCEPTANCE / NO CODE
-
-Historical decision: For business date 2026-09-01, the bounded production-surface probe is classified WAF_BLOCK and the decision gate is NO_CODE. The official Sporttery routes were not observably empty schedules: they returned HTTP 567 EdgeOne/WAF challenge HTML. The current 500 trade page was also not an empty schedule: it returned HTTP 200 access-denied challenge HTML with zero raw rows.
-
-The exact GitHub-runner response summaries and raw response metadata are durable in docs/data-foundation/CURRENT-UNIVERSE-ROLLOVER-1_PROBE_RUN_33455183881.json. This decision does not authorize endpoint migration, header changes, parser changes, fixture injection, third-party providers, Champion changes, identity changes, provenance reopening, or Challenger review. A later valid target-date response requires a new bounded decision gate.
-
-# D-033 — PRED-INPUT-PROVENANCE-1 deterministic error-stage classification
-
-Status: `DEPLOYED / SEALED / PRODUCTION ACCEPTANCE PASS`
-
-Decision: `PRED-INPUT-PROVENANCE-1 = DEPLOYED / SEALED / PRODUCTION ACCEPTANCE PASS`. The
-general BASE runner classification rule was corrected because source fetch failures were being collapsed into
-`INPUT_TIMESTAMP_UNVERIFIED` when recent form was unavailable. The correction
-must classify by deterministic source/validation stage, persist bounded
-provenance diagnostics, keep timing and cutoff checks fail-closed, and leave
-valid existing frozen Champion predictions unchanged.
-
-The two current `INPUT_TIMESTAMP_UNVERIFIED` jobs and the 18 historical
-revision-level umbrella failures lack enough durable causal evidence for
-retroactive relabeling. Production run `33399507542` proves 18 500 deep page
-fetch failures across three fallback attempts, but not their fixture mapping.
-No timestamp, source status, model output, frozen record, or prospective row
-was fabricated or rewritten. Production acceptance is PASS, the milestone is
-deployed and sealed, and the post-merge production verification is recorded.
-
-Evidence: `docs/data-foundation/PRED-INPUT-PROVENANCE-1_IMPLEMENTATION_REPORT.md`.
-
-# D-030 — Cloud Production Football Data Architecture Decision
-
-Status: `SEALED / ACCEPTANCE PASS`
-
-Decision: `B. PRIVATE_SNAPSHOT_STORE`.
-
-The production runtime must obtain the same versioned private dataset snapshot
-as local research/runtime, verify both artifact bytes and the existing logical
-dataset digest/count, then open the existing DuckDB read-only under
-`FOOTBALL_DATA_HOME`. The Git-tracked manifest is the pin and provenance
-boundary; it must not contain restricted raw captures or a full public runtime
-dataset.
-
-The clean-runner audit against the latest checked `origin/main` is
-`PARTIALLY_REPRODUCIBLE`: tracked legacy inputs repeatably produce 206 rows
-with digest `0a1183aa11ae3c27c8b2081cae2f8776dfc50fbb35371ef48374e6f798d01a74`,
-not the authoritative 1778 rows with digest
-`48088556830cfb5a6ecd523fc4dc29889406b4853001c51849f5533ecc44a3f2`. The
-manifests pin source facts but do not carry all raw inputs; the current rebuild
-command is offline migration, not a full source downloader. A bounded clean
-source proof nevertheless rebuilt a temporary versioned Norway dataset and
-made `500-1364199` pass authoritative recent-form input eligibility.
-
-Option A remains the offline publisher/recovery builder when all pinned raw
-inputs are present. Option C is overbuilt for a read-only 1778-row artifact;
-Option D conflicts with the public-repository and Football-Data.co.uk terms
-boundary. GitHub cache/artifact remains non-authoritative because of eviction
-and retention. R2/S3-compatible vendor choice, snapshot upload, workflow
-bootstrap and rollback implementation are explicitly deferred to a separate
-milestone.
-
-The full audit, comparison, cost/maintenance assessment, failure recovery,
-refresh frequency and bootstrap contract are recorded in
-`docs/data-foundation/DATA-PLANE-1_CLOUD_PRODUCTION_DATA_ARCHITECTURE.md`.
-
-Independent acceptance recorded 1,778 authoritative rows with dataset SHA-256
-`48088556830cfb5a6ecd523fc4dc29889406b4853001c51849f5533ecc44a3f2`,
-`PARTIALLY_REPRODUCIBLE` clean-runner behavior, and the clean Norway proof for
-`500-1364199` with 10 pre-kickoff authoritative recent-form records. PR #121
-merged to `main` at `963f36e7d00e16560fbdcd571dc20415437afa2b`; PR #120 remains
-OPEN and unmerged. This acceptance record does not alter the
-`B. PRIVATE_SNAPSHOT_STORE` architecture decision.
-
-# D-031 - PRED-TRUST-2 bounded strength/lambda challenger shootout
-
-Status: `SEALED / ACCEPTANCE PASS`
-
-The bounded experiment compares exactly the production Champion with two
-deterministic challengers on the pinned PRED-TRUST-1 cohort: `217` unique
-final legal prematch matches and `181` verified 90-minute results. Challenger A
-removes the market side-share blend while holding total intensity fixed.
-Challenger B uses the frozen market total and side share as the scoring state.
-Neither candidate is fitted on post-match results or enabled in shadow.
-
-The result is locked as `NO_CHALLENGER_BEATS_CHAMPION`. Challenger B reduces
-1-1 Top1 concentration from `76.50%` to `49.31%` and separates lambda gaps,
-but worsens BTTS, O/U 2.5, and right-tail probability error; exact-score Top1
-also falls to `10.50%`. Challenger A worsens core 1X2 and exact-score metrics
-without improving the lambda failure signal. The next sole milestone returns
-to upstream inputs / football evidence / market fusion; no lambda patch series
-or production promotion follows from this result.
-
-Champion, production, shadow automation, frozen predictions, the prospective
-ledger, health monitor/gate, providers, and frontend remain unchanged. Durable
-evidence is recorded in the PRED-TRUST-2 manifest, replay artifact, and final
-report.
-
-# D-032 - PRED-TRUST-3 market-side-only hybrid knockout
-
-Status: `SEALED / ACCEPTANCE PASS`
-
-Independent product decision: `MARKET_SIDE_FUSION_PROMISING_FOR_SHADOW`
-
-The one-shot replay reads the accepted PRED-TRUST-2 replay and compares only
-Champion, existing Challenger B, and one new deterministic Challenger C on the
-same `217` unique final legal prematch matches and `181` verified 90-minute
-matches. C keeps the Champion total `0.60*form_total + 0.40*market_total` and
-uses only the frozen `market_share` for side allocation. Clamp, independent
-Poisson, `rho=0`, and the score matrix remain unchanged. Challenger A is not
-replayed after its PRED-TRUST-2 `REJECT` result.
-
-C retains the 1X2 improvement and exact-score Top1/Top3 performance while
-restoring Champion BTTS accuracy, O/U 2.5 accuracy, and the full right-tail
-probability distribution. It reduces 1-1 Top1 to `54.84%`, reduces lambda gap
-`<0.5` to `47.93%`, and raises median absolute gap to `0.5340`. The bounded
-gate fails only on BTTS ECE (`0.1420` versus Champion `0.0986`). The original
-machine conclusion remains `MARKET_SIDE_ONLY_NOT_SUFFICIENT` in the immutable
-replay artifact. Independent acceptance overrides that product disposition for
-a bounded shadow because BTTS accuracy was maintained and BTTS Brier improved;
-BTTS ECE is retained as `SHADOW_WATCH_RISK`, not hidden or deleted.
-
-PR #127 merged at
-`c4a128826e4380ead2bea4ac10453b03cd849a28`. The next decision record is
-D-033 for the engineering-only shadow wiring. Champion, production, frozen
-predictions, prospective ledger, health monitor/gate, providers, and frontend
-remain unchanged by this acceptance override. Evidence remains in the
-PRED-TRUST-3 replay artifact and final report.
-
-# D-033 - MARKET-SIDE-SHADOW-1 bounded prospective shadow validation
-
-Status: `LOCKED FOR MARKET-SIDE-SHADOW-1 ACCEPTANCE`
-
-The accepted C formula is wired in an independent `market_side_shadow_1`
-namespace. The existing prediction runner captures Champion and C from the
-same eligible fixture and frozen input snapshot. The immutable pair records
-the same `match_id`, source cutoff, freeze eligibility, and frozen input
-digest, with `PAIRED` or failure-isolated `CHALLENGER_ABSTAIN`.
-
-C stores lambdas, 1X2, the complete 13x13 exact-score distribution, Top1/Top3,
-BTTS, O/U 2.5, and tails `>=4/5/6`. A separate verified-result evaluator
-reports all required proper/hit/distribution metrics and BTTS reliability bins.
-At 50 verified paired matches it emits `CHECKPOINT`; at 100 it emits
-`PROMOTION_REVIEW_READY`; neither state auto-promotes. The first 30-pair
-window exposes `SHADOW_EARLY_STOP_RECOMMENDED` for integrity or severe proper
-metric failures.
-
-This decision forbids Champion mutation, production promotion, formal ledger
-pollution, frozen rewrite, new provider/model/parameter, post-match generation
-input, and frontend work. Smoke evidence and focused tests are required, then
-the milestone stops at `READY_FOR_ACCEPTANCE`.
-
-The closure uses `scripts/market_side_shadow_refresh.py` to read only existing
-verified final 90-minute artifacts from
-`data/postmatch_automation/results/*.json`, build an identity-safe result map,
-and atomically persist the latest shadow evaluation under
-`data/prediction_quality/market_side_shadow_1/latest.json`. The optional
-`automation_cycle.py` step runs after postmatch and prospective settlement;
-research-step failure is explicit `DEGRADED` and does not block Champion,
-formal prospective settlement, or publication. No automatic promotion is
-enabled.
-
-The formal shadow cohort is explicitly filtered to
-`pair_status=PAIRED AND promotion_eligible=true`. Engineering, replay, manual,
-and smoke pairs remain outside that cohort even when a verified result is
-discoverable. A production pair may set `promotion_eligible=true` only through
-the explicit automatic runner context after formal Champion eligibility,
-pre-kickoff capture, same fixture/cutoff/freeze eligibility/frozen input digest,
-`post_match_input_used_for_generation=false`, and all pair integrity checks
-pass. The preserved smoke pair therefore remains evidence for result discovery
-and evaluator execution, not prospective sample evidence.
-
-# D-028 - Daily prediction availability closure
-
-Status: `LOCKED FOR PRED-AVAIL-1`
-
-BASE may reuse an existing immutable historical-result store as a recent-form
-source only through one generic exact-identity route. The route must filter
-eligible pre-kickoff records, enforce the existing recency window, preserve
-source/dataset provenance, and feed the existing four-block recent-form
-contract without changing Champion math. It runs after the existing prematch,
-Nowscore, 500 deep, and reviewed-cache paths.
-
-There is no unvalidated market-only fallback: market-only remains metadata-only
-and no DEGRADED production prediction is enabled. The 2026-08-30 bounded replay
-moves availability from 1/25 to 2/25; the remaining 23 rows stay
-identity/source/history blocked. The production automatic prediction, market,
-prospective, dashboard, runtime, frozen, and historical-state artifacts remain
-unchanged. PRED-AVAIL-1 ends at `READY_FOR_ACCEPTANCE`; independent acceptance
-is required before any live refresh. IDENTITY_BACKLOG is
-`NON_BLOCKING / ON_DEMAND`; ID-AUTO-2 does not start.
-
-# D-027 - League-agnostic deterministic team identity resolution
-
-Status: `LOCKED FOR ID-AUTO-1`
-
-Identity resolution uses one reusable registry and one competition-scoped exact
-ladder: stable provider ID, reviewed canonical/provider crosswalk, fixture
-canonical ID, competition-constrained exact normalized name, then
-competition-constrained reviewed alias. Only a unique candidate may be
-`AUTO_RESOLVED`; multiple candidates are `AMBIGUOUS` and unresolved evidence
-stays fail-closed. Existing reviewed provider IDs are durable and reusable
-across future fixtures. No fuzzy similarity, LLM guessing, transliteration,
-kickoff proximity, cross-competition matching, manual per-fixture alias list,
-new provider, or league-specific resolver is permitted. Identity status gates
-only historical challenger eligibility; the existing Champion stays fail-open.
-Japan J1 and Spain La Liga are recorded for a generic import path only; no
-league-specific importer is started.
+最后更新：2026-09-04
+角色：只记录**仍会约束今天与未来路线的 Durable Decisions / Anti-Rollback**。
 
-# D-026 - League-agnostic historical coverage foundation
+本文件不是 milestone ledger。旧 D-xxx 全量历史继续存在于 Git history、Issues/PR、evidence docs 与 Memory-Hub；不在当前文件重复保存。
 
-Status: `LOCKED FOR HC-AUTO-1`
+长期 Canonical：`gemini077/Memory-Hub / PROJECTS/Football-Betting-OneShot/CANONICAL.md`。
 
-The product must route daily fixtures through one manifest/adapter-driven
-coverage registry and exact-only gate. The gate returns `SUPPORTED`,
-`DEGRADED`, or `UNSUPPORTED` with auditable reason codes. Coverage gaps must
-never block other fixtures or the current Champion; insufficient history must
-turn off only the historical challenger metadata. The first source priority is
-existing free, stable, reproducible adapters. New providers and
-country-specific adapters are outside this milestone. Champion mathematics,
-frozen predictions, prospective records, Sweden/DC research and paid sources
-remain unchanged. HC-AUTO-1 ends at `READY_FOR_ACCEPTANCE`; HC-AUTO-2 does not
-start automatically.
+---
 
-Acceptance record: independent acceptance passed HC-AUTO-1. PR #117 is merged
-to `main` at `7680c57475c907ba87cf40c9c1a3d1d48543edb1`, with the latest
-automatic-run state preserved; HC-AUTO-1 is `SEALED / ACCEPTANCE PASS`.
+# D-CURRENT-01 — Product Identity
 
-# D-025 ? Sweden / Dixon-Coles final closeout
+Decision：Football Betting OneShot 是足球信息 + 市场信息 + 赛前概率 + 可审计验证的**决策支持产品**。
 
-Status: `LOCKED FOR FE-SE-DC-CLOSE`
+- 核心玩法：1X2 / Exact Score / O-U / BTTS；
+- 比分是一级能力，但不是唯一产品；
+- 产品不是彩票交易、代购、出票、充值、自动下注或官方彩票服务；
+- Betting Decision Layer（EV/stake/portfolio）保持 downstream，直到 probability / calibration / executable price / compliance 均过 Gate。
 
-FE-SE-HIST-1 is accepted and sealed after PR #115 merged to main. The final Sweden/DC experiment must reuse the FE-DC-1 fixed configuration and the exact old 103 target IDs, comparing the old 1554-row history with the complete 1778-row history. No rho, half-life, attack/defense, optimizer, score-grid, or fallback changes are permitted.
+---
 
-The recorded run found 7 model-specific fixed-optimizer non-convergence rows in the new complete-history replay, leaving 96 targets with both models. Because this blocks a complete apples-to-apples 103-row evaluation, the verdict is locked as `INCONCLUSIVE`; partial metrics are diagnostic only and do not justify promotion or further tuning.
+# D-CURRENT-02 — Immutable Prematch Truth
 
-This closes `SWEDEN_SPECIFIC_FURTHER_TUNING`. PR #114 remains OPEN and unmerged. Champion, production prediction, frozen prediction, user prediction surface, providers, and other leagues remain unchanged. The next candidate is only `League-Agnostic Historical Coverage / Automatic Coverage Gate`, without implementation in this task.
-# D-024 — Sweden Historical Completeness 采用 bounded authoritative closure
+Decision：正式 prediction 必须 prematch frozen，赛后只能追加 result/evaluation，不得改写赛前答案。
 
-状态：LOCKED FOR FE-SE-HIST-1
+- postmatch truth 不得进入赛前生成；
+- `one football match = one observation`；
+- version history 可审计但不能放大统计样本；
+- source cutoff / model identity / probability state / freeze time 必须可追溯。
 
-FE-DC-1 的独立验收确认工程/研究实验 PASS，但 Dixon-Coles `NOT_PROMOTABLE`；PR #114 保留为 research evidence，暂不 merge。新的上游数据 closure 只针对 `competition:sweden-allsvenskan`：
+---
 
-- 使用现有 Football-Data.co.uk adapter、source contract 和免费稳定 SWE.csv；不新增 provider，不扩其他联赛；
-- 2025 必须是完整 `240/240`，canonical identity 只能使用 reviewed deterministic exact mapping；
-- source hash/timestamp/provenance 必须保留，duplicate/conflict 必须显式审计，事实冲突 fail closed；
-- 2026 authoritative 结果本轮保持 `119`，不因当前来源已出现更多进行中结果而扩大范围；
-- authoritative historical store 可在临时 DuckDB 中从既有记录和目标 source 重建，atomic replace，并保持可重复、无重复、非目标记录不变；
-- 不修改 Champion、production prediction、frozen prediction、FE-DC-1 参数或任何 production model。closure 只服务 research/shadow，不能自动 promotion。
+# D-CURRENT-03 — Champion / Challenger Governance
 
-# D-001 — Prediction Universe 是当天 canonical schedule
+Decision：
 
-状态：LOCKED
+- Champion=`recent_form_market_calibrated_poisson_v2`；
+- Challenger C=`market_side_only_hybrid / shadow-only`；
+- `auto_promote=false`；
+- `<50 unique=NOT_REACHED`；`50–99=CHECKPOINT`；`>=100=PROMOTION_REVIEW_READY at most`；
+- Promotion 只能经独立 review。
 
-完整赛程更新 Universe。Filtered / single-match fetch 不得覆盖全天 Universe。
+任何新 Challenger 都必须：
 
-# D-002 — Frozen prediction immutable
+`Research → fixed experiment → historical holdout/replay → prospective shadow → unique-match evaluation → independent Promotion Review`。
 
-状态：LOCKED
+---
 
-赛后只能追加 result / evaluation，不能改写赛前预测。
+# D-CURRENT-04 — Challenger C Is Promising, Not Established
 
-# D-003 — 足球业务时间使用 Asia/Shanghai
+Accepted 50+ snapshot：`80 eligible / 56 verified / 24 unmatched`。
 
-状态：LOCKED
+Exact Score NLL `C - Champion` mean=`-0.026121699`，但 IID 与 chronology-aware bootstrap 95% CI 都跨 0；存在时间段与英冠 slice 的 Champion-favored 反向证据。
 
-# D-004 — 正式结果口径
+Decision=`C_SIGNAL_PROMISING_NOT_ESTABLISHED`。
 
-状态：LOCKED
+因此：
 
-90 分钟 + 伤停补时，不含加时和点球。
+- 不 Promotion；
+- 不为显著性调 C；
+- 不反复扫描参数/inference；
+- C 后台自然积累到 >=100。
 
-# D-005 — Legacy Mapper 不再发展
+---
 
-状态：LOCKED
+# D-CURRENT-05 — Exact-Score Failure Routes Already Closed
 
-仅用于 historical compatibility。
+以下路线不能无新证据复活：
 
-# D-006 — Homepage Slice 1A 保持封版
+- selector patch 不是 1-1 collapse 根因；
+- Challenger D / market-calibrated lambda：REJECTED；
+- global recency half-life scan：REJECTED；
+- current 61-match FRIENDLY_EXCLUDED causal route：RETIRED（provenance/sample 不足）；
+- global +lambda：当前 chronology/universe evidence 不支持；
+- 简单“打开 Dixon-Coles rho”：旧 Sweden strict holdout 未优于 rho=0 control；
+- 1-1 penalty / diversity quota / random replacement / threshold hack：禁止。
 
-状态：LOCKED UNTIL REAL PRODUCT EVIDENCE
+新模型必须来自新的 failure-mode + applicability evidence，而不是换名字重跑旧路线。
 
-# D-007 — P0 Workspace Auto-Update Recovery 已完成
+---
 
-状态：SEALED / DEPLOYED
+# D-CURRENT-06 — Current Universe / Data Source Boundary
 
-# D-008 — Current exact-score selector 判定 FAIL
+Decision：Nowscore public JC 是当前 production current-universe 主路径；500 已退出 current-universe fallback 主链。
 
-状态：LOCKED UNTIL NEW EVIDENCE
+原则：
 
-2026-08-15：FROZEN 23；21/23 unique score = 1-1；1X2 leader HOME 12 / AWAY 11 / DRAW 0。
+- source 可访问 ≠ rights 已解决；
+- provider failure 不应静默变成空 universe；
+- identity / business-date / source cutoff 均 fail closed；
+- provider 与模型职责分离。
 
-# D-009 — 不直接启用 Outcome-conditioned MAP
+---
 
-状态：LOCKED UNTIL NEW PROSPECTIVE EVIDENCE
+# D-CURRENT-07 — Sporttery CRS Rights Not Cleared
 
-Formal 14：Exact Top1=0%，selection outcome=28.57%。
+Decision：Sporttery `CRS/比分` 与 Exact Score target 高度匹配，但当前未经书面许可的第三方接入/复制/相关数据利用边界不足以支持自动化商业生产链。
 
-# D-010 — 不直接启用 Existing Scenario Challenger
+状态=`RIGHTS_NOT_CLEARED`。
 
-状态：LOCKED UNTIL NEW PROSPECTIVE EVIDENCE
+不得因为技术上能访问就直接接 production。
 
-Freeze-time replay 有效，但 Formal 14：Exact Top1=0%，selection outcome=28.57%。
+---
 
-# D-011 — 不人工惩罚 1-1 / 平局
+# D-CURRENT-08 — The Odds API Is Benchmark-Only Until Further Gate
 
-状态：LOCKED
+Decision：锁定 `the-odds-api.com / api.the-odds-api.com` 作为当前 rights-clear external correct-score benchmark candidate。
 
-禁止 1-1 penalty、draw penalty、每日 diversity quota、随机改比分。
+允许：future-only benchmark/capture、storage/analytics/derived/model-training 在其当前公开 Terms 边界内。
 
-# D-012 — 当前主问题进入 λ / team-strength 层
+禁止：
 
-状态：LOCKED FOR CURRENT PROGRAM
+- 把 raw feed 当独立数据产品转售/再分发；
+- 历史 backfill 伪装 prematch；
+- benchmark 自动成为 Champion/C 输入；
+- provider hopping 规避失败 Gate。
 
-问题不只是 selector，还包括 lambda compression。
+PR #179 的 `0 exact identity` 只证明 identity mapping 未就绪，**不证明 correct-score coverage=0**。
 
-# D-013 — PA-2 Challenger 只作为 Research / Shadow
+---
 
-状态：LOCKED
+# D-CURRENT-09 — Cross-Provider Identity Must Be Deterministic
 
-`opponent_adjusted_strength_poisson_v1` 尚未完成 production paired validation。
+Decision：跨源 team/match identity 必须可审计并 fail closed。
 
-# D-014 — CA-1 当前暂停
+不能单独作为 authoritative identity 的信号：
 
-状态：LOCKED UNTIL PREDICTION QUALITY GATE
+- kickoff overlap；
+- fuzzy similarity；
+- LLM translation；
+- on-the-fly transliteration；
+- result score；
+- manual post-hoc guessing。
 
-禁止用高级自动分析包装已知存在结构问题的预测。
+当前 repo 的 `team_identity.py + team_aliases.json` 只允许 confirmed alias/evidence。
 
-# D-015 — Canonical Identity 禁止 fuzzy 猜测
+Current candidate #180：Reep v1 exact/typed alias + competition context preflight。
 
-状态：LOCKED
+#180 完成后必须回项目 Gate，不自动继续 identity 子树。
 
-允许 deterministic provider ID / canonical registry / exact unique alias。
+---
 
-# D-016 — Promotion 必须 prospective
+# D-CURRENT-10 — Product Roadmap Is No Longer Model-First Serial
 
-状态：LOCKED
+Decision：旧“数据基础 → 模型成熟 → 分析 → 完整产品 → 用户/商业”的串行路线不再作为默认 Roadmap。
 
-约 40–50 新 prospective 后才进入严肃 review；约 100+ 更成熟样本后才考虑 Champion promotion。
+当前产品已具备 substantial production/product foundation；下一阶段必须并行管理：
 
-# D-017 — 数据覆盖按阶段治理
+- Prediction Trust；
+- User Trust / Product；
+- Data / Identity / Rights；
+- Operations / Reliability；
+- Closed Beta / User Validation；
+- Compliance / Commercial；
+- Advanced Model R&D（supporting lane）。
 
-状态：LOCKED
+局部技术 blocker 不能吞掉整个 Roadmap。
 
-不因少量缺口自动 provider hopping；历史赛事扩展按真实 blocker 定向进行。
+---
 
-# D-018 — 用户页面不暴露工程/AI术语
+# D-CURRENT-11 — Prediction Trust Must Become User-Facing Truth
 
-状态：LOCKED
+Decision：后台的 freeze、prospective evaluation、confidence/evidence quality、degraded/abstain、historical performance 不能永远只作为工程资产。
 
-# D-019 — 验收通过不等于已部署
+产品长期需要让用户知道：
 
-状态：LOCKED
+- 这场怎么看；
+- 哪些比分情景最可能；
+- 有多大把握；
+- 为什么；
+- 最大风险；
+- 什么时候系统选择不强猜；
+- 过去类似判断真实表现如何。
 
-必须核 remote main、workflow、durable state、Pages、health。
+禁止只宣传单一“命中率”或把 degraded prediction 包装成 normal recommendation。
 
-# D-020 — Codex 不得自行 SEALED
+---
 
-状态：LOCKED
+# D-CURRENT-12 — Closed Beta Before Model Perfection
 
-完成任务只能标记 READY_FOR_ACCEPTANCE。
+Decision：Closed Beta 不需要等待最终模型架构完成，但必须明确展示不确定性与 abstention，并保持 Prediction Trust Gate。
 
-# D-021 — 正式交付在仓库外
+目的：获得当前最缺失的 evidence——真实用户是否理解、使用、回访，以及哪些玩法/页面真正有价值。
 
-状态：LOCKED
+用户喜欢 ≠ 模型可信；模型可信 ≠ 用户产品成立。两类证据并行。
 
-`D:\MyProject\_deliveries\football-betting-oneshot\`
+---
 
-# D-022 — 默认不占用用户电脑前台
+# D-CURRENT-13 — Technical Accessibility Is Not Commercial Permission
 
-状态：LOCKED
+Decision：任何数据/API/网页必须分别判断：
 
-优先 CLI / headless / scripts / worktree / CI。
+`technical access / storage / analysis / commercial app use / redistribution / raw-feed resale`
 
-# D-023 — 重大模块与 build-vs-buy 必须主动做市场/工具雷达
+不得把“能抓”写成“能商用”。
 
-状态：LOCKED
+Public commercialization 前 Data Rights 必须作为独立 Gate 关闭。
 
-项目外部已有持续运行的每日市场/工具雷达，持续到用户暂停；雷达只负责发现与提供证据，不得直接改动 Champion、生产模型或其他生产状态。
+---
 
-任何重大模块或 build-vs-buy 决策，必须先做主动的 landscape scan，不得采用“用户找到一个候选 → 代理只研究该候选 → 沿近邻线索停止”的反应式流程。扫描至少覆盖直接竞品、替代方案、相邻类别、开源项目、国内外商业工具/API、上下游组件、近期发布或更新的选项，以及现实可行的低成本组合。
+# D-CURRENT-14 — Completion Returns to Project Gate
 
-发现必须迭代扩展：每个有希望的结果都成为新的搜索种子，继续查找其替代品、竞品、fork、依赖、相似项目和不同解决类别。必须维护比较 shortlist，并比较适配度、质量、成本、许可证、数据合法性与可持续性、维护健康度、集成/迁移成本和锁定风险，明确选择直接使用、fork、改造、借鉴或拒绝。
+Decision：一个 bounded task 完成后，默认动作不是沿同一技术树继续。
 
-对当前自研模块必须追问“如果今天从零开始，还会自己构建吗？”若答案为否，须定义替代方案和最小验证实验/替换门槛。新发现本身不是架构变更理由；替换必须有明确预期收益阈值和有界实验。与项目实质相关的研究结果应反馈到决策和路线图，但不得绕过 Champion、production、acceptance 或 promotion 既有门禁。只记录有持久价值的新发现/变化，避免重复每日噪声。
+Founder 回复“已完成”触发：
 
-# Current Facts — 不是永久 Decision
+`Independent acceptance → Canonical Evolution Gate → 必要的外部 Research Gate → route comparison → unique best next step`
 
-以下未来可随新 artifact 更新：
+如果新事实证明 Roadmap 假设已失效，先改 Roadmap。
 
-- production Champion：`recent_form_market_calibrated_poisson_v2`
-- calibration artifact 当前 `shadow_only / active=false`
-- current production `rho=0.0`
-- PA-2 historical Challenger Brier/LogLoss 优于 uniform，但 exact-score 1-1 仍过度集中。
+---
+
+# Historical Decision Archive Pointer
+
+旧 D-001...D-041 等详细决策仍可从：
+
+- Git history 中本文件旧版本；
+- GitHub Issue / PR / Actions；
+- `docs/data-foundation/`；
+- `docs/prediction-quality/`；
+- `docs/model-governance/`；
+- `docs/research/`；
+- Memory-Hub `RESEARCH_ASSETS.md` / Canonical Decision Lineage
+
+恢复。
+
+**只有仍影响当前路线的 durable decision 才允许重新进入本文件。**
