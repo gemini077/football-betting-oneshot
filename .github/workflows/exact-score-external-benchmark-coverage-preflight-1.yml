@@ -1,0 +1,199 @@
+name: Exact Score external benchmark coverage preflight 1
+
+on:
+  workflow_dispatch:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - ".github/workflows/exact-score-external-benchmark-coverage-preflight-1.yml"
+      - "scripts/exact_score_external_benchmark_coverage_preflight.py"
+      - "scripts/match_identity.py"
+      - "scripts/team_identity.py"
+      - "scripts/postmatch_queue.py"
+      - "tests/test_exact_score_external_benchmark_coverage_preflight.py"
+      - "tests/test_provider_identity_and_core_selector.py"
+      - "tests/test_prediction_universe.py"
+
+permissions:
+  contents: read
+
+jobs:
+  coverage-preflight:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout the audit head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install focused test dependencies
+        run: python -m pip install -r requirements.txt
+
+      - name: Run focused provider-identity and universe tests
+        run: >-
+          pytest -q
+          tests/test_exact_score_external_benchmark_coverage_preflight.py
+          tests/test_provider_identity_and_core_selector.py
+          tests/test_prediction_universe.py
+
+      - name: Compile preflight and identity paths
+        run: >-
+          python -m py_compile
+          scripts/exact_score_external_benchmark_coverage_preflight.py
+          scripts/match_identity.py
+          scripts/team_identity.py
+          scripts/postmatch_queue.py
+
+      - name: Verify required secret gate
+        shell: bash
+        env:
+          THE_ODDS_API_KEY: ${{ secrets.THE_ODDS_API_KEY }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${THE_ODDS_API_KEY:-}" ]]; then
+            printf '%s\n' 'FOUNDER_SECRET_REQUIRED'
+            exit 1
+          fi
+
+      - name: Run real current-main provider coverage preflight
+        shell: bash
+        env:
+          THE_ODDS_API_KEY: ${{ secrets.THE_ODDS_API_KEY }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin main
+          main_sha="$(git rev-parse origin/main)"
+          data_root="$RUNNER_TEMP/current-main-universe"
+          universe_root="$data_root/data/prediction_universe"
+          output_dir="$RUNNER_TEMP/exact-score-external-benchmark-coverage-preflight-1"
+          snapshot_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          mkdir -p "$data_root"
+          git archive --format=tar "$main_sha" \
+            data/prediction_universe | tar -xf - -C "$data_root"
+
+          git status --porcelain=v1 > "$RUNNER_TEMP/repo.before.status"
+          find "$universe_root" -type f -print0 \
+            | sort -z | xargs -0 sha256sum > "$RUNNER_TEMP/universe.before.sha256"
+          python scripts/exact_score_external_benchmark_coverage_preflight.py \
+            --universe-root "$universe_root" \
+            --current-ref "$main_sha" \
+            --snapshot-at "$snapshot_at" \
+            --output-dir "$output_dir" \
+            > "$RUNNER_TEMP/preflight-summary.json"
+          find "$universe_root" -type f -print0 \
+            | sort -z | xargs -0 sha256sum > "$RUNNER_TEMP/universe.after.sha256"
+          diff -u "$RUNNER_TEMP/universe.before.sha256" "$RUNNER_TEMP/universe.after.sha256"
+          git status --porcelain=v1 > "$RUNNER_TEMP/repo.after.status"
+          diff -u "$RUNNER_TEMP/repo.before.status" "$RUNNER_TEMP/repo.after.status"
+          git diff --exit-code -- data/prediction_universe
+          printf 'main_sha=%s\nsnapshot_at=%s\n' "$main_sha" "$snapshot_at" \
+            > "$RUNNER_TEMP/preflight-context.txt"
+
+      - name: Verify preflight artifact, credit cap, identity, and secret safety
+        shell: bash
+        env:
+          THE_ODDS_API_KEY: ${{ secrets.THE_ODDS_API_KEY }}
+        run: |
+          set -euo pipefail
+          python - "$RUNNER_TEMP/exact-score-external-benchmark-coverage-preflight-1/summary.json" "$RUNNER_TEMP/exact-score-external-benchmark-coverage-preflight-1/report.md" <<'PY'
+          import json
+          from datetime import datetime, timezone
+          from pathlib import Path
+          import os
+          import sys
+
+          summary_path = Path(sys.argv[1])
+          report_path = Path(sys.argv[2])
+          summary_text = summary_path.read_text(encoding="utf-8")
+          report_text = report_path.read_text(encoding="utf-8")
+          summary = json.loads(summary_text)
+          cohort = summary["candidate_cohort"]
+          discovery = summary["provider_discovery"]
+          probes = summary["probes"]
+          credits = summary["credits"]
+          controls = summary["controls"]
+          candidates = cohort["candidates"]
+          results = probes["candidate_results"]
+          assert summary["milestone"] == "EXACT-SCORE-EXTERNAL-BENCHMARK-COVERAGE-PREFLIGHT-1"
+          assert summary["schema_version"] == "exact_score_external_benchmark_coverage_preflight_1.v1"
+          assert summary["source"]["provider"] == "the-odds-api.com"
+          assert summary["source"]["api_host"] == "https://api.the-odds-api.com"
+          assert summary["source"]["api_key_env"] == "THE_ODDS_API_KEY"
+          assert cohort["candidate_count"] == len(candidates) == len(results)
+          assert cohort["candidate_count"] > 0
+          assert len({row["match_id"] for row in candidates}) == len(candidates)
+          assert len({row["match_key"] for row in candidates}) == len(candidates)
+          snapshot = datetime.fromisoformat(summary["audit_snapshot_at"].replace("Z", "+00:00"))
+          assert all(datetime.fromisoformat(row["kickoff"].replace("Z", "+00:00")) > snapshot for row in candidates)
+          allowed_identity = {
+              "EXACT_MATCH",
+              "NO_PROVIDER_SPORT_MAPPING",
+              "NO_EVENT_MATCH",
+              "IDENTITY_AMBIGUOUS_FAIL_CLOSED",
+          }
+          assert all(row["identity_status"] in allowed_identity for row in results)
+          exact = [row for row in results if row["identity_status"] == "EXACT_MATCH"]
+          assert probes["exact_match_count"] == len(exact)
+          assert probes["correct_score_covered_count"] == sum(
+              bool((row.get("correct_score") or {}).get("correct_score_covered"))
+              for row in results
+          )
+          assert all(row["provider_event_id"] is not None for row in exact)
+          assert all(row["provider_sport_key"] for row in exact)
+          assert all(row["correct_score"] is None and row["probe_status"] == "NOT_PROBED" for row in results if row not in exact)
+          assert probes["market"] == "correct_score"
+          assert probes["region"] == "eu"
+          assert probes["region_chosen_before_outcome_inspection"] is True
+          assert credits["credits_used"] <= 100
+          assert credits["credits_reserved_upper_bound"] <= 100
+          assert credits["probes_attempted"] <= 100
+          assert credits["credits_used"] <= credits["credits_reserved_upper_bound"]
+          assert summary["final_decision"] in {
+              "CORRECT_SCORE_BENCHMARK_PILOT_READY",
+              "PROVIDER_COVERAGE_INSUFFICIENT",
+              "IDENTITY_MAPPING_NOT_READY",
+              "FAIL_CLOSED",
+          }
+          if summary["final_decision"] == "CORRECT_SCORE_BENCHMARK_PILOT_READY":
+              assert probes["exact_match_count"] >= 10
+              assert probes["correct_score_covered_count"] >= 10
+          assert summary["provider_query_ok"] is True
+          assert all(controls[key] is False for key in (
+              "result_network_fetch", "historical_backfill", "manual_identity_assignment",
+              "fuzzy_matching", "frozen_prediction_modified",
+              "authoritative_result_modified", "champion_modified",
+              "challenger_modified", "model_modified", "serving_modified",
+              "promotion_attempted", "paid_upgrade_attempted", "raw_feed_published",
+          ))
+          assert controls["read_only_preflight"] is True
+          secret = os.environ["THE_ODDS_API_KEY"]
+          assert secret not in summary_text
+          assert secret not in report_text
+          assert "apiKey=" not in summary_text
+          assert "apiKey=" not in report_text
+          assert report_path.exists() and summary_path.exists()
+          assert "## Candidate-by-candidate evidence" in report_text
+          assert "DO NOT MERGE" in report_text
+          print(json.dumps({
+              "candidate_count": cohort["candidate_count"],
+              "exact_match_count": probes["exact_match_count"],
+              "correct_score_covered_count": probes["correct_score_covered_count"],
+              "credits_used": credits["credits_used"],
+              "final_decision": summary["final_decision"],
+          }, sort_keys=True))
+          PY
+
+      - name: Upload read-only provider coverage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: exact-score-external-benchmark-coverage-preflight-1
+          path: |
+            ${{ runner.temp }}/exact-score-external-benchmark-coverage-preflight-1/summary.json
+            ${{ runner.temp }}/exact-score-external-benchmark-coverage-preflight-1/report.md
