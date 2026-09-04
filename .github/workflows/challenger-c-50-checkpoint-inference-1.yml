@@ -1,0 +1,195 @@
+name: Challenger C 50 checkpoint inference 1
+
+on:
+  workflow_dispatch:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - ".github/workflows/challenger-c-50-checkpoint-inference-1.yml"
+      - "scripts/challenger_c_50_checkpoint_inference.py"
+      - "scripts/market_side_shadow.py"
+      - "scripts/market_side_shadow_refresh.py"
+      - "scripts/prediction_trust_2_replay.py"
+      - "tests/test_challenger_c_50_checkpoint_inference.py"
+      - "tests/test_challenger_c_unique_cohort_semantics.py"
+      - "tests/test_market_side_shadow.py"
+      - "tests/test_market_side_shadow_refresh.py"
+      - "tests/test_prospective_settlement.py"
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout the audit head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install focused test dependencies
+        run: python -m pip install -r requirements.txt
+
+      - name: Run focused inference and settlement tests
+        run: >-
+          pytest -q
+          tests/test_challenger_c_50_checkpoint_inference.py
+          tests/test_challenger_c_unique_cohort_semantics.py
+          tests/test_market_side_shadow.py
+          tests/test_market_side_shadow_refresh.py
+          tests/test_prospective_settlement.py
+
+      - name: Compile inference and settlement paths
+        run: >-
+          python -m py_compile
+          scripts/challenger_c_50_checkpoint_inference.py
+          scripts/market_side_shadow.py
+          scripts/market_side_shadow_refresh.py
+          scripts/prediction_trust_2_replay.py
+
+      - name: Run real current-main C refresh and inference audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin main
+          main_sha="$(git rev-parse origin/main)"
+          data_root="$RUNNER_TEMP/current-main-data"
+          pair_root="$data_root/data/prediction_quality/market_side_shadow_1/pairs"
+          result_root="$data_root/data/postmatch_automation/results"
+          universe_root="$data_root/data/prediction_universe"
+          latest="$RUNNER_TEMP/current-c-refresh.json"
+          audit_dir="$RUNNER_TEMP/challenger-c-50-checkpoint-inference-1"
+          snapshot_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          mkdir -p "$data_root"
+          git archive --format=tar "$main_sha" \
+            data/prediction_quality/market_side_shadow_1/pairs \
+            data/postmatch_automation/results \
+            data/prediction_universe | tar -xf - -C "$data_root"
+
+          git status --porcelain=v1 > "$RUNNER_TEMP/repo.before.status"
+          find "$pair_root" "$result_root" "$universe_root" -type f -print0 \
+            | sort -z | xargs -0 sha256sum > "$RUNNER_TEMP/inputs.before.sha256"
+          python scripts/market_side_shadow_refresh.py \
+            --pair-root "$pair_root" \
+            --result-root "$result_root" \
+            --output "$latest" \
+            --refreshed-at "$snapshot_at" \
+            > "$RUNNER_TEMP/refresh-summary.json"
+          python scripts/challenger_c_50_checkpoint_inference.py \
+            --latest "$latest" \
+            --result-root "$result_root" \
+            --universe-root "$universe_root" \
+            --current-ref "$main_sha" \
+            --snapshot-at "$snapshot_at" \
+            --output-dir "$audit_dir" \
+            > "$RUNNER_TEMP/audit-summary.json"
+          find "$pair_root" "$result_root" "$universe_root" -type f -print0 \
+            | sort -z | xargs -0 sha256sum > "$RUNNER_TEMP/inputs.after.sha256"
+          diff -u "$RUNNER_TEMP/inputs.before.sha256" "$RUNNER_TEMP/inputs.after.sha256"
+          git status --porcelain=v1 > "$RUNNER_TEMP/repo.after.status"
+          diff -u "$RUNNER_TEMP/repo.before.status" "$RUNNER_TEMP/repo.after.status"
+          git diff --exit-code -- \
+            data/prediction_quality/market_side_shadow_1/pairs \
+            data/postmatch_automation/results \
+            data/prediction_universe
+          printf 'main_sha=%s\nsnapshot_at=%s\n' "$main_sha" "$snapshot_at" \
+            > "$RUNNER_TEMP/current-audit-context.txt"
+
+      - name: Verify independent artifact, baseline, inference, and safety
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - "$RUNNER_TEMP/challenger-c-50-checkpoint-inference-1/summary.json" "$RUNNER_TEMP/challenger-c-50-checkpoint-inference-1/report.md" <<'PY'
+          import json
+          import math
+          from pathlib import Path
+          import sys
+
+          summary_path = Path(sys.argv[1])
+          report_path = Path(sys.argv[2])
+          summary = json.loads(summary_path.read_text(encoding="utf-8"))
+          current = summary["current_main"]
+          counts = current["counts"]
+          primary = summary["primary"]
+          accepted = summary["accepted_pr175_reference"]
+          controls = summary["controls"]
+          assert summary["milestone"] == "CHALLENGER-C-50-CHECKPOINT-INFERENCE-1"
+          assert summary["schema_version"] == "challenger_c_50_checkpoint_inference_1.v1"
+          assert (accepted["pr"], accepted["merge_sha"], accepted["accepted_head"]) == (
+              175,
+              "3af2656ffcb50386bd37b829876a3dd93acea535",
+              "e90fd09156e3d8d6a832b301c07aff64f0158fa7",
+          )
+          assert (accepted["eligible_unique_matches"], accepted["verified_unique_matches"], accepted["unmatched_unique_matches"]) == (74, 56, 18)
+          eligible = counts["promotion_eligible_unique_matches"]
+          verified = counts["verified_unique_matches"]
+          assert 50 <= verified < 100
+          assert counts["unmatched_unique_matches"] == eligible - verified
+          assert current["checkpoint"]["status"] == "CHECKPOINT"
+          assert current["checkpoint"]["observation_unit"] == "unique_match"
+          assert current["checkpoint"]["auto_promote"] is False
+          assert primary["paired_match_count"] == verified
+          assert len(current["paired_rows"]) == verified
+          assert len({row["match_id"] for row in current["paired_rows"]}) == verified
+          assert primary["metric"] == "exact_score_nll"
+          assert primary["iid_bootstrap"]["resamples"] >= 10000
+          assert primary["moving_block_bootstrap"]["resamples"] >= 10000
+          assert primary["moving_block_bootstrap"]["block_length"] == max(2, round(math.sqrt(verified)))
+          assert primary["iid_bootstrap"]["ci"]["lower"] <= primary["iid_bootstrap"]["ci"]["upper"]
+          assert primary["moving_block_bootstrap"]["ci"]["lower"] <= primary["moving_block_bootstrap"]["ci"]["upper"]
+          assert all("delta_nll" in row and row["delta_nll"] == row["deltas"]["delta_nll"] for row in current["paired_rows"])
+          expected_delta = {
+              key: counts[key] - accepted[key]
+              for key in ("eligible_unique_matches", "verified_unique_matches", "unmatched_unique_matches")
+          }
+          assert summary["natural_main_delta_vs_pr175"] == expected_delta
+          assert current["integrity"]["status"] == "PASS"
+          assert current["refresh"]["result_identity_conflicts"] == 0
+          assert current["refresh"]["result_identity_mismatches"] == 0
+          assert summary["source"]["matching"]["result_identity_mismatches"] == 0
+          assert summary["source"]["discovery"]["result_identity_conflicts"] == 0
+          assert summary["final_decision"] in {
+              "C_SIGNAL_STABLE_KEEP_TO_100",
+              "C_SIGNAL_PROMISING_NOT_ESTABLISHED",
+              "C_SIGNAL_NOT_SUPPORTED",
+              "FAIL_CLOSED",
+          }
+          assert all(controls[key] is False for key in (
+              "result_network_fetch", "result_backfill", "manual_result_entry",
+              "fuzzy_matching", "frozen_prediction_modified",
+              "authoritative_result_modified", "champion_modified",
+              "challenger_modified", "model_modified", "production_modified",
+              "promotion_attempted", "automatic_promotion",
+          ))
+          assert controls["read_only_audit"] is True
+          assert summary_path.exists() and report_path.exists()
+          report = report_path.read_text(encoding="utf-8")
+          assert "## Per-match paired rows" in report
+          assert "DO NOT MERGE" in report
+          print(json.dumps({
+              "eligible_unique": eligible,
+              "verified_unique": verified,
+              "unmatched_unique": eligible - verified,
+              "natural_main_delta": summary["natural_main_delta_vs_pr175"],
+              "mean_exact_nll_delta": primary["mean_delta"],
+              "iid_bootstrap_ci": primary["iid_bootstrap"]["ci"],
+              "block_bootstrap_ci": primary["moving_block_bootstrap"]["ci"],
+              "final_decision": summary["final_decision"],
+          }, sort_keys=True))
+          PY
+
+      - name: Upload read-only inference artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: challenger-c-50-checkpoint-inference-1
+          path: |
+            ${{ runner.temp }}/challenger-c-50-checkpoint-inference-1/summary.json
+            ${{ runner.temp }}/challenger-c-50-checkpoint-inference-1/report.md
