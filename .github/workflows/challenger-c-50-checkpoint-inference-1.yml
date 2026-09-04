@@ -147,8 +147,9 @@ jobs:
           assert primary["moving_block_bootstrap"]["ci"]["lower"] <= primary["moving_block_bootstrap"]["ci"]["upper"]
           assert all("delta_nll" in row and row["delta_nll"] == row["deltas"]["delta_nll"] for row in current["paired_rows"])
           expected_delta = {
-              key: counts[key] - accepted[key]
-              for key in ("eligible_unique_matches", "verified_unique_matches", "unmatched_unique_matches")
+              "eligible_unique_matches": counts["promotion_eligible_unique_matches"] - accepted["eligible_unique_matches"],
+              "verified_unique_matches": counts["verified_unique_matches"] - accepted["verified_unique_matches"],
+              "unmatched_unique_matches": counts["unmatched_unique_matches"] - accepted["unmatched_unique_matches"],
           }
           assert summary["natural_main_delta_vs_pr175"] == expected_delta
           assert current["integrity"]["status"] == "PASS"
