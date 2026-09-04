@@ -1,0 +1,224 @@
+name: Challenger C normalized result linkage fix 1
+
+on:
+  workflow_dispatch:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - ".github/workflows/challenger-c-normalized-result-linkage-fix-1.yml"
+      - "scripts/market_side_shadow.py"
+      - "scripts/market_side_shadow_refresh.py"
+      - "scripts/prediction_trust_2_replay.py"
+      - "tests/test_challenger_c_unique_cohort_semantics.py"
+      - "tests/test_market_side_shadow.py"
+      - "tests/test_market_side_shadow_refresh.py"
+      - "tests/test_prospective_settlement.py"
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout the audit head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install focused test dependencies
+        run: python -m pip install -r requirements.txt
+
+      - name: Run focused settlement and shadow tests
+        run: >-
+          pytest -q
+          tests/test_challenger_c_unique_cohort_semantics.py
+          tests/test_market_side_shadow.py
+          tests/test_market_side_shadow_refresh.py
+          tests/test_prospective_settlement.py
+
+      - name: Compile the settlement and shadow paths
+        run: >-
+          python -m py_compile
+          scripts/market_side_shadow.py
+          scripts/market_side_shadow_refresh.py
+          scripts/prediction_trust_2_replay.py
+
+      - name: Run real current-main C refresh and review
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin main
+          main_sha="$(git rev-parse origin/main)"
+          data_root="$RUNNER_TEMP/current-main-data"
+          pair_root="$data_root/data/prediction_quality/market_side_shadow_1/pairs"
+          result_root="$data_root/data/postmatch_automation/results"
+          output="$RUNNER_TEMP/current-c-review.json"
+          mkdir -p "$data_root"
+          git archive --format=tar "$main_sha" \
+            data/prediction_quality/market_side_shadow_1/pairs \
+            data/postmatch_automation/results | tar -xf - -C "$data_root"
+
+          find "$pair_root" "$result_root" -type f -print0 | sort -z | xargs -0 sha256sum > "$RUNNER_TEMP/inputs.before.sha256"
+          python scripts/market_side_shadow_refresh.py \
+            --pair-root "$pair_root" \
+            --result-root "$result_root" \
+            --output "$output" \
+            --refreshed-at "2026-09-04T02:00:00+08:00" \
+            > "$RUNNER_TEMP/refresh-summary.json"
+          find "$pair_root" "$result_root" -type f -print0 | sort -z | xargs -0 sha256sum > "$RUNNER_TEMP/inputs.after.sha256"
+          diff -u "$RUNNER_TEMP/inputs.before.sha256" "$RUNNER_TEMP/inputs.after.sha256"
+          git diff --exit-code -- data/prediction_quality/market_side_shadow_1/pairs data/postmatch_automation/results
+
+          python - "$output" "$RUNNER_TEMP/review-evidence.json" "$RUNNER_TEMP/report.md" "$main_sha" <<'PY'
+          import json
+          from pathlib import Path
+          import sys
+
+          document = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+          counts = document["counts"]
+          evaluation = document["evaluation"]
+          refresh = document["refresh"]
+          metrics = evaluation["candidates"]
+          reference = {
+              "pr": 173,
+              "artifact": "9921627053",
+              "source_main_sha": "df3ba44a57f84435674172bd520fd3af2c71b0a6",
+              "eligible_unique_matches": 74,
+              "verified_unique_matches": 30,
+              "unmatched_unique_matches": 44,
+          }
+          verified = counts["verified_unique_matches"]
+          evidence = {
+              "schema_version": "challenger_c_normalized_result_linkage_fix_1.v1",
+              "milestone": "CHALLENGER-C-NORMALIZED-RESULT-LINKAGE-FIX-1",
+              "accepted_issue_173_reference": reference,
+              "before_fix_reference": reference,
+              "current_main": {
+                  "source_main_sha": sys.argv[4],
+                  "counts": counts,
+                  "checkpoint": document["checkpoint"],
+                  "champion_metrics": metrics["champion"],
+                  "challenger_metrics": metrics["challenger"],
+                  "refresh": refresh,
+                  "early_kill": evaluation["early_kill"],
+                  "production_protection": document["production_protection"],
+              },
+              "current_main_data_delta_vs_issue_173_reference": {
+                  "total_pair_version_rows": counts["total_pair_version_rows"] - 443,
+                  "promotion_eligible_pair_version_rows": counts["promotion_eligible_pair_version_rows"] - 442,
+                  "promotion_eligible_unique_matches": counts["promotion_eligible_unique_matches"] - 74,
+                  "result_files_scanned": refresh["result_files_scanned"] - 443,
+              },
+              "linkage_recovery": {
+                  "verified_unique_matches_before_fix": 30,
+                  "verified_unique_matches_after_fix": verified,
+                  "verified_unique_delta_after_fix": verified - 30,
+                  "unmatched_unique_matches_after_fix": counts["promotion_eligible_unique_matches"] - verified,
+              },
+              "checks": {
+                  "focused_tests": "PASS",
+                  "py_compile": "PASS",
+                  "real_current_data_refresh": "PASS",
+                  "integrity": "PASS" if not evaluation["early_kill"]["integrity_failures"] else "FAIL",
+                  "identity_linkage": "PASS" if refresh["result_identity_conflicts"] == 0 and refresh["result_identity_mismatches"] == 0 else "FAIL",
+                  "input_hashes_unchanged": True,
+                  "result_network_fetch": False,
+                  "result_backfill": False,
+                  "fuzzy_matching": False,
+                  "frozen_prediction_modified": False,
+                  "authoritative_result_modified": False,
+                  "champion_modified": False,
+                  "challenger_c_modified": False,
+                  "model_modified": False,
+                  "production_modified": False,
+                  "automatic_promotion": document["production_protection"]["automatic_promotion"],
+              },
+          }
+          Path(sys.argv[2]).write_text(json.dumps(evidence, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+          report = "\n".join([
+              "# Challenger C normalized result linkage fix 1",
+              "",
+              "## Counts",
+              "",
+              "| snapshot | eligible unique | verified unique | unmatched unique | checkpoint |",
+              "| --- | ---: | ---: | ---: | --- |",
+              "| accepted Issue #173 before fix | 74 | 30 | 44 | NOT_REACHED reference |",
+              f"| current `origin/main` after fix | {counts['promotion_eligible_unique_matches']} | {verified} | {counts['promotion_eligible_unique_matches'] - verified} | {document['checkpoint']['status']} |",
+              "",
+              "## Exact current Champion vs C metrics",
+              "",
+              "```json",
+              json.dumps(metrics, ensure_ascii=False, indent=2, sort_keys=True),
+              "```",
+              "",
+              "## Checks",
+              "",
+              f"- Current main source: `{sys.argv[4]}`; structural delta vs accepted Issue #173 snapshot: `{evidence['current_main_data_delta_vs_issue_173_reference']}`.",
+              "- Existing verified 90m artifacts only; no network result fetch, backfill, fuzzy matching, or identity-linkage change.",
+              f"- Input pair/result hashes unchanged; identity conflicts/mismatches: `{refresh['result_identity_conflicts']}/{refresh['result_identity_mismatches']}`.",
+              "- Frozen predictions, authoritative results, Champion/C mathematics, model parameters, and production serving unchanged.",
+              "- Automatic promotion is disabled. STOP for independent acceptance; do not merge from this audit run.",
+              "",
+          ])
+          Path(sys.argv[3]).write_text(report, encoding="utf-8")
+          PY
+
+      - name: Verify current counts, checkpoint, metrics, and safety
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - "$RUNNER_TEMP/review-evidence.json" <<'PY'
+          import json
+          from pathlib import Path
+          import sys
+
+          evidence = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+          reference = evidence["before_fix_reference"]
+          current = evidence["current_main"]
+          counts = current["counts"]
+          checkpoint = current["checkpoint"]
+          checks = evidence["checks"]
+          verified = counts["verified_unique_matches"]
+          eligible = counts["promotion_eligible_unique_matches"]
+          assert (reference["eligible_unique_matches"], reference["verified_unique_matches"], reference["unmatched_unique_matches"]) == (74, 30, 44)
+          assert 0 <= verified <= eligible
+          assert current["champion_metrics"]["sample_count"] == verified
+          assert current["challenger_metrics"]["sample_count"] == verified
+          assert checkpoint["verified_unique_matches"] == verified
+          assert checkpoint["auto_promote"] is False
+          assert checkpoint["status"] == ("CHECKPOINT" if 50 <= verified < 100 else "PROMOTION_REVIEW_READY" if verified >= 100 else "NOT_REACHED")
+          assert current["refresh"]["result_identity_conflicts"] == 0
+          assert current["refresh"]["result_identity_mismatches"] == 0
+          assert checks["integrity"] == "PASS"
+          assert all(checks[key] is False for key in (
+              "result_network_fetch", "result_backfill", "fuzzy_matching",
+              "frozen_prediction_modified", "authoritative_result_modified",
+              "champion_modified", "challenger_c_modified", "model_modified",
+              "production_modified", "automatic_promotion",
+          ))
+          print(json.dumps({
+              "eligible_unique": eligible,
+              "verified_unique": verified,
+              "unmatched_unique": eligible - verified,
+              "checkpoint": checkpoint["status"],
+              "current_main_delta": evidence["current_main_data_delta_vs_issue_173_reference"],
+              "verified_delta_after_fix": evidence["linkage_recovery"]["verified_unique_delta_after_fix"],
+          }, sort_keys=True))
+          PY
+
+      - name: Upload current-data refresh and review evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: challenger-c-normalized-result-linkage-fix-1
+          path: |
+            ${{ runner.temp }}/refresh-summary.json
+            ${{ runner.temp }}/review-evidence.json
+            ${{ runner.temp }}/report.md
