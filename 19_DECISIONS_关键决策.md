@@ -100,7 +100,7 @@ Current #180 仅做 bounded Reep v1 preflight；结束后回项目 Gate。
 
 旧 `data → model → challenger → analysis → product` 串行路线废止。
 
-同时也禁止新的反向过度纠偏：`Trust Center → transparency → user trust` 不能成为预测能力的替代主干。
+同时禁止反向过度纠偏：`Trust Center → transparency → user trust` 不能成为预测能力替代主干。
 
 正确层级：
 
@@ -110,18 +110,11 @@ Current #180 仅做 bounded Reep v1 preflight；结束后回项目 Gate。
 
 # D-CURRENT-11 — Hit Rate Is Core, But Must Be Honest
 
-命中率是核心产品结果指标之一，不再把它降级成“只是营销数字”。
+命中率是核心产品结果指标之一。
 
-但任何命中率必须逐玩法报告，并与以下内容绑定：
+任何命中率必须逐玩法报告，并与以下内容绑定：full coverage vs served coverage、coverage/abstain、same-market baseline、proper score/calibration、sample/uncertainty、competition/population scope、forecast horizon。
 
-- full coverage vs served coverage；
-- coverage / abstain rate；
-- same-market baseline；
-- proper score / calibration；
-- sample size / uncertainty；
-- competition/population scope。
-
-禁止一个跨玩法 blended “overall hit rate”。
+禁止跨玩法 blended “overall hit rate”。
 
 ---
 
@@ -149,11 +142,11 @@ Founder “已完成”触发：`acceptance → Canonical Gate → 必要 Resear
 
 ---
 
-# D-CURRENT-15 — Serving Is Segmented By Market
+# D-CURRENT-15 — Serving Is Segmented
 
 正式 serving 单位：
 
-`Market × Competition Support × Evidence Quality × Prediction Quality`
+`Market × Competition Support × Forecast Horizon × Evidence Quality × Prediction Quality`
 
 Competition：`SUPPORTED / LIMITED / EXPERIMENTAL / UNSUPPORTED`。
 
@@ -163,13 +156,13 @@ Serving：`NORMAL / CAUTION / DEGRADED / ABSTAIN`。
 
 一个玩法失败不得拖累其它玩法；其它玩法好不得替它背书。
 
-“精选高命中”必须同时公开/可追溯 coverage，禁止靠大量 abstain 制造虚高准确率。
+“精选高命中”必须同时公开/可追溯 coverage。
 
 ---
 
 # D-CURRENT-16 — Confidence Must Be Empirically Defensible
 
-任何正式 confidence 必须能回到 prospective calibration / reliability bucket / sample size / uncertainty / population scope；否则只展示 evidence/uncertainty/serving state。
+任何正式 confidence 必须能回到 prospective calibration / reliability bucket / sample size / uncertainty / population scope / forecast horizon；否则只展示 evidence/uncertainty/serving state。
 
 ---
 
@@ -203,15 +196,7 @@ Track record / methodology / completed reviews 倾向长期免费作为信任资
 
 # D-CURRENT-20 — China JC Market Universe Is First-Class
 
-长期 Tier-A 不再只写 `1X2 / Exact / O-U / BTTS`。
-
-中国竞彩用户第一等预测 target 至少包括：
-
-- 胜平负；
-- 让球胜平负；
-- 比分（raw score distribution + official result buckets）；
-- 总进球数 0–7+；
-- 半全场。
+长期 Tier-A 至少包括：胜平负、让球胜平负、比分（raw + official buckets）、总进球数 0–7+、半全场。
 
 O/U、BTTS、Asian handicap 等继续作为重要 Tier-B 国际/分析型市场。
 
@@ -219,7 +204,7 @@ O/U、BTTS、Asian handicap 等继续作为重要 Tier-B 国际/分析型市场�
 
 ---
 
-# D-CURRENT-21 — One Score State May Feed Many Markets, But One Model Need Not Be Optimal For All
+# D-CURRENT-21 — Shared Score State, Market-Specific Optimization Allowed
 
 长期优先：
 
@@ -234,8 +219,6 @@ O/U、BTTS、Asian handicap 等继续作为重要 Tier-B 国际/分析型市场�
 半全场不得通过 `90m lambda / 2` 直接制造。
 
 必须先证明 first-half score/outcome truth、prematch inputs、结算语义与 dedicated evaluation 可用，再决定模型路线。
-
-当前这是一项待审计缺口，不是预授权工程任务。
 
 ---
 
@@ -253,13 +236,44 @@ Football-only / Market-only / Fusion 长期保持可区分。
 
 #180 不取消、不改契约。
 
-但在其完成后，当前最高信息价值候选是：
+但其完成后，当前最高信息价值候选是：
 
 `MULTI-MARKET-PREDICTION-COVERAGE-AND-EVALUATION-GAP-AUDIT`
 
 先查 current repo 已经能预测/推导/冻结/结算/评价哪些玩法，以及各玩法 current prospective scorecard；再决定下一模型或新玩法实现。
 
 这不是预授权 Issue，#180 完成后仍需完整 Research-Backed Project Gate。
+
+---
+
+# D-CURRENT-25 — Forecast Horizon Is Part of the Forecast Contract
+
+T-24h、T-6h、T-60m 等不同信息截止的 forecast 不得混成同条件成绩。
+
+- 先审真实 freeze lead-time 分布再定义 horizon bins；
+- 同一比赛不同 horizon 是 repeated paired forecasts，不是多个 independent matches；
+- 优先 same-market / same-horizon baseline；
+- closing market 是 late-information benchmark，不得冒充 equal-information control。
+
+---
+
+# D-CURRENT-26 — Overall 1X2 Accuracy Cannot Hide Class Collapse
+
+1X2 长期必须检查 Home/Draw/Away predicted mix、confusion matrix、per-class recall、尤其 Draw recall，并配合 multiclass proper score / calibration。
+
+若模型通过“几乎不预测 Draw / 永远押热门”提高 overall accuracy，不得无条件判定为提升。
+
+---
+
+# D-CURRENT-27 — Rich Features Must Prove Incremental Value
+
+xG、阵容/球员、伤停、weather、travel/rest、NLP/news、GNN/embedding 等 rich inputs 不因“更高级”自动进入 production。
+
+必须执行：
+
+`time-safe acquisition → same-match paired control → fixed +feature ablation → chronological holdout → coverage/population audit → prospective shadow if promising`
+
+必须分别证明相对 Champion 与 closest same-time strong market baseline 的增量，并披露覆盖率代价。
 
 ---
 
