@@ -131,6 +131,39 @@ def test_seven_legal_versions_are_one_verified_promotion_observation():
     assert evaluation["candidates"]["challenger"]["sample_count"] == 1
 
 
+def test_evaluator_consumes_normalized_90m_result_mapping_at_c_boundary():
+    pair = _pair()
+
+    evaluation = evaluate_paired_cohort(
+        [pair],
+        {"M-1": {"home_score_90m": 2, "away_score_90m": 1}},
+    )
+
+    assert evaluation["verified_pair_version_rows"] == 1
+    assert evaluation["verified_unique_matches"] == 1
+    assert evaluation["candidates"]["challenger"]["sample_count"] == 1
+
+
+def test_evaluator_preserves_legacy_result_mapping_and_rejects_invalid_scores():
+    pair = _pair()
+
+    legacy = evaluate_paired_cohort(
+        [pair],
+        {"M-1": {"home_score": 2, "away_score": 1}},
+    )
+    assert legacy["verified_unique_matches"] == 1
+
+    for invalid in (
+        {"home_score_90m": -1, "away_score_90m": 1},
+        {"home_score_90m": "malformed", "away_score_90m": 1},
+        {"home_score_90m": 2},
+    ):
+        evaluation = evaluate_paired_cohort([pair], {"M-1": invalid})
+        assert evaluation["verified_pair_version_rows"] == 0
+        assert evaluation["verified_unique_matches"] == 0
+        assert evaluation["candidates"]["challenger"]["sample_count"] == 0
+
+
 def test_latest_legal_prematch_version_is_representative():
     pairs = [_pair(version=index) for index in range(7)]
     selected = select_promotion_representatives(pairs, _results(pairs))

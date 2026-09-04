@@ -87,6 +87,46 @@ def test_refresh_uses_identity_safe_final_scope_only(tmp_path):
     assert summary["checkpoint_status"] == "NOT_REACHED"
 
 
+def test_refresh_rejects_exact_key_with_kickoff_mismatch(tmp_path):
+    pair_root, result_root = _copy_smoke_inputs(tmp_path)
+    result_path = result_root / RESULT_SOURCE.name
+    result = json.loads(result_path.read_text(encoding="utf-8"))
+    result["kickoff_local"] = "2026-08-16T10:30:00+08:00"
+    result_path.write_text(json.dumps(result), encoding="utf-8")
+
+    summary = refresh_shadow(
+        pair_root=pair_root,
+        result_root=result_root,
+        output=tmp_path / "latest.json",
+        refreshed_at="2026-08-30T12:00:00+08:00",
+    )
+
+    assert summary["result_identity_mismatches"] == 1
+    assert summary["verified_paired_count"] == 0
+    latest = json.loads((tmp_path / "latest.json").read_text(encoding="utf-8"))
+    assert latest["refresh"]["matched_pair_count"] == 0
+
+
+def test_refresh_does_not_mutate_pair_or_result_inputs(tmp_path):
+    pair_root, result_root = _copy_smoke_inputs(tmp_path)
+    pair_path = next(pair_root.glob("*.json"))
+    result_path = next(result_root.glob("*.json"))
+    before = {
+        "pair": pair_path.read_bytes(),
+        "result": result_path.read_bytes(),
+    }
+
+    refresh_shadow(
+        pair_root=pair_root,
+        result_root=result_root,
+        output=tmp_path / "latest.json",
+        refreshed_at="2026-08-30T12:00:00+08:00",
+    )
+
+    assert pair_path.read_bytes() == before["pair"]
+    assert result_path.read_bytes() == before["result"]
+
+
 def test_refresh_is_repeatable_and_replaces_latest_atomically(tmp_path):
     pair_root, result_root = _copy_smoke_inputs(tmp_path)
     output = tmp_path / "latest.json"

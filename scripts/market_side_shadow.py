@@ -880,7 +880,11 @@ def _actual_for_pair(pair: Mapping[str, Any], results: Mapping[str, Any]) -> tup
             value = results[key]
             break
     if isinstance(value, Mapping):
-        value = value.get("actual_score") or value.get("score") or value
+        nested_score = value.get("actual_score") or value.get("score")
+        if nested_score is not None:
+            value = nested_score
+        elif "home_score_90m" in value or "away_score_90m" in value:
+            value = (value.get("home_score_90m"), value.get("away_score_90m"))
     return _score_pair(value)
 
 
