@@ -1,0 +1,257 @@
+name: Exact Score Reep identity bridge preflight 1
+
+on:
+  workflow_dispatch:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - ".github/workflows/exact-score-reep-identity-bridge-preflight-1.yml"
+      - "scripts/exact_score_reep_identity_bridge_preflight.py"
+      - "scripts/match_identity.py"
+      - "scripts/postmatch_queue.py"
+      - "data/team_aliases.json"
+      - "tests/test_exact_score_reep_identity_bridge_preflight.py"
+      - "tests/test_provider_identity_and_core_selector.py"
+      - "tests/test_prediction_universe.py"
+
+permissions:
+  contents: read
+
+jobs:
+  identity-bridge-preflight:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout the audit head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install focused test dependencies
+        run: python -m pip install -r requirements.txt
+
+      - name: Run focused identity and universe tests
+        run: >-
+          pytest -q
+          tests/test_exact_score_reep_identity_bridge_preflight.py
+          tests/test_provider_identity_and_core_selector.py
+          tests/test_prediction_universe.py
+
+      - name: Compile bridge and identity paths
+        run: >-
+          python -m py_compile
+          scripts/exact_score_reep_identity_bridge_preflight.py
+          scripts/match_identity.py
+          scripts/team_identity.py
+          scripts/postmatch_queue.py
+
+      - name: Verify required provider secret gate
+        shell: bash
+        env:
+          THE_ODDS_API_KEY: ${{ secrets.THE_ODDS_API_KEY }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${THE_ODDS_API_KEY:-}" ]]; then
+            printf '%s\n' 'FOUNDER_SECRET_REQUIRED'
+            exit 1
+          fi
+
+      - name: Run real current-main Reep and provider preflight
+        shell: bash
+        env:
+          THE_ODDS_API_KEY: ${{ secrets.THE_ODDS_API_KEY }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin main
+          main_sha="$(git rev-parse origin/main)"
+          data_root="$RUNNER_TEMP/current-main-universe"
+          universe_root="$data_root/data/prediction_universe"
+          reep_cache="$RUNNER_TEMP/reep-v1-current-release"
+          output_dir="$RUNNER_TEMP/exact-score-reep-identity-bridge-preflight-1"
+          snapshot_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          mkdir -p "$data_root" "$reep_cache" "$output_dir"
+          git archive --format=tar "$main_sha" data/prediction_universe \
+            | tar -xf - -C "$data_root"
+          git status --porcelain=v1 > "$RUNNER_TEMP/repo.before.status"
+          find "$universe_root" -type f -print0 \
+            | sort -z | xargs -0 sha256sum > "$RUNNER_TEMP/universe.before.sha256"
+
+          python scripts/exact_score_reep_identity_bridge_preflight.py \
+            --universe-root "$universe_root" \
+            --current-ref "$main_sha" \
+            --snapshot-at "$snapshot_at" \
+            --output-dir "$output_dir" \
+            --reep-cache-dir "$reep_cache" \
+            > "$RUNNER_TEMP/reep-preflight-summary.json"
+
+          find "$universe_root" -type f -print0 \
+            | sort -z | xargs -0 sha256sum > "$RUNNER_TEMP/universe.after.sha256"
+          diff -u "$RUNNER_TEMP/universe.before.sha256" "$RUNNER_TEMP/universe.after.sha256"
+          git status --porcelain=v1 > "$RUNNER_TEMP/repo.after.status"
+          diff -u "$RUNNER_TEMP/repo.before.status" "$RUNNER_TEMP/repo.after.status"
+          git diff --exit-code -- data/prediction_universe
+          printf 'main_sha=%s\nsnapshot_at=%s\n' "$main_sha" "$snapshot_at" \
+            > "$RUNNER_TEMP/reep-preflight-context.txt"
+
+      - name: Verify release provenance, bridge evidence, credit cap, and secret safety
+        shell: bash
+        env:
+          THE_ODDS_API_KEY: ${{ secrets.THE_ODDS_API_KEY }}
+        run: |
+          set -euo pipefail
+          python - "$RUNNER_TEMP/exact-score-reep-identity-bridge-preflight-1/summary.json" "$RUNNER_TEMP/exact-score-reep-identity-bridge-preflight-1/report.md" <<'PY'
+          import json
+          from datetime import datetime
+          from pathlib import Path
+          import os
+          import sys
+
+          summary_path = Path(sys.argv[1])
+          report_path = Path(sys.argv[2])
+          summary_text = summary_path.read_text(encoding="utf-8")
+          report_text = report_path.read_text(encoding="utf-8")
+          summary = json.loads(summary_text)
+          cohort = summary["candidate_cohort"]
+          release = summary["reep_release"]
+          identity = summary["identity"]
+          discovery = summary["provider_discovery"]
+          probes = summary["probes"]
+          credits = summary["credits"]
+          controls = summary["controls"]
+          final_decision = summary["final_decision"]
+          candidates = cohort["candidates"]
+          results = probes["candidate_results"]
+
+          assert summary["milestone"] == "EXACT-SCORE-REEP-IDENTITY-BRIDGE-PREFLIGHT-1"
+          assert summary["schema_version"] == "exact_score_reep_identity_bridge_preflight_1.v1"
+          assert summary["source"]["provider"] == "the-odds-api.com"
+          assert summary["source"]["api_host"] == "https://api.the-odds-api.com"
+          assert summary["source"]["api_key_env"] == "THE_ODDS_API_KEY"
+          assert cohort["candidate_count"] == len(candidates) == len(results)
+          assert cohort["candidate_count"] > 0
+          assert cohort["baseline_pr179_candidate_count"] == 60
+          assert cohort["current_main_delta"] == cohort["candidate_count"] - 60
+          assert summary["baseline_pr179"]["current_main_delta"] == cohort["current_main_delta"]
+          assert len({row["match_id"] for row in candidates}) == len(candidates)
+          assert len({row["match_key"] for row in candidates}) == len(candidates)
+          snapshot = datetime.fromisoformat(summary["audit_snapshot_at"].replace("Z", "+00:00"))
+          assert all(datetime.fromisoformat(row["kickoff"].replace("Z", "+00:00")) > snapshot for row in candidates)
+
+          if final_decision != "REEP_BOUNDED_ACCESS_NOT_READY":
+              assert release["access_status"] == "BOUNDED_CSV_READY"
+              assert release["official_release_contract_verified"] is True
+              assert release["release_stamp"]
+              assert release["latest_pointer_url"] == "https://data.reep.football/releases/latest.json"
+              assert release["duckdb_downloaded"] is False
+              assert release["api_key_requested"] is False
+              assert release["licence"]["spdx"] == "CC0-1.0"
+              assert release["licence"]["url"] == "https://creativecommons.org/publicdomain/zero/1.0/"
+              assert set(release["relevant_tables"]) == {"teams", "aliases", "competitions", "redirects"}
+              for name in ("csv/teams.csv.gz", "csv/aliases.csv.gz", "csv/competitions.csv.gz", "csv/redirects.csv.gz", "LICENSE.txt", "schema.json", "checksums.txt"):
+                  record = release["files"][name]
+                  assert record["url"].startswith("https://data.reep.football/releases/")
+                  assert record["bytes"] > 0
+                  assert len(record["official_sha256"]) == 64
+                  assert len(record["local_sha256"]) == 64
+                  assert record["official_sha256"] == record["local_sha256"]
+                  assert record["locally_verified"] is True
+          else:
+              assert release["access_status"] == "BOUNDED_ACCESS_NOT_READY"
+              assert release["official_release_contract_verified"] is False
+
+          allowed_resolution = {"UNIQUE_EXACT_REEP_ID", "NO_REEP_MATCH", "AMBIGUOUS_REEP_MATCH_FAIL_CLOSED"}
+          resolution_rows = identity["team_resolutions"]
+          assert len({(row["side"], row["input_name"]) for row in resolution_rows}) == len(resolution_rows)
+          assert all(row["side"] in {"FBOS", "THE_ODDS_API"} for row in resolution_rows)
+          assert all(row["resolution_status"] in allowed_resolution for row in resolution_rows)
+          assert identity["unique_fbos_team_count"] == len(cohort["unique_fbos_team_names"])
+          assert identity["reep_resolved_fbos_team_count"] == sum(
+              row["side"] == "FBOS" and row["resolution_status"] == "UNIQUE_EXACT_REEP_ID"
+              for row in resolution_rows
+          )
+          assert identity["reep_resolved_provider_team_count"] == sum(
+              row["side"] == "THE_ODDS_API" and row["resolution_status"] == "UNIQUE_EXACT_REEP_ID"
+              for row in resolution_rows
+          )
+
+          allowed_identity = {"EXACT_MATCH", "NO_PROVIDER_SPORT_MAPPING", "NO_EVENT_MATCH", "IDENTITY_AMBIGUOUS_FAIL_CLOSED"}
+          assert all(row["identity_status"] in allowed_identity for row in results)
+          exact = [row for row in results if row["identity_status"] == "EXACT_MATCH"]
+          assert probes["exact_event_identity_count"] == len(exact)
+          assert probes["correct_score_covered_count"] == sum(
+              bool((row.get("correct_score") or {}).get("correct_score_covered")) for row in results
+          )
+          assert all(row["provider_event_id"] is not None and row["provider_sport_key"] for row in exact)
+          assert all(
+              row["correct_score"] is None and row["probe_status"] == "NOT_PROBED"
+              for row in results if row not in exact
+          )
+          assert probes["market"] == "correct_score"
+          assert probes["region"] == "eu"
+          assert probes["region_chosen_before_outcome_inspection"] is True
+          assert discovery["provider_event_count"] >= 0
+          assert discovery["kickoff_overlap_candidate_count"] <= cohort["candidate_count"]
+          assert credits["credits_used"] <= 100
+          assert credits["credits_reserved_upper_bound"] <= 100
+          assert credits["probes_attempted"] <= 100
+          assert credits["credits_used"] <= credits["credits_reserved_upper_bound"]
+          assert final_decision in {
+              "REEP_IDENTITY_AND_CORRECT_SCORE_PILOT_READY",
+              "REEP_IDENTITY_BRIDGE_USEFUL_COVERAGE_NOT_ENOUGH",
+              "REEP_IDENTITY_COVERAGE_INSUFFICIENT",
+              "REEP_BOUNDED_ACCESS_NOT_READY",
+              "FAIL_CLOSED",
+          }
+          if final_decision == "REEP_IDENTITY_AND_CORRECT_SCORE_PILOT_READY":
+              assert probes["exact_event_identity_count"] >= 10
+              assert probes["correct_score_covered_count"] >= 10
+          if final_decision == "REEP_IDENTITY_BRIDGE_USEFUL_COVERAGE_NOT_ENOUGH":
+              assert probes["exact_event_identity_count"] >= 10
+              assert probes["correct_score_covered_count"] < 10
+          if final_decision == "REEP_IDENTITY_COVERAGE_INSUFFICIENT":
+              assert probes["exact_event_identity_count"] < 10
+          assert credits["usage_headers"]
+          assert all("apiKey=" not in json.dumps(row) for row in credits["usage_headers"])
+
+          assert all(controls[key] is False for key in (
+              "result_network_fetch", "historical_backfill", "manual_identity_assignment",
+              "fuzzy_matching", "translation_or_transliteration", "frozen_prediction_modified",
+              "authoritative_result_modified", "champion_modified", "challenger_modified",
+              "model_modified", "serving_modified", "promotion_attempted",
+              "paid_upgrade_attempted", "raw_feed_published",
+          ))
+          assert controls["read_only_preflight"] is True
+          secret = os.environ["THE_ODDS_API_KEY"]
+          assert secret not in summary_text
+          assert secret not in report_text
+          assert "apiKey=" not in summary_text
+          assert "apiKey=" not in report_text
+          assert '"price"' not in summary_text
+          assert '"outcome"' not in summary_text
+          assert "## Candidate-by-candidate evidence" in report_text
+          assert "DO NOT MERGE" in report_text
+          assert "STOP" in report_text
+          print(json.dumps({
+              "candidate_count": cohort["candidate_count"],
+              "reep_resolved_fbos_teams": identity["reep_resolved_fbos_team_count"],
+              "reep_resolved_provider_teams": identity["reep_resolved_provider_team_count"],
+              "exact_event_identities": probes["exact_event_identity_count"],
+              "correct_score_covered": probes["correct_score_covered_count"],
+              "credits_used": credits["credits_used"],
+              "final_decision": summary["final_decision"],
+          }, sort_keys=True))
+          PY
+
+      - name: Upload read-only bridge evidence artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: exact-score-reep-identity-bridge-preflight-1
+          path: |
+            ${{ runner.temp }}/exact-score-reep-identity-bridge-preflight-1/summary.json
+            ${{ runner.temp }}/exact-score-reep-identity-bridge-preflight-1/report.md
