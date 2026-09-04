@@ -11,17 +11,22 @@
 
 # 1. Product-Level Direction
 
-状态：`MULTI-MARKET PREDICTION QUALITY REBASE LOCKED`
+状态：`MULTI-MARKET QUALITY + HISTORICAL FOOTBALL MEMORY REBASE LOCKED`
 
-当前总门=`PUBLIC-LAUNCH-TRUST`。
+总门=`PUBLIC-LAUNCH-TRUST`。
 
-当前技术/产品发动机=`MULTI-MARKET-PREDICTION-QUALITY`。
+发动机=`MULTI-MARKET-PREDICTION-QUALITY`。
+
+两个长期 Job：
+
+- `UNDERSTAND MATCH`
+- `PREDICT / DECISION SUPPORT`
+
+Exact Score / 比分 / 波胆是旗舰玩法，但不是唯一玩法。
 
 核心关系：
 
-`预测质量 → prospective proof/trust → serving/product → public-launch gates`
-
-Trust 不替代命中率/概率质量；命中率也不能脱离 coverage、baseline、proper score、sample/uncertainty、forecast horizon 单独宣传。
+`Historical Football Memory + Current Evidence + Same-Horizon Market → Prediction Quality → Prospective Proof → Serving/Product → Public Launch`
 
 ---
 
@@ -35,7 +40,7 @@ Lane：`Data / Identity / Rights`。
 
 边界：future-only / exact fail-closed / no fuzzy / no LLM translation / no bulk manual alias / no model or serving change / research-only PR。
 
-**#180 不因 Roadmap correction 取消。完成后无论 PASS/FAIL，都必须回 Project Gate，不自动继续 identity/provider 子树。**
+**#180 保持不变。完成后无论 PASS/FAIL，都必须回 Project Gate，不自动继续 identity/provider 子树。**
 
 ---
 
@@ -47,102 +52,135 @@ Accepted：`56 verified unique / PROMISING_NOT_ESTABLISHED / shadow-only`。
 
 - 不调 C；
 - 不扫参数；
-- 不因少量新增样本机械 review；
-- 到 >=100 才进入新的 Promotion Review Gate；
-- >=100 也不自动 Promotion。
+- 不因少量新样本机械 review；
+- >=100 才进入 Promotion Review Ready at most；
+- 不自动 Promotion。
 
 ---
 
 # 4. Post-#180 Highest-Value Candidate — 不是预授权任务
 
-## Candidate A — MULTI-MARKET-PREDICTION-COVERAGE-AND-EVALUATION-GAP-AUDIT
+## `MULTI-MARKET-PREDICTION-COVERAGE-AND-EVALUATION-GAP-AUDIT`
 
 当前研究排序：`HIGHEST`。
 
-优先只读回答：
+必须是**只读全局审计**，一次形成四张地图。
 
-1. current frozen FT joint score state 已经能数学一致推导哪些玩法？
-2. current result truth 已能合法结算哪些玩法？
-3. current unique prospective cohort 上，各玩法 full-coverage hit rate / proper score 是多少？
-4. 若已有 selective serving，各玩法 served hit rate / coverage 是多少？
-5. same-market strong/simple baseline 已有哪些？
-6. actual freeze lead-time 分布怎样，T-24h / T-6h / T-60m 等是否可公平分层评价？
-7. 1X2 Home/Draw/Away predicted mix、confusion matrix、per-class recall、Draw recall 是否健康？
-8. 中国竞彩胜平负 / 让球胜平负 / 比分桶 / 0–7+总进球 / 半全场中，哪些只是缺 projection/evaluation，哪些缺 prematch line/truth？
-9. HTFT 是否确实缺 first-half score/outcome truth？
-10. 当前有哪些 xG/阵容/球员/伤停等 rich-feature surface 可做 paired incremental-value audit？
-11. strongest / weakest market、competition、horizon 分别是谁？
-12. 哪些 failure 是模型本身，哪些只是 evaluation/product/data/rights gap？
+### A. Prediction Scorecard Map
 
-目的：先得到一张真实的“多玩法成绩与缺口地图”，再决定下一模型路线。
+1. 1X2 / O-U / BTTS / Exact 当前 full-coverage hit rate；
+2. 若已有 serving，served hit rate + coverage / abstain；
+3. proper score / calibration / CI；
+4. actual freeze lead-time 与 horizon-specific scorecard；
+5. 1X2 Home/Draw/Away mix、confusion、per-class recall、Draw recall；
+6. competition / regime / early-season slices；
+7. strongest / weakest market。
 
-## Candidate B — Closed Beta Measurement Minimum
+### B. Truth / Projection Map
 
-排序：`HIGH`。
+1. current FT joint score state 已能数学一致推导哪些玩法；
+2. current result truth 已能合法结算哪些玩法；
+3. JC 0–7+ / official score buckets 是否只是 projection/evaluation gap；
+4. official JC handicap line 是否已有合法 frozen truth；
+5. HTFT 是 raw source 已有 HT 但没进 contract，还是 source 根本缺 HT truth；
+6. 哪些缺口不需要新模型。
 
-低成本验证真实用户看什么玩法、能否理解 probability / strongest view / abstain、是否回看赛果、是否重复使用。
+### C. Historical Football Memory / Training Corpus Map
 
-## Candidate C — Data Rights / Source Commercial Inventory
+1. current historical real-match count by competition × season × team；
+2. regulation-90m semantics / extra-time contamination；
+3. HT coverage；
+4. canonical team/competition identity continuity；
+5. existing OpenFootball CC0 pilot 的可扩范围；
+6. 其它 rights-clear corpus 的实际增量与 license boundary；
+7. point-in-time replay readiness；
+8. promoted/new/cold-start teams 与 sparse leagues 的 pooling need；
+9. current Champion 是否真正使用长期 team state；
+10. historical market/odds 的 timepoint / rights / coverage。
 
-排序：`HIGH BEFORE PUBLIC SCALE`。
+### D. Baseline / Model-Bottleneck Map
 
-## Candidate D — Operations Release-Readiness Audit
+1. Exact common-score / competition-mode baseline；
+2. simple leakage-safe historical dynamic team-strength baseline；
+3. same-market / same-horizon baseline；
+4. market-implied score MAP where legal；
+5. Football-only / Market-only / Fusion；
+6. Champion / C；
+7. current `_select_primary()` 是否进入用户 surface、是否已有 evidence；
+8. rich-feature ablation surfaces；
+9. 最终把每个 failure 分类为：`MODEL / TRAINING-CORPUS / DATA / IDENTITY / TRUTH / PROJECTION / EVALUATION / RIGHTS / PRODUCT`。
 
-排序：`HIGH BEFORE PUBLIC LAUNCH`。
+目的：
 
-## Candidate E — New Model / New Market Implementation
-
-排序：`NOT BEFORE GAP AUDIT BY DEFAULT`。
-
-只有 Candidate A 证明具体 per-market failure 后，才研究 Exact Score、handicap、goals、HTFT、market-specific head、xG/lineup/player 等哪条最值得做。
-
-最终仍由：
-
-`#180 accepted truth → Canonical Evolution Gate → Research-Backed route comparison → highest product information/value`
-
-选择唯一下一项。
-
----
-
-# 5. Current Market Priority
-
-## Tier A — 中国竞彩
-
-- FT 1X2 / 胜平负
-- 让球胜平负
-- 比分 / official score buckets
-- 总进球 0–7+
-- 半全场（先过 first-half truth gate）
-
-## Tier B
-
-O/U / BTTS / Asian/common handicap / team totals / winning margin / double chance 等。
-
-禁止为了“玩法多”直接实现；先有 truth/evaluation。
+> **先查清“哪里不准、为什么不准、是不是样本/真相/产品缺口”，再决定要不要造模型以及造哪一种。**
 
 ---
 
-# 6. Explicitly Not Next By Default
+# 5. If Historical Football Memory Becomes Highest-Value Route — 仍需 Gate
+
+若上面审计证明历史 Football Memory 是主要瓶颈，候选最短实验梯子：
+
+`historical corpus truth/rights`
+`→ simple leakage-safe dynamic team-strength baseline`
+`→ hierarchical/partial pooling`
+`→ same-horizon market prior / implied score matrix`
+`→ football + market residual/fusion`
+`→ Exact Score distribution-family experiment only if residual evidence requires`
+`→ enriched xG/lineup/player only if incremental`
+
+不得一口气做完。
+
+---
+
+# 6. Exact Score Flagship Questions
+
+后续任何技术路线都必须回答它对波胆究竟增加什么：
+
+- strict Top1 / Top3 / Top5；
+- Score NLL；
+- actual-score rank；
+- Top-k predicted mass vs observed coverage；
+- common-score / league-mode baseline；
+- market-implied score MAP / direct correct-score baseline（可得时）；
+- 是否只让比分“看起来合理”却没有提高 strict future metrics。
+
+近似命中不能冒充 Exact hit。
+
+---
+
+# 7. Parallel High-Value Candidates
+
+完成 #180 后仍由 Project Gate 排序，不机械执行：
+
+- Closed Beta Measurement Minimum；
+- Data Rights / Source Commercial Inventory；
+- Operations Release-Readiness Audit；
+- User Decision / Exact Score product-surface audit。
+
+New Model / New Market Implementation 默认排在 gap audit 后。
+
+---
+
+# 8. Explicitly Not Next By Default
 
 - Challenger E；
-- Dixon-Coles/rho tuning；
-- global lambda raise；
-- half-life scan；
+- lambda/rho/selector 局部美化；
+- 为显著性调 C；
+- global recency/half-life scan；
 - friendlies weighting；
-- provider hopping；
-- bulk alias authoring；
-- Trust Center UI 大改而没有逐玩法 scorecard；
+- provider hopping / bulk alias；
+- synthetic/Monte-Carlo 冒充新增真实样本；
+- 大历史库不分年代/赛事/90m semantics 直接训练；
+- closing market 给早期预测当 equal-information baseline；
+- 只看 overall 1X2 accuracy；
+- 因“高级”直接接 xG/player/GNN/LLM；
 - HTFT 用 90m lambda/2；
-- 只为了“提高总命中率”加入 easy-market mix；
-- T-24h 与 closing market 不公平比较；
-- overall 1X2 accuracy 不查 Draw/class collapse；
-- 因“高级”直接接 xG/球员/GNN；
 - generic news/live-score/community expansion；
-- EV/stake/portfolio。
+- EV/stake/portfolio 先于 probability trust。
 
 ---
 
-# 7. Completion Rule
+# 9. Completion Rule
 
 Founder 回复“已完成”时：
 
@@ -152,7 +190,7 @@ Founder 回复“已完成”时：
 
 ---
 
-# 8. Historical Pointer
+# 10. Historical Pointer
 
 旧 Next Work 从 Git history、Issues/PR/Actions、`docs/*` evidence 与 Memory-Hub 恢复。
 
