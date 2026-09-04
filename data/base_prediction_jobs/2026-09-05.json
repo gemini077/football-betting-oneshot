@@ -2,13 +2,13 @@
   "schema_version": "1.0",
   "business_date": "2026-09-05",
   "status": "READY",
-  "generated_at": "2026-09-04T07:19:05.635383+00:00",
+  "generated_at": "2026-09-04T07:31:02.166476+00:00",
   "fixture_count": 25,
   "job_count": 25,
   "pending_count": 0,
-  "frozen_count": 24,
+  "frozen_count": 17,
   "predicted_count": 0,
-  "insufficient_data_count": 1,
+  "insufficient_data_count": 8,
   "prediction_failed_count": 0,
   "missed_prematch_count": 0,
   "duplicate_job_count": 0,
@@ -39,12 +39,12 @@
       "home": "福冈黄蜂",
       "away": "水户蜀葵",
       "kickoff": "2026-09-05T18:00:00+08:00",
-      "status": "FROZEN",
+      "status": "INSUFFICIENT_DATA",
       "created_at": "2026-09-04T03:26:15.050595+00:00",
-      "updated_at": "2026-09-04T07:19:05.635383+00:00",
+      "updated_at": "2026-09-04T07:31:02.433554+00:00",
       "source_universe": "data/prediction_universe/2026-09-05.json",
       "prediction_id": "FBOS-PRED-fda092c9d9088300033aaa84",
-      "last_error": null,
+      "last_error": "SOURCE_FETCH_FAILED",
       "coverage": {
         "status": "UNSUPPORTED",
         "reason_codes": [
@@ -56,7 +56,7 @@
         "warning_codes": [],
         "historical_challenger_allowed": false,
         "champion_prediction_allowed": true,
-        "evaluated_at": "2026-09-04T07:19:05Z"
+        "evaluated_at": "2026-09-04T07:31:02Z"
       },
       "coverage_status": "UNSUPPORTED",
       "coverage_reason_codes": [
@@ -77,7 +77,173 @@
         "FBOS-PRED-fda092c9d9088300033aaa84"
       ],
       "prediction_created_at": "2026-09-04T06:50:03.749759+00:00",
-      "freeze_created_at": "2026-09-04T06:50:03.827055+00:00"
+      "freeze_created_at": "2026-09-04T06:50:03.827055+00:00",
+      "input_provenance_diagnostic": {
+        "schema_version": "input_provenance_diagnostic.v1",
+        "stage": "SOURCE_FETCH_FAILED",
+        "error_code": "SOURCE_FETCH_FAILED",
+        "source": "500_deep",
+        "status": "FETCH_ERROR",
+        "detail": "500 deep recent-form page fetch failed before usable form evidence was built",
+        "captured_at": "2026-09-04T07:31:14+08:00",
+        "references": [
+          "data/source_cache/shared-football/parsed/2026-09-05_1419057.json"
+        ],
+        "pages": [
+          "ouzhi",
+          "yazhi",
+          "rangqiu",
+          "daxiao",
+          "shuju",
+          "touzhu"
+        ],
+        "expected_before": "2026-09-05T18:00:00+08:00",
+        "attempts": [
+          {
+            "schema_version": "input_provenance_diagnostic.v1",
+            "stage": "OTHER_DETERMINISTIC_CAUSE",
+            "error_code": "INPUT_PROVENANCE_UNVERIFIED",
+            "source": "nowscore",
+            "status": "IDENTITY_MISMATCH",
+            "detail": "nowscore identity verification rejected",
+            "references": [
+              "data/source_cache/nowscore/raw/3000443_3in1.html",
+              "data/source_cache/nowscore/raw/3000443_analysis.js"
+            ],
+            "nowscore_status": "IDENTITY_MISMATCH",
+            "resolution": {
+              "status": "EXPLICIT_ID",
+              "nowscore_id": 3000443,
+              "identity_verification": {
+                "trusted": false,
+                "status": "TRUSTED_JC_REJECTED",
+                "source": "nowscore_public_jc_sales",
+                "nowscore_id": 3000443,
+                "page_provider_id": null,
+                "page_provider_id_availability_state": "UNAVAILABLE",
+                "page_provider_id_reason": "PAGE_PROVIDER_ID_UNAVAILABLE",
+                "page_provider_id_parse_state": "MISSING",
+                "page_provider_id_raw": null,
+                "page_provider_id_corroborated": false,
+                "display_name_mismatch": true,
+                "same_side_scores": {
+                  "home": 0.0,
+                  "away": 0.0
+                },
+                "reverse_side_scores": {
+                  "home": 0.0,
+                  "away": 0.0
+                },
+                "reasons": [
+                  "KICKOFF_MISMATCH",
+                  "PROVIDER_TEAM_IDENTITY_MISSING",
+                  "AMBIGUOUS_IDENTITY"
+                ],
+                "non_blocking_reasons": [
+                  "PAGE_PROVIDER_ID_UNAVAILABLE"
+                ]
+              },
+              "trusted_jc_provenance": {
+                "trusted": true,
+                "source": "nowscore_public_jc_sales",
+                "nowscore_id": 3000443,
+                "business_date": "2026-09-05",
+                "source_url": "https://cp.nowscore.com/buy/jingcai.aspx?typeID=101&oddstype=2&date=2026-09-05",
+                "reasons": []
+              }
+            },
+            "identity_errors": [
+              "HOME_TEAM_MISMATCH",
+              "AWAY_TEAM_MISMATCH",
+              "KICKOFF_MISMATCH",
+              "PROVIDER_TEAM_IDENTITY_MISSING",
+              "AMBIGUOUS_IDENTITY"
+            ],
+            "identity_verification": {
+              "trusted": false,
+              "status": "TRUSTED_JC_REJECTED",
+              "source": "nowscore_public_jc_sales",
+              "nowscore_id": 3000443,
+              "page_provider_id": null,
+              "page_provider_id_availability_state": "UNAVAILABLE",
+              "page_provider_id_reason": "PAGE_PROVIDER_ID_UNAVAILABLE",
+              "page_provider_id_parse_state": "MISSING",
+              "page_provider_id_raw": null,
+              "page_provider_id_corroborated": false,
+              "display_name_mismatch": true,
+              "same_side_scores": {
+                "home": 0.0,
+                "away": 0.0
+              },
+              "reverse_side_scores": {
+                "home": 0.0,
+                "away": 0.0
+              },
+              "reasons": [
+                "KICKOFF_MISMATCH",
+                "PROVIDER_TEAM_IDENTITY_MISSING",
+                "AMBIGUOUS_IDENTITY"
+              ],
+              "non_blocking_reasons": [
+                "PAGE_PROVIDER_ID_UNAVAILABLE"
+              ]
+            },
+            "identity_verification_status": "TRUSTED_JC_REJECTED",
+            "identity_verification_reasons": [
+              "KICKOFF_MISMATCH",
+              "PROVIDER_TEAM_IDENTITY_MISSING",
+              "AMBIGUOUS_IDENTITY"
+            ],
+            "trusted_jc_provenance": {
+              "trusted": true,
+              "source": "nowscore_public_jc_sales",
+              "nowscore_id": 3000443,
+              "business_date": "2026-09-05",
+              "source_url": "https://cp.nowscore.com/buy/jingcai.aspx?typeID=101&oddstype=2&date=2026-09-05",
+              "reasons": []
+            },
+            "trusted_jc_provenance_reasons": [],
+            "page_identity": {
+              "nowscore_id": 0,
+              "nowscore_id_raw": null,
+              "page_provider_id": null,
+              "page_provider_id_availability_state": "UNAVAILABLE",
+              "page_provider_id_reason": "PAGE_PROVIDER_ID_UNAVAILABLE",
+              "page_provider_id_parse_state": "MISSING",
+              "page_provider_id_raw": null,
+              "kickoff_local": null,
+              "home_team": null,
+              "away_team": null,
+              "home_team_id": null,
+              "away_team_id": null
+            },
+            "parsed_page_provider_id": null,
+            "page_provider_id": null,
+            "page_provider_id_availability_state": "UNAVAILABLE",
+            "page_provider_id_reason": "PAGE_PROVIDER_ID_UNAVAILABLE"
+          },
+          {
+            "schema_version": "input_provenance_diagnostic.v1",
+            "stage": "SOURCE_FETCH_FAILED",
+            "error_code": "SOURCE_FETCH_FAILED",
+            "source": "500_deep",
+            "status": "FETCH_ERROR",
+            "detail": "500 deep recent-form page fetch failed before usable form evidence was built",
+            "captured_at": "2026-09-04T07:31:14+08:00",
+            "references": [
+              "data/source_cache/shared-football/parsed/2026-09-05_1419057.json"
+            ],
+            "pages": [
+              "ouzhi",
+              "yazhi",
+              "rangqiu",
+              "daxiao",
+              "shuju",
+              "touzhu"
+            ]
+          }
+        ]
+      }
     },
     {
       "job_id": "BASE-2026-09-05-3000057",
@@ -90,9 +256,9 @@
       "kickoff": "2026-09-05T18:00:00+08:00",
       "status": "FROZEN",
       "created_at": "2026-09-04T03:26:15.050595+00:00",
-      "updated_at": "2026-09-04T07:19:05.635383+00:00",
+      "updated_at": "2026-09-04T07:31:02.433554+00:00",
       "source_universe": "data/prediction_universe/2026-09-05.json",
-      "prediction_id": "FBOS-PRED-766d8b2e630efcff0b20f4c5",
+      "prediction_id": "FBOS-PRED-5d11575bcc0a1d784a49560a",
       "last_error": null,
       "coverage": {
         "status": "UNSUPPORTED",
@@ -105,7 +271,7 @@
         "warning_codes": [],
         "historical_challenger_allowed": false,
         "champion_prediction_allowed": true,
-        "evaluated_at": "2026-09-04T07:19:05Z"
+        "evaluated_at": "2026-09-04T07:31:02Z"
       },
       "coverage_status": "UNSUPPORTED",
       "coverage_reason_codes": [
@@ -116,16 +282,17 @@
       ],
       "historical_challenger_allowed": false,
       "football_evidence_status": "created",
-      "football_evidence_ref": "/home/runner/work/football-betting-oneshot/football-betting-oneshot/data/prospective/football_evidence/FBOS-PRED-766d8b2e630efcff0b20f4c5.json",
+      "football_evidence_ref": "/home/runner/work/football-betting-oneshot/football-betting-oneshot/data/prospective/football_evidence/FBOS-PRED-5d11575bcc0a1d784a49560a.json",
       "football_evidence_error": null,
-      "shadow_status": "existing",
-      "shadow_comparison_id": "891bea265db3bd2bf4060822ab2654db3bb86a4ca981493f183bd7914802ff0a",
+      "shadow_status": "created",
+      "shadow_comparison_id": "d424d135d4a35bb637bb3ff6fec36a7e5254d81710e0969283308cf2c76d5ab0",
       "shadow_failure_reason": null,
       "prediction_ids": [
-        "FBOS-PRED-766d8b2e630efcff0b20f4c5"
+        "FBOS-PRED-766d8b2e630efcff0b20f4c5",
+        "FBOS-PRED-5d11575bcc0a1d784a49560a"
       ],
-      "prediction_created_at": "2026-09-04T06:26:42.955265+00:00",
-      "freeze_created_at": "2026-09-04T06:26:43.065065+00:00"
+      "prediction_created_at": "2026-09-04T07:31:24.278258+00:00",
+      "freeze_created_at": "2026-09-04T07:31:24.404168+00:00"
     },
     {
       "job_id": "BASE-2026-09-05-2929712",
@@ -136,12 +303,12 @@
       "home": "济州SK",
       "away": "蔚山现代",
       "kickoff": "2026-09-05T18:00:00+08:00",
-      "status": "FROZEN",
+      "status": "INSUFFICIENT_DATA",
       "created_at": "2026-09-04T03:26:15.050595+00:00",
-      "updated_at": "2026-09-04T07:19:05.635383+00:00",
+      "updated_at": "2026-09-04T07:31:02.433554+00:00",
       "source_universe": "data/prediction_universe/2026-09-05.json",
       "prediction_id": "FBOS-PRED-254cac70f50f9e347c09ce3b",
-      "last_error": null,
+      "last_error": "SOURCE_FETCH_FAILED",
       "coverage": {
         "status": "UNSUPPORTED",
         "reason_codes": [
@@ -153,7 +320,7 @@
         "warning_codes": [],
         "historical_challenger_allowed": false,
         "champion_prediction_allowed": true,
-        "evaluated_at": "2026-09-04T07:19:05Z"
+        "evaluated_at": "2026-09-04T07:31:02Z"
       },
       "coverage_status": "UNSUPPORTED",
       "coverage_reason_codes": [
@@ -173,7 +340,173 @@
         "FBOS-PRED-254cac70f50f9e347c09ce3b"
       ],
       "prediction_created_at": "2026-09-04T06:50:26.731773+00:00",
-      "freeze_created_at": "2026-09-04T06:50:26.804660+00:00"
+      "freeze_created_at": "2026-09-04T06:50:26.804660+00:00",
+      "input_provenance_diagnostic": {
+        "schema_version": "input_provenance_diagnostic.v1",
+        "stage": "SOURCE_FETCH_FAILED",
+        "error_code": "SOURCE_FETCH_FAILED",
+        "source": "500_deep",
+        "status": "FETCH_ERROR",
+        "detail": "500 deep recent-form page fetch failed before usable form evidence was built",
+        "captured_at": "2026-09-04T07:31:34+08:00",
+        "references": [
+          "data/source_cache/shared-football/parsed/2026-09-05_1373242.json"
+        ],
+        "pages": [
+          "ouzhi",
+          "yazhi",
+          "rangqiu",
+          "daxiao",
+          "shuju",
+          "touzhu"
+        ],
+        "expected_before": "2026-09-05T18:00:00+08:00",
+        "attempts": [
+          {
+            "schema_version": "input_provenance_diagnostic.v1",
+            "stage": "OTHER_DETERMINISTIC_CAUSE",
+            "error_code": "INPUT_PROVENANCE_UNVERIFIED",
+            "source": "nowscore",
+            "status": "IDENTITY_MISMATCH",
+            "detail": "nowscore identity verification rejected",
+            "references": [
+              "data/source_cache/nowscore/raw/2929712_3in1.html",
+              "data/source_cache/nowscore/raw/2929712_analysis.js"
+            ],
+            "nowscore_status": "IDENTITY_MISMATCH",
+            "resolution": {
+              "status": "EXPLICIT_ID",
+              "nowscore_id": 2929712,
+              "identity_verification": {
+                "trusted": false,
+                "status": "TRUSTED_JC_REJECTED",
+                "source": "nowscore_public_jc_sales",
+                "nowscore_id": 2929712,
+                "page_provider_id": null,
+                "page_provider_id_availability_state": "UNAVAILABLE",
+                "page_provider_id_reason": "PAGE_PROVIDER_ID_UNAVAILABLE",
+                "page_provider_id_parse_state": "MISSING",
+                "page_provider_id_raw": null,
+                "page_provider_id_corroborated": false,
+                "display_name_mismatch": true,
+                "same_side_scores": {
+                  "home": 0.0,
+                  "away": 0.0
+                },
+                "reverse_side_scores": {
+                  "home": 0.0,
+                  "away": 0.0
+                },
+                "reasons": [
+                  "KICKOFF_MISMATCH",
+                  "PROVIDER_TEAM_IDENTITY_MISSING",
+                  "AMBIGUOUS_IDENTITY"
+                ],
+                "non_blocking_reasons": [
+                  "PAGE_PROVIDER_ID_UNAVAILABLE"
+                ]
+              },
+              "trusted_jc_provenance": {
+                "trusted": true,
+                "source": "nowscore_public_jc_sales",
+                "nowscore_id": 2929712,
+                "business_date": "2026-09-05",
+                "source_url": "https://cp.nowscore.com/buy/jingcai.aspx?typeID=101&oddstype=2&date=2026-09-05",
+                "reasons": []
+              }
+            },
+            "identity_errors": [
+              "HOME_TEAM_MISMATCH",
+              "AWAY_TEAM_MISMATCH",
+              "KICKOFF_MISMATCH",
+              "PROVIDER_TEAM_IDENTITY_MISSING",
+              "AMBIGUOUS_IDENTITY"
+            ],
+            "identity_verification": {
+              "trusted": false,
+              "status": "TRUSTED_JC_REJECTED",
+              "source": "nowscore_public_jc_sales",
+              "nowscore_id": 2929712,
+              "page_provider_id": null,
+              "page_provider_id_availability_state": "UNAVAILABLE",
+              "page_provider_id_reason": "PAGE_PROVIDER_ID_UNAVAILABLE",
+              "page_provider_id_parse_state": "MISSING",
+              "page_provider_id_raw": null,
+              "page_provider_id_corroborated": false,
+              "display_name_mismatch": true,
+              "same_side_scores": {
+                "home": 0.0,
+                "away": 0.0
+              },
+              "reverse_side_scores": {
+                "home": 0.0,
+                "away": 0.0
+              },
+              "reasons": [
+                "KICKOFF_MISMATCH",
+                "PROVIDER_TEAM_IDENTITY_MISSING",
+                "AMBIGUOUS_IDENTITY"
+              ],
+              "non_blocking_reasons": [
+                "PAGE_PROVIDER_ID_UNAVAILABLE"
+              ]
+            },
+            "identity_verification_status": "TRUSTED_JC_REJECTED",
+            "identity_verification_reasons": [
+              "KICKOFF_MISMATCH",
+              "PROVIDER_TEAM_IDENTITY_MISSING",
+              "AMBIGUOUS_IDENTITY"
+            ],
+            "trusted_jc_provenance": {
+              "trusted": true,
+              "source": "nowscore_public_jc_sales",
+              "nowscore_id": 2929712,
+              "business_date": "2026-09-05",
+              "source_url": "https://cp.nowscore.com/buy/jingcai.aspx?typeID=101&oddstype=2&date=2026-09-05",
+              "reasons": []
+            },
+            "trusted_jc_provenance_reasons": [],
+            "page_identity": {
+              "nowscore_id": 0,
+              "nowscore_id_raw": null,
+              "page_provider_id": null,
+              "page_provider_id_availability_state": "UNAVAILABLE",
+              "page_provider_id_reason": "PAGE_PROVIDER_ID_UNAVAILABLE",
+              "page_provider_id_parse_state": "MISSING",
+              "page_provider_id_raw": null,
+              "kickoff_local": null,
+              "home_team": null,
+              "away_team": null,
+              "home_team_id": null,
+              "away_team_id": null
+            },
+            "parsed_page_provider_id": null,
+            "page_provider_id": null,
+            "page_provider_id_availability_state": "UNAVAILABLE",
+            "page_provider_id_reason": "PAGE_PROVIDER_ID_UNAVAILABLE"
+          },
+          {
+            "schema_version": "input_provenance_diagnostic.v1",
+            "stage": "SOURCE_FETCH_FAILED",
+            "error_code": "SOURCE_FETCH_FAILED",
+            "source": "500_deep",
+            "status": "FETCH_ERROR",
+            "detail": "500 deep recent-form page fetch failed before usable form evidence was built",
+            "captured_at": "2026-09-04T07:31:34+08:00",
+            "references": [
+              "data/source_cache/shared-football/parsed/2026-09-05_1373242.json"
+            ],
+            "pages": [
+              "ouzhi",
+              "yazhi",
+              "rangqiu",
+              "daxiao",
+              "shuju",
+              "touzhu"
+            ]
+          }
+        ]
+      }
     },
     {
       "job_id": "BASE-2026-09-05-3003877",
@@ -184,12 +517,12 @@
       "home": "纽卡斯尔",
       "away": "伯恩茅斯",
       "kickoff": "2026-09-05T19:30:00+08:00",
-      "status": "FROZEN",
+      "status": "INSUFFICIENT_DATA",
       "created_at": "2026-09-04T03:26:15.050595+00:00",
-      "updated_at": "2026-09-04T07:19:05.635383+00:00",
+      "updated_at": "2026-09-04T07:31:02.433554+00:00",
       "source_universe": "data/prediction_universe/2026-09-05.json",
       "prediction_id": "FBOS-PRED-79ca7717088094acc9961d61",
-      "last_error": null,
+      "last_error": "SOURCE_FETCH_FAILED",
       "coverage": {
         "status": "UNSUPPORTED",
         "reason_codes": [
@@ -201,7 +534,7 @@
         "warning_codes": [],
         "historical_challenger_allowed": false,
         "champion_prediction_allowed": true,
-        "evaluated_at": "2026-09-04T07:19:05Z"
+        "evaluated_at": "2026-09-04T07:31:02Z"
       },
       "coverage_status": "UNSUPPORTED",
       "coverage_reason_codes": [
@@ -221,7 +554,173 @@
         "FBOS-PRED-79ca7717088094acc9961d61"
       ],
       "prediction_created_at": "2026-09-04T06:27:07.488806+00:00",
-      "freeze_created_at": "2026-09-04T06:27:07.604682+00:00"
+      "freeze_created_at": "2026-09-04T06:27:07.604682+00:00",
+      "input_provenance_diagnostic": {
+        "schema_version": "input_provenance_diagnostic.v1",
+        "stage": "SOURCE_FETCH_FAILED",
+        "error_code": "SOURCE_FETCH_FAILED",
+        "source": "500_deep",
+        "status": "FETCH_ERROR",
+        "detail": "500 deep recent-form page fetch failed before usable form evidence was built",
+        "captured_at": "2026-09-04T07:31:44+08:00",
+        "references": [
+          "data/source_cache/shared-football/parsed/2026-09-05_1420395.json"
+        ],
+        "pages": [
+          "ouzhi",
+          "yazhi",
+          "rangqiu",
+          "daxiao",
+          "shuju",
+          "touzhu"
+        ],
+        "expected_before": "2026-09-05T19:30:00+08:00",
+        "attempts": [
+          {
+            "schema_version": "input_provenance_diagnostic.v1",
+            "stage": "OTHER_DETERMINISTIC_CAUSE",
+            "error_code": "INPUT_PROVENANCE_UNVERIFIED",
+            "source": "nowscore",
+            "status": "IDENTITY_MISMATCH",
+            "detail": "nowscore identity verification rejected",
+            "references": [
+              "data/source_cache/nowscore/raw/3003877_3in1.html",
+              "data/source_cache/nowscore/raw/3003877_analysis.js"
+            ],
+            "nowscore_status": "IDENTITY_MISMATCH",
+            "resolution": {
+              "status": "EXPLICIT_ID",
+              "nowscore_id": 3003877,
+              "identity_verification": {
+                "trusted": false,
+                "status": "TRUSTED_JC_REJECTED",
+                "source": "nowscore_public_jc_sales",
+                "nowscore_id": 3003877,
+                "page_provider_id": null,
+                "page_provider_id_availability_state": "UNAVAILABLE",
+                "page_provider_id_reason": "PAGE_PROVIDER_ID_UNAVAILABLE",
+                "page_provider_id_parse_state": "MISSING",
+                "page_provider_id_raw": null,
+                "page_provider_id_corroborated": false,
+                "display_name_mismatch": true,
+                "same_side_scores": {
+                  "home": 0.0,
+                  "away": 0.0
+                },
+                "reverse_side_scores": {
+                  "home": 0.0,
+                  "away": 0.0
+                },
+                "reasons": [
+                  "KICKOFF_MISMATCH",
+                  "PROVIDER_TEAM_IDENTITY_MISSING",
+                  "AMBIGUOUS_IDENTITY"
+                ],
+                "non_blocking_reasons": [
+                  "PAGE_PROVIDER_ID_UNAVAILABLE"
+                ]
+              },
+              "trusted_jc_provenance": {
+                "trusted": true,
+                "source": "nowscore_public_jc_sales",
+                "nowscore_id": 3003877,
+                "business_date": "2026-09-05",
+                "source_url": "https://cp.nowscore.com/buy/jingcai.aspx?typeID=101&oddstype=2&date=2026-09-05",
+                "reasons": []
+              }
+            },
+            "identity_errors": [
+              "HOME_TEAM_MISMATCH",
+              "AWAY_TEAM_MISMATCH",
+              "KICKOFF_MISMATCH",
+              "PROVIDER_TEAM_IDENTITY_MISSING",
+              "AMBIGUOUS_IDENTITY"
+            ],
+            "identity_verification": {
+              "trusted": false,
+              "status": "TRUSTED_JC_REJECTED",
+              "source": "nowscore_public_jc_sales",
+              "nowscore_id": 3003877,
+              "page_provider_id": null,
+              "page_provider_id_availability_state": "UNAVAILABLE",
+              "page_provider_id_reason": "PAGE_PROVIDER_ID_UNAVAILABLE",
+              "page_provider_id_parse_state": "MISSING",
+              "page_provider_id_raw": null,
+              "page_provider_id_corroborated": false,
+              "display_name_mismatch": true,
+              "same_side_scores": {
+                "home": 0.0,
+                "away": 0.0
+              },
+              "reverse_side_scores": {
+                "home": 0.0,
+                "away": 0.0
+              },
+              "reasons": [
+                "KICKOFF_MISMATCH",
+                "PROVIDER_TEAM_IDENTITY_MISSING",
+                "AMBIGUOUS_IDENTITY"
+              ],
+              "non_blocking_reasons": [
+                "PAGE_PROVIDER_ID_UNAVAILABLE"
+              ]
+            },
+            "identity_verification_status": "TRUSTED_JC_REJECTED",
+            "identity_verification_reasons": [
+              "KICKOFF_MISMATCH",
+              "PROVIDER_TEAM_IDENTITY_MISSING",
+              "AMBIGUOUS_IDENTITY"
+            ],
+            "trusted_jc_provenance": {
+              "trusted": true,
+              "source": "nowscore_public_jc_sales",
+              "nowscore_id": 3003877,
+              "business_date": "2026-09-05",
+              "source_url": "https://cp.nowscore.com/buy/jingcai.aspx?typeID=101&oddstype=2&date=2026-09-05",
+              "reasons": []
+            },
+            "trusted_jc_provenance_reasons": [],
+            "page_identity": {
+              "nowscore_id": 0,
+              "nowscore_id_raw": null,
+              "page_provider_id": null,
+              "page_provider_id_availability_state": "UNAVAILABLE",
+              "page_provider_id_reason": "PAGE_PROVIDER_ID_UNAVAILABLE",
+              "page_provider_id_parse_state": "MISSING",
+              "page_provider_id_raw": null,
+              "kickoff_local": null,
+              "home_team": null,
+              "away_team": null,
+              "home_team_id": null,
+              "away_team_id": null
+            },
+            "parsed_page_provider_id": null,
+            "page_provider_id": null,
+            "page_provider_id_availability_state": "UNAVAILABLE",
+            "page_provider_id_reason": "PAGE_PROVIDER_ID_UNAVAILABLE"
+          },
+          {
+            "schema_version": "input_provenance_diagnostic.v1",
+            "stage": "SOURCE_FETCH_FAILED",
+            "error_code": "SOURCE_FETCH_FAILED",
+            "source": "500_deep",
+            "status": "FETCH_ERROR",
+            "detail": "500 deep recent-form page fetch failed before usable form evidence was built",
+            "captured_at": "2026-09-04T07:31:44+08:00",
+            "references": [
+              "data/source_cache/shared-football/parsed/2026-09-05_1420395.json"
+            ],
+            "pages": [
+              "ouzhi",
+              "yazhi",
+              "rangqiu",
+              "daxiao",
+              "shuju",
+              "touzhu"
+            ]
+          }
+        ]
+      }
     },
     {
       "job_id": "BASE-2026-09-05-2993778",
@@ -234,9 +733,9 @@
       "kickoff": "2026-09-05T21:00:00+08:00",
       "status": "FROZEN",
       "created_at": "2026-09-04T03:26:15.050595+00:00",
-      "updated_at": "2026-09-04T07:19:05.635383+00:00",
+      "updated_at": "2026-09-04T07:31:02.433554+00:00",
       "source_universe": "data/prediction_universe/2026-09-05.json",
-      "prediction_id": "FBOS-PRED-660dabe4456b5b03c03b0550",
+      "prediction_id": "FBOS-PRED-7085fb98e9578b3541227d84",
       "last_error": null,
       "coverage": {
         "status": "UNSUPPORTED",
@@ -249,7 +748,7 @@
         "warning_codes": [],
         "historical_challenger_allowed": false,
         "champion_prediction_allowed": true,
-        "evaluated_at": "2026-09-04T07:19:05Z"
+        "evaluated_at": "2026-09-04T07:31:02Z"
       },
       "coverage_status": "UNSUPPORTED",
       "coverage_reason_codes": [
@@ -260,18 +759,19 @@
       ],
       "historical_challenger_allowed": false,
       "football_evidence_status": "created",
-      "football_evidence_ref": "/home/runner/work/football-betting-oneshot/football-betting-oneshot/data/prospective/football_evidence/FBOS-PRED-660dabe4456b5b03c03b0550.json",
+      "football_evidence_ref": "/home/runner/work/football-betting-oneshot/football-betting-oneshot/data/prospective/football_evidence/FBOS-PRED-7085fb98e9578b3541227d84.json",
       "football_evidence_error": null,
       "shadow_status": "created",
-      "shadow_comparison_id": "848f1e1458a7e5fd72f111722efab01311e6eda0488442a1ff907563c7f203ce",
+      "shadow_comparison_id": "c471cefb709652a7d8ac5e03325f20209fa11daadabf582f270c790745018fd6",
       "shadow_failure_reason": null,
       "prediction_ids": [
         "FBOS-PRED-cea4a827dc86a2f3d153cefb",
         "FBOS-PRED-0b017753329f690972c8b151",
-        "FBOS-PRED-660dabe4456b5b03c03b0550"
+        "FBOS-PRED-660dabe4456b5b03c03b0550",
+        "FBOS-PRED-7085fb98e9578b3541227d84"
       ],
-      "prediction_created_at": "2026-09-04T06:50:55.566980+00:00",
-      "freeze_created_at": "2026-09-04T06:50:55.646730+00:00"
+      "prediction_created_at": "2026-09-04T07:31:56.427306+00:00",
+      "freeze_created_at": "2026-09-04T07:31:56.562052+00:00"
     },
     {
       "job_id": "BASE-2026-09-05-3018796",
@@ -284,9 +784,9 @@
       "kickoff": "2026-09-05T21:30:00+08:00",
       "status": "FROZEN",
       "created_at": "2026-09-04T03:26:15.050595+00:00",
-      "updated_at": "2026-09-04T07:19:05.635383+00:00",
+      "updated_at": "2026-09-04T07:31:02.433554+00:00",
       "source_universe": "data/prediction_universe/2026-09-05.json",
-      "prediction_id": "FBOS-PRED-24fd53d9bd79310d2a91e93c",
+      "prediction_id": "FBOS-PRED-59b0ef89a4230d324df25305",
       "last_error": null,
       "coverage": {
         "status": "UNSUPPORTED",
@@ -299,7 +799,7 @@
         "warning_codes": [],
         "historical_challenger_allowed": false,
         "champion_prediction_allowed": true,
-        "evaluated_at": "2026-09-04T07:19:05Z"
+        "evaluated_at": "2026-09-04T07:31:02Z"
       },
       "coverage_status": "UNSUPPORTED",
       "coverage_reason_codes": [
@@ -310,16 +810,17 @@
       ],
       "historical_challenger_allowed": false,
       "football_evidence_status": "created",
-      "football_evidence_ref": "/home/runner/work/football-betting-oneshot/football-betting-oneshot/data/prospective/football_evidence/FBOS-PRED-24fd53d9bd79310d2a91e93c.json",
+      "football_evidence_ref": "/home/runner/work/football-betting-oneshot/football-betting-oneshot/data/prospective/football_evidence/FBOS-PRED-59b0ef89a4230d324df25305.json",
       "football_evidence_error": null,
       "shadow_status": "created",
-      "shadow_comparison_id": "1ba4c26a4ef0c660f929e0acc4dd9d458ee129836d29081a1882d2b0465749eb",
+      "shadow_comparison_id": "a9e7760b3c0a6231e21a7f451f045343663e72eccd87f9967673e72b99c2855d",
       "shadow_failure_reason": null,
       "prediction_ids": [
-        "FBOS-PRED-24fd53d9bd79310d2a91e93c"
+        "FBOS-PRED-24fd53d9bd79310d2a91e93c",
+        "FBOS-PRED-59b0ef89a4230d324df25305"
       ],
-      "prediction_created_at": "2026-09-04T06:51:07.079716+00:00",
-      "freeze_created_at": "2026-09-04T06:51:07.163197+00:00"
+      "prediction_created_at": "2026-09-04T07:32:09.547562+00:00",
+      "freeze_created_at": "2026-09-04T07:32:09.683645+00:00"
     },
     {
       "job_id": "BASE-2026-09-05-3018803",
@@ -332,7 +833,7 @@
       "kickoff": "2026-09-05T21:30:00+08:00",
       "status": "FROZEN",
       "created_at": "2026-09-04T03:26:15.050595+00:00",
-      "updated_at": "2026-09-04T07:19:05.635383+00:00",
+      "updated_at": "2026-09-04T07:31:02.433554+00:00",
       "source_universe": "data/prediction_universe/2026-09-05.json",
       "prediction_id": "FBOS-PRED-446d64a080406e3c8b51735c",
       "last_error": null,
@@ -347,7 +848,7 @@
         "warning_codes": [],
         "historical_challenger_allowed": false,
         "champion_prediction_allowed": true,
-        "evaluated_at": "2026-09-04T07:19:05Z"
+        "evaluated_at": "2026-09-04T07:31:02Z"
       },
       "coverage_status": "UNSUPPORTED",
       "coverage_reason_codes": [
@@ -382,9 +883,9 @@
       "kickoff": "2026-09-05T21:30:00+08:00",
       "status": "FROZEN",
       "created_at": "2026-09-04T03:26:15.050595+00:00",
-      "updated_at": "2026-09-04T07:19:05.635383+00:00",
+      "updated_at": "2026-09-04T07:31:02.433554+00:00",
       "source_universe": "data/prediction_universe/2026-09-05.json",
-      "prediction_id": "FBOS-PRED-8e3d4d5f7d7af1d120d856df",
+      "prediction_id": "FBOS-PRED-b9a7ae8fa7352f7e227db942",
       "last_error": null,
       "coverage": {
         "status": "UNSUPPORTED",
@@ -397,7 +898,7 @@
         "warning_codes": [],
         "historical_challenger_allowed": false,
         "champion_prediction_allowed": true,
-        "evaluated_at": "2026-09-04T07:19:05Z"
+        "evaluated_at": "2026-09-04T07:31:02Z"
       },
       "coverage_status": "UNSUPPORTED",
       "coverage_reason_codes": [
@@ -408,18 +909,19 @@
       ],
       "historical_challenger_allowed": false,
       "football_evidence_status": "created",
-      "football_evidence_ref": "/home/runner/work/football-betting-oneshot/football-betting-oneshot/data/prospective/football_evidence/FBOS-PRED-8e3d4d5f7d7af1d120d856df.json",
+      "football_evidence_ref": "/home/runner/work/football-betting-oneshot/football-betting-oneshot/data/prospective/football_evidence/FBOS-PRED-b9a7ae8fa7352f7e227db942.json",
       "football_evidence_error": null,
       "shadow_status": "created",
-      "shadow_comparison_id": "6f44cddd2a94c8ecfa901f1f206bd5253461b314bd8c6ef9a10f1627af36f95a",
+      "shadow_comparison_id": "4224515c4f7630ca05465d0337cafcf34a9731c0b97f22bf976421ba76db0351",
       "shadow_failure_reason": null,
       "prediction_ids": [
         "FBOS-PRED-33708cbf8f767c7b83591c9f",
         "FBOS-PRED-9b76b55ac2952619a43dac13",
-        "FBOS-PRED-8e3d4d5f7d7af1d120d856df"
+        "FBOS-PRED-8e3d4d5f7d7af1d120d856df",
+        "FBOS-PRED-b9a7ae8fa7352f7e227db942"
       ],
-      "prediction_created_at": "2026-09-04T06:51:32.680702+00:00",
-      "freeze_created_at": "2026-09-04T06:51:32.757375+00:00"
+      "prediction_created_at": "2026-09-04T07:32:31.469547+00:00",
+      "freeze_created_at": "2026-09-04T07:32:31.603127+00:00"
     },
     {
       "job_id": "BASE-2026-09-05-3018799",
@@ -432,9 +934,9 @@
       "kickoff": "2026-09-05T21:30:00+08:00",
       "status": "FROZEN",
       "created_at": "2026-09-04T03:26:15.050595+00:00",
-      "updated_at": "2026-09-04T07:19:05.635383+00:00",
+      "updated_at": "2026-09-04T07:31:02.433554+00:00",
       "source_universe": "data/prediction_universe/2026-09-05.json",
-      "prediction_id": "FBOS-PRED-52cbf4a7dd768ae1f5318be1",
+      "prediction_id": "FBOS-PRED-6e968ccbb4270d103cf68e20",
       "last_error": null,
       "coverage": {
         "status": "UNSUPPORTED",
@@ -447,7 +949,7 @@
         "warning_codes": [],
         "historical_challenger_allowed": false,
         "champion_prediction_allowed": true,
-        "evaluated_at": "2026-09-04T07:19:05Z"
+        "evaluated_at": "2026-09-04T07:31:02Z"
       },
       "coverage_status": "UNSUPPORTED",
       "coverage_reason_codes": [
@@ -458,17 +960,18 @@
       ],
       "historical_challenger_allowed": false,
       "football_evidence_status": "created",
-      "football_evidence_ref": "/home/runner/work/football-betting-oneshot/football-betting-oneshot/data/prospective/football_evidence/FBOS-PRED-52cbf4a7dd768ae1f5318be1.json",
+      "football_evidence_ref": "/home/runner/work/football-betting-oneshot/football-betting-oneshot/data/prospective/football_evidence/FBOS-PRED-6e968ccbb4270d103cf68e20.json",
       "football_evidence_error": null,
-      "shadow_status": "existing",
-      "shadow_comparison_id": "f007cc7d4ed21319b02866059cab4b25ebfaad661a6b822fc83c26b57a1a5dcd",
+      "shadow_status": "created",
+      "shadow_comparison_id": "08fe5254ea109d8a82eef7fcaedd816026909932eeefeea0ac54e1eefc044c5b",
       "shadow_failure_reason": null,
       "prediction_ids": [
         "FBOS-PRED-411abfd8defc8b0056e06b91",
-        "FBOS-PRED-52cbf4a7dd768ae1f5318be1"
+        "FBOS-PRED-52cbf4a7dd768ae1f5318be1",
+        "FBOS-PRED-6e968ccbb4270d103cf68e20"
       ],
-      "prediction_created_at": "2026-09-04T06:28:15.526759+00:00",
-      "freeze_created_at": "2026-09-04T06:28:15.646670+00:00"
+      "prediction_created_at": "2026-09-04T07:32:44.958797+00:00",
+      "freeze_created_at": "2026-09-04T07:32:45.091214+00:00"
     },
     {
       "job_id": "BASE-2026-09-05-3018795",
@@ -481,9 +984,9 @@
       "kickoff": "2026-09-05T21:30:00+08:00",
       "status": "FROZEN",
       "created_at": "2026-09-04T03:26:15.050595+00:00",
-      "updated_at": "2026-09-04T07:19:05.635383+00:00",
+      "updated_at": "2026-09-04T07:31:02.433554+00:00",
       "source_universe": "data/prediction_universe/2026-09-05.json",
-      "prediction_id": "FBOS-PRED-cfa0afd1acdd6dc47ea47fc6",
+      "prediction_id": "FBOS-PRED-deecd76aa5ea9b9d25a53a26",
       "last_error": null,
       "coverage": {
         "status": "UNSUPPORTED",
@@ -496,7 +999,7 @@
         "warning_codes": [],
         "historical_challenger_allowed": false,
         "champion_prediction_allowed": true,
-        "evaluated_at": "2026-09-04T07:19:05Z"
+        "evaluated_at": "2026-09-04T07:31:02Z"
       },
       "coverage_status": "UNSUPPORTED",
       "coverage_reason_codes": [
@@ -507,17 +1010,18 @@
       ],
       "historical_challenger_allowed": false,
       "football_evidence_status": "created",
-      "football_evidence_ref": "/home/runner/work/football-betting-oneshot/football-betting-oneshot/data/prospective/football_evidence/FBOS-PRED-cfa0afd1acdd6dc47ea47fc6.json",
+      "football_evidence_ref": "/home/runner/work/football-betting-oneshot/football-betting-oneshot/data/prospective/football_evidence/FBOS-PRED-deecd76aa5ea9b9d25a53a26.json",
       "football_evidence_error": null,
       "shadow_status": "created",
-      "shadow_comparison_id": "cebb543b31f904f4e6343b64853caa825b89666bd33b2e13d92291c96e12afc9",
+      "shadow_comparison_id": "94c52abc0cd9134128e91fae3d051bad968eeaa7c2e84f6cb8526dc66477bfd4",
       "shadow_failure_reason": null,
       "prediction_ids": [
         "FBOS-PRED-99badde17c4bcb29dd2ec979",
-        "FBOS-PRED-cfa0afd1acdd6dc47ea47fc6"
+        "FBOS-PRED-cfa0afd1acdd6dc47ea47fc6",
+        "FBOS-PRED-deecd76aa5ea9b9d25a53a26"
       ],
-      "prediction_created_at": "2026-09-04T06:51:59.191270+00:00",
-      "freeze_created_at": "2026-09-04T06:51:59.267051+00:00"
+      "prediction_created_at": "2026-09-04T07:32:57.153735+00:00",
+      "freeze_created_at": "2026-09-04T07:32:57.282071+00:00"
     },
     {
       "job_id": "BASE-2026-09-05-3003878",
@@ -528,12 +1032,12 @@
       "home": "诺丁汉",
       "away": "热刺",
       "kickoff": "2026-09-05T22:00:00+08:00",
-      "status": "FROZEN",
+      "status": "INSUFFICIENT_DATA",
       "created_at": "2026-09-04T03:26:15.050595+00:00",
-      "updated_at": "2026-09-04T07:19:05.635383+00:00",
+      "updated_at": "2026-09-04T07:31:02.433554+00:00",
       "source_universe": "data/prediction_universe/2026-09-05.json",
       "prediction_id": "FBOS-PRED-1f7c1d9993451b8fa875c53b",
-      "last_error": null,
+      "last_error": "SOURCE_FETCH_FAILED",
       "coverage": {
         "status": "UNSUPPORTED",
         "reason_codes": [
@@ -545,7 +1049,7 @@
         "warning_codes": [],
         "historical_challenger_allowed": false,
         "champion_prediction_allowed": true,
-        "evaluated_at": "2026-09-04T07:19:05Z"
+        "evaluated_at": "2026-09-04T07:31:02Z"
       },
       "coverage_status": "UNSUPPORTED",
       "coverage_reason_codes": [
@@ -567,698 +1071,7 @@
         "FBOS-PRED-1f7c1d9993451b8fa875c53b"
       ],
       "prediction_created_at": "2026-09-04T06:52:13.044907+00:00",
-      "freeze_created_at": "2026-09-04T06:52:13.143872+00:00"
-    },
-    {
-      "job_id": "BASE-2026-09-05-3003876",
-      "business_date": "2026-09-05",
-      "match_id": "3003876",
-      "match_num": "周六013",
-      "league": "英超",
-      "home": "曼城",
-      "away": "考文垂",
-      "kickoff": "2026-09-05T22:00:00+08:00",
-      "status": "FROZEN",
-      "created_at": "2026-09-04T03:26:15.050595+00:00",
-      "updated_at": "2026-09-04T07:19:05.635383+00:00",
-      "source_universe": "data/prediction_universe/2026-09-05.json",
-      "prediction_id": "FBOS-PRED-8bacc8e898228679ad17d11d",
-      "last_error": null,
-      "coverage": {
-        "status": "UNSUPPORTED",
-        "reason_codes": [
-          "COMPETITION_UNSUPPORTED"
-        ],
-        "blocking_reason_codes": [
-          "COMPETITION_UNSUPPORTED"
-        ],
-        "warning_codes": [],
-        "historical_challenger_allowed": false,
-        "champion_prediction_allowed": true,
-        "evaluated_at": "2026-09-04T07:19:05Z"
-      },
-      "coverage_status": "UNSUPPORTED",
-      "coverage_reason_codes": [
-        "COMPETITION_UNSUPPORTED"
-      ],
-      "coverage_blocking_reason_codes": [
-        "COMPETITION_UNSUPPORTED"
-      ],
-      "historical_challenger_allowed": false,
-      "football_evidence_status": "created",
-      "football_evidence_ref": "/home/runner/work/football-betting-oneshot/football-betting-oneshot/data/prospective/football_evidence/FBOS-PRED-8bacc8e898228679ad17d11d.json",
-      "football_evidence_error": null,
-      "shadow_status": "created",
-      "shadow_comparison_id": "7306cc9ad165ad8f89f6a004970adb76d9aec966cd4da78d6837a1a1ffd828cb",
-      "shadow_failure_reason": null,
-      "prediction_ids": [
-        "FBOS-PRED-6adf454b742ec9837306cb51",
-        "FBOS-PRED-8bacc8e898228679ad17d11d"
-      ],
-      "prediction_created_at": "2026-09-04T06:52:27.684261+00:00",
-      "freeze_created_at": "2026-09-04T06:52:27.763826+00:00"
-    },
-    {
-      "job_id": "BASE-2026-09-05-3003870",
-      "business_date": "2026-09-05",
-      "match_id": "3003870",
-      "match_num": "周六014",
-      "league": "英超",
-      "home": "布伦特",
-      "away": "桑德兰",
-      "kickoff": "2026-09-05T22:00:00+08:00",
-      "status": "FROZEN",
-      "created_at": "2026-09-04T03:26:15.050595+00:00",
-      "updated_at": "2026-09-04T07:19:05.635383+00:00",
-      "source_universe": "data/prediction_universe/2026-09-05.json",
-      "prediction_id": "FBOS-PRED-7f0d070d71115f0bd67cd3b4",
-      "last_error": null,
-      "coverage": {
-        "status": "UNSUPPORTED",
-        "reason_codes": [
-          "COMPETITION_UNSUPPORTED"
-        ],
-        "blocking_reason_codes": [
-          "COMPETITION_UNSUPPORTED"
-        ],
-        "warning_codes": [],
-        "historical_challenger_allowed": false,
-        "champion_prediction_allowed": true,
-        "evaluated_at": "2026-09-04T07:19:05Z"
-      },
-      "coverage_status": "UNSUPPORTED",
-      "coverage_reason_codes": [
-        "COMPETITION_UNSUPPORTED"
-      ],
-      "coverage_blocking_reason_codes": [
-        "COMPETITION_UNSUPPORTED"
-      ],
-      "historical_challenger_allowed": false,
-      "football_evidence_status": "created",
-      "football_evidence_ref": "/home/runner/work/football-betting-oneshot/football-betting-oneshot/data/prospective/football_evidence/FBOS-PRED-7f0d070d71115f0bd67cd3b4.json",
-      "football_evidence_error": null,
-      "shadow_status": "created",
-      "shadow_comparison_id": "da386485f2225ba2a37e466c1cc66242031917d3bff89fd61a40a0f304038bfc",
-      "shadow_failure_reason": null,
-      "prediction_ids": [
-        "FBOS-PRED-fe2c32536f474cfa1094de6e",
-        "FBOS-PRED-7f0d070d71115f0bd67cd3b4"
-      ],
-      "prediction_created_at": "2026-09-04T06:52:40.038698+00:00",
-      "freeze_created_at": "2026-09-04T06:52:40.119286+00:00"
-    },
-    {
-      "job_id": "BASE-2026-09-05-3003873",
-      "business_date": "2026-09-05",
-      "match_id": "3003873",
-      "match_num": "周六015",
-      "league": "英超",
-      "home": "富勒姆",
-      "away": "水晶宫",
-      "kickoff": "2026-09-05T22:00:00+08:00",
-      "status": "FROZEN",
-      "created_at": "2026-09-04T03:26:15.050595+00:00",
-      "updated_at": "2026-09-04T07:19:05.635383+00:00",
-      "source_universe": "data/prediction_universe/2026-09-05.json",
-      "prediction_id": "FBOS-PRED-f6cad1bf48007859a501a0e9",
-      "last_error": null,
-      "coverage": {
-        "status": "UNSUPPORTED",
-        "reason_codes": [
-          "COMPETITION_UNSUPPORTED"
-        ],
-        "blocking_reason_codes": [
-          "COMPETITION_UNSUPPORTED"
-        ],
-        "warning_codes": [],
-        "historical_challenger_allowed": false,
-        "champion_prediction_allowed": true,
-        "evaluated_at": "2026-09-04T07:19:05Z"
-      },
-      "coverage_status": "UNSUPPORTED",
-      "coverage_reason_codes": [
-        "COMPETITION_UNSUPPORTED"
-      ],
-      "coverage_blocking_reason_codes": [
-        "COMPETITION_UNSUPPORTED"
-      ],
-      "historical_challenger_allowed": false,
-      "football_evidence_status": "created",
-      "football_evidence_ref": "/home/runner/work/football-betting-oneshot/football-betting-oneshot/data/prospective/football_evidence/FBOS-PRED-f6cad1bf48007859a501a0e9.json",
-      "football_evidence_error": null,
-      "shadow_status": "created",
-      "shadow_comparison_id": "389d242530b9229023e3baa37d655cf7ce77969bdf14ed3464bdc2257fc37aa5",
-      "shadow_failure_reason": null,
-      "prediction_ids": [
-        "FBOS-PRED-e1d8ced477695087f0aab973",
-        "FBOS-PRED-f6cad1bf48007859a501a0e9"
-      ],
-      "prediction_created_at": "2026-09-04T06:52:54.608761+00:00",
-      "freeze_created_at": "2026-09-04T06:52:54.687512+00:00"
-    },
-    {
-      "job_id": "BASE-2026-09-05-3013673",
-      "business_date": "2026-09-05",
-      "match_id": "3013673",
-      "match_num": "周六016",
-      "league": "西甲",
-      "home": "毕尔巴鄂",
-      "away": "马竞",
-      "kickoff": "2026-09-05T22:15:00+08:00",
-      "status": "FROZEN",
-      "created_at": "2026-09-04T03:26:15.050595+00:00",
-      "updated_at": "2026-09-04T07:19:05.635383+00:00",
-      "source_universe": "data/prediction_universe/2026-09-05.json",
-      "prediction_id": "FBOS-PRED-778403f2afe422df103917c0",
-      "last_error": null,
-      "coverage": {
-        "status": "UNSUPPORTED",
-        "reason_codes": [
-          "COMPETITION_UNSUPPORTED"
-        ],
-        "blocking_reason_codes": [
-          "COMPETITION_UNSUPPORTED"
-        ],
-        "warning_codes": [],
-        "historical_challenger_allowed": false,
-        "champion_prediction_allowed": true,
-        "evaluated_at": "2026-09-04T07:19:05Z"
-      },
-      "coverage_status": "UNSUPPORTED",
-      "coverage_reason_codes": [
-        "COMPETITION_UNSUPPORTED"
-      ],
-      "coverage_blocking_reason_codes": [
-        "COMPETITION_UNSUPPORTED"
-      ],
-      "historical_challenger_allowed": false,
-      "football_evidence_status": "created",
-      "football_evidence_ref": "/home/runner/work/football-betting-oneshot/football-betting-oneshot/data/prospective/football_evidence/FBOS-PRED-778403f2afe422df103917c0.json",
-      "football_evidence_error": null,
-      "shadow_status": "created",
-      "shadow_comparison_id": "2e05a0bf28ab69af93e21ead324789e3d8b9757aaa47caec9969c074669d67d9",
-      "shadow_failure_reason": null,
-      "prediction_ids": [
-        "FBOS-PRED-620a4475926ef8a23537c7b8",
-        "FBOS-PRED-dc997435f48b276a754e4ef6",
-        "FBOS-PRED-057c2b50dd185b40160d29c2",
-        "FBOS-PRED-778403f2afe422df103917c0"
-      ],
-      "prediction_created_at": "2026-09-04T06:53:06.511384+00:00",
-      "freeze_created_at": "2026-09-04T06:53:06.598746+00:00"
-    },
-    {
-      "job_id": "BASE-2026-09-05-2995328",
-      "business_date": "2026-09-05",
-      "match_id": "2995328",
-      "match_num": "周六017",
-      "league": "法甲",
-      "home": "朗斯",
-      "away": "洛里昂",
-      "kickoff": "2026-09-05T23:15:00+08:00",
-      "status": "FROZEN",
-      "created_at": "2026-09-04T03:26:15.050595+00:00",
-      "updated_at": "2026-09-04T07:19:05.635383+00:00",
-      "source_universe": "data/prediction_universe/2026-09-05.json",
-      "prediction_id": "FBOS-PRED-f5d07e73bacade372e8452c3",
-      "last_error": null,
-      "coverage": {
-        "status": "UNSUPPORTED",
-        "reason_codes": [
-          "COMPETITION_UNSUPPORTED"
-        ],
-        "blocking_reason_codes": [
-          "COMPETITION_UNSUPPORTED"
-        ],
-        "warning_codes": [],
-        "historical_challenger_allowed": false,
-        "champion_prediction_allowed": true,
-        "evaluated_at": "2026-09-04T07:19:05Z"
-      },
-      "coverage_status": "UNSUPPORTED",
-      "coverage_reason_codes": [
-        "COMPETITION_UNSUPPORTED"
-      ],
-      "coverage_blocking_reason_codes": [
-        "COMPETITION_UNSUPPORTED"
-      ],
-      "historical_challenger_allowed": false,
-      "football_evidence_status": "created",
-      "football_evidence_ref": "/home/runner/work/football-betting-oneshot/football-betting-oneshot/data/prospective/football_evidence/FBOS-PRED-f5d07e73bacade372e8452c3.json",
-      "football_evidence_error": null,
-      "shadow_status": "created",
-      "shadow_comparison_id": "93a3451f6e639491aeda95f0b21d4f53499542bf728090bd695a9751342fe6b9",
-      "shadow_failure_reason": null,
-      "prediction_ids": [
-        "FBOS-PRED-331b713523980f3e9f4854d7",
-        "FBOS-PRED-f5d07e73bacade372e8452c3"
-      ],
-      "prediction_created_at": "2026-09-04T06:53:20.595196+00:00",
-      "freeze_created_at": "2026-09-04T06:53:20.670412+00:00"
-    },
-    {
-      "job_id": "BASE-2026-09-05-2993781",
-      "business_date": "2026-09-05",
-      "match_id": "2993781",
-      "match_num": "周六018",
-      "league": "意甲",
-      "home": "国际米兰",
-      "away": "那不勒斯",
-      "kickoff": "2026-09-06T00:00:00+08:00",
-      "status": "FROZEN",
-      "created_at": "2026-09-04T03:26:15.050595+00:00",
-      "updated_at": "2026-09-04T07:19:05.635383+00:00",
-      "source_universe": "data/prediction_universe/2026-09-05.json",
-      "prediction_id": "FBOS-PRED-a14136f1463e9ce807761e49",
-      "last_error": null,
-      "coverage": {
-        "status": "UNSUPPORTED",
-        "reason_codes": [
-          "COMPETITION_UNSUPPORTED"
-        ],
-        "blocking_reason_codes": [
-          "COMPETITION_UNSUPPORTED"
-        ],
-        "warning_codes": [],
-        "historical_challenger_allowed": false,
-        "champion_prediction_allowed": true,
-        "evaluated_at": "2026-09-04T07:19:05Z"
-      },
-      "coverage_status": "UNSUPPORTED",
-      "coverage_reason_codes": [
-        "COMPETITION_UNSUPPORTED"
-      ],
-      "coverage_blocking_reason_codes": [
-        "COMPETITION_UNSUPPORTED"
-      ],
-      "historical_challenger_allowed": false,
-      "football_evidence_status": "created",
-      "football_evidence_ref": "/home/runner/work/football-betting-oneshot/football-betting-oneshot/data/prospective/football_evidence/FBOS-PRED-a14136f1463e9ce807761e49.json",
-      "football_evidence_error": null,
-      "shadow_status": "created",
-      "shadow_comparison_id": "02adfc54e0f04d31817476ef579959e2c095a640496c671b00f1523328d16cd3",
-      "shadow_failure_reason": null,
-      "prediction_ids": [
-        "FBOS-PRED-493d358b6e64458a924881f9",
-        "FBOS-PRED-56684fe268ac19fdb1aba1a9",
-        "FBOS-PRED-a14136f1463e9ce807761e49"
-      ],
-      "prediction_created_at": "2026-09-04T06:53:34.201524+00:00",
-      "freeze_created_at": "2026-09-04T06:53:34.281041+00:00"
-    },
-    {
-      "job_id": "BASE-2026-09-05-3003874",
-      "business_date": "2026-09-05",
-      "match_id": "3003874",
-      "match_num": "周六020",
-      "league": "英超",
-      "home": "赫尔城",
-      "away": "维拉",
-      "kickoff": "2026-09-06T00:30:00+08:00",
-      "status": "FROZEN",
-      "created_at": "2026-09-04T03:26:15.050595+00:00",
-      "updated_at": "2026-09-04T07:19:05.635383+00:00",
-      "source_universe": "data/prediction_universe/2026-09-05.json",
-      "prediction_id": "FBOS-PRED-7de6af54ccdc79c253f807b8",
-      "last_error": null,
-      "coverage": {
-        "status": "UNSUPPORTED",
-        "reason_codes": [
-          "COMPETITION_UNSUPPORTED"
-        ],
-        "blocking_reason_codes": [
-          "COMPETITION_UNSUPPORTED"
-        ],
-        "warning_codes": [],
-        "historical_challenger_allowed": false,
-        "champion_prediction_allowed": true,
-        "evaluated_at": "2026-09-04T07:19:05Z"
-      },
-      "coverage_status": "UNSUPPORTED",
-      "coverage_reason_codes": [
-        "COMPETITION_UNSUPPORTED"
-      ],
-      "coverage_blocking_reason_codes": [
-        "COMPETITION_UNSUPPORTED"
-      ],
-      "historical_challenger_allowed": false,
-      "football_evidence_status": "created",
-      "football_evidence_ref": "/home/runner/work/football-betting-oneshot/football-betting-oneshot/data/prospective/football_evidence/FBOS-PRED-7de6af54ccdc79c253f807b8.json",
-      "football_evidence_error": null,
-      "shadow_status": "existing",
-      "shadow_comparison_id": "e79311b6a5cb74780f862aff351ee0c55e3f60ea93b7be09898d9626ee67a85a",
-      "shadow_failure_reason": null,
-      "prediction_ids": [
-        "FBOS-PRED-c788dbeb1329aef5f2347bd1",
-        "FBOS-PRED-7de6af54ccdc79c253f807b8"
-      ],
-      "prediction_created_at": "2026-09-04T06:41:43.036407+00:00",
-      "freeze_created_at": "2026-09-04T06:41:43.181329+00:00"
-    },
-    {
-      "job_id": "BASE-2026-09-05-3018801",
-      "business_date": "2026-09-05",
-      "match_id": "3018801",
-      "match_num": "周六021",
-      "league": "德甲",
-      "home": "沙尔克04",
-      "away": "拜仁",
-      "kickoff": "2026-09-06T00:30:00+08:00",
-      "status": "FROZEN",
-      "created_at": "2026-09-04T03:26:15.050595+00:00",
-      "updated_at": "2026-09-04T07:19:05.635383+00:00",
-      "source_universe": "data/prediction_universe/2026-09-05.json",
-      "prediction_id": "FBOS-PRED-6345893f90510deb30eef020",
-      "last_error": null,
-      "coverage": {
-        "status": "UNSUPPORTED",
-        "reason_codes": [
-          "COMPETITION_UNSUPPORTED"
-        ],
-        "blocking_reason_codes": [
-          "COMPETITION_UNSUPPORTED"
-        ],
-        "warning_codes": [],
-        "historical_challenger_allowed": false,
-        "champion_prediction_allowed": true,
-        "evaluated_at": "2026-09-04T07:19:05Z"
-      },
-      "coverage_status": "UNSUPPORTED",
-      "coverage_reason_codes": [
-        "COMPETITION_UNSUPPORTED"
-      ],
-      "coverage_blocking_reason_codes": [
-        "COMPETITION_UNSUPPORTED"
-      ],
-      "historical_challenger_allowed": false,
-      "football_evidence_status": "created",
-      "football_evidence_ref": "/home/runner/work/football-betting-oneshot/football-betting-oneshot/data/prospective/football_evidence/FBOS-PRED-6345893f90510deb30eef020.json",
-      "football_evidence_error": null,
-      "shadow_status": "created",
-      "shadow_comparison_id": "a9a454015f2b6e2ef036439225ce782ea2d0835334ca806bc4eec6c62bba71e5",
-      "shadow_failure_reason": null,
-      "prediction_ids": [
-        "FBOS-PRED-9d51621985839b66aadffaf6",
-        "FBOS-PRED-a415efdc843acce26e2e96f3",
-        "FBOS-PRED-6345893f90510deb30eef020"
-      ],
-      "prediction_created_at": "2026-09-04T06:54:04.776770+00:00",
-      "freeze_created_at": "2026-09-04T06:54:04.856107+00:00"
-    },
-    {
-      "job_id": "BASE-2026-09-05-3013679",
-      "business_date": "2026-09-05",
-      "match_id": "3013679",
-      "match_num": "周六022",
-      "league": "西甲",
-      "home": "巴列卡诺",
-      "away": "桑坦德",
-      "kickoff": "2026-09-06T00:30:00+08:00",
-      "status": "FROZEN",
-      "created_at": "2026-09-04T03:26:15.050595+00:00",
-      "updated_at": "2026-09-04T07:19:05.635383+00:00",
-      "source_universe": "data/prediction_universe/2026-09-05.json",
-      "prediction_id": "FBOS-PRED-b3cea4dc4a423df00b1be31f",
-      "last_error": null,
-      "coverage": {
-        "status": "UNSUPPORTED",
-        "reason_codes": [
-          "COMPETITION_UNSUPPORTED"
-        ],
-        "blocking_reason_codes": [
-          "COMPETITION_UNSUPPORTED"
-        ],
-        "warning_codes": [],
-        "historical_challenger_allowed": false,
-        "champion_prediction_allowed": true,
-        "evaluated_at": "2026-09-04T07:19:05Z"
-      },
-      "coverage_status": "UNSUPPORTED",
-      "coverage_reason_codes": [
-        "COMPETITION_UNSUPPORTED"
-      ],
-      "coverage_blocking_reason_codes": [
-        "COMPETITION_UNSUPPORTED"
-      ],
-      "historical_challenger_allowed": false,
-      "football_evidence_status": "created",
-      "football_evidence_ref": "/home/runner/work/football-betting-oneshot/football-betting-oneshot/data/prospective/football_evidence/FBOS-PRED-b3cea4dc4a423df00b1be31f.json",
-      "football_evidence_error": null,
-      "shadow_status": "created",
-      "shadow_comparison_id": "e69636cc4f7355a274536fc65732ff5f4df5ccc83275ff0444571ad2013f4b3f",
-      "shadow_failure_reason": null,
-      "prediction_ids": [
-        "FBOS-PRED-d95f5480d9a1ec36bed84bbc",
-        "FBOS-PRED-b3cea4dc4a423df00b1be31f"
-      ],
-      "prediction_created_at": "2026-09-04T06:54:15.525699+00:00",
-      "freeze_created_at": "2026-09-04T06:54:15.606480+00:00"
-    },
-    {
-      "job_id": "BASE-2026-09-05-3023472",
-      "business_date": "2026-09-05",
-      "match_id": "3023472",
-      "match_num": "周六023",
-      "league": "葡超",
-      "home": "马里迪莫",
-      "away": "本菲卡",
-      "kickoff": "2026-09-06T01:00:00+08:00",
-      "status": "FROZEN",
-      "created_at": "2026-09-04T03:26:15.050595+00:00",
-      "updated_at": "2026-09-04T07:19:05.635383+00:00",
-      "source_universe": "data/prediction_universe/2026-09-05.json",
-      "prediction_id": "FBOS-PRED-b2f20985bdcc5b6e38332b9a",
-      "last_error": null,
-      "coverage": {
-        "status": "UNSUPPORTED",
-        "reason_codes": [
-          "COMPETITION_UNSUPPORTED"
-        ],
-        "blocking_reason_codes": [
-          "COMPETITION_UNSUPPORTED"
-        ],
-        "warning_codes": [],
-        "historical_challenger_allowed": false,
-        "champion_prediction_allowed": true,
-        "evaluated_at": "2026-09-04T07:19:05Z"
-      },
-      "coverage_status": "UNSUPPORTED",
-      "coverage_reason_codes": [
-        "COMPETITION_UNSUPPORTED"
-      ],
-      "coverage_blocking_reason_codes": [
-        "COMPETITION_UNSUPPORTED"
-      ],
-      "historical_challenger_allowed": false,
-      "football_evidence_status": "created",
-      "football_evidence_ref": "/home/runner/work/football-betting-oneshot/football-betting-oneshot/data/prospective/football_evidence/FBOS-PRED-b2f20985bdcc5b6e38332b9a.json",
-      "football_evidence_error": null,
-      "shadow_status": "created",
-      "shadow_comparison_id": "a6df2f800145b4a52ba892d6cf38c7bf2f515a47824dc80e6e09e6b4ca9c878b",
-      "shadow_failure_reason": null,
-      "prediction_ids": [
-        "FBOS-PRED-b2452e7af5844152c699bcb6",
-        "FBOS-PRED-b2f20985bdcc5b6e38332b9a"
-      ],
-      "prediction_created_at": "2026-09-04T06:54:29.623754+00:00",
-      "freeze_created_at": "2026-09-04T06:54:29.708196+00:00"
-    },
-    {
-      "job_id": "BASE-2026-09-05-2996137",
-      "business_date": "2026-09-05",
-      "match_id": "2996137",
-      "match_num": "周六025",
-      "league": "荷甲",
-      "home": "阿贾克斯",
-      "away": "埃因霍温",
-      "kickoff": "2026-09-06T02:00:00+08:00",
-      "status": "FROZEN",
-      "created_at": "2026-09-04T03:26:15.050595+00:00",
-      "updated_at": "2026-09-04T07:19:05.635383+00:00",
-      "source_universe": "data/prediction_universe/2026-09-05.json",
-      "prediction_id": "FBOS-PRED-80291674ba109fcfe48c1255",
-      "last_error": null,
-      "coverage": {
-        "status": "UNSUPPORTED",
-        "reason_codes": [
-          "COMPETITION_UNSUPPORTED"
-        ],
-        "blocking_reason_codes": [
-          "COMPETITION_UNSUPPORTED"
-        ],
-        "warning_codes": [],
-        "historical_challenger_allowed": false,
-        "champion_prediction_allowed": true,
-        "evaluated_at": "2026-09-04T07:19:05Z"
-      },
-      "coverage_status": "UNSUPPORTED",
-      "coverage_reason_codes": [
-        "COMPETITION_UNSUPPORTED"
-      ],
-      "coverage_blocking_reason_codes": [
-        "COMPETITION_UNSUPPORTED"
-      ],
-      "historical_challenger_allowed": false,
-      "football_evidence_status": "created",
-      "football_evidence_ref": "/home/runner/work/football-betting-oneshot/football-betting-oneshot/data/prospective/football_evidence/FBOS-PRED-80291674ba109fcfe48c1255.json",
-      "football_evidence_error": null,
-      "shadow_status": "created",
-      "shadow_comparison_id": "b2a55a71c75a502eed767e2cfe4c6425d293f353aed0eed79f59bb2d122f5e12",
-      "shadow_failure_reason": null,
-      "prediction_ids": [
-        "FBOS-PRED-243b8c79d397d5810a11be13",
-        "FBOS-PRED-ec77526ec51d561f2aa7bccd",
-        "FBOS-PRED-80291674ba109fcfe48c1255"
-      ],
-      "prediction_created_at": "2026-09-04T06:54:43.221029+00:00",
-      "freeze_created_at": "2026-09-04T06:54:43.298349+00:00"
-    },
-    {
-      "job_id": "BASE-2026-09-05-2993775",
-      "business_date": "2026-09-05",
-      "match_id": "2993775",
-      "match_num": "周六026",
-      "league": "意甲",
-      "home": "罗马",
-      "away": "亚特兰大",
-      "kickoff": "2026-09-06T02:45:00+08:00",
-      "status": "FROZEN",
-      "created_at": "2026-09-04T03:26:15.050595+00:00",
-      "updated_at": "2026-09-04T07:19:05.635383+00:00",
-      "source_universe": "data/prediction_universe/2026-09-05.json",
-      "prediction_id": "FBOS-PRED-0b486a970c5ce308e4e3a314",
-      "last_error": null,
-      "coverage": {
-        "status": "UNSUPPORTED",
-        "reason_codes": [
-          "COMPETITION_UNSUPPORTED"
-        ],
-        "blocking_reason_codes": [
-          "COMPETITION_UNSUPPORTED"
-        ],
-        "warning_codes": [],
-        "historical_challenger_allowed": false,
-        "champion_prediction_allowed": true,
-        "evaluated_at": "2026-09-04T07:19:05Z"
-      },
-      "coverage_status": "UNSUPPORTED",
-      "coverage_reason_codes": [
-        "COMPETITION_UNSUPPORTED"
-      ],
-      "coverage_blocking_reason_codes": [
-        "COMPETITION_UNSUPPORTED"
-      ],
-      "historical_challenger_allowed": false,
-      "football_evidence_status": "created",
-      "football_evidence_ref": "/home/runner/work/football-betting-oneshot/football-betting-oneshot/data/prospective/football_evidence/FBOS-PRED-0b486a970c5ce308e4e3a314.json",
-      "football_evidence_error": null,
-      "shadow_status": "created",
-      "shadow_comparison_id": "5e41b3e69e1473307221b7889187dad6e3d2e997befb9fd9873a176c84ab79fb",
-      "shadow_failure_reason": null,
-      "prediction_ids": [
-        "FBOS-PRED-6abd66881fafa38d583c2303",
-        "FBOS-PRED-58cc9e0734fe86f0911337be",
-        "FBOS-PRED-0b486a970c5ce308e4e3a314"
-      ],
-      "prediction_created_at": "2026-09-04T06:54:58.142785+00:00",
-      "freeze_created_at": "2026-09-04T06:54:58.233650+00:00"
-    },
-    {
-      "job_id": "BASE-2026-09-05-2995327",
-      "business_date": "2026-09-05",
-      "match_id": "2995327",
-      "match_num": "周六027",
-      "league": "法甲",
-      "home": "勒阿弗尔",
-      "away": "布雷斯特",
-      "kickoff": "2026-09-06T02:45:00+08:00",
-      "status": "FROZEN",
-      "created_at": "2026-09-04T03:26:15.050595+00:00",
-      "updated_at": "2026-09-04T07:19:05.635383+00:00",
-      "source_universe": "data/prediction_universe/2026-09-05.json",
-      "prediction_id": "FBOS-PRED-037f32c8fb7d7ce8d04b1e11",
-      "last_error": null,
-      "coverage": {
-        "status": "UNSUPPORTED",
-        "reason_codes": [
-          "COMPETITION_UNSUPPORTED"
-        ],
-        "blocking_reason_codes": [
-          "COMPETITION_UNSUPPORTED"
-        ],
-        "warning_codes": [],
-        "historical_challenger_allowed": false,
-        "champion_prediction_allowed": true,
-        "evaluated_at": "2026-09-04T07:19:05Z"
-      },
-      "coverage_status": "UNSUPPORTED",
-      "coverage_reason_codes": [
-        "COMPETITION_UNSUPPORTED"
-      ],
-      "coverage_blocking_reason_codes": [
-        "COMPETITION_UNSUPPORTED"
-      ],
-      "historical_challenger_allowed": false,
-      "football_evidence_status": "created",
-      "football_evidence_ref": "/home/runner/work/football-betting-oneshot/football-betting-oneshot/data/prospective/football_evidence/FBOS-PRED-037f32c8fb7d7ce8d04b1e11.json",
-      "football_evidence_error": null,
-      "shadow_status": "created",
-      "shadow_comparison_id": "87d69f65b70ad01a0be00b6511525a5abf36519cdad41ab85a51c9bb21b8e981",
-      "shadow_failure_reason": null,
-      "prediction_ids": [
-        "FBOS-PRED-8f17c2bdd6108d8ee1939610",
-        "FBOS-PRED-037f32c8fb7d7ce8d04b1e11"
-      ],
-      "prediction_created_at": "2026-09-04T06:55:10.634827+00:00",
-      "freeze_created_at": "2026-09-04T06:55:10.708670+00:00"
-    },
-    {
-      "job_id": "BASE-2026-09-05-3013681",
-      "business_date": "2026-09-05",
-      "match_id": "3013681",
-      "match_num": "周六028",
-      "league": "西甲",
-      "home": "比利亚雷",
-      "away": "拉科",
-      "kickoff": "2026-09-06T03:00:00+08:00",
-      "status": "INSUFFICIENT_DATA",
-      "created_at": "2026-09-04T03:26:15.050595+00:00",
-      "updated_at": "2026-09-04T07:19:05.635383+00:00",
-      "source_universe": "data/prediction_universe/2026-09-05.json",
-      "prediction_id": "FBOS-PRED-17b780b655c7fde4d53da5b1",
-      "last_error": "SOURCE_FETCH_FAILED",
-      "coverage": {
-        "status": "UNSUPPORTED",
-        "reason_codes": [
-          "COMPETITION_UNSUPPORTED"
-        ],
-        "blocking_reason_codes": [
-          "COMPETITION_UNSUPPORTED"
-        ],
-        "warning_codes": [],
-        "historical_challenger_allowed": false,
-        "champion_prediction_allowed": true,
-        "evaluated_at": "2026-09-04T07:19:05Z"
-      },
-      "coverage_status": "UNSUPPORTED",
-      "coverage_reason_codes": [
-        "COMPETITION_UNSUPPORTED"
-      ],
-      "coverage_blocking_reason_codes": [
-        "COMPETITION_UNSUPPORTED"
-      ],
-      "historical_challenger_allowed": false,
-      "football_evidence_status": "created",
-      "football_evidence_ref": "/home/runner/work/football-betting-oneshot/football-betting-oneshot/data/prospective/football_evidence/FBOS-PRED-17b780b655c7fde4d53da5b1.json",
-      "football_evidence_error": null,
-      "shadow_status": "existing",
-      "shadow_comparison_id": "47f1966796682c3ae18b04d8bab5395b935f2b4144a2b62979f4b417be27d425",
-      "shadow_failure_reason": null,
-      "prediction_ids": [
-        "FBOS-PRED-17b780b655c7fde4d53da5b1"
-      ],
-      "prediction_created_at": "2026-09-04T06:31:46.586749+00:00",
-      "freeze_created_at": "2026-09-04T06:31:46.700813+00:00",
+      "freeze_created_at": "2026-09-04T06:52:13.143872+00:00",
       "input_provenance_diagnostic": {
         "schema_version": "input_provenance_diagnostic.v1",
         "stage": "SOURCE_FETCH_FAILED",
@@ -1266,9 +1079,9 @@
         "source": "500_deep",
         "status": "FETCH_ERROR",
         "detail": "500 deep recent-form page fetch failed before usable form evidence was built",
-        "captured_at": "2026-09-04T06:55:21+08:00",
+        "captured_at": "2026-09-04T07:33:08+08:00",
         "references": [
-          "data/source_cache/shared-football/parsed/2026-09-05_1428006.json"
+          "data/source_cache/shared-football/parsed/2026-09-05_1420399.json"
         ],
         "pages": [
           "ouzhi",
@@ -1278,7 +1091,7 @@
           "shuju",
           "touzhu"
         ],
-        "expected_before": "2026-09-06T03:00:00+08:00",
+        "expected_before": "2026-09-05T22:00:00+08:00",
         "attempts": [
           {
             "schema_version": "input_provenance_diagnostic.v1",
@@ -1288,18 +1101,18 @@
             "status": "IDENTITY_MISMATCH",
             "detail": "nowscore identity verification rejected",
             "references": [
-              "data/source_cache/nowscore/raw/3013681_3in1.html",
-              "data/source_cache/nowscore/raw/3013681_analysis.js"
+              "data/source_cache/nowscore/raw/3003878_3in1.html",
+              "data/source_cache/nowscore/raw/3003878_analysis.js"
             ],
             "nowscore_status": "IDENTITY_MISMATCH",
             "resolution": {
               "status": "EXPLICIT_ID",
-              "nowscore_id": 3013681,
+              "nowscore_id": 3003878,
               "identity_verification": {
                 "trusted": false,
                 "status": "TRUSTED_JC_REJECTED",
                 "source": "nowscore_public_jc_sales",
-                "nowscore_id": 3013681,
+                "nowscore_id": 3003878,
                 "page_provider_id": null,
                 "page_provider_id_availability_state": "UNAVAILABLE",
                 "page_provider_id_reason": "PAGE_PROVIDER_ID_UNAVAILABLE",
@@ -1327,7 +1140,7 @@
               "trusted_jc_provenance": {
                 "trusted": true,
                 "source": "nowscore_public_jc_sales",
-                "nowscore_id": 3013681,
+                "nowscore_id": 3003878,
                 "business_date": "2026-09-05",
                 "source_url": "https://cp.nowscore.com/buy/jingcai.aspx?typeID=101&oddstype=2&date=2026-09-05",
                 "reasons": []
@@ -1344,7 +1157,7 @@
               "trusted": false,
               "status": "TRUSTED_JC_REJECTED",
               "source": "nowscore_public_jc_sales",
-              "nowscore_id": 3013681,
+              "nowscore_id": 3003878,
               "page_provider_id": null,
               "page_provider_id_availability_state": "UNAVAILABLE",
               "page_provider_id_reason": "PAGE_PROVIDER_ID_UNAVAILABLE",
@@ -1378,7 +1191,7 @@
             "trusted_jc_provenance": {
               "trusted": true,
               "source": "nowscore_public_jc_sales",
-              "nowscore_id": 3013681,
+              "nowscore_id": 3003878,
               "business_date": "2026-09-05",
               "source_url": "https://cp.nowscore.com/buy/jingcai.aspx?typeID=101&oddstype=2&date=2026-09-05",
               "reasons": []
@@ -1410,9 +1223,9 @@
             "source": "500_deep",
             "status": "FETCH_ERROR",
             "detail": "500 deep recent-form page fetch failed before usable form evidence was built",
-            "captured_at": "2026-09-04T06:55:21+08:00",
+            "captured_at": "2026-09-04T07:33:08+08:00",
             "references": [
-              "data/source_cache/shared-football/parsed/2026-09-05_1428006.json"
+              "data/source_cache/shared-football/parsed/2026-09-05_1420399.json"
             ],
             "pages": [
               "ouzhi",
@@ -1425,6 +1238,1374 @@
           }
         ]
       }
+    },
+    {
+      "job_id": "BASE-2026-09-05-3003876",
+      "business_date": "2026-09-05",
+      "match_id": "3003876",
+      "match_num": "周六013",
+      "league": "英超",
+      "home": "曼城",
+      "away": "考文垂",
+      "kickoff": "2026-09-05T22:00:00+08:00",
+      "status": "INSUFFICIENT_DATA",
+      "created_at": "2026-09-04T03:26:15.050595+00:00",
+      "updated_at": "2026-09-04T07:31:02.433554+00:00",
+      "source_universe": "data/prediction_universe/2026-09-05.json",
+      "prediction_id": "FBOS-PRED-8bacc8e898228679ad17d11d",
+      "last_error": "SOURCE_FETCH_FAILED",
+      "coverage": {
+        "status": "UNSUPPORTED",
+        "reason_codes": [
+          "COMPETITION_UNSUPPORTED"
+        ],
+        "blocking_reason_codes": [
+          "COMPETITION_UNSUPPORTED"
+        ],
+        "warning_codes": [],
+        "historical_challenger_allowed": false,
+        "champion_prediction_allowed": true,
+        "evaluated_at": "2026-09-04T07:31:02Z"
+      },
+      "coverage_status": "UNSUPPORTED",
+      "coverage_reason_codes": [
+        "COMPETITION_UNSUPPORTED"
+      ],
+      "coverage_blocking_reason_codes": [
+        "COMPETITION_UNSUPPORTED"
+      ],
+      "historical_challenger_allowed": false,
+      "football_evidence_status": "created",
+      "football_evidence_ref": "/home/runner/work/football-betting-oneshot/football-betting-oneshot/data/prospective/football_evidence/FBOS-PRED-8bacc8e898228679ad17d11d.json",
+      "football_evidence_error": null,
+      "shadow_status": "created",
+      "shadow_comparison_id": "7306cc9ad165ad8f89f6a004970adb76d9aec966cd4da78d6837a1a1ffd828cb",
+      "shadow_failure_reason": null,
+      "prediction_ids": [
+        "FBOS-PRED-6adf454b742ec9837306cb51",
+        "FBOS-PRED-8bacc8e898228679ad17d11d"
+      ],
+      "prediction_created_at": "2026-09-04T06:52:27.684261+00:00",
+      "freeze_created_at": "2026-09-04T06:52:27.763826+00:00",
+      "input_provenance_diagnostic": {
+        "schema_version": "input_provenance_diagnostic.v1",
+        "stage": "SOURCE_FETCH_FAILED",
+        "error_code": "SOURCE_FETCH_FAILED",
+        "source": "500_deep",
+        "status": "FETCH_ERROR",
+        "detail": "500 deep recent-form page fetch failed before usable form evidence was built",
+        "captured_at": "2026-09-04T07:33:20+08:00",
+        "references": [
+          "data/source_cache/shared-football/parsed/2026-09-05_1420393.json"
+        ],
+        "pages": [
+          "ouzhi",
+          "yazhi",
+          "rangqiu",
+          "daxiao",
+          "shuju",
+          "touzhu"
+        ],
+        "expected_before": "2026-09-05T22:00:00+08:00",
+        "attempts": [
+          {
+            "schema_version": "input_provenance_diagnostic.v1",
+            "stage": "OTHER_DETERMINISTIC_CAUSE",
+            "error_code": "INPUT_PROVENANCE_UNVERIFIED",
+            "source": "nowscore",
+            "status": "IDENTITY_MISMATCH",
+            "detail": "nowscore identity verification rejected",
+            "references": [
+              "data/source_cache/nowscore/raw/3003876_3in1.html",
+              "data/source_cache/nowscore/raw/3003876_analysis.js"
+            ],
+            "nowscore_status": "IDENTITY_MISMATCH",
+            "resolution": {
+              "status": "EXPLICIT_ID",
+              "nowscore_id": 3003876,
+              "identity_verification": {
+                "trusted": false,
+                "status": "TRUSTED_JC_REJECTED",
+                "source": "nowscore_public_jc_sales",
+                "nowscore_id": 3003876,
+                "page_provider_id": null,
+                "page_provider_id_availability_state": "UNAVAILABLE",
+                "page_provider_id_reason": "PAGE_PROVIDER_ID_UNAVAILABLE",
+                "page_provider_id_parse_state": "MISSING",
+                "page_provider_id_raw": null,
+                "page_provider_id_corroborated": false,
+                "display_name_mismatch": true,
+                "same_side_scores": {
+                  "home": 0.0,
+                  "away": 0.0
+                },
+                "reverse_side_scores": {
+                  "home": 0.0,
+                  "away": 0.0
+                },
+                "reasons": [
+                  "KICKOFF_MISMATCH",
+                  "PROVIDER_TEAM_IDENTITY_MISSING",
+                  "AMBIGUOUS_IDENTITY"
+                ],
+                "non_blocking_reasons": [
+                  "PAGE_PROVIDER_ID_UNAVAILABLE"
+                ]
+              },
+              "trusted_jc_provenance": {
+                "trusted": true,
+                "source": "nowscore_public_jc_sales",
+                "nowscore_id": 3003876,
+                "business_date": "2026-09-05",
+                "source_url": "https://cp.nowscore.com/buy/jingcai.aspx?typeID=101&oddstype=2&date=2026-09-05",
+                "reasons": []
+              }
+            },
+            "identity_errors": [
+              "HOME_TEAM_MISMATCH",
+              "AWAY_TEAM_MISMATCH",
+              "KICKOFF_MISMATCH",
+              "PROVIDER_TEAM_IDENTITY_MISSING",
+              "AMBIGUOUS_IDENTITY"
+            ],
+            "identity_verification": {
+              "trusted": false,
+              "status": "TRUSTED_JC_REJECTED",
+              "source": "nowscore_public_jc_sales",
+              "nowscore_id": 3003876,
+              "page_provider_id": null,
+              "page_provider_id_availability_state": "UNAVAILABLE",
+              "page_provider_id_reason": "PAGE_PROVIDER_ID_UNAVAILABLE",
+              "page_provider_id_parse_state": "MISSING",
+              "page_provider_id_raw": null,
+              "page_provider_id_corroborated": false,
+              "display_name_mismatch": true,
+              "same_side_scores": {
+                "home": 0.0,
+                "away": 0.0
+              },
+              "reverse_side_scores": {
+                "home": 0.0,
+                "away": 0.0
+              },
+              "reasons": [
+                "KICKOFF_MISMATCH",
+                "PROVIDER_TEAM_IDENTITY_MISSING",
+                "AMBIGUOUS_IDENTITY"
+              ],
+              "non_blocking_reasons": [
+                "PAGE_PROVIDER_ID_UNAVAILABLE"
+              ]
+            },
+            "identity_verification_status": "TRUSTED_JC_REJECTED",
+            "identity_verification_reasons": [
+              "KICKOFF_MISMATCH",
+              "PROVIDER_TEAM_IDENTITY_MISSING",
+              "AMBIGUOUS_IDENTITY"
+            ],
+            "trusted_jc_provenance": {
+              "trusted": true,
+              "source": "nowscore_public_jc_sales",
+              "nowscore_id": 3003876,
+              "business_date": "2026-09-05",
+              "source_url": "https://cp.nowscore.com/buy/jingcai.aspx?typeID=101&oddstype=2&date=2026-09-05",
+              "reasons": []
+            },
+            "trusted_jc_provenance_reasons": [],
+            "page_identity": {
+              "nowscore_id": 0,
+              "nowscore_id_raw": null,
+              "page_provider_id": null,
+              "page_provider_id_availability_state": "UNAVAILABLE",
+              "page_provider_id_reason": "PAGE_PROVIDER_ID_UNAVAILABLE",
+              "page_provider_id_parse_state": "MISSING",
+              "page_provider_id_raw": null,
+              "kickoff_local": null,
+              "home_team": null,
+              "away_team": null,
+              "home_team_id": null,
+              "away_team_id": null
+            },
+            "parsed_page_provider_id": null,
+            "page_provider_id": null,
+            "page_provider_id_availability_state": "UNAVAILABLE",
+            "page_provider_id_reason": "PAGE_PROVIDER_ID_UNAVAILABLE"
+          },
+          {
+            "schema_version": "input_provenance_diagnostic.v1",
+            "stage": "SOURCE_FETCH_FAILED",
+            "error_code": "SOURCE_FETCH_FAILED",
+            "source": "500_deep",
+            "status": "FETCH_ERROR",
+            "detail": "500 deep recent-form page fetch failed before usable form evidence was built",
+            "captured_at": "2026-09-04T07:33:20+08:00",
+            "references": [
+              "data/source_cache/shared-football/parsed/2026-09-05_1420393.json"
+            ],
+            "pages": [
+              "ouzhi",
+              "yazhi",
+              "rangqiu",
+              "daxiao",
+              "shuju",
+              "touzhu"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "job_id": "BASE-2026-09-05-3003870",
+      "business_date": "2026-09-05",
+      "match_id": "3003870",
+      "match_num": "周六014",
+      "league": "英超",
+      "home": "布伦特",
+      "away": "桑德兰",
+      "kickoff": "2026-09-05T22:00:00+08:00",
+      "status": "FROZEN",
+      "created_at": "2026-09-04T03:26:15.050595+00:00",
+      "updated_at": "2026-09-04T07:31:02.433554+00:00",
+      "source_universe": "data/prediction_universe/2026-09-05.json",
+      "prediction_id": "FBOS-PRED-7f0d070d71115f0bd67cd3b4",
+      "last_error": null,
+      "coverage": {
+        "status": "UNSUPPORTED",
+        "reason_codes": [
+          "COMPETITION_UNSUPPORTED"
+        ],
+        "blocking_reason_codes": [
+          "COMPETITION_UNSUPPORTED"
+        ],
+        "warning_codes": [],
+        "historical_challenger_allowed": false,
+        "champion_prediction_allowed": true,
+        "evaluated_at": "2026-09-04T07:31:02Z"
+      },
+      "coverage_status": "UNSUPPORTED",
+      "coverage_reason_codes": [
+        "COMPETITION_UNSUPPORTED"
+      ],
+      "coverage_blocking_reason_codes": [
+        "COMPETITION_UNSUPPORTED"
+      ],
+      "historical_challenger_allowed": false,
+      "football_evidence_status": "created",
+      "football_evidence_ref": "/home/runner/work/football-betting-oneshot/football-betting-oneshot/data/prospective/football_evidence/FBOS-PRED-7f0d070d71115f0bd67cd3b4.json",
+      "football_evidence_error": null,
+      "shadow_status": "existing",
+      "shadow_comparison_id": "da386485f2225ba2a37e466c1cc66242031917d3bff89fd61a40a0f304038bfc",
+      "shadow_failure_reason": null,
+      "prediction_ids": [
+        "FBOS-PRED-fe2c32536f474cfa1094de6e",
+        "FBOS-PRED-7f0d070d71115f0bd67cd3b4"
+      ],
+      "prediction_created_at": "2026-09-04T06:52:40.038698+00:00",
+      "freeze_created_at": "2026-09-04T06:52:40.119286+00:00"
+    },
+    {
+      "job_id": "BASE-2026-09-05-3003873",
+      "business_date": "2026-09-05",
+      "match_id": "3003873",
+      "match_num": "周六015",
+      "league": "英超",
+      "home": "富勒姆",
+      "away": "水晶宫",
+      "kickoff": "2026-09-05T22:00:00+08:00",
+      "status": "FROZEN",
+      "created_at": "2026-09-04T03:26:15.050595+00:00",
+      "updated_at": "2026-09-04T07:31:02.433554+00:00",
+      "source_universe": "data/prediction_universe/2026-09-05.json",
+      "prediction_id": "FBOS-PRED-f6cad1bf48007859a501a0e9",
+      "last_error": null,
+      "coverage": {
+        "status": "UNSUPPORTED",
+        "reason_codes": [
+          "COMPETITION_UNSUPPORTED"
+        ],
+        "blocking_reason_codes": [
+          "COMPETITION_UNSUPPORTED"
+        ],
+        "warning_codes": [],
+        "historical_challenger_allowed": false,
+        "champion_prediction_allowed": true,
+        "evaluated_at": "2026-09-04T07:31:02Z"
+      },
+      "coverage_status": "UNSUPPORTED",
+      "coverage_reason_codes": [
+        "COMPETITION_UNSUPPORTED"
+      ],
+      "coverage_blocking_reason_codes": [
+        "COMPETITION_UNSUPPORTED"
+      ],
+      "historical_challenger_allowed": false,
+      "football_evidence_status": "created",
+      "football_evidence_ref": "/home/runner/work/football-betting-oneshot/football-betting-oneshot/data/prospective/football_evidence/FBOS-PRED-f6cad1bf48007859a501a0e9.json",
+      "football_evidence_error": null,
+      "shadow_status": "existing",
+      "shadow_comparison_id": "389d242530b9229023e3baa37d655cf7ce77969bdf14ed3464bdc2257fc37aa5",
+      "shadow_failure_reason": null,
+      "prediction_ids": [
+        "FBOS-PRED-e1d8ced477695087f0aab973",
+        "FBOS-PRED-f6cad1bf48007859a501a0e9"
+      ],
+      "prediction_created_at": "2026-09-04T06:52:54.608761+00:00",
+      "freeze_created_at": "2026-09-04T06:52:54.687512+00:00"
+    },
+    {
+      "job_id": "BASE-2026-09-05-3013673",
+      "business_date": "2026-09-05",
+      "match_id": "3013673",
+      "match_num": "周六016",
+      "league": "西甲",
+      "home": "毕尔巴鄂",
+      "away": "马竞",
+      "kickoff": "2026-09-05T22:15:00+08:00",
+      "status": "FROZEN",
+      "created_at": "2026-09-04T03:26:15.050595+00:00",
+      "updated_at": "2026-09-04T07:31:02.433554+00:00",
+      "source_universe": "data/prediction_universe/2026-09-05.json",
+      "prediction_id": "FBOS-PRED-54ec567685df1fab7d591c48",
+      "last_error": null,
+      "coverage": {
+        "status": "UNSUPPORTED",
+        "reason_codes": [
+          "COMPETITION_UNSUPPORTED"
+        ],
+        "blocking_reason_codes": [
+          "COMPETITION_UNSUPPORTED"
+        ],
+        "warning_codes": [],
+        "historical_challenger_allowed": false,
+        "champion_prediction_allowed": true,
+        "evaluated_at": "2026-09-04T07:31:02Z"
+      },
+      "coverage_status": "UNSUPPORTED",
+      "coverage_reason_codes": [
+        "COMPETITION_UNSUPPORTED"
+      ],
+      "coverage_blocking_reason_codes": [
+        "COMPETITION_UNSUPPORTED"
+      ],
+      "historical_challenger_allowed": false,
+      "football_evidence_status": "created",
+      "football_evidence_ref": "/home/runner/work/football-betting-oneshot/football-betting-oneshot/data/prospective/football_evidence/FBOS-PRED-54ec567685df1fab7d591c48.json",
+      "football_evidence_error": null,
+      "shadow_status": "created",
+      "shadow_comparison_id": "3d3c7bc1ec493dc7fed979f1fcc82a813dad7e177077e2c5f2ab146324cef71e",
+      "shadow_failure_reason": null,
+      "prediction_ids": [
+        "FBOS-PRED-620a4475926ef8a23537c7b8",
+        "FBOS-PRED-dc997435f48b276a754e4ef6",
+        "FBOS-PRED-057c2b50dd185b40160d29c2",
+        "FBOS-PRED-778403f2afe422df103917c0",
+        "FBOS-PRED-54ec567685df1fab7d591c48"
+      ],
+      "prediction_created_at": "2026-09-04T07:33:52.822224+00:00",
+      "freeze_created_at": "2026-09-04T07:33:52.956836+00:00"
+    },
+    {
+      "job_id": "BASE-2026-09-05-2995328",
+      "business_date": "2026-09-05",
+      "match_id": "2995328",
+      "match_num": "周六017",
+      "league": "法甲",
+      "home": "朗斯",
+      "away": "洛里昂",
+      "kickoff": "2026-09-05T23:15:00+08:00",
+      "status": "INSUFFICIENT_DATA",
+      "created_at": "2026-09-04T03:26:15.050595+00:00",
+      "updated_at": "2026-09-04T07:31:02.433554+00:00",
+      "source_universe": "data/prediction_universe/2026-09-05.json",
+      "prediction_id": "FBOS-PRED-f5d07e73bacade372e8452c3",
+      "last_error": "SOURCE_FETCH_FAILED",
+      "coverage": {
+        "status": "UNSUPPORTED",
+        "reason_codes": [
+          "COMPETITION_UNSUPPORTED"
+        ],
+        "blocking_reason_codes": [
+          "COMPETITION_UNSUPPORTED"
+        ],
+        "warning_codes": [],
+        "historical_challenger_allowed": false,
+        "champion_prediction_allowed": true,
+        "evaluated_at": "2026-09-04T07:31:02Z"
+      },
+      "coverage_status": "UNSUPPORTED",
+      "coverage_reason_codes": [
+        "COMPETITION_UNSUPPORTED"
+      ],
+      "coverage_blocking_reason_codes": [
+        "COMPETITION_UNSUPPORTED"
+      ],
+      "historical_challenger_allowed": false,
+      "football_evidence_status": "created",
+      "football_evidence_ref": "/home/runner/work/football-betting-oneshot/football-betting-oneshot/data/prospective/football_evidence/FBOS-PRED-f5d07e73bacade372e8452c3.json",
+      "football_evidence_error": null,
+      "shadow_status": "created",
+      "shadow_comparison_id": "93a3451f6e639491aeda95f0b21d4f53499542bf728090bd695a9751342fe6b9",
+      "shadow_failure_reason": null,
+      "prediction_ids": [
+        "FBOS-PRED-331b713523980f3e9f4854d7",
+        "FBOS-PRED-f5d07e73bacade372e8452c3"
+      ],
+      "prediction_created_at": "2026-09-04T06:53:20.595196+00:00",
+      "freeze_created_at": "2026-09-04T06:53:20.670412+00:00",
+      "input_provenance_diagnostic": {
+        "schema_version": "input_provenance_diagnostic.v1",
+        "stage": "SOURCE_FETCH_FAILED",
+        "error_code": "SOURCE_FETCH_FAILED",
+        "source": "500_deep",
+        "status": "FETCH_ERROR",
+        "detail": "500 deep recent-form page fetch failed before usable form evidence was built",
+        "captured_at": "2026-09-04T07:34:05+08:00",
+        "references": [
+          "data/source_cache/shared-football/parsed/2026-09-05_1415098.json"
+        ],
+        "pages": [
+          "ouzhi",
+          "yazhi",
+          "rangqiu",
+          "daxiao",
+          "shuju",
+          "touzhu"
+        ],
+        "expected_before": "2026-09-05T23:15:00+08:00",
+        "attempts": [
+          {
+            "schema_version": "input_provenance_diagnostic.v1",
+            "stage": "OTHER_DETERMINISTIC_CAUSE",
+            "error_code": "INPUT_PROVENANCE_UNVERIFIED",
+            "source": "nowscore",
+            "status": "IDENTITY_MISMATCH",
+            "detail": "nowscore identity verification rejected",
+            "references": [
+              "data/source_cache/nowscore/raw/2995328_3in1.html",
+              "data/source_cache/nowscore/raw/2995328_analysis.js"
+            ],
+            "nowscore_status": "IDENTITY_MISMATCH",
+            "resolution": {
+              "status": "EXPLICIT_ID",
+              "nowscore_id": 2995328,
+              "identity_verification": {
+                "trusted": false,
+                "status": "TRUSTED_JC_REJECTED",
+                "source": "nowscore_public_jc_sales",
+                "nowscore_id": 2995328,
+                "page_provider_id": null,
+                "page_provider_id_availability_state": "UNAVAILABLE",
+                "page_provider_id_reason": "PAGE_PROVIDER_ID_UNAVAILABLE",
+                "page_provider_id_parse_state": "MISSING",
+                "page_provider_id_raw": null,
+                "page_provider_id_corroborated": false,
+                "display_name_mismatch": true,
+                "same_side_scores": {
+                  "home": 0.0,
+                  "away": 0.0
+                },
+                "reverse_side_scores": {
+                  "home": 0.0,
+                  "away": 0.0
+                },
+                "reasons": [
+                  "KICKOFF_MISMATCH",
+                  "PROVIDER_TEAM_IDENTITY_MISSING",
+                  "AMBIGUOUS_IDENTITY"
+                ],
+                "non_blocking_reasons": [
+                  "PAGE_PROVIDER_ID_UNAVAILABLE"
+                ]
+              },
+              "trusted_jc_provenance": {
+                "trusted": true,
+                "source": "nowscore_public_jc_sales",
+                "nowscore_id": 2995328,
+                "business_date": "2026-09-05",
+                "source_url": "https://cp.nowscore.com/buy/jingcai.aspx?typeID=101&oddstype=2&date=2026-09-05",
+                "reasons": []
+              }
+            },
+            "identity_errors": [
+              "HOME_TEAM_MISMATCH",
+              "AWAY_TEAM_MISMATCH",
+              "KICKOFF_MISMATCH",
+              "PROVIDER_TEAM_IDENTITY_MISSING",
+              "AMBIGUOUS_IDENTITY"
+            ],
+            "identity_verification": {
+              "trusted": false,
+              "status": "TRUSTED_JC_REJECTED",
+              "source": "nowscore_public_jc_sales",
+              "nowscore_id": 2995328,
+              "page_provider_id": null,
+              "page_provider_id_availability_state": "UNAVAILABLE",
+              "page_provider_id_reason": "PAGE_PROVIDER_ID_UNAVAILABLE",
+              "page_provider_id_parse_state": "MISSING",
+              "page_provider_id_raw": null,
+              "page_provider_id_corroborated": false,
+              "display_name_mismatch": true,
+              "same_side_scores": {
+                "home": 0.0,
+                "away": 0.0
+              },
+              "reverse_side_scores": {
+                "home": 0.0,
+                "away": 0.0
+              },
+              "reasons": [
+                "KICKOFF_MISMATCH",
+                "PROVIDER_TEAM_IDENTITY_MISSING",
+                "AMBIGUOUS_IDENTITY"
+              ],
+              "non_blocking_reasons": [
+                "PAGE_PROVIDER_ID_UNAVAILABLE"
+              ]
+            },
+            "identity_verification_status": "TRUSTED_JC_REJECTED",
+            "identity_verification_reasons": [
+              "KICKOFF_MISMATCH",
+              "PROVIDER_TEAM_IDENTITY_MISSING",
+              "AMBIGUOUS_IDENTITY"
+            ],
+            "trusted_jc_provenance": {
+              "trusted": true,
+              "source": "nowscore_public_jc_sales",
+              "nowscore_id": 2995328,
+              "business_date": "2026-09-05",
+              "source_url": "https://cp.nowscore.com/buy/jingcai.aspx?typeID=101&oddstype=2&date=2026-09-05",
+              "reasons": []
+            },
+            "trusted_jc_provenance_reasons": [],
+            "page_identity": {
+              "nowscore_id": 0,
+              "nowscore_id_raw": null,
+              "page_provider_id": null,
+              "page_provider_id_availability_state": "UNAVAILABLE",
+              "page_provider_id_reason": "PAGE_PROVIDER_ID_UNAVAILABLE",
+              "page_provider_id_parse_state": "MISSING",
+              "page_provider_id_raw": null,
+              "kickoff_local": null,
+              "home_team": null,
+              "away_team": null,
+              "home_team_id": null,
+              "away_team_id": null
+            },
+            "parsed_page_provider_id": null,
+            "page_provider_id": null,
+            "page_provider_id_availability_state": "UNAVAILABLE",
+            "page_provider_id_reason": "PAGE_PROVIDER_ID_UNAVAILABLE"
+          },
+          {
+            "schema_version": "input_provenance_diagnostic.v1",
+            "stage": "SOURCE_FETCH_FAILED",
+            "error_code": "SOURCE_FETCH_FAILED",
+            "source": "500_deep",
+            "status": "FETCH_ERROR",
+            "detail": "500 deep recent-form page fetch failed before usable form evidence was built",
+            "captured_at": "2026-09-04T07:34:05+08:00",
+            "references": [
+              "data/source_cache/shared-football/parsed/2026-09-05_1415098.json"
+            ],
+            "pages": [
+              "ouzhi",
+              "yazhi",
+              "rangqiu",
+              "daxiao",
+              "shuju",
+              "touzhu"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "job_id": "BASE-2026-09-05-2993781",
+      "business_date": "2026-09-05",
+      "match_id": "2993781",
+      "match_num": "周六018",
+      "league": "意甲",
+      "home": "国际米兰",
+      "away": "那不勒斯",
+      "kickoff": "2026-09-06T00:00:00+08:00",
+      "status": "INSUFFICIENT_DATA",
+      "created_at": "2026-09-04T03:26:15.050595+00:00",
+      "updated_at": "2026-09-04T07:31:02.433554+00:00",
+      "source_universe": "data/prediction_universe/2026-09-05.json",
+      "prediction_id": "FBOS-PRED-a14136f1463e9ce807761e49",
+      "last_error": "SOURCE_FETCH_FAILED",
+      "coverage": {
+        "status": "UNSUPPORTED",
+        "reason_codes": [
+          "COMPETITION_UNSUPPORTED"
+        ],
+        "blocking_reason_codes": [
+          "COMPETITION_UNSUPPORTED"
+        ],
+        "warning_codes": [],
+        "historical_challenger_allowed": false,
+        "champion_prediction_allowed": true,
+        "evaluated_at": "2026-09-04T07:31:02Z"
+      },
+      "coverage_status": "UNSUPPORTED",
+      "coverage_reason_codes": [
+        "COMPETITION_UNSUPPORTED"
+      ],
+      "coverage_blocking_reason_codes": [
+        "COMPETITION_UNSUPPORTED"
+      ],
+      "historical_challenger_allowed": false,
+      "football_evidence_status": "created",
+      "football_evidence_ref": "/home/runner/work/football-betting-oneshot/football-betting-oneshot/data/prospective/football_evidence/FBOS-PRED-a14136f1463e9ce807761e49.json",
+      "football_evidence_error": null,
+      "shadow_status": "created",
+      "shadow_comparison_id": "02adfc54e0f04d31817476ef579959e2c095a640496c671b00f1523328d16cd3",
+      "shadow_failure_reason": null,
+      "prediction_ids": [
+        "FBOS-PRED-493d358b6e64458a924881f9",
+        "FBOS-PRED-56684fe268ac19fdb1aba1a9",
+        "FBOS-PRED-a14136f1463e9ce807761e49"
+      ],
+      "prediction_created_at": "2026-09-04T06:53:34.201524+00:00",
+      "freeze_created_at": "2026-09-04T06:53:34.281041+00:00",
+      "input_provenance_diagnostic": {
+        "schema_version": "input_provenance_diagnostic.v1",
+        "stage": "SOURCE_FETCH_FAILED",
+        "error_code": "SOURCE_FETCH_FAILED",
+        "source": "500_deep",
+        "status": "FETCH_ERROR",
+        "detail": "500 deep recent-form page fetch failed before usable form evidence was built",
+        "captured_at": "2026-09-04T07:34:16+08:00",
+        "references": [
+          "data/source_cache/shared-football/parsed/2026-09-05_1414233.json"
+        ],
+        "pages": [
+          "ouzhi",
+          "yazhi",
+          "rangqiu",
+          "daxiao",
+          "shuju",
+          "touzhu"
+        ],
+        "expected_before": "2026-09-06T00:00:00+08:00",
+        "attempts": [
+          {
+            "schema_version": "input_provenance_diagnostic.v1",
+            "stage": "OTHER_DETERMINISTIC_CAUSE",
+            "error_code": "INPUT_PROVENANCE_UNVERIFIED",
+            "source": "nowscore",
+            "status": "IDENTITY_MISMATCH",
+            "detail": "nowscore identity verification rejected",
+            "references": [
+              "data/source_cache/nowscore/raw/2993781_3in1.html",
+              "data/source_cache/nowscore/raw/2993781_analysis.js"
+            ],
+            "nowscore_status": "IDENTITY_MISMATCH",
+            "resolution": {
+              "status": "EXPLICIT_ID",
+              "nowscore_id": 2993781,
+              "identity_verification": {
+                "trusted": false,
+                "status": "TRUSTED_JC_REJECTED",
+                "source": "nowscore_public_jc_sales",
+                "nowscore_id": 2993781,
+                "page_provider_id": null,
+                "page_provider_id_availability_state": "UNAVAILABLE",
+                "page_provider_id_reason": "PAGE_PROVIDER_ID_UNAVAILABLE",
+                "page_provider_id_parse_state": "MISSING",
+                "page_provider_id_raw": null,
+                "page_provider_id_corroborated": false,
+                "display_name_mismatch": true,
+                "same_side_scores": {
+                  "home": 0.0,
+                  "away": 0.0
+                },
+                "reverse_side_scores": {
+                  "home": 0.0,
+                  "away": 0.0
+                },
+                "reasons": [
+                  "KICKOFF_MISMATCH",
+                  "PROVIDER_TEAM_IDENTITY_MISSING",
+                  "AMBIGUOUS_IDENTITY"
+                ],
+                "non_blocking_reasons": [
+                  "PAGE_PROVIDER_ID_UNAVAILABLE"
+                ]
+              },
+              "trusted_jc_provenance": {
+                "trusted": true,
+                "source": "nowscore_public_jc_sales",
+                "nowscore_id": 2993781,
+                "business_date": "2026-09-05",
+                "source_url": "https://cp.nowscore.com/buy/jingcai.aspx?typeID=101&oddstype=2&date=2026-09-05",
+                "reasons": []
+              }
+            },
+            "identity_errors": [
+              "HOME_TEAM_MISMATCH",
+              "AWAY_TEAM_MISMATCH",
+              "KICKOFF_MISMATCH",
+              "PROVIDER_TEAM_IDENTITY_MISSING",
+              "AMBIGUOUS_IDENTITY"
+            ],
+            "identity_verification": {
+              "trusted": false,
+              "status": "TRUSTED_JC_REJECTED",
+              "source": "nowscore_public_jc_sales",
+              "nowscore_id": 2993781,
+              "page_provider_id": null,
+              "page_provider_id_availability_state": "UNAVAILABLE",
+              "page_provider_id_reason": "PAGE_PROVIDER_ID_UNAVAILABLE",
+              "page_provider_id_parse_state": "MISSING",
+              "page_provider_id_raw": null,
+              "page_provider_id_corroborated": false,
+              "display_name_mismatch": true,
+              "same_side_scores": {
+                "home": 0.0,
+                "away": 0.0
+              },
+              "reverse_side_scores": {
+                "home": 0.0,
+                "away": 0.0
+              },
+              "reasons": [
+                "KICKOFF_MISMATCH",
+                "PROVIDER_TEAM_IDENTITY_MISSING",
+                "AMBIGUOUS_IDENTITY"
+              ],
+              "non_blocking_reasons": [
+                "PAGE_PROVIDER_ID_UNAVAILABLE"
+              ]
+            },
+            "identity_verification_status": "TRUSTED_JC_REJECTED",
+            "identity_verification_reasons": [
+              "KICKOFF_MISMATCH",
+              "PROVIDER_TEAM_IDENTITY_MISSING",
+              "AMBIGUOUS_IDENTITY"
+            ],
+            "trusted_jc_provenance": {
+              "trusted": true,
+              "source": "nowscore_public_jc_sales",
+              "nowscore_id": 2993781,
+              "business_date": "2026-09-05",
+              "source_url": "https://cp.nowscore.com/buy/jingcai.aspx?typeID=101&oddstype=2&date=2026-09-05",
+              "reasons": []
+            },
+            "trusted_jc_provenance_reasons": [],
+            "page_identity": {
+              "nowscore_id": 0,
+              "nowscore_id_raw": null,
+              "page_provider_id": null,
+              "page_provider_id_availability_state": "UNAVAILABLE",
+              "page_provider_id_reason": "PAGE_PROVIDER_ID_UNAVAILABLE",
+              "page_provider_id_parse_state": "MISSING",
+              "page_provider_id_raw": null,
+              "kickoff_local": null,
+              "home_team": null,
+              "away_team": null,
+              "home_team_id": null,
+              "away_team_id": null
+            },
+            "parsed_page_provider_id": null,
+            "page_provider_id": null,
+            "page_provider_id_availability_state": "UNAVAILABLE",
+            "page_provider_id_reason": "PAGE_PROVIDER_ID_UNAVAILABLE"
+          },
+          {
+            "schema_version": "input_provenance_diagnostic.v1",
+            "stage": "SOURCE_FETCH_FAILED",
+            "error_code": "SOURCE_FETCH_FAILED",
+            "source": "500_deep",
+            "status": "FETCH_ERROR",
+            "detail": "500 deep recent-form page fetch failed before usable form evidence was built",
+            "captured_at": "2026-09-04T07:34:16+08:00",
+            "references": [
+              "data/source_cache/shared-football/parsed/2026-09-05_1414233.json"
+            ],
+            "pages": [
+              "ouzhi",
+              "yazhi",
+              "rangqiu",
+              "daxiao",
+              "shuju",
+              "touzhu"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "job_id": "BASE-2026-09-05-3003874",
+      "business_date": "2026-09-05",
+      "match_id": "3003874",
+      "match_num": "周六020",
+      "league": "英超",
+      "home": "赫尔城",
+      "away": "维拉",
+      "kickoff": "2026-09-06T00:30:00+08:00",
+      "status": "FROZEN",
+      "created_at": "2026-09-04T03:26:15.050595+00:00",
+      "updated_at": "2026-09-04T07:31:02.433554+00:00",
+      "source_universe": "data/prediction_universe/2026-09-05.json",
+      "prediction_id": "FBOS-PRED-ce9b5bf79a17f6e022dcdb05",
+      "last_error": null,
+      "coverage": {
+        "status": "UNSUPPORTED",
+        "reason_codes": [
+          "COMPETITION_UNSUPPORTED"
+        ],
+        "blocking_reason_codes": [
+          "COMPETITION_UNSUPPORTED"
+        ],
+        "warning_codes": [],
+        "historical_challenger_allowed": false,
+        "champion_prediction_allowed": true,
+        "evaluated_at": "2026-09-04T07:31:02Z"
+      },
+      "coverage_status": "UNSUPPORTED",
+      "coverage_reason_codes": [
+        "COMPETITION_UNSUPPORTED"
+      ],
+      "coverage_blocking_reason_codes": [
+        "COMPETITION_UNSUPPORTED"
+      ],
+      "historical_challenger_allowed": false,
+      "football_evidence_status": "created",
+      "football_evidence_ref": "/home/runner/work/football-betting-oneshot/football-betting-oneshot/data/prospective/football_evidence/FBOS-PRED-ce9b5bf79a17f6e022dcdb05.json",
+      "football_evidence_error": null,
+      "shadow_status": "created",
+      "shadow_comparison_id": "c39c8b8f8f641fb46164f972b9d0370d5943cb78d4c3f5bd70832b46c5661ddc",
+      "shadow_failure_reason": null,
+      "prediction_ids": [
+        "FBOS-PRED-c788dbeb1329aef5f2347bd1",
+        "FBOS-PRED-7de6af54ccdc79c253f807b8",
+        "FBOS-PRED-ce9b5bf79a17f6e022dcdb05"
+      ],
+      "prediction_created_at": "2026-09-04T07:34:26.096342+00:00",
+      "freeze_created_at": "2026-09-04T07:34:26.239983+00:00"
+    },
+    {
+      "job_id": "BASE-2026-09-05-3018801",
+      "business_date": "2026-09-05",
+      "match_id": "3018801",
+      "match_num": "周六021",
+      "league": "德甲",
+      "home": "沙尔克04",
+      "away": "拜仁",
+      "kickoff": "2026-09-06T00:30:00+08:00",
+      "status": "FROZEN",
+      "created_at": "2026-09-04T03:26:15.050595+00:00",
+      "updated_at": "2026-09-04T07:31:02.433554+00:00",
+      "source_universe": "data/prediction_universe/2026-09-05.json",
+      "prediction_id": "FBOS-PRED-0c351afc54cbcd1ba8ef4844",
+      "last_error": null,
+      "coverage": {
+        "status": "UNSUPPORTED",
+        "reason_codes": [
+          "COMPETITION_UNSUPPORTED"
+        ],
+        "blocking_reason_codes": [
+          "COMPETITION_UNSUPPORTED"
+        ],
+        "warning_codes": [],
+        "historical_challenger_allowed": false,
+        "champion_prediction_allowed": true,
+        "evaluated_at": "2026-09-04T07:31:02Z"
+      },
+      "coverage_status": "UNSUPPORTED",
+      "coverage_reason_codes": [
+        "COMPETITION_UNSUPPORTED"
+      ],
+      "coverage_blocking_reason_codes": [
+        "COMPETITION_UNSUPPORTED"
+      ],
+      "historical_challenger_allowed": false,
+      "football_evidence_status": "created",
+      "football_evidence_ref": "/home/runner/work/football-betting-oneshot/football-betting-oneshot/data/prospective/football_evidence/FBOS-PRED-0c351afc54cbcd1ba8ef4844.json",
+      "football_evidence_error": null,
+      "shadow_status": "created",
+      "shadow_comparison_id": "489ffff848f0db396cb4889ebaa659b79be738fda607b26338c6dfe8614fef2e",
+      "shadow_failure_reason": null,
+      "prediction_ids": [
+        "FBOS-PRED-9d51621985839b66aadffaf6",
+        "FBOS-PRED-a415efdc843acce26e2e96f3",
+        "FBOS-PRED-6345893f90510deb30eef020",
+        "FBOS-PRED-0c351afc54cbcd1ba8ef4844"
+      ],
+      "prediction_created_at": "2026-09-04T07:34:36.086348+00:00",
+      "freeze_created_at": "2026-09-04T07:34:36.226500+00:00"
+    },
+    {
+      "job_id": "BASE-2026-09-05-3013679",
+      "business_date": "2026-09-05",
+      "match_id": "3013679",
+      "match_num": "周六022",
+      "league": "西甲",
+      "home": "巴列卡诺",
+      "away": "桑坦德",
+      "kickoff": "2026-09-06T00:30:00+08:00",
+      "status": "FROZEN",
+      "created_at": "2026-09-04T03:26:15.050595+00:00",
+      "updated_at": "2026-09-04T07:31:02.433554+00:00",
+      "source_universe": "data/prediction_universe/2026-09-05.json",
+      "prediction_id": "FBOS-PRED-61450e0a74e918e02237af30",
+      "last_error": null,
+      "coverage": {
+        "status": "UNSUPPORTED",
+        "reason_codes": [
+          "COMPETITION_UNSUPPORTED"
+        ],
+        "blocking_reason_codes": [
+          "COMPETITION_UNSUPPORTED"
+        ],
+        "warning_codes": [],
+        "historical_challenger_allowed": false,
+        "champion_prediction_allowed": true,
+        "evaluated_at": "2026-09-04T07:31:02Z"
+      },
+      "coverage_status": "UNSUPPORTED",
+      "coverage_reason_codes": [
+        "COMPETITION_UNSUPPORTED"
+      ],
+      "coverage_blocking_reason_codes": [
+        "COMPETITION_UNSUPPORTED"
+      ],
+      "historical_challenger_allowed": false,
+      "football_evidence_status": "created",
+      "football_evidence_ref": "/home/runner/work/football-betting-oneshot/football-betting-oneshot/data/prospective/football_evidence/FBOS-PRED-61450e0a74e918e02237af30.json",
+      "football_evidence_error": null,
+      "shadow_status": "created",
+      "shadow_comparison_id": "07ba0e8261a26c1568faff714eb97908c278025189c96d7180c870e0d090cd59",
+      "shadow_failure_reason": null,
+      "prediction_ids": [
+        "FBOS-PRED-d95f5480d9a1ec36bed84bbc",
+        "FBOS-PRED-b3cea4dc4a423df00b1be31f",
+        "FBOS-PRED-61450e0a74e918e02237af30"
+      ],
+      "prediction_created_at": "2026-09-04T07:34:48.021885+00:00",
+      "freeze_created_at": "2026-09-04T07:34:48.157333+00:00"
+    },
+    {
+      "job_id": "BASE-2026-09-05-3023472",
+      "business_date": "2026-09-05",
+      "match_id": "3023472",
+      "match_num": "周六023",
+      "league": "葡超",
+      "home": "马里迪莫",
+      "away": "本菲卡",
+      "kickoff": "2026-09-06T01:00:00+08:00",
+      "status": "INSUFFICIENT_DATA",
+      "created_at": "2026-09-04T03:26:15.050595+00:00",
+      "updated_at": "2026-09-04T07:31:02.433554+00:00",
+      "source_universe": "data/prediction_universe/2026-09-05.json",
+      "prediction_id": "FBOS-PRED-b2f20985bdcc5b6e38332b9a",
+      "last_error": "SOURCE_FETCH_FAILED",
+      "coverage": {
+        "status": "UNSUPPORTED",
+        "reason_codes": [
+          "COMPETITION_UNSUPPORTED"
+        ],
+        "blocking_reason_codes": [
+          "COMPETITION_UNSUPPORTED"
+        ],
+        "warning_codes": [],
+        "historical_challenger_allowed": false,
+        "champion_prediction_allowed": true,
+        "evaluated_at": "2026-09-04T07:31:02Z"
+      },
+      "coverage_status": "UNSUPPORTED",
+      "coverage_reason_codes": [
+        "COMPETITION_UNSUPPORTED"
+      ],
+      "coverage_blocking_reason_codes": [
+        "COMPETITION_UNSUPPORTED"
+      ],
+      "historical_challenger_allowed": false,
+      "football_evidence_status": "created",
+      "football_evidence_ref": "/home/runner/work/football-betting-oneshot/football-betting-oneshot/data/prospective/football_evidence/FBOS-PRED-b2f20985bdcc5b6e38332b9a.json",
+      "football_evidence_error": null,
+      "shadow_status": "created",
+      "shadow_comparison_id": "a6df2f800145b4a52ba892d6cf38c7bf2f515a47824dc80e6e09e6b4ca9c878b",
+      "shadow_failure_reason": null,
+      "prediction_ids": [
+        "FBOS-PRED-b2452e7af5844152c699bcb6",
+        "FBOS-PRED-b2f20985bdcc5b6e38332b9a"
+      ],
+      "prediction_created_at": "2026-09-04T06:54:29.623754+00:00",
+      "freeze_created_at": "2026-09-04T06:54:29.708196+00:00",
+      "input_provenance_diagnostic": {
+        "schema_version": "input_provenance_diagnostic.v1",
+        "stage": "SOURCE_FETCH_FAILED",
+        "error_code": "SOURCE_FETCH_FAILED",
+        "source": "500_deep",
+        "status": "FETCH_ERROR",
+        "detail": "500 deep recent-form page fetch failed before usable form evidence was built",
+        "captured_at": "2026-09-04T07:34:59+08:00",
+        "references": [
+          "data/source_cache/shared-football/parsed/2026-09-05_1438088.json"
+        ],
+        "pages": [
+          "ouzhi",
+          "yazhi",
+          "rangqiu",
+          "daxiao",
+          "shuju",
+          "touzhu"
+        ],
+        "expected_before": "2026-09-06T01:00:00+08:00",
+        "attempts": [
+          {
+            "schema_version": "input_provenance_diagnostic.v1",
+            "stage": "OTHER_DETERMINISTIC_CAUSE",
+            "error_code": "INPUT_PROVENANCE_UNVERIFIED",
+            "source": "nowscore",
+            "status": "IDENTITY_MISMATCH",
+            "detail": "nowscore identity verification rejected",
+            "references": [
+              "data/source_cache/nowscore/raw/3023472_3in1.html",
+              "data/source_cache/nowscore/raw/3023472_analysis.js"
+            ],
+            "nowscore_status": "IDENTITY_MISMATCH",
+            "resolution": {
+              "status": "EXPLICIT_ID",
+              "nowscore_id": 3023472,
+              "identity_verification": {
+                "trusted": false,
+                "status": "TRUSTED_JC_REJECTED",
+                "source": "nowscore_public_jc_sales",
+                "nowscore_id": 3023472,
+                "page_provider_id": null,
+                "page_provider_id_availability_state": "UNAVAILABLE",
+                "page_provider_id_reason": "PAGE_PROVIDER_ID_UNAVAILABLE",
+                "page_provider_id_parse_state": "MISSING",
+                "page_provider_id_raw": null,
+                "page_provider_id_corroborated": false,
+                "display_name_mismatch": true,
+                "same_side_scores": {
+                  "home": 0.0,
+                  "away": 0.0
+                },
+                "reverse_side_scores": {
+                  "home": 0.0,
+                  "away": 0.0
+                },
+                "reasons": [
+                  "KICKOFF_MISMATCH",
+                  "PROVIDER_TEAM_IDENTITY_MISSING",
+                  "AMBIGUOUS_IDENTITY"
+                ],
+                "non_blocking_reasons": [
+                  "PAGE_PROVIDER_ID_UNAVAILABLE"
+                ]
+              },
+              "trusted_jc_provenance": {
+                "trusted": true,
+                "source": "nowscore_public_jc_sales",
+                "nowscore_id": 3023472,
+                "business_date": "2026-09-05",
+                "source_url": "https://cp.nowscore.com/buy/jingcai.aspx?typeID=101&oddstype=2&date=2026-09-05",
+                "reasons": []
+              }
+            },
+            "identity_errors": [
+              "HOME_TEAM_MISMATCH",
+              "AWAY_TEAM_MISMATCH",
+              "KICKOFF_MISMATCH",
+              "PROVIDER_TEAM_IDENTITY_MISSING",
+              "AMBIGUOUS_IDENTITY"
+            ],
+            "identity_verification": {
+              "trusted": false,
+              "status": "TRUSTED_JC_REJECTED",
+              "source": "nowscore_public_jc_sales",
+              "nowscore_id": 3023472,
+              "page_provider_id": null,
+              "page_provider_id_availability_state": "UNAVAILABLE",
+              "page_provider_id_reason": "PAGE_PROVIDER_ID_UNAVAILABLE",
+              "page_provider_id_parse_state": "MISSING",
+              "page_provider_id_raw": null,
+              "page_provider_id_corroborated": false,
+              "display_name_mismatch": true,
+              "same_side_scores": {
+                "home": 0.0,
+                "away": 0.0
+              },
+              "reverse_side_scores": {
+                "home": 0.0,
+                "away": 0.0
+              },
+              "reasons": [
+                "KICKOFF_MISMATCH",
+                "PROVIDER_TEAM_IDENTITY_MISSING",
+                "AMBIGUOUS_IDENTITY"
+              ],
+              "non_blocking_reasons": [
+                "PAGE_PROVIDER_ID_UNAVAILABLE"
+              ]
+            },
+            "identity_verification_status": "TRUSTED_JC_REJECTED",
+            "identity_verification_reasons": [
+              "KICKOFF_MISMATCH",
+              "PROVIDER_TEAM_IDENTITY_MISSING",
+              "AMBIGUOUS_IDENTITY"
+            ],
+            "trusted_jc_provenance": {
+              "trusted": true,
+              "source": "nowscore_public_jc_sales",
+              "nowscore_id": 3023472,
+              "business_date": "2026-09-05",
+              "source_url": "https://cp.nowscore.com/buy/jingcai.aspx?typeID=101&oddstype=2&date=2026-09-05",
+              "reasons": []
+            },
+            "trusted_jc_provenance_reasons": [],
+            "page_identity": {
+              "nowscore_id": 0,
+              "nowscore_id_raw": null,
+              "page_provider_id": null,
+              "page_provider_id_availability_state": "UNAVAILABLE",
+              "page_provider_id_reason": "PAGE_PROVIDER_ID_UNAVAILABLE",
+              "page_provider_id_parse_state": "MISSING",
+              "page_provider_id_raw": null,
+              "kickoff_local": null,
+              "home_team": null,
+              "away_team": null,
+              "home_team_id": null,
+              "away_team_id": null
+            },
+            "parsed_page_provider_id": null,
+            "page_provider_id": null,
+            "page_provider_id_availability_state": "UNAVAILABLE",
+            "page_provider_id_reason": "PAGE_PROVIDER_ID_UNAVAILABLE"
+          },
+          {
+            "schema_version": "input_provenance_diagnostic.v1",
+            "stage": "SOURCE_FETCH_FAILED",
+            "error_code": "SOURCE_FETCH_FAILED",
+            "source": "500_deep",
+            "status": "FETCH_ERROR",
+            "detail": "500 deep recent-form page fetch failed before usable form evidence was built",
+            "captured_at": "2026-09-04T07:34:59+08:00",
+            "references": [
+              "data/source_cache/shared-football/parsed/2026-09-05_1438088.json"
+            ],
+            "pages": [
+              "ouzhi",
+              "yazhi",
+              "rangqiu",
+              "daxiao",
+              "shuju",
+              "touzhu"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "job_id": "BASE-2026-09-05-2996137",
+      "business_date": "2026-09-05",
+      "match_id": "2996137",
+      "match_num": "周六025",
+      "league": "荷甲",
+      "home": "阿贾克斯",
+      "away": "埃因霍温",
+      "kickoff": "2026-09-06T02:00:00+08:00",
+      "status": "FROZEN",
+      "created_at": "2026-09-04T03:26:15.050595+00:00",
+      "updated_at": "2026-09-04T07:31:02.433554+00:00",
+      "source_universe": "data/prediction_universe/2026-09-05.json",
+      "prediction_id": "FBOS-PRED-df348a85e2a25e390fbe6da7",
+      "last_error": null,
+      "coverage": {
+        "status": "UNSUPPORTED",
+        "reason_codes": [
+          "COMPETITION_UNSUPPORTED"
+        ],
+        "blocking_reason_codes": [
+          "COMPETITION_UNSUPPORTED"
+        ],
+        "warning_codes": [],
+        "historical_challenger_allowed": false,
+        "champion_prediction_allowed": true,
+        "evaluated_at": "2026-09-04T07:31:02Z"
+      },
+      "coverage_status": "UNSUPPORTED",
+      "coverage_reason_codes": [
+        "COMPETITION_UNSUPPORTED"
+      ],
+      "coverage_blocking_reason_codes": [
+        "COMPETITION_UNSUPPORTED"
+      ],
+      "historical_challenger_allowed": false,
+      "football_evidence_status": "created",
+      "football_evidence_ref": "/home/runner/work/football-betting-oneshot/football-betting-oneshot/data/prospective/football_evidence/FBOS-PRED-df348a85e2a25e390fbe6da7.json",
+      "football_evidence_error": null,
+      "shadow_status": "created",
+      "shadow_comparison_id": "d1a81ba423c03673f50448fa3e46235b78f81eec3dc5c7ce275aee9d0ba20124",
+      "shadow_failure_reason": null,
+      "prediction_ids": [
+        "FBOS-PRED-243b8c79d397d5810a11be13",
+        "FBOS-PRED-ec77526ec51d561f2aa7bccd",
+        "FBOS-PRED-80291674ba109fcfe48c1255",
+        "FBOS-PRED-df348a85e2a25e390fbe6da7"
+      ],
+      "prediction_created_at": "2026-09-04T07:35:09.747324+00:00",
+      "freeze_created_at": "2026-09-04T07:35:09.877545+00:00"
+    },
+    {
+      "job_id": "BASE-2026-09-05-2993775",
+      "business_date": "2026-09-05",
+      "match_id": "2993775",
+      "match_num": "周六026",
+      "league": "意甲",
+      "home": "罗马",
+      "away": "亚特兰大",
+      "kickoff": "2026-09-06T02:45:00+08:00",
+      "status": "FROZEN",
+      "created_at": "2026-09-04T03:26:15.050595+00:00",
+      "updated_at": "2026-09-04T07:31:02.433554+00:00",
+      "source_universe": "data/prediction_universe/2026-09-05.json",
+      "prediction_id": "FBOS-PRED-0b486a970c5ce308e4e3a314",
+      "last_error": null,
+      "coverage": {
+        "status": "UNSUPPORTED",
+        "reason_codes": [
+          "COMPETITION_UNSUPPORTED"
+        ],
+        "blocking_reason_codes": [
+          "COMPETITION_UNSUPPORTED"
+        ],
+        "warning_codes": [],
+        "historical_challenger_allowed": false,
+        "champion_prediction_allowed": true,
+        "evaluated_at": "2026-09-04T07:31:02Z"
+      },
+      "coverage_status": "UNSUPPORTED",
+      "coverage_reason_codes": [
+        "COMPETITION_UNSUPPORTED"
+      ],
+      "coverage_blocking_reason_codes": [
+        "COMPETITION_UNSUPPORTED"
+      ],
+      "historical_challenger_allowed": false,
+      "football_evidence_status": "created",
+      "football_evidence_ref": "/home/runner/work/football-betting-oneshot/football-betting-oneshot/data/prospective/football_evidence/FBOS-PRED-0b486a970c5ce308e4e3a314.json",
+      "football_evidence_error": null,
+      "shadow_status": "existing",
+      "shadow_comparison_id": "5e41b3e69e1473307221b7889187dad6e3d2e997befb9fd9873a176c84ab79fb",
+      "shadow_failure_reason": null,
+      "prediction_ids": [
+        "FBOS-PRED-6abd66881fafa38d583c2303",
+        "FBOS-PRED-58cc9e0734fe86f0911337be",
+        "FBOS-PRED-0b486a970c5ce308e4e3a314"
+      ],
+      "prediction_created_at": "2026-09-04T06:54:58.142785+00:00",
+      "freeze_created_at": "2026-09-04T06:54:58.233650+00:00"
+    },
+    {
+      "job_id": "BASE-2026-09-05-2995327",
+      "business_date": "2026-09-05",
+      "match_id": "2995327",
+      "match_num": "周六027",
+      "league": "法甲",
+      "home": "勒阿弗尔",
+      "away": "布雷斯特",
+      "kickoff": "2026-09-06T02:45:00+08:00",
+      "status": "FROZEN",
+      "created_at": "2026-09-04T03:26:15.050595+00:00",
+      "updated_at": "2026-09-04T07:31:02.433554+00:00",
+      "source_universe": "data/prediction_universe/2026-09-05.json",
+      "prediction_id": "FBOS-PRED-037f32c8fb7d7ce8d04b1e11",
+      "last_error": null,
+      "coverage": {
+        "status": "UNSUPPORTED",
+        "reason_codes": [
+          "COMPETITION_UNSUPPORTED"
+        ],
+        "blocking_reason_codes": [
+          "COMPETITION_UNSUPPORTED"
+        ],
+        "warning_codes": [],
+        "historical_challenger_allowed": false,
+        "champion_prediction_allowed": true,
+        "evaluated_at": "2026-09-04T07:31:02Z"
+      },
+      "coverage_status": "UNSUPPORTED",
+      "coverage_reason_codes": [
+        "COMPETITION_UNSUPPORTED"
+      ],
+      "coverage_blocking_reason_codes": [
+        "COMPETITION_UNSUPPORTED"
+      ],
+      "historical_challenger_allowed": false,
+      "football_evidence_status": "created",
+      "football_evidence_ref": "/home/runner/work/football-betting-oneshot/football-betting-oneshot/data/prospective/football_evidence/FBOS-PRED-037f32c8fb7d7ce8d04b1e11.json",
+      "football_evidence_error": null,
+      "shadow_status": "existing",
+      "shadow_comparison_id": "87d69f65b70ad01a0be00b6511525a5abf36519cdad41ab85a51c9bb21b8e981",
+      "shadow_failure_reason": null,
+      "prediction_ids": [
+        "FBOS-PRED-8f17c2bdd6108d8ee1939610",
+        "FBOS-PRED-037f32c8fb7d7ce8d04b1e11"
+      ],
+      "prediction_created_at": "2026-09-04T06:55:10.634827+00:00",
+      "freeze_created_at": "2026-09-04T06:55:10.708670+00:00"
+    },
+    {
+      "job_id": "BASE-2026-09-05-3013681",
+      "business_date": "2026-09-05",
+      "match_id": "3013681",
+      "match_num": "周六028",
+      "league": "西甲",
+      "home": "比利亚雷",
+      "away": "拉科",
+      "kickoff": "2026-09-06T03:00:00+08:00",
+      "status": "FROZEN",
+      "created_at": "2026-09-04T03:26:15.050595+00:00",
+      "updated_at": "2026-09-04T07:31:02.433554+00:00",
+      "source_universe": "data/prediction_universe/2026-09-05.json",
+      "prediction_id": "FBOS-PRED-0540faff78574ad0005229d4",
+      "last_error": null,
+      "coverage": {
+        "status": "UNSUPPORTED",
+        "reason_codes": [
+          "COMPETITION_UNSUPPORTED"
+        ],
+        "blocking_reason_codes": [
+          "COMPETITION_UNSUPPORTED"
+        ],
+        "warning_codes": [],
+        "historical_challenger_allowed": false,
+        "champion_prediction_allowed": true,
+        "evaluated_at": "2026-09-04T07:31:02Z"
+      },
+      "coverage_status": "UNSUPPORTED",
+      "coverage_reason_codes": [
+        "COMPETITION_UNSUPPORTED"
+      ],
+      "coverage_blocking_reason_codes": [
+        "COMPETITION_UNSUPPORTED"
+      ],
+      "historical_challenger_allowed": false,
+      "football_evidence_status": "created",
+      "football_evidence_ref": "/home/runner/work/football-betting-oneshot/football-betting-oneshot/data/prospective/football_evidence/FBOS-PRED-0540faff78574ad0005229d4.json",
+      "football_evidence_error": null,
+      "shadow_status": "created",
+      "shadow_comparison_id": "1a54f8787bb1e84da06aa34c1363ad75cc67e3b7985c3cb650f6dd9b0ca41c50",
+      "shadow_failure_reason": null,
+      "prediction_ids": [
+        "FBOS-PRED-17b780b655c7fde4d53da5b1",
+        "FBOS-PRED-0540faff78574ad0005229d4"
+      ],
+      "prediction_created_at": "2026-09-04T07:35:43.308165+00:00",
+      "freeze_created_at": "2026-09-04T07:35:43.439613+00:00"
     }
-  ]
+  ],
+  "last_run_at": "2026-09-04T07:31:02.433554+00:00",
+  "failure_reasons": {
+    "SOURCE_FETCH_FAILED": 8
+  },
+  "input_provenance_failure_stages": {
+    "SOURCE_FETCH_FAILED": 8
+  }
 }
