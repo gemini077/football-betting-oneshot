@@ -1,0 +1,144 @@
+name: Challenger C unmatched settlement truth 1
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/challenger-c-unmatched-settlement-truth-1.yml"
+      - "scripts/challenger_c_unmatched_settlement_truth_audit.py"
+      - "tests/test_challenger_c_unmatched_settlement_truth_audit.py"
+      - "scripts/market_side_shadow.py"
+      - "scripts/market_side_shadow_refresh.py"
+      - "scripts/prematch_versioning.py"
+      - "scripts/prospective_settlement.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout the audit head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install focused test dependencies
+        run: python -m pip install -r requirements.txt
+
+      - name: Run Issue #172 focused tests
+        run: python -m pytest -q tests/test_challenger_c_unmatched_settlement_truth_audit.py
+
+      - name: Compile the read-only audit
+        run: python -m py_compile scripts/challenger_c_unmatched_settlement_truth_audit.py
+
+      - name: Materialize PR #170 baseline and current-main data snapshots
+        id: snapshots
+        env:
+          BASELINE_HEAD: ef7cdb447344341ad250bd6e5eeb223c398c1124
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin "refs/pull/170/head:refs/remotes/origin/pr-170"
+          test "$(git rev-parse refs/remotes/origin/pr-170)" = "$BASELINE_HEAD"
+          git fetch --no-tags origin main
+          CURRENT_MAIN_SHA="$(git rev-parse origin/main)"
+          BASELINE_DIR="$RUNNER_TEMP/fbos-pr170-baseline"
+          CURRENT_DIR="$RUNNER_TEMP/fbos-current-main"
+          rm -rf "$BASELINE_DIR" "$CURRENT_DIR"
+          mkdir -p "$BASELINE_DIR" "$CURRENT_DIR"
+          git archive --format=tar "$BASELINE_HEAD" \
+            data/prediction_quality/market_side_shadow_1/pairs \
+            data/postmatch_automation/results | tar -x -C "$BASELINE_DIR"
+          git archive --format=tar "$CURRENT_MAIN_SHA" \
+            data/prediction_quality/market_side_shadow_1/pairs \
+            data/postmatch_automation/results | tar -x -C "$CURRENT_DIR"
+          echo "baseline_dir=$BASELINE_DIR" >> "$GITHUB_OUTPUT"
+          echo "current_dir=$CURRENT_DIR" >> "$GITHUB_OUTPUT"
+          echo "current_main_sha=$CURRENT_MAIN_SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Run real current-data settlement truth audit
+        env:
+          BASELINE_HEAD: ef7cdb447344341ad250bd6e5eeb223c398c1124
+          BASELINE_DIR: ${{ steps.snapshots.outputs.baseline_dir }}
+          CURRENT_DIR: ${{ steps.snapshots.outputs.current_dir }}
+          CURRENT_MAIN_SHA: ${{ steps.snapshots.outputs.current_main_sha }}
+        run: |
+          set -euo pipefail
+          rm -rf audit-artifact
+          python scripts/challenger_c_unmatched_settlement_truth_audit.py \
+            --baseline-pair-root "$BASELINE_DIR/data/prediction_quality/market_side_shadow_1/pairs" \
+            --baseline-result-root "$BASELINE_DIR/data/postmatch_automation/results" \
+            --current-pair-root "$CURRENT_DIR/data/prediction_quality/market_side_shadow_1/pairs" \
+            --current-result-root "$CURRENT_DIR/data/postmatch_automation/results" \
+            --baseline-ref "$BASELINE_HEAD" \
+            --current-ref "$CURRENT_MAIN_SHA" \
+            --output-dir audit-artifact
+
+      - name: Verify baseline, delta, classifications, and read-only boundary
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          summary = json.loads(Path("audit-artifact/summary.json").read_text(encoding="utf-8"))
+          baseline = summary["baseline"]
+          current = summary["current_main"]
+          reproduction = summary["baseline_reproduction"]
+          controls = summary["controls"]
+          assert summary["schema_version"] == "challenger_c_unmatched_settlement_truth_1.v1"
+          assert summary["milestone"] == "CHALLENGER-C-UNMATCHED-SETTLEMENT-TRUTH-1"
+          assert reproduction["status"] == "PASS"
+          assert reproduction["observed"] == reproduction["accepted"]
+          assert len(baseline["unmatched_unique"]) == 40
+          assert len(current["unmatched_unique"]) == current["counts"]["unmatched_eligible_unique_matches"]
+          assert len(summary["current_main_delta"]["baseline_unmatched_current_mapping"]) == 40
+          assert set(baseline["reason_counts"]) == set(summary["method"]["unmatched_reason_enum"])
+          assert set(current["reason_counts"]) == set(summary["method"]["unmatched_reason_enum"])
+          assert summary["recoverable_now"] == current["reason_counts"]["RESULT_PRESENT_RECOVERABLE_LINKAGE"]
+          assert summary["verified_unique_after_legal_recovery"] == (
+              current["counts"]["verified_unique_matches"] + summary["recoverable_now"]
+          )
+          assert summary["final_decision"] in {
+              "SETTLEMENT_GAP_MATERIAL",
+              "PARTIAL_SETTLEMENT_GAP_NOT_CHECKPOINT",
+              "SAMPLE_GENUINELY_NOT_REACHED",
+              "FAIL_CLOSED",
+          }
+          assert all(controls[key] is False for key in (
+              "result_network_fetch",
+              "result_writeback",
+              "manual_result_entry",
+              "fuzzy_matching",
+              "frozen_prediction_modified",
+              "authoritative_result_modified",
+              "champion_modified",
+              "challenger_c_modified",
+              "model_modified",
+              "production_modified",
+              "promotion_attempted",
+          ))
+          assert Path("audit-artifact/report.md").is_file()
+          print(json.dumps({
+              "baseline": reproduction["observed"],
+              "current_reason_counts": current["reason_counts"],
+              "recoverable_now": summary["recoverable_now"],
+              "verified_unique_after_legal_recovery": summary["verified_unique_after_legal_recovery"],
+              "final_decision": summary["final_decision"],
+          }, ensure_ascii=False, sort_keys=True))
+          PY
+
+      - name: Upload compact settlement truth artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: challenger-c-unmatched-settlement-truth-1
+          path: audit-artifact
+          if-no-files-found: error
