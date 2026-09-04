@@ -58,30 +58,87 @@ Bug fix 只有在根因有独立证据、修改最小确定、regression test �
 
 1. eligible unique matches；
 2. settled unique matches；
-3. **full-coverage top-choice hit rate**；
-4. **served hit rate**；
-5. **served coverage / abstain rate**；
-6. **same-market simple/market baseline**；
-7. **delta vs baseline**；
+3. full-coverage top-choice hit rate；
+4. served hit rate；
+5. served coverage / abstain rate；
+6. same-market simple/market baseline；
+7. delta vs baseline；
 8. appropriate proper score（Brier / LogLoss / NLL 等）；
 9. calibration / ECE；
 10. sample size + uncertainty / CI；
 11. competition/population scope；
 12. chronology/stability；
-13. failure taxonomy。
+13. forecast horizon / freeze lead-time；
+14. failure taxonomy。
 
 Exact Score 额外报告 Top1/Top3/Top5、Score NLL、concentration/entropy；官方竞彩比分桶建立后单独报告其 accuracy。
 
 验收解释：
 
-- **命中率是核心指标，不得因为强调 proper score 就回避用户实际关心的“猜对多少”。**
-- **命中率也不能脱离 coverage**：精选越少通常越容易抬高 hit rate，因此必须报告 `Hit Rate @ Coverage / risk-coverage`。
-- 一个容易玩法的高命中率不得替其它玩法背书。
+- 命中率是核心指标，不得因为强调 proper score 就回避用户实际关心的“猜对多少”；
+- 命中率不能脱离 coverage：精选越少通常越容易抬高 hit rate，因此必须报告 `Hit Rate @ Coverage / risk-coverage`；
+- 一个容易玩法的高命中率不得替其它玩法背书；
 - 只优于 random/naive baseline 不足以证明竞争力；有同玩法市场/强简单基线时必须比较。
 
 ---
 
-# 5. Model / Challenger Gate
+# 5. Forecast Horizon / Benchmark Fairness Gate
+
+T-24h、T-6h、T-60m 等 forecast 不属于同一信息条件。
+
+验收必须：
+
+- 保留真实 freeze lead-time；
+- 先审 lead-time 分布，再定义 horizon bins；
+- 同一 match 不同 horizon 视为 paired/repeated forecasts，不放大 independent sample；
+- 早期 forecast 优先与同一时点或更早的 market snapshot 比较；
+- closing market 可作为 final-information benchmark，但不得冒充 equal-information control；
+- 若不同 horizon 混合汇总，必须同时提供分层结果或明确限制。
+
+---
+
+# 6. Class-Balance / Anti-Favourite Gate
+
+1X2 不能只用 overall accuracy 验收。
+
+至少在样本允许时检查：
+
+- Home / Draw / Away predicted share；
+- actual share；
+- confusion matrix；
+- per-class recall；
+- Draw recall；
+- multiclass Brier / LogLoss；
+- RPS 可作为附加 ordinal metric；
+- class-wise calibration。
+
+若模型通过“几乎不预测 Draw / 总是押 favourite”提高 overall accuracy，不能视为无条件提升。
+
+其它多类玩法同理：0–7+ 关注尾部类别，HTFT 关注九类失衡。
+
+---
+
+# 7. Feature Incremental Value Gate
+
+任何新 rich feature /复杂表示（xG/xT、lineup/player、injury、manager、weather、travel/rest、NLP/news、GNN/embedding 等）进入 production 前必须证明增量。
+
+最低验收：
+
+`time-safe acquisition → same-match paired control → fixed +feature ablation → chronological holdout → coverage/population audit → prospective shadow if promising`
+
+必须回答：
+
+- 相同赛前截止时点上，相对当前 Champion 增加了什么？
+- 相对 closest same-time strong market baseline 增加了什么？
+- 是否只提升解释性而没有提升预测？
+- 是否因 rich-data 缺失显著压缩产品覆盖率？
+- 是否只在某个 competition/horizon 有效？
+
+“更高级/更贵/数据更多”不能作为 PASS 理由。
+
+---
+
+# 8. Model / Challenger Gate
 
 `Research hypothesis → fixed implementation → holdout/replay → prospective shadow → unique-match evaluation → independent Promotion Review`
 
@@ -91,7 +148,7 @@ Exact Score 额外报告 Top1/Top3/Top5、Score NLL、concentration/entropy；�
 - 不按 version rows 放大样本；
 - 不用 postmatch outcome 生成 prematch；
 - 不为显著性反复调参；
-- **hit rate + coverage + baseline + proper score + calibration + stability + subgroup safety 联合判断**；
+- hit rate + coverage + baseline + proper score + calibration + stability + subgroup safety 联合判断；
 - 保留 Champion control；
 - Promotion 必须独立验收。
 
@@ -99,7 +156,7 @@ C governance：`<50 NOT_REACHED / 50–99 CHECKPOINT / >=100 PROMOTION_REVIEW_RE
 
 ---
 
-# 6. Market Target / Truth Gate
+# 9. Market Target / Truth Gate
 
 ### Tier A — 中国竞彩
 
@@ -113,40 +170,33 @@ C governance：`<50 NOT_REACHED / 50–99 CHECKPOINT / >=100 PROMOTION_REVIEW_RE
 
 O/U / BTTS / Asian/common handicap / team totals / winning margin / double chance 等。
 
-任何新玩法在进入正式模型/页面前必须先证明：
-
-- target semantics 明确；
-- prematch 必需输入已合法冻结；
-- result/settlement truth 可得到；
-- evaluation unit 与 metric 定义明确；
-- market/source rights 可接受；
-- 不与已有玩法数学定义冲突。
+任何新玩法正式上线前必须先证明 target semantics、prematch 必需输入、result/settlement truth、evaluation unit/metric、market/source rights、与已有玩法数学定义的兼容性。
 
 **半全场专门 Gate**：必须先证明 first-half score/outcome truth 与 dedicated evaluation；禁止用 `90m lambda / 2` 直接宣称完成。
 
 ---
 
-# 7. Shared-State / Market-Specific Model Gate
+# 10. Shared-State / Market-Specific Model Gate
 
 full-time joint score state 可作为共同底盘，并尽量数学一致推导 FT 玩法。
 
 但不得把“一套模型对所有玩法最优”写成硬规则。
 
-若 1X2 / Goals / BTTS / handicap 等使用 market-specific calibration/head，必须：
+若 1X2 / Goals / BTTS / handicap 使用 market-specific calibration/head，必须：
 
 - 预先固定 hypothesis 与参数搜索边界；
 - 用独立 holdout/prospective evidence 证明该玩法提升；
-- 同时检查 probability calibration；
+- 检查 probability calibration；
 - 检查与 authoritative score state 的显著矛盾；
 - 不因单一 hit-rate 增长牺牲其它关键指标而不披露。
 
 ---
 
-# 8. Segmented Serving Gate
+# 11. Segmented Serving Gate
 
 正式 serving 单位：
 
-`Market × Competition Support × Evidence Quality × Prediction Quality`
+`Market × Competition Support × Forecast Horizon × Evidence Quality × Prediction Quality`
 
 Competition：`SUPPORTED / LIMITED / EXPERIMENTAL / UNSUPPORTED`
 
@@ -158,28 +208,22 @@ Serving：`NORMAL / CAUTION / DEGRADED / ABSTAIN`
 
 - 一个玩法 DEGRADED 不得机械拖累其它玩法；
 - 一个玩法表现好不得替另一个玩法背书；
-- competition / regime 小样本不得伪装成稳定支持；
+- competition / regime / horizon 小样本不得伪装成稳定支持；
 - serving threshold 必须有 prospective / calibration / risk-coverage evidence；
 - UI 忠实呈现 serving state；
 - 任何“精选高命中”必须能审计 coverage 与被 abstain 的比赛。
 
 ---
 
-# 9. Confidence / Calibration Gate
+# 12. Confidence / Calibration Gate
 
-任何用户看到的“高/中/低”“70%可信”或类似 confidence，必须能回答：
-
-- 来自什么可复现量；
-- 历史相同 bucket/regime 实际发生率；
-- sample size；
-- uncertainty；
-- 是否经过 prospective/time-safe 验证。
+任何用户看到的“高/中/低”“70%可信”或类似 confidence，必须能回答来源、相同 bucket/regime 实际发生率、sample size、uncertainty、是否经过 prospective/time-safe 验证。
 
 若不能回答，显示 evidence completeness / uncertainty / serving state，而不是制造 confidence。
 
 ---
 
-# 10. User Decision Product / Trust Center Gate
+# 13. User Decision Product / Trust Center Gate
 
 用户至少应快速回答：
 
@@ -188,27 +232,17 @@ Serving：`NORMAL / CAUTION / DEGRADED / ABSTAIN`
 3. 比分情景/概率是什么？
 4. 哪些玩法应谨慎或 abstain？
 5. 为什么？最大风险/冲突是什么？
-6. 过去同玩法、同赛事层表现如何？
+6. 过去同玩法、同赛事层、同 horizon 表现如何？
 
-Trust Center 不能只显示一个“命中率”，但也**不能只显示 NLL/Brier 而把用户关心的 hit rate 藏掉**。
+Trust Center 不能只显示一个“命中率”，也不能只显示 NLL/Brier 而把 hit rate 藏掉。
 
-样本允许时至少覆盖：
-
-- per-market full-coverage / served hit rate；
-- served coverage；
-- market/simple baseline + delta；
-- proper scores；
-- Exact Top1/3/5；
-- calibration；
-- sample/uncertainty；
-- competition tier / known weak spots；
-- abstain/selective quality。
+样本允许时至少覆盖 per-market full/served hit rate、coverage、baseline+delta、proper scores、Exact Top1/3/5、calibration、sample/uncertainty、competition/horizon、class-balance diagnostics、known weak spots、abstain/selective quality。
 
 失败样本和低表现时期不得被隐藏。
 
 ---
 
-# 11. Data / Identity / Rights Gate
+# 14. Data / Identity / Rights Gate
 
 关键链同时过 availability、deterministic identity、prematch timing、freshness/completeness、provenance、commercial-use/storage/display/redistribution boundary、replacement/fallback strategy。
 
@@ -216,7 +250,7 @@ Trust Center 不能只显示一个“命中率”，但也**不能只显示 NLL/
 
 ---
 
-# 12. Operations / Release Gate
+# 15. Operations / Release Gate
 
 Public Launch 至少关闭 daily/business-date freshness、silent missing、provider degradation observability、freeze/result/settlement continuity、durable write/rollback、monitoring/fail-safe、secret/log hygiene、public-site smoke/stale-page protection。
 
@@ -224,24 +258,15 @@ Public Launch 至少关闭 daily/business-date freshness、silent missing、prov
 
 ---
 
-# 13. Closed Beta Measurement Gate
+# 16. Closed Beta Measurement Gate
 
-邀请真实用户前至少需要低成本、隐私最小化测量方案，回答：
-
-- 首页是否成功带到 detail；
-- 用户主要查看哪些玩法；
-- 是否理解 probability / score scenarios / abstain；
-- evidence / Trust Center 是否被使用；
-- 是否赛后回来；
-- 哪些玩法/赛事被重复使用；
-- 哪里误解；
-- 为什么第二天/下周回来。
+邀请真实用户前至少需要低成本、隐私最小化测量方案，回答首页→detail、用户主要查看哪些玩法、是否理解 strongest view/probability/score scenarios/abstain、evidence/Trust Center 是否被使用、是否赛后回来、哪些玩法/赛事被重复使用、哪里误解、为什么第二天/下周回来。
 
 允许小规模人工访谈/结构化反馈；不要求先搭重账户系统。
 
 ---
 
-# 14. Compliance / Commercial Gate
+# 17. Compliance / Commercial Gate
 
 公开商业化前确认：
 
@@ -255,7 +280,7 @@ Public Launch 至少关闭 daily/business-date freshness、silent missing、prov
 
 ---
 
-# 15. Distribution / Monetization Gate
+# 18. Distribution / Monetization Gate
 
 商业模式目前是 hypothesis。
 
@@ -265,7 +290,7 @@ Public Launch 至少关闭 daily/business-date freshness、silent missing、prov
 
 ---
 
-# 16. Historical Pointer
+# 19. Historical Pointer
 
 旧专项验收条款从 Git history、Issue、PR、Actions、`docs/*` evidence 与 Memory-Hub 恢复。
 
