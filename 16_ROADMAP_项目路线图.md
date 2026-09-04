@@ -31,9 +31,7 @@ Football Betting OneShot 的核心不是“做一个 Trust 页面”，也不是
 
 ---
 
-# 2. 目标玩法不是只有四个
-
-旧控制面长期把核心玩法缩成 `1X2 / Exact Score / O-U / BTTS`，不完整。
+# 2. 玩法宇宙
 
 ## Tier A — 中国竞彩第一等目标
 
@@ -49,12 +47,7 @@ Football Betting OneShot 的核心不是“做一个 Trust 页面”，也不是
 
 ## Tier B — 国际/分析核心补充
 
-- O/U lines
-- BTTS
-- Asian/common handicap
-- team totals
-- winning margin
-- double chance
+O/U、BTTS、Asian/common handicap、team totals、winning margin、double chance。
 
 ## Tier C — Specialized Future
 
@@ -62,46 +55,40 @@ corners / cards / player props 等，只在用户需求、合法赛前数据、�
 
 ---
 
-# 3. Prediction Quality Scorecard — 产品第一指标体系
+# 3. Prediction Quality Scorecard
 
 禁止一个跨玩法 blended “overall accuracy”。不同玩法难度不同，把 Double Chance、O1.5、Exact Score 混成一个数字会失真。
 
-**每个玩法单独建立成绩表。**
-
-最小字段：
+每个玩法单独建立成绩表：
 
 1. `eligible unique matches`
 2. `settled unique matches`
-3. **full-coverage Top1 hit rate**
-4. **served hit rate**
-5. **served coverage / abstain rate**
-6. **same-market baseline hit rate**
-7. **delta vs baseline**
+3. full-coverage Top1 hit rate
+4. served hit rate
+5. served coverage / abstain rate
+6. same-market baseline hit rate
+7. delta vs baseline
 8. proper score：Brier / LogLoss / NLL 等
 9. calibration / ECE（样本允许时）
 10. sample size + uncertainty / CI
-11. competition/population slice
+11. competition / population slice
 12. chronology / stability
-13. failure taxonomy
+13. **forecast horizon / freeze lead-time**
+14. failure taxonomy
 
-Exact Score 额外：
+Exact Score 额外：Top1 / Top3 / Top5、Score NLL、concentration / entropy、官方竞彩比分桶准确率（语义完成后）。
 
-- Top1 / Top3 / Top5
-- Score NLL
-- concentration / entropy
-- 官方竞彩比分桶准确率（语义完成后）
-
-命中率是重要的用户结果指标，但必须和 coverage 一起看：
+命中率是一级用户结果指标，但必须和 coverage 一起看。
 
 > **不能通过只预测少量“容易场”把命中率做漂亮。**
 
-因此长期同时评价 `Hit Rate @ Coverage / risk-coverage`。
+长期同时评价 `Hit Rate @ Coverage / risk-coverage`。
 
 ---
 
-# 4. Baseline Contract — 不能只比随机强
+# 4. Baseline Contract
 
-每个玩法优先和最接近的强基线比较。
+每个玩法优先和最接近的强基线比较：
 
 - 1X2 → same-match de-vigged 1X2 / market favourite；
 - handicap → 同一冻结 handicap line / market；
@@ -109,19 +96,21 @@ Exact Score 额外：
 - score → rights-clear correct-score market；
 - HTFT → 同玩法市场（若合法可得）。
 
-同时保留：
+同时保留 Football-only / Market-only / Fusion。
 
-- Football-only
-- Market-only
-- Fusion
+“比 random 33% / 50% 强”不能单独成为模型优秀证据。
 
-这样才能知道模型是真有足球增量，还是只是复制市场。
+### Forecast Horizon 公平性
 
-“比随机 33% / 50% 强”不能单独成为模型优秀证据。
+- T-24h、T-6h、T-60m 等不是同一个信息集；
+- 先审 current `minutes_to_kickoff_at_freeze` 分布，再锁 horizon bins；
+- 同一 match 的多个 horizon 是 repeated paired forecasts，不是多个独立样本；
+- 早期 FBOS forecast 优先与同一时点或更早的 market snapshot 比；
+- closing market 可作为最终信息 benchmark，但不能冒充 equal-information control。
 
 ---
 
-# 5. Model Architecture — 共享底盘，但允许玩法专门优化
+# 5. Model Architecture
 
 长期目标不是“一套 Poisson 包打天下”，也不是每个玩法完全割裂。
 
@@ -132,41 +121,63 @@ Exact Score 额外：
 `→ mathematically coherent derived FT markets`
 `→ market-specific calibration/head when prospective evidence proves gain`
 
-## 从 full-time joint score state 可自然推导
+共同 score state 可自然推导 FT 1X2、double chance、Exact Score、official score buckets、0–7+ goals、O/U、BTTS、full-time handicap、team totals / winning margin。
 
-- FT 1X2
-- double chance
-- Exact Score / Top-N scenarios
-- official score buckets
-- total goals 0–7+
-- O/U
-- BTTS
-- full-time handicap outcomes
-- team totals / winning margin
+若 1X2 / Goals / BTTS / handicap 使用独立 head，必须 fixed experiment + holdout + prospective evidence 证明对应玩法增益，同时检查与 authoritative score state 的显著冲突。
 
-## 可允许独立 market head / calibration
-
-如果 fixed experiment + holdout + prospective evidence 证明某个玩法使用专门模型更准，可以拥有独立 head，例如：
-
-- 1X2 classifier/calibrator
-- goals classifier/calibrator
-- BTTS classifier/calibrator
-- handicap calibration
-
-但必须继续检查与 authoritative score state 的冲突，不能为了命中率制造互相矛盾的产品结论。
-
-## 必须独立建模的典型目标
-
-- **半场 / HTFT**：不能简单 `90m lambda / 2`；先建立 first-half score/outcome truth、再建模/评价。
-- corners / cards / player props：specialized event models。
+HTFT 不能简单 `90m lambda / 2`；corners/cards/player props 属于 specialized model lane。
 
 ---
 
-# 6. Segmented Serving
+# 6. Feature Incremental Value Gate
+
+任何 rich feature /复杂模型都必须证明增量，而不是因为“更高级”直接接入。
+
+适用于 xG/xT、shot quality、lineup/player、injury、manager、weather、travel/rest、NLP/news、GNN/embeddings 等。
+
+必须走：
+
+`time-safe acquisition`
+`→ paired current control`
+`→ fixed +feature ablation`
+`→ chronological holdout`
+`→ coverage / competition audit`
+`→ prospective shadow if promising`
+
+核心问题：
+
+> 在相同比赛、相同赛前截止时点上，它相对当前 Champion 和 closest same-time strong market baseline 增加了什么？
+
+解释性增益不自动等于预测增益；rich-data feature 也不能把广覆盖产品拖成只剩少量比赛可用。
+
+---
+
+# 7. Class-Balance / Anti-Favourite Gate
+
+1X2 不得只看 overall accuracy。
+
+至少同时审：
+
+- Home / Draw / Away predicted class mix；
+- actual class mix；
+- confusion matrix；
+- per-class recall；
+- Draw recall；
+- multiclass Brier / LogLoss；
+- RPS 可作为附加 ordinal metric；
+- class-wise calibration（样本允许时）。
+
+防止“永远猜热门 / 几乎不猜平局”获得漂亮 accuracy。
+
+其它多类玩法同理：0–7+ 关注尾部类别，HTFT 关注九类失衡。
+
+---
+
+# 8. Segmented Serving
 
 正式 serving 单位：
 
-`Market × Competition Support × Evidence Quality × Prediction Quality`
+`Market × Competition Support × Forecast Horizon × Evidence Quality × Prediction Quality`
 
 Competition：`SUPPORTED / LIMITED / EXPERIMENTAL / UNSUPPORTED`
 
@@ -176,7 +187,7 @@ Serving：`NORMAL / CAUTION / DEGRADED / ABSTAIN`
 
 一个玩法失败不得拖累其它玩法；其它玩法好也不得替它背书。
 
-用户最终应该能够看到全部合法玩法概率，同时系统可以突出：
+用户可看到全部合法玩法概率，同时系统最终可突出：
 
 > **这场当前证据下，哪一个玩法是历史上最有把握的正式判断。**
 
@@ -184,63 +195,38 @@ Serving：`NORMAL / CAUTION / DEGRADED / ABSTAIN`
 
 ---
 
-# 7. Current Program
+# 9. Current Program
 
 Public Launch 总门仍为：`PUBLIC-LAUNCH-TRUST`
 
-但当前最大技术/产品发动机正式改为：
-
-> **`MULTI-MARKET-PREDICTION-QUALITY`**
+当前最大技术/产品发动机：`MULTI-MARKET-PREDICTION-QUALITY`
 
 ## Lane A — Multi-Market Prediction Quality | TECHNICAL P0
 
-当前最重要的模型问题不再只问“Exact Score 怎么提高”，而是：
+当前最重要的问题：
 
-- 我们每个玩法现在到底多准？
+- 每个玩法到底多准？
 - 全覆盖和精选分别多准？
 - coverage 多大？
-- 是否优于同玩法强基线？
-- 哪些赛事最强/最弱？
-- 哪些玩法已经可服务，哪些根本还没有 truth/evaluation chain？
+- 是否优于同玩法、同时点强基线？
+- 哪些赛事 / horizon 最强或最弱？
+- 1X2 是否存在 draw/class collapse？
+- 哪些高级 feature 真有增量？
+- 哪些玩法其实只是缺 projection / truth / evaluation，而不是缺模型？
 
-Exact Score 仍是最大已知单项技术难题；Challenger C=`56 verified / PROMISING_NOT_ESTABLISHED / shadow-only`，后台自然积累到 >=100，不调参救显著性。
+Exact Score 仍是最大已知单项技术难题；C=`56 verified / PROMISING_NOT_ESTABLISHED / shadow-only`，后台自然积累到 >=100，不调参救显著性。
 
 ## Lane B — Prediction Proof / Trust / Serving | P0
 
-职责：证明 Lane A 的成绩是真的。
-
-包括：
-
-- immutable freeze
-- unique-match prospective ledger
-- market-specific calibration
-- coverage / abstain
-- uncertainty
-- market/simple benchmark
-- failure taxonomy
-- segmented serving
-
-Trust 是证据层，不是替代模型表现的主产品。
+immutable freeze、unique-match prospective ledger、market-specific calibration、coverage/abstain、uncertainty、benchmark、failure taxonomy、segmented serving。
 
 ## Lane C — User Decision Product / Trust Center
 
-用户 30 秒内要知道：
-
-- 这场各玩法怎么看；
-- 哪个玩法当前最值得关注；
-- 概率/比分情景；
-- 数据是否完整；
-- 风险与冲突；
-- 哪些玩法应谨慎/abstain；
-- 过去同类玩法/赛事真实表现。
-
-Trust Center 必须以**逐玩法成绩表**为主体之一，而不是只有工程指标或一个“总命中率”。
+用户 30 秒内知道各玩法怎么看、哪个玩法当前最值得关注、概率/比分情景、风险/冲突、哪些玩法谨慎/abstain、过去同玩法/同赛事表现。
 
 ## Lane D — Data / Identity / Rights | P0 FOUNDATION
 
-当前 Issue #180 属于此 lane 的 bounded research preflight。
-
-它只回答 Reep 是否能低成本解决 cross-provider identity 并恢复 correct-score benchmark probe；完成后不自动继续 identity 子树。
+Issue #180 属于此 lane 的 bounded research preflight；完成后不自动继续 identity 子树。
 
 ## Lane E — Operations / Reliability
 
@@ -248,7 +234,7 @@ Public Launch 前关闭 freshness、silent missing、settlement continuity、pro
 
 ## Lane F — Closed Beta / User Validation
 
-模型不等完美才给真实用户，但要最小测量：用户看哪些玩法、是否理解概率/abstain、是否回看赛果、是否重复使用。
+真实验证用户看哪些玩法、是否理解概率/abstain、是否回看赛果、是否重复使用。
 
 ## Lane G — Compliance / Commercial
 
@@ -260,21 +246,17 @@ Closed Beta 有信号以后再验证获客、复访、付费；不复制“红�
 
 ## Lane I — Advanced Model R&D
 
-不再以“模型更高级”为理由启动。
-
-启动条件改成：
-
-`per-market measured failure → legal prematch inputs → population fit → fixed evaluation → prospective path`
+只有：`per-market measured failure → legal prematch inputs → population fit → fixed evaluation → prospective path` 才启动。
 
 ---
 
-# 8. Current Execution / Background
+# 10. Current Execution / Background
 
 ### Current bounded execution
 
 Issue #180：`EXACT-SCORE-REEP-IDENTITY-BRIDGE-PREFLIGHT-1`
 
-保持执行，不因本次 Roadmap correction 中断。
+保持执行，不因 Roadmap correction 中断。
 
 ### Background
 
@@ -282,71 +264,67 @@ Challenger C 自然 prospective accumulation to >=100。
 
 ---
 
-# 9. Post-#180 Highest-Value Candidate
+# 11. Post-#180 Highest-Value Candidate
 
 这不是预授权 Issue；#180 完成后仍需完整 Project Gate。
 
-当前外部研究后的最高候选变为：
+当前最高候选：
 
 ## `MULTI-MARKET-PREDICTION-COVERAGE-AND-EVALUATION-GAP-AUDIT`
 
 先回答：
 
-1. 当前 frozen full-time score state 已经能准确推导哪些玩法？
-2. 当前 90m result truth 已能合法结算哪些玩法？
-3. 当前 unique prospective cohort 上，各玩法实际 hit rate / proper score 是多少？
-4. 哪些玩法已有 strong/simple/market baseline？
-5. 官方竞彩让球胜平负需要的 handicap line 是否已有合法 frozen truth？
-6. 官方 0–7+ 总进球、比分桶是否只是缺 projection/evaluation，而不是缺模型？
-7. HTFT 是否缺 first-half result truth？
-8. strongest / weakest market 分别是谁？
-9. 哪些问题是 evaluation/product gap，哪些才是真正 model-quality gap？
+1. current frozen full-time joint score state 已经能准确推导哪些玩法？
+2. current result truth 已能合法结算哪些玩法？
+3. current unique prospective cohort 上，各玩法 hit rate / proper score / coverage 是多少？
+4. 哪些玩法已有 same-market / same-horizon baseline？
+5. actual freeze lead-time 分布怎样，是否能形成 horizon scorecard？
+6. 1X2 Home/Draw/Away class mix / recall 是否健康？
+7. 官方竞彩让球胜平负需要的 handicap line 是否已有合法 frozen truth？
+8. 官方 0–7+、比分桶是否只是缺 projection/evaluation？
+9. HTFT 是否缺 first-half result truth？
+10. rich-feature coverage / potential ablation surface 已有哪些？
+11. strongest / weakest market 分别是谁？
+12. 哪些是 evaluation/product/data gap，哪些才是真正 model-quality gap？
 
 **没有这张地图以前，不默认造新模型。**
 
 ---
 
-# 10. Public Launch Gate
+# 12. Public Launch Gate
 
 Public Launch 至少要求：
 
 1. 各一级玩法有明确 prediction-quality scorecard / serving state；
 2. 不把一个玩法的好成绩包装成全产品成绩；
-3. Competition support 可见；
-4. Trust/prospective record 可审计；
-5. Data/Rights 可接受；
-6. Operations 可无人值守；
-7. Compliance 边界关闭；
-8. Closed Beta 证明真实重复价值；
-9. release smoke 真实通过。
+3. Forecast Horizon 与 baseline 比较公平；
+4. 1X2 / 多类玩法无隐藏 class collapse；
+5. Competition support 可见；
+6. Trust/prospective record 可审计；
+7. Data/Rights 可接受；
+8. Operations 可无人值守；
+9. Compliance 边界关闭；
+10. Closed Beta 证明真实重复价值；
+11. release smoke 真实通过。
 
 ---
 
-# 11. Anti-Patterns
+# 13. Anti-Patterns
 
 以后不允许：
 
-- 把 Trust Center 当成预测质量的替代品；
+- 把 Trust Center 当成预测质量替代品；
 - 一个跨玩法“总命中率”；
 - 只报精选命中率不报 coverage；
-- 用 Double Chance/O1.5 等容易玩法抬高其它玩法声誉；
+- 用容易玩法抬高其它玩法声誉；
 - 只和 random baseline 比；
+- T-24h forecast 和 T-0 closing market 当同信息条件比较；
+- overall 1X2 accuracy 掩盖不猜 Draw；
+- “xG/阵容/球员/GNN 更高级所以一定更准”；
 - Exact Score 单项绑架整个产品；
 - 因 Exact Score 难就降低它的一等能力地位；
 - 永久把核心 market universe 缩成 1X2/O-U/BTTS/Exact；
 - half-time 用 90m lambda/2 直接伪造；
-- 为了玩法数量直接上模型而不先建 truth/evaluation；
+- 为玩法数量直接上模型而不先建 truth/evaluation；
 - 一个 bounded Issue 完成后自动沿同技术树继续；
 - 把历史 milestone 塞回 Roadmap。
-
----
-
-# 12. Historical / Research Pointer
-
-路线研究在 Memory-Hub：
-
-- `RESEARCH/2026-09-04-MULTI-MARKET-PREDICTION-QUALITY-REBASE.md`
-- `RESEARCH/2026-09-04-PRODUCT-ROADMAP-REBASE.md`
-- 其它 Exact Score / identity / benchmark research assets。
-
-历史 milestone 只从 Git history、Issues/PR/Actions、`docs/*` evidence 恢复，禁止复制回当前 Roadmap。
