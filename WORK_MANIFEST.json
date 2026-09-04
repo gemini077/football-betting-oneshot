@@ -18,10 +18,15 @@
   "current_program": {
     "public_launch_gate": "PUBLIC-LAUNCH-TRUST",
     "technical_engine": "MULTI-MARKET-PREDICTION-QUALITY",
-    "status": "MULTI_MARKET_QUALITY_REBASE_LOCKED",
-    "maturity": "LEVEL_4A_ENGINEERING_CLOSED_BETA_READY_MULTI_MARKET_EVALUATION_GAP",
-    "note": "Prediction quality is the core user value; trust/freeze/calibration/benchmark are the proof layer."
+    "status": "MULTI_MARKET_QUALITY_AND_HISTORICAL_FOOTBALL_MEMORY_REBASE_LOCKED",
+    "maturity": "LEVEL_4A_ENGINEERING_CLOSED_BETA_READY_MULTI_MARKET_AND_HISTORICAL_MEMORY_EVALUATION_GAP",
+    "note": "Prediction quality is the engine. Historical Football Memory is an upstream training foundation; trust/freeze/calibration/benchmark are the proof layer. Exact Score is a flagship market, not the only market."
   },
+  "product_jobs": [
+    "UNDERSTAND_MATCH",
+    "PREDICT_DECISION_SUPPORT"
+  ],
+  "flagship_market": "EXACT_SCORE",
   "current_execution": {
     "issue": 180,
     "key": "EXACT-SCORE-REEP-IDENTITY-BRIDGE-PREFLIGHT-1",
@@ -37,6 +42,37 @@
       "next_gate": ">=100 unique -> PROMOTION_REVIEW_READY at most",
       "auto_promote": false
     }
+  },
+  "sample_evidence_layers": {
+    "historical_training_corpus": "may expand with real rights-clear chronology-safe historical matches; used for team/league state and chronological holdout",
+    "historical_market_research_corpus": "rights/timepoint-gated historical odds/market research; does not automatically become production input",
+    "prospective_trust_ledger": "future frozen matches only; used for promotion, serving trust and public performance claims",
+    "anti_confusion": "historical expansion, bootstrap, simulation, synthetic rows or forecast versions must never inflate prospective independent-match counts"
+  },
+  "historical_football_memory": {
+    "current_status": "GAP_TO_AUDIT",
+    "current_champion_state": "short recent-form actual goals plus market fusion; not a large-history team-strength learner",
+    "existing_assets": [
+      "data/football_data/historical_result_ledger/",
+      "data/football_data/historical_result_samples/",
+      "OpenFootball CC0 pilot",
+      "competition registries and coverage history"
+    ],
+    "candidate_structure": [
+      "global_or_competition_tier_prior",
+      "league_season_regime",
+      "dynamic_point_in_time_team_attack_defence",
+      "current_match_evidence",
+      "same_horizon_market_prior",
+      "authoritative_joint_goal_state"
+    ],
+    "rules": [
+      "expand real historical results before defaulting to model complexity",
+      "all historical state must be point-in-time replay safe",
+      "sparse leagues/promoted/new teams should use conservative pooling/fallback rather than unstable tiny standalone models",
+      "market is a strong prior/baseline; independent football memory must prove incremental value",
+      "old small-cohort DC/rho rejection does not ban new large-history dynamic attack/defence applicability research"
+    ]
   },
   "market_universe": {
     "tier_a_china_jc": [
@@ -75,6 +111,20 @@
     "chronology_stability",
     "class_balance_diagnostics_where_applicable"
   ],
+  "exact_score_scorecard": [
+    "strict_top1_hit_rate",
+    "top3_hit_rate",
+    "top5_hit_rate",
+    "score_nll",
+    "actual_score_rank",
+    "score_concentration_entropy",
+    "topk_predicted_mass_vs_observed_coverage",
+    "common_score_baseline",
+    "competition_mode_baseline",
+    "historical_team_strength_baseline",
+    "market_implied_map_where_legal",
+    "direct_correct_score_market_where_rights_clear"
+  ],
   "segmented_serving_contract": {
     "dimensions": [
       "market",
@@ -90,10 +140,20 @@
   "model_governance": {
     "class_balance_gate": "1X2 must audit predicted mix, confusion matrix, per-class recall and draw recall; overall accuracy cannot hide class collapse",
     "feature_incremental_value_gate": "rich features require time-safe paired ablation versus Champion and closest same-time strong market baseline before production",
-    "forecast_horizon_gate": "different freeze lead-times are different information conditions; closing market is a late-information benchmark, not automatically an equal-information control"
+    "forecast_horizon_gate": "different freeze lead-times are different information conditions; closing market is a late-information benchmark, not automatically an equal-information control",
+    "core_vs_market_heads": "Core State Champion may coexist with independently validated per-market serving heads/calibrators",
+    "router_gate": "any best-market selector is itself a frozen prediction policy requiring independent holdout/prospective evaluation",
+    "drift_gate": "market x competition x horizon drift may trigger investigation/caution/abstain but never automatic retraining"
   },
-  "post_issue_180_highest_candidate": "MULTI-MARKET-PREDICTION-COVERAGE-AND-EVALUATION-GAP-AUDIT",
+  "post_issue_180_highest_candidate": "MULTI-MARKET-PREDICTION-COVERAGE-AND-EVALUATION-GAP-AUDIT_WITH_HISTORICAL_FOOTBALL_MEMORY",
+  "post_issue_180_required_maps": [
+    "prediction_scorecard_map",
+    "truth_projection_map",
+    "historical_football_memory_training_corpus_map",
+    "baseline_model_bottleneck_map"
+  ],
   "product_lanes": [
+    "historical_football_memory_training_foundation",
     "multi_market_prediction_quality",
     "prediction_proof_trust_serving",
     "data_identity_rights",
@@ -115,17 +175,22 @@
     "single_match_postmatch_verification": "active",
     "automation_pages": "active",
     "champion_prediction_engine": "active",
-    "challenger_c": "shadow_only"
+    "challenger_c": "shadow_only",
+    "historical_result_infrastructure": "partial_existing",
+    "openfootball_cc0_pilot": "existing"
   },
   "current_product_gaps": [
     "prospective_scorecard_parity_across_markets",
+    "historical_football_memory_training_corpus_coverage_and_point_in_time_readiness",
     "china_jc_handicap_total_goals_score_bucket_htft_truth_map",
     "same_market_same_horizon_baselines",
+    "exact_score_common_mode_historical_strength_market_implied_baselines",
     "forecast_horizon_scorecards",
     "1x2_class_balance_and_draw_diagnostics",
     "feature_incremental_value_map",
     "hit_rate_at_coverage_governance",
     "first_half_truth_for_htft_unverified",
+    "current_select_primary_router_evidence_unverified",
     "empirically_defensible_user_confidence",
     "closed_beta_minimum_measurement",
     "public_launch_rights_operations_compliance_closure"
@@ -145,6 +210,12 @@
   },
   "critical_rules": [
     "prediction quality is the engine; trust is the proof layer",
+    "help users understand the match and provide auditable prediction decision support are both product jobs",
+    "exact score is a flagship market but may not monopolize unrelated product progress",
+    "historical training sample and future prospective proof sample are separate evidence classes",
+    "expand real historical score truth before defaulting to model complexity when sample size is the limiting factor",
+    "synthetic/bootstrap/monte-carlo/version rows cannot manufacture independent football truth",
+    "all historical model state must be point-in-time and leakage safe",
     "never publish one blended cross-market overall accuracy",
     "served hit rate must be paired with coverage",
     "same-market same-horizon strong baseline is preferred over random baseline",
@@ -166,6 +237,8 @@
     "docs/prediction-quality/",
     "docs/model-governance/",
     "docs/research/",
+    "data/football_data/historical_result_ledger/",
+    "data/football_data/historical_result_samples/",
     "Memory-Hub RESEARCH_ASSETS.md"
   ]
 }
