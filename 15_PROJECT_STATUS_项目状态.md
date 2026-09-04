@@ -1,31 +1,42 @@
 # 15_PROJECT_STATUS_项目状态.md
 
 最后更新：2026-09-04
-角色：**主仓库中的当前状态投影**。只保留今天仍成立、会影响当前决策的事实；不保存 milestone 流水账。
+角色：**主仓库当前状态投影**。只保留今天仍成立、会影响当前决策的事实；不保存 milestone 流水账。
 
-长期 Canonical Source of Truth：`gemini077/Memory-Hub / PROJECTS/Football-Betting-OneShot/CANONICAL.md`。
+长期 Canonical：`gemini077/Memory-Hub / PROJECTS/Football-Betting-OneShot/CANONICAL.md`。
 
 ---
 
 ## 1. 产品定位
 
-Football Betting OneShot 是面向中国用户的足球信息 + 市场信息 + 赛前概率 + 可审计验证的决策支持产品。
+Football Betting OneShot 是面向中国用户的足球信息 + 市场信息 + **多玩法赛前预测** + 可审计验证的决策支持产品。
 
-核心输出：`1X2 / Exact Score / O-U / BTTS`。
+核心用户价值：提高用户真正关心玩法的预测命中率与概率质量；Trust / Freeze / Calibration / Benchmark 负责证明成绩真实，不替代预测能力。
 
-产品不是彩票交易、代购、出票、充值、自动下注或官方彩票机构服务。
+长期 Tier-A 中国竞彩目标：
+
+- 胜平负；
+- 让球胜平负；
+- 比分（raw score distribution + official score buckets）；
+- 总进球 0–7+；
+- 半全场（需独立 first-half truth/model lane）。
+
+O/U、BTTS、Asian/common handicap 等继续作为重要 Tier-B 市场。
+
+产品不是彩票交易、代购、出票、充值、自动下注或官方彩票服务。
 
 ---
 
 ## 2. 当前成熟度
 
-- Whole product：`LEVEL 4A — ENGINEERING CLOSED-BETA READY / TRUST-BETA MEASUREMENT PREP / PUBLIC LAUNCH NOT READY`
-- Strategic program：`PUBLIC-LAUNCH TRUST`
-- 最大技术 P0：`Exact Score Prediction Trust`
+- Whole product：`LEVEL 4A — ENGINEERING CLOSED-BETA READY / MULTI-MARKET-EVALUATION GAP / PUBLIC LAUNCH NOT READY`
+- Public-launch umbrella：`PUBLIC-LAUNCH-TRUST`
+- 当前最大技术/产品发动机：`MULTI-MARKET-PREDICTION-QUALITY`
+- Exact Score：仍是最大已知单项技术难题，但不再代表全部模型质量。
 - Product/UI：Homepage + Match Detail 已存在；G5 functional/product gate 已过。
 - Production foundation：Universe、freeze、90m result、prospective ledger、automation、Pages 已建立。
 
-解释：产品已经能运行，也已经具备 Closed Beta 边界文案和单场赛后验证；但真实 Beta 还缺最小用户测量能力、可验证 confidence、按玩法/赛事分层的 serving contract 和聚合 Trust Center。
+当前最重要的新缺口不是再做 Trust UI，而是：**其它玩法没有和 Exact Score 同等级的 prospective scorecard / baseline / coverage / failure map。**
 
 ---
 
@@ -52,107 +63,124 @@ C 继续自然积累到 >=100；禁止为显著性调参或机械反复 review�
 
 ---
 
-## 4. 当前 Product Trust Surface — 已有与缺口
+## 4. Multi-Market Quality Contract
 
-代码现状已经有：
+禁止一个跨玩法 blended “overall accuracy”。
 
-- `prediction_quality_health` 与 Exact Score serving warning；
-- score distribution / Top score alternatives；
-- `INSUFFICIENT_DATA / PREDICTION_FAILED / MISSED_PREMATCH_WINDOW` 等 fail-closed 状态；
-- Closed Beta / 不售彩 / responsible-use 文案；
-- 单场 `prediction vs actual` 赛后核验；
-- frozen/source-cutoff 等可追溯字段。
+每个玩法至少独立报告：
 
-当前缺口：
+- full-coverage Top1 hit rate；
+- served hit rate；
+- served coverage / abstain rate；
+- same-market baseline；
+- delta vs baseline；
+- proper score；
+- calibration / ECE（样本允许时）；
+- sample / uncertainty；
+- competition / chronology stability。
 
-1. **没有被历史 calibration 证明的 user-facing confidence 语义**；
-2. **没有 per-market × competition-tier serving matrix**；
-3. Exact Score health 已独立治理，但 1X2 / O-U / BTTS 尚未形成同等级 user-serving contract；
-4. 首页当前主要仍按 kickoff 排序，不是真正按 evidence/trust 帮用户优先决策的 queue；
-5. 没有聚合 Trust Center：per-market proper scores、calibration、样本、赛事分层、known weaknesses、market benchmark 尚未产品化；
-6. Closed Beta 没有最小行为/理解度 measurement surface。
+Exact Score 额外报告 Top1/3/5、Score NLL、concentration/entropy。
 
-因此下一阶段不是“再多做几个页面模块”，而是把已有后台真相组织成可验证的用户信任系统。
+命中率是核心指标之一，但不能脱离 coverage；精选越少越容易抬高命中率，因此必须同时看 risk-coverage。
 
 ---
 
-## 5. Segmented Trust Contract — 当前新战略真相
+## 5. Model Architecture Truth
 
-正式 serving 以后至少按：
+长期优先结构：
+
+`shared football/market features → authoritative FT joint goal state → coherent FT markets → market-specific calibration/head when prospective evidence proves gain`
+
+full-time score state 应尽量数学一致地支持 1X2、比分、总进球、O/U、BTTS、handicap 等。
+
+但不再规定“一套模型必须对所有玩法最优”。如果专门 1X2 / Goals / BTTS / handicap head 在 fixed + prospective evaluation 中确有增益，可以独立存在。
+
+半场/HTFT 必须先有 first-half truth/evaluation；不得机械 `90m lambda / 2`。
+
+---
+
+## 6. Segmented Serving
+
+正式 serving 按：
 
 `Market × Competition Support × Evidence Quality × Prediction Quality`
 
-分别判断。
+Competition：`SUPPORTED / LIMITED / EXPERIMENTAL / UNSUPPORTED`
 
-### Markets
-`1X2 / O-U / BTTS / Exact Score`
+Evidence：`FULL / PARTIAL / INSUFFICIENT`
 
-### Competition Support
-`SUPPORTED / LIMITED / EXPERIMENTAL / UNSUPPORTED`
+Serving：`NORMAL / CAUTION / DEGRADED / ABSTAIN`
 
-### Evidence Quality
-`FULL / PARTIAL / INSUFFICIENT`
+一个玩法 DEGRADED 不得拖累其它玩法；其它玩法好不得替它背书。
 
-### Serving State
-`NORMAL / CAUTION / DEGRADED / ABSTAIN`
-
-一个玩法 DEGRADED 不得自动拖累其他玩法；其他玩法表现好也不得替 Exact Score 背书。
-
-任何“高/中/低置信度”若不能映射到 prospective calibration / reliability / sample uncertainty，不得作为正式用户 confidence。
+任何 user-facing confidence 必须可回到 prospective calibration / reliability / sample uncertainty；否则不显示主观高/中/低。
 
 ---
 
-## 6. External Correct-Score Benchmark
+## 7. External Correct-Score Benchmark / Current Execution
 
-Issue #178 / PR #179 accepted：
+Issue #178 / PR #179 accepted：60 future candidates / 60 kickoff overlap / 0 exact identity / 0 correct-score probe，decision=`IDENTITY_MAPPING_NOT_READY`。
 
-- FBOS future candidates=`60`
-- provider events=`646`
-- kickoff overlap=`60/60`
-- exact identity=`0`
-- correct_score probes=`0`
-- credits=`0`
-- decision=`IDENTITY_MAPPING_NOT_READY`
-
-`0 exact identity` 不等于 provider coverage=0；market 尚未真正 probe。
+`0 exact identity` 不等于 provider score-market coverage=0。
 
 Current bounded execution：Issue #180 `EXACT-SCORE-REEP-IDENTITY-BRIDGE-PREFLIGHT-1`。
 
-#180 属于 Data / Identity / Rights lane；完成后必须回项目级 Gate，不自动继续 identity/provider 子树。
+#180 仍属于 Data / Identity / Rights lane；本次 Roadmap correction 不取消它。完成后必须回项目级 Gate，不自动继续 identity/provider 子树。
 
 ---
 
-## 7. 当前 Product Lanes
+## 8. Post-#180 Highest Candidate
+
+当前最高信息价值候选已改为：
+
+`MULTI-MARKET-PREDICTION-COVERAGE-AND-EVALUATION-GAP-AUDIT`
+
+先只读查清：
+
+- current frozen state 已能推导哪些玩法；
+- current result truth 已能结算哪些玩法；
+- 各玩法 current prospective hit rate / coverage / proper score / baseline；
+- 官方竞彩让球、总进球、比分桶、HTFT 的 prematch/settlement truth 缺口；
+- strongest / weakest market；
+- 哪些是 evaluation gap，哪些才是真正 model-quality gap。
+
+这不是预授权 Issue；#180 完成后仍需完整 Research-Backed Project Gate。
+
+---
+
+## 9. 当前 Product Lanes
 
 | Lane | 状态 |
 |---|---|
-| Prediction Trust | `CURRENT / P0` |
-| User Trust / Decision Product | `CURRENT / P0` |
-| Trust Center / Public Track Record | `CURRENT DESIGN PRIORITY` |
+| Multi-Market Prediction Quality | `CURRENT / TECHNICAL P0` |
+| Prediction Proof / Trust / Serving | `CURRENT / P0` |
 | Data / Identity / Rights | `CURRENT / P0 FOUNDATION` |
+| User Decision Product / Trust Center | `CURRENT PRODUCT LANE` |
 | Operations / Reliability | `REQUIRED BEFORE PUBLIC LAUNCH` |
 | Closed Beta / User Validation | `NEXT PRODUCT MATURITY GATE` |
 | Compliance / Commercial | `REQUIRED BEFORE PUBLIC COMMERCIALIZATION` |
 | Distribution / Business Model | `DISCOVERY AFTER BETA SIGNAL` |
-| Advanced Model R&D | `SUPPORTING / DEMAND-TRIGGERED` |
+| Advanced Model R&D | `DEMAND-TRIGGERED BY PER-MARKET FAILURE` |
 
 ---
 
-## 8. 仍生效的 Anti-Rollback
+## 10. Anti-Rollback
 
+- Prediction Quality 是发动机；Trust 是证明层，不能再次倒置。
+- 不用跨玩法总命中率；不隐藏 coverage。
+- 不用容易玩法给难玩法背书。
+- 不只和 random baseline 比；优先 same-market strong baseline。
+- Exact Score 仍是一等核心能力，但不绑架其它玩法。
+- 核心市场集合不得永久缩窄为 `1X2/O-U/BTTS/Exact`。
+- HTFT 在 first-half truth 未证明前不实现。
 - frozen prematch history 不重写；postmatch truth 不进入赛前生成。
-- selector 不是历史 1-1 collapse 主因。
-- Challenger D REJECTED；global recency route REJECTED；61-match friendlies causal route RETIRED。
-- 不机械打开 Dixon-Coles rho；不做 1-1 penalty / diversity quota / random replacement。
 - C=`PROMISING_NOT_ESTABLISHED`，不得包装成稳定优于 Champion。
-- Sporttery CRS rights=`NOT_CLEARED`。
-- external market benchmark 先是 benchmark，不自动成为模型输入。
 - technical accessibility != commercial reuse permission。
-- transparency/track record 本身不是唯一 moat；必须和 segmented reliability / abstention / benchmark / failure transparency 组合。
+- bounded task 完成后不沿同 subtree 自动继续。
 
 ---
 
-## 9. 历史 Pointer
+## 11. Historical Pointer
 
 历史 milestone 只从 Git history、Issues/PR/Actions、`docs/*` evidence 与 Memory-Hub Research Assets 恢复。
 
