@@ -65,24 +65,32 @@
     "full_coverage_hit_rate",
     "served_hit_rate",
     "served_coverage",
-    "same_market_baseline",
+    "same_market_same_horizon_baseline",
     "delta_vs_baseline",
     "proper_score",
     "calibration",
     "sample_uncertainty",
     "competition_population_scope",
-    "chronology_stability"
+    "forecast_horizon",
+    "chronology_stability",
+    "class_balance_diagnostics_where_applicable"
   ],
   "segmented_serving_contract": {
     "dimensions": [
       "market",
       "competition_support",
+      "forecast_horizon",
       "evidence_quality",
       "prediction_quality"
     ],
     "competition_support": ["SUPPORTED", "LIMITED", "EXPERIMENTAL", "UNSUPPORTED"],
     "evidence_quality": ["FULL", "PARTIAL", "INSUFFICIENT"],
     "serving_state": ["NORMAL", "CAUTION", "DEGRADED", "ABSTAIN"]
+  },
+  "model_governance": {
+    "class_balance_gate": "1X2 must audit predicted mix, confusion matrix, per-class recall and draw recall; overall accuracy cannot hide class collapse",
+    "feature_incremental_value_gate": "rich features require time-safe paired ablation versus Champion and closest same-time strong market baseline before production",
+    "forecast_horizon_gate": "different freeze lead-times are different information conditions; closing market is a late-information benchmark, not automatically an equal-information control"
   },
   "post_issue_180_highest_candidate": "MULTI-MARKET-PREDICTION-COVERAGE-AND-EVALUATION-GAP-AUDIT",
   "product_lanes": [
@@ -112,7 +120,10 @@
   "current_product_gaps": [
     "prospective_scorecard_parity_across_markets",
     "china_jc_handicap_total_goals_score_bucket_htft_truth_map",
-    "same_market_baselines",
+    "same_market_same_horizon_baselines",
+    "forecast_horizon_scorecards",
+    "1x2_class_balance_and_draw_diagnostics",
+    "feature_incremental_value_map",
     "hit_rate_at_coverage_governance",
     "first_half_truth_for_htft_unverified",
     "empirically_defensible_user_confidence",
@@ -136,8 +147,11 @@
     "prediction quality is the engine; trust is the proof layer",
     "never publish one blended cross-market overall accuracy",
     "served hit rate must be paired with coverage",
-    "same-market strong baseline is preferred over random baseline",
+    "same-market same-horizon strong baseline is preferred over random baseline",
     "one football match = one observation",
+    "different forecast horizons are repeated forecasts, not independent samples",
+    "overall 1X2 accuracy must not hide draw/class collapse",
+    "rich features require paired incremental-value evidence before production",
     "never rewrite legal frozen prematch truth",
     "no postmatch leakage into prematch generation",
     "a degraded market must not contaminate unrelated market serving truth",
