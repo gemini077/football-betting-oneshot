@@ -77,7 +77,8 @@ C 继续自然积累到 >=100；禁止为显著性调参或机械反复 review�
 - proper score；
 - calibration / ECE（样本允许时）；
 - sample / uncertainty；
-- competition / chronology stability。
+- competition / chronology stability；
+- forecast horizon / freeze lead-time。
 
 Exact Score 额外报告 Top1/3/5、Score NLL、concentration/entropy。
 
@@ -85,7 +86,7 @@ Exact Score 额外报告 Top1/3/5、Score NLL、concentration/entropy。
 
 ---
 
-## 5. Model Architecture Truth
+## 5. Model Architecture / Feature Truth
 
 长期优先结构：
 
@@ -95,15 +96,29 @@ full-time score state 应尽量数学一致地支持 1X2、比分、总进球、
 
 但不再规定“一套模型必须对所有玩法最优”。如果专门 1X2 / Goals / BTTS / handicap head 在 fixed + prospective evaluation 中确有增益，可以独立存在。
 
+任何 xG、阵容/球员、伤停、weather、travel/rest、GNN/embedding 等 rich feature 必须先过 `Feature Incremental Value Gate`：同一比赛、同一赛前信息截止、paired control、chronological holdout，证明相对 Champion / same-time strong market baseline 有增量。
+
 半场/HTFT 必须先有 first-half truth/evaluation；不得机械 `90m lambda / 2`。
 
 ---
 
-## 6. Segmented Serving
+## 6. Forecast Horizon / Class-Balance Truth
+
+预测时点是正式评价维度：T-24h、T-6h、T-60m 等不能混成一个成绩。
+
+- 先审真实 `minutes_to_kickoff_at_freeze` 分布，再定义 horizon bins；
+- 同一比赛不同 horizon 是 paired repeated forecasts，不是多场独立样本；
+- 早期 forecast 优先与同一时点或更早 market baseline 比；closing market 单独作为 late-information benchmark。
+
+1X2 不能只看 overall accuracy。长期至少检查 Home/Draw/Away predicted mix、confusion matrix、per-class recall、Draw recall、multiclass proper score / RPS、class-wise calibration（样本允许时），防止“永远猜热门/几乎不猜平局”伪造高准确率。
+
+---
+
+## 7. Segmented Serving
 
 正式 serving 按：
 
-`Market × Competition Support × Evidence Quality × Prediction Quality`
+`Market × Competition Support × Forecast Horizon × Evidence Quality × Prediction Quality`
 
 Competition：`SUPPORTED / LIMITED / EXPERIMENTAL / UNSUPPORTED`
 
@@ -117,7 +132,7 @@ Serving：`NORMAL / CAUTION / DEGRADED / ABSTAIN`
 
 ---
 
-## 7. External Correct-Score Benchmark / Current Execution
+## 8. External Correct-Score Benchmark / Current Execution
 
 Issue #178 / PR #179 accepted：60 future candidates / 60 kickoff overlap / 0 exact identity / 0 correct-score probe，decision=`IDENTITY_MAPPING_NOT_READY`。
 
@@ -129,9 +144,9 @@ Current bounded execution：Issue #180 `EXACT-SCORE-REEP-IDENTITY-BRIDGE-PREFLIG
 
 ---
 
-## 8. Post-#180 Highest Candidate
+## 9. Post-#180 Highest Candidate
 
-当前最高信息价值候选已改为：
+当前最高信息价值候选：
 
 `MULTI-MARKET-PREDICTION-COVERAGE-AND-EVALUATION-GAP-AUDIT`
 
@@ -140,7 +155,10 @@ Current bounded execution：Issue #180 `EXACT-SCORE-REEP-IDENTITY-BRIDGE-PREFLIG
 - current frozen state 已能推导哪些玩法；
 - current result truth 已能结算哪些玩法；
 - 各玩法 current prospective hit rate / coverage / proper score / baseline；
+- actual freeze lead-time distribution 与 horizon-specific performance；
+- 1X2 Home/Draw/Away class-balance diagnostics；
 - 官方竞彩让球、总进球、比分桶、HTFT 的 prematch/settlement truth 缺口；
+- rich-feature coverage 与 potential ablation surface；
 - strongest / weakest market；
 - 哪些是 evaluation gap，哪些才是真正 model-quality gap。
 
@@ -148,7 +166,7 @@ Current bounded execution：Issue #180 `EXACT-SCORE-REEP-IDENTITY-BRIDGE-PREFLIG
 
 ---
 
-## 9. 当前 Product Lanes
+## 10. 当前 Product Lanes
 
 | Lane | 状态 |
 |---|---|
@@ -164,12 +182,15 @@ Current bounded execution：Issue #180 `EXACT-SCORE-REEP-IDENTITY-BRIDGE-PREFLIG
 
 ---
 
-## 10. Anti-Rollback
+## 11. Anti-Rollback
 
 - Prediction Quality 是发动机；Trust 是证明层，不能再次倒置。
 - 不用跨玩法总命中率；不隐藏 coverage。
 - 不用容易玩法给难玩法背书。
-- 不只和 random baseline 比；优先 same-market strong baseline。
+- 不只和 random baseline 比；优先 same-market / same-horizon strong baseline。
+- 不让 overall 1X2 accuracy 掩盖 Draw/class collapse。
+- 不把 closing market 的晚期信息优势写成同条件 baseline。
+- 不假设 xG/阵容/球员/GNN 一定提升；先做 incremental-value ablation。
 - Exact Score 仍是一等核心能力，但不绑架其它玩法。
 - 核心市场集合不得永久缩窄为 `1X2/O-U/BTTS/Exact`。
 - HTFT 在 first-half truth 未证明前不实现。
@@ -180,7 +201,7 @@ Current bounded execution：Issue #180 `EXACT-SCORE-REEP-IDENTITY-BRIDGE-PREFLIG
 
 ---
 
-## 11. Historical Pointer
+## 12. Historical Pointer
 
 历史 milestone 只从 Git history、Issues/PR/Actions、`docs/*` evidence 与 Memory-Hub Research Assets 恢复。
 
