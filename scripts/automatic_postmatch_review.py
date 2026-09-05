@@ -19,7 +19,8 @@ from match_identity import identity_aliases
 from postmatch_evidence import fetch_postmatch_evidence
 from paper_ledger import pair_key
 from risk_engine import dixon_coles_score_matrix
-from model_governance import DEFAULT_RECORD_ROOT, validate_postmatch_review_link
+from exact_distribution import classify_frozen_exact_score
+from model_governance import DEFAULT_RECORD_ROOT, load_frozen_prediction, validate_postmatch_review_link
 from baseline_production import (
     DEFAULT_PREDICTION_ROOT as BENCHMARK_PREDICTION_ROOT,
     DEFAULT_SETTLEMENT_ROOT as BENCHMARK_SETTLEMENT_ROOT,
@@ -172,10 +173,21 @@ def _model_diagnostics(report: dict, home_goals: int, away_goals: int) -> dict:
     log_loss = -math.log(actual_probability)
     lambda_home = float(model.get("lambda_home") or 0.0)
     lambda_away = float(model.get("lambda_away") or 0.0)
-    matrix = dixon_coles_score_matrix({"lambda_home": lambda_home, "lambda_away": lambda_away, "rho": float(model.get("rho") or 0.0)}) if lambda_home > 0 and lambda_away > 0 else {}
-    score_probability = float(matrix.get((home_goals, away_goals)) or 0.0)
-    ranked = sorted(matrix.items(), key=lambda item: item[1], reverse=True)
-    score_rank = next((index + 1 for index, (score, _) in enumerate(ranked) if score == (home_goals, away_goals)), None)
+    governance = report.get("model_governance") or {}
+    frozen_record = load_frozen_prediction(str(governance.get("prediction_id") or ""), DEFAULT_RECORD_ROOT)
+    frozen_exact = classify_frozen_exact_score(frozen_record or {}, home_goals, away_goals)
+    if frozen_exact["FORMAL_EXACT_DISTRIBUTION_FROZEN"]:
+        score_probability = frozen_exact["probability"]
+        score_rank = frozen_exact["rank"]
+        exact_authority = frozen_exact["authority_status"]
+    else:
+        # Historical reviews may retain a clearly research-only reconstruction;
+        # a formal frozen distribution is never regenerated here.
+        matrix = dixon_coles_score_matrix({"lambda_home": lambda_home, "lambda_away": lambda_away, "rho": float(model.get("rho") or 0.0)}) if lambda_home > 0 and lambda_away > 0 else {}
+        score_probability = float(matrix.get((home_goals, away_goals)) or 0.0) if matrix else None
+        ranked = sorted(matrix.items(), key=lambda item: (-item[1], item[0][0], item[0][1]))
+        score_rank = next((index + 1 for index, (score, _) in enumerate(ranked) if score == (home_goals, away_goals)), None)
+        exact_authority = frozen_exact["authority_status"]
     market = (model.get("calibration") or {}).get("market_probabilities") or {}
     market_actual = float(market.get(actual_key) or 0.0) if market else None
     return {
@@ -183,8 +195,13 @@ def _model_diagnostics(report: dict, home_goals: int, away_goals: int) -> dict:
         "actual_outcome_probability": round(actual_probability, 6),
         "brier_score_1x2": round(brier, 6),
         "log_loss_1x2": round(log_loss, 6),
-        "actual_score_probability": round(score_probability, 6),
+        "actual_score_probability": round(score_probability, 6) if score_probability is not None else None,
         "actual_score_rank": score_rank,
+        "exact_score_authority_status": exact_authority,
+        "FORMAL_EXACT_DISTRIBUTION_FROZEN": frozen_exact["FORMAL_EXACT_DISTRIBUTION_FROZEN"],
+        "FINITE_GRID_EXACTLY_REPRESENTED": frozen_exact["FINITE_GRID_EXACTLY_REPRESENTED"],
+        "OUT_OF_EXPLICIT_SUPPORT": frozen_exact["OUT_OF_EXPLICIT_SUPPORT"],
+        "FORMAL_EXACT_LOG_SCORE_ELIGIBLE": frozen_exact["FORMAL_EXACT_LOG_SCORE_ELIGIBLE"],
         "lambda_home_residual": round(home_goals - lambda_home, 4),
         "lambda_away_residual": round(away_goals - lambda_away, 4),
         "total_goals_residual": round((home_goals + away_goals) - (lambda_home + lambda_away), 4),

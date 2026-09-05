@@ -16,9 +16,9 @@ from test_champion_data_foundation_isolation import fixed_fixture_context
 from test_model_governance import prediction_payload
 
 
-EXPECTED_CORE_SHA256 = "064f9fa96e2995a66966c916dd9e9f600358b6c49b3ad9aa1efe9704cbdd1f15"
+EXPECTED_CORE_SHA256 = "6bf7d59b9a6c85c9fdb86fefc29c85fcfad5c74e0f7540e19312e708078b30e6"
 EXPECTED_FIXED_DIGEST = "b104c0f81c2a5c457967d9047b41e389209b99bd3cfc1613d9fb13fb0c2175df"
-EXPECTED_SOURCE_FINGERPRINT = "2e7121dcfe1f5164db82c5591000dffa6fb9122a6440c01af3e758829b62273a"
+EXPECTED_SOURCE_FINGERPRINT = "5bbad6d0fe3f17cc8a6d9175c0754d1af5720f8d96b3f3fd27bdb9075f382faf"
 
 
 def digest(result: dict) -> str:

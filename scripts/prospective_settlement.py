@@ -23,6 +23,7 @@ from postmatch_result import (
     resolve_nowscore_id,
     safe_key,
 )
+from exact_distribution import classify_frozen_exact_score
 
 
 BASE_DIR = Path(__file__).resolve().parents[1]
@@ -288,6 +289,12 @@ def evaluate_prediction(record: dict[str, Any], actual: dict[str, Any]) -> dict[
         "actual_score_probability": None,
         "actual_score_nll": None,
         "actual_score_nll_status": None,
+        "exact_score_authority_status": "RESEARCH_RECONSTRUCTED",
+        "exact_score_frozen_rank": None,
+        "FORMAL_EXACT_DISTRIBUTION_FROZEN": False,
+        "FINITE_GRID_EXACTLY_REPRESENTED": False,
+        "OUT_OF_EXPLICIT_SUPPORT": False,
+        "FORMAL_EXACT_LOG_SCORE_ELIGIBLE": False,
         "market_only_1x2_brier": None,
         "market_only_1x2_logloss": None,
         "market_only_metric_status": None,
@@ -318,13 +325,37 @@ def evaluate_prediction(record: dict[str, Any], actual: dict[str, Any]) -> dict[
     else:
         metrics["btts_metric_status"] = "UNAVAILABLE_IN_FROZEN_RECORD"
 
+    frozen_exact = classify_frozen_exact_score(record, home, away)
+    metrics.update({
+        "FORMAL_EXACT_DISTRIBUTION_FROZEN": frozen_exact["FORMAL_EXACT_DISTRIBUTION_FROZEN"],
+        "FINITE_GRID_EXACTLY_REPRESENTED": frozen_exact["FINITE_GRID_EXACTLY_REPRESENTED"],
+        "OUT_OF_EXPLICIT_SUPPORT": frozen_exact["OUT_OF_EXPLICIT_SUPPORT"],
+        "FORMAL_EXACT_LOG_SCORE_ELIGIBLE": frozen_exact["FORMAL_EXACT_LOG_SCORE_ELIGIBLE"],
+        "exact_score_authority_status": frozen_exact["authority_status"],
+        "exact_score_frozen_rank": frozen_exact["rank"],
+    })
+    if frozen_exact["FORMAL_EXACT_LOG_SCORE_ELIGIBLE"]:
+        metrics.update({
+            "actual_score_probability": frozen_exact["probability"],
+            "actual_score_nll": frozen_exact["log_score"],
+            "actual_score_nll_status": "FROZEN_EXACT_DISTRIBUTION",
+        })
+    elif frozen_exact["OUT_OF_EXPLICIT_SUPPORT"]:
+        metrics["actual_score_nll_status"] = "OUT_OF_EXPLICIT_SUPPORT"
+    elif frozen_exact["FORMAL_EXACT_DISTRIBUTION_FROZEN"]:
+        metrics["actual_score_nll_status"] = frozen_exact["formal_exact_distribution_status"]
+
     rows = _score_rows(record)
     actual_pair = (home, away)
     if rows:
         for index, row in enumerate(rows):
-            if _score_pair(row.get("score")) == actual_pair:
+            if (
+                not frozen_exact["FORMAL_EXACT_DISTRIBUTION_FROZEN"]
+                and _score_pair(row.get("score")) == actual_pair
+            ):
                 metrics["actual_score_probability"] = float(row["probability"])
                 metrics["actual_score_nll"] = -math.log(max(float(row["probability"]), EPSILON))
+                metrics["actual_score_nll_status"] = "RESEARCH_RECONSTRUCTED_NO_FROZEN_AUTHORITY"
                 break
         metrics.update({
             "exact_score_top1": any(_score_pair(row.get("score")) == actual_pair for row in rows[:1]),
@@ -336,7 +367,7 @@ def evaluate_prediction(record: dict[str, Any], actual: dict[str, Any]) -> dict[
                 else None
             ),
         })
-        if metrics["actual_score_nll"] is None:
+        if metrics["actual_score_nll"] is None and metrics["actual_score_nll_status"] is None:
             metrics["actual_score_nll_status"] = "UNAVAILABLE_IN_FROZEN_RECORD"
     else:
         metrics["actual_score_nll_status"] = "UNAVAILABLE_IN_FROZEN_RECORD"
@@ -562,6 +593,9 @@ def _write_summary(
         "last_run": {"business_date": date, "settled_at": result.get("settled_at")},
         "formal_sample_count_total": len(formal_rows),
         "samples_added_this_run": result.get("formal_samples_added", 0),
+        "formal_exact_distribution_frozen": result.get("formal_exact_distribution_frozen", 0),
+        "formal_exact_log_score_eligible": result.get("formal_exact_log_score_eligible", 0),
+        "formal_exact_out_of_support": result.get("formal_exact_out_of_support", 0),
         "pending_results": result.get("pending_results", 0),
         "excluded_prediction_count": len(excluded_prediction_ids(exclusion_root)),
         "pilot_excluded_settled": len(exploratory_rows),
@@ -611,6 +645,9 @@ def settle_records(
         "pending_results": 0,
         "pilot_excluded_settled": 0,
         "formal_samples_added": 0,
+        "formal_exact_distribution_frozen": 0,
+        "formal_exact_log_score_eligible": 0,
+        "formal_exact_out_of_support": 0,
         "result_failures": 0,
         "result_conflicts": 0,
         "duplicate_prospective_samples": max(0, len(formal_rows) - len(formal_by_id)),
@@ -695,6 +732,13 @@ def settle_records(
                 result["failure_reasons"]["RESULT_CONFLICT"] = result["failure_reasons"].get("RESULT_CONFLICT", 0) + 1
             continue
         metrics = evaluate_prediction(record, actual)
+        result["formal_exact_distribution_frozen"] += int(
+            metrics["FORMAL_EXACT_DISTRIBUTION_FROZEN"]
+        )
+        result["formal_exact_log_score_eligible"] += int(
+            metrics["FORMAL_EXACT_LOG_SCORE_ELIGIBLE"]
+        )
+        result["formal_exact_out_of_support"] += int(metrics["OUT_OF_EXPLICIT_SUPPORT"])
         sample = _sample(
             record,
             actual,

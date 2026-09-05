@@ -1558,6 +1558,7 @@ def main() -> int:
     state = load_json(Path(args.state))
     analysis = load_json(Path(args.analysis_json)) if args.analysis_json else None
     payload = build_payload(manifest, official, trade, deep, state, analysis, polymarket)
+    exact_distribution_state = payload.pop("_prediction_time_exact_distribution_state", None)
     model = payload.get("model") or {}
     if isinstance(model.get("probabilities"), dict) and model.get("lambda_home") is not None and model.get("lambda_away") is not None:
         # The deterministic execution stage already persisted the exact
@@ -1568,6 +1569,8 @@ def main() -> int:
             payload,
             repository_root=PROJECT_ROOT,
             input_payload=governance_input,
+            exact_distribution_state=exact_distribution_state,
+            require_exact_distribution=True,
         )
         frozen = freeze_prediction(governance_record)
         payload["analysis_output"] = governance_record["analysis_output"]
