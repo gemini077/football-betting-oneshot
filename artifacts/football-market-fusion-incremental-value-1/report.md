@@ -44,14 +44,14 @@ Point estimates and unique-match paired bootstrap 95% CIs. Pairwise delta is lef
 
 | Metric | Football-only | Market-only | Current Fusion | Fusion − Market decision | Football − Market decision | Fusion − Football decision |
 |---|---:|---:|---:|---|---|---|
-| Top1 accuracy | 0.509960 | 0.585657 | 0.553785 | INDISTINGUISHABLE_WITH_95CI (-0.031873, [-0.071713, 0.003984]) | RIGHT_BETTER (-0.075697, [-0.135458, -0.015936]) | INDISTINGUISHABLE_WITH_95CI (0.043825, [0.000000, 0.087649]) |
+| Top1 accuracy | 0.505976 | 0.585657 | 0.553785 | INDISTINGUISHABLE_WITH_95CI (-0.031873, [-0.071713, 0.003984]) | RIGHT_BETTER (-0.079681, [-0.139442, -0.019920]) | LEFT_BETTER (0.047809, [0.003984, 0.091633]) |
 | Log loss | 1.023644 | 0.917834 | 0.972295 | RIGHT_BETTER (0.054461, [0.030270, 0.079834]) | RIGHT_BETTER (0.105810, [0.065624, 0.146685]) | LEFT_BETTER (-0.051349, [-0.067648, -0.036960]) |
 | Brier | 0.616038 | 0.539484 | 0.578086 | RIGHT_BETTER (0.038602, [0.020335, 0.055313]) | RIGHT_BETTER (0.076554, [0.046737, 0.106740]) | LEFT_BETTER (-0.037952, [-0.049528, -0.026365]) |
 | RPS | 0.230355 | 0.193753 | 0.211543 | RIGHT_BETTER (0.017789, [0.009302, 0.026028]) | RIGHT_BETTER (0.036602, [0.023011, 0.050747]) | LEFT_BETTER (-0.018813, [-0.024333, -0.013160]) |
 
 ### Class mix and recall
 
-- `football_only`: `{"actual_class_mix": {"away": {"n": 85, "share": 0.338645}, "draw": {"n": 47, "share": 0.187251}, "home": {"n": 119, "share": 0.474104}}, "per_class_recall": {"away": {"hits": 46, "n": 85, "recall": 0.541176}, "draw": {"hits": 0, "n": 47, "recall": 0.0}, "home": {"hits": 82, "n": 119, "recall": 0.689076}}, "predicted_class_mix": {"away": {"n": 99, "share": 0.394422}, "draw": {"n": 0, "share": 0.0}, "home": {"n": 152, "share": 0.605578}}}`
+- `football_only`: `{"actual_class_mix": {"away": {"n": 85, "share": 0.338645}, "draw": {"n": 47, "share": 0.187251}, "home": {"n": 119, "share": 0.474104}}, "per_class_recall": {"away": {"hits": 44, "n": 85, "recall": 0.517647}, "draw": {"hits": 0, "n": 47, "recall": 0.0}, "home": {"hits": 83, "n": 119, "recall": 0.697479}}, "predicted_class_mix": {"away": {"n": 96, "share": 0.38247}, "draw": {"n": 0, "share": 0.0}, "home": {"n": 155, "share": 0.61753}}}`
 - `market_only`: `{"actual_class_mix": {"away": {"n": 85, "share": 0.338645}, "draw": {"n": 47, "share": 0.187251}, "home": {"n": 119, "share": 0.474104}}, "per_class_recall": {"away": {"hits": 52, "n": 85, "recall": 0.611765}, "draw": {"hits": 0, "n": 47, "recall": 0.0}, "home": {"hits": 95, "n": 119, "recall": 0.798319}}, "predicted_class_mix": {"away": {"n": 93, "share": 0.370518}, "draw": {"n": 0, "share": 0.0}, "home": {"n": 158, "share": 0.629482}}}`
 - `current_fusion`: `{"actual_class_mix": {"away": {"n": 85, "share": 0.338645}, "draw": {"n": 47, "share": 0.187251}, "home": {"n": 119, "share": 0.474104}}, "per_class_recall": {"away": {"hits": 48, "n": 85, "recall": 0.564706}, "draw": {"hits": 0, "n": 47, "recall": 0.0}, "home": {"hits": 91, "n": 119, "recall": 0.764706}}, "predicted_class_mix": {"away": {"n": 91, "share": 0.36255}, "draw": {"n": 0, "share": 0.0}, "home": {"n": 160, "share": 0.63745}}}`
 
@@ -66,13 +66,13 @@ Point estimates and unique-match paired bootstrap 95% CIs. Pairwise delta is lef
 | Exact metric | Football-only | Market-only | Current Fusion | Fusion − Market | Football − Market | Fusion − Football |
 |---|---:|---:|---:|---|---|---|
 | Exact NLL | 3.181543 | 3.023062 | 3.101359 | RIGHT_BETTER (0.078297, [0.041223, 0.115613]) | RIGHT_BETTER (0.158480, [0.098713, 0.222999]) | LEFT_BETTER (-0.080184, [-0.106685, -0.056542]) |
-| Full actual-score rank | 9.509960 | 8.298805 | 8.892430 | RIGHT_BETTER (0.593625, [0.286653, 0.900498]) | RIGHT_BETTER (1.211155, [0.736952, 1.705279]) | LEFT_BETTER (-0.617530, [-0.848606, -0.402390]) |
+| Full actual-score rank | 9.505976 | 8.298805 | 8.892430 | RIGHT_BETTER (0.593625, [0.286653, 0.900498]) | RIGHT_BETTER (1.207171, [0.736952, 1.701195]) | LEFT_BETTER (-0.613546, [-0.844622, -0.398307]) |
 
 ### Exact Top-k hits
 
 | Metric | Football-only | Market-only | Current Fusion |
 |---|---:|---:|---:|
-| Top1 hit | 0.087649 | 0.123506 | 0.115538 |
+| Top1 hit | 0.091633 | 0.123506 | 0.115538 |
 | Top3 hit | 0.247012 | 0.310757 | 0.278884 |
 | Top5 hit | 0.402390 | 0.430279 | 0.406375 |
 

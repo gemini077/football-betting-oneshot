@@ -949,6 +949,15 @@ def _apply_current_calibration(matrix: dict[tuple[int, int], float], total: floa
     return matrix
 
 
+def _quantize_probability_matrix(matrix: Mapping[tuple[int, int], float], digits: int = 12) -> dict[tuple[int, int], float]:
+    """Make reconstructed football probabilities stable across Python runtimes."""
+    rounded = {score: round(max(0.0, float(probability)), digits) for score, probability in matrix.items()}
+    total = sum(rounded.values())
+    if total <= 0.0:
+        raise AuditError("EMPTY_SCORE_MATRIX")
+    return {score: value / total for score, value in rounded.items()}
+
+
 def reconstruct_football_only(model_input: Mapping[str, Any] | None) -> dict[str, Any]:
     """Reconstruct the current Champion's pre-market football component.
 
@@ -1001,8 +1010,9 @@ def reconstruct_football_only(model_input: Mapping[str, Any] | None) -> dict[str
     lambda_home = total * share
     lambda_away = total * (1.0 - share)
     matrix, _ = independent_score_matrix(lambda_home, lambda_away)
-    matrix = _apply_current_calibration(matrix, total, share, model_input)
+    matrix = _quantize_probability_matrix(_apply_current_calibration(matrix, total, share, model_input))
     probabilities = _outcome_probabilities_from_matrix(matrix)
+    probabilities = {key: round(float(value), 12) for key, value in probabilities.items()}
     return {
         "status": "EVALUABLE",
         "reason": None,
@@ -1035,6 +1045,10 @@ def _outcome_probabilities_from_matrix(matrix: Mapping[tuple[int, int], float]) 
     if total <= 0.0:
         raise AuditError("EMPTY_SCORE_MATRIX")
     return {key: value / total for key, value in result.items()}
+
+
+def _deterministic_outcome(probabilities: Mapping[str, float]) -> str:
+    return max(OUTCOMES, key=lambda key: (round(float(probabilities[key]), 12), -OUTCOMES.index(key)))
 
 
 def _champion_probabilities(record: Mapping[str, Any]) -> dict[str, float] | None:
@@ -1362,7 +1376,7 @@ def _three_lane_metric_row(
         ranked = [row["score"] for row in _top_scores(matrix, len(matrix))]
         if actual not in matrix:
             raise AuditError("ACTUAL_SCORE_OUTSIDE_THREE_LANE_MATRIX_SUPPORT")
-        predicted_outcome = max(OUTCOMES, key=lambda key: probabilities[key])
+        predicted_outcome = _deterministic_outcome(probabilities)
         lanes[lane] = {
             "probabilities": probabilities,
             "lambda_home": lane_lambdas[lane][0],
