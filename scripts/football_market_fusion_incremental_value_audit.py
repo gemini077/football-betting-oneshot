@@ -1349,9 +1349,11 @@ def _three_lane_metric_row(
     if any(value is None for value in (fusion_lambda_home, fusion_lambda_away, football_lambda_home, football_lambda_away)):
         return None
     lane_lambdas = {
-        "football_only": (float(football_lambda_home), float(football_lambda_away)),
-        "market_only": (market_lambda_home, market_lambda_away),
-        "current_fusion": (float(fusion_lambda_home), float(fusion_lambda_away)),
+        # Diagnostic lambdas are rounded before any derived total/gap so the
+        # generated research artifact is stable across Python/math runtimes.
+        "football_only": (round(float(football_lambda_home), 5), round(float(football_lambda_away), 5)),
+        "market_only": (round(market_lambda_home, 5), round(market_lambda_away, 5)),
+        "current_fusion": (round(float(fusion_lambda_home), 5), round(float(fusion_lambda_away), 5)),
     }
     one_hot = {key: float(key == outcome) for key in OUTCOMES}
 
@@ -2219,26 +2221,26 @@ def build_summary(root: Path = ROOT, *, source_main_sha: str | None = None) -> d
             "baseline_reason": baseline.get("reason"),
             "one_x2_bookmaker_count": observation["one_x2"].get("valid_bookmaker_count", 0),
             "ou_bookmaker_count": observation["ou"].get("valid_bookmaker_count", 0),
-            "lambda_total": _rounded(baseline.get("lambda_total"), 8),
+            "lambda_total": _rounded(baseline.get("lambda_total"), 5),
             "lambda_total_residual_summary": _summary_numbers(baseline.get("lambda_total_residuals") or []),
-            "lambda_home_market": _rounded((baseline.get("projection") or {}).get("lambda_home"), 8),
-            "lambda_away_market": _rounded((baseline.get("projection") or {}).get("lambda_away"), 8),
-            "lambda_home_football": _rounded(football.get("lambda_home"), 8),
-            "lambda_away_football": _rounded(football.get("lambda_away"), 8),
-            "lambda_home_fusion": _rounded(record.get("lambda_home"), 8),
-            "lambda_away_fusion": _rounded(record.get("lambda_away"), 8),
+            "lambda_home_market": _rounded((baseline.get("projection") or {}).get("lambda_home"), 5),
+            "lambda_away_market": _rounded((baseline.get("projection") or {}).get("lambda_away"), 5),
+            "lambda_home_football": _rounded(football.get("lambda_home"), 5),
+            "lambda_away_football": _rounded(football.get("lambda_away"), 5),
+            "lambda_home_fusion": _rounded(record.get("lambda_home"), 5),
+            "lambda_away_fusion": _rounded(record.get("lambda_away"), 5),
             "football_status": football.get("status"),
             "football_reason": football.get("reason"),
             "all_three_paired": metric is not None,
             "market_fusion_lambda_total_delta": _rounded(
                 (_number(record.get("lambda_home")) or 0.0) + (_number(record.get("lambda_away")) or 0.0)
                 - (float(market_projection.get("lambda_home") or 0.0) + float(market_projection.get("lambda_away") or 0.0)),
-                8,
+                5,
             ) if baseline.get("status") == "EVALUABLE" else None,
             "market_fusion_lambda_gap_delta": _rounded(
                 (_number(record.get("lambda_home")) or 0.0) - (_number(record.get("lambda_away")) or 0.0)
                 - (float(market_projection.get("lambda_home") or 0.0) - float(market_projection.get("lambda_away") or 0.0)),
-                8,
+                5,
             ) if baseline.get("status") == "EVALUABLE" else None,
             "ah_status": observation["ah"].get("status"),
             "ah_reason": observation["ah"].get("reason"),
