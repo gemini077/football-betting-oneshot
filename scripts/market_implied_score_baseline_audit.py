@@ -113,7 +113,8 @@ def _stable_artifact_value(value: Any) -> Any:
     if isinstance(value, float):
         if not math.isfinite(value):
             raise AuditError("NON_FINITE_ARTIFACT_FLOAT")
-        return float(f"{value:.{ARTIFACT_FLOAT_DECIMALS}f}")
+        rounded = float(f"{value:.{ARTIFACT_FLOAT_DECIMALS}f}")
+        return 0.0 if rounded == 0.0 else rounded
     if isinstance(value, dict):
         return {key: _stable_artifact_value(item) for key, item in value.items()}
     if isinstance(value, (list, tuple)):

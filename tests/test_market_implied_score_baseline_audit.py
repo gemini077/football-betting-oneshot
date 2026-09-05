@@ -90,8 +90,8 @@ def test_hk_water_conversion_and_fail_closed_guards() -> None:
 
 
 def test_artifact_float_serialization_is_stable() -> None:
-    value = audit._stable_artifact_value({"a": 0.123456789012345, "nested": [1.0 / 3.0]})
-    assert value == {"a": 0.123457, "nested": [0.333333]}
+    value = audit._stable_artifact_value({"a": 0.123456789012345, "nested": [1.0 / 3.0, -1e-12]})
+    assert value == {"a": 0.123457, "nested": [0.333333, 0.0]}
 
 
 def test_proportional_devig_is_fixed_and_normalized() -> None:

@@ -40,7 +40,7 @@ The all-selected quote counts are reported separately because verified-result li
 ## O/U and AH diagnostics
 
 - O/U evaluable matches: `319`; failed: `2`.
-- Per-book O/U lambda residual summary: `{"max": 0.0, "mean": -0.0, "median": -0.0, "min": -0.0, "n": 2339, "p10": -0.0, "p90": 0.0}`
+- Per-book O/U lambda residual summary: `{"max": 0.0, "mean": 0.0, "median": 0.0, "min": 0.0, "n": 2339, "p10": 0.0, "p90": 0.0}`
 - AH was used in the primary fit: `False`.
 - AH held-out mean absolute error summary: `{"max": 0.250748, "mean": 0.029233, "median": 0.008457, "min": 0.000178, "n": 315, "p10": 0.004108, "p90": 0.069142}`
 
