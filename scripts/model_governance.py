@@ -1275,6 +1275,10 @@ def build_prediction_record(
                     "input_sha256": record["input_sha256"],
                 },
             )
+            jc_total_goals = record["exact_score_distribution"].get("jc_total_goals")
+            if isinstance(jc_total_goals, dict):
+                record["jc_total_goals"] = deepcopy(jc_total_goals)
+                record["prediction_output"]["jc_total_goals"] = deepcopy(jc_total_goals)
     record["prediction_sha256"] = prediction_content_hash(record)
     return record
 
@@ -1301,6 +1305,16 @@ def _validate_record(record: dict[str, Any]) -> None:
                 if record.get(key) is not None
             },
         )
+        exact_jc_total_goals = record["exact_score_distribution"].get("jc_total_goals")
+        if exact_jc_total_goals is not None and record.get("jc_total_goals") != exact_jc_total_goals:
+            raise ValueError("JC total-goals projection does not match frozen exact distribution")
+        if exact_jc_total_goals is None and record.get("jc_total_goals") is not None:
+            raise ValueError("JC total-goals projection has no frozen exact-distribution authority")
+        prediction_output_jc_total_goals = (record.get("prediction_output") or {}).get("jc_total_goals")
+        if exact_jc_total_goals is not None and prediction_output_jc_total_goals != exact_jc_total_goals:
+            raise ValueError("prediction_output JC total-goals projection does not match frozen exact distribution")
+        if exact_jc_total_goals is None and prediction_output_jc_total_goals is not None:
+            raise ValueError("prediction_output JC total-goals projection has no frozen exact-distribution authority")
     snapshot = record.get("input_snapshot") or {}
     if snapshot.get("canonical_input_sha256") != record.get("input_sha256"):
         raise ValueError("input snapshot hash does not match input_sha256")

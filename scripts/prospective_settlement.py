@@ -23,7 +23,7 @@ from postmatch_result import (
     resolve_nowscore_id,
     safe_key,
 )
-from exact_distribution import classify_frozen_exact_score
+from exact_distribution import classify_frozen_exact_score, classify_frozen_jc_total_goals
 
 
 BASE_DIR = Path(__file__).resolve().parents[1]
@@ -295,6 +295,15 @@ def evaluate_prediction(record: dict[str, Any], actual: dict[str, Any]) -> dict[
         "FINITE_GRID_EXACTLY_REPRESENTED": False,
         "OUT_OF_EXPLICIT_SUPPORT": False,
         "FORMAL_EXACT_LOG_SCORE_ELIGIBLE": False,
+        "FORMAL_JC_TOTAL_GOALS_FROZEN": False,
+        "JC_TOTAL_GOALS_BUCKET_EXACTLY_REPRESENTED": False,
+        "actual_jc_total_goals_bucket": None,
+        "jc_total_goals_probability": None,
+        "jc_total_goals_status": "MISSING_FROZEN_JC_TOTAL_GOALS",
+        "jc_total_goals_authority_status": "RESEARCH_RECONSTRUCTED",
+        "jc_total_goals_top_selection": None,
+        "jc_total_goals_top_selection_hit": None,
+        "same_time_official_market_baseline_status": None,
         "market_only_1x2_brier": None,
         "market_only_1x2_logloss": None,
         "market_only_metric_status": None,
@@ -326,6 +335,7 @@ def evaluate_prediction(record: dict[str, Any], actual: dict[str, Any]) -> dict[
         metrics["btts_metric_status"] = "UNAVAILABLE_IN_FROZEN_RECORD"
 
     frozen_exact = classify_frozen_exact_score(record, home, away)
+    frozen_jc_total_goals = classify_frozen_jc_total_goals(record, home, away)
     metrics.update({
         "FORMAL_EXACT_DISTRIBUTION_FROZEN": frozen_exact["FORMAL_EXACT_DISTRIBUTION_FROZEN"],
         "FINITE_GRID_EXACTLY_REPRESENTED": frozen_exact["FINITE_GRID_EXACTLY_REPRESENTED"],
@@ -333,6 +343,19 @@ def evaluate_prediction(record: dict[str, Any], actual: dict[str, Any]) -> dict[
         "FORMAL_EXACT_LOG_SCORE_ELIGIBLE": frozen_exact["FORMAL_EXACT_LOG_SCORE_ELIGIBLE"],
         "exact_score_authority_status": frozen_exact["authority_status"],
         "exact_score_frozen_rank": frozen_exact["rank"],
+        "FORMAL_JC_TOTAL_GOALS_FROZEN": frozen_jc_total_goals["FORMAL_JC_TOTAL_GOALS_FROZEN"],
+        "JC_TOTAL_GOALS_BUCKET_EXACTLY_REPRESENTED": frozen_jc_total_goals[
+            "JC_TOTAL_GOALS_BUCKET_EXACTLY_REPRESENTED"
+        ],
+        "actual_jc_total_goals_bucket": frozen_jc_total_goals["actual_jc_total_goals_bucket"],
+        "jc_total_goals_probability": frozen_jc_total_goals["jc_total_goals_probability"],
+        "jc_total_goals_status": frozen_jc_total_goals["jc_total_goals_status"],
+        "jc_total_goals_authority_status": frozen_jc_total_goals["authority_status"],
+        "jc_total_goals_top_selection": frozen_jc_total_goals["jc_total_goals_top_selection"],
+        "jc_total_goals_top_selection_hit": frozen_jc_total_goals["jc_total_goals_top_selection_hit"],
+        "same_time_official_market_baseline_status": frozen_jc_total_goals[
+            "same_time_official_market_baseline_status"
+        ],
     })
     if frozen_exact["FORMAL_EXACT_LOG_SCORE_ELIGIBLE"]:
         metrics.update({
@@ -559,6 +582,11 @@ def _sample(record: dict[str, Any], actual: dict[str, Any], metrics: dict[str, A
             "score_top3": record.get("score_top3"),
             "score_top5": record.get("score_top5"),
             "score_distribution": record.get("score_distribution") or (record.get("prediction_output") or {}).get("score_matrix"),
+            "jc_total_goals": (
+                record.get("jc_total_goals")
+                or (record.get("prediction_output") or {}).get("jc_total_goals")
+                or (record.get("exact_score_distribution") or {}).get("jc_total_goals")
+            ),
             "market_only_baseline": record.get("market_only_baseline"),
         },
         "actual": {
@@ -596,6 +624,7 @@ def _write_summary(
         "formal_exact_distribution_frozen": result.get("formal_exact_distribution_frozen", 0),
         "formal_exact_log_score_eligible": result.get("formal_exact_log_score_eligible", 0),
         "formal_exact_out_of_support": result.get("formal_exact_out_of_support", 0),
+        "formal_jc_total_goals_frozen": result.get("formal_jc_total_goals_frozen", 0),
         "pending_results": result.get("pending_results", 0),
         "excluded_prediction_count": len(excluded_prediction_ids(exclusion_root)),
         "pilot_excluded_settled": len(exploratory_rows),
@@ -648,6 +677,7 @@ def settle_records(
         "formal_exact_distribution_frozen": 0,
         "formal_exact_log_score_eligible": 0,
         "formal_exact_out_of_support": 0,
+        "formal_jc_total_goals_frozen": 0,
         "result_failures": 0,
         "result_conflicts": 0,
         "duplicate_prospective_samples": max(0, len(formal_rows) - len(formal_by_id)),
@@ -739,6 +769,7 @@ def settle_records(
             metrics["FORMAL_EXACT_LOG_SCORE_ELIGIBLE"]
         )
         result["formal_exact_out_of_support"] += int(metrics["OUT_OF_EXPLICIT_SUPPORT"])
+        result["formal_jc_total_goals_frozen"] += int(metrics["FORMAL_JC_TOTAL_GOALS_FROZEN"])
         sample = _sample(
             record,
             actual,

@@ -9,6 +9,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 
 import automatic_postmatch_review as review_module
 from automatic_postmatch_review import _primary_settlement, _rich_market_timeline, _rich_root_cause, build_review
+from exact_distribution import build_exact_distribution_contract, build_prediction_time_exact_distribution_state
 from model_governance import build_prediction_record, freeze_prediction
 
 
@@ -76,6 +77,40 @@ def test_new_review_carries_exact_frozen_prediction_join(tmp_path, monkeypatch):
     assert review["prediction_sha256"] == record["prediction_sha256"]
     assert review["model_run_fingerprint"] == record["model_run_fingerprint"]
     assert review["prediction_link_status"] == "verified"
+
+
+def test_postmatch_diagnostics_read_frozen_jc_total_goals_truth_only(monkeypatch):
+    state = build_prediction_time_exact_distribution_state(
+        {(home, away): 1 / 169 for home in range(13) for away in range(13)},
+        lambda_home=1.2,
+        lambda_away=0.9,
+        rho=0.0,
+    )
+    frozen = {
+        "prediction_id": "JC-REVIEW-001",
+        "exact_score_distribution": build_exact_distribution_contract(
+            state,
+            model_identity={"prediction_id": "JC-REVIEW-001"},
+        ),
+    }
+    monkeypatch.setattr(review_module, "load_frozen_prediction", lambda *_args: frozen)
+    diagnostics = review_module._model_diagnostics(
+        {
+            "model": {
+                "probabilities": {"home": 0.45, "draw": 0.3, "away": 0.25},
+                "lambda_home": 99.0,
+                "lambda_away": 99.0,
+                "rho": 0.0,
+            },
+            "model_governance": {"prediction_id": "JC-REVIEW-001"},
+        },
+        3,
+        3,
+    )
+    assert diagnostics["FORMAL_JC_TOTAL_GOALS_FROZEN"] is True
+    assert diagnostics["actual_jc_total_goals_bucket"] == "6"
+    assert diagnostics["jc_total_goals_authority_status"] == "FROZEN_PREDICTION_TIME"
+    assert diagnostics["same_time_official_market_baseline_status"] == "NOT_AVAILABLE"
 
 
 def test_generate_does_not_rewrite_existing_reviewed_schedule(tmp_path, monkeypatch):

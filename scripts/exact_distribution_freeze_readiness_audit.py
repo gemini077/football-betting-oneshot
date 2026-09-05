@@ -9,6 +9,8 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
+from exact_distribution import JC_TOTAL_GOALS_BUCKET_ORDER
+
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURE = ROOT / "tests" / "fixtures" / "exact_distribution" / "current_model_input.json"
@@ -95,8 +97,10 @@ def _probe_current_capture() -> dict[str, Any]:
     from exact_distribution import (
         EXACT_DISTRIBUTION_CELL_COUNT,
         EXACT_DISTRIBUTION_CONTRACT_VERSION,
+        JC_TOTAL_GOALS_BUCKET_ORDER,
         build_exact_distribution_contract,
         classify_frozen_exact_score,
+        classify_frozen_jc_total_goals,
         validate_exact_distribution_contract,
     )
 
@@ -129,6 +133,10 @@ def _probe_current_capture() -> dict[str, Any]:
     probe_record = {**identity, "exact_score_distribution": contract}
     in_grid = classify_frozen_exact_score(probe_record, 0, 0)
     out_of_grid = classify_frozen_exact_score(probe_record, 13, 0)
+    jc_six = classify_frozen_jc_total_goals(probe_record, 3, 3)
+    jc_seven = classify_frozen_jc_total_goals(probe_record, 4, 3)
+    jc_high_score = classify_frozen_jc_total_goals(probe_record, 13, 0)
+    jc_contract = contract.get("jc_total_goals") or {}
     cell_by_score = {
         (cell["home_goals"], cell["away_goals"]): cell["probability"]
         for cell in cells
@@ -164,6 +172,17 @@ def _probe_current_capture() -> dict[str, Any]:
         "out_of_explicit_support_policy": (contract.get("score_space") or {}).get("out_of_support_policy"),
         "production_path": state.get("production_path"),
         "content_sha256": contract.get("content_sha256"),
+        "jc_total_goals_formal_truth": jc_six["FORMAL_JC_TOTAL_GOALS_FROZEN"] and jc_high_score[
+            "FORMAL_JC_TOTAL_GOALS_FROZEN"
+        ],
+        "jc_total_goals_order": jc_contract.get("selection_order"),
+        "jc_total_goals_normalization": (jc_contract.get("normalization") or {}).get("status"),
+        "same_time_official_market_baseline_status": (
+            jc_contract.get("same_time_official_market_baseline") or {}
+        ).get("status"),
+        "jc_total_goals_boundary_6": jc_six["actual_jc_total_goals_bucket"],
+        "jc_total_goals_boundary_7": jc_seven["actual_jc_total_goals_bucket"],
+        "jc_total_goals_high_score": jc_high_score["actual_jc_total_goals_bucket"],
     }
 
 
@@ -187,6 +206,13 @@ def audit(limit: int = 200) -> dict[str, Any]:
         or not probe.get("formal_exact_log_score_on_frozen_cell")
         or not probe.get("out_of_support_fail_closed")
         or not probe.get("top1_to_top5_parity")
+        or not probe.get("jc_total_goals_formal_truth")
+        or probe.get("jc_total_goals_order") != list(JC_TOTAL_GOALS_BUCKET_ORDER)
+        or probe.get("jc_total_goals_normalization") != "NORMALIZED_FROM_FROZEN_EXACT_DISTRIBUTION"
+        or probe.get("same_time_official_market_baseline_status") != "NOT_AVAILABLE"
+        or probe.get("jc_total_goals_boundary_6") != "6"
+        or probe.get("jc_total_goals_boundary_7") != "7+"
+        or probe.get("jc_total_goals_high_score") != "7+"
     ):
         decision = DECISION_FAIL_CLOSED
     elif probe.get("tail_diagnostic_status") != "EXACT_TAIL_RESOLVED":
@@ -200,6 +226,7 @@ def audit(limit: int = 200) -> dict[str, Any]:
             "data/model_governance/predictions/*.json (bounded latest sample)",
             "tests/fixtures/exact_distribution/current_model_input.json",
             "scripts/automatic_model_core.py effective matrix capture",
+            "scripts/exact_distribution.py frozen JC total-goals projection",
         ],
         "LEGACY_RECONSTRUCTION_COVERAGE": legacy,
         "PROSPECTIVE_CAPTURE_CAPABILITY": probe,

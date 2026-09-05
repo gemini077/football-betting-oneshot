@@ -940,6 +940,9 @@ def test_governance_record_contains_minimum_prediction_contract():
     assert record["base_input_quality"] == "VERIFIED_MINIMUM"
     assert record["formal_eligibility_policy"] == "base_prediction_minimum.v1"
     assert record["formal_eligible"] is True
+    assert record["jc_total_goals"]["selection_order"] == ["0", "1", "2", "3", "4", "5", "6", "7+"]
+    assert len(record["jc_total_goals"]["probabilities"]) == 8
+    assert record["jc_total_goals"]["same_time_official_market_baseline"]["status"] == "NOT_AVAILABLE"
 
 
 def test_repeat_freeze_with_same_prediction_id_different_content_keeps_conflict_guard():
