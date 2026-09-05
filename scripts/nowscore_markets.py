@@ -2029,6 +2029,32 @@ def _recent_matches(rows: list[list[object]]) -> list[dict[str, object]]:
     return [parsed for row in rows if (parsed := _recent_match_row(row)) is not None]
 
 
+def _state_memory_match_row(row: list[object]) -> dict[str, object] | None:
+    """Retain source-only identifiers beside the legacy recent-form row."""
+    parsed = _recent_match_row(row)
+    if parsed is None:
+        return None
+    value = dict(parsed)
+    # Index 20 is retained only as a candidate.  The state-memory builder
+    # promotes it after exact corroboration against the current panlu source
+    # fixture record; a positional value is never trusted on its own.
+    if len(row) > 20:
+        source_fixture_id_candidate = _integer(row[20])
+        if source_fixture_id_candidate is not None and source_fixture_id_candidate > 0:
+            value["source_fixture_id_candidate"] = source_fixture_id_candidate
+    # row[1] has no independently established field-level semantic in the
+    # current source contract.  Do not persist it as a competition identifier.
+    return value
+
+
+def _state_memory_matches(rows: list[list[object]]) -> list[dict[str, object]]:
+    return [
+        parsed
+        for row in rows
+        if (parsed := _state_memory_match_row(row)) is not None
+    ]
+
+
 def parse_analysis_data(text: str) -> dict:
     """Build the recent-form contract consumed by the deterministic model."""
     home_rows, away_rows = _analysis_array(text, "h_data"), _analysis_array(text, "a_data")
@@ -2048,6 +2074,10 @@ def parse_analysis_data(text: str) -> dict:
         "recent_matches": {
             "home_team": _recent_matches(home_rows),
             "away_team": _recent_matches(away_rows),
+        },
+        "state_memory_matches": {
+            "home_team": _state_memory_matches(home_rows),
+            "away_team": _state_memory_matches(away_rows),
         },
         "source_note": "Nowscore analysis recent results; actual goals, not xG",
         "team_ids": {"home": home_id, "away": away_id},
@@ -2470,6 +2500,31 @@ def fetch_context_bundle(match_id: int, kickoff: object, parsed_markets: dict, n
     return context
 
 
+def _state_memory_target_identity(
+    identity: Mapping[str, object],
+    match_id: int,
+    fixture: Mapping[str, object] | None,
+) -> dict[str, object]:
+    """Expose direct target identity for the research-only capture layer."""
+    fixture = fixture or {}
+    raw_competition = (
+        fixture.get("raw_competition_label")
+        or fixture.get("competition")
+        or fixture.get("league")
+    )
+    return {
+        "source_fixture_id": match_id,
+        "provider_match_id": match_id,
+        "home_team_id": identity.get("home_team_id"),
+        "away_team_id": identity.get("away_team_id"),
+        "home_team_name": identity.get("home_team"),
+        "away_team_name": identity.get("away_team"),
+        "kickoff_at": identity.get("kickoff_local"),
+        "raw_competition_label": raw_competition,
+        "source_record_ref": MARKET_URL.format(match_id=match_id),
+    }
+
+
 def fetch_match_markets(
     home: str,
     away: str,
@@ -2628,6 +2683,9 @@ def fetch_match_markets(
         "source": "nowscore_public_3in1", "status": "OK", "fetched_at": fetched_at,
         "nowscore_id": match_id, "target": target, "resolution": resolved,
         "identity": parsed["identity"], "source_url": MARKET_URL.format(match_id=match_id),
+        "state_memory_identity": _state_memory_target_identity(
+            parsed["identity"], match_id, fixture,
+        ),
         "identity_verification": identity_verification,
         "trusted_jc_provenance": trusted_provenance,
         **page_provider_id,
