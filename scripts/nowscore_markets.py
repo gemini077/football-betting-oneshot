@@ -2035,17 +2035,15 @@ def _state_memory_match_row(row: list[object]) -> dict[str, object] | None:
     if parsed is None:
         return None
     value = dict(parsed)
-    # Nowscore analysis rows currently publish the source fixture ID at index
-    # 20.  Keep the field optional: older/synthetic rows remain explicit
-    # partial evidence rather than receiving a guessed identifier.
+    # Index 20 is retained only as a candidate.  The state-memory builder
+    # promotes it after exact corroboration against the current panlu source
+    # fixture record; a positional value is never trusted on its own.
     if len(row) > 20:
-        source_fixture_id = _integer(row[20])
-        if source_fixture_id is not None and source_fixture_id > 0:
-            value["source_fixture_id"] = source_fixture_id
-    if len(row) > 1:
-        source_competition_id = _integer(row[1])
-        if source_competition_id is not None and source_competition_id > 0:
-            value["source_competition_id"] = source_competition_id
+        source_fixture_id_candidate = _integer(row[20])
+        if source_fixture_id_candidate is not None and source_fixture_id_candidate > 0:
+            value["source_fixture_id_candidate"] = source_fixture_id_candidate
+    # row[1] has no independently established field-level semantic in the
+    # current source contract.  Do not persist it as a competition identifier.
     return value
 
 

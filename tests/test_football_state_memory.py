@@ -1,3 +1,4 @@
+import hashlib
 import json
 import sys
 from pathlib import Path
@@ -16,7 +17,11 @@ from football_state_memory import (  # noqa: E402
     normalize_competition_label,
 )
 from model_governance import build_deterministic_model_input_projection  # noqa: E402
-from nowscore_markets import parse_analysis_data  # noqa: E402
+from nowscore_markets import (  # noqa: E402
+    parse_analysis_data,
+    parse_panlu_page,
+    parse_three_in_one,
+)
 
 
 def _analysis_row(source_date, home_id, home_name, away_id, away_name, *, fixture_id):
@@ -117,6 +122,26 @@ def _record():
     }
 
 
+def _current_source_fixture():
+    return json.loads(
+        (ROOT / "tests" / "fixtures" / "nowscore_state_memory" / "current_source_sample.json")
+        .read_text(encoding="utf-8")
+    )
+
+
+def _current_source_snapshot():
+    fixture = _current_source_fixture()
+    parsed = parse_analysis_data(fixture["analysis_js"])
+    return fixture, parsed, {
+        "nowscore_id": fixture["source_match_id"],
+        "fetched_at": "2026-08-12T15:37:42+08:00",
+        "state_memory_identity": fixture["target_identity"],
+        "shuju": parsed,
+        "context": {"panlu": parse_panlu_page(fixture["panlu_html"])},
+        "source_record_ref": "tests/fixtures/nowscore_state_memory/current_source_sample.json",
+    }
+
+
 def test_competition_normalization_is_exact_and_unknown_is_explicit():
     friendly = normalize_competition_label("球會友誼")
     formal = normalize_competition_label("意甲")
@@ -154,8 +179,8 @@ def test_analysis_parser_keeps_legacy_rows_and_captures_source_fixture_identity(
     result = parse_analysis_data(text)
 
     assert "source_fixture_id" not in result["recent_matches"]["home_team"][0]
-    assert result["state_memory_matches"]["home_team"][0]["source_fixture_id"] == 9001
-    assert result["state_memory_matches"]["away_team"][0]["source_competition_id"] == 22
+    assert result["state_memory_matches"]["home_team"][0]["source_fixture_id_candidate"] == 9001
+    assert "source_competition_id" not in result["state_memory_matches"]["away_team"][0]
 
 
 def test_state_memory_uses_source_ids_and_panlu_not_display_names():
@@ -220,6 +245,92 @@ def test_500_fallback_without_per_fixture_rows_is_explicitly_unavailable():
     assert build_state_memory(_record(), source) is None
 
 
+def test_current_nowscore_source_fixture_is_an_immutable_parser_contract():
+    fixture, parsed, snapshot = _current_source_snapshot()
+    panlu_ids = {
+        str(row["match_id"])
+        for row in parse_panlu_page(fixture["panlu_html"])["matches"]
+    }
+    candidates = [
+        row["source_fixture_id_candidate"]
+        for group in ("home_team", "away_team")
+        for row in parsed["state_memory_matches"][group]
+    ]
+
+    assert fixture["fixture_contract_version"] == "current_nowscore_state_memory_source_sample.v1"
+    assert all(len(value) == 64 for value in fixture["source_sha256"].values())
+    assert fixture["fixture_payload_sha256"]["analysis"] == hashlib.sha256(
+        fixture["analysis_js"].encode("utf-8")
+    ).hexdigest()
+    assert fixture["fixture_payload_sha256"]["panlu"] == hashlib.sha256(
+        fixture["panlu_html"].encode("utf-8")
+    ).hexdigest()
+    assert fixture["fixture_payload_sha256"]["three_in_one"] == hashlib.sha256(
+        fixture["three_in_one_html"].encode("utf-8")
+    ).hexdigest()
+    assert parsed["team_ids"] == {
+        "home": fixture["target_identity"]["home_team_id"],
+        "away": fixture["target_identity"]["away_team_id"],
+    }
+    assert len(candidates) == fixture["selection"]["analysis_rows"]
+    assert sum(str(candidate) in panlu_ids for candidate in candidates) == 6
+    assert "source_fixture_id" not in parsed["state_memory_matches"]["home_team"][0]
+    assert all(
+        "source_competition_id" not in row
+        for group in ("home_team", "away_team")
+        for row in parsed["state_memory_matches"][group]
+    )
+    assert snapshot["context"]["panlu"]["count"] == fixture["selection"]["panlu_rows"]
+
+
+def test_current_source_capture_fail_closes_unpaired_row20_and_resolves_subject_opponent():
+    fixture, _parsed, snapshot = _current_source_snapshot()
+    source = {"nowscore": {"snapshots": [snapshot], "source_reference": "fixture"}}
+    record = {
+        **_record(),
+        "source_cutoff_at": "2026-08-12T15:37:42+08:00",
+    }
+    state = build_state_memory(record, source)
+    assert state["target_fixture"]["source_fixture_id"] == fixture["source_match_id"]
+    assert state["target_fixture"]["home_team_id"] == fixture["target_identity"]["home_team_id"]
+    assert state["target_fixture"]["away_team_id"] == fixture["target_identity"]["away_team_id"]
+    rows = [
+        row
+        for group in ("home_team", "away_team")
+        for row in state["history"][group]
+    ]
+    assert state["coverage"]["source_fixture_id_count"] == 6
+    assert state["coverage"]["subject_identity_resolved_count"] == len(rows)
+    assert any(row["source_fixture_id"] is None for row in rows)
+    assert all(row["subject_identity_status"] == "RESOLVED" for row in rows)
+    assert all(row["subject_team_id"] in {465, 1040} for row in rows)
+    assert all(row["opponent_team_id"] not in {465, 1040} for row in rows)
+
+
+def test_current_source_fixture_fail_closes_row20_id_with_wrong_team_date_pair():
+    _fixture, _parsed, snapshot = _current_source_snapshot()
+    snapshot["shuju"]["state_memory_matches"]["home_team"][0][
+        "source_fixture_id_candidate"
+    ] = 3055809
+    state = build_state_memory(
+        _record(),
+        {"nowscore": {"snapshots": [snapshot]}},
+    )
+    row = state["history"]["home_team"][0]
+    assert row["source_fixture_id"] is None
+    assert row["competition_resolution_status"] == "UNKNOWN"
+
+
+def test_current_source_fixture_proves_target_identity_parser_path():
+    fixture = _current_source_fixture()
+    identity = parse_three_in_one(fixture["three_in_one_html"])["identity"]
+    assert identity["nowscore_id"] == fixture["target_identity"]["source_fixture_id"]
+    assert identity["home_team_id"] == fixture["target_identity"]["home_team_id"]
+    assert identity["away_team_id"] == fixture["target_identity"]["away_team_id"]
+    assert identity["home_team"] == fixture["target_identity"]["home_team_name"]
+    assert identity["away_team"] == fixture["target_identity"]["away_team_name"]
+
+
 def test_current_source_audit_is_offline_and_uses_only_existing_providers():
     import football_state_memory_readiness_audit as audit
 
@@ -232,6 +343,19 @@ def test_current_source_audit_is_offline_and_uses_only_existing_providers():
         "FAIL_CLOSED",
     }
     assert set(result["sources"]["providers"]) <= {"nowscore", "500.com"}
+    assert "LEGACY_RECONSTRUCTION_COVERAGE" in result
+    assert "PROSPECTIVE_CAPTURE_CAPABILITY" in result
+    capability = result["PROSPECTIVE_CAPTURE_CAPABILITY"]
+    row20 = capability["source_truth"]["row_20_source_fixture_id"]
+    assert row20["exact_panlu_match_count"] > 0
+    assert row20["promotion_policy"] == "PROMOTE_ONLY_EXACT_PANLU_MATCH; OTHERWISE_NULL"
+    assert capability["source_truth"]["row_1_source_competition_id"]["retained"] is False
+    assert capability["capture"]["target_team_identity"][
+        "verified_by_source_identity_and_analysis_ids"
+    ] is True
+    assert capability["capture"]["subject_opponent_identity"]["resolved_count"] > 0
+    assert "latest_sample_observed_usage" in capability["500.com"]
+    assert "KNOWN_FALLBACK_CAPABILITY_GAP" in capability["500.com"]
 
 
 def test_schema_declares_versioned_state_memory_contract():

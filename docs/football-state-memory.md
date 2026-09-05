@@ -53,19 +53,39 @@ never rewritten.  New captures add `state_memory_contract_version` and the
 nested `state_memory` object.  Capture occurs only on the existing new frozen
 prediction path; unchanged frozen jobs do not create a second sidecar.
 
-## Offline current-source audit
+## Source truth and readiness artifacts
 
-The bounded audit reads current tracked sidecars, frozen records, and embedded
-input snapshots only.  It performs exact source-ID/team-ID/date joins to the
-existing Nowscore `panlu` rows, makes no network calls, and writes only the
+The bounded audit reads current tracked sidecars, frozen records, embedded
+input snapshots, and the existing local Nowscore raw source pair when present.
+GitHub Actions uses the committed immutable representative fixture at
+`tests/fixtures/nowscore_state_memory/current_source_sample.json` when the
+local cache is absent.  It makes no network calls and writes only the
 caller-selected output path:
 
 ```powershell
 python scripts/football_state_memory_readiness_audit.py --limit 200 --output state-memory-readiness.json
 ```
 
-The decision is exactly one of `PROSPECTIVE_STATE_MEMORY_READY`,
-`PROSPECTIVE_STATE_MEMORY_PARTIAL`, or `FAIL_CLOSED`.  The current fallback
-gap keeps this milestone at `PROSPECTIVE_STATE_MEMORY_PARTIAL` until the
-existing 500.com path can supply the same per-fixture contract.  Existing
-historical/frozen artifacts are audit inputs only.
+The audit artifact has two separate authoritative sections:
+
+* `LEGACY_RECONSTRUCTION_COVERAGE` reports bounded reconstruction from
+  existing historical/frozen evidence.  It is read-only coverage and is not
+  presented as prospective capture.
+* `PROSPECTIVE_CAPTURE_CAPABILITY` proves the current capture path against
+  the source fixture.  Nowscore analysis `row[20]` is only promoted to
+  `source_fixture_id` after an exact `panlu.match_id` join with source team and
+  date corroboration.  Unpaired values remain `null`.  `row[1]` is not
+  persisted as a competition ID because its field-level semantic is not
+  independently proven.
+
+The same section records target team IDs from the current 3-in-1 identity and
+analysis `team_ids`, plus deterministic subject/opponent IDs and venue.  A
+match containing both target teams is `AMBIGUOUS`, not guessed.
+
+For `500.com`, `latest_sample_observed_usage` is the measured use in the
+selected sample; `KNOWN_FALLBACK_CAPABILITY_GAP` separately records that the
+existing fallback exposes aggregate `recent_form` only and cannot populate
+the full per-fixture State Memory contract.  These checks compute exactly one
+of `PROSPECTIVE_STATE_MEMORY_READY`, `PROSPECTIVE_STATE_MEMORY_PARTIAL`, or
+`FAIL_CLOSED`; no conclusion is preset.  Existing historical/frozen artifacts
+are audit inputs only.

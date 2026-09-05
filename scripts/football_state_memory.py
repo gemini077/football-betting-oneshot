@@ -333,6 +333,14 @@ def _row_fixture_id(row: dict[str, Any]) -> int | str | None:
     ))
 
 
+def _row_fixture_id_candidate(row: dict[str, Any]) -> int | str | None:
+    return _canonical_id(_first(
+        row,
+        "source_fixture_id_candidate",
+        "source_match_id_candidate",
+    ))
+
+
 def _row_team_id(row: dict[str, Any], side: str) -> int | str | None:
     return _canonical_id(row.get(f"{side}_team_id"))
 
@@ -357,13 +365,14 @@ def _same_history_row(left: dict[str, Any], right: dict[str, Any]) -> bool:
 
 
 def _match_panlu(row: dict[str, Any], panlu: list[dict[str, Any]]) -> dict[str, Any] | None:
-    fixture_id = _identifier_key(_row_fixture_id(row))
+    fixture_id = _identifier_key(_row_fixture_id(row) or _row_fixture_id_candidate(row))
     if fixture_id:
         exact = [candidate for candidate in panlu if _identifier_key(_row_fixture_id(candidate)) == fixture_id]
-        if len(exact) == 1:
+        if len(exact) == 1 and _same_history_row(row, exact[0]):
             return exact[0]
-        # A published fixture ID is the strongest source identity.  Do not
-        # replace an ID mismatch with a weaker date/team join.
+        # A published fixture ID is the strongest source identity, but the
+        # paired source row must also corroborate orientation and date.  Do
+        # not replace a mismatch with a weaker date/team join.
         return None
     exact = [candidate for candidate in panlu if _same_history_row(row, candidate)]
     return exact[0] if len(exact) == 1 else None
@@ -506,9 +515,29 @@ def _state_memory_row(
         away_id = away_id or _canonical_id(panlu.get("away_team_id"))
         home_name = home_name or panlu.get("home_team")
         away_name = away_name or panlu.get("away_team")
-    fixture_id = _row_fixture_id(row)
-    if fixture_id is None and isinstance(panlu, dict):
-        fixture_id = _row_fixture_id(panlu)
+    direct_fixture_id = _row_fixture_id(row)
+    candidate_fixture_id = _row_fixture_id_candidate(row)
+    fixture_id = direct_fixture_id
+    if isinstance(panlu, dict):
+        panlu_fixture_id = _row_fixture_id(panlu)
+        if candidate_fixture_id is not None:
+            # The positional analysis value is usable only when the paired
+            # current panlu record exposes the same provider fixture ID.
+            fixture_id = (
+                panlu_fixture_id
+                if panlu_fixture_id is not None
+                and _identifier_key(panlu_fixture_id) == _identifier_key(candidate_fixture_id)
+                else None
+            )
+        elif direct_fixture_id is None:
+            fixture_id = panlu_fixture_id
+        elif panlu_fixture_id is None or _identifier_key(direct_fixture_id) != _identifier_key(panlu_fixture_id):
+            # An explicit source ID that conflicts with the paired source is
+            # also fail-closed rather than silently re-joined by team/date.
+            fixture_id = None
+    elif candidate_fixture_id is not None:
+        # Without the paired source record, row[20] remains unverified.
+        fixture_id = None
     match_date = _row_date(row) or (_panlu_date(panlu) if isinstance(panlu, dict) else None)
     kickoff = _timestamp(panlu.get("kickoff")) if isinstance(panlu, dict) else None
     home_score, away_score = _score(row, panlu)
