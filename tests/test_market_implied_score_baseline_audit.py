@@ -79,6 +79,23 @@ def _quote_snapshot(*, fetched_at: str = "2026-01-01T08:00:00+08:00") -> dict:
     }
 
 
+def _parity_record() -> dict:
+    record = _record("v1", "2026-01-01T09:00:00+08:00")
+    probabilities = audit._outcome_probabilities(record["lambda_home"], record["lambda_away"])
+    matrix, _ = audit.independent_score_matrix(record["lambda_home"], record["lambda_away"])
+    top = [row["score"] for row in audit._top_scores(matrix, 5)]
+    record["probabilities"] = probabilities
+    record["score_top1"] = top[0]
+    record["score_top3"] = top[:3]
+    record["score_top5"] = top[:5]
+    return record
+
+
+def _baseline() -> dict:
+    snapshot = _quote_snapshot()
+    return audit.build_market_baseline(audit.extract_1x2_quotes(snapshot), audit.extract_ou_quotes(snapshot))
+
+
 def test_hk_water_conversion_and_fail_closed_guards() -> None:
     assert audit.water_to_decimal(0.9) == pytest.approx(1.9)
     with pytest.raises(audit.AuditError, match="INVALID_HK_WATER_DOMAIN"):
@@ -179,15 +196,26 @@ def test_missing_raw_quote_fields_have_exhaustive_reasons() -> None:
     assert ah["reason"] == "NO_FROZEN_YAZHI_QUOTE_ROWS"
 
 
-def _metric(match_key: str) -> dict:
+def _metric(match_key: str, *, actual_score: str = "1-0", research: bool = True) -> dict:
     row = {
         "match_key": match_key,
-        "actual_score": "1-0",
+        "actual_score": actual_score,
         "actual_outcome": "home",
         "champion": {"top1_accuracy": 1, "log_loss": 0.2, "brier": 0.1, "rps": 0.05, "predicted_outcome": "home", "exact_top1": 1, "exact_top3": 1, "exact_top5": 1, "btts_brier": 0.1, "over_2_5_brier": 0.1},
         "market": {"top1_accuracy": 0, "log_loss": 0.8, "brier": 0.5, "rps": 0.3, "predicted_outcome": "draw", "exact_top1": 0, "exact_top3": 1, "exact_top5": 1, "btts_brier": 0.2, "over_2_5_brier": 0.2, "actual_score_nll": 2.0},
-        "actual_score_rank": {"champion_persisted_top5": 1, "market_score_matrix": 3, "comparable": True},
     }
+    if research:
+        row["research_reconstructed"] = {
+            "label": "RESEARCH_RECONSTRUCTED",
+            "FORMAL_HISTORICAL_FULL_SUPPORT_TRUTH": "NO",
+            "champion_exact_nll": 1.0,
+            "market_exact_nll": 2.0,
+            "champion_actual_score_rank": 1,
+            "market_actual_score_rank": 3,
+            "actual_score_rank_comparable": True,
+        }
+    else:
+        row["research_reconstructed"] = None
     return row
 
 
@@ -196,14 +224,14 @@ def test_paired_metrics_reject_duplicate_match_rows() -> None:
         audit.paired_scorecard([_metric("MATCH-1"), _metric("MATCH-1")], include_bootstrap=False)
 
 
-def test_actual_score_rank_reports_only_comparable_ranked_surface() -> None:
-    row = _metric("MATCH-1")
+def test_reconstructed_rank_uses_full_paired_cohort_not_persisted_top5_membership() -> None:
+    row = _metric("MATCH-1", actual_score="9-9")
     scorecard = audit.paired_scorecard([row], include_bootstrap=False)
-    rank = scorecard["actual_score_rank"]
-    assert rank["comparable_unique_match_n"] == 1
-    assert rank["champion_actual_score_rank"]["point"] == pytest.approx(1.0)
-    assert rank["market_actual_score_rank"]["point"] == pytest.approx(3.0)
-    assert rank["paired_delta_champion_minus_market"]["point"] == pytest.approx(-2.0)
+    reconstructed = scorecard["research_reconstructed_scorecard"]
+    assert reconstructed["status"] == "RESEARCH_RECONSTRUCTED"
+    assert reconstructed["paired_unique_match_n"] == 1
+    assert reconstructed["full_actual_score_rank"]["champion"]["point"] == pytest.approx(1.0)
+    assert reconstructed["full_actual_score_rank"]["market"]["point"] == pytest.approx(3.0)
 
 
 def test_champion_full_distribution_nll_is_blocked_without_replay_parity() -> None:
@@ -212,6 +240,36 @@ def test_champion_full_distribution_nll_is_blocked_without_replay_parity() -> No
     assert parity["status"] == "CHAMPION_FULL_DISTRIBUTION_NOT_FORMALLY_RECONSTRUCTIBLE"
     assert parity["formal_champion_exact_nll"] is None
     assert parity["formal_champion_topk_probability_calibration"] is None
+    assert parity["research_reconstruction_allowed"] is False
+    scorecard = audit.paired_scorecard([_metric("MATCH-1", research=False)], include_bootstrap=False)
+    reconstructed = scorecard["research_reconstructed_scorecard"]
+    assert reconstructed["status"] == "RESEARCH_RECONSTRUCTION_BLOCKED_BY_REPLAY_PARITY"
+    assert reconstructed["exact_nll"] is None
+    assert reconstructed["full_actual_score_rank"] is None
+
+
+def test_reconstructed_metrics_are_emitted_only_after_replay_parity() -> None:
+    record = _parity_record()
+    parity = audit.replay_champion_parity([record], return_reconstructed=True)
+    assert parity["research_reconstruction_status"] == "RESEARCH_RECONSTRUCTED"
+    matrices = parity["_reconstructed_matrices"]
+    metric = audit._metric_row(
+        record,
+        {"home_score_90m": 1, "away_score_90m": 0},
+        _baseline(),
+        reconstructed_champion_matrix=matrices["MATCH-1"],
+    )
+    assert metric is not None
+    assert metric["research_reconstructed"]["label"] == "RESEARCH_RECONSTRUCTED"
+    scorecard = audit.paired_scorecard([metric], include_bootstrap=False)
+    assert scorecard["research_reconstructed_scorecard"]["paired_unique_match_n"] == 1
+
+
+def test_replay_parity_failure_blocks_reconstructed_metric_input() -> None:
+    record = _record("v1", "2026-01-01T09:00:00+08:00")
+    parity = audit.replay_champion_parity([record], return_reconstructed=True)
+    assert parity["research_reconstruction_status"] == "RESEARCH_RECONSTRUCTION_BLOCKED_BY_REPLAY_PARITY"
+    assert parity["_reconstructed_matrices"] == {}
 
 
 def test_protected_truth_and_production_paths_cannot_be_audit_outputs() -> None:

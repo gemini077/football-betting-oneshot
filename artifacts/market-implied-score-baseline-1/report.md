@@ -68,13 +68,19 @@ Market predicted class mix / recall: `{"actual_class_mix": {"away": {"n": 85, "s
 | Top3 hit | 0.278884 | 0.310757 | -0.031873 [-0.075697, 0.015936] | INDISTINGUISHABLE_WITH_95CI |
 | Top5 hit | 0.406375 | 0.430279 | -0.023904 [-0.063745, 0.019920] | INDISTINGUISHABLE_WITH_95CI |
 
-### Actual-score rank surface
+### RESEARCH_RECONSTRUCTED full score surface
 
-Ranks are reported only on the comparable surface: Champion's persisted Top5 list versus the market's full normalized score-matrix ranking. Champion ranks outside persisted Top5 are not reconstructed.
-- Comparable unique matches: `102`; not comparable: `149`.
-- Champion actual-score rank: `2.666667`; market actual-score rank: `2.862745`; paired delta Champion - market: `-0.196078` [-0.460784, 0.088235].
+The reconstructed Champion matrix is created only after frozen lambda replay reproduces persisted Champion 1X2 + Top1/3/5 parity. It is a research surface, never historical frozen full-support truth; the realized score never decides cohort membership.
+- Status: `RESEARCH_RECONSTRUCTED`; paired unique matches: `251`.
+- `FORMAL_HISTORICAL_FULL_SUPPORT_TRUTH=NO`.
+- Cohort rule: `all paired unique verified matches; no actual-score-in-Champion-Top5 filter`.
 
 Market-only descriptive Exact Score NLL: `{"ci95": [2.905987, 3.142485], "iterations": 2000, "n": 251, "point": 3.023062, "seed": 288}`. This is not a paired Champion-vs-market NLL verdict.
+
+| Metric | Reconstructed Champion | Market | Paired delta | Decision |
+|---|---:|---:|---:|---|
+| Exact NLL | 3.101359 | 3.023062 | 0.078297 [0.040756, 0.115428] | MARKET_BETTER |
+| Full actual-score rank | 8.892430 | 8.298805 | 0.593625 [0.290837, 0.904382] | MARKET_BETTER |
 
 ### Derived scoring state
 
@@ -87,8 +93,10 @@ BTTS and Over 2.5 Brier are included only because the frozen Champion stores tho
 
 - Status: **`CHAMPION_FULL_DISTRIBUTION_NOT_FORMALLY_RECONSTRUCTIBLE`**
 - Replay parity pass: `321/321`
+- Research reconstruction gate: **`RESEARCH_RECONSTRUCTED`**
+- `FORMAL_HISTORICAL_FULL_SUPPORT_TRUTH=NO`
 - Explicit full-distribution persistence: `0/321`
-- Formal Champion Exact NLL and Top-k probability calibration are omitted. Top1/3/5 hits do not constitute a persisted full-support probability distribution.
+- Formal historical Champion Exact NLL and Top-k probability calibration remain omitted. The reconstructed research distribution must not be relabeled as frozen formal full-support truth.
 
 ## Horizon and slices
 

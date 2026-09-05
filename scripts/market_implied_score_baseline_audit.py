@@ -939,12 +939,13 @@ def has_explicit_full_distribution(record: Mapping[str, Any]) -> bool:
     return False
 
 
-def replay_champion_parity(records: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
+def replay_champion_parity(records: Iterable[Mapping[str, Any]], *, return_reconstructed: bool = False) -> dict[str, Any]:
     rows = [dict(row) for row in records]
     failures: Counter[str] = Counter()
     checked = 0
     passed = 0
     explicit_full = 0
+    reconstructed: dict[str, dict[tuple[int, int], float]] = {}
     for record in rows:
         checked += 1
         if has_explicit_full_distribution(record):
@@ -975,9 +976,11 @@ def replay_champion_parity(records: Iterable[Mapping[str, Any]]) -> dict[str, An
             failures["PERSISTED_TOPK_PARITY_MISMATCH"] += 1
             continue
         passed += 1
-    proven = checked > 0 and explicit_full == checked and passed == checked and not failures
-    return {
-        "status": "CHAMPION_FULL_DISTRIBUTION_REPLAY_PARITY_PROVEN" if proven else "CHAMPION_FULL_DISTRIBUTION_NOT_FORMALLY_RECONSTRUCTIBLE",
+        reconstructed[_identity_key(record)] = replay_matrix
+    replay_parity_proven = checked > 0 and passed == checked and not failures
+    formal_full_support_proven = replay_parity_proven and explicit_full == checked
+    result = {
+        "status": "CHAMPION_FULL_DISTRIBUTION_REPLAY_PARITY_PROVEN" if formal_full_support_proven else "CHAMPION_FULL_DISTRIBUTION_NOT_FORMALLY_RECONSTRUCTIBLE",
         "checked_unique_matches": checked,
         "replay_parity_pass": passed,
         "replay_parity_fail": checked - passed,
@@ -987,8 +990,14 @@ def replay_champion_parity(records: Iterable[Mapping[str, Any]]) -> dict[str, An
         "failure_reasons": dict(sorted(failures.items())),
         "formal_champion_exact_nll": None,
         "formal_champion_topk_probability_calibration": None,
-        "reason": "formal full-support persistence and immutable replay parity are both required; Top1/3/5 alone are not a full distribution",
+        "FORMAL_HISTORICAL_FULL_SUPPORT_TRUTH": "NO",
+        "research_reconstruction_allowed": replay_parity_proven,
+        "research_reconstruction_status": "RESEARCH_RECONSTRUCTED" if replay_parity_proven else "RESEARCH_RECONSTRUCTION_BLOCKED_BY_REPLAY_PARITY",
+        "reason": "frozen lambda replay parity gates a research-only reconstructed matrix; explicit persisted full-support truth remains absent and Top1/3/5 alone are not formal full distribution",
     }
+    if return_reconstructed:
+        result["_reconstructed_matrices"] = reconstructed if replay_parity_proven else {}
+    return result
 
 
 def _verified_result_for_record(record: Mapping[str, Any], ledger_keys: set[str], results: Mapping[str, Mapping[str, Any]], duplicate_result_keys: set[str]) -> tuple[dict[str, Any] | None, str]:
@@ -1021,7 +1030,13 @@ def horizon_band(minutes: float | None) -> str | None:
     return None
 
 
-def _metric_row(record: Mapping[str, Any], result: Mapping[str, Any], baseline: Mapping[str, Any]) -> dict[str, Any] | None:
+def _metric_row(
+    record: Mapping[str, Any],
+    result: Mapping[str, Any],
+    baseline: Mapping[str, Any],
+    *,
+    reconstructed_champion_matrix: Mapping[tuple[int, int], float] | None = None,
+) -> dict[str, Any] | None:
     actual = (int(result["home_score_90m"]), int(result["away_score_90m"]))
     champion_probabilities = _champion_probabilities(record)
     market_probabilities = baseline["projection"]["probabilities"]
@@ -1052,13 +1067,28 @@ def _metric_row(record: Mapping[str, Any], result: Mapping[str, Any], baseline: 
     champion_top3_scores = _champion_score_list(record, "score_top3")
     champion_top5_scores = _champion_score_list(record, "score_top5")
     market_top = [row["score"] for row in baseline["projection"]["top_scores"]]
-    market_ranked_scores = [row["score"] for row in _top_scores(baseline["projection"]["matrix"], len(baseline["projection"]["matrix"]))]
-    champion_actual_rank = _score_rank(champion_top5_scores[:5], actual_score)
-    market_actual_rank = _score_rank(market_ranked_scores, actual_score)
     champion_btts = champion_btts_probability(record)
     champion_over = champion_total_probability(record)
     actual_btts = actual[0] > 0 and actual[1] > 0
     actual_over = sum(actual) > 2
+    research_reconstructed: dict[str, Any] | None = None
+    if reconstructed_champion_matrix is not None:
+        market_matrix = baseline["projection"]["matrix"]
+        champion_ranked_scores = [row["score"] for row in _top_scores(reconstructed_champion_matrix, len(reconstructed_champion_matrix))]
+        market_ranked_scores = [row["score"] for row in _top_scores(market_matrix, len(market_matrix))]
+        champion_actual_rank = _score_rank(champion_ranked_scores, actual_score)
+        market_actual_rank = _score_rank(market_ranked_scores, actual_score)
+        if champion_actual_rank is None or market_actual_rank is None:
+            raise AuditError("ACTUAL_SCORE_OUTSIDE_RESEARCH_MATRIX_SUPPORT")
+        research_reconstructed = {
+            "label": "RESEARCH_RECONSTRUCTED",
+            "FORMAL_HISTORICAL_FULL_SUPPORT_TRUTH": "NO",
+            "champion_exact_nll": -math.log(max(float(reconstructed_champion_matrix.get(actual, 0.0)), EPSILON)),
+            "market_exact_nll": -math.log(max(float(market_matrix.get(actual, 0.0)), EPSILON)),
+            "champion_actual_score_rank": champion_actual_rank,
+            "market_actual_score_rank": market_actual_rank,
+            "actual_score_rank_comparable": True,
+        }
     return {
         "match_key": _identity_key(record),
         "actual_score": actual_score,
@@ -1088,11 +1118,7 @@ def _metric_row(record: Mapping[str, Any], result: Mapping[str, Any], baseline: 
             "over_2_5_brier": (baseline["projection"]["total_over_2_5"] - float(actual_over)) ** 2,
             "actual_score_nll": -math.log(max(float(baseline["projection"]["matrix"].get(actual, 0.0)), EPSILON)),
         },
-        "actual_score_rank": {
-            "champion_persisted_top5": champion_actual_rank,
-            "market_score_matrix": market_actual_rank,
-            "comparable": champion_actual_rank is not None and market_actual_rank is not None,
-        },
+        "research_reconstructed": research_reconstructed,
     }
 
 
@@ -1151,28 +1177,90 @@ def _class_mix(rows: list[dict[str, Any]], model: str) -> dict[str, Any]:
     }
 
 
-def _rank_surface_scorecard(rows: list[dict[str, Any]], *, include_bootstrap: bool) -> dict[str, Any]:
-    pairs = [
-        (row["actual_score_rank"]["champion_persisted_top5"], row["actual_score_rank"]["market_score_matrix"])
-        for row in rows
-        if row.get("actual_score_rank", {}).get("champion_persisted_top5") is not None
-        and row.get("actual_score_rank", {}).get("market_score_matrix") is not None
-    ]
-    champion = [float(pair[0]) for pair in pairs]
-    market = [float(pair[1]) for pair in pairs]
-    delta = [c - m for c, m in zip(champion, market)]
-    def interval(values: list[float], seed: int) -> dict[str, Any]:
-        if include_bootstrap:
-            return _bootstrap_interval(values, seed=seed)
-        return {"n": len(values), "point": _mean(values), "ci95": [None, None]}
+def _paired_series_scorecard(
+    champion: list[float],
+    market: list[float],
+    *,
+    lower_is_better: bool,
+    seed: int,
+    include_bootstrap: bool,
+) -> dict[str, Any]:
+    if len(champion) != len(market):
+        raise AuditError("RESEARCH_RECONSTRUCTED_PAIRED_SERIES_LENGTH_MISMATCH")
+    if include_bootstrap:
+        champion_stat = _bootstrap_interval(champion, seed=seed)
+        market_stat = _bootstrap_interval(market, seed=seed + 1)
+        delta_stat = _bootstrap_interval([c - m for c, m in zip(champion, market)], seed=seed + 2)
+    else:
+        champion_stat = {"n": len(champion), "point": _mean(champion), "ci95": [None, None]}
+        market_stat = {"n": len(market), "point": _mean(market), "ci95": [None, None]}
+        delta_stat = {"n": len(champion), "point": _mean(c - m for c, m in zip(champion, market)), "ci95": [None, None]}
+    point = delta_stat["point"]
+    ci = delta_stat["ci95"]
+    if not include_bootstrap:
+        decision = "NOT_BOOTSTRAPPED"
+    elif point is None or ci[0] is None or ci[1] is None or ci[0] <= 0.0 <= ci[1]:
+        decision = "INDISTINGUISHABLE_WITH_95CI"
+    elif lower_is_better:
+        decision = "CHAMPION_BETTER" if point < 0.0 else "MARKET_BETTER"
+    else:
+        decision = "CHAMPION_BETTER" if point > 0.0 else "MARKET_BETTER"
     return {
-        "comparable_unique_match_n": len(pairs),
-        "not_comparable_unique_match_n": len(rows) - len(pairs),
-        "champion_surface": "persisted score_top5 only; rank is null when actual score is outside that surface",
-        "market_surface": "full normalized rho=0 score matrix support",
-        "champion_actual_score_rank": interval(champion, BOOTSTRAP_SEED + 301),
-        "market_actual_score_rank": interval(market, BOOTSTRAP_SEED + 302),
-        "paired_delta_champion_minus_market": interval(delta, BOOTSTRAP_SEED + 303),
+        "champion": champion_stat,
+        "market": market_stat,
+        "paired_delta_champion_minus_market": delta_stat,
+        "lower_is_better": lower_is_better,
+        "decision": decision,
+    }
+
+
+def _research_reconstructed_scorecard(rows: list[dict[str, Any]], *, include_bootstrap: bool) -> dict[str, Any]:
+    if not rows:
+        return {
+            "status": "RESEARCH_RECONSTRUCTION_BLOCKED_BY_REPLAY_PARITY",
+            "label": "RESEARCH_RECONSTRUCTED",
+            "FORMAL_HISTORICAL_FULL_SUPPORT_TRUTH": "NO",
+            "paired_unique_match_n": 0,
+            "reason": "NO_PAIRED_UNIQUE_MATCHES",
+            "exact_nll": None,
+            "full_actual_score_rank": None,
+        }
+    research_rows = [row.get("research_reconstructed") for row in rows]
+    if any(item is None for item in research_rows):
+        return {
+            "status": "RESEARCH_RECONSTRUCTION_BLOCKED_BY_REPLAY_PARITY",
+            "label": "RESEARCH_RECONSTRUCTED",
+            "FORMAL_HISTORICAL_FULL_SUPPORT_TRUTH": "NO",
+            "paired_unique_match_n": 0,
+            "reason": "REPLAY_PARITY_NOT_PROVEN",
+            "exact_nll": None,
+            "full_actual_score_rank": None,
+        }
+    exact_champion = [float(item["champion_exact_nll"]) for item in research_rows]
+    exact_market = [float(item["market_exact_nll"]) for item in research_rows]
+    rank_champion = [float(item["champion_actual_score_rank"]) for item in research_rows]
+    rank_market = [float(item["market_actual_score_rank"]) for item in research_rows]
+    return {
+        "status": "RESEARCH_RECONSTRUCTED",
+        "label": "RESEARCH_RECONSTRUCTED",
+        "FORMAL_HISTORICAL_FULL_SUPPORT_TRUTH": "NO",
+        "paired_unique_match_n": len(rows),
+        "cohort_rule": "all paired unique verified matches; no actual-score-in-Champion-Top5 filter",
+        "distribution_source": "frozen lambda_home/lambda_away after 1X2 + Top1/3/5 replay parity",
+        "exact_nll": _paired_series_scorecard(
+            exact_champion,
+            exact_market,
+            lower_is_better=True,
+            seed=BOOTSTRAP_SEED + 401,
+            include_bootstrap=include_bootstrap,
+        ),
+        "full_actual_score_rank": _paired_series_scorecard(
+            rank_champion,
+            rank_market,
+            lower_is_better=True,
+            seed=BOOTSTRAP_SEED + 404,
+            include_bootstrap=include_bootstrap,
+        ),
     }
 
 
@@ -1217,7 +1305,7 @@ def paired_scorecard(rows: list[dict[str, Any]], *, include_bootstrap: bool = Tr
         "paired_unique_match_n": len(rows),
         "ft_1x2": {**metrics, "champion_class_mix": _class_mix(rows, "champion"), "market_class_mix": _class_mix(rows, "market")},
         "exact_score_topk": exact,
-        "actual_score_rank": _rank_surface_scorecard(rows, include_bootstrap=include_bootstrap),
+        "research_reconstructed_scorecard": _research_reconstructed_scorecard(rows, include_bootstrap=include_bootstrap),
         "derived_scoring_state": derived,
         "market_only_exact_score_nll_descriptive": market_nll,
     }
@@ -1336,6 +1424,8 @@ def build_summary(root: Path = ROOT, *, source_main_sha: str | None = None) -> d
     result_index, duplicate_result_keys, result_info = load_verified_results(root)
     snapshot_root = root / "data" / "model_governance" / "input_snapshots"
     snapshot_cache: dict[str, tuple[dict[str, Any] | None, str | None]] = {}
+    replay = replay_champion_parity(selection["selected_records"], return_reconstructed=True)
+    reconstructed_matrices = replay.pop("_reconstructed_matrices", {})
 
     observations: list[dict[str, Any]] = []
     quote_reason_counts = {"1x2": Counter(), "ou": Counter(), "ah": Counter(), "baseline": Counter(), "result": Counter()}
@@ -1383,7 +1473,16 @@ def build_summary(root: Path = ROOT, *, source_main_sha: str | None = None) -> d
         competition = universe.get(_text(record.get("match_id")), {}).get("competition", "UNKNOWN")
         data_grade = _text(record.get("data_grade") or record.get("generic_data_grade")) or "UNKNOWN"
         verified = result is not None
-        metric = _metric_row(record, result, baseline) if verified and baseline.get("status") == "EVALUABLE" else None
+        metric = (
+            _metric_row(
+                record,
+                result,
+                baseline,
+                reconstructed_champion_matrix=reconstructed_matrices.get(key),
+            )
+            if verified and baseline.get("status") == "EVALUABLE"
+            else None
+        )
         ah = _build_ah_diagnostic(baseline, ah_quotes)
         observations.append({
             "match_key": key,
@@ -1409,12 +1508,7 @@ def build_summary(root: Path = ROOT, *, source_main_sha: str | None = None) -> d
             "slice_key": "UNKNOWN",
         })
 
-    for observation in observations:
-        metric = observation.get("metric")
-        if metric is not None:
-            pass
     metric_rows = [observation["metric"] for observation in observations if observation.get("metric") is not None]
-    replay = replay_champion_parity([observation["record"] for observation in observations])
     verified_observations = [observation for observation in observations if observation["verified"]]
     baseline_observations = [observation for observation in observations if observation["baseline"].get("status") == "EVALUABLE"]
     paired_observations = [observation for observation in observations if observation.get("metric") is not None]
@@ -1579,7 +1673,7 @@ def build_summary(root: Path = ROOT, *, source_main_sha: str | None = None) -> d
             "ah_status": observation["ah"].get("status"),
             "ah_reason": observation["ah"].get("reason"),
             "ah_mean_absolute_error": _rounded(observation["ah"].get("match_mean_absolute_error"), 8),
-            "actual_score_rank": (observation["metric"] or {}).get("actual_score_rank"),
+            "research_reconstructed": (observation["metric"] or {}).get("research_reconstructed"),
         })
 
     top_decision = _decision_from_n(len(observations), len(paired_observations), integrity_failures, solve_failures)
@@ -1606,6 +1700,7 @@ def build_summary(root: Path = ROOT, *, source_main_sha: str | None = None) -> d
             "correct_score_provider_used": False,
             "champion_challenger_calibration_serving_ui_changed": False,
             "frozen_history_rewritten": False,
+            "FORMAL_HISTORICAL_FULL_SUPPORT_TRUTH": "NO",
         },
         "policy": {
             "version_selection": selection["selection_rule"],
@@ -1734,13 +1829,15 @@ def render_report(summary: Mapping[str, Any]) -> str:
     for key, label in (("exact_top1", "Top1 hit"), ("exact_top3", "Top3 hit"), ("exact_top5", "Top5 hit")):
         item = paired["exact_score_topk"][key]
         lines.append(f"| {label} | {item['champion']['point']:.6f} | {item['market']['point']:.6f} | {item['paired_delta_champion_minus_market']['point']:.6f} [{item['paired_delta_champion_minus_market']['ci95'][0]:.6f}, {item['paired_delta_champion_minus_market']['ci95'][1]:.6f}] | {item['decision']} |")
+    reconstructed = paired["research_reconstructed_scorecard"]
     lines += [
         "",
-        "### Actual-score rank surface",
+        "### RESEARCH_RECONSTRUCTED full score surface",
         "",
-        "Ranks are reported only on the comparable surface: Champion's persisted Top5 list versus the market's full normalized score-matrix ranking. Champion ranks outside persisted Top5 are not reconstructed.",
-        f"- Comparable unique matches: `{paired['actual_score_rank']['comparable_unique_match_n']}`; not comparable: `{paired['actual_score_rank']['not_comparable_unique_match_n']}`.",
-        f"- Champion actual-score rank: `{paired['actual_score_rank']['champion_actual_score_rank']['point']:.6f}`; market actual-score rank: `{paired['actual_score_rank']['market_actual_score_rank']['point']:.6f}`; paired delta Champion - market: `{paired['actual_score_rank']['paired_delta_champion_minus_market']['point']:.6f}` [{paired['actual_score_rank']['paired_delta_champion_minus_market']['ci95'][0]:.6f}, {paired['actual_score_rank']['paired_delta_champion_minus_market']['ci95'][1]:.6f}].",
+        "The reconstructed Champion matrix is created only after frozen lambda replay reproduces persisted Champion 1X2 + Top1/3/5 parity. It is a research surface, never historical frozen full-support truth; the realized score never decides cohort membership.",
+        f"- Status: `{reconstructed['status']}`; paired unique matches: `{reconstructed['paired_unique_match_n']}`.",
+        f"- `FORMAL_HISTORICAL_FULL_SUPPORT_TRUTH={reconstructed['FORMAL_HISTORICAL_FULL_SUPPORT_TRUTH']}`.",
+        f"- Cohort rule: `{reconstructed.get('cohort_rule', reconstructed.get('reason'))}`.",
         "",
         f"Market-only descriptive Exact Score NLL: `{json.dumps(paired['market_only_exact_score_nll_descriptive'], ensure_ascii=False, sort_keys=True)}`. This is not a paired Champion-vs-market NLL verdict.",
         "",
@@ -1749,6 +1846,18 @@ def render_report(summary: Mapping[str, Any]) -> str:
         "BTTS and Over 2.5 Brier are included only because the frozen Champion stores those probability vectors. Missing Champion probabilities are not manufactured.",
         "",
     ]
+    if reconstructed["status"] == "RESEARCH_RECONSTRUCTED":
+        insert_at = lines.index("### Derived scoring state")
+        lines[insert_at:insert_at] = [
+            "| Metric | Reconstructed Champion | Market | Paired delta | Decision |",
+            "|---|---:|---:|---:|---|",
+            f"| Exact NLL | {reconstructed['exact_nll']['champion']['point']:.6f} | {reconstructed['exact_nll']['market']['point']:.6f} | {reconstructed['exact_nll']['paired_delta_champion_minus_market']['point']:.6f} [{reconstructed['exact_nll']['paired_delta_champion_minus_market']['ci95'][0]:.6f}, {reconstructed['exact_nll']['paired_delta_champion_minus_market']['ci95'][1]:.6f}] | {reconstructed['exact_nll']['decision']} |",
+            f"| Full actual-score rank | {reconstructed['full_actual_score_rank']['champion']['point']:.6f} | {reconstructed['full_actual_score_rank']['market']['point']:.6f} | {reconstructed['full_actual_score_rank']['paired_delta_champion_minus_market']['point']:.6f} [{reconstructed['full_actual_score_rank']['paired_delta_champion_minus_market']['ci95'][0]:.6f}, {reconstructed['full_actual_score_rank']['paired_delta_champion_minus_market']['ci95'][1]:.6f}] | {reconstructed['full_actual_score_rank']['decision']} |",
+            "",
+        ]
+    else:
+        insert_at = lines.index("### Derived scoring state")
+        lines[insert_at:insert_at] = ["Reconstructed Exact NLL and full actual-score rank are omitted because replay parity did not pass.", ""]
     for key, label in (("btts_brier", "BTTS Brier"), ("over_2_5_brier", "Over 2.5 Brier")):
         item = paired["derived_scoring_state"][key]
         lines.append(f"- {label}: Champion `{item['champion']['point']}`, market `{item['market']['point']}`, paired delta `{item['paired_delta_champion_minus_market']['point']}` ({item['decision']}).")
@@ -1758,8 +1867,10 @@ def render_report(summary: Mapping[str, Any]) -> str:
         "",
         f"- Status: **`{summary['replay_parity']['status']}`**",
         f"- Replay parity pass: `{summary['replay_parity']['replay_parity_pass']}/{summary['replay_parity']['checked_unique_matches']}`",
+        f"- Research reconstruction gate: **`{summary['replay_parity']['research_reconstruction_status']}`**",
+        f"- `FORMAL_HISTORICAL_FULL_SUPPORT_TRUTH={summary['replay_parity']['FORMAL_HISTORICAL_FULL_SUPPORT_TRUTH']}`",
         f"- Explicit full-distribution persistence: `{summary['replay_parity']['explicit_full_distribution_persisted']}/{summary['replay_parity']['explicit_full_distribution_denominator']}`",
-        "- Formal Champion Exact NLL and Top-k probability calibration are omitted. Top1/3/5 hits do not constitute a persisted full-support probability distribution.",
+        "- Formal historical Champion Exact NLL and Top-k probability calibration remain omitted. The reconstructed research distribution must not be relabeled as frozen formal full-support truth.",
         "",
         "## Horizon and slices",
         "",
