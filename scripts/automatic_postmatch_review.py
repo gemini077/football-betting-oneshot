@@ -19,7 +19,7 @@ from match_identity import identity_aliases
 from postmatch_evidence import fetch_postmatch_evidence
 from paper_ledger import pair_key
 from risk_engine import dixon_coles_score_matrix
-from exact_distribution import classify_frozen_exact_score
+from exact_distribution import classify_frozen_exact_score, classify_frozen_jc_total_goals
 from model_governance import DEFAULT_RECORD_ROOT, load_frozen_prediction, validate_postmatch_review_link
 from baseline_production import (
     DEFAULT_PREDICTION_ROOT as BENCHMARK_PREDICTION_ROOT,
@@ -176,6 +176,7 @@ def _model_diagnostics(report: dict, home_goals: int, away_goals: int) -> dict:
     governance = report.get("model_governance") or {}
     frozen_record = load_frozen_prediction(str(governance.get("prediction_id") or ""), DEFAULT_RECORD_ROOT)
     frozen_exact = classify_frozen_exact_score(frozen_record or {}, home_goals, away_goals)
+    frozen_jc_total_goals = classify_frozen_jc_total_goals(frozen_record or {}, home_goals, away_goals)
     if frozen_exact["FORMAL_EXACT_DISTRIBUTION_FROZEN"]:
         score_probability = frozen_exact["probability"]
         score_rank = frozen_exact["rank"]
@@ -202,6 +203,19 @@ def _model_diagnostics(report: dict, home_goals: int, away_goals: int) -> dict:
         "FINITE_GRID_EXACTLY_REPRESENTED": frozen_exact["FINITE_GRID_EXACTLY_REPRESENTED"],
         "OUT_OF_EXPLICIT_SUPPORT": frozen_exact["OUT_OF_EXPLICIT_SUPPORT"],
         "FORMAL_EXACT_LOG_SCORE_ELIGIBLE": frozen_exact["FORMAL_EXACT_LOG_SCORE_ELIGIBLE"],
+        "FORMAL_JC_TOTAL_GOALS_FROZEN": frozen_jc_total_goals["FORMAL_JC_TOTAL_GOALS_FROZEN"],
+        "JC_TOTAL_GOALS_BUCKET_EXACTLY_REPRESENTED": frozen_jc_total_goals[
+            "JC_TOTAL_GOALS_BUCKET_EXACTLY_REPRESENTED"
+        ],
+        "actual_jc_total_goals_bucket": frozen_jc_total_goals["actual_jc_total_goals_bucket"],
+        "jc_total_goals_probability": frozen_jc_total_goals["jc_total_goals_probability"],
+        "jc_total_goals_status": frozen_jc_total_goals["jc_total_goals_status"],
+        "jc_total_goals_authority_status": frozen_jc_total_goals["authority_status"],
+        "jc_total_goals_top_selection": frozen_jc_total_goals["jc_total_goals_top_selection"],
+        "jc_total_goals_top_selection_hit": frozen_jc_total_goals["jc_total_goals_top_selection_hit"],
+        "same_time_official_market_baseline_status": frozen_jc_total_goals[
+            "same_time_official_market_baseline_status"
+        ],
         "lambda_home_residual": round(home_goals - lambda_home, 4),
         "lambda_away_residual": round(away_goals - lambda_away, 4),
         "total_goals_residual": round((home_goals + away_goals) - (lambda_home + lambda_away), 4),
@@ -642,6 +656,9 @@ def build_review(schedule: dict, report: dict, now: datetime) -> dict:
     diagnostics = _model_diagnostics(report, home_goals, away_goals)
     score_hit = score_pick == actual if score_pick else None
     total_hit = (total_pick == str(total_actual)) if total_pick and total_pick != "6+" else (total_actual >= 6 if total_pick == "6+" else None)
+    jc_total_pick = diagnostics.get("jc_total_goals_top_selection")
+    jc_total_actual = diagnostics.get("actual_jc_total_goals_bucket")
+    jc_total_hit = diagnostics.get("jc_total_goals_top_selection_hit")
     btts_hit = btts_pick == btts_actual if btts_pick else None
     score_trace = decisions.get("score_selection_trace") or {}
     misses = []
@@ -651,6 +668,8 @@ def build_review(schedule: dict, report: dict, now: datetime) -> dict:
         misses.append(f"唯一比分{score_pick[0]}-{score_pick[1]}，实际{actual_score}；相邻比分不计命中")
     if total_hit is False:
         misses.append(f"总进球众数{total_pick}，实际{total_actual}")
+    if jc_total_hit is False:
+        misses.append(f"官方竞彩总进球首选{jc_total_pick}，实际{jc_total_actual}")
     if btts_hit is False:
         misses.append(f"BTTS首选{btts_pick}，实际{btts_actual}")
     classification = "主维度命中" if primary_hit is True else "主维度错误" if primary_hit is False else "主维度走盘/不可结算"
@@ -714,6 +733,8 @@ def build_review(schedule: dict, report: dict, now: datetime) -> dict:
             error_tags.append("score_selector_error")
     if total_hit is False:
         error_tags.append("goal_total_error")
+    if jc_total_hit is False:
+        error_tags.append("jc_total_goals_error")
     if btts_hit is False:
         error_tags.append("btts_error")
     if not checkpoint_count:
@@ -804,6 +825,18 @@ def build_review(schedule: dict, report: dict, now: datetime) -> dict:
             "by_dimension": dimension_settlements,
             "exact_score": {"pick": f"{score_pick[0]}-{score_pick[1]}" if score_pick else None, "actual": actual_score, "hit": score_hit, "rule": "仅精确比分命中"},
             "total_goals_mode": {"pick": total_pick, "actual": total_actual, "hit": total_hit},
+            "official_jc_total_goals": {
+                "pick": jc_total_pick,
+                "actual": jc_total_actual,
+                "hit": jc_total_hit,
+                "probability": diagnostics.get("jc_total_goals_probability"),
+                "authority_status": diagnostics.get("jc_total_goals_authority_status"),
+                "status": diagnostics.get("jc_total_goals_status"),
+                "same_time_official_market_baseline_status": diagnostics.get(
+                    "same_time_official_market_baseline_status"
+                ),
+                "rule": "仅从冻结的官方竞彩8类总进球投影结算；旧版通用6+不代表该语义",
+            },
             "btts": {"pick": btts_pick, "actual": btts_actual, "hit": btts_hit},
             "expected_goals": {
                 "pick": round(float((report.get("model") or {}).get("expected_goals") or 0), 3),

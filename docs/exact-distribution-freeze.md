@@ -51,3 +51,41 @@ Old records remain readable without the new object. Their historical Exact
 metrics remain `RESEARCH_RECONSTRUCTED` and
 `FORMAL_HISTORICAL_FULL_SUPPORT_TRUTH=false`; no old record or input snapshot
 is rewritten.
+
+## Official JC total goals
+
+Every newly frozen formal Champion exact-distribution contract also contains a
+`jc_total_goals.v1` projection under `jc_total_goals`; the governance record
+exposes the same immutable object at top-level `jc_total_goals`. It is a pure
+sum over the same frozen effective Exact cells, with the fixed order:
+`[0, 1, 2, 3, 4, 5, 6, 7+]`. Exactly six goals maps to `6`; only totals greater
+than or equal to seven map to `7+`. The projection stores all eight unrounded
+probabilities, deterministic top selection, normalization diagnostics, and its
+own content hash, which is covered by the parent Exact contract hash and the
+prediction content hash.
+
+The current accepted prematch evidence contains no same-time official eight-way
+JC total-goals market baseline, so the contract records
+`same_time_official_market_baseline.status=NOT_AVAILABLE`, with no provider and
+`derived_from_asian_total=false`. The existing generic `total_goals_buckets`
+output and its legacy `6+` bucket remain compatibility data only and are not
+used as the official JC semantic.
+
+Post-match evaluation and review read the frozen `jc_total_goals` object only.
+They settle the verified regulation result (90 minutes plus stoppage time),
+ignore extra time and penalties, and do not regenerate probabilities from
+current lambdas or market lines. Legacy Exact contracts without this additive
+projection remain readable and report the JC dimension as unavailable.
+
+The formal JC evaluation lane is eligible only when the record is formally
+eligible, the frozen `jc_total_goals.v1` contract validates, and the result is
+a verified regulation-time artifact. It persists `jc_total_goals_log_loss`,
+`jc_total_goals_brier`, and `jc_total_goals_rps`; invalid, missing, or
+unverified inputs persist no numeric JC score. Brier uses the project's
+multiclass sum-of-squared-errors convention (no division by class count).
+RPS uses cumulative squared errors in the canonical eight-class order divided
+by `K-1` (denominator `7`). The prospective summary reports eligible `n`,
+coverage, Top1 hit rate, mean scores, predicted/actual class mix, and
+per-class recall. Empty or sub-30 eligible cohorts are marked
+`INSUFFICIENT_SAMPLE`; this reporting threshold does not tune or promote any
+model.

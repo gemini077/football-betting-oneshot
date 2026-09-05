@@ -20,6 +20,9 @@ EXACT_DISTRIBUTION_CONTRACT_VERSION = "exact_score_distribution.v1"
 EXACT_DISTRIBUTION_MAX_GOALS = 12
 EXACT_DISTRIBUTION_CELL_COUNT = (EXACT_DISTRIBUTION_MAX_GOALS + 1) ** 2
 EXACT_DISTRIBUTION_NORMALIZATION_TOLERANCE = 1e-12
+JC_TOTAL_GOALS_CONTRACT_VERSION = "jc_total_goals.v1"
+JC_TOTAL_GOALS_BUCKET_ORDER = ("0", "1", "2", "3", "4", "5", "6", "7+")
+JC_TOTAL_GOALS_SELECTION_ORDER = JC_TOTAL_GOALS_BUCKET_ORDER
 
 
 def canonical_distribution_json(value: Any) -> str:
@@ -96,6 +99,158 @@ def _validated_cells(raw_cells: Any) -> list[dict[str, Any]]:
     ] != expected:
         raise ValueError("exact distribution cells do not cover the declared finite grid")
     return cells
+
+
+def _jc_total_goals_bucket(total_goals: int) -> str:
+    return str(total_goals) if total_goals <= 6 else "7+"
+
+
+def _jc_bucket_semantics() -> list[dict[str, Any]]:
+    return [
+        {
+            "goals": bucket,
+            "minimum_total_goals": 7 if bucket == "7+" else int(bucket),
+            "maximum_total_goals": None if bucket == "7+" else int(bucket),
+        }
+        for bucket in JC_TOTAL_GOALS_BUCKET_ORDER
+    ]
+
+
+def build_jc_total_goals_contract(cells: Any) -> dict[str, Any]:
+    """Project the official JC eight-way total-goals market from exact cells."""
+
+    validated_cells = _validated_cells(cells)
+    probabilities = {bucket: 0.0 for bucket in JC_TOTAL_GOALS_BUCKET_ORDER}
+    for cell in validated_cells:
+        total_goals = cell["home_goals"] + cell["away_goals"]
+        probabilities[_jc_total_goals_bucket(total_goals)] += float(cell["probability"])
+    rows = [
+        {"goals": bucket, "probability": probabilities[bucket]}
+        for bucket in JC_TOTAL_GOALS_BUCKET_ORDER
+    ]
+    top_selection = max(
+        JC_TOTAL_GOALS_BUCKET_ORDER,
+        key=lambda bucket: (probabilities[bucket], -JC_TOTAL_GOALS_BUCKET_ORDER.index(bucket)),
+    )
+    represented_sum = sum(probabilities.values())
+    contract: dict[str, Any] = {
+        "contract_version": JC_TOTAL_GOALS_CONTRACT_VERSION,
+        "status": "FORMAL_JC_TOTAL_GOALS_FROZEN",
+        "authority": "frozen_effective_exact_distribution",
+        "market_code": "JC_TOTAL_GOALS",
+        "market_family": "official_jc_total_goals",
+        "market_name": "official JC total goals",
+        "selection_order": list(JC_TOTAL_GOALS_BUCKET_ORDER),
+        "bucket_semantics": _jc_bucket_semantics(),
+        "buckets": rows,
+        "probabilities": probabilities,
+        "top_selection": top_selection,
+        "top_probability": probabilities[top_selection],
+        "normalization": {
+            "represented_probability_sum": represented_sum,
+            "target_probability_sum": 1.0,
+            "absolute_error": abs(represented_sum - 1.0),
+            "tolerance": EXACT_DISTRIBUTION_NORMALIZATION_TOLERANCE,
+            "status": "NORMALIZED_FROM_FROZEN_EXACT_DISTRIBUTION",
+        },
+        "same_time_official_market_baseline": {
+            "status": "NOT_AVAILABLE",
+            "probabilities": None,
+            "captured_at": None,
+            "source": None,
+            "reason": (
+                "No same-time official eight-way JC total-goals market baseline "
+                "is present in frozen prematch evidence."
+            ),
+            "derived_from_asian_total": False,
+        },
+        "content_sha256": None,
+    }
+    content = {key: value for key, value in contract.items() if key != "content_sha256"}
+    contract["content_sha256"] = distribution_content_sha256(content)
+    validate_jc_total_goals_contract(contract)
+    return contract
+
+
+def validate_jc_total_goals_contract(contract: Mapping[str, Any]) -> None:
+    if not isinstance(contract, Mapping):
+        raise ValueError("JC total-goals contract must be an object")
+    if (
+        contract.get("contract_version") != JC_TOTAL_GOALS_CONTRACT_VERSION
+        or contract.get("status") != "FORMAL_JC_TOTAL_GOALS_FROZEN"
+        or contract.get("authority") != "frozen_effective_exact_distribution"
+        or contract.get("market_code") != "JC_TOTAL_GOALS"
+        or contract.get("market_family") != "official_jc_total_goals"
+    ):
+        raise ValueError("JC total-goals frozen contract identity is invalid")
+    if contract.get("selection_order") != list(JC_TOTAL_GOALS_BUCKET_ORDER):
+        raise ValueError("JC total-goals selection order is invalid")
+    if contract.get("bucket_semantics") != _jc_bucket_semantics():
+        raise ValueError("JC total-goals bucket semantics are invalid")
+    rows = contract.get("buckets")
+    if not isinstance(rows, list) or len(rows) != len(JC_TOTAL_GOALS_BUCKET_ORDER):
+        raise ValueError("JC total-goals contract must contain eight buckets")
+    row_probabilities: dict[str, float] = {}
+    for expected, row in zip(JC_TOTAL_GOALS_BUCKET_ORDER, rows):
+        if not isinstance(row, Mapping) or row.get("goals") != expected:
+            raise ValueError("JC total-goals buckets are out of order or incomplete")
+        probability = _number(row.get("probability"))
+        if probability is None or probability < 0:
+            raise ValueError("JC total-goals bucket probability is invalid")
+        row_probabilities[expected] = probability
+    declared_probabilities = contract.get("probabilities")
+    if (
+        not isinstance(declared_probabilities, Mapping)
+        or set(declared_probabilities) != set(JC_TOTAL_GOALS_BUCKET_ORDER)
+    ):
+        raise ValueError("JC total-goals probability map is incomplete")
+    for bucket in JC_TOTAL_GOALS_BUCKET_ORDER:
+        declared = _number(declared_probabilities.get(bucket))
+        if declared is None or abs(declared - row_probabilities[bucket]) > EXACT_DISTRIBUTION_NORMALIZATION_TOLERANCE:
+            raise ValueError("JC total-goals probability map does not match buckets")
+    represented_sum = sum(row_probabilities.values())
+    normalization = contract.get("normalization")
+    declared_sum = (
+        _number((normalization or {}).get("represented_probability_sum"))
+        if isinstance(normalization, Mapping)
+        else None
+    )
+    tolerance = (
+        _number((normalization or {}).get("tolerance"))
+        if isinstance(normalization, Mapping)
+        else None
+    )
+    if (
+        declared_sum is None
+        or tolerance is None
+        or tolerance <= 0
+        or abs(represented_sum - declared_sum) > tolerance
+        or abs(represented_sum - 1.0) > tolerance
+    ):
+        raise ValueError("JC total-goals normalization diagnostics do not match buckets")
+    top_selection = max(
+        JC_TOTAL_GOALS_BUCKET_ORDER,
+        key=lambda bucket: (row_probabilities[bucket], -JC_TOTAL_GOALS_BUCKET_ORDER.index(bucket)),
+    )
+    if (
+        contract.get("top_selection") != top_selection
+        or _number(contract.get("top_probability")) != row_probabilities[top_selection]
+    ):
+        raise ValueError("JC total-goals top selection does not match probabilities")
+    baseline = contract.get("same_time_official_market_baseline")
+    if (
+        not isinstance(baseline, Mapping)
+        or baseline.get("status") != "NOT_AVAILABLE"
+        or baseline.get("probabilities") is not None
+        or baseline.get("captured_at") is not None
+        or baseline.get("source") is not None
+        or baseline.get("derived_from_asian_total") is not False
+    ):
+        raise ValueError("JC total-goals same-time market baseline status is invalid")
+    supplied_hash = contract.get("content_sha256")
+    content = {key: value for key, value in contract.items() if key != "content_sha256"}
+    if not isinstance(supplied_hash, str) or supplied_hash != distribution_content_sha256(content):
+        raise ValueError("JC total-goals content hash mismatch")
 
 
 def build_prediction_time_exact_distribution_state(
@@ -196,6 +351,7 @@ def build_exact_distribution_contract(
             "tail_cell_present": False,
             "basis": "risk_engine exposes a normalized finite grid; no frozen pre-normalization tail mass is available",
         },
+        "jc_total_goals": build_jc_total_goals_contract(cells),
         "content_sha256": None,
     }
     content = {key: value for key, value in contract.items() if key != "content_sha256"}
@@ -243,6 +399,8 @@ def validate_exact_distribution_contract(
         or abs(represented_sum - 1.0) > tolerance
     ):
         raise ValueError("exact distribution normalization diagnostics do not match cells")
+    if contract.get("jc_total_goals") is not None:
+        validate_jc_total_goals_contract(contract["jc_total_goals"])
     identity = contract.get("model_identity")
     if not isinstance(identity, Mapping):
         raise ValueError("exact distribution model identity is missing")
@@ -338,5 +496,72 @@ def classify_frozen_exact_score(
         "FORMAL_EXACT_LOG_SCORE_ELIGIBLE": True,
         "formal_exact_distribution_status": "FORMAL_EXACT_LOG_SCORE_ELIGIBLE",
         "log_score": -math.log(probability),
+    })
+    return base
+
+
+def classify_frozen_jc_total_goals(
+    record: Mapping[str, Any],
+    home_goals: Any,
+    away_goals: Any,
+) -> dict[str, Any]:
+    """Classify a realized 90-minute score using only frozen JC truth."""
+
+    base = {
+        "FORMAL_JC_TOTAL_GOALS_FROZEN": False,
+        "JC_TOTAL_GOALS_BUCKET_EXACTLY_REPRESENTED": False,
+        "jc_total_goals_status": "MISSING_FROZEN_JC_TOTAL_GOALS",
+        "authority_status": "RESEARCH_RECONSTRUCTED",
+        "actual_jc_total_goals_bucket": None,
+        "jc_total_goals_probability": None,
+        "jc_total_goals_top_selection": None,
+        "jc_total_goals_top_selection_hit": None,
+        "same_time_official_market_baseline_status": None,
+    }
+    exact_contract = record.get("exact_score_distribution") if isinstance(record, Mapping) else None
+    if not isinstance(exact_contract, Mapping):
+        return base
+    expected_identity = {
+        "prediction_id": record.get("prediction_id"),
+        "model_family": record.get("model_family"),
+        "model_core_version": record.get("model_core_version"),
+        "release_version": record.get("release_version"),
+        "model_source_fingerprint": record.get("model_source_fingerprint"),
+        "model_run_fingerprint": record.get("model_run_fingerprint"),
+        "calibration_artifact_sha256": record.get("calibration_artifact_sha256"),
+        "effective_calibration_fingerprint": record.get("effective_calibration_fingerprint"),
+        "input_sha256": record.get("input_sha256"),
+    }
+    try:
+        validate_exact_distribution_contract(
+            exact_contract,
+            expected_model_identity={key: value for key, value in expected_identity.items() if value is not None},
+        )
+    except ValueError:
+        base["jc_total_goals_status"] = "INVALID_FROZEN_JC_TOTAL_GOALS"
+        base["authority_status"] = "FAIL_CLOSED"
+        return base
+    jc_contract = exact_contract.get("jc_total_goals")
+    if not isinstance(jc_contract, Mapping):
+        return base
+    home = _goal(home_goals)
+    away = _goal(away_goals)
+    if home is None or away is None or home < 0 or away < 0:
+        base["jc_total_goals_status"] = "INVALID_REALIZED_SCORE"
+        return base
+    bucket = _jc_total_goals_bucket(home + away)
+    probabilities = jc_contract["probabilities"]
+    base.update({
+        "FORMAL_JC_TOTAL_GOALS_FROZEN": True,
+        "JC_TOTAL_GOALS_BUCKET_EXACTLY_REPRESENTED": True,
+        "jc_total_goals_status": "FORMAL_JC_TOTAL_GOALS_FROZEN",
+        "authority_status": "FROZEN_PREDICTION_TIME",
+        "actual_jc_total_goals_bucket": bucket,
+        "jc_total_goals_probability": float(probabilities[bucket]),
+        "jc_total_goals_top_selection": jc_contract["top_selection"],
+        "jc_total_goals_top_selection_hit": jc_contract["top_selection"] == bucket,
+        "same_time_official_market_baseline_status": (
+            jc_contract["same_time_official_market_baseline"]["status"]
+        ),
     })
     return base
