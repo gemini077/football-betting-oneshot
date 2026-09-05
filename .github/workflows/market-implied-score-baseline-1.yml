@@ -1,0 +1,52 @@
+name: MARKET-IMPLIED-SCORE-BASELINE-1
+
+on:
+  pull_request:
+    paths:
+      - "scripts/market_implied_score_baseline_audit.py"
+      - "tests/test_market_implied_score_baseline_audit.py"
+      - "artifacts/market-implied-score-baseline-1/**"
+      - ".github/workflows/market-implied-score-baseline-1.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  bounded-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout PR and fetch authoritative main
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install existing project dependencies
+        run: python -m pip install -r requirements.txt
+
+      - name: Focused tests
+        run: python -m pytest -q tests/test_market_implied_score_baseline_audit.py
+
+      - name: Compile audit module
+        run: python -m py_compile scripts/market_implied_score_baseline_audit.py
+
+      - name: Re-run real repository-data audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          SOURCE_MAIN_SHA="$(git rev-parse --short=9 origin/main)"
+          python scripts/market_implied_score_baseline_audit.py \
+            --source-main-sha "${SOURCE_MAIN_SHA}" \
+            --output-dir artifacts/market-implied-score-baseline-1
+
+      - name: Verify generated artifacts and diff hygiene
+        run: |
+          git diff --check
+          git diff --exit-code -- artifacts/market-implied-score-baseline-1
