@@ -9,6 +9,7 @@ from pathlib import Path
 from statistics import fmean, median
 
 from market_contracts import split_quarter_line
+from exact_distribution import build_prediction_time_exact_distribution_state
 from risk_engine import dixon_coles_score_matrix
 
 
@@ -813,7 +814,7 @@ def _btts_judgement(yes_probability: float) -> str:
         return "双方进球偏否"
     return "双方进球无明显倾向"
 
-def build_automatic_model(context: dict) -> dict:
+def build_automatic_model(context: dict, *, include_exact_distribution: bool = False) -> dict:
     deep = _deep_snapshot(context)
     nowscore_fundamentals = _nowscore_context_fundamentals(deep)
     deep_form = (deep.get("shuju") or {}).get("recent_form") or {}
@@ -874,6 +875,23 @@ def build_automatic_model(context: dict) -> dict:
             calibration_strength,
         )
     probabilities = _outcomes(matrix)
+    exact_distribution_state = (
+        build_prediction_time_exact_distribution_state(
+            matrix,
+            lambda_home=lambda_home,
+            lambda_away=lambda_away,
+            rho=0.0,
+            calibration={
+                "compatible": calibration_state["compatible"],
+                "strength": calibration_strength,
+                "total_goals_applied": calibration_state["total_approved"],
+                "dispersion_applied": calibration_state["dispersion_approved"],
+                "direction_applied": calibration_state["direction_approved"],
+            },
+        )
+        if include_exact_distribution
+        else None
+    )
     score_rows, total_rows, btts = _model_rows(matrix)
     btts["judgement"] = _btts_judgement(btts["yes"])
     top_result = max(probabilities, key=probabilities.get)
@@ -1041,7 +1059,7 @@ def build_automatic_model(context: dict) -> dict:
             "probability": {"point": live_selection["model_probability"], "conservative": live_selection["conservative_probability"], "confirmed_model_output": True, "source": MODEL_FAMILY, "calibration_status": "walk_forward_partial" if calibration_state["compatible"] else "market_calibrated_with_uncertainty_haircut_not_holdout_calibrated"},
             "price": {"max_quote_age_ms": 15000}, "execution": {"minimum_conservative_ev": 0.08},
         }
-    return {
+    result = {
         "model": model, "decisions": decisions,
         "price_audit": _price_audit(deep, matrix, probabilities),
         "data_quality": {"status": "模型已计算，临场信息待补", "overall": "FORM_AND_MARKET_MODEL", "missing": ["确认首发", "即时伤停", "用户渠道即时赔率"], "notes": [f"近期攻防来源：{form_source or '未标明'}。", "模型数值由固定公式生成，DeepSeek不参与概率计算。"]},
@@ -1056,3 +1074,6 @@ def build_automatic_model(context: dict) -> dict:
         },
         "live_ev_profiles": live_profile,
     }
+    if exact_distribution_state is not None:
+        result["exact_distribution_state"] = exact_distribution_state
+    return result

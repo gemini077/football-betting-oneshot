@@ -257,7 +257,10 @@ def analysis_context(manifest_path: Path, request: dict) -> dict:
     from automatic_model_core import build_automatic_model
     # Use the exact projection that is persisted for replay; the report layer
     # must never reconstruct a different model context after this point.
-    context["deterministic_core"] = build_automatic_model(model_input_snapshot["projection"])
+    context["deterministic_core"] = build_automatic_model(
+        model_input_snapshot["projection"],
+        include_exact_distribution=True,
+    )
     # Record the execution completion time, not the earlier fetch/task start
     # time.  This metadata is outside the canonical input hash.
     context["prediction_created_at"] = datetime.now().astimezone().isoformat()
@@ -491,6 +494,8 @@ def apply_deterministic_core(analysis: dict, context: dict) -> dict:
         return analysis
     analysis["model"] = core["model"]
     analysis["decisions"] = core["decisions"]
+    if core.get("exact_distribution_state") is not None:
+        analysis["_prediction_time_exact_distribution_state"] = core["exact_distribution_state"]
     if core.get("live_ev_profiles"):
         analysis["live_ev_profiles"] = core["live_ev_profiles"]
     quality = analysis.setdefault("data_quality", {})

@@ -129,6 +129,11 @@ def champion_result() -> dict:
         {"score": f"{index // 3}-{index % 3}", "probability": 0.10 - index * 0.005, "rank": index + 1}
         for index in range(10)
     ]
+    exact_cells = [
+        {"home_goals": home, "away_goals": away, "probability": 1 / 169}
+        for home in range(13)
+        for away in range(13)
+    ]
     return {
         "model": {
             "method": runner.MODEL_FAMILY,
@@ -146,6 +151,22 @@ def champion_result() -> dict:
             "score_selection_trace": {"confidence": "medium", "main_risk": "small sample"},
         },
         "data_quality": {"status": "MODEL_READY", "missing": []},
+        "exact_distribution_state": {
+            "effective_matrix": exact_cells,
+            "probability_state": {"lambda_home": 1.7, "lambda_away": 1.2, "rho": 0.0},
+            "production_path": {
+                "base_matrix": "test_fixture",
+                "effective_stage": "after_approved_calibration_before_top_score_rows",
+                "top_score_projection": "test_fixture",
+                "calibration": {
+                    "compatible": False,
+                    "strength": 0.0,
+                    "total_goals_applied": False,
+                    "dispersion_applied": False,
+                    "direction_applied": False,
+                },
+            },
+        },
     }
 
 

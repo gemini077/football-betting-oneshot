@@ -7,7 +7,7 @@ from pathlib import Path
 from scripts.football_data.phase2c1_experiment import champion_evidence
 
 
-EXPECTED_CORE_SHA = "064f9fa96e2995a66966c916dd9e9f600358b6c49b3ad9aa1efe9704cbdd1f15"
+EXPECTED_CORE_SHA = "6bf7d59b9a6c85c9fdb86fefc29c85fcfad5c74e0f7540e19312e708078b30e6"
 EXPECTED_FIXED_DIGEST = "b104c0f81c2a5c457967d9047b41e389209b99bd3cfc1613d9fb13fb0c2175df"
 
 

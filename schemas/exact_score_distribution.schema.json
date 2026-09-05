@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://football-betting-oneshot.local/schemas/exact_score_distribution.v1.schema.json",
+  "title": "Football Betting OneShot Exact Score distribution v1",
+  "description": "Inline, immutable prediction-time authority for the effective Exact Score matrix.",
+  "type": "object",
+  "required": [
+    "contract_version",
+    "status",
+    "authority",
+    "model_identity",
+    "probability_state",
+    "production_path",
+    "score_space",
+    "cells",
+    "canonicalization",
+    "normalization",
+    "tail_diagnostic",
+    "content_sha256"
+  ],
+  "properties": {
+    "contract_version": {"const": "exact_score_distribution.v1"},
+    "status": {"const": "FORMAL_EXACT_DISTRIBUTION_FROZEN"},
+    "authority": {"const": "prediction_time_effective_exact_matrix"},
+    "model_identity": {"type": "object"},
+    "probability_state": {
+      "type": "object",
+      "required": ["lambda_home", "lambda_away", "rho"],
+      "properties": {
+        "lambda_home": {"type": "number", "minimum": 0},
+        "lambda_away": {"type": "number", "minimum": 0},
+        "rho": {"type": "number"}
+      }
+    },
+    "production_path": {"type": "object"},
+    "score_space": {
+      "type": "object",
+      "required": [
+        "representation",
+        "support_semantics",
+        "max_home_goals",
+        "max_away_goals",
+        "cell_count",
+        "full_support",
+        "tail_bucket",
+        "out_of_support_policy"
+      ],
+      "properties": {
+        "representation": {"const": "FINITE_NORMALIZED_GRID"},
+        "support_semantics": {"const": "EXPLICIT_CELLS_ONLY"},
+        "min_home_goals": {"const": 0},
+        "min_away_goals": {"const": 0},
+        "max_home_goals": {"const": 12},
+        "max_away_goals": {"const": 12},
+        "cell_count": {"const": 169},
+        "full_support": {"const": false},
+        "tail_bucket": {"const": false},
+        "out_of_support_policy": {"const": "OUT_OF_EXPLICIT_SUPPORT"}
+      }
+    },
+    "cells": {
+      "type": "array",
+      "minItems": 169,
+      "maxItems": 169,
+      "items": {
+        "type": "object",
+        "required": ["home_goals", "away_goals", "probability"],
+        "properties": {
+          "home_goals": {"type": "integer", "minimum": 0, "maximum": 12},
+          "away_goals": {"type": "integer", "minimum": 0, "maximum": 12},
+          "probability": {"type": "number", "minimum": 0}
+        }
+      }
+    },
+    "canonicalization": {"type": "object"},
+    "normalization": {"type": "object"},
+    "tail_diagnostic": {"type": "object"},
+    "content_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  }
+}

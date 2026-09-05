@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any
 
 from prediction_quality import BASE_PREDICTION_POLICY, classify_base_prediction, classify_prediction
+from exact_distribution import build_exact_distribution_contract, validate_exact_distribution_contract
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -78,6 +79,7 @@ MODEL_SOURCE_COMPONENTS = (
 )
 GOVERNANCE_FILES = (
     "scripts/model_governance.py",
+    "scripts/exact_distribution.py",
     "scripts/generate_analysis_report.py",
     "scripts/automatic_postmatch_review.py",
     "config/model_governance.json",
@@ -976,6 +978,8 @@ def build_prediction_record(
     input_payload: Any = None,
     commit_sha: str | None = None,
     repository_root: Path = ROOT,
+    exact_distribution_state: dict[str, Any] | None = None,
+    require_exact_distribution: bool = False,
 ) -> dict[str, Any]:
     if not isinstance(payload, dict):
         raise ValueError("prediction payload must be an object")
@@ -1246,6 +1250,31 @@ def build_prediction_record(
             "generic_data_grade": base_policy_result["generic_data_grade"],
             "freeze_created_at": report.get("freeze_created_at"),
         })
+    captured_exact_state = exact_distribution_state
+    if captured_exact_state is None:
+        candidate_state = payload.get("_prediction_time_exact_distribution_state")
+        if isinstance(candidate_state, dict):
+            captured_exact_state = candidate_state
+    if role == "champion" and model_formal:
+        if captured_exact_state is None:
+            if require_exact_distribution:
+                raise ValueError("formal Champion freeze is missing prediction-time exact distribution state")
+        else:
+            record["exact_score_distribution"] = build_exact_distribution_contract(
+                captured_exact_state,
+                model_identity={
+                    "prediction_id": record["prediction_id"],
+                    "model_role": record["model_role"],
+                    "model_family": record["model_family"],
+                    "model_core_version": record["model_core_version"],
+                    "release_version": record["release_version"],
+                    "model_source_fingerprint": record["model_source_fingerprint"],
+                    "model_run_fingerprint": record["model_run_fingerprint"],
+                    "calibration_artifact_sha256": record["calibration_artifact_sha256"],
+                    "effective_calibration_fingerprint": record["effective_calibration_fingerprint"],
+                    "input_sha256": record["input_sha256"],
+                },
+            )
     record["prediction_sha256"] = prediction_content_hash(record)
     return record
 
@@ -1259,6 +1288,19 @@ def _validate_record(record: dict[str, Any]) -> None:
         raise ValueError("postmatch fields are not allowed in a frozen prediction: " + ", ".join(forbidden))
     if record["prediction_sha256"] != prediction_content_hash(record):
         raise ValueError("prediction_sha256 does not match frozen content")
+    if record.get("exact_score_distribution") is not None:
+        validate_exact_distribution_contract(
+            record["exact_score_distribution"],
+            expected_model_identity={
+                key: record.get(key)
+                for key in (
+                    "prediction_id", "model_role", "model_family", "model_core_version",
+                    "release_version", "model_source_fingerprint", "model_run_fingerprint",
+                    "calibration_artifact_sha256", "effective_calibration_fingerprint", "input_sha256",
+                )
+                if record.get(key) is not None
+            },
+        )
     snapshot = record.get("input_snapshot") or {}
     if snapshot.get("canonical_input_sha256") != record.get("input_sha256"):
         raise ValueError("input snapshot hash does not match input_sha256")

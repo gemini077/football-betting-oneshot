@@ -1913,7 +1913,10 @@ def run_base_prediction_jobs(
         try:
             # The projection is the exact deterministic input that is frozen;
             # no report or deep-language layer participates in the model call.
-            result = build_automatic_model(input_snapshot["projection"])
+            result = build_automatic_model(
+                input_snapshot["projection"],
+                include_exact_distribution=True,
+            )
         except Exception as error:
             job["status"] = "PREDICTION_FAILED"
             job["last_error"] = f"MODEL_EXCEPTION_{type(error).__name__}"
@@ -1954,6 +1957,8 @@ def run_base_prediction_jobs(
                 payload,
                 input_payload=input_snapshot,
                 repository_root=PROJECT_ROOT,
+                exact_distribution_state=result.get("exact_distribution_state"),
+                require_exact_distribution=True,
             )
             if record.get("model_role") != "champion" or not record.get("formal_eligible"):
                 raise GovernanceContractBlocker(

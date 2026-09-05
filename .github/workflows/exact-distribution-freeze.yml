@@ -1,0 +1,82 @@
+name: Exact distribution freeze contract
+
+on:
+  pull_request:
+    paths:
+      - "scripts/automatic_model_core.py"
+      - "scripts/exact_distribution.py"
+      - "scripts/exact_distribution_freeze_readiness_audit.py"
+      - "scripts/model_governance.py"
+      - "scripts/base_prediction_runner.py"
+      - "scripts/deepseek_auto_analysis.py"
+      - "scripts/generate_analysis_report.py"
+      - "scripts/prospective_settlement.py"
+      - "scripts/automatic_postmatch_review.py"
+      - "schemas/exact_score_distribution.schema.json"
+      - "tests/test_exact_distribution_freeze.py"
+      - "tests/fixtures/exact_distribution/current_model_input.json"
+      - "tests/test_automatic_model_core.py"
+      - "tests/test_model_governance.py"
+      - "tests/test_base_prediction_runner.py"
+      - "tests/test_prospective_settlement.py"
+      - "tests/test_automatic_postmatch_review.py"
+      - "docs/exact-distribution-freeze.md"
+      - ".github/workflows/exact-distribution-freeze.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  contract-and-readiness:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run focused Exact distribution tests
+        run: >-
+          python -m pytest -q
+          tests/test_exact_distribution_freeze.py
+          tests/test_automatic_model_core.py
+          tests/test_model_governance.py
+          tests/test_base_prediction_runner.py
+          tests/test_prospective_settlement.py
+          tests/test_automatic_postmatch_review.py
+
+      - name: Compile changed Python paths
+        run: >-
+          python -m py_compile
+          scripts/automatic_model_core.py
+          scripts/exact_distribution.py
+          scripts/exact_distribution_freeze_readiness_audit.py
+          scripts/model_governance.py
+          scripts/base_prediction_runner.py
+          scripts/deepseek_auto_analysis.py
+          scripts/generate_analysis_report.py
+          scripts/prospective_settlement.py
+          scripts/automatic_postmatch_review.py
+
+      - name: Run bounded offline repository-data audit
+        run: python scripts/exact_distribution_freeze_readiness_audit.py --limit 200 --output exact-distribution-readiness.json
+
+      - name: Check diff whitespace
+        run: git diff --check "${{ github.event.pull_request.base.sha || 'HEAD^' }}...${{ github.sha }}"
+
+      - name: Upload readiness artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: exact-distribution-readiness
+          path: exact-distribution-readiness.json
