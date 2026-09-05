@@ -1,0 +1,54 @@
+name: Decision Packet coverage and horizon audit 1
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - ".github/workflows/decision-packet-coverage-and-horizon-audit-1.yml"
+      - "scripts/decision_packet_coverage_audit.py"
+      - "tests/test_decision_packet_coverage_audit.py"
+      - "artifacts/decision-packet-coverage-and-horizon-audit-1/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout pull request head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install existing project requirements
+        run: python -m pip install -r requirements.txt
+
+      - name: Run focused audit tests
+        run: python -m pytest -q tests/test_decision_packet_coverage_audit.py
+
+      - name: Compile audit module
+        run: python -m py_compile scripts/decision_packet_coverage_audit.py
+
+      - name: Re-run real repository-data audit
+        shell: bash
+        run: |
+          git fetch --no-tags origin main
+          SOURCE_MAIN_SHA="$(git rev-parse origin/main)"
+          python scripts/decision_packet_coverage_audit.py \
+            --source-main-sha "${SOURCE_MAIN_SHA}" \
+            --output-dir artifacts/decision-packet-coverage-and-horizon-audit-1
+
+      - name: Check generated artifacts and whitespace
+        shell: bash
+        run: |
+          git diff --check
+          git diff --exit-code -- artifacts/decision-packet-coverage-and-horizon-audit-1
