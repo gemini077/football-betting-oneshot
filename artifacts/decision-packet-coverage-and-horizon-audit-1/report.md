@@ -1,7 +1,7 @@
 # Decision Packet coverage and horizon audit
 
 - Issue: #183 — `DECISION-PACKET-COVERAGE-AND-HORIZON-AUDIT-1`
-- Source `origin/main` SHA: `02b759c843be4dc20bff7c192969539b79d60f39`
+- Source `origin/main` SHA: `0412218d614ae19f79af4effa9d6afc51a273834`
 - Top-level decision: **`DECISION_PACKET_CORE_READY_WITH_DEGRADED_FIELDS`**
 - Scope: read-only audit of repository-resident frozen/prospective truth; no UI, API, new data acquisition, The Odds API, Reep, model, calibration, serving, or frozen-history change.
 - Observation unit: **one football match = one unique `match_key`**. Version rows are counted only in the Change Awareness section.
