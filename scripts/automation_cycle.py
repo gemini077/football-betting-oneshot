@@ -18,9 +18,16 @@ RUNTIME_PATH = ROOT / "data" / "product_runtime" / "latest_cycle.json"
 PREDICTION_UNIVERSE_DIR = ROOT / "data" / "prediction_universe"
 BASE_JOBS_DIR = ROOT / "data" / "base_prediction_jobs"
 NOT_YET_PUBLISHED = "NOT_YET_PUBLISHED"
+DEFAULT_SUBPROCESS_TIMEOUT = 360
+BASE_PREDICTION_TIMEOUT = 600
 
 
-def run(command: list[str], *, optional: bool = False) -> dict:
+def run(
+    command: list[str],
+    *,
+    optional: bool = False,
+    timeout: int = DEFAULT_SUBPROCESS_TIMEOUT,
+) -> dict:
     """Run a local CLI and return a bounded JSON summary."""
     try:
         completed = subprocess.run(
@@ -30,7 +37,7 @@ def run(command: list[str], *, optional: bool = False) -> dict:
             capture_output=True,
             encoding="utf-8",
             errors="replace",
-            timeout=360,
+            timeout=timeout,
         )
     except (OSError, subprocess.TimeoutExpired) as error:
         if not optional:
@@ -85,10 +92,14 @@ def _step(
     optional: bool,
     executor=None,
     allow_not_yet_published: bool = False,
+    timeout: int | None = None,
 ) -> dict:
     executor = executor or run
     try:
-        payload = executor(command, optional=optional)
+        executor_kwargs = {"optional": optional}
+        if timeout is not None:
+            executor_kwargs["timeout"] = timeout
+        payload = executor(command, **executor_kwargs)
     except Exception as error:  # the cycle records the failure and keeps projection alive
         return {
             "status": "FAILED" if not optional else "DEGRADED",
@@ -116,9 +127,25 @@ def _step(
     }
 
 
-def _group(name: str, commands: list[list[str]], *, optional: bool, executor=None) -> dict:
+def _group(
+    name: str,
+    commands: list[list[str]],
+    *,
+    optional: bool,
+    executor=None,
+    timeout: int | None = None,
+) -> dict:
     executor = executor or run
-    results = [_step(f"{name}_{index}", command, optional=optional, executor=executor) for index, command in enumerate(commands, 1)]
+    results = [
+        _step(
+            f"{name}_{index}",
+            command,
+            optional=optional,
+            executor=executor,
+            timeout=timeout,
+        )
+        for index, command in enumerate(commands, 1)
+    ]
     failed = [row for row in results if row["returncode"] != 0]
     return {
         "status": "SUCCESS" if not failed else "DEGRADED" if optional else "FAILED",
@@ -230,7 +257,7 @@ def _carryover_preparation(business_date: str) -> tuple[dict[str, dict], str]:
         ], optional=True),
         "carryover_base_prediction": _step("carryover_base_prediction", [
             python, "scripts/base_prediction_runner.py", "--date", business_date,
-        ], optional=True),
+        ], optional=True, timeout=BASE_PREDICTION_TIMEOUT),
         "carryover_result_schedule": _step("carryover_result_schedule", [
             python, "scripts/sync_result_schedules.py", "--date", business_date,
         ], optional=True),
@@ -262,7 +289,7 @@ def cycle(
     ], optional=True)
     steps["base_prediction"] = _step("base_prediction", [
         python, "scripts/base_prediction_runner.py", "--date", business_date,
-    ], optional=True)
+    ], optional=True, timeout=BASE_PREDICTION_TIMEOUT)
     steps["postmatch"] = _group("postmatch", [
         [python, "scripts/sync_result_schedules.py", "--date", business_date],
         [python, "scripts/postmatch_result.py"],
@@ -361,7 +388,7 @@ def production_cycle(
         ], optional=True)
         steps["next_base_prediction"] = _step("next_base_prediction", [
             sys.executable, "scripts/base_prediction_runner.py", "--date", next_date,
-        ], optional=True)
+        ], optional=True, timeout=BASE_PREDICTION_TIMEOUT)
     if carryover_state == "READY":
         steps["carryover_prospective"] = _step("carryover_prospective", [
             sys.executable, "scripts/prospective_settlement.py", "--date", carryover_date,

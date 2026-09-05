@@ -12,7 +12,7 @@ from scripts import automation_cycle  # noqa: E402
 def test_cycle_calls_base_runner_and_prospective_settlement_and_writes_health(tmp_path, monkeypatch):
     calls = []
 
-    def fake_run(command, *, optional=False):
+    def fake_run(command, *, optional=False, timeout=None):
         calls.append(command)
         if _has_script(command, "base_prediction_runner.py"):
             return {
@@ -68,7 +68,7 @@ def test_cycle_calls_base_runner_and_prospective_settlement_and_writes_health(tm
 
 
 def test_optional_step_failure_makes_cycle_degraded_but_keeps_health_artifact(tmp_path, monkeypatch):
-    def fake_run(command, *, optional=False):
+    def fake_run(command, *, optional=False, timeout=None):
         if any("daily_schedule_workspace.py" in part for part in command):
             return {"returncode": 1, "status": "FETCH_FAILED"}
         return {"returncode": 0, "status": "READY"}
@@ -84,7 +84,7 @@ def test_optional_step_failure_makes_cycle_degraded_but_keeps_health_artifact(tm
 
 
 def test_market_side_shadow_evaluation_failure_is_explicitly_degraded(tmp_path, monkeypatch):
-    def fake_run(command, *, optional=False):
+    def fake_run(command, *, optional=False, timeout=None):
         if _has_script(command, "market_side_shadow_refresh.py"):
             return {"returncode": 1, "error": "RESULT_SOURCE_UNREADABLE"}
         return {"returncode": 0, "status": "READY"}
@@ -130,7 +130,7 @@ def test_production_cycle_processes_today_and_yesterday_without_refetching_yeste
     monkeypatch.setattr(automation_cycle, "BASE_JOBS_DIR", jobs_dir, raising=False)
     calls = []
 
-    def fake_run(command, *, optional=False):
+    def fake_run(command, *, optional=False, timeout=None):
         calls.append(list(command))
         if _has_script(command, "prospective_settlement.py"):
             return {"returncode": 0, "status": "RESULT_PENDING", "pending_results": 1}
@@ -214,7 +214,7 @@ def test_production_cycle_skips_future_jobs_when_next_universe_is_not_yet_publis
     monkeypatch.setattr(automation_cycle, "BASE_JOBS_DIR", jobs_dir, raising=False)
     calls = []
 
-    def fake_run(command, *, optional=False):
+    def fake_run(command, *, optional=False, timeout=None):
         calls.append(list(command))
         if _has_script(command, "daily_schedule_workspace.py") and _command_date(command) == "2026-08-14":
             return {
@@ -262,7 +262,7 @@ def test_production_cycle_keeps_real_next_universe_fetch_failure_degraded(
     monkeypatch.setattr(automation_cycle, "PREDICTION_UNIVERSE_DIR", tmp_path / "universe", raising=False)
     monkeypatch.setattr(automation_cycle, "BASE_JOBS_DIR", tmp_path / "jobs", raising=False)
 
-    def fake_run(command, *, optional=False):
+    def fake_run(command, *, optional=False, timeout=None):
         if _has_script(command, "daily_schedule_workspace.py") and _command_date(command) == "2026-08-14":
             return {"returncode": 1, "status": "FETCH_FAILED"}
         return {"returncode": 0, "status": "SUCCESS"}
@@ -278,7 +278,7 @@ def test_production_cycle_keeps_real_next_universe_fetch_failure_degraded(
 
 
 def test_current_universe_not_yet_published_remains_degraded(tmp_path, monkeypatch):
-    def fake_run(command, *, optional=False):
+    def fake_run(command, *, optional=False, timeout=None):
         if _has_script(command, "daily_schedule_workspace.py"):
             return {
                 "returncode": 0,
@@ -303,7 +303,7 @@ def test_missing_carryover_state_is_skipped_without_degrading_cycle(tmp_path, mo
     monkeypatch.setattr(
         automation_cycle,
         "run",
-        lambda command, *, optional=False: {"returncode": 0, "status": "SUCCESS"},
+        lambda command, *, optional=False, timeout=None: {"returncode": 0, "status": "SUCCESS"},
     )
 
     payload = automation_cycle.production_cycle(
@@ -329,3 +329,104 @@ def test_explicit_date_mode_does_not_add_yesterday(tmp_path, monkeypatch, capsys
     assert automation_cycle.main() == 0
     assert seen == ["2026-08-12"]
     capsys.readouterr()
+
+
+def test_run_keeps_360_second_default_and_forwards_explicit_timeout(monkeypatch):
+    calls = []
+
+    class Completed:
+        returncode = 0
+        stdout = '{"status": "SUCCESS"}'
+        stderr = ""
+
+    def fake_subprocess_run(command, **kwargs):
+        calls.append((list(command), kwargs))
+        return Completed()
+
+    monkeypatch.setattr(automation_cycle.subprocess, "run", fake_subprocess_run)
+
+    automation_cycle.run(["python", "step.py"])
+    automation_cycle.run(["python", "base_prediction_runner.py"], timeout=600)
+
+    assert calls[0][1]["timeout"] == 360
+    assert calls[1][1]["timeout"] == 600
+
+
+def test_step_and_group_only_forward_timeout_when_explicitly_requested():
+    calls = []
+
+    def executor(command, **kwargs):
+        calls.append((list(command), kwargs))
+        return {"returncode": 0, "status": "SUCCESS"}
+
+    automation_cycle._step("default", ["default"], optional=True, executor=executor)
+    automation_cycle._step(
+        "base", ["base"], optional=True, executor=executor, timeout=600
+    )
+    automation_cycle._group(
+        "group", [["one"], ["two"]], optional=True, executor=executor, timeout=600
+    )
+
+    assert calls[0][1] == {"optional": True}
+    assert calls[1][1] == {"optional": True, "timeout": 600}
+    assert calls[2][1] == {"optional": True, "timeout": 600}
+    assert calls[3][1] == {"optional": True, "timeout": 600}
+
+
+def test_production_cycle_uses_600_seconds_only_for_carryover_current_and_next_base(
+    tmp_path, monkeypatch
+):
+    universe_dir, jobs_dir = _write_carryover_state(tmp_path)
+    monkeypatch.setattr(automation_cycle, "PREDICTION_UNIVERSE_DIR", universe_dir, raising=False)
+    monkeypatch.setattr(automation_cycle, "BASE_JOBS_DIR", jobs_dir, raising=False)
+    calls = []
+
+    def fake_run(
+        command,
+        *,
+        optional=False,
+        timeout=automation_cycle.DEFAULT_SUBPROCESS_TIMEOUT,
+    ):
+        calls.append((list(command), timeout))
+        return {"returncode": 0, "status": "SUCCESS"}
+
+    monkeypatch.setattr(automation_cycle, "run", fake_run)
+
+    automation_cycle.production_cycle(
+        now=datetime.fromisoformat("2026-08-13T00:30:00+08:00"),
+        runtime_path=tmp_path / "runtime.json",
+    )
+
+    base_timeouts = [
+        timeout
+        for command, timeout in calls
+        if _has_script(command, "base_prediction_runner.py")
+    ]
+    non_base_timeouts = [
+        timeout
+        for command, timeout in calls
+        if not _has_script(command, "base_prediction_runner.py")
+    ]
+    assert base_timeouts == [600, 600, 600]
+    assert set(non_base_timeouts) == {360}
+
+
+def test_base_timeout_preserves_existing_fail_closed_degraded_step_semantics():
+    seen = []
+
+    def timeout_executor(command, *, optional=False, timeout=360):
+        seen.append(timeout)
+        raise automation_cycle.subprocess.TimeoutExpired(command, timeout)
+
+    result = automation_cycle._step(
+        "base_prediction",
+        ["base_prediction_runner.py"],
+        optional=True,
+        executor=timeout_executor,
+        timeout=600,
+    )
+
+    assert seen == [600]
+    assert result["status"] == "DEGRADED"
+    assert result["returncode"] == 1
+    assert result["summary"]["error"].startswith("TimeoutExpired:")
