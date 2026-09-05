@@ -20,6 +20,10 @@ jobs:
       - name: Checkout PR and fetch authoritative main
         uses: actions/checkout@v4
         with:
+          # Keep the Issue #191 frozen-data cohort on the PR head.  The
+          # authoritative main ref is still fetched below for provenance;
+          # unrelated public-data refreshes must not rewrite this audit.
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
 
       - name: Set up Python
