@@ -67,6 +67,7 @@ SHARE_SOLVE_UPPER = 0.99
 SHARE_SOLVE_ITERATIONS = 70
 BOOTSTRAP_ITERATIONS = 2000
 BOOTSTRAP_SEED = 189
+ARTIFACT_FLOAT_DECIMALS = 10
 MIN_PAIRED_SAMPLE_FOR_MEANINGFUL_DECISION = 50
 
 HORIZON_BANDS = (
@@ -105,6 +106,19 @@ def _json_default(value: Any) -> Any:
 
 def canonical_json(value: Any) -> str:
     return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False, default=_json_default)
+
+
+def _stable_artifact_value(value: Any) -> Any:
+    """Quantize serialized floats so local and CI audit artifacts are byte-stable."""
+    if isinstance(value, float):
+        if not math.isfinite(value):
+            raise AuditError("NON_FINITE_ARTIFACT_FLOAT")
+        return float(f"{value:.{ARTIFACT_FLOAT_DECIMALS}f}")
+    if isinstance(value, dict):
+        return {key: _stable_artifact_value(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_stable_artifact_value(item) for item in value]
+    return value
 
 
 def _number(value: Any) -> float | None:
@@ -1602,6 +1616,7 @@ def build_summary(root: Path = ROOT, *, source_main_sha: str | None = None) -> d
             "home_away_split": "rho=0; bounded deterministic golden-section loss against frozen 1X2 consensus; no AH input",
             "ah": "held-out settlement-correct consistency surface only",
             "score_matrix_max_goals": MAX_GOALS,
+            "artifact_float_decimals": ARTIFACT_FLOAT_DECIMALS,
             "bootstrap": {"iterations": BOOTSTRAP_ITERATIONS, "seed": BOOTSTRAP_SEED, "unit": OBSERVATION_UNIT},
         },
         "inventory": {
@@ -1791,10 +1806,11 @@ def _safe_output_dir(root: Path, output_dir: Path) -> Path:
 def write_outputs(summary: dict[str, Any], output_dir: Path, *, root: Path = ROOT) -> tuple[Path, Path]:
     output_dir = _safe_output_dir(root, output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
+    stable_summary = _stable_artifact_value(summary)
     summary_path = output_dir / "summary.json"
     report_path = output_dir / "report.md"
-    summary_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8", newline="\n")
-    report_path.write_text(render_report(summary), encoding="utf-8", newline="\n")
+    summary_path.write_text(json.dumps(stable_summary, ensure_ascii=False, indent=2, sort_keys=True, allow_nan=False) + "\n", encoding="utf-8", newline="\n")
+    report_path.write_text(render_report(stable_summary), encoding="utf-8", newline="\n")
     return summary_path, report_path
 
 

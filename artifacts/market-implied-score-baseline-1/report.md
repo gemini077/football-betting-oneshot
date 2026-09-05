@@ -40,9 +40,9 @@ The all-selected quote counts are reported separately because verified-result li
 ## O/U and AH diagnostics
 
 - O/U evaluable matches: `319`; failed: `2`.
-- Per-book O/U lambda residual summary: `{"max": 2.220446049250313e-16, "mean": -4.4309242987925766e-17, "median": -5.551115123125783e-17, "min": -3.3306690738754696e-16, "n": 2339, "p10": -1.1102230246251565e-16, "p90": 5.551115123125783e-17}`
+- Per-book O/U lambda residual summary: `{"max": 0.0, "mean": -0.0, "median": -0.0, "min": -0.0, "n": 2339, "p10": -0.0, "p90": 0.0}`
 - AH was used in the primary fit: `False`.
-- AH held-out mean absolute error summary: `{"max": 0.25074820877080806, "mean": 0.02923289900088605, "median": 0.008456669875927688, "min": 0.00017827670841186194, "n": 315, "p10": 0.004108220017431256, "p90": 0.06914210257546188}`
+- AH held-out mean absolute error summary: `{"max": 0.2507482088, "mean": 0.029232899, "median": 0.0084566699, "min": 0.0001782767, "n": 315, "p10": 0.00410822, "p90": 0.0691421026}`
 
 ## Champion vs market paired scorecard
 
@@ -57,8 +57,8 @@ Values are paired point estimates with deterministic unique-match bootstrap 95% 
 | Brier | 0.578086 | 0.539484 | 0.038602 [0.020997, 0.055932] | MARKET_BETTER |
 | RPS | 0.211543 | 0.193753 | 0.017789 [0.009559, 0.025866] | MARKET_BETTER |
 
-Champion predicted class mix / recall: `{"actual_class_mix": {"away": {"n": 85, "share": 0.3386454183266932}, "draw": {"n": 47, "share": 0.18725099601593626}, "home": {"n": 119, "share": 0.47410358565737054}}, "per_class_recall": {"away": {"hits": 48, "n": 85, "recall": 0.5647058823529412}, "draw": {"hits": 0, "n": 47, "recall": 0.0}, "home": {"hits": 91, "n": 119, "recall": 0.7647058823529411}}, "predicted_class_mix": {"away": {"n": 91, "share": 0.36254980079681276}, "draw": {"n": 0, "share": 0.0}, "home": {"n": 160, "share": 0.6374501992031872}}}`
-Market predicted class mix / recall: `{"actual_class_mix": {"away": {"n": 85, "share": 0.3386454183266932}, "draw": {"n": 47, "share": 0.18725099601593626}, "home": {"n": 119, "share": 0.47410358565737054}}, "per_class_recall": {"away": {"hits": 52, "n": 85, "recall": 0.611764705882353}, "draw": {"hits": 0, "n": 47, "recall": 0.0}, "home": {"hits": 95, "n": 119, "recall": 0.7983193277310925}}, "predicted_class_mix": {"away": {"n": 93, "share": 0.3705179282868526}, "draw": {"n": 0, "share": 0.0}, "home": {"n": 158, "share": 0.6294820717131474}}}`
+Champion predicted class mix / recall: `{"actual_class_mix": {"away": {"n": 85, "share": 0.3386454183}, "draw": {"n": 47, "share": 0.187250996}, "home": {"n": 119, "share": 0.4741035857}}, "per_class_recall": {"away": {"hits": 48, "n": 85, "recall": 0.5647058824}, "draw": {"hits": 0, "n": 47, "recall": 0.0}, "home": {"hits": 91, "n": 119, "recall": 0.7647058824}}, "predicted_class_mix": {"away": {"n": 91, "share": 0.3625498008}, "draw": {"n": 0, "share": 0.0}, "home": {"n": 160, "share": 0.6374501992}}}`
+Market predicted class mix / recall: `{"actual_class_mix": {"away": {"n": 85, "share": 0.3386454183}, "draw": {"n": 47, "share": 0.187250996}, "home": {"n": 119, "share": 0.4741035857}}, "per_class_recall": {"away": {"hits": 52, "n": 85, "recall": 0.6117647059}, "draw": {"hits": 0, "n": 47, "recall": 0.0}, "home": {"hits": 95, "n": 119, "recall": 0.7983193277}}, "predicted_class_mix": {"away": {"n": 93, "share": 0.3705179283}, "draw": {"n": 0, "share": 0.0}, "home": {"n": 158, "share": 0.6294820717}}}`
 
 ### Exact Score Top-k
 
@@ -74,14 +74,14 @@ Ranks are reported only on the comparable surface: Champion's persisted Top5 lis
 - Comparable unique matches: `102`; not comparable: `149`.
 - Champion actual-score rank: `2.666667`; market actual-score rank: `2.862745`; paired delta Champion - market: `-0.196078` [-0.460784, 0.088235].
 
-Market-only descriptive Exact Score NLL: `{"ci95": [2.9059873271846905, 3.1424847068871316], "iterations": 2000, "n": 251, "point": 3.0230622791927675, "seed": 288}`. This is not a paired Champion-vs-market NLL verdict.
+Market-only descriptive Exact Score NLL: `{"ci95": [2.9059873272, 3.1424847069], "iterations": 2000, "n": 251, "point": 3.0230622792, "seed": 288}`. This is not a paired Champion-vs-market NLL verdict.
 
 ### Derived scoring state
 
 BTTS and Over 2.5 Brier are included only because the frozen Champion stores those probability vectors. Missing Champion probabilities are not manufactured.
 
-- BTTS Brier: Champion `0.23565630310445418`, market `0.23831056367819514`, paired delta `-0.00265426057374095` (INDISTINGUISHABLE_WITH_95CI).
-- Over 2.5 Brier: Champion `0.22580879850205576`, market `0.22807209278027168`, paired delta `-0.0022632942782158964` (INDISTINGUISHABLE_WITH_95CI).
+- BTTS Brier: Champion `0.2356563031`, market `0.2383105637`, paired delta `-0.0026542606` (INDISTINGUISHABLE_WITH_95CI).
+- Over 2.5 Brier: Champion `0.2258087985`, market `0.2280720928`, paired delta `-0.0022632943` (INDISTINGUISHABLE_WITH_95CI).
 
 ## Full-distribution replay parity
 
@@ -92,7 +92,7 @@ BTTS and Over 2.5 Brier are included only because the frozen Champion stores tho
 
 ## Horizon and slices
 
-Raw horizon statistics: `{"max": 2724.651485133333, "mean": 563.5551545090862, "median": 442.90615068333335, "min": 1.5839728333333334, "n": 321, "p10": 47.483147333333335, "p90": 1029.7147396333335}`
+Raw horizon statistics: `{"max": 2724.6514851333, "mean": 563.5551545091, "median": 442.9061506833, "min": 1.5839728333, "n": 321, "p10": 47.4831473333, "p90": 1029.7147396333}`
 
 | Horizon band | Unique | Verified | Baseline evaluable |
 |---|---:|---:|---:|
