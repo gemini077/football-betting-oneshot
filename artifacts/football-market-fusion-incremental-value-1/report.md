@@ -2,7 +2,7 @@
 
 Research-only, read-only bounded audit. **DO NOT MERGE.**
 
-- Source `origin/main`: `793ff549f`
+- Source `origin/main`: `e41d7f570`
 - Top-level decision: **`CURRENT_FUSION_DILUTES_MARKET`**
 - Stop state: `READY_FOR_INDEPENDENT_ACCEPTANCE; DO NOT MERGE`
 - Observation unit: `one football match = one unique match_key`
@@ -13,7 +13,7 @@ The audit uses only frozen legal prematch prediction-time inputs, the accepted I
 
 | Lane | Definition |
 |---|---|
-| `FOOTBALL_ONLY` | Current Champion recent-form football component with `target_total=form_total` and `share=form_share`; no market predictive state; fail closed if immutable form inputs are missing. |
+| `FOOTBALL_ONLY` | Raw pre-fusion production `form_total` + `form_share`; stops before Football x Market fusion and before downstream Champion calibration; no market predictive state; fail closed if immutable form inputs are missing. |
 | `MARKET_ONLY` | Accepted #189 same-time frozen 1X2 proportional inverse-odds de-vig plus O/U line and both prices solved under exact Asian settlement; AH held out. |
 | `CURRENT_FUSION` | Persisted/frozen current Champion 1X2; full score matrix is reconstructed only after immutable lambda + Top1/3/5 replay parity. |
 
@@ -22,7 +22,9 @@ The audit uses only frozen legal prematch prediction-time inputs, the accepted I
 - Football state: recent-form `goals_for` / `goals_against` venue and overall rates from the immutable input snapshot, averaged with the current production weighting.
 - Market state: current Champion uses market total target and market-derived 1X2 share; the MARKET_ONLY lane is the fixed #189 control, not a fitted component.
 - Combination: production uses the fixed `0.60 * form_total + 0.40 * market_total` total and `0.65 * form_share + 0.35 * market_share` direction share before the persisted Champion lambdas; no weights or model parameters are changed here.
-- Football-only reconstruction removes the market target/share inputs while retaining the current fixed non-market calibration transforms; its `market_predictive_state_used` flag is false.
+- Football-only reconstruction is the raw pre-fusion `form_total` / `form_share` signal only; it applies no downstream Fusion calibration and its `market_predictive_state_used` flag is false.
+- Frozen calibration provenance across the selected cohort: `{"active_count": 0, "all_frozen_calibration_identity_or_inactive": true, "approved_counts": {"direction": 0, "dispersion": 0, "total_goals": 0}, "compatible_count": 0, "identity_or_inactive_rule": "payload active=false, compatible=false, zero effective strength, and no approved direction/total/dispersion transform for every selected frozen match", "inactive_count": 321, "incompatible_count": 321, "missing_provenance_count": 0, "provenance_source": "immutable selected input snapshot model_calibration projection", "selected_unique_match_n": 321, "strength": {"nonzero_count": 0, "summary": {"max": 0.0, "mean": 0.0, "median": 0.0, "min": 0.0, "n": 321, "p10": 0.0, "p90": 0.0}, "zero_count": 321}}`.
+- Corrected Football-only vs the existing committed artifact: `{"comparison_metric_count": 9, "comparison_source": "existing committed summary.json before this audit output was regenerated", "deltas": {"exact_score_topk.exact_top1": 0.0, "exact_score_topk.exact_top3": 0.0, "exact_score_topk.exact_top5": 0.0, "ft_1x2.brier": 0.0, "ft_1x2.log_loss": 0.0, "ft_1x2.rps": 0.0, "ft_1x2.top1_accuracy": 0.0, "research_reconstructed_exact.actual_score_rank": 0.0, "research_reconstructed_exact.exact_nll": 0.0}, "max_abs_delta": 0.0, "metrics_unchanged_within_tolerance": true, "missing_metrics": [], "status": "PASS", "tolerance": 1e-05}`; when every frozen calibration state is inactive/identity, unchanged metrics must be within `1e-05`.
 
 ## Unique-match funnel
 

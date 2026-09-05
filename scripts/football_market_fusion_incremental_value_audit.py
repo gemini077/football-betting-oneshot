@@ -28,7 +28,7 @@ if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
 try:  # Direct execution from the repository root.
-    from automatic_model_core import _calibration_state, _mix_dispersion, _reweight_outcomes
+    from automatic_model_core import _calibration_state
     from market_contracts import split_quarter_line
     from model_governance import load_frozen_prediction, load_input_snapshot
     from prematch_versioning import (
@@ -39,7 +39,7 @@ try:  # Direct execution from the repository root.
     )
     from prospective_settlement import is_formally_eligible, normalize_result
 except ImportError:  # Package imports used by focused tests.
-    from scripts.automatic_model_core import _calibration_state, _mix_dispersion, _reweight_outcomes
+    from scripts.automatic_model_core import _calibration_state
     from scripts.market_contracts import split_quarter_line
     from scripts.model_governance import load_frozen_prediction, load_input_snapshot
     from scripts.prematch_versioning import (
@@ -105,8 +105,8 @@ READER_PATHS = (
 FOOTBALL_RECONSTRUCTION_REQUIRED_FIELDS = (
     "source_snapshots.shuju.recent_form",
     "prematch_fundamentals.recent_form",
-    "model_calibration",
 )
+CALIBRATION_PROVENANCE_REQUIRED_FIELDS = ("model_calibration",)
 FOOTBALL_MARKET_PREDICTIVE_FIELDS_EXCLUDED = (
     "source_snapshots.ouzhi",
     "source_snapshots.daxiao",
@@ -932,23 +932,6 @@ def _football_form_mean(values: Iterable[float | None]) -> float | None:
     return statistics.fmean(clean) if clean else None
 
 
-def _apply_current_calibration(matrix: dict[tuple[int, int], float], total: float, share: float, model_input: Mapping[str, Any]) -> dict[tuple[int, int], float]:
-    """Apply only the current Champion's fixed non-market transforms."""
-    state = _calibration_state(dict(model_input))
-    artifact = state.get("artifact") or {}
-    strength = float(state.get("strength") or 0.0)
-    if state.get("dispersion_approved"):
-        tail_weight = float((artifact.get("dispersion") or {}).get("tail_mixture_weight") or 0.0) * strength
-        matrix = _mix_dispersion(matrix, total, share, tail_weight)
-    if state.get("direction_approved"):
-        matrix = _reweight_outcomes(
-            matrix,
-            (artifact.get("direction") or {}).get("logit_offsets") or {},
-            strength,
-        )
-    return matrix
-
-
 def _quantize_probability_matrix(matrix: Mapping[tuple[int, int], float], digits: int = 12) -> dict[tuple[int, int], float]:
     """Make reconstructed football probabilities stable across Python runtimes."""
     rounded = {score: round(max(0.0, float(probability)), digits) for score, probability in matrix.items()}
@@ -959,11 +942,12 @@ def _quantize_probability_matrix(matrix: Mapping[tuple[int, int], float], digits
 
 
 def reconstruct_football_only(model_input: Mapping[str, Any] | None) -> dict[str, Any]:
-    """Reconstruct the current Champion's pre-market football component.
+    """Reconstruct only the raw pre-fusion football signal.
 
-    The current production formula is retained: recent-form lambdas provide
-    total and share, with the existing fixed calibration transforms applied.
-    The market target total, 1X2 market share, AH and all other quote fields are
+    ``form_total`` and ``form_share`` are the current production football-side
+    state before market fusion.  The downstream Champion calibration belongs
+    after fusion, so it is deliberately not read or applied here.  The market
+    target total, 1X2 market share, AH and all other quote fields are
     intentionally excluded.  Missing immutable form evidence fails closed.
     """
     if not isinstance(model_input, Mapping):
@@ -997,20 +981,12 @@ def reconstruct_football_only(model_input: Mapping[str, Any] | None) -> dict[str
     away_form = _football_form_mean((away_venue, away_venue, away_general))
     if home_form is None or away_form is None:
         return {"status": "NOT_EVALUABLE", "reason": "FOOTBALL_FORM_COMPONENT_INCOMPLETE", "form_source": form_source}
-    state = _calibration_state(dict(model_input))
-    artifact = state.get("artifact") or {}
-    strength = float(state.get("strength") or 0.0)
     form_total = max(1.2, min(4.2, home_form + away_form))
-    total_shift = (
-        float((artifact.get("total_goals") or {}).get("lambda_shift") or 0.0)
-        if state.get("total_approved") else 0.0
-    )
-    total = max(1.0, min(4.8, form_total + total_shift * strength))
     share = max(0.15, min(0.85, home_form / max(home_form + away_form, 0.01)))
-    lambda_home = total * share
-    lambda_away = total * (1.0 - share)
+    lambda_home = form_total * share
+    lambda_away = form_total * (1.0 - share)
     matrix, _ = independent_score_matrix(lambda_home, lambda_away)
-    matrix = _quantize_probability_matrix(_apply_current_calibration(matrix, total, share, model_input))
+    matrix = _quantize_probability_matrix(matrix)
     probabilities = _outcome_probabilities_from_matrix(matrix)
     probabilities = {key: round(float(value), 12) for key, value in probabilities.items()}
     return {
@@ -1020,20 +996,165 @@ def reconstruct_football_only(model_input: Mapping[str, Any] | None) -> dict[str
         "form_lambda_home": home_form,
         "form_lambda_away": away_form,
         "form_total": form_total,
-        "lambda_total": total,
+        "lambda_total": form_total,
         "form_share": share,
         "lambda_home": lambda_home,
         "lambda_away": lambda_away,
         "probabilities": probabilities,
         "matrix": matrix,
         "calibration": {
-            "active": bool(state.get("compatible")),
-            "strength": strength,
-            "direction_applied": bool(state.get("direction_approved")),
-            "total_goals_applied": bool(state.get("total_approved")),
-            "dispersion_applied": bool(state.get("dispersion_approved")),
+            "pre_fusion_raw_signal": True,
+            "downstream_fusion_calibration_applied": False,
         },
         "market_predictive_state_used": False,
+    }
+
+
+def _frozen_calibration_state(model_input: Mapping[str, Any] | None) -> dict[str, Any]:
+    """Describe calibration provenance without making it a Football-only input."""
+    if not isinstance(model_input, Mapping):
+        return {
+            "status": "MISSING_MODEL_INPUT",
+            "payload_active": None,
+            "compatible": None,
+            "strength": None,
+            "direction_approved": None,
+            "total_goals_approved": None,
+            "dispersion_approved": None,
+        }
+    payload = model_input.get("model_calibration")
+    if not isinstance(payload, Mapping):
+        return {
+            "status": "MISSING_CALIBRATION_PROVENANCE",
+            "payload_active": None,
+            "compatible": None,
+            "strength": None,
+            "direction_approved": None,
+            "total_goals_approved": None,
+            "dispersion_approved": None,
+        }
+    state = _calibration_state(dict(model_input))
+    return {
+        "status": "PRESENT",
+        "payload_active": bool(payload.get("active")),
+        "compatible": bool(state.get("compatible")),
+        "strength": float(state.get("strength") or 0.0),
+        "direction_approved": bool(state.get("direction_approved")),
+        "total_goals_approved": bool(state.get("total_approved")),
+        "dispersion_approved": bool(state.get("dispersion_approved")),
+    }
+
+
+def _calibration_cohort(observations: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
+    states = [observation.get("calibration_state") or {} for observation in observations]
+    selected_n = len(states)
+
+    def count_true(field: str) -> int:
+        return sum(value.get(field) is True for value in states)
+
+    strengths = [float(value["strength"]) for value in states if _number(value.get("strength")) is not None]
+    missing_provenance = sum(value.get("status") != "PRESENT" for value in states)
+    active_count = count_true("payload_active")
+    compatible_count = count_true("compatible")
+    nonzero_strength = sum(abs(value) > EPSILON for value in strengths)
+    approved_counts = {
+        "direction": count_true("direction_approved"),
+        "total_goals": count_true("total_goals_approved"),
+        "dispersion": count_true("dispersion_approved"),
+    }
+    all_identity_or_inactive = (
+        missing_provenance == 0
+        and active_count == 0
+        and nonzero_strength == 0
+        and all(count == 0 for count in approved_counts.values())
+    )
+    return {
+        "selected_unique_match_n": selected_n,
+        "provenance_source": "immutable selected input snapshot model_calibration projection",
+        "missing_provenance_count": missing_provenance,
+        "active_count": active_count,
+        "inactive_count": selected_n - active_count,
+        "compatible_count": compatible_count,
+        "incompatible_count": sum(value.get("compatible") is False for value in states),
+        "strength": {
+            "nonzero_count": nonzero_strength,
+            "zero_count": sum(abs(value) <= EPSILON for value in strengths),
+            "summary": _summary_numbers(strengths),
+        },
+        "approved_counts": approved_counts,
+        "all_frozen_calibration_identity_or_inactive": all_identity_or_inactive,
+        "identity_or_inactive_rule": "payload active=false, compatible=false, zero effective strength, and no approved direction/total/dispersion transform for every selected frozen match",
+    }
+
+
+def _load_existing_audit_summary(root: Path) -> dict[str, Any] | None:
+    path = root / "artifacts" / "football-market-fusion-incremental-value-1" / "summary.json"
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    return value if isinstance(value, dict) else None
+
+
+def _football_scorecard_points(scorecard: Mapping[str, Any]) -> dict[str, float | None]:
+    points: dict[str, float | None] = {}
+    ft = scorecard.get("ft_1x2") if isinstance(scorecard, Mapping) else None
+    if isinstance(ft, Mapping):
+        for key in ("top1_accuracy", "log_loss", "brier", "rps"):
+            item = ft.get(key)
+            lanes = item.get("lanes") if isinstance(item, Mapping) else None
+            value = lanes.get("football_only") if isinstance(lanes, Mapping) else None
+            points[f"ft_1x2.{key}"] = _number(value.get("point")) if isinstance(value, Mapping) else None
+    topk = scorecard.get("exact_score_topk") if isinstance(scorecard, Mapping) else None
+    if isinstance(topk, Mapping):
+        for key in ("exact_top1", "exact_top3", "exact_top5"):
+            item = topk.get(key)
+            lanes = item.get("lanes") if isinstance(item, Mapping) else None
+            value = lanes.get("football_only") if isinstance(lanes, Mapping) else None
+            points[f"exact_score_topk.{key}"] = _number(value.get("point")) if isinstance(value, Mapping) else None
+    exact = scorecard.get("research_reconstructed_exact") if isinstance(scorecard, Mapping) else None
+    if isinstance(exact, Mapping):
+        for key in ("exact_nll", "actual_score_rank"):
+            item = exact.get(key)
+            lanes = item.get("lanes") if isinstance(item, Mapping) else None
+            value = lanes.get("football_only") if isinstance(lanes, Mapping) else None
+            points[f"research_reconstructed_exact.{key}"] = _number(value.get("point")) if isinstance(value, Mapping) else None
+    return points
+
+
+def _football_boundary_comparison(
+    current_scorecard: Mapping[str, Any],
+    prior_summary: Mapping[str, Any] | None,
+    calibration: Mapping[str, Any],
+) -> dict[str, Any]:
+    current = _football_scorecard_points(current_scorecard)
+    prior_scorecard = prior_summary.get("all_three_paired_scorecard") if isinstance(prior_summary, Mapping) else None
+    prior = _football_scorecard_points(prior_scorecard) if isinstance(prior_scorecard, Mapping) else {}
+    deltas = {
+        key: round(float(current[key]) - float(prior[key]), 12)
+        for key in sorted(current)
+        if current.get(key) is not None and prior.get(key) is not None
+    }
+    if not calibration.get("all_frozen_calibration_identity_or_inactive"):
+        return {
+            "status": "RECOMPUTED_NON_IDENTITY_CALIBRATION",
+            "comparison_metric_count": len(deltas),
+            "tolerance": PARITY_TOLERANCE,
+            "metrics_unchanged_within_tolerance": None,
+            "deltas": deltas,
+        }
+    missing = sorted(key for key in current if current.get(key) is None or prior.get(key) is None)
+    max_abs_delta = max((abs(value) for value in deltas.values()), default=None)
+    unchanged = not missing and (max_abs_delta is not None and max_abs_delta <= PARITY_TOLERANCE)
+    return {
+        "status": "PASS" if unchanged else "FAIL",
+        "comparison_source": "existing committed summary.json before this audit output was regenerated",
+        "comparison_metric_count": len(deltas),
+        "missing_metrics": missing,
+        "tolerance": PARITY_TOLERANCE,
+        "max_abs_delta": max_abs_delta,
+        "metrics_unchanged_within_tolerance": unchanged,
+        "deltas": deltas,
     }
 
 
@@ -1953,6 +2074,7 @@ def _decision_from_n(n: int, baseline_n: int, integrity_failures: list[str], sol
 
 def build_summary(root: Path = ROOT, *, source_main_sha: str | None = None) -> dict[str, Any]:
     source_main_sha = _source_main_sha(root, source_main_sha)
+    prior_summary = _load_existing_audit_summary(root)
     records, inventory = load_prediction_rows(root)
     selection = select_unique_legal_versions(records)
     universe, universe_errors = load_universe_index(root)
@@ -2012,6 +2134,7 @@ def build_summary(root: Path = ROOT, *, source_main_sha: str | None = None) -> d
         model_input = None
         if isinstance(snapshot, Mapping):
             model_input = snapshot.get("input") or snapshot.get("projection")
+        calibration_state = _frozen_calibration_state(model_input)
         football = reconstruct_football_only(model_input)
         if football.get("status") != "EVALUABLE":
             quote_reason_counts["football"][football.get("reason") or "FOOTBALL_LANE_NOT_EVALUABLE"] += 1
@@ -2037,6 +2160,7 @@ def build_summary(root: Path = ROOT, *, source_main_sha: str | None = None) -> d
             "result_reason": result_reason,
             "snapshot": snapshot,
             "snapshot_reason": legal_snapshot.get("reason"),
+            "calibration_state": calibration_state,
             "source": legal_snapshot.get("source"),
             "captured_at": legal_snapshot.get("captured_at"),
             "one_x2": one_x2,
@@ -2081,6 +2205,12 @@ def build_summary(root: Path = ROOT, *, source_main_sha: str | None = None) -> d
     }
 
     paired_score = three_lane_scorecard(metric_rows)
+    calibration_cohort = _calibration_cohort(observations)
+    football_boundary_comparison = _football_boundary_comparison(
+        paired_score,
+        prior_summary,
+        calibration_cohort,
+    )
     # Slices are fixed from observed fields, but no result is used to choose a row.
     slice_groups: dict[str, dict[str, list[dict[str, Any]]]] = {"competition": defaultdict(list), "horizon": defaultdict(list), "data_grade": defaultdict(list)}
     for observation in observations:
@@ -2176,6 +2306,8 @@ def build_summary(root: Path = ROOT, *, source_main_sha: str | None = None) -> d
     integrity_failures: list[str] = []
     if universe_errors:
         integrity_failures.extend(universe_errors)
+    if calibration_cohort["missing_provenance_count"]:
+        integrity_failures.append("CALIBRATION_PROVENANCE_MISSING_FOR_SELECTED_MATCH")
     if duplicate_result_keys:
         # Duplicate result identity is an integrity failure only for a selected match.
         selected_keys = {_identity_key(observation["record"]) for observation in observations}
@@ -2231,6 +2363,7 @@ def build_summary(root: Path = ROOT, *, source_main_sha: str | None = None) -> d
             "lambda_away_fusion": _rounded(record.get("lambda_away"), 5),
             "football_status": football.get("status"),
             "football_reason": football.get("reason"),
+            "calibration_state": observation["calibration_state"],
             "all_three_paired": metric is not None,
             "market_fusion_lambda_total_delta": _rounded(
                 (_number(record.get("lambda_home")) or 0.0) + (_number(record.get("lambda_away")) or 0.0)
@@ -2283,7 +2416,7 @@ def build_summary(root: Path = ROOT, *, source_main_sha: str | None = None) -> d
             "FORMAL_HISTORICAL_FULL_SUPPORT_TRUTH": "NO",
             "market_baseline_contract": "accepted_issue_189_semantics_reused_exactly",
             "current_fusion_lane": "persisted_frozen_Champion_1X2; research reconstructed full matrix only after replay parity",
-            "football_only_lane": "current_Champion_recent_form_component_without_market_predictive_state",
+            "football_only_lane": "raw_pre_fusion_form_total_and_form_share_without_market_state_or_downstream_calibration",
         },
         "policy": {
             "version_selection": selection["selection_rule"],
@@ -2297,9 +2430,10 @@ def build_summary(root: Path = ROOT, *, source_main_sha: str | None = None) -> d
             "lanes": {
                 "MARKET_ONLY": "accepted #189 baseline: same-time frozen 1X2 proportional de-vig plus O/U line and both prices solved under exact Asian settlement",
                 "CURRENT_FUSION": "persisted/frozen current Champion; full score matrix is RESEARCH_RECONSTRUCTED only after immutable lambda and Top1/3/5 replay parity",
-                "FOOTBALL_ONLY": "same production recent-form calculation with target_total=form_total and share=form_share; no market quote or market baseline input",
+                "FOOTBALL_ONLY": "raw pre-fusion production form_total/form_share only; stops before Football x Market fusion and before any downstream Champion calibration; no market quote or market baseline input",
             },
             "football_reconstruction_required_fields": list(FOOTBALL_RECONSTRUCTION_REQUIRED_FIELDS),
+            "calibration_provenance_required_fields": list(CALIBRATION_PROVENANCE_REQUIRED_FIELDS),
             "football_market_predictive_fields_excluded": list(FOOTBALL_MARKET_PREDICTIVE_FIELDS_EXCLUDED),
             "score_matrix_max_goals": MAX_GOALS,
             "artifact_float_decimals": ARTIFACT_FLOAT_DECIMALS,
@@ -2322,6 +2456,8 @@ def build_summary(root: Path = ROOT, *, source_main_sha: str | None = None) -> d
         "quote_diagnostics": quote_diagnostics,
         "ou_solve_diagnostics": ou_diagnostics,
         "ah_heldout_consistency": ah_heldout,
+        "calibration_cohort": calibration_cohort,
+        "football_only_boundary_comparison": football_boundary_comparison,
         "paired_scorecard": paired_score,
         "all_three_paired_scorecard": paired_score,
         "fusion_diagnostics": fusion_diagnostics,
@@ -2377,7 +2513,7 @@ def render_report(summary: Mapping[str, Any]) -> str:
         "",
         "| Lane | Definition |",
         "|---|---|",
-        "| `FOOTBALL_ONLY` | Current Champion recent-form football component with `target_total=form_total` and `share=form_share`; no market predictive state; fail closed if immutable form inputs are missing. |",
+        "| `FOOTBALL_ONLY` | Raw pre-fusion production `form_total` + `form_share`; stops before Football x Market fusion and before downstream Champion calibration; no market predictive state; fail closed if immutable form inputs are missing. |",
         "| `MARKET_ONLY` | Accepted #189 same-time frozen 1X2 proportional inverse-odds de-vig plus O/U line and both prices solved under exact Asian settlement; AH held out. |",
         "| `CURRENT_FUSION` | Persisted/frozen current Champion 1X2; full score matrix is reconstructed only after immutable lambda + Top1/3/5 replay parity. |",
         "",
@@ -2386,7 +2522,9 @@ def render_report(summary: Mapping[str, Any]) -> str:
         "- Football state: recent-form `goals_for` / `goals_against` venue and overall rates from the immutable input snapshot, averaged with the current production weighting.",
         "- Market state: current Champion uses market total target and market-derived 1X2 share; the MARKET_ONLY lane is the fixed #189 control, not a fitted component.",
         "- Combination: production uses the fixed `0.60 * form_total + 0.40 * market_total` total and `0.65 * form_share + 0.35 * market_share` direction share before the persisted Champion lambdas; no weights or model parameters are changed here.",
-        "- Football-only reconstruction removes the market target/share inputs while retaining the current fixed non-market calibration transforms; its `market_predictive_state_used` flag is false.",
+        "- Football-only reconstruction is the raw pre-fusion `form_total` / `form_share` signal only; it applies no downstream Fusion calibration and its `market_predictive_state_used` flag is false.",
+        f"- Frozen calibration provenance across the selected cohort: `{json.dumps(summary['calibration_cohort'], ensure_ascii=False, sort_keys=True)}`.",
+        f"- Corrected Football-only vs the existing committed artifact: `{json.dumps(summary['football_only_boundary_comparison'], ensure_ascii=False, sort_keys=True)}`; when every frozen calibration state is inactive/identity, unchanged metrics must be within `{PARITY_TOLERANCE}`.",
         "",
         "## Unique-match funnel",
         "",

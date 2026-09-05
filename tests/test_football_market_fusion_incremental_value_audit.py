@@ -309,6 +309,40 @@ def test_football_only_excludes_market_predictive_state() -> None:
     assert left["market_predictive_state_used"] is False
 
 
+def test_football_only_stops_before_downstream_fusion_calibration() -> None:
+    inactive = _football_model_input()
+    active = deepcopy(inactive)
+    active["model_calibration"] = {
+        "active": True,
+        "model_family": "recent_form_market_calibrated_poisson_v2",
+        "policy": {"strength": 0.6},
+        "direction": {"approved": True, "logit_offsets": {"home": 8.0, "draw": -7.0, "away": 6.0}},
+        "total_goals": {"approved": True, "lambda_shift": 9.0},
+        "dispersion": {"approved": True, "tail_mixture_weight": 0.15},
+    }
+    left = audit.reconstruct_football_only(inactive)
+    right = audit.reconstruct_football_only(active)
+    assert left["status"] == right["status"] == "EVALUABLE"
+    assert right["calibration"]["pre_fusion_raw_signal"] is True
+    assert right["calibration"]["downstream_fusion_calibration_applied"] is False
+    assert right["lambda_total"] == pytest.approx(right["form_total"])
+    assert left["lambda_home"] == pytest.approx(right["lambda_home"])
+    assert left["lambda_away"] == pytest.approx(right["lambda_away"])
+    assert left["probabilities"] == pytest.approx(right["probabilities"])
+    assert left["matrix"] == pytest.approx(right["matrix"])
+
+
+def test_calibration_cohort_reports_state_counts_and_identity_boundary() -> None:
+    inactive = {"status": "PRESENT", "payload_active": False, "compatible": False, "strength": 0.0, "direction_approved": False, "total_goals_approved": False, "dispersion_approved": False}
+    cohort = audit._calibration_cohort([{"calibration_state": inactive} for _ in range(3)])
+    assert cohort["selected_unique_match_n"] == 3
+    assert cohort["active_count"] == 0
+    assert cohort["compatible_count"] == 0
+    assert cohort["strength"]["nonzero_count"] == 0
+    assert cohort["approved_counts"] == {"direction": 0, "total_goals": 0, "dispersion": 0}
+    assert cohort["all_frozen_calibration_identity_or_inactive"] is True
+
+
 def test_football_only_failure_isolated_and_fail_closed() -> None:
     result = audit.reconstruct_football_only({"source_snapshots": {}, "model_calibration": {}})
     assert result["status"] == "NOT_EVALUABLE"
