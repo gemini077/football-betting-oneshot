@@ -979,6 +979,8 @@ def test_runner_creates_football_evidence_sidecar_after_champion_freeze():
     assert payload["source_cutoff_at"]
     assert payload["evidence_captured_at"] == "2026-08-12T12:30:00+08:00"
     assert payload["recent_matches"] == recent_matches()
+    assert payload["state_memory_contract_version"] == "football_state_memory.v1"
+    assert payload["state_memory"]["history"]["home_team"][0]["home_goals_90m"] == 2
     assert not {"actual", "result", "settlement", "verified_result"}.intersection(payload)
 
 

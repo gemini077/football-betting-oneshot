@@ -1,0 +1,336 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://football-betting-oneshot.local/schemas/football_state_memory.v1.schema.json",
+  "title": "Football State Memory v1",
+  "description": "Additive, prospective-only source history captured beside the frozen prediction.",
+  "type": "object",
+  "required": [
+    "contract_version",
+    "normalization_version",
+    "capture_status",
+    "source",
+    "target_fixture",
+    "history",
+    "coverage"
+  ],
+  "properties": {
+    "contract_version": {
+      "const": "football_state_memory.v1"
+    },
+    "normalization_version": {
+      "const": "football_state_memory_normalization.v1"
+    },
+    "capture_status": {
+      "enum": ["READY", "PARTIAL"]
+    },
+    "source": {
+      "$ref": "#/$defs/source"
+    },
+    "target_fixture": {
+      "$ref": "#/$defs/targetFixture"
+    },
+    "history": {
+      "type": "object",
+      "required": ["home_team", "away_team"],
+      "properties": {
+        "home_team": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/historyRow"
+          }
+        },
+        "away_team": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/historyRow"
+          }
+        }
+      },
+      "additionalProperties": true
+    },
+    "coverage": {
+      "type": "object",
+      "required": [
+        "history_row_count",
+        "source_fixture_id_count",
+        "team_id_count",
+        "match_date_count",
+        "score_90m_count",
+        "competition_resolved_count",
+        "subject_identity_resolved_count"
+      ],
+      "properties": {
+        "history_row_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "source_fixture_id_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "team_id_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "match_date_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "score_90m_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "competition_resolved_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "subject_identity_resolved_count": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": true
+    }
+  },
+  "$defs": {
+    "identifier": {
+      "type": ["integer", "string", "null"]
+    },
+    "competition": {
+      "type": "object",
+      "required": [
+        "raw_competition_label",
+        "normalized_competition_label",
+        "normalized_competition_class",
+        "is_club_friendly",
+        "competition_resolution_status",
+        "normalization_version"
+      ],
+      "properties": {
+        "raw_competition_label": {
+          "type": ["string", "null"]
+        },
+        "normalized_competition_label": {
+          "type": ["string", "null"]
+        },
+        "normalized_competition_class": {
+          "enum": [
+            "CLUB_FRIENDLY",
+            "INTERNATIONAL_FRIENDLY",
+            "FORMAL_COMPETITION",
+            "UNKNOWN"
+          ]
+        },
+        "is_club_friendly": {
+          "type": ["boolean", "null"]
+        },
+        "competition_resolution_status": {
+          "enum": ["RESOLVED", "UNKNOWN"]
+        },
+        "competition_resolution_reason": {
+          "type": "string"
+        },
+        "normalization_version": {
+          "const": "football_state_memory_normalization.v1"
+        }
+      },
+      "additionalProperties": true
+    },
+    "source": {
+      "type": "object",
+      "required": [
+        "provider",
+        "snapshot_captured_at",
+        "captured_at",
+        "source_cutoff_at",
+        "prediction_created_at",
+        "freeze_created_at",
+        "prematch_verified",
+        "prematch_status",
+        "source_references"
+      ],
+      "properties": {
+        "provider": {
+          "enum": ["nowscore", "500.com"]
+        },
+        "snapshot_captured_at": {
+          "type": ["string", "null"]
+        },
+        "captured_at": {
+          "type": ["string", "null"]
+        },
+        "source_cutoff_at": {
+          "type": ["string", "null"]
+        },
+        "prediction_created_at": {
+          "type": ["string", "null"]
+        },
+        "freeze_created_at": {
+          "type": ["string", "null"]
+        },
+        "prematch_verified": {
+          "type": ["boolean", "null"]
+        },
+        "prematch_status": {
+          "enum": ["VERIFIED", "UNKNOWN"]
+        },
+        "source_references": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "targetFixture": {
+      "allOf": [
+        {
+          "type": "object",
+          "required": [
+            "source_fixture_id",
+            "provider_match_id",
+            "home_team_id",
+            "away_team_id",
+            "home_team_name",
+            "away_team_name",
+            "kickoff_at"
+          ],
+          "properties": {
+            "source_fixture_id": {
+              "$ref": "#/$defs/identifier"
+            },
+            "provider_match_id": {
+              "$ref": "#/$defs/identifier"
+            },
+            "home_team_id": {
+              "$ref": "#/$defs/identifier"
+            },
+            "away_team_id": {
+              "$ref": "#/$defs/identifier"
+            },
+            "home_team_name": {
+              "type": ["string", "null"]
+            },
+            "away_team_name": {
+              "type": ["string", "null"]
+            },
+            "kickoff_at": {
+              "type": ["string", "null"]
+            }
+          },
+          "additionalProperties": true
+        },
+        {
+          "$ref": "#/$defs/competition"
+        }
+      ]
+    },
+    "historyRow": {
+      "allOf": [
+        {
+          "type": "object",
+          "required": [
+            "source_fixture_id",
+            "provider_match_id",
+            "home_team_id",
+            "home_team_name",
+            "away_team_id",
+            "away_team_name",
+            "source_date",
+            "match_date",
+            "kickoff_at",
+            "home_goals_90m",
+            "away_goals_90m",
+            "score_semantics",
+            "subject_team_id",
+            "opponent_team_id",
+            "subject_venue",
+            "subject_identity_status",
+            "source_provider",
+            "source_captured_at",
+            "captured_at",
+            "source_cutoff_at",
+            "source_reference",
+            "source_record_ref"
+          ],
+          "properties": {
+            "source_fixture_id": {
+              "$ref": "#/$defs/identifier"
+            },
+            "provider_match_id": {
+              "$ref": "#/$defs/identifier"
+            },
+            "home_team_id": {
+              "$ref": "#/$defs/identifier"
+            },
+            "home_team_name": {
+              "type": ["string", "null"]
+            },
+            "away_team_id": {
+              "$ref": "#/$defs/identifier"
+            },
+            "away_team_name": {
+              "type": ["string", "null"]
+            },
+            "source_date": {
+              "type": ["string", "null"]
+            },
+            "match_date": {
+              "type": ["string", "null"]
+            },
+            "kickoff_at": {
+              "type": ["string", "null"]
+            },
+            "home_goals_90m": {
+              "type": ["integer", "null"],
+              "minimum": 0
+            },
+            "away_goals_90m": {
+              "type": ["integer", "null"],
+              "minimum": 0
+            },
+            "score_semantics": {
+              "const": "SOURCE_HISTORICAL_90M_EVIDENCE"
+            },
+            "subject_team_id": {
+              "$ref": "#/$defs/identifier"
+            },
+            "opponent_team_id": {
+              "$ref": "#/$defs/identifier"
+            },
+            "subject_venue": {
+              "enum": ["home", "away", null]
+            },
+            "subject_identity_status": {
+              "enum": ["RESOLVED", "UNKNOWN", "AMBIGUOUS"]
+            },
+            "source_provider": {
+              "enum": ["nowscore", "500.com"]
+            },
+            "source_captured_at": {
+              "type": ["string", "null"]
+            },
+            "captured_at": {
+              "type": ["string", "null"]
+            },
+            "source_cutoff_at": {
+              "type": ["string", "null"]
+            },
+            "source_reference": {
+              "type": ["string", "null"]
+            },
+            "source_record_ref": {
+              "type": ["string", "null"]
+            }
+          },
+          "additionalProperties": true
+        },
+        {
+          "$ref": "#/$defs/competition"
+        }
+      ]
+    }
+  },
+  "additionalProperties": false
+}

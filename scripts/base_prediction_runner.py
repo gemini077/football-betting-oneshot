@@ -51,6 +51,11 @@ from recent_form_cache import (  # noqa: E402
     load_recent_form_cache,
     refresh_recent_form_cache,
 )
+from football_state_memory import (  # noqa: E402
+    build_football_evidence_audit as _state_memory_build_football_evidence_audit,
+    build_football_evidence_sidecar as _state_memory_build_football_evidence_sidecar,
+    write_football_evidence_sidecar as _state_memory_write_football_evidence_sidecar,
+)
 
 
 JOBS_ROOT = PROJECT_ROOT / "data" / "base_prediction_jobs"
@@ -1064,27 +1069,7 @@ def _nowscore_recent_matches(snapshot: dict[str, Any]) -> dict[str, list[dict[st
 
 
 def _build_football_evidence_audit(source_snapshots: Any) -> dict[str, Any] | None:
-    snapshot = _nowscore_snapshot(source_snapshots)
-    if snapshot is None:
-        return None
-    recent_matches = _nowscore_recent_matches(snapshot)
-    if recent_matches is None:
-        return None
-    evidence: dict[str, Any] = {
-        "source_provider": "nowscore",
-        "recent_matches": recent_matches,
-    }
-    nowscore_id = _first(snapshot, "nowscore_id", "nowscoreId")
-    if nowscore_id not in (None, ""):
-        try:
-            nowscore_id = int(nowscore_id)
-        except (TypeError, ValueError):
-            nowscore_id = str(nowscore_id)
-        evidence["nowscore_id"] = nowscore_id
-    captured_at = _snapshot_capture(snapshot)
-    if captured_at is not None:
-        evidence["evidence_captured_at"] = captured_at.isoformat()
-    return evidence
+    return _state_memory_build_football_evidence_audit(source_snapshots)
 
 
 def build_football_evidence_sidecar(
@@ -1094,31 +1079,11 @@ def build_football_evidence_sidecar(
     business_date: str | None = None,
 ) -> dict[str, Any] | None:
     """Build research-only football evidence without copying the frozen result."""
-    evidence = _build_football_evidence_audit(source_snapshots)
-    if evidence is None:
-        return None
-    identity = record.get("match_identity") if isinstance(record.get("match_identity"), dict) else {}
-    sidecar: dict[str, Any] = {
-        "contract_version": FOOTBALL_EVIDENCE_CONTRACT_VERSION,
-        "prediction_id": record.get("prediction_id"),
-        "match_id": record.get("match_id") or identity.get("match_id"),
-        "business_date": business_date or record.get("business_date"),
-        "home": record.get("home") or identity.get("home"),
-        "away": record.get("away") or identity.get("away"),
-        "kickoff_at": record.get("kickoff_at") or identity.get("kickoff_at"),
-        "source_provider": "nowscore",
-        "evidence_captured_at": evidence.get("evidence_captured_at"),
-        "recent_matches": evidence["recent_matches"],
-    }
-    match_key = record.get("match_key") or identity.get("match_key")
-    if match_key not in (None, ""):
-        sidecar["match_key"] = match_key
-    for key in ("prediction_created_at", "freeze_created_at", "source_cutoff_at"):
-        if record.get(key) not in (None, ""):
-            sidecar[key] = record[key]
-    if "nowscore_id" in evidence:
-        sidecar["nowscore_id"] = evidence["nowscore_id"]
-    return sidecar
+    return _state_memory_build_football_evidence_sidecar(
+        record,
+        source_snapshots,
+        business_date=business_date,
+    )
 
 
 def write_football_evidence_sidecar(
@@ -1129,34 +1094,12 @@ def write_football_evidence_sidecar(
     business_date: str | None = None,
 ) -> dict[str, Any]:
     """Write one exclusive research sidecar keyed by prediction_id."""
-    try:
-        sidecar = build_football_evidence_sidecar(record, source_snapshots, business_date=business_date)
-    except Exception as error:
-        return {"status": "failed", "reason": f"{type(error).__name__}"}
-    if sidecar is None:
-        return {"status": "skipped", "reason": "NOWSCORE_RECENT_MATCHES_UNAVAILABLE"}
-    prediction_id = str(sidecar.get("prediction_id") or "").strip()
-    if not prediction_id:
-        return {"status": "skipped", "reason": "MISSING_PREDICTION_ID"}
-    root = Path(evidence_root) if evidence_root is not None else DEFAULT_FOOTBALL_EVIDENCE_ROOT
-    target = root / f"{prediction_id}.json"
-    try:
-        root.mkdir(parents=True, exist_ok=True)
-        serialized = json.dumps(sidecar, ensure_ascii=False, indent=2) + "\n"
-        try:
-            with target.open("x", encoding="utf-8") as handle:
-                handle.write(serialized)
-            return {"status": "created", "path": target, "record": sidecar}
-        except FileExistsError:
-            try:
-                existing = _load_json(target)
-            except (OSError, json.JSONDecodeError):
-                return {"status": "conflict", "path": target, "reason": "EXISTING_SIDECAR_UNREADABLE"}
-            if existing == sidecar:
-                return {"status": "existing", "path": target, "record": existing}
-            return {"status": "conflict", "path": target, "reason": "SIDECAR_CONTENT_CONFLICT"}
-    except (OSError, TypeError, ValueError) as error:
-        return {"status": "failed", "reason": f"{type(error).__name__}"}
+    return _state_memory_write_football_evidence_sidecar(
+        record,
+        source_snapshots,
+        evidence_root=evidence_root,
+        business_date=business_date,
+    )
 
 
 def _resolve_football_evidence_root(record_root: Path, evidence_root: Path | None) -> Path:
