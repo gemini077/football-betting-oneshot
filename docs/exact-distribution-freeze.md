@@ -76,3 +76,16 @@ They settle the verified regulation result (90 minutes plus stoppage time),
 ignore extra time and penalties, and do not regenerate probabilities from
 current lambdas or market lines. Legacy Exact contracts without this additive
 projection remain readable and report the JC dimension as unavailable.
+
+The formal JC evaluation lane is eligible only when the record is formally
+eligible, the frozen `jc_total_goals.v1` contract validates, and the result is
+a verified regulation-time artifact. It persists `jc_total_goals_log_loss`,
+`jc_total_goals_brier`, and `jc_total_goals_rps`; invalid, missing, or
+unverified inputs persist no numeric JC score. Brier uses the project's
+multiclass sum-of-squared-errors convention (no division by class count).
+RPS uses cumulative squared errors in the canonical eight-class order divided
+by `K-1` (denominator `7`). The prospective summary reports eligible `n`,
+coverage, Top1 hit rate, mean scores, predicted/actual class mix, and
+per-class recall. Empty or sub-30 eligible cohorts are marked
+`INSUFFICIENT_SAMPLE`; this reporting threshold does not tune or promote any
+model.

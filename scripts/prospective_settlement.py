@@ -23,7 +23,13 @@ from postmatch_result import (
     resolve_nowscore_id,
     safe_key,
 )
-from exact_distribution import classify_frozen_exact_score, classify_frozen_jc_total_goals
+from exact_distribution import (
+    EXACT_DISTRIBUTION_NORMALIZATION_TOLERANCE,
+    JC_TOTAL_GOALS_BUCKET_ORDER,
+    JC_TOTAL_GOALS_CONTRACT_VERSION,
+    classify_frozen_exact_score,
+    classify_frozen_jc_total_goals,
+)
 
 
 BASE_DIR = Path(__file__).resolve().parents[1]
@@ -37,6 +43,10 @@ SHANGHAI = timezone(timedelta(hours=8))
 BASE_PREDICTION_POLICY = "base_prediction_minimum.v1"
 EPSILON = 1e-15
 FROZEN_STATUSES = {"formal", "frozen", "FROZEN"}
+JC_TOTAL_GOALS_BRIER_CONVENTION = "SUM_SQUARED_ERROR"
+JC_TOTAL_GOALS_RPS_CONVENTION = "CUMULATIVE_SQUARED_ERROR_DIVIDED_BY_K_MINUS_1"
+JC_TOTAL_GOALS_RPS_DENOMINATOR = len(JC_TOTAL_GOALS_BUCKET_ORDER) - 1
+JC_TOTAL_GOALS_MINIMUM_SUMMARY_SAMPLE_COUNT = 30
 
 
 def _number(value: Any) -> float | None:
@@ -232,6 +242,206 @@ def _score_rows(record: dict[str, Any]) -> list[dict[str, Any]]:
     return []
 
 
+def _empty_jc_total_goals_evaluation(status: str) -> dict[str, Any]:
+    return {
+        "jc_total_goals_evaluation_eligible": False,
+        "jc_total_goals_evaluation_status": status,
+        "jc_total_goals_log_loss": None,
+        "jc_total_goals_brier": None,
+        "jc_total_goals_multiclass_brier": None,
+        "jc_total_goals_rps": None,
+        "jc_total_goals_brier_convention": JC_TOTAL_GOALS_BRIER_CONVENTION,
+        "jc_total_goals_rps_convention": JC_TOTAL_GOALS_RPS_CONVENTION,
+        "jc_total_goals_rps_denominator": JC_TOTAL_GOALS_RPS_DENOMINATOR,
+        "jc_total_goals_vector_order": list(JC_TOTAL_GOALS_BUCKET_ORDER),
+    }
+
+
+def _evaluate_frozen_jc_total_goals(
+    record: dict[str, Any],
+    frozen_jc_total_goals: dict[str, Any],
+    *,
+    verified_result: bool,
+) -> dict[str, Any]:
+    """Score only a formally eligible frozen JC vector against a verified 90m result."""
+
+    if not verified_result:
+        return _empty_jc_total_goals_evaluation("UNVERIFIED_90M_RESULT")
+    if not is_formally_eligible(record):
+        return _empty_jc_total_goals_evaluation("NOT_FORMALLY_ELIGIBLE")
+    if not frozen_jc_total_goals["FORMAL_JC_TOTAL_GOALS_FROZEN"]:
+        return _empty_jc_total_goals_evaluation(frozen_jc_total_goals["jc_total_goals_status"])
+
+    actual_bucket = frozen_jc_total_goals["actual_jc_total_goals_bucket"]
+    exact_contract = record.get("exact_score_distribution") or {}
+    jc_contract = exact_contract.get("jc_total_goals") if isinstance(exact_contract, dict) else None
+    probabilities = jc_contract.get("probabilities") if isinstance(jc_contract, dict) else None
+    if not isinstance(probabilities, dict) or actual_bucket not in JC_TOTAL_GOALS_BUCKET_ORDER:
+        return _empty_jc_total_goals_evaluation("INVALID_FROZEN_JC_TOTAL_GOALS_VECTOR")
+    vector = [_number(probabilities.get(bucket)) for bucket in JC_TOTAL_GOALS_BUCKET_ORDER]
+    if (
+        any(value is None or value < 0 for value in vector)
+        or abs(sum(vector) - 1.0) > EXACT_DISTRIBUTION_NORMALIZATION_TOLERANCE
+    ):
+        return _empty_jc_total_goals_evaluation("INVALID_FROZEN_JC_TOTAL_GOALS_VECTOR")
+    actual_index = JC_TOTAL_GOALS_BUCKET_ORDER.index(actual_bucket)
+    actual_probability = vector[actual_index]
+    if actual_probability is None or actual_probability <= 0:
+        return _empty_jc_total_goals_evaluation(
+            "INVALID_FROZEN_JC_ACTUAL_CLASS_PROBABILITY"
+        )
+
+    brier = sum(
+        (probability - float(index == actual_index)) ** 2
+        for index, probability in enumerate(vector)
+    )
+    rps = sum(
+        (
+            sum(vector[:index + 1])
+            - float(actual_index <= index)
+        ) ** 2
+        for index in range(JC_TOTAL_GOALS_RPS_DENOMINATOR)
+    ) / JC_TOTAL_GOALS_RPS_DENOMINATOR
+    return {
+        "jc_total_goals_evaluation_eligible": True,
+        "jc_total_goals_evaluation_status": "ELIGIBLE_FROZEN_JC_TOTAL_GOALS",
+        "jc_total_goals_log_loss": -math.log(actual_probability),
+        "jc_total_goals_brier": brier,
+        "jc_total_goals_multiclass_brier": brier,
+        "jc_total_goals_rps": rps,
+        "jc_total_goals_brier_convention": JC_TOTAL_GOALS_BRIER_CONVENTION,
+        "jc_total_goals_rps_convention": JC_TOTAL_GOALS_RPS_CONVENTION,
+        "jc_total_goals_rps_denominator": JC_TOTAL_GOALS_RPS_DENOMINATOR,
+        "jc_total_goals_vector_order": list(JC_TOTAL_GOALS_BUCKET_ORDER),
+    }
+
+
+def _jc_total_goals_summary(formal_rows: list[dict[str, Any]]) -> dict[str, Any]:
+    """Summarize persisted formal JC metrics without reconstructing old observations."""
+
+    cohort_count = len(formal_rows)
+    eligible_rows: list[dict[str, Any]] = []
+    eligibility_status_counts: Counter[str] = Counter()
+    for row in formal_rows:
+        metrics = row.get("metrics")
+        if not isinstance(metrics, dict):
+            eligibility_status_counts["MISSING_PERSISTED_JC_EVALUATION"] += 1
+            continue
+        eligibility_status_counts[
+            str(metrics.get("jc_total_goals_evaluation_status") or "MISSING_PERSISTED_JC_EVALUATION")
+        ] += 1
+        actual = metrics.get("actual_jc_total_goals_bucket")
+        predicted = metrics.get("jc_total_goals_top_selection")
+        if (
+            metrics.get("jc_total_goals_evaluation_eligible") is True
+            and actual in JC_TOTAL_GOALS_BUCKET_ORDER
+            and predicted in JC_TOTAL_GOALS_BUCKET_ORDER
+            and isinstance(metrics.get("jc_total_goals_top_selection_hit"), bool)
+            and all(
+                _number(metrics.get(key)) is not None
+                for key in (
+                    "jc_total_goals_log_loss",
+                    "jc_total_goals_brier",
+                    "jc_total_goals_rps",
+                )
+            )
+        ):
+            eligible_rows.append(row)
+
+    eligible_count = len(eligible_rows)
+    predicted_counts = {bucket: 0 for bucket in JC_TOTAL_GOALS_BUCKET_ORDER}
+    actual_counts = {bucket: 0 for bucket in JC_TOTAL_GOALS_BUCKET_ORDER}
+    recall_hits = {bucket: 0 for bucket in JC_TOTAL_GOALS_BUCKET_ORDER}
+    for row in eligible_rows:
+        metrics = row["metrics"]
+        actual = metrics["actual_jc_total_goals_bucket"]
+        predicted = metrics["jc_total_goals_top_selection"]
+        predicted_counts[predicted] += 1
+        actual_counts[actual] += 1
+        recall_hits[actual] += int(predicted == actual)
+
+    def _mix(counts: dict[str, int]) -> dict[str, float | None]:
+        return {
+            bucket: round(count / eligible_count, 6) if eligible_count else None
+            for bucket, count in counts.items()
+        }
+
+    metric_mean = {
+        name: round(
+            sum(float(row["metrics"][name]) for row in eligible_rows) / eligible_count,
+            9,
+        )
+        if eligible_count
+        else None
+        for name in (
+            "jc_total_goals_log_loss",
+            "jc_total_goals_brier",
+            "jc_total_goals_rps",
+        )
+    }
+    if cohort_count == 0:
+        coverage_status = "NO_FORMAL_SETTLED_SAMPLES"
+    elif eligible_count == 0:
+        coverage_status = "NO_ELIGIBLE_FROZEN_JC_SAMPLES"
+    elif eligible_count < cohort_count:
+        coverage_status = "PARTIAL_COVERAGE"
+    else:
+        coverage_status = "FULL_COVERAGE"
+    return {
+        "contract_version": JC_TOTAL_GOALS_CONTRACT_VERSION,
+        "status": (
+            "SUFFICIENT_SAMPLE"
+            if eligible_count >= JC_TOTAL_GOALS_MINIMUM_SUMMARY_SAMPLE_COUNT
+            else "INSUFFICIENT_SAMPLE"
+        ),
+        "minimum_sample_count": JC_TOTAL_GOALS_MINIMUM_SUMMARY_SAMPLE_COUNT,
+        "formal_cohort_n": cohort_count,
+        "eligible_n": eligible_count,
+        "coverage": round(eligible_count / cohort_count, 6) if cohort_count else None,
+        "coverage_status": coverage_status,
+        "eligibility_status_counts": dict(eligibility_status_counts),
+        "top1_hit_rate": (
+            round(
+                sum(
+                    int(row["metrics"]["jc_total_goals_top_selection_hit"] is True)
+                    for row in eligible_rows
+                )
+                / eligible_count,
+                9,
+            )
+            if eligible_count
+            else None
+        ),
+        "mean_log_loss": metric_mean["jc_total_goals_log_loss"],
+        "mean_brier": metric_mean["jc_total_goals_brier"],
+        "mean_multiclass_brier": metric_mean["jc_total_goals_brier"],
+        "mean_rps": metric_mean["jc_total_goals_rps"],
+        "predicted_class_counts": predicted_counts,
+        "actual_class_counts": actual_counts,
+        "predicted_class_mix": _mix(predicted_counts),
+        "actual_class_mix": _mix(actual_counts),
+        "per_class_recall": {
+            bucket: {
+                "actual_n": actual_counts[bucket],
+                "hits": recall_hits[bucket],
+                "recall": (
+                    round(recall_hits[bucket] / actual_counts[bucket], 9)
+                    if actual_counts[bucket]
+                    else None
+                ),
+            }
+            for bucket in JC_TOTAL_GOALS_BUCKET_ORDER
+        },
+        "metric_conventions": {
+            "order": list(JC_TOTAL_GOALS_BUCKET_ORDER),
+            "brier": JC_TOTAL_GOALS_BRIER_CONVENTION,
+            "rps": JC_TOTAL_GOALS_RPS_CONVENTION,
+            "rps_denominator": JC_TOTAL_GOALS_RPS_DENOMINATOR,
+        },
+        "same_time_official_market_baseline_status": "NOT_AVAILABLE",
+    }
+
+
 def _btts(record: dict[str, Any]) -> dict[str, float] | None:
     output = record.get("prediction_output") or {}
     value = record.get("btts") or output.get("btts")
@@ -304,6 +514,16 @@ def evaluate_prediction(record: dict[str, Any], actual: dict[str, Any]) -> dict[
         "jc_total_goals_top_selection": None,
         "jc_total_goals_top_selection_hit": None,
         "same_time_official_market_baseline_status": None,
+        "jc_total_goals_evaluation_eligible": False,
+        "jc_total_goals_evaluation_status": "MISSING_FROZEN_JC_TOTAL_GOALS",
+        "jc_total_goals_log_loss": None,
+        "jc_total_goals_brier": None,
+        "jc_total_goals_multiclass_brier": None,
+        "jc_total_goals_rps": None,
+        "jc_total_goals_brier_convention": JC_TOTAL_GOALS_BRIER_CONVENTION,
+        "jc_total_goals_rps_convention": JC_TOTAL_GOALS_RPS_CONVENTION,
+        "jc_total_goals_rps_denominator": JC_TOTAL_GOALS_RPS_DENOMINATOR,
+        "jc_total_goals_vector_order": list(JC_TOTAL_GOALS_BUCKET_ORDER),
         "market_only_1x2_brier": None,
         "market_only_1x2_logloss": None,
         "market_only_metric_status": None,
@@ -336,6 +556,11 @@ def evaluate_prediction(record: dict[str, Any], actual: dict[str, Any]) -> dict[
 
     frozen_exact = classify_frozen_exact_score(record, home, away)
     frozen_jc_total_goals = classify_frozen_jc_total_goals(record, home, away)
+    jc_evaluation = _evaluate_frozen_jc_total_goals(
+        record,
+        frozen_jc_total_goals,
+        verified_result=_is_verified_result_artifact(actual),
+    )
     metrics.update({
         "FORMAL_EXACT_DISTRIBUTION_FROZEN": frozen_exact["FORMAL_EXACT_DISTRIBUTION_FROZEN"],
         "FINITE_GRID_EXACTLY_REPRESENTED": frozen_exact["FINITE_GRID_EXACTLY_REPRESENTED"],
@@ -357,6 +582,7 @@ def evaluate_prediction(record: dict[str, Any], actual: dict[str, Any]) -> dict[
             "same_time_official_market_baseline_status"
         ],
     })
+    metrics.update(jc_evaluation)
     if frozen_exact["FORMAL_EXACT_LOG_SCORE_ELIGIBLE"]:
         metrics.update({
             "actual_score_probability": frozen_exact["probability"],
@@ -625,6 +851,10 @@ def _write_summary(
         "formal_exact_log_score_eligible": result.get("formal_exact_log_score_eligible", 0),
         "formal_exact_out_of_support": result.get("formal_exact_out_of_support", 0),
         "formal_jc_total_goals_frozen": result.get("formal_jc_total_goals_frozen", 0),
+        "formal_jc_total_goals_evaluation_eligible": result.get(
+            "formal_jc_total_goals_evaluation_eligible", 0
+        ),
+        "jc_total_goals": _jc_total_goals_summary(formal_rows),
         "pending_results": result.get("pending_results", 0),
         "excluded_prediction_count": len(excluded_prediction_ids(exclusion_root)),
         "pilot_excluded_settled": len(exploratory_rows),
@@ -678,6 +908,7 @@ def settle_records(
         "formal_exact_log_score_eligible": 0,
         "formal_exact_out_of_support": 0,
         "formal_jc_total_goals_frozen": 0,
+        "formal_jc_total_goals_evaluation_eligible": 0,
         "result_failures": 0,
         "result_conflicts": 0,
         "duplicate_prospective_samples": max(0, len(formal_rows) - len(formal_by_id)),
@@ -769,7 +1000,13 @@ def settle_records(
             metrics["FORMAL_EXACT_LOG_SCORE_ELIGIBLE"]
         )
         result["formal_exact_out_of_support"] += int(metrics["OUT_OF_EXPLICIT_SUPPORT"])
-        result["formal_jc_total_goals_frozen"] += int(metrics["FORMAL_JC_TOTAL_GOALS_FROZEN"])
+        if excluded is not None:
+            metrics.update(_empty_jc_total_goals_evaluation("EXCLUDED_FROM_FORMAL_COHORT"))
+        else:
+            result["formal_jc_total_goals_frozen"] += int(metrics["FORMAL_JC_TOTAL_GOALS_FROZEN"])
+        result["formal_jc_total_goals_evaluation_eligible"] += int(
+            metrics["jc_total_goals_evaluation_eligible"]
+        )
         sample = _sample(
             record,
             actual,

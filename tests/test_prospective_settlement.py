@@ -1,4 +1,6 @@
 import json
+from copy import deepcopy
+import math
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -10,8 +12,13 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
 from prediction_exclusions import is_prediction_excluded  # noqa: E402
+from exact_distribution import (  # noqa: E402
+    build_exact_distribution_contract,
+    build_prediction_time_exact_distribution_state,
+)
 from prospective_settlement import (  # noqa: E402
     BASE_PREDICTION_POLICY,
+    _jc_total_goals_summary,
     evaluate_prediction,
     is_formally_eligible,
     normalize_result,
@@ -103,6 +110,39 @@ def result(*, home=1, away=0, prediction_id="P-1", match_key="FBOS-P-1"):
     }
 
 
+def jc_record(vector=None):
+    vector = vector or [0.05, 0.10, 0.15, 0.20, 0.15, 0.10, 0.10, 0.15]
+    current = record(prediction_id="JC-1")
+    bucket_counts = {str(total): total + 1 for total in range(7)}
+    bucket_counts["7+"] = 141
+    matrix = {}
+    for home in range(13):
+        for away in range(13):
+            total = home + away
+            bucket = str(total) if total <= 6 else "7+"
+            matrix[(home, away)] = vector[0 if bucket == "0" else int(bucket) if bucket != "7+" else 7] / bucket_counts[bucket]
+    state = build_prediction_time_exact_distribution_state(
+        matrix,
+        lambda_home=1.5,
+        lambda_away=0.8,
+        rho=0.0,
+    )
+    contract = build_exact_distribution_contract(
+        state,
+        model_identity={
+            "prediction_id": current["prediction_id"],
+            "model_family": current["model_family"],
+            "release_version": current["release_version"],
+            "model_source_fingerprint": current["model_source_fingerprint"],
+            "input_sha256": current["input_sha256"],
+        },
+    )
+    current["exact_score_distribution"] = contract
+    current["jc_total_goals"] = deepcopy(contract["jc_total_goals"])
+    current["prediction_output"] = {"jc_total_goals": deepcopy(contract["jc_total_goals"])}
+    return current
+
+
 def test_base_c_grade_uses_explicit_policy_not_generic_grade():
     current = record(grade="C")
     assert is_formally_eligible(current) is True
@@ -131,6 +171,175 @@ def test_evaluation_calculates_1x2_brier_and_logloss():
     assert metrics["top1_accuracy_1x2"] == 1
     assert metrics["brier_score_1x2"] == pytest.approx((0.5 - 1) ** 2 + 0.3**2 + 0.2**2)
     assert metrics["log_loss_1x2"] == pytest.approx(-__import__("math").log(0.5))
+
+
+def test_jc_evaluation_scores_are_independently_recomputed_from_frozen_vector():
+    vector = [0.05, 0.10, 0.15, 0.20, 0.15, 0.10, 0.10, 0.15]
+    metrics = evaluate_prediction(
+        jc_record(vector),
+        result(home=3, away=3, prediction_id="JC-1", match_key="FBOS-JC-1"),
+    )
+    actual_index = 6
+    expected_log_loss = -math.log(vector[actual_index])
+    expected_brier = sum(
+        (probability - float(index == actual_index)) ** 2
+        for index, probability in enumerate(vector)
+    )
+    expected_rps = sum(
+        (
+            sum(vector[:index + 1])
+            - float(actual_index <= index)
+        ) ** 2
+        for index in range(len(vector) - 1)
+    ) / (len(vector) - 1)
+
+    assert metrics["jc_total_goals_evaluation_eligible"] is True
+    assert metrics["jc_total_goals_evaluation_status"] == "ELIGIBLE_FROZEN_JC_TOTAL_GOALS"
+    assert metrics["jc_total_goals_log_loss"] == pytest.approx(expected_log_loss)
+    assert metrics["jc_total_goals_brier"] == pytest.approx(expected_brier)
+    assert metrics["jc_total_goals_multiclass_brier"] == pytest.approx(expected_brier)
+    assert metrics["jc_total_goals_rps"] == pytest.approx(expected_rps)
+    assert metrics["jc_total_goals_brier_convention"] == "SUM_SQUARED_ERROR"
+    assert metrics["jc_total_goals_rps_convention"] == "CUMULATIVE_SQUARED_ERROR_DIVIDED_BY_K_MINUS_1"
+    assert metrics["jc_total_goals_rps_denominator"] == 7
+
+
+def test_jc_evaluation_covers_0_6_7_and_high_total_boundaries():
+    for home, away, expected_bucket in (
+        (0, 0, "0"),
+        (3, 3, "6"),
+        (4, 3, "7+"),
+        (13, 0, "7+"),
+    ):
+        metrics = evaluate_prediction(
+            jc_record(),
+            result(home=home, away=away, prediction_id="JC-1", match_key="FBOS-JC-1"),
+        )
+        assert metrics["actual_jc_total_goals_bucket"] == expected_bucket
+        assert metrics["jc_total_goals_evaluation_eligible"] is True
+        assert metrics["jc_total_goals_log_loss"] is not None
+
+
+def test_jc_evaluation_is_frozen_only_and_fail_closed_for_bad_eligibility():
+    frozen = jc_record()
+    baseline = evaluate_prediction(
+        frozen,
+        result(home=4, away=3, prediction_id="JC-1", match_key="FBOS-JC-1"),
+    )
+    changed = deepcopy(frozen)
+    changed["probabilities"] = {"home": 0.01, "draw": 0.01, "away": 0.98}
+    changed["lambda_home"] = 99.0
+    changed["lambda_away"] = 99.0
+    changed["market_only_baseline"] = {"home": 0.99, "draw": 0.005, "away": 0.005}
+    replay = evaluate_prediction(
+        changed,
+        result(home=4, away=3, prediction_id="JC-1", match_key="FBOS-JC-1"),
+    )
+    for key in (
+        "jc_total_goals_log_loss",
+        "jc_total_goals_brier",
+        "jc_total_goals_rps",
+        "actual_jc_total_goals_bucket",
+    ):
+        assert replay[key] == baseline[key]
+
+    missing = evaluate_prediction(
+        record(),
+        result(home=3, away=3),
+    )
+    assert missing["jc_total_goals_evaluation_eligible"] is False
+    assert missing["jc_total_goals_evaluation_status"] == "MISSING_FROZEN_JC_TOTAL_GOALS"
+    assert missing["jc_total_goals_log_loss"] is None
+    unverified = evaluate_prediction(jc_record(), {"home_score": 3, "away_score": 3})
+    assert unverified["jc_total_goals_evaluation_eligible"] is False
+    assert unverified["jc_total_goals_evaluation_status"] == "UNVERIFIED_90M_RESULT"
+
+    zero_actual_probability = jc_record([0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.0, 0.4])
+    invalid = evaluate_prediction(
+        zero_actual_probability,
+        result(home=3, away=3, prediction_id="JC-1", match_key="FBOS-JC-1"),
+    )
+    assert invalid["FORMAL_JC_TOTAL_GOALS_FROZEN"] is True
+    assert invalid["jc_total_goals_evaluation_eligible"] is False
+    assert invalid["jc_total_goals_evaluation_status"] == "INVALID_FROZEN_JC_ACTUAL_CLASS_PROBABILITY"
+    assert invalid["jc_total_goals_brier"] is None
+
+    excluded = jc_record()
+    excluded["formal_eligible"] = False
+    not_formal = evaluate_prediction(
+        excluded,
+        result(home=3, away=3, prediction_id="JC-1", match_key="FBOS-JC-1"),
+    )
+    assert not_formal["jc_total_goals_evaluation_eligible"] is False
+    assert not_formal["jc_total_goals_evaluation_status"] == "NOT_FORMALLY_ELIGIBLE"
+
+
+def test_jc_prospective_summary_reports_mix_recall_and_small_cohort_status():
+    first = evaluate_prediction(
+        jc_record(),
+        result(home=3, away=3, prediction_id="JC-1", match_key="FBOS-JC-1"),
+    )
+    second = evaluate_prediction(
+        jc_record([0.02, 0.03, 0.05, 0.08, 0.10, 0.12, 0.15, 0.45]),
+        result(home=4, away=3, prediction_id="JC-1", match_key="FBOS-JC-1"),
+    )
+    summary = _jc_total_goals_summary([
+        {"metrics": first},
+        {"metrics": second},
+        {"metrics": {"jc_total_goals_evaluation_eligible": False}},
+    ])
+
+    assert summary["status"] == "INSUFFICIENT_SAMPLE"
+    assert summary["formal_cohort_n"] == 3
+    assert summary["eligible_n"] == 2
+    assert summary["coverage"] == pytest.approx(2 / 3, abs=1e-6)
+    assert summary["eligibility_status_counts"] == {
+        "ELIGIBLE_FROZEN_JC_TOTAL_GOALS": 2,
+        "MISSING_PERSISTED_JC_EVALUATION": 1,
+    }
+    assert summary["mean_log_loss"] == pytest.approx(
+        (first["jc_total_goals_log_loss"] + second["jc_total_goals_log_loss"]) / 2,
+        abs=1e-9,
+    )
+    assert summary["predicted_class_counts"]["3"] == 1
+    assert summary["predicted_class_counts"]["7+"] == 1
+    assert summary["actual_class_counts"]["6"] == 1
+    assert summary["actual_class_counts"]["7+"] == 1
+    assert summary["per_class_recall"]["6"] == {"actual_n": 1, "hits": 0, "recall": 0.0}
+    assert summary["per_class_recall"]["7+"] == {"actual_n": 1, "hits": 1, "recall": 1.0}
+
+    empty = _jc_total_goals_summary([])
+    assert empty["status"] == "INSUFFICIENT_SAMPLE"
+    assert empty["eligible_n"] == 0
+    assert empty["mean_rps"] is None
+    assert empty["eligibility_status_counts"] == {}
+    assert all(value is None for value in empty["actual_class_mix"].values())
+
+
+def test_jc_metrics_and_summary_are_persisted_for_formal_settlement(tmp_path):
+    out = settle_records(
+        [jc_record()],
+        now=datetime(2026, 8, 14, 12, 0, tzinfo=TZ),
+        result_fetcher=lambda *_: result(
+            home=4,
+            away=3,
+            prediction_id="JC-1",
+            match_key="FBOS-JC-1",
+        ),
+        prospective_root=tmp_path,
+        shadow_prediction_root=tmp_path / "shadow_predictions",
+        shadow_settlement_root=tmp_path / "shadow_settlements",
+    )
+    sample = json.loads((tmp_path / "ledger.jsonl").read_text(encoding="utf-8"))
+    summary = json.loads((tmp_path / "summary.json").read_text(encoding="utf-8"))
+
+    assert out["formal_jc_total_goals_evaluation_eligible"] == 1
+    assert sample["metrics"]["jc_total_goals_evaluation_eligible"] is True
+    assert sample["metrics"]["jc_total_goals_log_loss"] is not None
+    assert summary["jc_total_goals"]["eligible_n"] == 1
+    assert summary["jc_total_goals"]["formal_cohort_n"] == 1
+    assert summary["jc_total_goals"]["status"] == "INSUFFICIENT_SAMPLE"
+    assert summary["jc_total_goals"]["actual_class_counts"]["7+"] == 1
 
 
 def test_evaluation_calculates_goal_absolute_errors():
