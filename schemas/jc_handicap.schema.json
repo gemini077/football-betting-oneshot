@@ -1,0 +1,190 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://football-betting-oneshot.local/schemas/jc_handicap.v1.schema.json",
+  "title": "Football Betting OneShot official JC handicap v1",
+  "description": "Frozen H/D/A projection from a prematch Nowscore official integer JC handicap line and the effective Exact distribution.",
+  "type": "object",
+  "required": [
+    "contract_version",
+    "status",
+    "served_state",
+    "authority",
+    "market_code",
+    "market_family",
+    "market_name",
+    "selection_order",
+    "line",
+    "official_integer_line",
+    "line_perspective",
+    "source_authority",
+    "probabilities",
+    "probability_vector",
+    "top_selection",
+    "top_probability",
+    "normalization",
+    "underlying_exact_distribution",
+    "forecast_horizon",
+    "abstain_reason",
+    "abstain_reasons",
+    "same_time_official_market_baseline",
+    "generic_asian_handicap_used",
+    "model_identity",
+    "content_sha256"
+  ],
+  "properties": {
+    "contract_version": {"const": "jc_handicap.v1"},
+    "status": {"enum": ["FORMAL_JC_HANDICAP_FROZEN", "JC_HANDICAP_ABSTAIN"]},
+    "served_state": {"enum": ["FORMAL", "ABSTAIN"]},
+    "authority": {"const": "frozen_effective_exact_distribution_and_prematch_nowscore_line"},
+    "market_code": {"const": "JC_HANDICAP_1X2"},
+    "market_family": {"const": "official_jc_handicap"},
+    "market_name": {"const": "official JC handicap 1X2"},
+    "selection_order": {"const": ["home", "draw", "away"]},
+    "line": {"type": ["integer", "null"]},
+    "official_integer_line": {"type": ["integer", "null"]},
+    "line_perspective": {"const": "home"},
+    "source_authority": {
+      "type": "object",
+      "required": [
+        "provider",
+        "surface",
+        "source_url",
+        "nowscore_id",
+        "business_date",
+        "match_number",
+        "fetched_at",
+        "http_status",
+        "response_sha256",
+        "content_sha256",
+        "parser_contract_version",
+        "line_binding",
+        "line_perspective",
+        "identity_status",
+        "page_identity",
+        "capture_status",
+        "capture_reason",
+        "capture_reason_codes"
+      ],
+      "properties": {
+        "provider": {"const": "nowscore_public_jc"},
+        "surface": {"const": "nowscore_public_jc_analysis"},
+        "source_url": {"type": ["string", "null"]},
+        "nowscore_id": {"type": ["integer", "null"]},
+        "business_date": {"type": ["string", "null"]},
+        "match_number": {"type": ["string", "null"]},
+        "fetched_at": {"type": ["string", "null"]},
+        "captured_at": {"type": ["string", "null"]},
+        "request_started_at": {"type": ["string", "null"]},
+        "response_at": {"type": ["string", "null"]},
+        "observed_at": {"type": ["string", "null"]},
+        "http_status": {"type": ["integer", "null"]},
+        "response_sha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+        "content_sha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+        "parser_contract_version": {"const": "nowscore_jc_handicap_parser.v1"},
+        "line_binding": {"const": "竞彩指数/GoJcUrl(0)"},
+        "line_perspective": {"const": "home"},
+        "identity_status": {"type": ["string", "null"]},
+        "page_identity": {"type": "object"},
+        "capture_status": {"enum": ["CAPTURED", "ABSTAIN"]},
+        "capture_reason": {"type": ["string", "null"]},
+        "capture_reason_codes": {"type": "array", "items": {"type": "string"}},
+        "name_diagnostics": {"type": "array", "items": {"type": "string"}},
+        "name_variant_sides": {"type": "array", "items": {"type": "string"}},
+        "name_variant_details": {"type": "array", "items": {"type": "object"}}
+      }
+    },
+    "probabilities": {
+      "type": ["object", "null"],
+      "required": ["home", "draw", "away"],
+      "properties": {
+        "home": {"type": "number", "minimum": 0},
+        "draw": {"type": "number", "minimum": 0},
+        "away": {"type": "number", "minimum": 0}
+      }
+    },
+    "probability_vector": {
+      "type": ["array", "null"],
+      "minItems": 3,
+      "maxItems": 3,
+      "items": {"type": "number", "minimum": 0}
+    },
+    "top_selection": {"type": ["string", "null"]},
+    "top_probability": {"type": ["number", "null"], "minimum": 0},
+    "normalization": {"type": "object"},
+    "underlying_exact_distribution": {
+      "type": "object",
+      "required": ["contract_version", "status", "reference", "content_sha256"],
+      "properties": {
+        "contract_version": {"const": "exact_score_distribution.v1"},
+        "status": {"enum": ["FROZEN_EXACT_AUTHORITY", "MISSING_OR_INVALID"]},
+        "reference": {"const": "inline:exact_score_distribution"},
+        "content_sha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "forecast_horizon": {"type": "object"},
+    "abstain_reason": {"type": ["string", "null"]},
+    "abstain_reasons": {"type": "array", "items": {"type": "string"}},
+    "same_time_official_market_baseline": {
+      "type": "object",
+      "required": ["status", "probabilities", "captured_at", "source", "reason", "derived_from_asian_handicap", "odds_available"],
+      "properties": {
+        "status": {"const": "NOT_AVAILABLE"},
+        "probabilities": {"type": ["object", "null"]},
+        "captured_at": {"type": ["string", "null"]},
+        "source": {"type": ["string", "null"]},
+        "reason": {"const": "QUOTE_TIME_SEMANTICS_NOT_PROVEN"},
+        "derived_from_asian_handicap": {"const": false},
+        "odds_available": {"const": false}
+      }
+    },
+    "generic_asian_handicap_used": {"const": false},
+    "model_identity": {"type": "object"},
+    "content_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"status": {"const": "FORMAL_JC_HANDICAP_FROZEN"}}},
+      "then": {
+        "properties": {
+          "served_state": {"const": "FORMAL"},
+          "line": {"type": "integer"},
+          "official_integer_line": {"type": "integer"},
+          "probabilities": {"type": "object"},
+          "probability_vector": {"type": "array"},
+          "abstain_reason": {"type": "null"},
+          "abstain_reasons": {"maxItems": 0},
+          "source_authority": {
+            "properties": {
+              "capture_status": {"const": "CAPTURED"},
+              "http_status": {"const": 200},
+              "identity_status": {"const": "EXACT_ID"}
+            }
+          },
+          "underlying_exact_distribution": {
+            "properties": {
+              "status": {"const": "FROZEN_EXACT_AUTHORITY"},
+              "content_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+            }
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "served_state": {"const": "ABSTAIN"},
+          "line": {"type": "null"},
+          "official_integer_line": {"type": "null"},
+          "probabilities": {"type": "null"},
+          "probability_vector": {"type": "null"},
+          "top_selection": {"type": "null"},
+          "top_probability": {"type": "null"},
+          "abstain_reason": {"type": "string"},
+          "source_authority": {
+            "properties": {
+              "capture_status": {"const": "ABSTAIN"}
+            }
+          }
+        }
+      }
+    }
+  ]
+}

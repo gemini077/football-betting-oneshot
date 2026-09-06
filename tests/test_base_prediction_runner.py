@@ -14,6 +14,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 
 import scripts.base_prediction_runner as runner
 from model_governance import PredictionConflictError, freeze_prediction, prediction_content_hash
+from official_jc_handicap import JC_HANDICAP_LINE_BINDING, JC_HANDICAP_SOURCE_SURFACE
 
 
 TZ = timezone(timedelta(hours=8))
@@ -247,6 +248,7 @@ def run_case(
     now: datetime = NOW,
     nowscore_result: dict | None = None,
     football_evidence_root: Path | None = None,
+    jc_capture: dict | None = None,
 ) -> tuple[dict, Mock]:
     parsed = parsed if parsed is not None else parsed_source()
     with ExitStack() as stack:
@@ -254,6 +256,8 @@ def run_case(
         stack.enter_context(patch.object(runner, "fetch_trade_matches", return_value=trade_payload()))
         stack.enter_context(patch.object(runner, "fetch_and_parse", return_value=parsed))
         stack.enter_context(patch.object(runner, "fetch_match_markets", return_value=nowscore_result))
+        if jc_capture is not None:
+            stack.enter_context(patch.object(runner, "capture_nowscore_jc_handicap", return_value=jc_capture))
         build = stack.enter_context(
             patch.object(runner, "build_automatic_model", return_value=model if model is not None else champion_result(), side_effect=model_side_effect)
         )
@@ -943,6 +947,60 @@ def test_governance_record_contains_minimum_prediction_contract():
     assert record["jc_total_goals"]["selection_order"] == ["0", "1", "2", "3", "4", "5", "6", "7+"]
     assert len(record["jc_total_goals"]["probabilities"]) == 8
     assert record["jc_total_goals"]["same_time_official_market_baseline"]["status"] == "NOT_AVAILABLE"
+
+
+def test_runner_freezes_jc_handicap_separately_without_changing_champion_probabilities():
+    capture = {
+        "contract_version": "jc_handicap_source_capture.v1",
+        "status": "CAPTURED",
+        "capture_status": "CAPTURED",
+        "reason": None,
+        "reason_codes": [],
+        "business_date": DATE,
+        "match_number": "T001",
+        "home_team": "Home 1",
+        "away_team": "Away 1",
+        "kickoff_at": KICKOFF,
+        "nowscore_id": 100001,
+        "source": "nowscore_public_jc",
+        "source_surface": JC_HANDICAP_SOURCE_SURFACE,
+        "source_url": "https://m.nowscore.com/Analy/Analysis/100001.htm",
+        "fetched_at": "2026-08-12T12:45:00+08:00",
+        "captured_at": "2026-08-12T12:45:00+08:00",
+        "request_started_at": "2026-08-12T12:44:59+08:00",
+        "response_at": "2026-08-12T12:45:00+08:00",
+        "observed_at": "2026-08-12T12:45:00+08:00",
+        "http_status": 200,
+        "page_http_status": 200,
+        "response_sha256": "b" * 64,
+        "content_sha256": "b" * 64,
+        "parser_contract_version": "nowscore_jc_handicap_parser.v1",
+        "parser_version": "nowscore_jc_handicap_parser.v1",
+        "line_binding": JC_HANDICAP_LINE_BINDING,
+        "line_perspective": "home",
+        "official_integer_line": 1,
+        "line": 1,
+        "line_available": True,
+        "odds_available": False,
+        "identity_status": "EXACT_ID",
+        "page_identity": {
+            "nowscore_id": 100001,
+            "home_team": "Home 1",
+            "away_team": "Away 1",
+            "kickoff_local": KICKOFF,
+        },
+        "official_row_count": 1,
+    }
+    with tempfile.TemporaryDirectory() as temp:
+        root = Path(temp)
+        write_case(root, [fixture(1, spf=limited_spf())])
+        summary, _ = run_case(root, jc_capture=capture)
+        record = records(root)[0]
+
+    assert summary["frozen"] == 1
+    assert record["jc_handicap"]["served_state"] == "FORMAL"
+    assert record["jc_handicap"]["official_integer_line"] == 1
+    assert record["probabilities"] == champion_result()["model"]["probabilities"]
 
 
 def test_repeat_freeze_with_same_prediction_id_different_content_keeps_conflict_guard():
