@@ -99,3 +99,36 @@ jobs:
         with:
           name: exact-distribution-readiness
           path: exact-distribution-readiness.json
+
+  live-jc-handicap-source-audit:
+    if: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run bounded live Sporttery source audit
+        id: live-audit
+        run: |
+          set +e
+          python scripts/official_jc_handicap_source_audit.py \
+            --output jc-handicap-live-source-audit.json
+          exit_code=$?
+          echo "exit_code=${exit_code}" >> "$GITHUB_OUTPUT"
+          exit "$exit_code"
+
+      - name: Upload live source audit artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jc-handicap-live-source-audit
+          path: jc-handicap-live-source-audit.json
+          if-no-files-found: warn

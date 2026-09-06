@@ -14,6 +14,7 @@ from official_jc_handicap import build_official_jc_handicap_state  # noqa: E402
 from official_jc_handicap_source_audit import (  # noqa: E402
     _binding_funnel,
     _delivery_decision,
+    resolve_current_business_date,
 )
 
 
@@ -136,3 +137,52 @@ def test_binding_funnel_reports_exact_line_and_price_stages():
         calculator_probe={"http_status": 200, "payload_success": True},
         binding_funnel={**funnel, "duplicates": 1, "conflicts": 0},
     ) == "JC_HANDICAP_SOURCE_AUTHORITY_PARTIAL"
+
+
+def test_live_lane_resolves_latest_authoritative_ready_universe(tmp_path):
+    for business_date, status, fixtures in (
+        ("2026-09-06", "READY", [{"matchId": "1"}]),
+        ("2026-09-07", "READY", [{"matchId": "2"}]),
+        ("2026-09-08", "NOT_YET_PUBLISHED", []),
+    ):
+        (tmp_path / f"{business_date}.json").write_text(
+            json.dumps({
+                "business_date": business_date,
+                "status": status,
+                "fixtures": fixtures,
+            }),
+            encoding="utf-8",
+        )
+    assert resolve_current_business_date(tmp_path) == "2026-09-07"
+
+
+def test_live_delivery_decision_maps_blocked_partial_and_conflict_fail_closed():
+    funnel = {
+        "status": "AVAILABLE",
+        "jc_fixtures": 1,
+        "official_rows": 1,
+        "exact_bound": 1,
+        "ambiguous": 0,
+        "unmatched": 0,
+        "duplicates": 0,
+        "conflicts": 0,
+        "line_available": 1,
+    }
+    assert _delivery_decision(
+        source_available=False,
+        page_probe={"http_status": 200},
+        calculator_probe={"http_status": 567, "payload_success": None},
+        binding_funnel=funnel,
+    ) == "OFFICIAL_SOURCE_NOT_EXECUTABLE"
+    assert _delivery_decision(
+        source_available=False,
+        page_probe={"http_status": 200},
+        calculator_probe={"http_status": 200, "payload_success": True},
+        binding_funnel=funnel,
+    ) == "JC_HANDICAP_SOURCE_AUTHORITY_PARTIAL"
+    assert _delivery_decision(
+        source_available=True,
+        page_probe={"http_status": 200},
+        calculator_probe={"http_status": 200, "payload_success": True},
+        binding_funnel={**funnel, "conflicts": 1},
+    ) == "FAIL_CLOSED"

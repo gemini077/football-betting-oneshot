@@ -35,10 +35,15 @@ TIMEOUT_SECONDS = 30
 MAX_RESPONSE_BYTES = 10 * 1024 * 1024
 AUDIT_CONTRACT_VERSION = "jc_handicap_source_audit.v1"
 UNIVERSE_ROOT = ROOT / "data" / "prediction_universe"
+AUTHORITATIVE_UNIVERSE_STATUSES = frozenset({"READY", "EMPTY_CONFIRMED"})
 DELIVERY_FORMAL_READY = "JC_HANDICAP_FORMAL_TRUTH_READY"
 DELIVERY_SOURCE_PARTIAL = "JC_HANDICAP_SOURCE_AUTHORITY_PARTIAL"
 DELIVERY_SOURCE_NOT_EXECUTABLE = "OFFICIAL_SOURCE_NOT_EXECUTABLE"
 DELIVERY_FAIL_CLOSED = "FAIL_CLOSED"
+BUSINESS_DATE_SELECTION_RULE = (
+    "latest business_date from data/prediction_universe with status READY or "
+    "EMPTY_CONFIRMED; NOT_YET_PUBLISHED and invalid files are excluded"
+)
 
 
 def _read_response(response: Any) -> tuple[bytes, bytes, str]:
@@ -103,8 +108,10 @@ def _probe(url: str, *, headers: dict[str, str], parse_json: bool = False) -> di
     return result
 
 
-def _raw_hhad_rows(payload: Any, target_date: str) -> list[dict[str, Any]]:
+def _raw_hhad_rows(payload: Any, target_date: str | None) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
+    if not target_date:
+        return rows
     groups = (payload.get("value") or {}).get("matchInfoList") if isinstance(payload, dict) else None
     for group in groups if isinstance(groups, list) else []:
         if not isinstance(group, dict):
@@ -245,7 +252,9 @@ def _binding_funnel(
     }
 
 
-def _load_identity_universe(target_date: str) -> tuple[dict[str, Any] | None, str]:
+def _load_identity_universe(target_date: str | None) -> tuple[dict[str, Any] | None, str]:
+    if not target_date:
+        return None, (UNIVERSE_ROOT / "UNRESOLVED.json").as_posix()
     path = UNIVERSE_ROOT / f"{target_date}.json"
     try:
         value = json.loads(path.read_text(encoding="utf-8"))
@@ -254,12 +263,70 @@ def _load_identity_universe(target_date: str) -> tuple[dict[str, Any] | None, st
     return value if isinstance(value, dict) else None, path.as_posix()
 
 
+def _current_business_date_resolution(
+    universe_root: Path = UNIVERSE_ROOT,
+) -> dict[str, Any]:
+    candidates: list[dict[str, Any]] = []
+    for path in universe_root.glob("*.json"):
+        try:
+            parsed_date = date.fromisoformat(path.stem)
+            value = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError, json.JSONDecodeError):
+            continue
+        if not isinstance(value, dict):
+            continue
+        business_date = str(value.get("business_date") or "").strip()
+        status = str(value.get("status") or "").strip().upper()
+        if business_date != parsed_date.isoformat() or status not in AUTHORITATIVE_UNIVERSE_STATUSES:
+            continue
+        fixtures = value.get("fixtures")
+        try:
+            path_ref = path.relative_to(ROOT).as_posix()
+        except ValueError:
+            path_ref = path.as_posix()
+        candidates.append({
+            "business_date": parsed_date.isoformat(),
+            "path": path_ref,
+            "status": status,
+            "fixture_count": len(fixtures) if isinstance(fixtures, list) else 0,
+            "fetched_at": value.get("fetched_at"),
+        })
+    if not candidates:
+        return {
+            "status": "UNRESOLVED",
+            "business_date": None,
+            "source": "data/prediction_universe",
+            "path": None,
+            "selection_rule": BUSINESS_DATE_SELECTION_RULE,
+            "candidates": [],
+        }
+    selected = max(candidates, key=lambda item: (item["business_date"], str(item.get("fetched_at") or "")))
+    return {
+        "status": "RESOLVED",
+        "business_date": selected["business_date"],
+        "source": "data/prediction_universe",
+        "path": selected["path"],
+        "universe_status": selected["status"],
+        "fixture_count": selected["fixture_count"],
+        "fetched_at": selected.get("fetched_at"),
+        "selection_rule": BUSINESS_DATE_SELECTION_RULE,
+        "candidates": candidates,
+    }
+
+
+def resolve_current_business_date(universe_root: Path = UNIVERSE_ROOT) -> str | None:
+    """Resolve the current date from authoritative prediction-universe files."""
+
+    return _current_business_date_resolution(universe_root).get("business_date")
+
+
 def _delivery_decision(
     *,
     source_available: bool,
     page_probe: dict[str, Any],
     calculator_probe: dict[str, Any],
     binding_funnel: dict[str, Any],
+    semantic_conflict: bool = False,
 ) -> str:
     if (
         page_probe.get("http_status") != 200
@@ -267,8 +334,10 @@ def _delivery_decision(
         or calculator_probe.get("payload_success") is not True
     ):
         return DELIVERY_SOURCE_NOT_EXECUTABLE
-    if not source_available:
+    if semantic_conflict or binding_funnel.get("conflicts"):
         return DELIVERY_FAIL_CLOSED
+    if not source_available:
+        return DELIVERY_SOURCE_PARTIAL
     if (
         binding_funnel.get("status") != "AVAILABLE"
         or not binding_funnel.get("jc_fixtures")
@@ -284,12 +353,13 @@ def _delivery_decision(
 
 
 def build_audit(
-    target_date: str,
+    target_date: str | None,
     *,
     page_probe: dict[str, Any],
     calculator_probe: dict[str, Any],
     universe: dict[str, Any] | None = None,
     universe_path: str | None = None,
+    business_date_resolution: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     payload = calculator_probe.get("payload")
     raw_rows = _raw_hhad_rows(payload, target_date)
@@ -320,18 +390,29 @@ def build_audit(
     binding_funnel = _binding_funnel(
         target_rows,
         universe,
-        universe_path=universe_path or str((UNIVERSE_ROOT / f"{target_date}.json").as_posix()),
+        universe_path=universe_path or str(
+            (UNIVERSE_ROOT / f"{target_date or 'UNRESOLVED'}.json").as_posix()
+        ),
     )
+    resolution = business_date_resolution or {
+        "status": "EXPLICIT_OR_TEST_INPUT",
+        "business_date": target_date,
+        "source": "caller",
+        "path": universe_path,
+        "selection_rule": None,
+    }
     delivery_decision = _delivery_decision(
         source_available=source_available,
         page_probe=page_probe,
         calculator_probe=calculator_probe,
         binding_funnel=binding_funnel,
+        semantic_conflict=resolution.get("status") == "UNRESOLVED",
     )
     calculator_probe = {key: value for key, value in calculator_probe.items() if key != "payload"}
     return {
         "schema_version": AUDIT_CONTRACT_VERSION,
         "target_business_date": target_date,
+        "business_date_resolution": resolution,
         "captured_at": datetime.now(timezone.utc).isoformat(),
         "source": "sporttery.cn",
         "market": "rqspf",
@@ -365,34 +446,49 @@ def build_audit(
     }
 
 
-def run_audit(target_date: str) -> dict[str, Any]:
+def run_audit(target_date: str | None = None) -> dict[str, Any]:
+    resolution = _current_business_date_resolution()
+    selected_date = target_date or resolution.get("business_date")
+    if target_date:
+        resolution = {
+            "status": "EXPLICIT_OVERRIDE",
+            "business_date": target_date,
+            "source": "cli",
+            "path": str((UNIVERSE_ROOT / f"{target_date}.json").as_posix()),
+            "selection_rule": BUSINESS_DATE_SELECTION_RULE,
+        }
     page_probe = _probe(OFFICIAL_PAGE_URL, headers=SPORTTERY_REQUEST_HEADERS)
     calculator_probe = _probe(SPORTTERY_API, headers=SPORTTERY_REQUEST_HEADERS, parse_json=True)
-    universe, universe_path = _load_identity_universe(target_date)
+    universe, universe_path = _load_identity_universe(selected_date)
     return {
         "audit_contract_version": AUDIT_CONTRACT_VERSION,
         "probe_policy": "Sporttery-owned page/calculator only; one request per surface; no retry; no production writes",
         "runner": {"platform": platform.platform(), "python": sys.version.split()[0]},
         "audit": build_audit(
-            target_date,
+            selected_date,
             page_probe=page_probe,
             calculator_probe=calculator_probe,
             universe=universe,
             universe_path=universe_path,
+            business_date_resolution=resolution,
         ),
     }
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--date", default=date.today().isoformat())
+    parser.add_argument(
+        "--date",
+        default=None,
+        help="optional explicit business date; PR live lane resolves it from data/prediction_universe",
+    )
     parser.add_argument("--output", type=Path, default=ROOT / "official-jc-handicap-source-audit.json")
     args = parser.parse_args()
     result = run_audit(args.date)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(result, ensure_ascii=False, indent=2))
-    return 0 if result["audit"]["current_source_status"] == "AVAILABLE" else 1
+    return 0 if result["audit"]["delivery_decision"] == DELIVERY_FORMAL_READY else 1
 
 
 if __name__ == "__main__":
