@@ -111,7 +111,15 @@ def test_projection_preserves_frozen_formal_market_parity_and_finite_support():
     verification = verify_formal_markets(projection, "13-0")
     assert verification["exact_score"]["verification_status"] == "OUT_OF_EXPLICIT_SUPPORT"
     assert verification["exact_score"]["actual_probability"] is None
+    assert verification["exact_score"]["actual_rank"] is None
+    assert verification["exact_score"]["represented_support_status"] == "OUT_OF_EXPLICIT_SUPPORT"
     assert verification["jc_total_goals"]["actual_selection"] == "7+"
+
+    represented = verify_formal_markets(projection, "1-0")["exact_score"]
+    assert represented["verification_status"] == "VERIFIED"
+    assert represented["actual_probability"] == pytest.approx(1 / 169)
+    assert represented["actual_rank"] == 14
+    assert represented["represented_support_status"] == "REPRESENTED"
 
 
 def test_missing_formal_market_contracts_are_independent_and_not_reconstructed():

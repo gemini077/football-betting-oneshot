@@ -260,6 +260,12 @@ def test_formal_markets_are_wired_to_detail_and_completed_verification(tmp_path)
     assert ">13+<" not in html
     assert 'data-formal-verification-status="VERIFIED"' in html
     assert 'data-formal-verification-market="jc_handicap"' in html
+    assert 'data-formal-actual-rank="14"' in html
+    assert 'data-formal-support-status="REPRESENTED"' in html
+    assert "frozen rank #14" in html
+    assert 'class="exact-grid-wrap" role="region" tabindex="0"' in html
+    assert "actual_probability" not in html
+    assert 'id="score-distribution"' not in html
 
 
 def test_formal_market_unavailability_is_scoped_to_one_market(tmp_path):

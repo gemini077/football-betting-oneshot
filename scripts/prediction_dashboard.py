@@ -39,13 +39,11 @@ except ImportError:  # package import used by tests
 
 try:
     from formal_market_projection import (
-        FORMAL_MARKET_STATUS_LABELS,
         project_frozen_formal_markets,
         summarize_formal_markets,
     )
 except ImportError:  # package import used by tests
     from scripts.formal_market_projection import (
-        FORMAL_MARKET_STATUS_LABELS,
         project_frozen_formal_markets,
         summarize_formal_markets,
     )
@@ -724,7 +722,6 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .match-number,
 .kickoff,
 .identity-competition,
-.goal-signal,
 .score-caption,
 .score-top3,
 .action-note {
@@ -815,38 +812,6 @@ button, a { -webkit-tap-highlight-color: transparent; }
 }
 .score-top3 span { white-space: nowrap; }
 .score-serving-note { margin-top: 4px; color: var(--warning); font-size: 10px; font-weight: 650; }
-.goal-signals {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 3px 10px;
-  min-width: 0;
-}
-.goal-signal {
-  white-space: nowrap;
-  font-variant-numeric: tabular-nums;
-}
-.formal-market-summary {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  margin-top: 6px;
-}
-.formal-market-chip {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 4px;
-  padding: 3px 5px;
-  border: 1px solid var(--line);
-  background: var(--surface);
-  color: var(--muted);
-  font-size: 10px;
-  line-height: 1.2;
-  white-space: nowrap;
-}
-.formal-market-chip b { color: var(--text); font-weight: 650; }
-.formal-market-chip em { font-style: normal; }
-.formal-market-chip.status-available { border-color: #B7D8C1; }
-.formal-market-chip.status-unavailable { border-color: #F2C4A8; color: var(--warning); }
 .row-action {
   display: flex;
   align-items: center;
@@ -990,10 +955,7 @@ button, a { -webkit-tap-highlight-color: transparent; }
     margin-top: 4px;
     font-size: 10px;
   }
-  .goal-signals {
-    gap: 3px 12px;
-    padding-top: 1px;
-  }
+
   .row-action {
     justify-content: flex-start;
     text-align: left;
@@ -1019,7 +981,7 @@ button, a { -webkit-tap-highlight-color: transparent; }
   .team-match { font-size: 16px; }
   .probability-grid { gap: 6px; }
   .probability-cell strong { font-size: 14px; }
-  .goal-signals { gap: 3px 8px; }
+
 }
 """
 
@@ -1226,80 +1188,6 @@ def _one_x_two_html(prediction: dict[str, Any]) -> str:
     return f'<div class="probability-grid">{"".join(cells)}</div>' if cells else ""
 
 
-def _goal_signal_values(prediction: dict[str, Any]) -> list[tuple[str, str]]:
-    signals: list[tuple[str, str]] = []
-    btts = prediction.get("btts")
-    if isinstance(btts, dict):
-        yes = _number(btts.get("yes"))
-        no = _number(btts.get("no"))
-        candidates = [(yes, "\u53cc\u65b9\u8fdb\u7403 \u662f"), (no, "\u53cc\u65b9\u8fdb\u7403 \u5426")]
-        for value, label in candidates:
-            if value is None or not 0 <= value <= 1:
-                continue
-            percent = _format_percent(value)
-            if percent:
-                signals.append((label, percent))
-    totals = prediction.get("totals")
-    if isinstance(totals, list):
-        under = 0.0
-        over = 0.0
-        has_under = False
-        has_over = False
-        for item in totals:
-            if not isinstance(item, dict):
-                continue
-            probability = _number(item.get("probability"))
-            goals = str(item.get("goals") or "").strip()
-            if probability is None or probability < 0:
-                continue
-            if goals in {"0", "1", "2"}:
-                under += probability
-                has_under = True
-            elif goals in {"3", "4", "5", "6+"}:
-                over += probability
-                has_over = True
-        if has_under and has_over:
-            for value, label in ((under, "\u5927\u5c0f2.5 \u5c0f"), (over, "\u5927\u5c0f2.5 \u5927")):
-                percent = _format_percent(value)
-                if percent:
-                    signals.append((label, percent))
-    return signals
-
-
-def _goal_signals_html(prediction: dict[str, Any]) -> str:
-    signals = _goal_signal_values(prediction)
-    if not signals:
-        return ""
-    return '<div class="goal-signals">' + "".join(
-        f'<span class="goal-signal">{html.escape(label)} {html.escape(percent)}</span>'
-        for label, percent in signals
-    ) + "</div>"
-
-
-def _formal_market_summary_html(prediction: dict[str, Any]) -> str:
-    formal = prediction.get("formal_markets")
-    markets = formal.get("markets") if isinstance(formal, dict) else None
-    if not isinstance(markets, dict):
-        return ""
-    labels = (
-        ("Exact", "exact_score"),
-        ("JC总进球", "jc_total_goals"),
-        ("JC让球", "jc_handicap"),
-    )
-    chips = []
-    for label, key in labels:
-        item = markets.get(key) if isinstance(markets.get(key), dict) else {}
-        status = str(item.get("status") or "NOT_RECORDED")
-        status_label = FORMAL_MARKET_STATUS_LABELS.get(status, status)
-        chips.append(
-            f'<span class="formal-market-chip status-{html.escape(status.lower(), quote=True)}" '
-            f'data-formal-market="{html.escape(key, quote=True)}" '
-            f'data-formal-market-status="{html.escape(status, quote=True)}">'
-            f'<b>{html.escape(label)}</b><em>{html.escape(status_label)}</em></span>'
-        )
-    return '<div class="formal-market-summary" aria-label="\u6b63\u5f0f\u73a9\u6cd5\u72b6\u6001">' + "".join(chips) + "</div>"
-
-
 def _score_summary_html(
     prediction: dict[str, Any],
     *,
@@ -1439,7 +1327,7 @@ def _modern_card_html(
         else '<div class="score-cell empty-score-cell" aria-hidden="true"></div>'
     )
     goals_html = (
-        f'{_formal_market_summary_html(prediction)}{_goal_signals_html(prediction)}{_market_divergence_html(prediction)}'
+        _market_divergence_html(prediction)
         if prediction
         else ""
     )

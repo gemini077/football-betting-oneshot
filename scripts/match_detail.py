@@ -316,6 +316,12 @@ def _formal_markets(contract: dict[str, Any]) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
 
 
+def _formal_exact_is_available(contract: dict[str, Any]) -> bool:
+    formal = _formal_markets(contract)
+    item = _formal_market_item(formal, "exact_score")
+    return _formal_status(item) == "AVAILABLE" and isinstance(item.get("contract"), dict)
+
+
 def _formal_market_item(formal: dict[str, Any], key: str) -> dict[str, Any]:
     markets = formal.get("markets")
     item = markets.get(key) if isinstance(markets, dict) else None
@@ -382,7 +388,8 @@ def _render_exact_formal_market(item: dict[str, Any]) -> str:
         'data-formal-market-status="AVAILABLE">'
         '<div class="formal-panel-heading"><h3>Exact</h3>'
         f'<span>{EXACT_DISTRIBUTION_CELL_COUNT}\u683c\u00b7\u663e\u5f0f\u7f51\u683c</span></div>'
-        '<div class="exact-grid-wrap"><table class="exact-grid"><thead><tr><th scope="col">H\\A</th>'
+        '<div class="exact-grid-wrap" role="region" tabindex="0" aria-label="冻结 Exact 169 格概率矩阵；H 为主队进球，A 为客队进球">'
+        '<table class="exact-grid"><caption class="sr-only">冻结 Exact 169 格：主队进球 H × 客队进球 A</caption><thead><tr><th scope="col">H\\A</th>'
         + headers
         + '</tr></thead><tbody>'
         + "".join(rows)
@@ -721,10 +728,17 @@ def _formal_verification_label(key: str, verification: dict[str, Any]) -> str:
         actual = verification.get("actual_selection") or "\u2014"
         if key == "jc_handicap":
             actual = _FORMAL_SELECTION_LABELS.get(str(actual), str(actual))
+        if key == "exact_score":
+            rank = verification.get("actual_rank")
+            rank_text = f"frozen rank #{rank}" if isinstance(rank, int) and rank > 0 else "frozen rank unavailable"
+            support = str(verification.get("represented_support_status") or "UNAVAILABLE")
+            return f"{actual} · {rank_text} · {support}"
         hit = "\uff0c\u8d5b\u524d\u9996\u9009\u547d\u4e2d" if verification.get("top_selection_hit") else "\uff0c\u8d5b\u524d\u9996\u9009\u672a\u547d\u4e2d"
         return f"{actual}{hit}"
     if status == "OUT_OF_EXPLICIT_SUPPORT":
-        return "\u8d85\u51fa 0\u201312 \u663e\u5f0f\u7f51\u683c\uff0c\u672a\u8ba1\u5165"
+        actual = verification.get("actual_selection") or "\u2014"
+        support = str(verification.get("represented_support_status") or "OUT_OF_EXPLICIT_SUPPORT")
+        return f"{actual} · {support} · \u672a\u8ba1\u5165 frozen rank / probability"
     if status == "NOT_RECORDED":
         return "\u672a\u8bb0\u5f55"
     if status == "UNAVAILABLE":
@@ -747,7 +761,9 @@ def _render_formal_verification(verification: dict[str, dict[str, Any]]) -> str:
         rows.append(
             f'<div class="formal-verification-row status-{html.escape(status.lower(), quote=True)}" '
             f'data-formal-verification-market="{html.escape(key, quote=True)}" '
-            f'data-formal-verification-status="{html.escape(status, quote=True)}">'
+            f'data-formal-verification-status="{html.escape(status, quote=True)}" '
+            f'data-formal-actual-rank="{html.escape(str(item.get("actual_rank") or ""), quote=True)}" '
+            f'data-formal-support-status="{html.escape(str(item.get("represented_support_status") or ""), quote=True)}">'
             f'<span>{_esc(_FORMAL_MARKET_LABELS[key])}</span>'
             f'<strong>{_esc(detail)}</strong>'
             f'<em>{_esc(probability_text)}</em></div>'
@@ -926,8 +942,8 @@ DETAIL_CSS = """
     .formal-panel-heading h3 { margin:0; font-size:15px; }
     .formal-panel-heading span { color:var(--muted); font-size:11px; text-align:right; }
     .formal-market-note { margin:9px 0 0; color:var(--muted); font-size:11px; }
-    .exact-grid-wrap { overflow-x:auto; max-width:100%; }
-    .exact-grid { width:100%; min-width:650px; border-collapse:collapse; table-layout:fixed; font-size:10px; font-variant-numeric:tabular-nums; }
+    .exact-grid-wrap { max-width:100%; overflow:visible; }
+    .exact-grid { width:100%; min-width:0; border-collapse:collapse; table-layout:fixed; font-size:10px; font-variant-numeric:tabular-nums; }
     .exact-grid th,.exact-grid td { width:7.14%; padding:5px 3px; border:1px solid var(--line); text-align:center; white-space:nowrap; }
     .exact-grid th { background:#FAF9F6; color:var(--muted); font-weight:650; }
     .exact-grid td { color:var(--ink); }
@@ -995,6 +1011,7 @@ DETAIL_CSS = """
     .closed-beta { margin-top:32px; padding-top:13px; border-top:1px solid var(--line); color:var(--muted); font-size:11px; }
     .closed-beta strong,.closed-beta span { display:block; margin-top:4px; }
     .detail-footer { display:flex; justify-content:space-between; gap:12px; padding-top:18px; color:var(--muted); font-size:11px; }
+    .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
     @media (max-width:900px) {
       .page { width:min(calc(100% - 28px), var(--max)); }
       .detail-layout { grid-template-columns:1fr; gap:0; }
@@ -1020,6 +1037,8 @@ DETAIL_CSS = """
       .formal-market-grid { grid-template-columns:1fr; }
       .formal-exact-panel { grid-column:auto; }
       .formal-market-panel { padding:11px; }
+      .exact-grid { font-size:8px; }
+      .exact-grid th,.exact-grid td { padding:4px 1px; overflow:hidden; text-overflow:clip; }
       .formal-verification-row { grid-template-columns:72px minmax(0,1fr); gap:5px 8px; }
       .formal-verification-row > em { grid-column:2; text-align:left; }
       .score-row { grid-template-columns:40px minmax(45px,1fr) 44px; gap:8px; min-height:29px; }
@@ -1075,9 +1094,13 @@ def render_match_detail(contract: dict[str, Any]) -> str:
     title = f"{home} vs {away} \u00b7 \u6bd4\u8d5b\u8be6\u60c5"
     result_html = _render_completed_result(contract) if serving else ""
     probability_html = _render_probability_cards(contract) if serving else ""
-    score_html = _render_score_distribution(contract) if serving else ""
-    goals_html = _render_goals(contract) if serving else ""
     formal_markets_html = _render_formal_markets(contract) if serving else ""
+    score_html = (
+        _render_score_distribution(contract)
+        if serving and not _formal_exact_is_available(contract)
+        else ""
+    )
+    goals_html = _render_goals(contract) if serving else ""
     evidence_html = _render_key_evidence(contract) if serving else ""
     market_html = _render_market_comparison(contract) if serving else ""
     if serving:
@@ -1085,9 +1108,9 @@ def render_match_detail(contract: dict[str, Any]) -> str:
             [
                 '<section class="detail-section forecast-section" id="analysis">',
                 probability_html,
+                formal_markets_html,
                 score_html,
                 goals_html,
-                formal_markets_html,
                 "</section>",
             ]
         )

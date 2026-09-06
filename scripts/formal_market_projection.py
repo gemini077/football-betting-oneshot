@@ -252,6 +252,8 @@ def _verification_base(item: Mapping[str, Any]) -> dict[str, Any]:
         "reason": item.get("reason"),
         "actual_selection": None,
         "actual_probability": None,
+        "actual_rank": None,
+        "represented_support_status": None,
         "top_selection": None,
         "top_selection_hit": None,
         "line": None,
@@ -286,6 +288,7 @@ def verify_formal_markets(
                     "verification_status": "OUT_OF_EXPLICIT_SUPPORT",
                     "reason": "OUT_OF_EXPLICIT_SUPPORT",
                     "actual_selection": f"{home}-{away}",
+                    "represented_support_status": "OUT_OF_EXPLICIT_SUPPORT",
                 })
                 result[name] = verification
                 continue
@@ -305,10 +308,20 @@ def verify_formal_markets(
                 key=lambda cell: (-float(cell.get("probability") or 0.0), cell.get("home_goals"), cell.get("away_goals")),
             )
             top = ranked[0] if ranked else None
+            actual_rank = next(
+                (
+                    index
+                    for index, cell in enumerate(ranked, start=1)
+                    if cell.get("home_goals") == home and cell.get("away_goals") == away
+                ),
+                None,
+            )
             verification.update({
                 "verification_status": "VERIFIED",
                 "actual_selection": f"{home}-{away}",
                 "actual_probability": _number(actual.get("probability")),
+                "actual_rank": actual_rank,
+                "represented_support_status": "REPRESENTED",
                 "top_selection": f"{top.get('home_goals')}-{top.get('away_goals')}" if top else None,
                 "top_selection_hit": bool(top and top.get("home_goals") == home and top.get("away_goals") == away),
             })

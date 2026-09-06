@@ -24,8 +24,10 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from scripts.build_public_site import _fixture_contract, _linked_frozen_formal_markets  # noqa: E402
+from scripts.formal_market_projection import project_frozen_formal_markets  # noqa: E402
 from scripts.match_detail import render_match_detail  # noqa: E402
-from scripts.prediction_dashboard import render_dashboard  # noqa: E402
+from scripts.official_jc_handicap import build_jc_handicap_contract  # noqa: E402
+from scripts.prediction_dashboard import build_dashboard, render_dashboard  # noqa: E402
 
 
 class _QuietHandler(SimpleHTTPRequestHandler):
@@ -132,6 +134,106 @@ def _mark_test_fixture(document: str, label: str) -> str:
     )
 
 
+def _linked_prediction_record(data_root: Path, fixture: dict[str, Any]) -> dict[str, Any] | None:
+    prediction_id = str(fixture.get("selected_prediction_id") or fixture.get("prediction_id") or "").strip()
+    if not prediction_id or not re.fullmatch(r"[A-Za-z0-9._~-]+", prediction_id):
+        return None
+    path = data_root / "model_governance" / "predictions" / f"{prediction_id}.json"
+    if not path.is_file():
+        return None
+    try:
+        record = _read_json(path)
+    except (OSError, ValueError):
+        return None
+    if str(record.get("prediction_id") or "") != prediction_id:
+        return None
+    fixture_match_id = str(fixture.get("match_id") or "")
+    record_match_id = str(record.get("match_id") or "")
+    if fixture_match_id and record_match_id and fixture_match_id != record_match_id:
+        return None
+    return record
+
+
+def _visual_jc_handicap_capture(fixture: dict[str, Any], prediction_id: str) -> dict[str, Any]:
+    """Return a test-only captured-line shape for the all-formal visual state."""
+
+    return {
+        "status": "CAPTURED",
+        "line": 1,
+        "source_surface": "nowscore_public_jc_analysis",
+        "source_url": "TEST_FIXTURE",
+        "nowscore_id": fixture.get("nowscore_id"),
+        "business_date": fixture.get("business_date"),
+        "match_number": fixture.get("match_num"),
+        "fetched_at": "2026-09-06T00:00:00+08:00",
+        "captured_at": "2026-09-06T00:00:00+08:00",
+        "request_started_at": "2026-09-06T00:00:00+08:00",
+        "response_at": "2026-09-06T00:00:00+08:00",
+        "observed_at": "2026-09-06T00:00:00+08:00",
+        "page_http_status": 200,
+        "response_sha256": f"TEST_FIXTURE_RESPONSE_{prediction_id}",
+        "content_sha256": f"TEST_FIXTURE_RESPONSE_{prediction_id}",
+        "parser_contract_version": "TEST_FIXTURE",
+        "line_binding": "竞彩指数/GoJcUrl(0)",
+        "line_perspective": "home",
+        "identity_status": "TEST_FIXTURE",
+        "page_identity": {},
+        "reason_codes": [],
+    }
+
+
+def _all_formal_markets_for_visual_fixture(
+    data_root: Path,
+    fixture: dict[str, Any],
+) -> dict[str, Any] | None:
+    """Build a labeled visual-only all-formal state without changing production data."""
+
+    record = _linked_prediction_record(data_root, fixture)
+    exact = record.get("exact_score_distribution") if isinstance(record, dict) else None
+    if not isinstance(record, dict) or not isinstance(exact, dict):
+        return None
+    prediction_id = str(record.get("prediction_id") or fixture.get("prediction_id") or "visual")
+    handicap = build_jc_handicap_contract(
+        exact,
+        _visual_jc_handicap_capture(fixture, prediction_id),
+        model_identity={
+            key: record.get(key)
+            for key in ("prediction_id", "model_role", "model_family", "release_version")
+            if record.get(key) is not None
+        },
+    )
+    visual_record = copy.deepcopy(record)
+    visual_record["jc_handicap"] = handicap
+    return project_frozen_formal_markets(visual_record)
+
+
+def _regenerate_dashboard(site_root: Path) -> dict[str, Any]:
+    """Regenerate the dashboard through the PR renderer immediately before capture."""
+
+    source_candidates = (
+        ROOT / "data" / "prediction_dashboard" / "latest.json",
+        site_root / "prediction_dashboard" / "latest.json",
+    )
+    source_payload = next((_read_json(path) for path in source_candidates if path.is_file()), None)
+    business_date = str((source_payload or {}).get("business_date") or "").strip()
+    if not business_date:
+        raise SystemExit("visual evidence requires a dashboard business_date")
+    data_root = ROOT / "data"
+    return build_dashboard(
+        business_date,
+        universe_root=data_root / "prediction_universe",
+        jobs_root=data_root / "base_prediction_jobs",
+        prediction_root=data_root / "model_governance" / "predictions",
+        exclusion_root=data_root / "model_governance" / "prediction_exclusions",
+        result_root=data_root / "postmatch_automation" / "results",
+        prospective_root=data_root / "prospective",
+        runtime_path=data_root / "product_runtime" / "latest_cycle.json",
+        health_watch_path=data_root / "product_runtime" / "health_watch.json",
+        workspace_path=data_root / "match_workspace" / "latest.json",
+        output_root=site_root / "prediction_dashboard",
+    )
+
+
 def _write_fixture_pages(site_root: Path, payload: dict[str, Any], current: dict[str, Any]) -> None:
     fixture_root = site_root / "visual-fixtures"
     fixture_root.mkdir(parents=True, exist_ok=True)
@@ -168,6 +270,19 @@ def _write_fixture_pages(site_root: Path, payload: dict[str, Any], current: dict
     )
     current_contract["prediction_quality_health"] = payload.get("prediction_quality_health") or {}
     pages["detail-current-frozen.html"] = render_match_detail(current_contract)
+
+    all_formal_markets = _all_formal_markets_for_visual_fixture(ROOT / "data", current)
+    if all_formal_markets is not None:
+        all_formal_contract = _fixture_contract(
+            current,
+            business_date,
+            formal_markets=all_formal_markets,
+        )
+        all_formal_contract["prediction_quality_health"] = payload.get("prediction_quality_health") or {}
+        pages["detail-all-formal.html"] = _mark_test_fixture(
+            render_match_detail(all_formal_contract),
+            "all formal markets",
+        )
 
     completed_contract = copy.deepcopy(current_contract)
     completed_contract["prediction_quality_health"] = {
@@ -248,6 +363,16 @@ def _capture_page(
                 "document.documentElement.clientWidth)"
             )
         )
+        formal_exact_metrics = page.locator(".exact-grid-wrap").evaluate_all(
+            """elements => elements.map(element => ({
+              cellCount: element.querySelectorAll('[data-formal-cell-home]').length,
+              horizontalOverflow: element.scrollWidth > element.clientWidth + 1,
+            }))"""
+        )
+        formal_exact_cells = sum(int(item.get("cellCount") or 0) for item in formal_exact_metrics)
+        formal_exact_horizontal_overflow = any(
+            bool(item.get("horizontalOverflow")) for item in formal_exact_metrics
+        )
         output_path.parent.mkdir(parents=True, exist_ok=True)
         page.screenshot(path=str(output_path), full_page=False)
         visible_status_badges = _visible_count(page, ".status-badge")
@@ -260,6 +385,8 @@ def _capture_page(
             "status": status,
             "url_path": path,
             "horizontal_overflow": overflow,
+            "formal_exact_cells": formal_exact_cells,
+            "formal_exact_horizontal_overflow": formal_exact_horizontal_overflow,
             "normal_frozen_badge_count": visible_status_badges,
             "normal_health_badge_count": visible_health_badges,
             "console_errors": console_errors,
@@ -358,9 +485,12 @@ def _capture_all(
         ("detail-current-frozen-1440x1000.png", "visual-fixtures/detail-current-frozen.html", (1440, 1000), str(current.get("match_id") or "current-frozen"), "PRODUCTION_TRUTH"),
         ("detail-current-frozen-390x844.png", "visual-fixtures/detail-current-frozen.html", (390, 844), str(current.get("match_id") or "current-frozen"), "PRODUCTION_TRUTH"),
         ("detail-current-frozen-320x800.png", "visual-fixtures/detail-current-frozen.html", (320, 800), str(current.get("match_id") or "current-frozen"), "PRODUCTION_TRUTH"),
-        ("formal-markets-1440x1000.png", "visual-fixtures/detail-current-frozen.html#formal-markets", (1440, 1000), str(current.get("match_id") or "formal-markets"), "PRODUCTION_TRUTH"),
-        ("formal-markets-390x844.png", "visual-fixtures/detail-current-frozen.html#formal-markets", (390, 844), str(current.get("match_id") or "formal-markets"), "PRODUCTION_TRUTH"),
-        ("formal-markets-320x800.png", "visual-fixtures/detail-current-frozen.html#formal-markets", (320, 800), str(current.get("match_id") or "formal-markets"), "PRODUCTION_TRUTH"),
+        ("formal-markets-unavailable-1440x1000.png", "visual-fixtures/detail-current-frozen.html#formal-markets", (1440, 1000), str(current.get("match_id") or "formal-markets-unavailable"), "PRODUCTION_TRUTH"),
+        ("formal-markets-unavailable-390x844.png", "visual-fixtures/detail-current-frozen.html#formal-markets", (390, 844), str(current.get("match_id") or "formal-markets-unavailable"), "PRODUCTION_TRUTH"),
+        ("formal-markets-unavailable-320x800.png", "visual-fixtures/detail-current-frozen.html#formal-markets", (320, 800), str(current.get("match_id") or "formal-markets-unavailable"), "PRODUCTION_TRUTH"),
+        ("all-formal-1440x1000.png", "visual-fixtures/detail-all-formal.html#formal-markets", (1440, 1000), "TEST FIXTURE · all formal markets", "TEST_FIXTURE"),
+        ("all-formal-390x844.png", "visual-fixtures/detail-all-formal.html#formal-markets", (390, 844), "TEST FIXTURE · all formal markets", "TEST_FIXTURE"),
+        ("all-formal-320x800.png", "visual-fixtures/detail-all-formal.html#formal-markets", (320, 800), "TEST FIXTURE · all formal markets", "TEST_FIXTURE"),
         ("insufficient-evidence-390x844.png", "visual-fixtures/dashboard-insufficient.html", (390, 844), "TEST FIXTURE · INSUFFICIENT_SAMPLE", "TEST_FIXTURE"),
         ("degraded-evidence-1440x1000.png", "visual-fixtures/dashboard-degraded.html", (1440, 1000), "TEST FIXTURE · DEGRADED", "TEST_FIXTURE"),
         ("unverified-evidence-390x844.png", "visual-fixtures/dashboard-unverified.html", (390, 844), "TEST FIXTURE · UNVERIFIED", "TEST_FIXTURE"),
@@ -406,10 +536,10 @@ def main() -> int:
     args = parser.parse_args()
     site_root = args.site_root.resolve()
     output = args.output_dir.resolve()
+    payload = _regenerate_dashboard(site_root)
     dashboard_path = site_root / "prediction_dashboard" / "latest.json"
     if not dashboard_path.is_file():
-        raise SystemExit(f"missing built dashboard JSON: {dashboard_path}")
-    payload = _read_json(dashboard_path)
+        raise SystemExit(f"PR renderer did not write regenerated dashboard JSON: {dashboard_path}")
     fixtures = [item for item in payload.get("fixtures") or [] if isinstance(item, dict)]
     current = next(
         (
@@ -432,10 +562,15 @@ def main() -> int:
         if record["console_errors"] or record["page_errors"]
     ]
     overflow = [record for record in records if record["horizontal_overflow"]]
-    if browser_errors or overflow:
+    exact_overflow = [record for record in records if record["formal_exact_horizontal_overflow"]]
+    if browser_errors or overflow or exact_overflow:
         raise SystemExit(
             json.dumps(
-                {"browser_errors": browser_errors, "horizontal_overflow": overflow},
+                {
+                    "browser_errors": browser_errors,
+                    "horizontal_overflow": overflow,
+                    "formal_exact_horizontal_overflow": exact_overflow,
+                },
                 ensure_ascii=False,
             )
         )
@@ -456,13 +591,21 @@ def main() -> int:
             "fixture_count": payload.get("summary", {}).get("fixture_count", len(fixtures)),
             "card_count": payload.get("summary", {}).get("card_count", len(fixtures)),
             "frozen_count": sum(1 for item in fixtures if item.get("status") == "FROZEN"),
-            "source": "site/prediction_dashboard/latest.json",
+            "source": "scripts.prediction_dashboard.build_dashboard -> site/prediction_dashboard/latest.json",
         },
         "screenshots": records,
         "checks": {
             "horizontal_overflow_1440": 0,
             "horizontal_overflow_390": 0,
             "horizontal_overflow_320": 0,
+            "formal_exact_horizontal_overflow_390": 0,
+            "formal_exact_horizontal_overflow_320": 0,
+            "formal_exact_cell_counts": {
+                record["name"]: record["formal_exact_cells"]
+                for record in records
+                if record["formal_exact_cells"]
+            },
+            "dashboard_regenerated_with_pr_renderer": "YES",
             "normal_frozen_badge_count": production_frozen_count,
             "normal_health_badge_count": production_health_count,
             "fake_data_graphics": 0,
