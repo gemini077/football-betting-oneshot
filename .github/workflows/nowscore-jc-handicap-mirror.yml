@@ -1,0 +1,83 @@
+name: Nowscore JC handicap mirror preflight
+
+on:
+  pull_request:
+    paths:
+      - "scripts/nowscore_jc_handicap_mirror_audit.py"
+      - "tests/test_nowscore_jc_handicap_mirror_audit.py"
+      - "data/prediction_universe/**"
+      - ".github/workflows/nowscore-jc-handicap-mirror.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out pull request head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install focused test dependency
+        run: python -m pip install --disable-pip-version-check pytest==8.4.1
+
+      - name: Run Nowscore mirror focused tests
+        run: python -m pytest -q tests/test_nowscore_jc_handicap_mirror_audit.py
+
+      - name: Compile audit script
+        run: python -m py_compile scripts/nowscore_jc_handicap_mirror_audit.py
+
+      - name: Check diff whitespace
+        run: git diff --check "${{ github.event.pull_request.base.sha }}...${{ github.event.pull_request.head.sha }}"
+
+  live-audit:
+    if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out pull request head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 1
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Fetch immutable PR #203 comparator object
+        env:
+          COMPARATOR_COMMIT: adc289626a5235510a998d893b6dbc47a3e0fe11
+        run: git fetch --no-tags --depth=1 origin "$COMPARATOR_COMMIT" || true
+
+      - name: Run bounded live Nowscore audit on GitHub runner
+        id: live-audit
+        env:
+          COMPARATOR_COMMIT: adc289626a5235510a998d893b6dbc47a3e0fe11
+        run: |
+          set +e
+          python scripts/nowscore_jc_handicap_mirror_audit.py \
+            --comparator-ref "$COMPARATOR_COMMIT" \
+            --output nowscore-jc-handicap-mirror-audit.json
+          exit_code=$?
+          echo "exit_code=${exit_code}" >> "$GITHUB_OUTPUT"
+          exit "$exit_code"
+
+      - name: Upload live Nowscore audit artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nowscore-jc-handicap-mirror-audit
+          path: nowscore-jc-handicap-mirror-audit.json
+          if-no-files-found: warn
+          retention-days: 7
