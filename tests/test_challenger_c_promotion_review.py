@@ -17,23 +17,23 @@ from challenger_c_promotion_review import (  # noqa: E402
 )
 
 
-def test_review_reproduces_unique_metrics_and_stops_below_unique_match_gate():
+def test_review_reproduces_109_unique_metrics_and_separates_natural_growth():
     evidence = run_review()
 
-    assert evidence["decision"] == "KEEP CHAMPION / KEEP C SHADOW"
-    assert evidence["safety_gate"]["status"] == "FAIL"
-    assert evidence["overall_reproduction"]["status"] == "PASS"
-    assert evidence["version_row_reproduction"]["status"] == "PASS"
-    assert evidence["counts"]["verified_pair_rows"] == 112
-    assert evidence["counts"]["verified_unique_matches"] == 29
-    assert evidence["counts"]["promotion_eligible_unique_matches"] >= evidence["counts"]["verified_unique_matches"]
-    assert evidence["counts"]["version_history_match_groups"] == 26
-    assert evidence["counts"]["extra_version_rows"] == 83
-    assert evidence["counts"]["duplicate_verified_match_groups"] == 26
-    assert evidence["safety_gate"]["checks"]["unique_match_promotion_gate"] is False
-    assert evidence["overall"]["metrics"]["champion"]["sample_count"] == 29
-    assert evidence["overall"]["version_row_audit_metrics"]["champion"]["sample_count"] == 112
+    assert evidence["milestone"] == "CHALLENGER-C-100-PROMOTION-REVIEW-1"
+    assert evidence["decision"] == "C_PROMOTION_REVIEW_INCONCLUSIVE"
     assert evidence["integrity"]["status"] == "PASS"
+    assert evidence["cohort"]["verified_unique_matches"] == 109
+    assert evidence["cohort"]["natural_growth_unique_matches"] == 2
+    assert evidence["cohort"]["natural_growth_included_in_decision"] is False
+    assert evidence["primary_exact_nll"]["n"] == 109
+    assert evidence["primary_exact_nll"]["iid_bootstrap_95_ci"]["resamples"] >= 10_000
+    assert evidence["primary_exact_nll"]["moving_block_bootstrap_95_ci"]["block_length"] == 10
+    assert evidence["overall"]["overall_reproduction_against_109_authority"]["status"] == "PASS"
+    assert evidence["overall"]["shadow_reference_reproduction"]["status"] == "PASS"
+    assert evidence["immutable_exact_authority"]["status"] == "PASS"
+    assert evidence["market_control"]["status"] == "COMPARABLE"
+    assert evidence["market_control"]["cohort_match_count"] == 107
     assert evidence["source"]["new_matches_fetched"] is False
 
 
@@ -76,6 +76,7 @@ def test_safety_floor_only_uses_explicit_proper_metric_floors():
 def test_review_input_is_current_shadow_artifact(path):
     document = json.loads(path.read_text(encoding="utf-8"))
     assert document["candidate_id"] == "market_side_only_hybrid"
-    assert document["checkpoint"]["status"] == "NOT_REACHED"
-    assert document["checkpoint"]["verified_unique_matches"] == 29
-    assert document["checkpoint"]["verified_pair_version_rows"] == 112
+    assert document["checkpoint"]["status"] == "PROMOTION_REVIEW_READY"
+    assert document["checkpoint"]["verified_unique_matches"] == 109
+    assert document["checkpoint"]["promotion_review_minimum"] == 100
+    assert document["checkpoint"]["auto_promote"] is False
