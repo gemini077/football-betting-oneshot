@@ -84,6 +84,75 @@ def _status_counter(rows: list[Mapping[str, Any]]) -> dict[str, int]:
     ))
 
 
+def _parse_timestamp(value: Any) -> datetime | None:
+    if not isinstance(value, str) or not value.strip():
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=datetime.now().astimezone().tzinfo)
+
+
+def _name_diagnostics(rows: list[Mapping[str, Any]]) -> dict[str, Any]:
+    variant_rows = [row for row in rows if row.get("name_diagnostics")]
+    codes = Counter(
+        str(code)
+        for row in variant_rows
+        for code in row.get("name_diagnostics") or []
+    )
+    return {
+        "variant_row_n": len(variant_rows),
+        "variant_side_n": sum(len(row.get("name_variant_sides") or []) for row in variant_rows),
+        "codes": dict(codes),
+        "rows": [
+            {
+                "match_number": row.get("match_number"),
+                "nowscore_id": row.get("nowscore_id"),
+                "sides": list(row.get("name_variant_sides") or []),
+                "details": list(row.get("name_variant_details") or []),
+            }
+            for row in variant_rows
+        ],
+    }
+
+
+def _timestamp_proof(rows: list[Mapping[str, Any]]) -> dict[str, Any]:
+    formal_rows = [row for row in rows if row.get("line_available")]
+    response_before_kickoff_n = 0
+    captured_equals_fetched_n = 0
+    response_equals_observed_n = 0
+    request_before_response_n = 0
+    invalid_n = 0
+    for row in formal_rows:
+        kickoff = _parse_timestamp(row.get("kickoff_at"))
+        request_started = _parse_timestamp(row.get("request_started_at"))
+        response_at = _parse_timestamp(row.get("response_at"))
+        observed_at = _parse_timestamp(row.get("observed_at"))
+        captured_at = _parse_timestamp(row.get("captured_at"))
+        fetched_at = _parse_timestamp(row.get("fetched_at"))
+        if kickoff is None or response_at is None or captured_at is None or fetched_at is None:
+            invalid_n += 1
+            continue
+        if response_at < kickoff:
+            response_before_kickoff_n += 1
+        if captured_at == fetched_at == response_at:
+            captured_equals_fetched_n += 1
+        if observed_at == response_at:
+            response_equals_observed_n += 1
+        if request_started is not None and request_started <= response_at:
+            request_before_response_n += 1
+    return {
+        "observation_field": "response_at",
+        "formal_capture_n": len(formal_rows),
+        "response_before_kickoff_n": response_before_kickoff_n,
+        "captured_at_equals_fetched_at_equals_response_at_n": captured_equals_fetched_n,
+        "observed_at_equals_response_at_n": response_equals_observed_n,
+        "request_started_at_before_or_at_response_at_n": request_before_response_n,
+        "invalid_or_missing_n": invalid_n,
+    }
+
+
 def run_audit(
     *,
     universe_root: Path = UNIVERSE_ROOT,
@@ -161,12 +230,20 @@ def run_audit(
             "home_team": capture.get("home_team"),
             "away_team": capture.get("away_team"),
             "kickoff_at": capture.get("kickoff_at"),
+            "request_started_at": capture.get("request_started_at"),
+            "response_at": capture.get("response_at"),
+            "observed_at": capture.get("observed_at"),
+            "fetched_at": capture.get("fetched_at"),
+            "captured_at": capture.get("captured_at"),
             "page_identity": capture.get("page_identity") or {},
             "retry_count": capture.get("retry_count", 0),
             "fetch_error": capture.get("fetch_error"),
             "abstain_reason": reason,
             "reason_codes": list(capture.get("reason_codes") or []),
             "source_url": capture.get("source_url"),
+            "name_diagnostics": list(capture.get("name_diagnostics") or []),
+            "name_variant_sides": list(capture.get("name_variant_sides") or []),
+            "name_variant_details": list(capture.get("name_variant_details") or []),
         }
         rows.append(row)
 
@@ -243,6 +320,8 @@ def run_audit(
             "derived_from_asian_handicap": False,
         },
         "abstain_reasons": dict(abstain_reasons),
+        "name_diagnostics": _name_diagnostics(rows),
+        "timestamp_proof": _timestamp_proof(rows),
         "response_hashes": response_hashes,
         "rows": rows,
         "delivery_decision": delivery_decision,

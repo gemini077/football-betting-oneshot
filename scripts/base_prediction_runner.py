@@ -1964,10 +1964,13 @@ def run_base_prediction_jobs(
                 metadata,
             )
             try:
-                jc_handicap_capture = capture_nowscore_jc_handicap(
-                    fixture,
-                    now=freeze_time,
-                )
+                jc_capture_kwargs = {}
+                if not real_time:
+                    # Deterministic clock injection is a test seam only.  A
+                    # production capture obtains its source timestamp from
+                    # the HTTP adapter's real response observation clock.
+                    jc_capture_kwargs["now"] = freeze_time
+                jc_handicap_capture = capture_nowscore_jc_handicap(fixture, **jc_capture_kwargs)
             except Exception as error:  # JC lane is failure-isolated from other markets
                 jc_handicap_capture = abstain_nowscore_jc_handicap_capture(
                     fixture,

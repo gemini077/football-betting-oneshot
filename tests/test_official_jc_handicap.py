@@ -74,21 +74,54 @@ def fixture() -> dict:
     }
 
 
-def page(line: str = "1", *, nowscore_id: int = 3000001, home: str = "Home FC", away: str = "Away FC") -> str:
+def page(
+    line: str = "1",
+    *,
+    nowscore_id: int = 3000001,
+    home: str = "Home FC",
+    away: str = "Away FC",
+    timestamp: int = 1788775200000,
+) -> str:
     return f'''<html><script>
         var scheduleId = {nowscore_id};
         var homeTeam = "{home}";
         var guestTeam = "{away}";
-        var MatchTimeStamp = 1788775200000;
+        var MatchTimeStamp = {timestamp};
     </script><div class="fenxiBar">竞彩指数</div>
     <div><table><tr onclick="GoJcUrl(1)"><td>0</td><td>1.5</td></tr>
     <tr onclick="GoJcUrl(0)"><td>{line}</td><td>1.8</td><td>3.5</td><td>4.5</td></tr></table></div></html>'''
 
 
-def captured(line: int = 1) -> dict:
-    response = {"http_status": 200, "body": page(str(line)).encode("utf-8")}
+def captured(
+    line: int = 1,
+    *,
+    response_at: str = "2026-09-06T12:34:56+08:00",
+    page_html: str | None = None,
+) -> dict:
+    response = {
+        "http_status": 200,
+        "body": (page_html or page(str(line))).encode("utf-8"),
+        "request_started_at": "2026-09-06T12:34:55+08:00",
+        "response_at": response_at,
+        "observed_at": response_at,
+    }
     return capture_nowscore_jc_handicap(
         fixture(),
+        now=NOW,
+        fetcher=lambda *_args, **_kwargs: response,
+    )
+
+
+def capture_fixture(fixture_row: dict, page_html: str, *, response_at: str = "2026-09-06T12:34:56+08:00") -> dict:
+    response = {
+        "http_status": 200,
+        "body": page_html.encode("utf-8"),
+        "request_started_at": "2026-09-06T12:34:55+08:00",
+        "response_at": response_at,
+        "observed_at": response_at,
+    }
+    return capture_nowscore_jc_handicap(
+        fixture_row,
         now=NOW,
         fetcher=lambda *_args, **_kwargs: response,
     )
@@ -134,26 +167,109 @@ def test_integer_line_capture_and_projection_boundaries(line):
     assert sum(projected.values()) == pytest.approx(1.0)
 
 
+def test_source_timestamps_use_http_observation_not_prediction_freeze_time():
+    source = captured(1)
+
+    assert source["captured_at"] == "2026-09-06T12:34:56+08:00"
+    assert source["fetched_at"] == source["captured_at"]
+    assert source["response_at"] == source["captured_at"]
+    assert source["observed_at"] == source["captured_at"]
+    assert source["captured_at"] != NOW.isoformat()
+
+
+def test_response_completed_at_kickoff_abstains_even_when_request_started_before_kickoff():
+    source = captured(response_at="2026-09-07T18:00:01+08:00")
+
+    assert source["status"] == "ABSTAIN"
+    assert source["reason"] == "POST_KICKOFF_ONLY"
+    assert "SOURCE_RESPONSE_AT_OR_AFTER_KICKOFF" in source["reason_codes"]
+    assert source["request_started_at"] == "2026-09-06T12:34:55+08:00"
+    assert source["response_at"] == "2026-09-07T18:00:01+08:00"
+    assert source["captured_at"] == source["response_at"]
+    assert source["line"] is None
+
+
+@pytest.mark.parametrize(
+    ("fixture_home", "fixture_away", "page_home", "page_away", "sides"),
+    [
+        ("\u8d6b\u5854\u83f2", "\u585e\u5c14\u5854", "\u8d6b\u5854\u8d39", "\u585e\u5c14\u5854", ["home"]),
+        ("\u5361\u5c14\u9a6c", "\u4f50\u52a0\u987f\u65af", "\u5361\u5c14\u9a6c", "\u5c24\u5c14\u52a0\u767b", ["away"]),
+        ("\u57c3\u65af\u6258\u91cc\u5c14", "\u963f\u7f57\u5361", "\u57c3\u65af\u6258\u91cc", "\u963f\u7f57\u5361", ["home"]),
+    ],
+)
+def test_same_provider_name_variants_are_diagnostics_not_identity_conflicts(
+    fixture_home, fixture_away, page_home, page_away, sides
+):
+    fixture_row = fixture()
+    fixture_row.update({"homeTeam": fixture_home, "awayTeam": fixture_away})
+    source = capture_fixture(fixture_row, page(home=page_home, away=page_away))
+
+    assert source["status"] == "CAPTURED"
+    assert source["reason"] is None
+    assert source["name_diagnostics"] == ["NAME_VARIANT_DIAGNOSTIC"]
+    assert source["name_variant_sides"] == sides
+
+
+def test_real_provider_id_kickoff_and_orientation_conflicts_fail_closed():
+    cases = [
+        (page(nowscore_id=3000002), "PAGE_NOWSCORE_ID_CONFLICT"),
+        (page(timestamp=1788775260000), "PAGE_KICKOFF_CONFLICT"),
+        (page(home="Away FC", away="Home FC"), "PAGE_ORIENTATION_CONFLICT"),
+    ]
+
+    for page_html, expected_code in cases:
+        source = capture_fixture(fixture(), page_html)
+        assert source["status"] == "ABSTAIN"
+        assert source["reason"] == "IDENTITY_CONFLICT"
+        assert expected_code in source["reason_codes"]
+
+
 def test_non_integer_multiple_identity_and_non200_fail_closed():
     non_integer = capture_nowscore_jc_handicap(
-        fixture(), now=NOW, fetcher=lambda *_args, **_kwargs: {"http_status": 200, "body": page("1.5").encode()}
+        fixture(),
+        now=NOW,
+        fetcher=lambda *_args, **_kwargs: {
+            "http_status": 200,
+            "body": page("1.5").encode(),
+            "response_at": "2026-09-06T12:34:56+08:00",
+        },
     )
     assert non_integer["status"] == "ABSTAIN"
     assert non_integer["reason"] == "NON_INTEGER_LINE"
 
     duplicate = page("1").replace('</table>', '<tr onclick="GoJcUrl(0)"><td>2</td></tr></table>')
     duplicate_result = capture_nowscore_jc_handicap(
-        fixture(), now=NOW, fetcher=lambda *_args, **_kwargs: {"http_status": 200, "body": duplicate.encode()}
+        fixture(),
+        now=NOW,
+        fetcher=lambda *_args, **_kwargs: {
+            "http_status": 200,
+            "body": duplicate.encode(),
+            "response_at": "2026-09-06T12:34:56+08:00",
+        },
     )
     assert duplicate_result["reason"] == "MULTIPLE_JC_HANDICAP_ROWS"
 
-    conflict = capture_nowscore_jc_handicap(
-        fixture(), now=NOW, fetcher=lambda *_args, **_kwargs: {"http_status": 200, "body": page("1", home="Other FC").encode()}
+    variant = capture_nowscore_jc_handicap(
+        fixture(),
+        now=NOW,
+        fetcher=lambda *_args, **_kwargs: {
+            "http_status": 200,
+            "body": page("1", home="Other FC").encode(),
+            "response_at": "2026-09-06T12:34:56+08:00",
+        },
     )
-    assert conflict["reason"] == "IDENTITY_CONFLICT"
+    assert variant["status"] == "CAPTURED"
+    assert variant["name_diagnostics"] == ["NAME_VARIANT_DIAGNOSTIC"]
+    assert variant["name_variant_sides"] == ["home"]
 
     unavailable = capture_nowscore_jc_handicap(
-        fixture(), now=NOW, fetcher=lambda *_args, **_kwargs: {"http_status": 567, "body": b"blocked"}
+        fixture(),
+        now=NOW,
+        fetcher=lambda *_args, **_kwargs: {
+            "http_status": 567,
+            "body": b"blocked",
+            "response_at": "2026-09-06T12:34:56+08:00",
+        },
     )
     assert unavailable["reason"] == "SOURCE_HTTP_NOT_200"
     assert unavailable["page_http_status"] == 567
@@ -164,7 +280,11 @@ def test_retry_budget_is_small_and_bounded():
 
     def fetcher(*_args, **_kwargs):
         calls.append(1)
-        return {"http_status": 503, "body": b"temporarily unavailable"}
+        return {
+            "http_status": 503,
+            "body": b"temporarily unavailable",
+            "response_at": "2026-09-06T12:34:56+08:00",
+        }
 
     result = capture_nowscore_jc_handicap(
         fixture(),
@@ -230,7 +350,13 @@ def test_freeze_classify_settle_and_evaluate_use_frozen_exact_authority_only():
 
 def test_abstain_authority_is_explicit_and_summary_is_prospective():
     abstain_source = capture_nowscore_jc_handicap(
-        fixture(), now=NOW, fetcher=lambda *_args, **_kwargs: {"http_status": 403, "body": b"blocked"}
+        fixture(),
+        now=NOW,
+        fetcher=lambda *_args, **_kwargs: {
+            "http_status": 403,
+            "body": b"blocked",
+            "response_at": "2026-09-06T12:34:56+08:00",
+        },
     )
     contract = build_jc_handicap_contract(exact_contract(), abstain_source)
     validate_jc_handicap_contract(contract)
@@ -338,3 +464,23 @@ def test_live_audit_resolves_newest_nowscore_universe_and_reports_line_coverage(
     assert result["line_coverage"]["available_n"] == 1
     assert result["odds_coverage"]["baseline_status"] == "NOT_AVAILABLE"
     assert result["delivery_decision"] == "JC_HANDICAP_NOWSCORE_FORMAL_TRUTH_READY"
+
+
+def test_fail_closed_live_audit_cannot_be_masked_as_ci_success():
+    workflow = (ROOT / ".github" / "workflows" / "jc-handicap-nowscore.yml").read_text(encoding="utf-8")
+
+    assert "continue-on-error" not in workflow
+    assert 'set +e' not in workflow
+    assert 'status=$?' not in workflow
+    assert "python scripts/official_jc_handicap_live_audit.py" in workflow
+    assert "if: ${{ always() }}" in workflow
+
+
+def test_fail_closed_live_audit_writes_artifact_and_returns_failure(tmp_path, monkeypatch):
+    output = tmp_path / "live-audit.json"
+    result = {"delivery_decision": "FAIL_CLOSED", "rows": [], "response_hashes": {}}
+    monkeypatch.setattr(live_audit, "run_audit", lambda **_kwargs: result)
+    monkeypatch.setattr(sys, "argv", ["official_jc_handicap_live_audit.py", "--output", str(output)])
+
+    assert live_audit.main() == 1
+    assert json.loads(output.read_text(encoding="utf-8")) == result

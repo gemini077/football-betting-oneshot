@@ -141,6 +141,10 @@ def _iso(value: Any) -> str | None:
     return parsed.isoformat(timespec="seconds") if parsed else None
 
 
+def _now_shanghai() -> datetime:
+    return datetime.now(SHANGHAI)
+
+
 def _canonical_json(value: Any) -> bytes:
     return json.dumps(
         value,
@@ -328,6 +332,7 @@ def _fetch_page(url: str, timeout: float = FETCH_TIMEOUT_SECONDS) -> dict[str, A
     """Fetch one Nowscore-owned page; callers bound all retry attempts."""
 
     started = time.monotonic()
+    request_started_at = _now_shanghai()
     body = b""
     http_status: int | None = None
     error: str | None = None
@@ -358,6 +363,8 @@ def _fetch_page(url: str, timeout: float = FETCH_TIMEOUT_SECONDS) -> dict[str, A
     if len(body) > MAX_RESPONSE_BYTES:
         body = b""
         error = "RESPONSE_TOO_LARGE"
+    response_at = _now_shanghai()
+    response_timestamp = response_at.isoformat(timespec="seconds")
     return {
         "http_status": http_status,
         "body": body,
@@ -365,6 +372,9 @@ def _fetch_page(url: str, timeout: float = FETCH_TIMEOUT_SECONDS) -> dict[str, A
         "response_sha256": _sha256(body) if body else None,
         "error": error,
         "duration_ms": round((time.monotonic() - started) * 1000, 1),
+        "request_started_at": request_started_at.isoformat(timespec="seconds"),
+        "response_at": response_timestamp,
+        "observed_at": response_timestamp,
     }
 
 
@@ -393,6 +403,16 @@ def _normalise_fetch_result(result: Any) -> dict[str, Any]:
     # never trusted from a caller-provided envelope.
     value["response_sha256"] = _sha256(body) if body else None
     value.setdefault("response_bytes", len(body))
+    request_started_at = _iso(value.get("request_started_at"))
+    response_at = _iso(value.get("response_at") or value.get("observed_at"))
+    if response_at is None:
+        # A custom fetcher is a test seam.  Its missing observation timestamp is
+        # filled at the adapter boundary with the real local observation clock;
+        # the caller's prediction/freeze clock is never used for this field.
+        response_at = _now_shanghai().isoformat(timespec="seconds")
+    value["request_started_at"] = request_started_at
+    value["response_at"] = response_at
+    value["observed_at"] = response_at
     return value
 
 
@@ -419,16 +439,57 @@ def _fixture_kickoff(fixture: Mapping[str, Any]) -> datetime | None:
     return _parse_datetime(_fixture_value(fixture, "kickoff_at", "kickoff_local"))
 
 
+def _name_variant_details(
+    fixture: Mapping[str, Any],
+    page_identity: Mapping[str, Any],
+) -> list[dict[str, str]]:
+    expected_home = _identity_text(_fixture_value(fixture, "homeTeam", "home_team", "home"))
+    expected_away = _identity_text(_fixture_value(fixture, "awayTeam", "away_team", "away"))
+    page_home = _identity_text(page_identity.get("home_team"))
+    page_away = _identity_text(page_identity.get("away_team"))
+    if not expected_home or not expected_away or not page_home or not page_away:
+        return []
+    variants: list[dict[str, str]] = []
+    for side, expected, observed in (
+        ("home", expected_home, page_home),
+        ("away", expected_away, page_away),
+    ):
+        if expected != observed:
+            variants.append({
+                "code": "NAME_VARIANT_DIAGNOSTIC",
+                "side": side,
+                "fixture_name": _text(_fixture_value(fixture, "homeTeam", "home_team", "home") if side == "home" else _fixture_value(fixture, "awayTeam", "away_team", "away")),
+                "page_name": _text(page_identity.get("home_team") if side == "home" else page_identity.get("away_team")),
+            })
+    return variants
+
+
 def _identity_errors(fixture: Mapping[str, Any], page_identity: Mapping[str, Any], expected_id: int) -> list[str]:
+    """Return only hard same-provider identity failures.
+
+    Nowscore's stable page id, exact kickoff and the page's native home/away
+    orientation are authoritative.  Display-name spelling/translation
+    differences are reported separately as diagnostics.
+    """
+
     errors: list[str] = []
     if page_identity.get("nowscore_id") != expected_id:
         errors.append("PAGE_NOWSCORE_ID_CONFLICT" if page_identity.get("nowscore_id") else "PAGE_NOWSCORE_ID_MISSING")
+
     expected_home = _identity_text(_fixture_value(fixture, "homeTeam", "home_team", "home"))
     expected_away = _identity_text(_fixture_value(fixture, "awayTeam", "away_team", "away"))
-    if not expected_home or _identity_text(page_identity.get("home_team")) != expected_home:
-        errors.append("PAGE_HOME_TEAM_CONFLICT" if page_identity.get("home_team") else "PAGE_HOME_TEAM_MISSING")
-    if not expected_away or _identity_text(page_identity.get("away_team")) != expected_away:
-        errors.append("PAGE_AWAY_TEAM_CONFLICT" if page_identity.get("away_team") else "PAGE_AWAY_TEAM_MISSING")
+    page_home = _identity_text(page_identity.get("home_team"))
+    page_away = _identity_text(page_identity.get("away_team"))
+    if not expected_home or not expected_away:
+        errors.append("FIXTURE_ORIENTATION_MISSING")
+    if not page_home:
+        errors.append("PAGE_HOME_TEAM_MISSING")
+    if not page_away:
+        errors.append("PAGE_AWAY_TEAM_MISSING")
+    if expected_home and expected_away and page_home and page_away:
+        if page_home == expected_away and page_away == expected_home:
+            errors.append("PAGE_ORIENTATION_CONFLICT")
+
     expected_kickoff = _fixture_kickoff(fixture)
     page_date = _normalise_date(page_identity.get("kickoff_date"))
     page_time = _normalise_time(page_identity.get("kickoff_time"))
@@ -450,6 +511,11 @@ def _capture_base(
     retry_count: int = 0,
 ) -> dict[str, Any]:
     identity = (parsed or {}).get("identity") if isinstance(parsed, Mapping) else None
+    identity = identity if isinstance(identity, Mapping) else {}
+    fetch = fetch_result or {}
+    response_at = _parse_datetime(fetch.get("response_at") or fetch.get("observed_at"))
+    source_observed_at = response_at or captured_at
+    name_variant_details = _name_variant_details(fixture, identity)
     value: dict[str, Any] = {
         "contract_version": JC_HANDICAP_SOURCE_CAPTURE_VERSION,
         "status": "CAPTURED" if reason is None else "ABSTAIN",
@@ -465,13 +531,16 @@ def _capture_base(
         "source": "nowscore_public_jc",
         "source_surface": JC_HANDICAP_SOURCE_SURFACE,
         "source_url": source_url,
-        "fetched_at": captured_at.isoformat(timespec="seconds") if captured_at else None,
-        "captured_at": captured_at.isoformat(timespec="seconds") if captured_at else None,
-        "http_status": (fetch_result or {}).get("http_status"),
-        "page_http_status": (fetch_result or {}).get("http_status"),
-        "response_bytes": (fetch_result or {}).get("response_bytes", 0),
-        "response_sha256": (fetch_result or {}).get("response_sha256"),
-        "content_sha256": (fetch_result or {}).get("response_sha256"),
+        "fetched_at": source_observed_at.isoformat(timespec="seconds") if source_observed_at else None,
+        "captured_at": source_observed_at.isoformat(timespec="seconds") if source_observed_at else None,
+        "request_started_at": _iso(fetch.get("request_started_at")),
+        "response_at": _iso(fetch.get("response_at") or fetch.get("observed_at")),
+        "observed_at": _iso(fetch.get("observed_at") or fetch.get("response_at")),
+        "http_status": fetch.get("http_status"),
+        "page_http_status": fetch.get("http_status"),
+        "response_bytes": fetch.get("response_bytes", 0),
+        "response_sha256": fetch.get("response_sha256"),
+        "content_sha256": fetch.get("response_sha256"),
         "parser_contract_version": JC_HANDICAP_PARSER_CONTRACT_VERSION,
         "parser_version": JC_HANDICAP_PARSER_CONTRACT_VERSION,
         "line_binding": JC_HANDICAP_LINE_BINDING,
@@ -480,11 +549,14 @@ def _capture_base(
         "line": None,
         "line_available": reason is None,
         "odds_available": False,
-        "page_identity": deepcopy(dict(identity or {})),
+        "page_identity": deepcopy(dict(identity)),
         "identity_status": (parsed or {}).get("identity_status"),
         "official_row_count": int((parsed or {}).get("official_row_count") or 0),
         "retry_count": retry_count,
-        "fetch_error": (fetch_result or {}).get("error"),
+        "fetch_error": fetch.get("error"),
+        "name_diagnostics": list(dict.fromkeys(item["code"] for item in name_variant_details)),
+        "name_variant_sides": [item["side"] for item in name_variant_details],
+        "name_variant_details": name_variant_details,
     }
     if reason is None:
         rows = (parsed or {}).get("official_rows") or []
@@ -548,6 +620,17 @@ def validate_nowscore_jc_handicap_capture(
             raise ValueError("captured JC handicap page response is not immutable")
         if capture.get("identity_status") != "EXACT_ID":
             raise ValueError("captured JC handicap page identity is not exact")
+        response_at = _parse_datetime(capture.get("response_at"))
+        observed_at = _parse_datetime(capture.get("observed_at"))
+        fetched_at = _parse_datetime(capture.get("fetched_at"))
+        captured_at = _parse_datetime(capture.get("captured_at"))
+        if not response_at or not observed_at or not fetched_at or not captured_at:
+            raise ValueError("captured JC handicap source observation timestamp is missing")
+        if not (response_at == observed_at == fetched_at == captured_at):
+            raise ValueError("captured JC handicap source timestamps are inconsistent")
+        request_started_at = _parse_datetime(capture.get("request_started_at"))
+        if request_started_at is not None and request_started_at > response_at:
+            raise ValueError("captured JC handicap request timestamp is after response")
     else:
         if not _text(capture.get("reason")):
             raise ValueError("JC handicap abstain capture has no reason")
@@ -561,7 +644,7 @@ def validate_nowscore_jc_handicap_capture(
             raise ValueError("JC handicap capture business date mismatch")
     boundary = _parse_datetime(kickoff_at) if kickoff_at is not None else _parse_datetime(capture.get("kickoff_at"))
     captured = _parse_datetime(capture.get("captured_at"))
-    if boundary is not None and captured is not None and captured >= boundary:
+    if capture.get("status") == "CAPTURED" and boundary is not None and captured is not None and captured >= boundary:
         raise ValueError("JC handicap capture is not strictly prematch")
 
 
@@ -622,9 +705,12 @@ def capture_nowscore_jc_handicap(
             reason_codes=list(trusted.get("reasons") or []),
         )
     kickoff = _fixture_kickoff(fixture)
-    clock = _parse_datetime(now) if now is not None else datetime.now(SHANGHAI)
+    # ``now`` is an injectable eligibility-clock seam for deterministic tests.
+    # It is never a source-observation timestamp; the latter comes only from
+    # the fetch result after the HTTP response has completed.
+    clock = _parse_datetime(now) if now is not None else _now_shanghai()
     if kickoff is None:
-        return _abstain_capture(fixture, "KICKOFF_UNRESOLVED", nowscore_id=nowscore_id, source_url=source_url, captured_at=clock)
+        return _abstain_capture(fixture, "KICKOFF_UNRESOLVED", nowscore_id=nowscore_id, source_url=source_url)
     cached = _reusable_capture(cached_capture, fixture, kickoff=kickoff)
     if cached is not None:
         return cached
@@ -634,7 +720,6 @@ def capture_nowscore_jc_handicap(
             "POST_KICKOFF_ONLY",
             nowscore_id=nowscore_id,
             source_url=source_url,
-            captured_at=clock,
         )
 
     request_fn = fetcher or _fetch_page
@@ -650,7 +735,40 @@ def capture_nowscore_jc_handicap(
         if not _retryable(result) or attempt >= bounded_retries:
             break
         time.sleep(max(0.0, min(float(backoff_seconds) * (2**attempt), 2.0)))
-    captured_at = clock if now is not None else datetime.now(SHANGHAI)
+    response_at = _parse_datetime(result.get("response_at") or result.get("observed_at"))
+    if response_at is None:
+        return _abstain_capture(
+            fixture,
+            "SOURCE_TIMESTAMP_INVALID",
+            nowscore_id=nowscore_id,
+            source_url=source_url,
+            fetch_result=result,
+            reason_codes=["SOURCE_RESPONSE_TIME_MISSING"],
+            retry_count=max(0, attempts - 1),
+        )
+    request_started_at = _parse_datetime(result.get("request_started_at"))
+    if request_started_at is not None and request_started_at > response_at:
+        return _abstain_capture(
+            fixture,
+            "SOURCE_TIMESTAMP_INVALID",
+            nowscore_id=nowscore_id,
+            source_url=source_url,
+            captured_at=response_at,
+            fetch_result=result,
+            reason_codes=["SOURCE_REQUEST_AFTER_RESPONSE"],
+            retry_count=max(0, attempts - 1),
+        )
+    if response_at >= kickoff:
+        return _abstain_capture(
+            fixture,
+            "POST_KICKOFF_ONLY",
+            nowscore_id=nowscore_id,
+            source_url=source_url,
+            captured_at=response_at,
+            reason_codes=["SOURCE_RESPONSE_AT_OR_AFTER_KICKOFF"],
+            fetch_result=result,
+            retry_count=max(0, attempts - 1),
+        )
     status = result.get("http_status")
     if status != 200 or not result.get("body"):
         reason = "SOURCE_HTTP_NOT_200" if status != 200 else "EMPTY_RESPONSE"
@@ -659,17 +777,7 @@ def capture_nowscore_jc_handicap(
             reason,
             nowscore_id=nowscore_id,
             source_url=source_url,
-            captured_at=captured_at,
-            fetch_result=result,
-            retry_count=max(0, attempts - 1),
-        )
-    if captured_at >= kickoff:
-        return _abstain_capture(
-            fixture,
-            "POST_KICKOFF_ONLY",
-            nowscore_id=nowscore_id,
-            source_url=source_url,
-            captured_at=captured_at,
+            captured_at=response_at,
             fetch_result=result,
             retry_count=max(0, attempts - 1),
         )
@@ -682,7 +790,7 @@ def capture_nowscore_jc_handicap(
             "IDENTITY_CONFLICT",
             nowscore_id=nowscore_id,
             source_url=source_url,
-            captured_at=captured_at,
+            captured_at=response_at,
             reason_codes=identity_errors,
             fetch_result=result,
             parsed=parsed,
@@ -701,7 +809,7 @@ def capture_nowscore_jc_handicap(
             fixture,
             nowscore_id=nowscore_id,
             source_url=source_url,
-            captured_at=captured_at,
+            captured_at=response_at,
             fetch_result=result,
             parsed=parsed,
             retry_count=max(0, attempts - 1),
@@ -709,12 +817,12 @@ def capture_nowscore_jc_handicap(
         validate_nowscore_jc_handicap_capture(capture, fixture=fixture, kickoff_at=kickoff)
         return capture
     return _abstain_capture(
-        fixture,
-        reason,
-        nowscore_id=nowscore_id,
-        source_url=source_url,
-        captured_at=captured_at,
-        fetch_result=result,
+            fixture,
+            reason,
+            nowscore_id=nowscore_id,
+            source_url=source_url,
+            captured_at=response_at,
+            fetch_result=result,
         parsed=parsed,
         retry_count=max(0, attempts - 1),
     )
@@ -737,7 +845,6 @@ def abstain_nowscore_jc_handicap_capture(
         reason,
         nowscore_id=nowscore_id,
         source_url=source_url,
-        captured_at=datetime.now(SHANGHAI),
         reason_codes=reason_codes,
     )
 
@@ -831,6 +938,10 @@ def _source_authority(capture: Mapping[str, Any]) -> dict[str, Any]:
         "business_date": capture.get("business_date"),
         "match_number": capture.get("match_number"),
         "fetched_at": capture.get("fetched_at"),
+        "captured_at": capture.get("captured_at"),
+        "request_started_at": capture.get("request_started_at"),
+        "response_at": capture.get("response_at"),
+        "observed_at": capture.get("observed_at"),
         "http_status": capture.get("page_http_status", capture.get("http_status")),
         "response_sha256": capture.get("response_sha256"),
         "content_sha256": capture.get("content_sha256") or capture.get("response_sha256"),
@@ -842,6 +953,9 @@ def _source_authority(capture: Mapping[str, Any]) -> dict[str, Any]:
         "capture_status": capture.get("status"),
         "capture_reason": capture.get("reason"),
         "capture_reason_codes": list(capture.get("reason_codes") or []),
+        "name_diagnostics": list(capture.get("name_diagnostics") or []),
+        "name_variant_sides": list(capture.get("name_variant_sides") or []),
+        "name_variant_details": deepcopy(capture.get("name_variant_details") or []),
     }
 
 
@@ -852,12 +966,18 @@ def _capture_identity_conflicts(
     if not isinstance(expected, Mapping) or capture.get("status") != "CAPTURED":
         return []
     conflicts: list[str] = []
-    for capture_key, expected_key, reason in (
-        ("home_team", "home", "CAPTURE_HOME_TEAM_CONFLICT"),
-        ("away_team", "away", "CAPTURE_AWAY_TEAM_CONFLICT"),
-    ):
-        if _identity_text(capture.get(capture_key)) != _identity_text(expected.get(expected_key)):
-            conflicts.append(reason)
+    expected_id = _positive_int(expected.get("nowscore_id") or expected.get("nowscoreId"))
+    captured_id = _positive_int(capture.get("nowscore_id"))
+    if expected_id is not None and captured_id != expected_id:
+        conflicts.append("CAPTURE_NOWSCORE_ID_CONFLICT")
+    page_identity = capture.get("page_identity")
+    if isinstance(page_identity, Mapping):
+        expected_home = _identity_text(expected.get("home"))
+        expected_away = _identity_text(expected.get("away"))
+        page_home = _identity_text(page_identity.get("home_team"))
+        page_away = _identity_text(page_identity.get("away_team"))
+        if expected_home and expected_away and page_home == expected_away and page_away == expected_home:
+            conflicts.append("CAPTURE_ORIENTATION_CONFLICT")
     captured_kickoff = _parse_datetime(capture.get("kickoff_at"))
     expected_kickoff = _parse_datetime(expected.get("kickoff_at"))
     if captured_kickoff is None or expected_kickoff is None or captured_kickoff != expected_kickoff:
