@@ -661,8 +661,18 @@ def _render_change_awareness(contract: dict[str, Any]) -> str:
             '<h2>暂无可比的此前记录</h2></div><p>当前预测保持不变</p></div>'
             '<p class="change-unavailable-copy">当前没有合法的更早赛前快照，暂不补写变化。</p></section>'
         )
-    previous_time = _format_datetime(previous.get("freeze_created_at"), include_date=True)
-    current_time = _format_datetime(current.get("freeze_created_at"), include_date=True)
+    previous_time = _format_datetime(
+        previous.get("chronology_timestamp")
+        or previous.get("source_cutoff_at")
+        or previous.get("freeze_created_at"),
+        include_date=True,
+    )
+    current_time = _format_datetime(
+        current.get("chronology_timestamp")
+        or current.get("source_cutoff_at")
+        or current.get("freeze_created_at"),
+        include_date=True,
+    )
     gap = _format_change_gap(change.get("elapsed_seconds"))
     timeline = " · ".join(value for value in (f"此前 {previous_time}" if previous_time else "", f"现在 {current_time}" if current_time else "", gap) if value)
     markets = change.get("markets") if isinstance(change.get("markets"), dict) else {}

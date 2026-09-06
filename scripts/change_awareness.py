@@ -123,30 +123,13 @@ def _same_canonical_match(record: Mapping[str, Any], expected: Mapping[str, Any]
     return not (expected_kickoff and candidate_kickoff and expected_kickoff != candidate_kickoff)
 
 
-def _is_legal_prematch(record: Mapping[str, Any], identity: Mapping[str, Any]) -> bool:
-    selected = select_latest_legal_prematch([dict(record)], identity=dict(identity))
-    return (
-        selected.get("status") == "SELECTED"
-        and _text(selected.get("selected_prediction_id")) == _text(record.get("prediction_id"))
-    )
-
-
-def _chronology_key(record: Mapping[str, Any]) -> tuple[datetime, datetime, datetime, str] | None:
-    freeze = _parse_timestamp(record.get("freeze_created_at"))
-    source_cutoff = _parse_timestamp(record.get("source_cutoff_at"))
-    prediction_created = _parse_timestamp(record.get("prediction_created_at"))
-    if freeze is None or source_cutoff is None or prediction_created is None:
-        return None
-    return freeze, source_cutoff, prediction_created, _text(record.get("prediction_id"))
-
-
 def _snapshot_summary(record: Mapping[str, Any]) -> dict[str, Any]:
-    chronology = _chronology_key(record)
+    chronology = _parse_timestamp(record.get("source_cutoff_at"))
     return {
         "prediction_id": record.get("prediction_id"),
         "freeze_created_at": record.get("freeze_created_at"),
         "source_cutoff_at": record.get("source_cutoff_at"),
-        "chronology_timestamp": record.get("freeze_created_at"),
+        "chronology_timestamp": record.get("source_cutoff_at"),
         "chronology_valid": chronology is not None,
     }
 
@@ -450,11 +433,20 @@ def _handicap_lane(
 
 
 def _elapsed_seconds(previous: Mapping[str, Any], current: Mapping[str, Any]) -> float | None:
-    before = _parse_timestamp(previous.get("freeze_created_at"))
-    now = _parse_timestamp(current.get("freeze_created_at"))
+    before = _parse_timestamp(previous.get("source_cutoff_at"))
+    now = _parse_timestamp(current.get("source_cutoff_at"))
     if before is None or now is None or now < before:
         return None
     return (now - before).total_seconds()
+
+
+def _selection_failure_reason(selection: Mapping[str, Any], scope: str) -> str:
+    status = _text(selection.get("status"))
+    if status == "IDENTITY_CONFLICT":
+        return f"{scope}_IDENTITY_CONFLICT"
+    if status == "AMBIGUOUS_FINAL_CHRONOLOGY":
+        return f"AMBIGUOUS_{scope}_PREMATCH_CHRONOLOGY"
+    return f"{scope}_NOT_STRICTLY_PREMATCH"
 
 
 def build_prematch_change_awareness(
@@ -485,7 +477,29 @@ def build_prematch_change_awareness(
             "available_market_count": 0,
         }
 
-    if not _is_legal_prematch(current_record, expected):
+    selection_records = list(record_list)
+    current_prediction_id = _text(current_record.get("prediction_id"))
+    if not any(_text(record.get("prediction_id")) == current_prediction_id for record in selection_records):
+        selection_records.append(current_record)
+
+    # Use the repository's canonical selector for the latest snapshot; this
+    # deliberately does not order records by freeze time.
+    current_selection = select_latest_legal_prematch(selection_records, identity=dict(expected))
+    if current_selection.get("status") != "SELECTED":
+        markets = {name: _unavailable("CURRENT_SNAPSHOT_NOT_STRICTLY_PREMATCH") for name in MARKET_ORDER}
+        return {
+            "schema_version": CHANGE_AWARENESS_CONTRACT_VERSION,
+            "status": CHANGE_AWARENESS_STATUS_UNAVAILABLE,
+            "reason": _selection_failure_reason(current_selection, "CURRENT"),
+            "current_snapshot": None,
+            "previous_snapshot": None,
+            "elapsed_seconds": None,
+            "markets": markets,
+            "available_market_count": 0,
+        }
+
+    authoritative_current = current_selection.get("selected_record")
+    if not isinstance(authoritative_current, dict):
         markets = {name: _unavailable("CURRENT_SNAPSHOT_NOT_STRICTLY_PREMATCH") for name in MARKET_ORDER}
         return {
             "schema_version": CHANGE_AWARENESS_CONTRACT_VERSION,
@@ -497,24 +511,48 @@ def build_prematch_change_awareness(
             "markets": markets,
             "available_market_count": 0,
         }
+    if _text(authoritative_current.get("prediction_id")) != current_prediction_id:
+        markets = {name: _unavailable("CURRENT_SNAPSHOT_NOT_LATEST_LEGAL_PREMATCH") for name in MARKET_ORDER}
+        return {
+            "schema_version": CHANGE_AWARENESS_CONTRACT_VERSION,
+            "status": CHANGE_AWARENESS_STATUS_UNAVAILABLE,
+            "reason": "CURRENT_SNAPSHOT_NOT_LATEST_LEGAL_PREMATCH",
+            "current_snapshot": None,
+            "previous_snapshot": None,
+            "elapsed_seconds": None,
+            "markets": markets,
+            "available_market_count": 0,
+        }
 
-    current_chronology = _chronology_key(current_record)
+    current_record = authoritative_current
     current_snapshot = _snapshot_summary(current_record)
-    candidates = []
-    for record in record_list:
-        if _text(record.get("prediction_id")) == _text(current_record.get("prediction_id")):
-            continue
-        if not _same_canonical_match(record, expected):
-            continue
-        if not _is_legal_prematch(record, expected):
-            continue
-        chronology = _chronology_key(record)
-        if chronology is None or current_chronology is None or chronology[0] >= current_chronology[0]:
-            continue
-        candidates.append((chronology, record))
-    candidates.sort(key=lambda item: item[0], reverse=True)
-    previous_record = candidates[0][1] if candidates else None
-    if previous_record is None:
+    previous_candidates = [
+        record
+        for record in selection_records
+        if _text(record.get("prediction_id")) != current_prediction_id
+    ]
+    # Removing the selected latest record and applying the same selector again
+    # yields the immediately previous authoritative version with the same
+    # ambiguity and identity-conflict fail-closed behavior.
+    previous_selection = select_latest_legal_prematch(previous_candidates, identity=dict(expected))
+    if previous_selection.get("status") != "SELECTED":
+        markets = {name: _unavailable("NO_COMPARABLE_PREVIOUS_SNAPSHOT") for name in MARKET_ORDER}
+        reason = "NO_COMPARABLE_PREVIOUS_SNAPSHOT"
+        if previous_selection.get("status") in {"IDENTITY_CONFLICT", "AMBIGUOUS_FINAL_CHRONOLOGY"}:
+            reason = _selection_failure_reason(previous_selection, "PREVIOUS")
+        return {
+            "schema_version": CHANGE_AWARENESS_CONTRACT_VERSION,
+            "status": CHANGE_AWARENESS_STATUS_UNAVAILABLE,
+            "reason": reason,
+            "current_snapshot": current_snapshot,
+            "previous_snapshot": None,
+            "elapsed_seconds": None,
+            "markets": markets,
+            "available_market_count": 0,
+        }
+
+    previous_record = previous_selection.get("selected_record")
+    if not isinstance(previous_record, dict):
         markets = {name: _unavailable("NO_COMPARABLE_PREVIOUS_SNAPSHOT") for name in MARKET_ORDER}
         return {
             "schema_version": CHANGE_AWARENESS_CONTRACT_VERSION,

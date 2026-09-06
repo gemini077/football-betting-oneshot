@@ -125,12 +125,30 @@ def _pair(*, current: dict | None = None, previous: dict | None = None) -> tuple
     return selected, records, _identity(selected)
 
 
+def _set_chronology(record: dict, *, source: str, prediction: str, freeze: str) -> dict:
+    record.update(
+        {
+            "source_cutoff_at": source,
+            "prediction_created_at": prediction,
+            "freeze_created_at": freeze,
+        }
+    )
+    return record
+
+
 def test_selects_nearest_earlier_legal_snapshot_deterministically_and_ignores_later_or_other_matches():
     current = _record("CURRENT", "2026-09-08T12:00:00+08:00")
     nearest = _record("NEAREST", "2026-09-08T11:00:00+08:00")
     older = _record("OLDER", "2026-09-08T09:00:00+08:00")
-    later = _record("LATER", "2026-09-08T13:00:00+08:00")
+    later = _set_chronology(
+        _record("LATER", "2026-09-08T13:00:00+08:00"),
+        source="2026-09-08T07:00:00+08:00",
+        prediction="2026-09-08T07:01:00+08:00",
+        freeze="2026-09-08T13:00:00+08:00",
+    )
     wrong_match = _record("WRONG", "2026-09-08T11:59:00+08:00", match_id="M2", match_key="CANONICAL-M2")
+    wrong_match["home"] = "Other FC"
+    wrong_match["match_identity"]["home"] = "Other FC"
 
     first = build_prematch_change_awareness(
         records=[older, later, wrong_match, nearest, current],
@@ -149,6 +167,127 @@ def test_selects_nearest_earlier_legal_snapshot_deterministically_and_ignores_la
     assert first["current_snapshot"]["prediction_id"] == "CURRENT"
 
 
+def test_selects_previous_by_authoritative_source_cutoff_not_freeze_order():
+    older = _set_chronology(
+        _record("OLDER", "2026-09-08T10:17:00+08:00"),
+        source="2026-09-08T10:00:00+08:00",
+        prediction="2026-09-08T10:01:00+08:00",
+        freeze="2026-09-08T10:17:00+08:00",
+    )
+    previous = _set_chronology(
+        _record("PREVIOUS", "2026-09-08T10:16:00+08:00"),
+        source="2026-09-08T10:10:00+08:00",
+        prediction="2026-09-08T10:11:00+08:00",
+        freeze="2026-09-08T10:16:00+08:00",
+    )
+    current = _set_chronology(
+        _record("CURRENT", "2026-09-08T10:18:00+08:00"),
+        source="2026-09-08T10:15:00+08:00",
+        prediction="2026-09-08T10:16:00+08:00",
+        freeze="2026-09-08T10:18:00+08:00",
+    )
+
+    result = build_prematch_change_awareness(
+        records=[older, current, previous],
+        current_record=current,
+        identity=_identity(current),
+    )
+
+    assert result["previous_snapshot"]["prediction_id"] == "PREVIOUS"
+
+
+def test_delayed_freeze_does_not_suppress_authoritative_previous_snapshot():
+    previous = _set_chronology(
+        _record("PREVIOUS", "2026-09-08T10:20:00+08:00"),
+        source="2026-09-08T10:10:00+08:00",
+        prediction="2026-09-08T10:11:00+08:00",
+        freeze="2026-09-08T10:20:00+08:00",
+    )
+    current = _set_chronology(
+        _record("CURRENT", "2026-09-08T10:18:00+08:00"),
+        source="2026-09-08T10:15:00+08:00",
+        prediction="2026-09-08T10:16:00+08:00",
+        freeze="2026-09-08T10:18:00+08:00",
+    )
+
+    result = build_prematch_change_awareness(
+        records=[current, previous],
+        current_record=current,
+        identity=_identity(current),
+    )
+
+    assert result["previous_snapshot"]["prediction_id"] == "PREVIOUS"
+
+
+def test_current_snapshot_must_be_the_authoritative_latest_version():
+    current = _set_chronology(
+        _record("CURRENT", "2026-09-08T10:18:00+08:00"),
+        source="2026-09-08T10:15:00+08:00",
+        prediction="2026-09-08T10:16:00+08:00",
+        freeze="2026-09-08T10:18:00+08:00",
+    )
+    later = _set_chronology(
+        _record("LATER", "2026-09-08T10:22:00+08:00"),
+        source="2026-09-08T10:20:00+08:00",
+        prediction="2026-09-08T10:21:00+08:00",
+        freeze="2026-09-08T10:22:00+08:00",
+    )
+
+    result = build_prematch_change_awareness(
+        records=[current, later],
+        current_record=current,
+        identity=_identity(current),
+    )
+
+    assert result["status"] == "UNAVAILABLE"
+    assert result["reason"] == "CURRENT_SNAPSHOT_NOT_LATEST_LEGAL_PREMATCH"
+    assert result["current_snapshot"] is None
+
+
+def test_equal_final_chronology_fails_closed_for_current_or_previous_selection():
+    current = _set_chronology(
+        _record("CURRENT", "2026-09-08T10:18:00+08:00"),
+        source="2026-09-08T10:15:00+08:00",
+        prediction="2026-09-08T10:16:00+08:00",
+        freeze="2026-09-08T10:18:00+08:00",
+    )
+    tied_previous_a = _set_chronology(
+        _record("PREVIOUS-A", "2026-09-08T10:16:00+08:00"),
+        source="2026-09-08T10:10:00+08:00",
+        prediction="2026-09-08T10:11:00+08:00",
+        freeze="2026-09-08T10:16:00+08:00",
+    )
+    tied_previous_b = _set_chronology(
+        _record("PREVIOUS-B", "2026-09-08T10:16:00+08:00"),
+        source="2026-09-08T10:10:00+08:00",
+        prediction="2026-09-08T10:11:00+08:00",
+        freeze="2026-09-08T10:16:00+08:00",
+    )
+
+    previous_ambiguous = build_prematch_change_awareness(
+        records=[current, tied_previous_a, tied_previous_b],
+        current_record=current,
+        identity=_identity(current),
+    )
+
+    tied_current_a = copy.deepcopy(current)
+    tied_current_a["prediction_id"] = "CURRENT-A"
+    tied_current_b = copy.deepcopy(current)
+    tied_current_b["prediction_id"] = "CURRENT-B"
+    current_ambiguous = build_prematch_change_awareness(
+        records=[tied_current_a, tied_current_b, tied_previous_a],
+        current_record=tied_current_a,
+        identity=_identity(tied_current_a),
+    )
+
+    assert previous_ambiguous["status"] == "UNAVAILABLE"
+    assert previous_ambiguous["reason"] == "AMBIGUOUS_PREVIOUS_PREMATCH_CHRONOLOGY"
+    assert previous_ambiguous["previous_snapshot"] is None
+    assert current_ambiguous["status"] == "UNAVAILABLE"
+    assert current_ambiguous["reason"] == "AMBIGUOUS_CURRENT_PREMATCH_CHRONOLOGY"
+    assert current_ambiguous["current_snapshot"] is None
+
+
 def test_post_kickoff_and_identity_conflict_records_are_not_comparable():
     current = _record("CURRENT", "2026-09-08T12:00:00+08:00")
     post_kickoff = _record("POST", "2026-09-09T00:00:00+08:00")
@@ -163,7 +302,7 @@ def test_post_kickoff_and_identity_conflict_records_are_not_comparable():
     )
 
     assert result["status"] == "UNAVAILABLE"
-    assert result["reason"] == "NO_COMPARABLE_PREVIOUS_SNAPSHOT"
+    assert result["reason"] == "CURRENT_IDENTITY_CONFLICT"
     assert result["previous_snapshot"] is None
 
 
