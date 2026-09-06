@@ -544,6 +544,155 @@ def _render_formal_markets(contract: dict[str, Any]) -> str:
     )
 
 
+def _format_change_delta(value: Any) -> str:
+    number = _finite(value)
+    if number is None:
+        return "—"
+    sign = "+" if number > 0 else ""
+    return f"{sign}{number:.2f} 个百分点"
+
+
+def _format_change_gap(seconds: Any) -> str:
+    number = _finite(seconds)
+    if number is None or number < 0:
+        return ""
+    minutes = int(round(number / 60))
+    if minutes < 60:
+        return f"间隔 {minutes} 分钟"
+    hours, remainder = divmod(minutes, 60)
+    if hours < 24:
+        return f"间隔 {hours} 小时" if remainder == 0 else f"间隔 {hours} 小时 {remainder} 分钟"
+    days, remainder = divmod(hours, 24)
+    return f"间隔 {days} 天" if remainder == 0 else f"间隔 {days} 天 {remainder} 小时"
+
+
+def _render_change_rows(items: Any, *, include_ranks: bool = False) -> str:
+    if not isinstance(items, list):
+        return '<p class="change-empty">当前没有明显变化。</p>'
+    rows = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        before = _percent_number(item.get("before"))
+        now = _percent_number(item.get("now"))
+        label = _esc(item.get("label") or item.get("key"), "—")
+        rank = ""
+        if include_ranks:
+            rank = (
+                f'<span class="change-rank">#{_esc(item.get("before_rank"), "—")} → '
+                f'#{_esc(item.get("now_rank"), "—")}</span>'
+            )
+        rows.append(
+            f'<div class="change-row" data-change-key="{html.escape(str(item.get("key") or ""), quote=True)}">'
+            f'<span class="change-label">{label}{rank}</span>'
+            f'<span class="change-before-now"><span>{_esc(_percent(before), "—")}</span>'
+            f'<b aria-hidden="true">→</b><strong>{_esc(_percent(now), "—")}</strong></span>'
+            f'<span class="change-delta">{_esc(_format_change_delta(item.get("delta_probability_points")))}</span>'
+            '</div>'
+        )
+    return "".join(rows) if rows else '<p class="change-empty">当前没有明显变化。</p>'
+
+
+def _render_change_lane(name: str, lane: dict[str, Any]) -> str:
+    labels = {
+        "ft_1x2": "胜平负",
+        "exact_score": "比分概率",
+        "jc_total_goals": "JC 总进球",
+        "jc_handicap": "JC 让球",
+    }
+    title = labels[name]
+    status = str(lane.get("status") or "UNAVAILABLE").upper()
+    if status == "UNAVAILABLE":
+        return (
+            f'<article class="change-lane change-lane-unavailable" data-change-lane="{name}" '
+            f'data-change-lane-status="{status}"><h3>{title}</h3>'
+            '<p>此前没有可比记录，当前玩法保持独立展示。</p></article>'
+        )
+    if name == "jc_handicap" and status == "LINE_CHANGED":
+        return (
+            f'<article class="change-lane change-lane-line" data-change-lane="{name}" '
+            f'data-change-lane-status="{status}"><h3>{title}</h3>'
+            f'<p class="change-line-value">让球线：{_esc(lane.get("before_line"), "—")} → '
+            f'{_esc(lane.get("now_line"), "—")}</p>'
+            '<p>让球线已变化；本栏不把两条不同的线当作同一市场比较概率。</p></article>'
+        )
+    if name == "exact_score":
+        support = lane.get("support") if isinstance(lane.get("support"), dict) else {}
+        support_text = (
+            f'仅比较已记录的 {html.escape(str(support.get("cell_count") or "—"))} 格显式比分；'
+            '范围外概率不补写。'
+        )
+        rows = _render_change_rows(lane.get("items"), include_ranks=True)
+        if not lane.get("items"):
+            rows = '<p class="change-empty">Top 比分没有明显变化。</p>'
+        return (
+            f'<article class="change-lane change-lane-wide" data-change-lane="{name}" '
+            f'data-change-lane-status="{status}"><h3>{title}</h3>'
+            f'<div class="change-rows">{rows}</div><p class="change-lane-note">{support_text}</p></article>'
+        )
+    rows = _render_change_rows(lane.get("items"))
+    if name == "jc_handicap":
+        line = f' · 让球线 {html.escape(str(lane.get("line") or "—"))}'
+        note = f'<p class="change-lane-note">同一官方整数让球线{line}。</p>'
+    elif name == "jc_total_goals":
+        note = '<p class="change-lane-note">同一官方 0、1、2、3、4、5、6、7+ 分类。</p>'
+    else:
+        note = ""
+    return (
+        f'<article class="change-lane" data-change-lane="{name}" '
+        f'data-change-lane-status="{status}"><h3>{title}</h3>'
+        f'<div class="change-rows">{rows}</div>{note}</article>'
+    )
+
+
+def _render_change_awareness(contract: dict[str, Any]) -> str:
+    change = contract.get("change_awareness")
+    if not isinstance(change, dict):
+        return ""
+    status = str(change.get("status") or "UNAVAILABLE").upper()
+    current = change.get("current_snapshot") if isinstance(change.get("current_snapshot"), dict) else {}
+    previous = change.get("previous_snapshot") if isinstance(change.get("previous_snapshot"), dict) else {}
+    if status != "AVAILABLE" or not previous:
+        return (
+            '<section class="detail-section change-awareness-section change-awareness-unavailable" '
+            'id="change-awareness" data-change-awareness="true" '
+            f'data-change-awareness-status="{html.escape(status, quote=True)}">'
+            '<div class="section-heading"><div><div class="section-kicker">赛前变化</div>'
+            '<h2>暂无可比的此前记录</h2></div><p>当前预测保持不变</p></div>'
+            '<p class="change-unavailable-copy">当前没有合法的更早赛前快照，暂不补写变化。</p></section>'
+        )
+    previous_time = _format_datetime(
+        previous.get("chronology_timestamp")
+        or previous.get("source_cutoff_at")
+        or previous.get("freeze_created_at"),
+        include_date=True,
+    )
+    current_time = _format_datetime(
+        current.get("chronology_timestamp")
+        or current.get("source_cutoff_at")
+        or current.get("freeze_created_at"),
+        include_date=True,
+    )
+    gap = _format_change_gap(change.get("elapsed_seconds"))
+    timeline = " · ".join(value for value in (f"此前 {previous_time}" if previous_time else "", f"现在 {current_time}" if current_time else "", gap) if value)
+    markets = change.get("markets") if isinstance(change.get("markets"), dict) else {}
+    lanes = "".join(
+        _render_change_lane(name, markets.get(name) if isinstance(markets.get(name), dict) else {})
+        for name in ("ft_1x2", "exact_score", "jc_total_goals", "jc_handicap")
+    )
+    return (
+        '<section class="detail-section change-awareness-section" id="change-awareness" '
+        'data-change-awareness="true" data-change-awareness-status="AVAILABLE" '
+        f'data-change-awareness-current-id="{html.escape(str(current.get("prediction_id") or ""), quote=True)}" '
+        f'data-change-awareness-previous-id="{html.escape(str(previous.get("prediction_id") or ""), quote=True)}">'
+        '<div class="section-heading"><div><div class="section-kicker">赛前变化</div>'
+        '<h2>较上一版</h2></div>'
+        f'<p>{html.escape(timeline or "只显示事实变化")}</p></div>'
+        f'<div class="change-lane-grid">{lanes}</div>'
+        '<p class="section-note">只展示此前与现在的可比记录，不从变化本身推断原因。</p></section>'
+    )
+
+
 def _render_form(evidence: dict[str, Any]) -> str:
     fundamentals = evidence.get("fundamentals") if isinstance(evidence.get("fundamentals"), dict) else {}
     form = fundamentals.get("recent_form") if isinstance(fundamentals.get("recent_form"), dict) else {}
@@ -997,6 +1146,27 @@ DETAIL_CSS = """
     .goal-card { padding:14px; border:1px solid var(--line); background:var(--surface); }
     .goal-card-label { display:block; color:var(--muted); font-size:12px; }
     .goal-card strong { display:block; margin-top:5px; font-size:18px; font-variant-numeric:tabular-nums; letter-spacing:-.03em; }
+    .change-awareness-section { padding-top:22px; }
+    .change-awareness-section .section-heading { margin-bottom:12px; }
+    .change-lane-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:9px; }
+    .change-lane { min-width:0; padding:12px; border:1px solid var(--line); background:var(--surface); }
+    .change-lane-wide { grid-column:1/-1; }
+    .change-lane h3 { margin:0 0 8px; font-size:14px; }
+    .change-rows { display:grid; gap:0; }
+    .change-row { display:grid; grid-template-columns:minmax(62px,.65fr) minmax(140px,1fr) minmax(86px,.6fr); align-items:center; gap:8px; min-height:28px; border-top:1px solid var(--line); font-size:11px; font-variant-numeric:tabular-nums; }
+    .change-row:first-child { border-top:0; }
+    .change-label { min-width:0; color:var(--muted); }
+    .change-rank { display:block; margin-top:1px; color:var(--quiet); font-size:10px; }
+    .change-before-now { display:flex; align-items:baseline; justify-content:center; gap:7px; min-width:0; }
+    .change-before-now > span { color:var(--muted); }
+    .change-before-now > b { color:var(--quiet); font-weight:500; }
+    .change-before-now > strong { font-weight:700; }
+    .change-delta { text-align:right; white-space:nowrap; }
+    .change-lane-note,.change-lane-line,.change-lane-unavailable p,.change-empty { margin:8px 0 0; color:var(--muted); font-size:11px; }
+    .change-lane-line { border-color:#F2C4A8; background:#FFF9F3; }
+    .change-line-value { color:var(--ink); font-weight:700; font-variant-numeric:tabular-nums; }
+    .change-awareness-unavailable { border-top:1px solid var(--line); }
+    .change-unavailable-copy { margin:0; color:var(--muted); font-size:12px; }
     .formal-market-status-matrix { display:flex; flex-wrap:wrap; gap:5px; margin:-2px 0 12px; }
     .formal-market-status { padding:4px 7px; border:1px solid var(--line); background:var(--surface); color:var(--muted); font-size:11px; white-space:nowrap; }
     .formal-market-status.status-available { border-color:#B7D8C1; color:var(--ink); }
@@ -1105,6 +1275,12 @@ DETAIL_CSS = """
       .probability-card strong { font-size:23px; }
       .completed-facts { grid-template-columns:repeat(2,minmax(0,1fr)); gap:5px; }
       .completed-facts > div { padding:8px; }
+      .change-lane-grid { grid-template-columns:1fr; }
+      .change-lane-wide { grid-column:auto; }
+      .change-lane { padding:11px; }
+      .change-row { grid-template-columns:64px minmax(105px,1fr) 78px; gap:6px; }
+      .change-before-now { gap:5px; }
+      .change-delta { font-size:10px; }
       .formal-market-grid { grid-template-columns:1fr; }
       .formal-exact-panel { grid-column:auto; }
       .formal-market-panel { padding:11px; }
@@ -1146,6 +1322,9 @@ DETAIL_CSS = """
       .probability-card strong { font-size:20px; }
       .formal-panel-heading { display:block; }
       .formal-panel-heading span { display:block; margin-top:3px; text-align:left; }
+      .change-row { grid-template-columns:54px minmax(85px,1fr) 72px; gap:5px; }
+      .change-before-now { gap:3px; }
+      .change-delta { font-size:9px; }
       .exact-compact-row { grid-template-columns:56px minmax(0,1fr) 54px; gap:6px; }
       .exact-compact-probability { font-size:12px; }
       .score-row { grid-template-columns:40px minmax(35px,1fr) 42px; gap:6px; }
@@ -1157,7 +1336,7 @@ def render_match_detail(contract: dict[str, Any]) -> str:
     identity = contract.get("identity") or {}
     status = contract.get("status") or {}
     status_code = _status_code(contract)
-    serving = status_code == "FROZEN"
+    serving = status_code in {"FROZEN", "COMPLETED"}
     result = contract.get("result") if isinstance(contract.get("result"), dict) else {}
     quality = contract.get("prediction_quality_health")
     exact_score_serving = (
@@ -1185,6 +1364,7 @@ def render_match_detail(contract: dict[str, Any]) -> str:
     title = f"{home} vs {away} \u00b7 \u6bd4\u8d5b\u8be6\u60c5"
     result_html = _render_completed_result(contract) if serving else ""
     probability_html = _render_probability_cards(contract) if serving else ""
+    change_awareness_html = _render_change_awareness(contract) if serving else ""
     formal_markets_html = _render_formal_markets(contract) if serving else ""
     score_html = (
         _render_score_distribution(contract)
@@ -1199,6 +1379,7 @@ def render_match_detail(contract: dict[str, Any]) -> str:
             [
                 '<section class="detail-section forecast-section" id="analysis">',
                 probability_html,
+                change_awareness_html,
                 formal_markets_html,
                 score_html,
                 goals_html,
@@ -1217,6 +1398,8 @@ def render_match_detail(contract: dict[str, Any]) -> str:
     nav_items = []
     if serving:
         nav_items.append('<a href="#analysis">\u9884\u6d4b</a>')
+        if change_awareness_html:
+            nav_items.append('<a href="#change-awareness">赛前变化</a>')
         if score_html:
             nav_items.append('<a href="#score-distribution">\u6bd4\u5206</a>')
         if goals_html:
