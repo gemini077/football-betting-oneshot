@@ -23,7 +23,12 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from scripts.build_public_site import _fixture_contract, _linked_frozen_formal_markets  # noqa: E402
+from scripts.build_public_site import (  # noqa: E402
+    _change_awareness_for_fixture,
+    _fixture_contract,
+    _linked_frozen_formal_markets,
+    _prediction_records,
+)
 from scripts.formal_market_projection import project_frozen_formal_markets  # noqa: E402
 from scripts.match_detail import render_match_detail  # noqa: E402
 from scripts.official_jc_handicap import build_jc_handicap_contract  # noqa: E402
@@ -262,14 +267,59 @@ def _write_fixture_pages(site_root: Path, payload: dict[str, Any], current: dict
     }
 
     business_date = str(payload.get("business_date") or "")
-    current_formal_markets = _linked_frozen_formal_markets(ROOT / "data", current)
+    data_root = ROOT / "data"
+    prediction_records = _prediction_records(data_root)
+    current_record = _linked_prediction_record(data_root, current)
+    current_change_awareness = _change_awareness_for_fixture(
+        data_root,
+        current,
+        records=prediction_records,
+    )
+    current_formal_markets = _linked_frozen_formal_markets(data_root, current)
     current_contract = _fixture_contract(
         current,
         business_date,
         formal_markets=current_formal_markets,
     )
+    current_contract["change_awareness"] = current_change_awareness
     current_contract["prediction_quality_health"] = payload.get("prediction_quality_health") or {}
     pages["detail-current-frozen.html"] = render_match_detail(current_contract)
+
+    no_previous_contract = copy.deepcopy(current_contract)
+    if current_record is not None:
+        no_previous_contract["change_awareness"] = _change_awareness_for_fixture(
+            data_root,
+            current,
+            records={str(current_record.get("prediction_id")): current_record},
+        )
+    pages["detail-change-no-previous.html"] = _mark_test_fixture(
+        render_match_detail(no_previous_contract),
+        "change awareness · no previous snapshot",
+    )
+
+    changed_line_contract = copy.deepcopy(current_contract)
+    changed_line = copy.deepcopy(current_change_awareness)
+    handicap_lane = changed_line.get("markets", {}).get("jc_handicap")
+    if isinstance(handicap_lane, dict):
+        before_line = handicap_lane.get("line", handicap_lane.get("now_line"))
+        try:
+            now_line = int(before_line) + 1
+        except (TypeError, ValueError):
+            now_line = "TEST_CHANGED_LINE"
+        changed_line["markets"]["jc_handicap"] = {
+            "status": "LINE_CHANGED",
+            "reason": "JC_HANDICAP_LINE_CHANGED",
+            "comparison_allowed": False,
+            "before_line": before_line,
+            "now_line": now_line,
+            "items": [],
+            "changed": True,
+        }
+    changed_line_contract["change_awareness"] = changed_line
+    pages["detail-change-handicap-line.html"] = _mark_test_fixture(
+        render_match_detail(changed_line_contract),
+        "change awareness · JC handicap line changed",
+    )
 
     all_formal_markets = _all_formal_markets_for_visual_fixture(ROOT / "data", current)
     if all_formal_markets is not None:
@@ -370,6 +420,22 @@ def _capture_page(
                  && element.scrollWidth > element.clientWidth + 1,
              }))"""
         )
+        change_metrics = page.locator("[data-change-awareness]").evaluate_all(
+            """elements => elements.map(element => ({
+              visible: (() => {
+                const style = window.getComputedStyle(element);
+                const rect = element.getBoundingClientRect();
+                return style.display !== 'none' && style.visibility !== 'hidden'
+                  && rect.width > 0 && rect.height > 0;
+              })(),
+              status: element.dataset.changeAwarenessStatus || '',
+              laneCount: element.querySelectorAll('[data-change-lane]').length,
+              unavailableLaneCount: element.querySelectorAll('[data-change-lane-status="UNAVAILABLE"]').length,
+              lineChangedCount: element.querySelectorAll('[data-change-lane-status="LINE_CHANGED"]').length,
+              timeline: element.querySelector('.section-heading p')?.textContent || '',
+            }))"""
+        )
+        change = change_metrics[0] if change_metrics else {}
         formal_exact_cells = sum(int(item.get("cellCount") or 0) for item in formal_exact_metrics)
         formal_exact_horizontal_overflow = any(
             bool(item.get("horizontalOverflow")) for item in formal_exact_metrics
@@ -466,6 +532,13 @@ def _capture_page(
             ),
             "normal_frozen_badge_count": visible_status_badges,
             "normal_health_badge_count": visible_health_badges,
+            "change_awareness_visible": bool(change.get("visible")),
+            "change_awareness_status": str(change.get("status") or ""),
+            "change_awareness_lane_count": int(change.get("laneCount") or 0),
+            "change_awareness_unavailable_lane_count": int(change.get("unavailableLaneCount") or 0),
+            "change_awareness_line_changed_count": int(change.get("lineChangedCount") or 0),
+            "change_awareness_timeline": str(change.get("timeline") or ""),
+            "completed_result_visible": _visible_count(page, ".result-panel") > 0,
             "console_errors": console_errors,
             "page_errors": page_errors,
         }
@@ -680,6 +753,12 @@ def _capture_all(
         ("detail-current-frozen-1440x1000.png", "visual-fixtures/detail-current-frozen.html", (1440, 1000), str(current.get("match_id") or "current-frozen"), "PRODUCTION_TRUTH"),
         ("detail-current-frozen-390x844.png", "visual-fixtures/detail-current-frozen.html", (390, 844), str(current.get("match_id") or "current-frozen"), "PRODUCTION_TRUTH"),
         ("detail-current-frozen-320x800.png", "visual-fixtures/detail-current-frozen.html", (320, 800), str(current.get("match_id") or "current-frozen"), "PRODUCTION_TRUTH"),
+        ("change-no-previous-1440x1000.png", "visual-fixtures/detail-change-no-previous.html", (1440, 1000), "TEST FIXTURE · change no previous", "TEST_FIXTURE"),
+        ("change-no-previous-390x844.png", "visual-fixtures/detail-change-no-previous.html", (390, 844), "TEST FIXTURE · change no previous", "TEST_FIXTURE"),
+        ("change-no-previous-320x800.png", "visual-fixtures/detail-change-no-previous.html", (320, 800), "TEST FIXTURE · change no previous", "TEST_FIXTURE"),
+        ("change-handicap-line-1440x1000.png", "visual-fixtures/detail-change-handicap-line.html", (1440, 1000), "TEST FIXTURE · change handicap line", "TEST_FIXTURE"),
+        ("change-handicap-line-390x844.png", "visual-fixtures/detail-change-handicap-line.html", (390, 844), "TEST FIXTURE · change handicap line", "TEST_FIXTURE"),
+        ("change-handicap-line-320x800.png", "visual-fixtures/detail-change-handicap-line.html", (320, 800), "TEST FIXTURE · change handicap line", "TEST_FIXTURE"),
         ("formal-markets-unavailable-1440x1000.png", "visual-fixtures/detail-current-frozen.html#formal-markets", (1440, 1000), str(current.get("match_id") or "formal-markets-unavailable"), "PRODUCTION_TRUTH"),
         ("formal-markets-unavailable-390x844.png", "visual-fixtures/detail-current-frozen.html#formal-markets", (390, 844), str(current.get("match_id") or "formal-markets-unavailable"), "PRODUCTION_TRUTH"),
         ("formal-markets-unavailable-320x800.png", "visual-fixtures/detail-current-frozen.html#formal-markets", (320, 800), str(current.get("match_id") or "formal-markets-unavailable"), "PRODUCTION_TRUTH"),
@@ -791,7 +870,37 @@ def main() -> int:
             or record["formal_exact_disclosure_visible_cell_count"] != 169
         )
     ]
-    if browser_errors or overflow or exact_overflow or mobile_exact_failures or desktop_exact_failures:
+    change_awareness_failures = []
+    for record in records:
+        name = record["name"]
+        if name.startswith("detail-current-frozen-"):
+            if (
+                not record["change_awareness_visible"]
+                or record["change_awareness_status"] != "AVAILABLE"
+                or record["change_awareness_lane_count"] < 3
+            ):
+                change_awareness_failures.append({"name": name, "reason": "valid multi-lane change missing"})
+        elif name.startswith("change-no-previous-"):
+            if (
+                not record["change_awareness_visible"]
+                or record["change_awareness_status"] != "UNAVAILABLE"
+            ):
+                change_awareness_failures.append({"name": name, "reason": "no-previous unavailable state missing"})
+        elif name.startswith("change-handicap-line-"):
+            if (
+                not record["change_awareness_visible"]
+                or record["change_awareness_status"] != "AVAILABLE"
+                or record["change_awareness_line_changed_count"] != 1
+            ):
+                change_awareness_failures.append({"name": name, "reason": "changed handicap line state missing"})
+        elif name.startswith("completed-evidence-"):
+            if (
+                not record["completed_result_visible"]
+                or not record["change_awareness_visible"]
+                or record["change_awareness_status"] != "AVAILABLE"
+            ):
+                change_awareness_failures.append({"name": name, "reason": "completed change history missing"})
+    if browser_errors or overflow or exact_overflow or mobile_exact_failures or desktop_exact_failures or change_awareness_failures:
         raise SystemExit(
             json.dumps(
                 {
@@ -800,6 +909,7 @@ def main() -> int:
                     "formal_exact_horizontal_overflow": exact_overflow,
                     "formal_exact_mobile_default_failures": mobile_exact_failures,
                     "formal_exact_desktop_full_matrix_failures": desktop_exact_failures,
+                    "change_awareness_failures": change_awareness_failures,
                 },
                 ensure_ascii=False,
             )
@@ -864,6 +974,29 @@ def main() -> int:
             "fake_data_graphics": 0,
             "fake_affordances": 0,
             "interaction_checks": interaction_checks,
+            "change_awareness": {
+                "valid_multi_lane_viewports": [
+                    record["name"] for record in records
+                    if record["name"].startswith("detail-current-frozen-")
+                    and record["change_awareness_status"] == "AVAILABLE"
+                ],
+                "no_previous_viewports": [
+                    record["name"] for record in records
+                    if record["name"].startswith("change-no-previous-")
+                    and record["change_awareness_status"] == "UNAVAILABLE"
+                ],
+                "changed_handicap_line_viewports": [
+                    record["name"] for record in records
+                    if record["name"].startswith("change-handicap-line-")
+                    and record["change_awareness_line_changed_count"] == 1
+                ],
+                "completed_viewports": [
+                    record["name"] for record in records
+                    if record["name"].startswith("completed-evidence-")
+                    and record["completed_result_visible"]
+                    and record["change_awareness_status"] == "AVAILABLE"
+                ],
+            },
             "production_data_changed": "NO",
             "model_data_contract_changed": "NO",
             "capture_integrity": "OK",

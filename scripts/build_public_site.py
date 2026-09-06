@@ -22,6 +22,11 @@ try:
 except ImportError:  # pragma: no cover - direct script execution path.
     from formal_market_projection import project_frozen_formal_markets
 
+try:
+    from .change_awareness import build_prematch_change_awareness
+except ImportError:  # pragma: no cover - direct script execution path.
+    from change_awareness import build_prematch_change_awareness
+
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_OUTPUT = ROOT / "site"
@@ -143,6 +148,64 @@ def _linked_frozen_formal_markets(data_root: Path, fixture: dict[str, Any]) -> d
     return project_frozen_formal_markets(record)
 
 
+def _prediction_records(data_root: Path) -> dict[str, dict[str, Any]]:
+    records: dict[str, dict[str, Any]] = {}
+    prediction_root = data_root / "model_governance" / "predictions"
+    if not prediction_root.is_dir():
+        return records
+    for path in sorted(prediction_root.glob("*.json")):
+        try:
+            record = _read_json(path)
+        except ValueError:
+            continue
+        prediction_id = str(record.get("prediction_id") or "").strip()
+        if prediction_id:
+            records[prediction_id] = record
+    return records
+
+
+def _linked_prediction_record(data_root: Path, fixture: dict[str, Any]) -> dict[str, Any] | None:
+    prediction_id = str(fixture.get("selected_prediction_id") or fixture.get("prediction_id") or "").strip()
+    if not prediction_id or not re.fullmatch(r"[A-Za-z0-9._~-]+", prediction_id):
+        return None
+    path = data_root / "model_governance" / "predictions" / f"{prediction_id}.json"
+    if not path.is_file():
+        return None
+    try:
+        record = _read_json(path)
+    except ValueError:
+        return None
+    if str(record.get("prediction_id") or "") != prediction_id:
+        return None
+    fixture_match_id = str(fixture.get("match_id") or "")
+    record_match_id = str(record.get("match_id") or "")
+    if fixture_match_id and record_match_id and fixture_match_id != record_match_id:
+        return None
+    return record
+
+
+def _change_awareness_for_fixture(
+    data_root: Path,
+    fixture: dict[str, Any],
+    *,
+    records: dict[str, dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    current = _linked_prediction_record(data_root, fixture)
+    all_records = records if records is not None else _prediction_records(data_root)
+    identity = {
+        "match_id": fixture.get("match_id"),
+        "match_key": fixture.get("match_key") or fixture.get("matchKey"),
+        "home": fixture.get("home"),
+        "away": fixture.get("away"),
+        "kickoff_at": fixture.get("kickoff") or fixture.get("kickoff_at"),
+    }
+    return build_prematch_change_awareness(
+        records=all_records.values(),
+        current_record=current,
+        identity=identity,
+    )
+
+
 def _formal_markets_for_fixture(data_root: Path, fixture: dict[str, Any]) -> dict[str, Any] | None:
     linked = _linked_frozen_formal_markets(data_root, fixture)
     if linked is not None:
@@ -222,6 +285,7 @@ def _fixture_contract(
 def _match_contracts(data_root: Path, dashboard: dict[str, Any], match_ids: set[str]) -> dict[str, dict[str, Any]]:
     contracts: dict[str, dict[str, Any]] = {}
     business_date = str(dashboard.get("business_date") or "")
+    prediction_records = _prediction_records(data_root)
     fixtures: dict[str, dict[str, Any]] = {}
     for fixture in dashboard.get("fixtures") or []:
         if isinstance(fixture, dict):
@@ -243,6 +307,15 @@ def _match_contracts(data_root: Path, dashboard: dict[str, Any], match_ids: set[
                         **payload,
                         "formal_markets": _formal_markets_for_fixture(data_root, fixture),
                     }
+                if fixture is not None:
+                    payload = {
+                        **payload,
+                        "change_awareness": _change_awareness_for_fixture(
+                            data_root,
+                            fixture,
+                            records=prediction_records,
+                        ),
+                    }
                 contracts[match_id] = payload
                 break
     for match_id in sorted(match_ids - contracts.keys()):
@@ -253,6 +326,11 @@ def _match_contracts(data_root: Path, dashboard: dict[str, Any], match_ids: set[
                 fixture,
                 business_date,
                 formal_markets=formal_markets,
+            )
+            contracts[match_id]["change_awareness"] = _change_awareness_for_fixture(
+                data_root,
+                fixture,
+                records=prediction_records,
             )
     return contracts
 
