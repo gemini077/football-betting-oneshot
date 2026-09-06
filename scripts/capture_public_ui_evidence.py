@@ -365,14 +365,66 @@ def _capture_page(
         )
         formal_exact_metrics = page.locator(".exact-grid-wrap").evaluate_all(
             """elements => elements.map(element => ({
-              cellCount: element.querySelectorAll('[data-formal-cell-home]').length,
-              horizontalOverflow: element.scrollWidth > element.clientWidth + 1,
-            }))"""
+               cellCount: element.querySelectorAll('[data-formal-cell-home]').length,
+               horizontalOverflow: element.offsetParent !== null
+                 && element.scrollWidth > element.clientWidth + 1,
+             }))"""
         )
         formal_exact_cells = sum(int(item.get("cellCount") or 0) for item in formal_exact_metrics)
         formal_exact_horizontal_overflow = any(
             bool(item.get("horizontalOverflow")) for item in formal_exact_metrics
         )
+        compact_metrics = page.locator(".exact-compact").evaluate_all(
+            """elements => elements.map(element => {
+              const visible = (() => {
+                const style = window.getComputedStyle(element);
+                const rect = element.getBoundingClientRect();
+                return style.display !== 'none' && style.visibility !== 'hidden'
+                  && rect.width > 0 && rect.height > 0;
+              })();
+              const fontSizes = [...element.querySelectorAll('.exact-compact-probability')]
+                .map(item => Number.parseFloat(window.getComputedStyle(item).fontSize))
+                .filter(Number.isFinite);
+              return {
+                visible,
+                sourceCellCount: Number(element.dataset.formalCompactSourceCellCount || 0),
+                topCount: Number(element.dataset.formalCompactTopCount || 0),
+                scoreCount: element.querySelectorAll('[data-formal-compact-score]').length,
+                remainderCount: Number(element.dataset.formalCompactRemainderCount || 0),
+                remainderProbability: Number(element.dataset.formalCompactRemainderProbability || 0),
+                probabilityFontSizeMin: fontSizes.length ? Math.min(...fontSizes) : null,
+              };
+            })"""
+        )
+        disclosure_metrics = page.locator("[data-formal-exact-disclosure]").evaluate_all(
+            """elements => elements.map(element => {
+              const visible = item => {
+                const style = window.getComputedStyle(item);
+                const rect = item.getBoundingClientRect();
+                return style.display !== 'none' && style.visibility !== 'hidden'
+                  && rect.width > 0 && rect.height > 0;
+              };
+              const wrapper = element.querySelector('.exact-grid-wrap');
+              return {
+                open: Boolean(element.open),
+                summaryVisible: Boolean(element.querySelector('summary')),
+                cuePresent: Boolean(element.querySelector('.exact-disclosure-cue')),
+                domCellCount: element.querySelectorAll('[data-formal-cell-home]').length,
+                visibleCellCount: [...element.querySelectorAll('[data-formal-cell-home]')]
+                  .filter(visible).length,
+                wrapper: wrapper ? {
+                  tabIndex: wrapper.tabIndex,
+                  role: wrapper.getAttribute('role'),
+                  ariaLabel: wrapper.getAttribute('aria-label'),
+                  scrollWidth: wrapper.scrollWidth,
+                  clientWidth: wrapper.clientWidth,
+                } : null,
+              };
+            })"""
+        )
+        compact = compact_metrics[0] if compact_metrics else {}
+        disclosure = disclosure_metrics[0] if disclosure_metrics else {}
+        wrapper = disclosure.get("wrapper") if isinstance(disclosure, dict) else None
         output_path.parent.mkdir(parents=True, exist_ok=True)
         page.screenshot(path=str(output_path), full_page=False)
         visible_status_badges = _visible_count(page, ".status-badge")
@@ -387,6 +439,31 @@ def _capture_page(
             "horizontal_overflow": overflow,
             "formal_exact_cells": formal_exact_cells,
             "formal_exact_horizontal_overflow": formal_exact_horizontal_overflow,
+            "formal_exact_compact_visible": bool(compact.get("visible")),
+            "formal_exact_compact_source_cell_count": int(compact.get("sourceCellCount") or 0),
+            "formal_exact_compact_top_count": int(compact.get("topCount") or 0),
+            "formal_exact_compact_score_count": int(compact.get("scoreCount") or 0),
+            "formal_exact_compact_remainder_count": int(compact.get("remainderCount") or 0),
+            "formal_exact_compact_remainder_probability": compact.get("remainderProbability"),
+            "formal_exact_compact_probability_font_size_min": compact.get("probabilityFontSizeMin"),
+            "formal_exact_disclosure_count": len(disclosure_metrics),
+            "formal_exact_disclosure_open": bool(disclosure.get("open")),
+            "formal_exact_disclosure_summary_visible": bool(disclosure.get("summaryVisible")),
+            "formal_exact_disclosure_cue_present": bool(disclosure.get("cuePresent")),
+            "formal_exact_disclosure_dom_cell_count": int(disclosure.get("domCellCount") or 0),
+            "formal_exact_disclosure_visible_cell_count": int(disclosure.get("visibleCellCount") or 0),
+            "formal_exact_disclosure_focusable": bool(
+                isinstance(wrapper, dict) and int(wrapper.get("tabIndex") or -1) >= 0
+            ),
+            "formal_exact_disclosure_labeled": bool(
+                isinstance(wrapper, dict)
+                and wrapper.get("role") == "region"
+                and str(wrapper.get("ariaLabel") or "").strip()
+            ),
+            "formal_exact_disclosure_scrollable": bool(
+                isinstance(wrapper, dict)
+                and int(wrapper.get("scrollWidth") or 0) > int(wrapper.get("clientWidth") or 0) + 1
+            ),
             "normal_frozen_badge_count": visible_status_badges,
             "normal_health_badge_count": visible_health_badges,
             "console_errors": console_errors,
@@ -467,6 +544,124 @@ def _check_interactions(browser: Any, base_url: str) -> dict[str, str]:
         context.close()
 
 
+def _check_exact_mobile_interactions(browser: Any, base_url: str) -> dict[str, str]:
+    checks: dict[str, str] = {}
+    for width, height in ((390, 844), (320, 800)):
+        context = browser.new_context(
+            viewport={"width": width, "height": height},
+            locale="zh-CN",
+        )
+        page = context.new_page()
+        label = str(width)
+        try:
+            page.goto(
+                f"{base_url}/visual-fixtures/detail-all-formal.html#formal-markets",
+                wait_until="networkidle",
+                timeout=30_000,
+            )
+            page.wait_for_timeout(150)
+            page_overflow = int(
+                page.evaluate(
+                    "() => Math.max(0, document.documentElement.scrollWidth - "
+                    "document.documentElement.clientWidth)"
+                )
+            )
+            if page_overflow:
+                raise RuntimeError(f"{label}px mobile page has horizontal overflow: {page_overflow}")
+
+            compact = page.locator(".exact-compact")
+            if _visible_count(page, ".exact-compact") != 1:
+                raise RuntimeError(f"{label}px Exact compact projection is not the default view")
+            compact_metrics = compact.evaluate(
+                """element => ({
+                  sourceCellCount: Number(element.dataset.formalCompactSourceCellCount || 0),
+                  topCount: Number(element.dataset.formalCompactTopCount || 0),
+                  scoreCount: element.querySelectorAll('[data-formal-compact-score]').length,
+                  remainderCount: Number(element.dataset.formalCompactRemainderCount || 0),
+                  probabilityFontSizeMin: Math.min(...[...element.querySelectorAll('.exact-compact-probability')]
+                    .map(item => Number.parseFloat(window.getComputedStyle(item).fontSize))),
+                })"""
+            )
+            if compact_metrics["sourceCellCount"] != 169:
+                raise RuntimeError(f"{label}px compact projection lost frozen cells")
+            if compact_metrics["topCount"] != 6 or compact_metrics["scoreCount"] != 6:
+                raise RuntimeError(f"{label}px compact projection does not expose deterministic Top 6")
+            if compact_metrics["remainderCount"] != 163:
+                raise RuntimeError(f"{label}px compact projection has an incorrect represented remainder")
+            if compact_metrics["probabilityFontSizeMin"] < 12:
+                raise RuntimeError(f"{label}px compact probability text is below 12px")
+
+            disclosure = page.locator("[data-formal-exact-disclosure]")
+            if disclosure.count() != 1:
+                raise RuntimeError(f"{label}px Exact disclosure control is missing")
+            if disclosure.evaluate("element => element.open"):
+                raise RuntimeError(f"{label}px full Exact matrix is the default view")
+            if page.locator("[data-formal-cell-home]").count() != 169:
+                raise RuntimeError(f"{label}px DOM does not retain all 169 frozen Exact cells")
+            if _visible_count(page, "[data-formal-cell-home]") != 0:
+                raise RuntimeError(f"{label}px full Exact matrix is visible before disclosure")
+            summary = disclosure.locator("summary")
+            if not summary.get_attribute("aria-label") and not summary.inner_text().strip():
+                raise RuntimeError(f"{label}px Exact disclosure has no readable control label")
+            wrapper = page.locator(".exact-grid-wrap")
+            compact_snapshot = compact.get_attribute("data-formal-compact-remainder-probability")
+
+            summary.click()
+            if not disclosure.evaluate("element => element.open"):
+                raise RuntimeError(f"{label}px Exact disclosure did not open by pointer interaction")
+            if _visible_count(page, "[data-formal-cell-home]") != 169:
+                raise RuntimeError(f"{label}px disclosure did not reveal all 169 frozen Exact cells")
+            wrapper_metrics = wrapper.evaluate(
+                """element => ({
+                  tabIndex: element.tabIndex,
+                  role: element.getAttribute('role'),
+                  ariaLabel: element.getAttribute('aria-label'),
+                  scrollWidth: element.scrollWidth,
+                  clientWidth: element.clientWidth,
+                })"""
+            )
+            if wrapper_metrics["tabIndex"] < 0 or wrapper_metrics["role"] != "region":
+                raise RuntimeError(f"{label}px Exact matrix scroll region is not keyboard focusable")
+            if not str(wrapper_metrics["ariaLabel"] or "").strip():
+                raise RuntimeError(f"{label}px Exact matrix scroll region is not labeled")
+            if wrapper_metrics["scrollWidth"] <= wrapper_metrics["clientWidth"] + 1:
+                raise RuntimeError(f"{label}px Exact matrix has no contained horizontal scroll affordance")
+            wrapper.focus()
+            if not page.evaluate("() => document.activeElement === document.querySelector('.exact-grid-wrap')"):
+                raise RuntimeError(f"{label}px Exact matrix scroll region did not receive keyboard focus")
+            scroll_left = wrapper.evaluate(
+                """element => {
+                  element.scrollLeft = element.scrollWidth;
+                  return element.scrollLeft;
+                }"""
+            )
+            if scroll_left <= 0:
+                raise RuntimeError(f"{label}px Exact matrix scroll region did not scroll")
+            if compact.get_attribute("data-formal-compact-remainder-probability") != compact_snapshot:
+                raise RuntimeError(f"{label}px disclosure mutated frozen compact probability state")
+            if int(
+                page.evaluate(
+                    "() => Math.max(0, document.documentElement.scrollWidth - "
+                    "document.documentElement.clientWidth)"
+                )
+            ):
+                raise RuntimeError(f"{label}px opening Exact matrix overflowed the page")
+
+            summary.focus()
+            summary.press("Enter")
+            if disclosure.evaluate("element => element.open"):
+                raise RuntimeError(f"{label}px Exact disclosure did not close by keyboard interaction")
+            summary.press("Enter")
+            if not disclosure.evaluate("element => element.open"):
+                raise RuntimeError(f"{label}px Exact disclosure did not reopen by keyboard interaction")
+            checks[f"exact_mobile_{label}_compact_default"] = "VERIFIED"
+            checks[f"exact_mobile_{label}_full_disclosure"] = "VERIFIED"
+            checks[f"exact_mobile_{label}_keyboard_scroll"] = "VERIFIED"
+        finally:
+            context.close()
+    return checks
+
+
 def _capture_all(
     site_root: Path,
     output: Path,
@@ -507,7 +702,10 @@ def _capture_all(
         with sync_playwright() as playwright:
             browser = playwright.chromium.launch(headless=True)
             try:
-                interaction_checks = _check_interactions(browser, base_url)
+                interaction_checks = {
+                    **_check_interactions(browser, base_url),
+                    **_check_exact_mobile_interactions(browser, base_url),
+                }
                 for name, path, viewport, fixture_id, status in specs:
                     records.append(
                         _capture_page(
@@ -563,13 +761,45 @@ def main() -> int:
     ]
     overflow = [record for record in records if record["horizontal_overflow"]]
     exact_overflow = [record for record in records if record["formal_exact_horizontal_overflow"]]
-    if browser_errors or overflow or exact_overflow:
+    mobile_exact_failures = [
+        record
+        for record in records
+        if record["formal_exact_cells"] == 169
+        and record["viewport"] in {"390x844", "320x800"}
+        and (
+            not record["formal_exact_compact_visible"]
+            or record["formal_exact_compact_source_cell_count"] != 169
+            or record["formal_exact_compact_top_count"] != 6
+            or record["formal_exact_compact_score_count"] != 6
+            or record["formal_exact_compact_remainder_count"] != 163
+            or (record["formal_exact_compact_probability_font_size_min"] or 0) < 12
+            or record["formal_exact_disclosure_count"] != 1
+            or record["formal_exact_disclosure_open"]
+            or record["formal_exact_disclosure_dom_cell_count"] != 169
+            or record["formal_exact_disclosure_summary_visible"] is not True
+            or record["formal_exact_disclosure_cue_present"] is not True
+        )
+    ]
+    desktop_exact_failures = [
+        record
+        for record in records
+        if record["formal_exact_cells"] == 169
+        and record["viewport"] == "1440x1000"
+        and (
+            record["formal_exact_disclosure_count"] != 1
+            or not record["formal_exact_disclosure_open"]
+            or record["formal_exact_disclosure_visible_cell_count"] != 169
+        )
+    ]
+    if browser_errors or overflow or exact_overflow or mobile_exact_failures or desktop_exact_failures:
         raise SystemExit(
             json.dumps(
                 {
                     "browser_errors": browser_errors,
                     "horizontal_overflow": overflow,
                     "formal_exact_horizontal_overflow": exact_overflow,
+                    "formal_exact_mobile_default_failures": mobile_exact_failures,
+                    "formal_exact_desktop_full_matrix_failures": desktop_exact_failures,
                 },
                 ensure_ascii=False,
             )
@@ -604,6 +834,29 @@ def main() -> int:
                 record["name"]: record["formal_exact_cells"]
                 for record in records
                 if record["formal_exact_cells"]
+            },
+            "formal_exact_mobile_default": {
+                record["name"]: {
+                    "compact_visible": record["formal_exact_compact_visible"],
+                    "source_cell_count": record["formal_exact_compact_source_cell_count"],
+                    "top_count": record["formal_exact_compact_top_count"],
+                    "score_count": record["formal_exact_compact_score_count"],
+                    "remainder_count": record["formal_exact_compact_remainder_count"],
+                    "probability_font_size_min": record["formal_exact_compact_probability_font_size_min"],
+                    "full_matrix_default_open": record["formal_exact_disclosure_open"],
+                    "full_matrix_dom_cell_count": record["formal_exact_disclosure_dom_cell_count"],
+                }
+                for record in records
+                if record["formal_exact_cells"] == 169
+                and record["viewport"] in {"390x844", "320x800"}
+            },
+            "formal_exact_desktop_full_matrix": {
+                record["name"]: {
+                    "open": record["formal_exact_disclosure_open"],
+                    "visible_cell_count": record["formal_exact_disclosure_visible_cell_count"],
+                }
+                for record in records
+                if record["formal_exact_cells"] == 169 and record["viewport"] == "1440x1000"
             },
             "dashboard_regenerated_with_pr_renderer": "YES",
             "normal_frozen_badge_count": production_frozen_count,

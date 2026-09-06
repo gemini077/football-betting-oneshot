@@ -359,6 +359,60 @@ def _formal_unavailable_html(key: str, item: dict[str, Any]) -> str:
     )
 
 
+def _exact_compact_projection(
+    contract: dict[str, Any],
+    *,
+    limit: int = 6,
+) -> tuple[list[dict[str, Any]], float, int]:
+    """Project the frozen finite cells without replaying or renormalizing them."""
+
+    def exact_cell_sort_key(cell: dict[str, Any]) -> tuple[float, int, int]:
+        return (
+            -float(cell.get("probability") or 0.0),
+            int(cell.get("home_goals")),
+            int(cell.get("away_goals")),
+        )
+
+    cells = [cell for cell in contract.get("cells", []) if isinstance(cell, dict)]
+    ranked = sorted(cells, key=exact_cell_sort_key)
+    selected = ranked[:limit]
+    remainder = math.fsum(float(cell.get("probability") or 0.0) for cell in ranked[limit:])
+    return selected, remainder, max(0, len(ranked) - len(selected))
+
+
+def _render_exact_compact_projection(contract: dict[str, Any]) -> str:
+    selected, remainder, remainder_count = _exact_compact_projection(contract)
+    rows = []
+    for rank, cell in enumerate(selected, start=1):
+        home = int(cell.get("home_goals"))
+        away = int(cell.get("away_goals"))
+        probability = _percent_number(cell.get("probability")) or 0.0
+        score = f"{home}-{away}"
+        rows.append(
+            f'<div class="exact-compact-row" data-formal-compact-score="{score}" '
+            f'data-formal-compact-rank="{rank}" data-formal-compact-probability="{probability:.12f}">'
+            f'<span class="exact-compact-score"><b>#{rank}</b>{html.escape(score)}</span>'
+            f'<span class="exact-compact-bar" aria-hidden="true"><span style="width:{probability * 100:.2f}%"></span></span>'
+            f'<strong class="exact-compact-probability">{_formal_probability(probability)}</strong></div>'
+        )
+    return (
+        '<div class="exact-compact" data-formal-exact-compact="true" '
+        f'data-formal-compact-source-cell-count="{len(selected) + remainder_count}" '
+        f'data-formal-compact-top-count="{len(selected)}" '
+        f'data-formal-compact-remainder-count="{remainder_count}" '
+        f'data-formal-compact-remainder-probability="{remainder:.12f}" '
+        'aria-label="移动端 Exact 冻结概率摘要">'
+        '<div class="exact-compact-heading"><h4>Exact 紧凑概率</h4><span>冻结格 Top 6</span></div>'
+        '<div class="exact-compact-list">'
+        + "".join(rows)
+        + '</div>'
+        f'<div class="exact-compact-remainder"><span>其余 {remainder_count} 个已表示格</span>'
+        f'<strong>{_formal_probability(remainder)}</strong></div>'
+        '<p class="exact-compact-note">仅合计 0–12 × 0–12 内其余已表示格；显式范围之外的比分未表示，不是已知尾部。</p>'
+        '</div>'
+    )
+
+
 def _render_exact_formal_market(item: dict[str, Any]) -> str:
     contract = item.get("contract") if isinstance(item.get("contract"), dict) else None
     if _formal_status(item) != "AVAILABLE" or contract is None:
@@ -388,12 +442,16 @@ def _render_exact_formal_market(item: dict[str, Any]) -> str:
         'data-formal-market-status="AVAILABLE">'
         '<div class="formal-panel-heading"><h3>Exact</h3>'
         f'<span>{EXACT_DISTRIBUTION_CELL_COUNT}\u683c\u00b7\u663e\u5f0f\u7f51\u683c</span></div>'
-        '<div class="exact-grid-wrap" role="region" tabindex="0" aria-label="冻结 Exact 169 格概率矩阵；H 为主队进球，A 为客队进球">'
-        '<table class="exact-grid"><caption class="sr-only">冻结 Exact 169 格：主队进球 H × 客队进球 A</caption><thead><tr><th scope="col">H\\A</th>'
+        + _render_exact_compact_projection(contract)
+        + '<details open class="exact-full-disclosure" data-formal-exact-disclosure>'
+        '<summary>\u67e5\u770b\u5b8c\u6574\u51bb\u7ed3 169 \u683c\u77e9\u9635</summary>'
+        '<p class="exact-disclosure-cue">\u79fb\u52a8\u7aef\u6253\u5f00\u540e\u5728 Exact \u533a\u57df\u5185\u5de6\u53f3\u6ed1\u52a8\uff1bH \u4e3a\u4e3b\u961f\u8fdb\u7403\uff0cA \u4e3a\u5ba2\u961f\u8fdb\u7403\u3002</p>'
+        '<div class="exact-grid-wrap" role="region" tabindex="0" aria-label="\u51bb\u7ed3 Exact 169 \u683c\u6982\u7387\u77e9\u9635\uff1bH \u4e3a\u4e3b\u961f\u8fdb\u7403\uff0cA \u4e3a\u5ba2\u961f\u8fdb\u7403">'
+        '<table class="exact-grid"><caption class="sr-only">\u51bb\u7ed3 Exact 169 \u683c\uff1a\u4e3b\u961f\u8fdb\u7403 H \u00d7 \u5ba2\u961f\u8fdb\u7403 A</caption><thead><tr><th scope="col">H\\A</th>'
         + headers
         + '</tr></thead><tbody>'
         + "".join(rows)
-        + '</tbody></table></div>'
+        + '</tbody></table></div></details>'
         '<p class="formal-market-note">\u4ec5\u5c55\u793a\u51bb\u7ed3\u5408\u7ea6\u4e2d 0\u201312 \u7403\u7684 169 \u4e2a\u663e\u5f0f\u683c\uff1b\u4e0d\u4f2a\u9020\u65e0\u9650\u5c3e\u90e8\u3002</p>'
         '</div>'
     )
@@ -474,7 +532,15 @@ def _render_formal_markets(contract: dict[str, Any]) -> str:
         + _render_exact_formal_market(items["exact_score"])
         + _render_total_formal_market(items["jc_total_goals"])
         + _render_handicap_formal_market(items["jc_handicap"])
-        + '</div></section>'
+        + '''</div><script>
+(() => {
+  const disclosures = document.querySelectorAll('[data-formal-exact-disclosure]');
+  const isMobile = window.matchMedia('(max-width: 560px)').matches;
+  disclosures.forEach((disclosure) => {
+    if (isMobile) disclosure.open = false;
+  });
+})();
+</script></section>'''
     )
 
 
@@ -942,8 +1008,13 @@ DETAIL_CSS = """
     .formal-panel-heading h3 { margin:0; font-size:15px; }
     .formal-panel-heading span { color:var(--muted); font-size:11px; text-align:right; }
     .formal-market-note { margin:9px 0 0; color:var(--muted); font-size:11px; }
-    .exact-grid-wrap { max-width:100%; overflow:visible; }
-    .exact-grid { width:100%; min-width:0; border-collapse:collapse; table-layout:fixed; font-size:10px; font-variant-numeric:tabular-nums; }
+    .exact-compact { display:none; }
+    .exact-full-disclosure { margin-top:2px; }
+    .exact-full-disclosure:not([open]) > :not(summary) { display:none; }
+    .exact-full-disclosure > summary { padding:3px 0 7px; cursor:pointer; font-size:12px; font-weight:700; }
+    .exact-disclosure-cue { margin:0 0 8px; color:var(--muted); font-size:11px; }
+    .exact-grid-wrap { max-width:100%; overflow-x:auto; }
+    .exact-grid { width:100%; min-width:650px; border-collapse:collapse; table-layout:fixed; font-size:10px; font-variant-numeric:tabular-nums; }
     .exact-grid th,.exact-grid td { width:7.14%; padding:5px 3px; border:1px solid var(--line); text-align:center; white-space:nowrap; }
     .exact-grid th { background:#FAF9F6; color:var(--muted); font-weight:650; }
     .exact-grid td { color:var(--ink); }
@@ -1037,8 +1108,26 @@ DETAIL_CSS = """
       .formal-market-grid { grid-template-columns:1fr; }
       .formal-exact-panel { grid-column:auto; }
       .formal-market-panel { padding:11px; }
-      .exact-grid { font-size:8px; }
-      .exact-grid th,.exact-grid td { padding:4px 1px; overflow:hidden; text-overflow:clip; }
+      .exact-compact { display:block; }
+      .exact-compact-heading { display:flex; align-items:baseline; justify-content:space-between; gap:8px; margin-bottom:8px; }
+      .exact-compact-heading h4 { margin:0; font-size:13px; }
+      .exact-compact-heading span { color:var(--muted); font-size:11px; }
+      .exact-compact-list { display:grid; gap:2px; }
+      .exact-compact-row { display:grid; grid-template-columns:64px minmax(0,1fr) 58px; align-items:center; gap:8px; min-height:29px; border-top:1px solid var(--line); }
+      .exact-compact-row:first-child { border-top:0; }
+      .exact-compact-score { font-size:13px; font-variant-numeric:tabular-nums; white-space:nowrap; }
+      .exact-compact-score b { margin-right:5px; color:var(--muted); font-size:11px; font-weight:650; }
+      .exact-compact-bar { height:6px; overflow:hidden; background:#F0EFEC; }
+      .exact-compact-bar > span { display:block; height:100%; background:var(--accent); }
+      .exact-compact-probability { text-align:right; font-size:13px; font-variant-numeric:tabular-nums; }
+      .exact-compact-remainder { display:flex; align-items:baseline; justify-content:space-between; gap:8px; margin-top:7px; padding-top:7px; border-top:1px solid var(--line); font-size:12px; }
+      .exact-compact-remainder strong { font-size:13px; font-variant-numeric:tabular-nums; }
+      .exact-compact-note { margin:7px 0 0; color:var(--muted); font-size:11px; }
+      .exact-full-disclosure { margin-top:10px; border-top:1px solid var(--line); }
+      .exact-full-disclosure > summary { min-height:34px; padding:9px 0 7px; }
+      .exact-grid-wrap { overflow-x:auto; }
+      .exact-grid { min-width:650px; font-size:10px; }
+      .exact-grid th,.exact-grid td { padding:5px 3px; overflow:visible; }
       .formal-verification-row { grid-template-columns:72px minmax(0,1fr); gap:5px 8px; }
       .formal-verification-row > em { grid-column:2; text-align:left; }
       .score-row { grid-template-columns:40px minmax(45px,1fr) 44px; gap:8px; min-height:29px; }
@@ -1057,6 +1146,8 @@ DETAIL_CSS = """
       .probability-card strong { font-size:20px; }
       .formal-panel-heading { display:block; }
       .formal-panel-heading span { display:block; margin-top:3px; text-align:left; }
+      .exact-compact-row { grid-template-columns:56px minmax(0,1fr) 54px; gap:6px; }
+      .exact-compact-probability { font-size:12px; }
       .score-row { grid-template-columns:40px minmax(35px,1fr) 42px; gap:6px; }
     }
 """

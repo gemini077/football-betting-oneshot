@@ -19,7 +19,11 @@ from scripts.match_analysis import (  # noqa: E402
     select_best_real_match,
     write_analysis_contract,
 )
-from scripts.match_detail import render_match_detail, write_match_detail_page  # noqa: E402
+from scripts.match_detail import (  # noqa: E402
+    _exact_compact_projection,
+    render_match_detail,
+    write_match_detail_page,
+)
 from test_formal_market_projection import formal_record  # noqa: E402
 
 
@@ -264,8 +268,31 @@ def test_formal_markets_are_wired_to_detail_and_completed_verification(tmp_path)
     assert 'data-formal-support-status="REPRESENTED"' in html
     assert "frozen rank #14" in html
     assert 'class="exact-grid-wrap" role="region" tabindex="0"' in html
+    assert 'data-formal-exact-compact="true"' in html
+    assert 'data-formal-compact-source-cell-count="169"' in html
+    assert 'data-formal-compact-top-count="6"' in html
+    assert 'data-formal-compact-remainder-count="163"' in html
+    assert 'data-formal-compact-remainder-probability="0.964497041420"' in html
+    assert html.count('data-formal-compact-score=') == 6
+    assert 'data-formal-exact-disclosure' in html
+    assert '<details open class="exact-full-disclosure"' in html
+    assert 'font-size:8px' not in html
     assert "actual_probability" not in html
     assert 'id="score-distribution"' not in html
+
+    selected, remainder, remainder_count = _exact_compact_projection(
+        markets["exact_score"]["contract"]
+    )
+    assert [(cell["home_goals"], cell["away_goals"]) for cell in selected] == [
+        (0, 0),
+        (0, 1),
+        (0, 2),
+        (0, 3),
+        (0, 4),
+        (0, 5),
+    ]
+    assert remainder == pytest.approx(163 / 169)
+    assert remainder_count == 163
 
 
 def test_formal_market_unavailability_is_scoped_to_one_market(tmp_path):
@@ -284,6 +311,23 @@ def test_formal_market_unavailability_is_scoped_to_one_market(tmp_path):
     assert 'data-formal-market="jc_total_goals"' in html
     assert 'data-formal-market="jc_handicap"' in html
     assert "\u65e7\u8bb0\u5f55\u6ca1\u6709\u8be5\u6b63\u5f0f\u73a9\u6cd5" in html
+
+
+def test_exact_unavailability_does_not_render_compact_or_matrix(tmp_path):
+    contract = assemble(roots(tmp_path, include_formal_markets=True))
+    contract["formal_markets"]["markets"]["exact_score"] = {
+        "status": "NOT_RECORDED",
+        "reason_code": "FORMAL_CONTRACT_NOT_RECORDED",
+    }
+
+    html = render_match_detail(contract)
+
+    assert 'data-formal-market="exact_score"' in html
+    assert 'data-formal-market-status="NOT_RECORDED"' in html
+    assert 'data-formal-exact-compact="true"' not in html
+    assert 'data-formal-cell-home=' not in html
+    assert 'data-formal-market="jc_total_goals"' in html
+    assert 'data-formal-market-status="AVAILABLE"' in html
 
 
 def test_pilot_contract_is_explicit_and_uses_real_frozen_outputs(tmp_path):
