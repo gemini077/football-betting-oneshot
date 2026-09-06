@@ -44,6 +44,10 @@ from model_governance import (  # noqa: E402
     prediction_content_hash,
 )
 from nowscore_markets import fetch_match_markets  # noqa: E402
+from official_jc_handicap import (  # noqa: E402
+    abstain_nowscore_jc_handicap_capture,
+    capture_nowscore_jc_handicap,
+)
 from prediction_universe import load_prediction_universe  # noqa: E402
 from prediction_quality import recent_form_is_usable  # noqa: E402
 from recent_form_cache import (  # noqa: E402
@@ -1523,13 +1527,14 @@ def _build_payload(
     now: datetime,
     freeze_created_at: datetime,
     metadata: dict[str, Any],
+    official_jc_handicap_capture: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     config = load_config()
     model = result.get("model") if isinstance(result, dict) else None
     if not isinstance(model, dict):
         raise ValueError("MODEL_RETURNED_NO_PREDICTION")
     decisions = result.get("decisions") or {}
-    return {
+    payload = {
         "report": {
             "report_type": "base_prediction_minimal",
             "model_version": config["champion"]["release_version"],
@@ -1565,6 +1570,11 @@ def _build_payload(
         },
         "business_date": business_date,
     }
+    if official_jc_handicap_capture is not None:
+        # This is a separate frozen market authority.  It is deliberately not
+        # placed in the deterministic model-input projection.
+        payload["official_jc_handicap_capture"] = copy.deepcopy(official_jc_handicap_capture)
+    return payload
 
 
 def _decorate_record(
@@ -1953,6 +1963,18 @@ def run_base_prediction_jobs(
                 freeze_time,
                 metadata,
             )
+            try:
+                jc_handicap_capture = capture_nowscore_jc_handicap(
+                    fixture,
+                    now=freeze_time,
+                )
+            except Exception as error:  # JC lane is failure-isolated from other markets
+                jc_handicap_capture = abstain_nowscore_jc_handicap_capture(
+                    fixture,
+                    "JC_HANDICAP_CAPTURE_EXCEPTION",
+                    reason_codes=[f"{type(error).__name__}"],
+                )
+            payload["official_jc_handicap_capture"] = jc_handicap_capture
             record = build_prediction_record(
                 payload,
                 input_payload=input_snapshot,

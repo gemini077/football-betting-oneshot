@@ -1,0 +1,130 @@
+name: JC handicap Nowscore formal truth
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - "scripts/official_jc_handicap.py"
+      - "scripts/official_jc_handicap_live_audit.py"
+      - "scripts/model_governance.py"
+      - "scripts/base_prediction_runner.py"
+      - "scripts/prospective_settlement.py"
+      - "scripts/automatic_postmatch_review.py"
+      - "schemas/jc_handicap.schema.json"
+      - "tests/test_official_jc_handicap.py"
+      - "tests/test_automatic_postmatch_review.py"
+      - "tests/test_model_governance.py"
+      - "tests/test_base_prediction_runner.py"
+      - "tests/test_prospective_settlement.py"
+      - "tests/test_exact_distribution_freeze.py"
+      - "tests/test_market_contracts.py"
+      - ".github/workflows/jc-handicap-nowscore.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  focused-validation:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install project dependencies
+        run: python -m pip install -r requirements.txt
+
+      - name: Run focused JC handicap and non-interference tests
+        run: >-
+          python -m pytest -q
+          tests/test_official_jc_handicap.py
+          tests/test_automatic_postmatch_review.py
+          tests/test_prospective_settlement.py
+          tests/test_model_governance.py
+          tests/test_base_prediction_runner.py
+          tests/test_exact_distribution_freeze.py
+          tests/test_market_contracts.py
+
+      - name: Compile touched Python modules
+        run: >-
+          python -m py_compile
+          scripts/official_jc_handicap.py
+          scripts/official_jc_handicap_live_audit.py
+          scripts/model_governance.py
+          scripts/base_prediction_runner.py
+          scripts/prospective_settlement.py
+          scripts/automatic_postmatch_review.py
+
+      - name: Run repository-data non-interference audit
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || 'HEAD^' }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          forbidden=0
+          while IFS= read -r path; do
+            case "$path" in
+              data/model_governance/predictions/*|data/model_governance/input_snapshots/*|data/prospective/*|data/prediction_universe/*|data/base_prediction_jobs/*|data/postmatch_results/*|data/postmatch_reviews/*|data/market_history/*|data/*provider*/*|site/*|src/*UI*/*)
+                echo "forbidden repository-data/UI change: $path" >&2
+                forbidden=1
+                ;;
+            esac
+          done < <(git diff --name-only "$BASE_SHA...$HEAD_SHA")
+          test "$forbidden" -eq 0
+
+      - name: Check patch whitespace
+        run: git diff --check "${{ github.event.pull_request.base.sha || 'HEAD^' }}...${{ github.event.pull_request.head.sha || github.sha }}"
+
+  live-audit:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install project dependencies
+        run: python -m pip install -r requirements.txt
+
+      - name: Run bounded current-business-date Nowscore live audit
+        shell: bash
+        run: |
+          set +e
+          python scripts/official_jc_handicap_live_audit.py \
+            --output "$RUNNER_TEMP/jc-handicap-nowscore-live-audit.json" \
+            --limit 20
+          status=$?
+          set -e
+          # A produced FAIL_CLOSED/PARTIAL/READY decision is evidence, not a
+          # reason to hide the artifact or to add a fallback source.  Genuine
+          # execution errors still fail the job when no artifact was written.
+          if [ "$status" -ne 0 ] && [ ! -s "$RUNNER_TEMP/jc-handicap-nowscore-live-audit.json" ]; then
+            exit "$status"
+          fi
+
+      - name: Upload current Nowscore live-audit artifact
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: jc-handicap-nowscore-live-audit
+          path: ${{ runner.temp }}/jc-handicap-nowscore-live-audit.json
+          if-no-files-found: error

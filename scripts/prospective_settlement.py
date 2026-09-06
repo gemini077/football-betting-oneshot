@@ -30,6 +30,13 @@ from exact_distribution import (
     classify_frozen_exact_score,
     classify_frozen_jc_total_goals,
 )
+from official_jc_handicap import (
+    JC_HANDICAP_CONTRACT_VERSION,
+    classify_frozen_jc_handicap,
+    empty_jc_handicap_evaluation,
+    evaluate_frozen_jc_handicap,
+    summarize_jc_handicap_evaluations,
+)
 
 
 BASE_DIR = Path(__file__).resolve().parents[1]
@@ -524,6 +531,26 @@ def evaluate_prediction(record: dict[str, Any], actual: dict[str, Any]) -> dict[
         "jc_total_goals_rps_convention": JC_TOTAL_GOALS_RPS_CONVENTION,
         "jc_total_goals_rps_denominator": JC_TOTAL_GOALS_RPS_DENOMINATOR,
         "jc_total_goals_vector_order": list(JC_TOTAL_GOALS_BUCKET_ORDER),
+        "FORMAL_JC_HANDICAP_FROZEN": False,
+        "JC_HANDICAP_1X2_ELIGIBLE": False,
+        "official_jc_handicap_line": None,
+        "actual_jc_handicap_class": None,
+        "jc_handicap_probability": None,
+        "jc_handicap_status": "MISSING_FROZEN_JC_HANDICAP",
+        "jc_handicap_authority_status": "RESEARCH_RECONSTRUCTED",
+        "jc_handicap_top_selection": None,
+        "jc_handicap_top_selection_hit": None,
+        "jc_handicap_evaluation_eligible": False,
+        "jc_handicap_evaluation_status": "MISSING_FROZEN_JC_HANDICAP",
+        "jc_handicap_log_loss": None,
+        "jc_handicap_brier": None,
+        "jc_handicap_multiclass_brier": None,
+        "jc_handicap_rps": None,
+        "jc_handicap_brier_convention": "SUM_SQUARED_ERROR",
+        "jc_handicap_rps_convention": "CUMULATIVE_SQUARED_ERROR_DIVIDED_BY_K_MINUS_1",
+        "jc_handicap_rps_denominator": 2,
+        "jc_handicap_vector_order": ["home", "draw", "away"],
+        "jc_handicap_forecast_horizon": None,
         "market_only_1x2_brier": None,
         "market_only_1x2_logloss": None,
         "market_only_metric_status": None,
@@ -556,10 +583,17 @@ def evaluate_prediction(record: dict[str, Any], actual: dict[str, Any]) -> dict[
 
     frozen_exact = classify_frozen_exact_score(record, home, away)
     frozen_jc_total_goals = classify_frozen_jc_total_goals(record, home, away)
+    frozen_jc_handicap = classify_frozen_jc_handicap(record, home, away)
     jc_evaluation = _evaluate_frozen_jc_total_goals(
         record,
         frozen_jc_total_goals,
         verified_result=_is_verified_result_artifact(actual),
+    )
+    jc_handicap_evaluation = evaluate_frozen_jc_handicap(
+        record,
+        (home, away),
+        verified_result=_is_verified_result_artifact(actual),
+        formally_eligible=is_formally_eligible(record),
     )
     metrics.update({
         "FORMAL_EXACT_DISTRIBUTION_FROZEN": frozen_exact["FORMAL_EXACT_DISTRIBUTION_FROZEN"],
@@ -581,8 +615,18 @@ def evaluate_prediction(record: dict[str, Any], actual: dict[str, Any]) -> dict[
         "same_time_official_market_baseline_status": frozen_jc_total_goals[
             "same_time_official_market_baseline_status"
         ],
+        "FORMAL_JC_HANDICAP_FROZEN": frozen_jc_handicap["FORMAL_JC_HANDICAP_FROZEN"],
+        "JC_HANDICAP_1X2_ELIGIBLE": frozen_jc_handicap["JC_HANDICAP_1X2_ELIGIBLE"],
+        "official_jc_handicap_line": frozen_jc_handicap["official_jc_handicap_line"],
+        "actual_jc_handicap_class": frozen_jc_handicap["actual_jc_handicap_class"],
+        "jc_handicap_probability": frozen_jc_handicap["jc_handicap_probability"],
+        "jc_handicap_status": frozen_jc_handicap["jc_handicap_status"],
+        "jc_handicap_authority_status": frozen_jc_handicap["authority_status"],
+        "jc_handicap_top_selection": frozen_jc_handicap["jc_handicap_top_selection"],
+        "jc_handicap_top_selection_hit": frozen_jc_handicap["jc_handicap_top_selection_hit"],
     })
     metrics.update(jc_evaluation)
+    metrics.update(jc_handicap_evaluation)
     if frozen_exact["FORMAL_EXACT_LOG_SCORE_ELIGIBLE"]:
         metrics.update({
             "actual_score_probability": frozen_exact["probability"],
@@ -813,6 +857,10 @@ def _sample(record: dict[str, Any], actual: dict[str, Any], metrics: dict[str, A
                 or (record.get("prediction_output") or {}).get("jc_total_goals")
                 or (record.get("exact_score_distribution") or {}).get("jc_total_goals")
             ),
+            "jc_handicap": (
+                record.get("jc_handicap")
+                or (record.get("prediction_output") or {}).get("jc_handicap")
+            ),
             "market_only_baseline": record.get("market_only_baseline"),
         },
         "actual": {
@@ -855,6 +903,11 @@ def _write_summary(
             "formal_jc_total_goals_evaluation_eligible", 0
         ),
         "jc_total_goals": _jc_total_goals_summary(formal_rows),
+        "formal_jc_handicap_frozen": result.get("formal_jc_handicap_frozen", 0),
+        "formal_jc_handicap_evaluation_eligible": result.get(
+            "formal_jc_handicap_evaluation_eligible", 0
+        ),
+        "jc_handicap": summarize_jc_handicap_evaluations(formal_rows),
         "pending_results": result.get("pending_results", 0),
         "excluded_prediction_count": len(excluded_prediction_ids(exclusion_root)),
         "pilot_excluded_settled": len(exploratory_rows),
@@ -909,6 +962,8 @@ def settle_records(
         "formal_exact_out_of_support": 0,
         "formal_jc_total_goals_frozen": 0,
         "formal_jc_total_goals_evaluation_eligible": 0,
+        "formal_jc_handicap_frozen": 0,
+        "formal_jc_handicap_evaluation_eligible": 0,
         "result_failures": 0,
         "result_conflicts": 0,
         "duplicate_prospective_samples": max(0, len(formal_rows) - len(formal_by_id)),
@@ -1002,10 +1057,15 @@ def settle_records(
         result["formal_exact_out_of_support"] += int(metrics["OUT_OF_EXPLICIT_SUPPORT"])
         if excluded is not None:
             metrics.update(_empty_jc_total_goals_evaluation("EXCLUDED_FROM_FORMAL_COHORT"))
+            metrics.update(empty_jc_handicap_evaluation("EXCLUDED_FROM_FORMAL_COHORT"))
         else:
             result["formal_jc_total_goals_frozen"] += int(metrics["FORMAL_JC_TOTAL_GOALS_FROZEN"])
+            result["formal_jc_handicap_frozen"] += int(metrics["FORMAL_JC_HANDICAP_FROZEN"])
         result["formal_jc_total_goals_evaluation_eligible"] += int(
             metrics["jc_total_goals_evaluation_eligible"]
+        )
+        result["formal_jc_handicap_evaluation_eligible"] += int(
+            metrics["jc_handicap_evaluation_eligible"]
         )
         sample = _sample(
             record,

@@ -11,6 +11,11 @@ import automatic_postmatch_review as review_module
 from automatic_postmatch_review import _primary_settlement, _rich_market_timeline, _rich_root_cause, build_review
 from exact_distribution import build_exact_distribution_contract, build_prediction_time_exact_distribution_state
 from model_governance import build_prediction_record, freeze_prediction
+from official_jc_handicap import (
+    JC_HANDICAP_LINE_BINDING,
+    JC_HANDICAP_SOURCE_SURFACE,
+    build_jc_handicap_contract,
+)
 
 
 def test_new_review_carries_exact_frozen_prediction_join(tmp_path, monkeypatch):
@@ -111,6 +116,65 @@ def test_postmatch_diagnostics_read_frozen_jc_total_goals_truth_only(monkeypatch
     assert diagnostics["actual_jc_total_goals_bucket"] == "6"
     assert diagnostics["jc_total_goals_authority_status"] == "FROZEN_PREDICTION_TIME"
     assert diagnostics["same_time_official_market_baseline_status"] == "NOT_AVAILABLE"
+
+
+def test_postmatch_diagnostics_read_frozen_jc_handicap_truth_only(monkeypatch):
+    state = build_prediction_time_exact_distribution_state(
+        {(home, away): 1 / 169 for home in range(13) for away in range(13)},
+        lambda_home=1.2,
+        lambda_away=0.9,
+        rho=0.0,
+    )
+    exact = build_exact_distribution_contract(
+        state,
+        model_identity={"prediction_id": "JC-HANDICAP-REVIEW-001"},
+    )
+    source = {
+        "status": "CAPTURED",
+        "line": 1,
+        "nowscore_id": 3000001,
+        "source_surface": JC_HANDICAP_SOURCE_SURFACE,
+        "source_url": "https://m.nowscore.com/Analy/Analysis/3000001.htm",
+        "business_date": "2026-08-05",
+        "match_number": "T001",
+        "fetched_at": "2026-08-04T23:00:00+08:00",
+        "captured_at": "2026-08-04T23:00:00+08:00",
+        "page_http_status": 200,
+        "response_sha256": "a" * 64,
+        "content_sha256": "a" * 64,
+        "parser_contract_version": "nowscore_jc_handicap_parser.v1",
+        "line_binding": JC_HANDICAP_LINE_BINDING,
+        "line_perspective": "home",
+        "identity_status": "EXACT_ID",
+        "home_team": "Home FC",
+        "away_team": "Away FC",
+        "kickoff_at": "2026-08-05T02:00:00+08:00",
+    }
+    handicap = build_jc_handicap_contract(exact, source)
+    frozen = {
+        "prediction_id": "JC-HANDICAP-REVIEW-001",
+        "exact_score_distribution": exact,
+        "jc_handicap": handicap,
+    }
+    monkeypatch.setattr(review_module, "load_frozen_prediction", lambda *_args: frozen)
+    diagnostics = review_module._model_diagnostics(
+        {
+            "model": {
+                "probabilities": {"home": 0.45, "draw": 0.3, "away": 0.25},
+                "lambda_home": 99.0,
+                "lambda_away": 99.0,
+                "rho": 0.0,
+            },
+            "model_governance": {"prediction_id": "JC-HANDICAP-REVIEW-001"},
+        },
+        0,
+        1,
+    )
+    assert diagnostics["FORMAL_JC_HANDICAP_FROZEN"] is True
+    assert diagnostics["official_jc_handicap_line"] == 1
+    assert diagnostics["actual_jc_handicap_class"] == "draw"
+    assert diagnostics["jc_handicap_authority_status"] == "FROZEN_PREDICTION_TIME"
+    assert diagnostics["jc_handicap_same_time_official_market_baseline_status"] == "NOT_AVAILABLE"
 
 
 def test_generate_does_not_rewrite_existing_reviewed_schedule(tmp_path, monkeypatch):

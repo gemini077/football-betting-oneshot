@@ -17,6 +17,7 @@ from typing import Any
 
 from prediction_quality import BASE_PREDICTION_POLICY, classify_base_prediction, classify_prediction
 from exact_distribution import build_exact_distribution_contract, validate_exact_distribution_contract
+from official_jc_handicap import build_jc_handicap_contract, validate_jc_handicap_contract
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -1279,6 +1280,32 @@ def build_prediction_record(
             if isinstance(jc_total_goals, dict):
                 record["jc_total_goals"] = deepcopy(jc_total_goals)
                 record["prediction_output"]["jc_total_goals"] = deepcopy(jc_total_goals)
+    captured_jc_handicap = payload.get("official_jc_handicap_capture")
+    if captured_jc_handicap is None:
+        captured_jc_handicap = payload.get("_prediction_time_official_jc_handicap_capture")
+    if captured_jc_handicap is not None:
+        record["jc_handicap"] = build_jc_handicap_contract(
+            record.get("exact_score_distribution"),
+            captured_jc_handicap,
+            model_identity={
+                "prediction_id": record["prediction_id"],
+                "model_role": record["model_role"],
+                "model_family": record["model_family"],
+                "model_core_version": record["model_core_version"],
+                "release_version": record["release_version"],
+            },
+            forecast_horizon={
+                "prediction_created_at": record.get("prediction_created_at"),
+                "kickoff_at": record.get("kickoff_at"),
+            },
+            expected_match_identity={
+                "home": match.get("home"),
+                "away": match.get("away"),
+                "kickoff_at": record.get("kickoff_at"),
+                "business_date": payload.get("business_date"),
+            },
+        )
+        record["prediction_output"]["jc_handicap"] = deepcopy(record["jc_handicap"])
     record["prediction_sha256"] = prediction_content_hash(record)
     return record
 
@@ -1315,6 +1342,17 @@ def _validate_record(record: dict[str, Any]) -> None:
             raise ValueError("prediction_output JC total-goals projection does not match frozen exact distribution")
         if exact_jc_total_goals is None and prediction_output_jc_total_goals is not None:
             raise ValueError("prediction_output JC total-goals projection has no frozen exact-distribution authority")
+    jc_handicap = record.get("jc_handicap")
+    if jc_handicap is not None:
+        exact_contract = record.get("exact_score_distribution")
+        expected_exact_hash = exact_contract.get("content_sha256") if isinstance(exact_contract, dict) else None
+        validate_jc_handicap_contract(
+            jc_handicap,
+            expected_exact_content_sha256=expected_exact_hash,
+        )
+        prediction_output_jc_handicap = (record.get("prediction_output") or {}).get("jc_handicap")
+        if prediction_output_jc_handicap != jc_handicap:
+            raise ValueError("prediction_output JC handicap projection does not match frozen JC handicap authority")
     snapshot = record.get("input_snapshot") or {}
     if snapshot.get("canonical_input_sha256") != record.get("input_sha256"):
         raise ValueError("input snapshot hash does not match input_sha256")
