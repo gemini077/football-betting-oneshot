@@ -23,7 +23,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from scripts.build_public_site import _fixture_contract  # noqa: E402
+from scripts.build_public_site import _fixture_contract, _linked_frozen_formal_markets  # noqa: E402
 from scripts.match_detail import render_match_detail  # noqa: E402
 from scripts.prediction_dashboard import render_dashboard  # noqa: E402
 
@@ -160,7 +160,12 @@ def _write_fixture_pages(site_root: Path, payload: dict[str, Any], current: dict
     }
 
     business_date = str(payload.get("business_date") or "")
-    current_contract = _fixture_contract(current, business_date)
+    current_formal_markets = _linked_frozen_formal_markets(ROOT / "data", current)
+    current_contract = _fixture_contract(
+        current,
+        business_date,
+        formal_markets=current_formal_markets,
+    )
     current_contract["prediction_quality_health"] = payload.get("prediction_quality_health") or {}
     pages["detail-current-frozen.html"] = render_match_detail(current_contract)
 
@@ -352,6 +357,10 @@ def _capture_all(
         ("dashboard-320x800.png", "prediction_dashboard/latest.html", (320, 800), "production-current", "PRODUCTION_TRUTH"),
         ("detail-current-frozen-1440x1000.png", "visual-fixtures/detail-current-frozen.html", (1440, 1000), str(current.get("match_id") or "current-frozen"), "PRODUCTION_TRUTH"),
         ("detail-current-frozen-390x844.png", "visual-fixtures/detail-current-frozen.html", (390, 844), str(current.get("match_id") or "current-frozen"), "PRODUCTION_TRUTH"),
+        ("detail-current-frozen-320x800.png", "visual-fixtures/detail-current-frozen.html", (320, 800), str(current.get("match_id") or "current-frozen"), "PRODUCTION_TRUTH"),
+        ("formal-markets-1440x1000.png", "visual-fixtures/detail-current-frozen.html#formal-markets", (1440, 1000), str(current.get("match_id") or "formal-markets"), "PRODUCTION_TRUTH"),
+        ("formal-markets-390x844.png", "visual-fixtures/detail-current-frozen.html#formal-markets", (390, 844), str(current.get("match_id") or "formal-markets"), "PRODUCTION_TRUTH"),
+        ("formal-markets-320x800.png", "visual-fixtures/detail-current-frozen.html#formal-markets", (320, 800), str(current.get("match_id") or "formal-markets"), "PRODUCTION_TRUTH"),
         ("insufficient-evidence-390x844.png", "visual-fixtures/dashboard-insufficient.html", (390, 844), "TEST FIXTURE · INSUFFICIENT_SAMPLE", "TEST_FIXTURE"),
         ("degraded-evidence-1440x1000.png", "visual-fixtures/dashboard-degraded.html", (1440, 1000), "TEST FIXTURE · DEGRADED", "TEST_FIXTURE"),
         ("unverified-evidence-390x844.png", "visual-fixtures/dashboard-unverified.html", (390, 844), "TEST FIXTURE · UNVERIFIED", "TEST_FIXTURE"),
@@ -359,6 +368,7 @@ def _capture_all(
         ("upcoming-empty-evidence-390x844.png", "visual-fixtures/dashboard-upcoming-empty.html", (390, 844), "TEST FIXTURE · UPCOMING=0", "TEST_FIXTURE"),
         ("completed-evidence-1440x1000.png", "visual-fixtures/detail-completed-verified.html", (1440, 1000), "TEST FIXTURE · completed-verified", "TEST_FIXTURE"),
         ("completed-evidence-390x844.png", "visual-fixtures/detail-completed-verified.html", (390, 844), "TEST FIXTURE · completed-verified", "TEST_FIXTURE"),
+        ("completed-evidence-320x800.png", "visual-fixtures/detail-completed-verified.html", (320, 800), "TEST FIXTURE / completed-verified", "TEST_FIXTURE"),
     ]
     records: list[dict[str, Any]] = []
     try:

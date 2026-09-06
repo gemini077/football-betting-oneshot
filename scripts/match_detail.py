@@ -22,6 +22,13 @@ except ImportError:
     from exact_score_serving_policy import exact_score_serving_presentation
 
 try:
+    from .exact_distribution import EXACT_DISTRIBUTION_CELL_COUNT, EXACT_DISTRIBUTION_MAX_GOALS
+    from .formal_market_projection import FORMAL_MARKET_STATUS_LABELS, verify_formal_markets
+except ImportError:
+    from exact_distribution import EXACT_DISTRIBUTION_CELL_COUNT, EXACT_DISTRIBUTION_MAX_GOALS
+    from formal_market_projection import FORMAL_MARKET_STATUS_LABELS, verify_formal_markets
+
+try:
     from .closed_beta_copy import render_closed_beta_notice
 except ImportError:
     from closed_beta_copy import render_closed_beta_notice
@@ -292,6 +299,178 @@ def _render_goals(contract: dict[str, Any]) -> str:
     )
 
 
+_FORMAL_MARKET_LABELS = {
+    "exact_score": "Exact",
+    "jc_total_goals": "JC\u603b\u8fdb\u7403",
+    "jc_handicap": "JC\u8ba9\u7403",
+}
+_FORMAL_SELECTION_LABELS = {
+    "home": "H",
+    "draw": "D",
+    "away": "A",
+}
+
+
+def _formal_markets(contract: dict[str, Any]) -> dict[str, Any]:
+    value = contract.get("formal_markets")
+    return value if isinstance(value, dict) else {}
+
+
+def _formal_market_item(formal: dict[str, Any], key: str) -> dict[str, Any]:
+    markets = formal.get("markets")
+    item = markets.get(key) if isinstance(markets, dict) else None
+    return item if isinstance(item, dict) else {"status": "NOT_RECORDED"}
+
+
+def _formal_status(item: dict[str, Any]) -> str:
+    status = str(item.get("status") or "NOT_RECORDED").upper()
+    return status if status in FORMAL_MARKET_STATUS_LABELS else "UNAVAILABLE"
+
+
+def _formal_status_reason(status: str) -> str:
+    if status == "NOT_RECORDED":
+        return "\u65e7\u8bb0\u5f55\u6ca1\u6709\u8be5\u6b63\u5f0f\u73a9\u6cd5\u7684\u51bb\u7ed3\u5408\u7ea6\uff0c\u672a\u56de\u7b97\u3002"
+    if status == "UNAVAILABLE":
+        return "\u8be5\u73a9\u6cd5\u7684\u51bb\u7ed3\u5408\u7ea6\u4e0d\u53ef\u7528\uff1b\u5176\u4ed6\u6b63\u5f0f\u73a9\u6cd5\u4ecd\u72ec\u7acb\u5c55\u793a\u3002"
+    return ""
+
+
+def _formal_probability(value: Any) -> str:
+    number = _percent_number(value)
+    return f"{number * 100:.2f}%" if number is not None else "\u2014"
+
+
+def _formal_unavailable_html(key: str, item: dict[str, Any]) -> str:
+    status = _formal_status(item)
+    label = _FORMAL_MARKET_LABELS[key]
+    status_label = FORMAL_MARKET_STATUS_LABELS.get(status, status)
+    return (
+        f'<div class="formal-market-unavailable status-{status.lower()}" '
+        f'data-formal-market="{html.escape(key, quote=True)}" '
+        f'data-formal-market-status="{html.escape(status, quote=True)}">'
+        f'<strong>{_esc(label)}</strong><span>{_esc(status_label)}</span>'
+        f'<p>{_esc(_formal_status_reason(status))}</p></div>'
+    )
+
+
+def _render_exact_formal_market(item: dict[str, Any]) -> str:
+    contract = item.get("contract") if isinstance(item.get("contract"), dict) else None
+    if _formal_status(item) != "AVAILABLE" or contract is None:
+        return _formal_unavailable_html("exact_score", item)
+    cells = contract.get("cells") if isinstance(contract.get("cells"), list) else []
+    by_score = {
+        (cell.get("home_goals"), cell.get("away_goals")): cell
+        for cell in cells
+        if isinstance(cell, dict)
+    }
+    max_goals = EXACT_DISTRIBUTION_MAX_GOALS
+    headers = "".join(f'<th scope="col">{goal}</th>' for goal in range(max_goals + 1))
+    rows = []
+    for home in range(max_goals + 1):
+        cells_html = []
+        for away in range(max_goals + 1):
+            cell = by_score.get((home, away))
+            probability = _percent_number(cell.get("probability")) if cell else None
+            probability_attr = f' data-probability="{probability:.6f}"' if probability is not None else ""
+            cells_html.append(
+                f'<td data-formal-cell-home="{home}" data-formal-cell-away="{away}"{probability_attr}>'
+                f'{_formal_probability(probability)}</td>'
+            )
+        rows.append(f'<tr><th scope="row">{home}</th>{"".join(cells_html)}</tr>')
+    return (
+        '<div class="formal-market-panel formal-exact-panel" data-formal-market="exact_score" '
+        'data-formal-market-status="AVAILABLE">'
+        '<div class="formal-panel-heading"><h3>Exact</h3>'
+        f'<span>{EXACT_DISTRIBUTION_CELL_COUNT}\u683c\u00b7\u663e\u5f0f\u7f51\u683c</span></div>'
+        '<div class="exact-grid-wrap"><table class="exact-grid"><thead><tr><th scope="col">H\\A</th>'
+        + headers
+        + '</tr></thead><tbody>'
+        + "".join(rows)
+        + '</tbody></table></div>'
+        '<p class="formal-market-note">\u4ec5\u5c55\u793a\u51bb\u7ed3\u5408\u7ea6\u4e2d 0\u201312 \u7403\u7684 169 \u4e2a\u663e\u5f0f\u683c\uff1b\u4e0d\u4f2a\u9020\u65e0\u9650\u5c3e\u90e8\u3002</p>'
+        '</div>'
+    )
+
+
+def _render_total_formal_market(item: dict[str, Any]) -> str:
+    contract = item.get("contract") if isinstance(item.get("contract"), dict) else None
+    if _formal_status(item) != "AVAILABLE" or contract is None:
+        return _formal_unavailable_html("jc_total_goals", item)
+    probabilities = contract.get("probabilities") if isinstance(contract.get("probabilities"), dict) else {}
+    top = contract.get("top_selection")
+    order = contract.get("selection_order") if isinstance(contract.get("selection_order"), list) else []
+    rows = []
+    for bucket in order:
+        number = _percent_number(probabilities.get(bucket))
+        top_class = " formal-market-top" if bucket == top else ""
+        rows.append(
+            f'<div class="formal-total-row{top_class}" data-formal-selection="{html.escape(str(bucket), quote=True)}">'
+            f'<span>{_esc(bucket)}</span><div class="formal-total-bar" aria-hidden="true"><span style="width:{(number or 0.0) * 100:.1f}%"></span></div>'
+            f'<strong>{_formal_probability(number)}</strong></div>'
+        )
+    return (
+        '<div class="formal-market-panel" data-formal-market="jc_total_goals" data-formal-market-status="AVAILABLE">'
+        '<div class="formal-panel-heading"><h3>JC\u603b\u8fdb\u7403</h3><span>0\u20136\uff0c7+</span></div>'
+        '<div class="formal-total-list">' + "".join(rows) + '</div>'
+        '<p class="formal-market-note">\u53ea\u8bfb\u51bb\u7ed3\u7684 official JC \u603b\u8fdb\u7403\u5408\u7ea6\u3002</p>'
+        '</div>'
+    )
+
+
+def _render_handicap_formal_market(item: dict[str, Any]) -> str:
+    contract = item.get("contract") if isinstance(item.get("contract"), dict) else None
+    if _formal_status(item) != "AVAILABLE" or contract is None:
+        return _formal_unavailable_html("jc_handicap", item)
+    probabilities = contract.get("probabilities") if isinstance(contract.get("probabilities"), dict) else {}
+    order = contract.get("selection_order") if isinstance(contract.get("selection_order"), list) else []
+    top = contract.get("top_selection")
+    cards = []
+    for selection in order:
+        number = _percent_number(probabilities.get(selection))
+        top_class = " formal-market-top" if selection == top else ""
+        code = _FORMAL_SELECTION_LABELS.get(str(selection), str(selection))
+        cards.append(
+            f'<div class="formal-handicap-card{top_class}" data-formal-selection="{html.escape(str(selection), quote=True)}">'
+            f'<span>{html.escape(code, quote=True)}</span><strong>{_formal_probability(number)}</strong>'
+            f'<em>{_esc(selection)}</em></div>'
+        )
+    line = contract.get("official_integer_line", contract.get("line"))
+    return (
+        '<div class="formal-market-panel" data-formal-market="jc_handicap" data-formal-market-status="AVAILABLE">'
+        f'<div class="formal-panel-heading"><h3>JC\u8ba9\u7403 H/D/A</h3><span>\u5b98\u65b9\u6574\u6570\u8ba9\u7403 {html.escape(str(line), quote=True)}</span></div>'
+        '<div class="formal-handicap-grid">' + "".join(cards) + '</div>'
+        '<p class="formal-market-note">H=\u4e3b\u80dc\uff0cD=\u5e73\uff0cA=\u5ba2\u80dc\uff1b\u53ea\u8bfb\u51bb\u7ed3\u7684\u6574\u6570\u8ba9\u7403\u5408\u7ea6\u3002</p>'
+        '</div>'
+    )
+
+
+def _render_formal_markets(contract: dict[str, Any]) -> str:
+    formal = _formal_markets(contract)
+    markets = formal.get("markets")
+    if not isinstance(markets, dict):
+        return ""
+    items = {key: _formal_market_item(formal, key) for key in _FORMAL_MARKET_LABELS}
+    status_matrix = "".join(
+        f'<span class="formal-market-status status-{_formal_status(item).lower()}" '
+        f'data-formal-market-status="{_formal_status(item)}">{_esc(_FORMAL_MARKET_LABELS[key])} '
+        f'{_esc(FORMAL_MARKET_STATUS_LABELS.get(_formal_status(item), _formal_status(item)))}</span>'
+        for key, item in items.items()
+    )
+    return (
+        '<section class="detail-section formal-markets-section" id="formal-markets">'
+        '<div class="section-heading"><div><div class="section-kicker">\u51bb\u7ed3\u8d5b\u524d\u5408\u7ea6</div>'
+        '<h2>\u6b63\u5f0f\u73a9\u6cd5\u6982\u7387</h2></div>'
+        '<p>\u53ea\u8bfb\u51bb\u7ed3\u7684 Exact \u4e0e official JC</p></div>'
+        '<div class="formal-market-status-matrix" aria-label="\u6b63\u5f0f\u73a9\u6cd5\u72b6\u6001">'
+        + status_matrix
+        + '</div><div class="formal-market-grid">'
+        + _render_exact_formal_market(items["exact_score"])
+        + _render_total_formal_market(items["jc_total_goals"])
+        + _render_handicap_formal_market(items["jc_handicap"])
+        + '</div></section>'
+    )
+
+
 def _render_form(evidence: dict[str, Any]) -> str:
     fundamentals = evidence.get("fundamentals") if isinstance(evidence.get("fundamentals"), dict) else {}
     form = fundamentals.get("recent_form") if isinstance(fundamentals.get("recent_form"), dict) else {}
@@ -536,7 +715,53 @@ def _outcome(score: tuple[int, int]) -> str:
     return "\u4e3b\u80dc" if score[0] > score[1] else "\u5ba2\u80dc" if score[0] < score[1] else "\u5e73"
 
 
-def _completed_comparison(contract: dict[str, Any]) -> dict[str, str]:
+def _formal_verification_label(key: str, verification: dict[str, Any]) -> str:
+    status = str(verification.get("verification_status") or "NOT_RECORDED").upper()
+    if status == "VERIFIED":
+        actual = verification.get("actual_selection") or "\u2014"
+        if key == "jc_handicap":
+            actual = _FORMAL_SELECTION_LABELS.get(str(actual), str(actual))
+        hit = "\uff0c\u8d5b\u524d\u9996\u9009\u547d\u4e2d" if verification.get("top_selection_hit") else "\uff0c\u8d5b\u524d\u9996\u9009\u672a\u547d\u4e2d"
+        return f"{actual}{hit}"
+    if status == "OUT_OF_EXPLICIT_SUPPORT":
+        return "\u8d85\u51fa 0\u201312 \u663e\u5f0f\u7f51\u683c\uff0c\u672a\u8ba1\u5165"
+    if status == "NOT_RECORDED":
+        return "\u672a\u8bb0\u5f55"
+    if status == "UNAVAILABLE":
+        return "\u4e0d\u53ef\u7528"
+    if status == "INVALID_90M_SCORE":
+        return "\u8d5b\u679c\u65e0\u6cd5\u6838\u9a8c"
+    return status
+
+
+def _render_formal_verification(verification: dict[str, dict[str, Any]]) -> str:
+    if not isinstance(verification, dict):
+        return ""
+    rows = []
+    for key in _FORMAL_MARKET_LABELS:
+        item = verification.get(key) if isinstance(verification.get(key), dict) else {}
+        status = str(item.get("verification_status") or "NOT_RECORDED").upper()
+        detail = _formal_verification_label(key, item)
+        probability = item.get("actual_probability")
+        probability_text = f"\uff1b\u8be5\u7ed3\u679c\u5728\u51bb\u7ed3\u5408\u7ea6\u4e2d\u4e3a {_formal_probability(probability)}" if probability is not None else ""
+        rows.append(
+            f'<div class="formal-verification-row status-{html.escape(status.lower(), quote=True)}" '
+            f'data-formal-verification-market="{html.escape(key, quote=True)}" '
+            f'data-formal-verification-status="{html.escape(status, quote=True)}">'
+            f'<span>{_esc(_FORMAL_MARKET_LABELS[key])}</span>'
+            f'<strong>{_esc(detail)}</strong>'
+            f'<em>{_esc(probability_text)}</em></div>'
+        )
+    return (
+        '<div class="formal-verification"><div class="formal-verification-heading">'
+        '<strong>\u6b63\u5f0f\u73a9\u6cd5\u6838\u9a8c</strong>'
+        '<span>\u4ec5\u6309 90 \u5206\u949f + \u8865\u65f6\u7684\u5df2\u6838\u9a8c\u8d5b\u679c</span></div>'
+        + "".join(rows)
+        + '</div>'
+    )
+
+
+def _completed_comparison(contract: dict[str, Any]) -> dict[str, Any]:
     result = contract.get("result") or {}
     score = _result_score(result) if isinstance(result, dict) else None
     primary = str((contract.get("hero") or {}).get("primary_score") or _model(contract).get("unique_score") or "").strip()
@@ -551,6 +776,10 @@ def _completed_comparison(contract: dict[str, Any]) -> dict[str, str]:
     actual_outcome = _outcome(score) if score else ""
     exact_status = "\u547d\u4e2d" if primary and actual_score and primary == actual_score else "\u672a\u547d\u4e2d" if primary and actual_score else "\u5f85\u786e\u8ba4"
     direction_status = "\u547d\u4e2d" if predicted and actual_outcome and predicted == actual_outcome else "\u672a\u547d\u4e2d" if predicted and actual_outcome else "\u5f85\u786e\u8ba4"
+    formal_verification = verify_formal_markets(
+        _formal_markets(contract),
+        score,
+    )
     return {
         "actual_score": actual_score,
         "primary_score": primary,
@@ -558,6 +787,7 @@ def _completed_comparison(contract: dict[str, Any]) -> dict[str, str]:
         "predicted_direction": predicted,
         "actual_direction": actual_outcome,
         "direction_status": direction_status,
+        "formal_market_verification": formal_verification,
     }
 
 
@@ -579,11 +809,13 @@ def _render_completed_result(contract: dict[str, Any]) -> str:
         f'<div><span>\u65b9\u5411</span><strong>{value("direction_status")}</strong></div>'
         '</div>'
     )
+    formal_verification_html = _render_formal_verification(comparison.get("formal_market_verification") or {})
     return (
         '<section class="result-panel" id="result"><div class="section-kicker">\u8d5b\u540e\u9a8c\u8bc1</div><h2>\u5b9e\u9645\u8d5b\u679c</h2>'
         f'<div class="actual-score">{_display_score(result.get("score_90m"))}</div>'
         f'<div class="actual-meta"><strong>90\u5206\u949f\u8d5b\u679c</strong>{verified_html}</div>'
         + facts
+        + formal_verification_html
         + "</section>"
     )
 
@@ -683,6 +915,51 @@ DETAIL_CSS = """
     .goal-card { padding:14px; border:1px solid var(--line); background:var(--surface); }
     .goal-card-label { display:block; color:var(--muted); font-size:12px; }
     .goal-card strong { display:block; margin-top:5px; font-size:18px; font-variant-numeric:tabular-nums; letter-spacing:-.03em; }
+    .formal-market-status-matrix { display:flex; flex-wrap:wrap; gap:5px; margin:-2px 0 12px; }
+    .formal-market-status { padding:4px 7px; border:1px solid var(--line); background:var(--surface); color:var(--muted); font-size:11px; white-space:nowrap; }
+    .formal-market-status.status-available { border-color:#B7D8C1; color:var(--ink); }
+    .formal-market-status.status-unavailable { border-color:#F2C4A8; color:#A34700; }
+    .formal-market-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
+    .formal-market-panel { min-width:0; padding:14px; border:1px solid var(--line); background:var(--surface); }
+    .formal-exact-panel { grid-column:1/-1; }
+    .formal-panel-heading { display:flex; align-items:baseline; justify-content:space-between; gap:10px; margin-bottom:10px; }
+    .formal-panel-heading h3 { margin:0; font-size:15px; }
+    .formal-panel-heading span { color:var(--muted); font-size:11px; text-align:right; }
+    .formal-market-note { margin:9px 0 0; color:var(--muted); font-size:11px; }
+    .exact-grid-wrap { overflow-x:auto; max-width:100%; }
+    .exact-grid { width:100%; min-width:650px; border-collapse:collapse; table-layout:fixed; font-size:10px; font-variant-numeric:tabular-nums; }
+    .exact-grid th,.exact-grid td { width:7.14%; padding:5px 3px; border:1px solid var(--line); text-align:center; white-space:nowrap; }
+    .exact-grid th { background:#FAF9F6; color:var(--muted); font-weight:650; }
+    .exact-grid td { color:var(--ink); }
+    .formal-total-list { display:grid; gap:2px; }
+    .formal-total-row { display:grid; grid-template-columns:30px minmax(0,1fr) 52px; align-items:center; gap:8px; min-height:27px; border-top:1px solid var(--line); font-size:11px; font-variant-numeric:tabular-nums; }
+    .formal-total-row:first-child { border-top:0; }
+    .formal-total-row > span { color:var(--muted); }
+    .formal-total-row > strong { text-align:right; font-weight:650; }
+    .formal-total-row.formal-market-top > span { color:var(--ink); font-weight:700; }
+    .formal-total-bar { height:5px; overflow:hidden; background:#F0EFEC; }
+    .formal-total-bar span { display:block; height:100%; background:var(--accent); }
+    .formal-handicap-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:5px; }
+    .formal-handicap-card { min-width:0; padding:10px 7px; border:1px solid var(--line); text-align:center; }
+    .formal-handicap-card.formal-market-top { border-color:var(--accent); }
+    .formal-handicap-card span,.formal-handicap-card strong,.formal-handicap-card em { display:block; }
+    .formal-handicap-card span { color:var(--muted); font-size:11px; }
+    .formal-handicap-card strong { margin-top:2px; font-size:18px; font-variant-numeric:tabular-nums; }
+    .formal-handicap-card em { margin-top:2px; color:var(--muted); font-size:10px; font-style:normal; }
+    .formal-market-unavailable { min-height:116px; padding:11px; border:1px dashed var(--line); background:#FAF9F6; }
+    .formal-market-unavailable strong,.formal-market-unavailable span { display:inline-block; }
+    .formal-market-unavailable span { margin-left:7px; color:var(--muted); font-size:11px; }
+    .formal-market-unavailable p { margin:9px 0 0; color:var(--muted); font-size:11px; }
+    .formal-market-unavailable.status-unavailable { border-color:#F2C4A8; }
+    .formal-verification { margin-top:16px; padding-top:12px; border-top:1px solid var(--line); }
+    .formal-verification-heading { display:flex; flex-wrap:wrap; align-items:baseline; gap:8px; margin-bottom:5px; }
+    .formal-verification-heading strong { font-size:13px; }
+    .formal-verification-heading span { color:var(--muted); font-size:11px; }
+    .formal-verification-row { display:grid; grid-template-columns:95px minmax(0,1fr) minmax(120px,1fr); gap:10px; align-items:baseline; padding:7px 0; border-top:1px solid var(--line); font-size:11px; }
+    .formal-verification-row > span { color:var(--muted); }
+    .formal-verification-row > strong { font-weight:650; }
+    .formal-verification-row > em { color:var(--muted); font-style:normal; text-align:right; }
+    .formal-verification-row.status-unavailable > strong,.formal-verification-row.status-not_recorded > strong { color:#A34700; }
     .evidence-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
     .evidence-block { padding:15px; border:1px solid var(--line); background:var(--surface); }
     .evidence-block h3 { margin:0 0 10px; font-size:15px; }
@@ -740,6 +1017,11 @@ DETAIL_CSS = """
       .probability-card strong { font-size:23px; }
       .completed-facts { grid-template-columns:repeat(2,minmax(0,1fr)); gap:5px; }
       .completed-facts > div { padding:8px; }
+      .formal-market-grid { grid-template-columns:1fr; }
+      .formal-exact-panel { grid-column:auto; }
+      .formal-market-panel { padding:11px; }
+      .formal-verification-row { grid-template-columns:72px minmax(0,1fr); gap:5px 8px; }
+      .formal-verification-row > em { grid-column:2; text-align:left; }
       .score-row { grid-template-columns:40px minmax(45px,1fr) 44px; gap:8px; min-height:29px; }
       .score-name { display:flex; align-items:baseline; gap:6px; }
       .score-name strong { font-size:15px; }
@@ -754,6 +1036,8 @@ DETAIL_CSS = """
       .page { width:calc(100% - 16px); }
       .match-identity h1 { font-size:28px; }
       .probability-card strong { font-size:20px; }
+      .formal-panel-heading { display:block; }
+      .formal-panel-heading span { display:block; margin-top:3px; text-align:left; }
       .score-row { grid-template-columns:40px minmax(35px,1fr) 42px; gap:6px; }
     }
 """
@@ -793,6 +1077,7 @@ def render_match_detail(contract: dict[str, Any]) -> str:
     probability_html = _render_probability_cards(contract) if serving else ""
     score_html = _render_score_distribution(contract) if serving else ""
     goals_html = _render_goals(contract) if serving else ""
+    formal_markets_html = _render_formal_markets(contract) if serving else ""
     evidence_html = _render_key_evidence(contract) if serving else ""
     market_html = _render_market_comparison(contract) if serving else ""
     if serving:
@@ -802,6 +1087,7 @@ def render_match_detail(contract: dict[str, Any]) -> str:
                 probability_html,
                 score_html,
                 goals_html,
+                formal_markets_html,
                 "</section>",
             ]
         )
@@ -821,6 +1107,8 @@ def render_match_detail(contract: dict[str, Any]) -> str:
             nav_items.append('<a href="#score-distribution">\u6bd4\u5206</a>')
         if goals_html:
             nav_items.append('<a href="#goals">\u8fdb\u7403\u4fe1\u53f7</a>')
+        if formal_markets_html:
+            nav_items.append('<a href="#formal-markets">\u6b63\u5f0f\u73a9\u6cd5</a>')
         if evidence_html:
             nav_items.append('<a href="#evidence">\u5173\u952e\u4f9d\u636e</a>')
         if market_html:

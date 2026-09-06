@@ -8,6 +8,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
 from scripts.prediction_dashboard import build_dashboard, render_dashboard  # noqa: E402
+from test_formal_market_projection import formal_record  # noqa: E402
 
 
 DATE = "2026-08-12"
@@ -236,6 +237,33 @@ def test_universe_three_produces_three_accountable_cards_and_frozen_fields(tmp_p
         "等待赛果",
     ):
         assert forbidden not in html
+
+
+def test_dashboard_keeps_formal_market_summary_compact_and_independent(tmp_path):
+    prediction_id = "FBOS-PRED-formal-summary"
+    record = frozen_prediction(prediction_id)
+    record.update(formal_record(prediction_id=prediction_id, match_id="1001"))
+    roots = make_roots(
+        tmp_path,
+        [fixture(1)],
+        [frozen_job("1001", prediction_id)],
+        [record],
+    )
+
+    payload = build_dashboard(DATE, **roots)
+    prediction = payload["fixtures"][0]["prediction"]
+    markets = prediction["formal_markets"]["markets"]
+    assert markets["exact_score"]["status"] == "AVAILABLE"
+    assert markets["exact_score"]["cell_count"] == 169
+    assert markets["jc_total_goals"]["status"] == "AVAILABLE"
+    assert markets["jc_handicap"]["status"] == "AVAILABLE"
+    assert "cells" not in markets["exact_score"]
+
+    html = (roots["output_root"] / "latest.html").read_text(encoding="utf-8")
+    assert 'data-formal-market="exact_score"' in html
+    assert 'data-formal-market="jc_total_goals"' in html
+    assert 'data-formal-market="jc_handicap"' in html
+    assert 'class="exact-grid"' not in html
 
 
 def test_dashboard_publishes_workspace_completed_history_when_current_cards_have_no_results(tmp_path):

@@ -20,6 +20,7 @@ from scripts.match_analysis import (  # noqa: E402
     write_analysis_contract,
 )
 from scripts.match_detail import render_match_detail, write_match_detail_page  # noqa: E402
+from test_formal_market_projection import formal_record  # noqa: E402
 
 
 DATE = "2026-08-12"
@@ -178,6 +179,7 @@ def roots(
     with_prediction: bool = True,
     pilot: bool = False,
     legacy_root: Path | None = None,
+    include_formal_markets: bool = False,
 ):
     universe_root = tmp_path / "universe"
     jobs_root = tmp_path / "jobs"
@@ -195,7 +197,11 @@ def roots(
     })
     write_json(jobs_root / f"{DATE}.json", {"business_date": DATE, "jobs": [job(match_id, prediction_id, status=status)]})
     if with_prediction:
-        record = prediction(prediction_id)
+        record = (
+            formal_record(prediction_id=prediction_id, match_id=match_id)
+            if include_formal_markets
+            else prediction(prediction_id)
+        )
         write_json(prediction_root / f"{prediction_id}.json", record)
         write_json(snapshot_root / "snapshots" / "snapshot.json", snapshot())
     if pilot:
@@ -226,6 +232,52 @@ def test_analysis_contract_has_stable_identity_and_version(tmp_path):
     assert match_url("2040820") == "/matches/2040820/"
     assert contract["hero"]["primary_score"] == "1-0"
     assert [item["score"] for item in contract["candidate_scores"]] == ["1-0", "2-0", "1-1"]
+
+
+def test_formal_markets_are_wired_to_detail_and_completed_verification(tmp_path):
+    contract = assemble(roots(tmp_path, include_formal_markets=True))
+
+    markets = contract["formal_markets"]["markets"]
+    assert markets["exact_score"]["status"] == "AVAILABLE"
+    assert len(markets["exact_score"]["contract"]["cells"]) == 169
+    assert markets["jc_total_goals"]["status"] == "AVAILABLE"
+    assert markets["jc_handicap"]["status"] == "AVAILABLE"
+    assert markets["jc_handicap"]["contract"]["official_integer_line"] == 1
+
+    contract["result"] = {
+        "score_90m": "1-0",
+        "scope": "regulation_90m_plus_stoppage",
+        "verified_at": "2026-08-13T08:10:00+08:00",
+        "source": "TEST FIXTURE",
+    }
+    html = render_match_detail(contract)
+
+    assert 'id="formal-markets"' in html
+    assert html.count('data-formal-cell-home=') == 169
+    assert "JC\u603b\u8fdb\u7403" in html
+    assert "JC\u8ba9\u7403 H/D/A" in html
+    assert 'data-formal-cell-home="13"' not in html
+    assert ">13+<" not in html
+    assert 'data-formal-verification-status="VERIFIED"' in html
+    assert 'data-formal-verification-market="jc_handicap"' in html
+
+
+def test_formal_market_unavailability_is_scoped_to_one_market(tmp_path):
+    payload = roots(tmp_path, include_formal_markets=True)
+    record = formal_record(prediction_id="FBOS-PRED-test", match_id="2040820")
+    record.pop("jc_handicap")
+    write_json(payload["prediction_root"] / "FBOS-PRED-test.json", record)
+
+    contract = assemble(payload)
+    markets = contract["formal_markets"]["markets"]
+    assert markets["exact_score"]["status"] == "AVAILABLE"
+    assert markets["jc_total_goals"]["status"] == "AVAILABLE"
+    assert markets["jc_handicap"]["status"] == "NOT_RECORDED"
+    html = render_match_detail(contract)
+    assert html.count('data-formal-cell-home=') == 169
+    assert 'data-formal-market="jc_total_goals"' in html
+    assert 'data-formal-market="jc_handicap"' in html
+    assert "\u65e7\u8bb0\u5f55\u6ca1\u6709\u8be5\u6b63\u5f0f\u73a9\u6cd5" in html
 
 
 def test_pilot_contract_is_explicit_and_uses_real_frozen_outputs(tmp_path):

@@ -23,6 +23,11 @@ except ImportError:  # pragma: no cover - exercised by the direct CLI path.
     from legacy_analysis_mapper import LegacyStructuredAnalysisMapper
 
 try:
+    from .formal_market_projection import project_frozen_formal_markets
+except ImportError:  # pragma: no cover - exercised by the direct CLI path.
+    from formal_market_projection import project_frozen_formal_markets
+
+try:
     from .current_serving_state import resolve_current_job_for_match
 except ImportError:  # pragma: no cover - exercised by the direct CLI path.
     from current_serving_state import resolve_current_job_for_match
@@ -1072,6 +1077,11 @@ def assemble_match_analysis(
     if not serving_prediction:
         recent_form, form_captured_at, form_source = {}, None, None
     model = _prediction_model(serving_prediction or {})
+    formal_markets = (
+        project_frozen_formal_markets(serving_prediction)
+        if serving_prediction
+        else None
+    )
     market = _market_facts(snapshot_input, serving_prediction or {})
     if not serving_prediction:
         market["model_comparison"]["source_refs"] = []
@@ -1238,6 +1248,7 @@ def assemble_match_analysis(
             "items": [],
         },
         "result": result,
+        "formal_markets": formal_markets,
         "governance": {
             "prediction_id": prediction_id,
             "pilot_excluded": pilot_excluded,

@@ -17,6 +17,11 @@ try:
 except ImportError:  # pragma: no cover - direct script execution path.
     from match_detail import render_match_detail
 
+try:
+    from .formal_market_projection import project_frozen_formal_markets
+except ImportError:  # pragma: no cover - direct script execution path.
+    from formal_market_projection import project_frozen_formal_markets
+
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_OUTPUT = ROOT / "site"
@@ -116,7 +121,47 @@ def _copy_linked_public_pages(data_root: Path, output: Path) -> set[str]:
     return match_ids
 
 
-def _fixture_contract(fixture: dict[str, Any], business_date: str) -> dict[str, Any]:
+def _linked_frozen_formal_markets(data_root: Path, fixture: dict[str, Any]) -> dict[str, Any] | None:
+    if str(fixture.get("status") or "").upper() != "FROZEN":
+        return None
+    prediction_id = str(fixture.get("selected_prediction_id") or fixture.get("prediction_id") or "").strip()
+    if not prediction_id or not re.fullmatch(r"[A-Za-z0-9._~-]+", prediction_id):
+        return None
+    path = data_root / "model_governance" / "predictions" / f"{prediction_id}.json"
+    if not path.is_file():
+        return None
+    try:
+        record = _read_json(path)
+    except ValueError:
+        return None
+    if str(record.get("prediction_id") or "") != str(prediction_id):
+        return None
+    fixture_match_id = str(fixture.get("match_id") or "")
+    record_match_id = str(record.get("match_id") or "")
+    if fixture_match_id and record_match_id and fixture_match_id != record_match_id:
+        return None
+    return project_frozen_formal_markets(record)
+
+
+def _formal_markets_for_fixture(data_root: Path, fixture: dict[str, Any]) -> dict[str, Any] | None:
+    linked = _linked_frozen_formal_markets(data_root, fixture)
+    if linked is not None:
+        return linked
+    prediction = fixture.get("prediction") if isinstance(fixture.get("prediction"), dict) else {}
+    summary = prediction.get("formal_markets")
+    if isinstance(summary, dict):
+        return summary
+    if str(fixture.get("status") or "").upper() == "FROZEN":
+        return project_frozen_formal_markets(None)
+    return None
+
+
+def _fixture_contract(
+    fixture: dict[str, Any],
+    business_date: str,
+    *,
+    formal_markets: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     prediction = fixture.get("prediction") if isinstance(fixture.get("prediction"), dict) else {}
     result = fixture.get("result") if isinstance(fixture.get("result"), dict) else {}
     source_quality = fixture.get("source_quality") if isinstance(fixture.get("source_quality"), dict) else {}
@@ -134,6 +179,11 @@ def _fixture_contract(fixture: dict[str, Any], business_date: str) -> dict[str, 
         or prediction.get("source_cutoff_at")
         or prediction.get("model_input_as_of_at")
     )
+    fallback_formal_markets = formal_markets
+    if fallback_formal_markets is None:
+        fallback_formal_markets = prediction.get("formal_markets")
+    if fallback_formal_markets is None and str(fixture.get("status") or "").upper() == "FROZEN":
+        fallback_formal_markets = project_frozen_formal_markets(None)
     return {
         "identity": {
             "match_id": fixture.get("match_id"),
@@ -157,6 +207,7 @@ def _fixture_contract(fixture: dict[str, Any], business_date: str) -> dict[str, 
             "script": prediction.get("script"),
         },
         "model": prediction,
+        "formal_markets": fallback_formal_markets,
         "result": result,
         "evidence": {"source_quality": source_quality},
         "governance": {"pilot_excluded": fixture.get("pilot_excluded", False)},
@@ -186,12 +237,23 @@ def _match_contracts(data_root: Path, dashboard: dict[str, Any], match_ids: set[
                 continue
             identity = payload.get("identity") or {}
             if str(identity.get("match_id") or "") == match_id:
+                fixture = fixtures.get(match_id)
+                if fixture is not None and not isinstance(payload.get("formal_markets"), dict):
+                    payload = {
+                        **payload,
+                        "formal_markets": _formal_markets_for_fixture(data_root, fixture),
+                    }
                 contracts[match_id] = payload
                 break
     for match_id in sorted(match_ids - contracts.keys()):
         fixture = fixtures.get(match_id)
         if fixture is not None:
-            contracts[match_id] = _fixture_contract(fixture, business_date)
+            formal_markets = _formal_markets_for_fixture(data_root, fixture)
+            contracts[match_id] = _fixture_contract(
+                fixture,
+                business_date,
+                formal_markets=formal_markets,
+            )
     return contracts
 
 

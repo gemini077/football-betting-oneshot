@@ -37,6 +37,19 @@ try:
 except ImportError:  # package import used by tests
     from scripts.closed_beta_copy import render_closed_beta_notice
 
+try:
+    from formal_market_projection import (
+        FORMAL_MARKET_STATUS_LABELS,
+        project_frozen_formal_markets,
+        summarize_formal_markets,
+    )
+except ImportError:  # package import used by tests
+    from scripts.formal_market_projection import (
+        FORMAL_MARKET_STATUS_LABELS,
+        project_frozen_formal_markets,
+        summarize_formal_markets,
+    )
+
 
 BASE_DIR = Path(__file__).resolve().parents[1]
 UNIVERSE_ROOT = BASE_DIR / "data" / "prediction_universe"
@@ -233,6 +246,7 @@ def _prediction_projection(
         prediction_output = record.get("prediction_output")
         if isinstance(prediction_output, dict):
             canonical_direction = prediction_output.get("one_x_two_direction")
+    formal_markets = summarize_formal_markets(project_frozen_formal_markets(record))
     return {
         "product_role": record.get("product_role"),
         "model_family": record.get("model_family"),
@@ -262,6 +276,9 @@ def _prediction_projection(
         "source_cutoff_at": record.get("source_cutoff_at") or record.get("model_input_as_of_at"),
         "input_snapshot_ref": record.get("input_snapshot_ref") or record.get("model_input_snapshot_ref"),
         "source_references": record.get("source_references") or [],
+        # Dashboard receives only the compact status/probability summary.  The
+        # 169-cell matrix remains a Match Detail concern.
+        "formal_markets": formal_markets,
     }
 
 
@@ -808,6 +825,28 @@ button, a { -webkit-tap-highlight-color: transparent; }
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
+.formal-market-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+.formal-market-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  padding: 3px 5px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+.formal-market-chip b { color: var(--text); font-weight: 650; }
+.formal-market-chip em { font-style: normal; }
+.formal-market-chip.status-available { border-color: #B7D8C1; }
+.formal-market-chip.status-unavailable { border-color: #F2C4A8; color: var(--warning); }
 .row-action {
   display: flex;
   align-items: center;
@@ -1237,6 +1276,30 @@ def _goal_signals_html(prediction: dict[str, Any]) -> str:
     ) + "</div>"
 
 
+def _formal_market_summary_html(prediction: dict[str, Any]) -> str:
+    formal = prediction.get("formal_markets")
+    markets = formal.get("markets") if isinstance(formal, dict) else None
+    if not isinstance(markets, dict):
+        return ""
+    labels = (
+        ("Exact", "exact_score"),
+        ("JC总进球", "jc_total_goals"),
+        ("JC让球", "jc_handicap"),
+    )
+    chips = []
+    for label, key in labels:
+        item = markets.get(key) if isinstance(markets.get(key), dict) else {}
+        status = str(item.get("status") or "NOT_RECORDED")
+        status_label = FORMAL_MARKET_STATUS_LABELS.get(status, status)
+        chips.append(
+            f'<span class="formal-market-chip status-{html.escape(status.lower(), quote=True)}" '
+            f'data-formal-market="{html.escape(key, quote=True)}" '
+            f'data-formal-market-status="{html.escape(status, quote=True)}">'
+            f'<b>{html.escape(label)}</b><em>{html.escape(status_label)}</em></span>'
+        )
+    return '<div class="formal-market-summary" aria-label="\u6b63\u5f0f\u73a9\u6cd5\u72b6\u6001">' + "".join(chips) + "</div>"
+
+
 def _score_summary_html(
     prediction: dict[str, Any],
     *,
@@ -1376,7 +1439,7 @@ def _modern_card_html(
         else '<div class="score-cell empty-score-cell" aria-hidden="true"></div>'
     )
     goals_html = (
-        f'{_goal_signals_html(prediction)}{_market_divergence_html(prediction)}'
+        f'{_formal_market_summary_html(prediction)}{_goal_signals_html(prediction)}{_market_divergence_html(prediction)}'
         if prediction
         else ""
     )
