@@ -8,6 +8,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
 from scripts.prediction_dashboard import build_dashboard, render_dashboard  # noqa: E402
+from test_formal_market_projection import formal_record  # noqa: E402
 
 
 DATE = "2026-08-12"
@@ -203,8 +204,9 @@ def test_universe_three_produces_three_accountable_cards_and_frozen_fields(tmp_p
     assert "最高概率比分" in html
     assert "1-0 15.5%" in html
     assert "1X2 概率" in html
-    assert "\u53cc\u65b9\u8fdb\u7403 \u662f 45.0%" in html
-    assert "\u53cc\u65b9\u8fdb\u7403 \u5426 55.0%" in html
+    assert "\u53cc\u65b9\u8fdb\u7403 \u662f 45.0%" not in html
+    assert "\u53cc\u65b9\u8fdb\u7403 \u5426 55.0%" not in html
+    assert "\u5927\u5c0f2.5" not in html
     assert "查看详情" in html
     assert 'href="../matches/1001/"' in html
     assert 'class="fixture-row-target"' in html
@@ -236,6 +238,37 @@ def test_universe_three_produces_three_accountable_cards_and_frozen_fields(tmp_p
         "等待赛果",
     ):
         assert forbidden not in html
+
+
+def test_dashboard_keeps_formal_packet_out_of_compact_decision_queue(tmp_path):
+    prediction_id = "FBOS-PRED-formal-summary"
+    record = frozen_prediction(prediction_id)
+    record.update(formal_record(prediction_id=prediction_id, match_id="1001"))
+    roots = make_roots(
+        tmp_path,
+        [fixture(1)],
+        [frozen_job("1001", prediction_id)],
+        [record],
+    )
+
+    payload = build_dashboard(DATE, **roots)
+    prediction = payload["fixtures"][0]["prediction"]
+    markets = prediction["formal_markets"]["markets"]
+    assert markets["exact_score"]["status"] == "AVAILABLE"
+    assert markets["exact_score"]["cell_count"] == 169
+    assert markets["jc_total_goals"]["status"] == "AVAILABLE"
+    assert markets["jc_handicap"]["status"] == "AVAILABLE"
+    assert "cells" not in markets["exact_score"]
+
+    html = (roots["output_root"] / "latest.html").read_text(encoding="utf-8")
+    assert 'class="fixture-row ' in html
+    assert 'data-prediction-kind="formal"' in html
+    assert 'class="fixture-row-target"' in html
+    assert 'data-formal-market="exact_score"' not in html
+    assert 'data-formal-market="jc_total_goals"' not in html
+    assert 'data-formal-market="jc_handicap"' not in html
+    assert 'class="formal-market-chip"' not in html
+    assert 'class="exact-grid"' not in html
 
 
 def test_dashboard_publishes_workspace_completed_history_when_current_cards_have_no_results(tmp_path):
@@ -837,7 +870,7 @@ def test_canonical_market_summary_and_score_concentration_are_display_only(tmp_p
     assert "1X2 概率" in html
 
 
-def test_dashboard_goal_signals_keep_both_sides_visible(tmp_path):
+def test_dashboard_keeps_secondary_goal_package_off_decision_queue(tmp_path):
     prediction_id = "FBOS-PRED-two-sided-goals"
     record = frozen_prediction(prediction_id)
     record["btts"] = {"yes": 0.537, "no": 0.463}
@@ -854,10 +887,10 @@ def test_dashboard_goal_signals_keep_both_sides_visible(tmp_path):
     build_dashboard(DATE, **roots)
     html = (roots["output_root"] / "latest.html").read_text(encoding="utf-8")
 
-    assert "\u53cc\u65b9\u8fdb\u7403 \u662f 53.7%" in html
-    assert "\u53cc\u65b9\u8fdb\u7403 \u5426 46.3%" in html
-    assert "\u5927\u5c0f2.5 \u5c0f 50.6%" in html
-    assert "\u5927\u5c0f2.5 \u5927 49.4%" in html
+    assert "\u53cc\u65b9\u8fdb\u7403 \u662f 53.7%" not in html
+    assert "\u53cc\u65b9\u8fdb\u7403 \u5426 46.3%" not in html
+    assert "\u5927\u5c0f2.5 \u5c0f 50.6%" not in html
+    assert "\u5927\u5c0f2.5 \u5927 49.4%" not in html
     assert "BTTS \u5426 53.7%" not in html
 
 

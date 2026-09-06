@@ -9,6 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
 import build_public_site  # noqa: E402
+from test_formal_market_projection import formal_record  # noqa: E402
 
 
 def write_text(path: Path, text: str) -> None:
@@ -147,7 +148,35 @@ def test_build_renders_missing_contract_from_current_dashboard_fixture_without_w
 
     detail = output / "matches/1001/index.html"
     assert detail.is_file()
-    assert "Home FC" in detail.read_text(encoding="utf-8")
+    detail_html = detail.read_text(encoding="utf-8")
+    assert "Home FC" in detail_html
+    assert 'id="formal-markets"' in detail_html
+    assert detail_html.count('data-formal-market-status="NOT_RECORDED"') == 6
+    assert not (tmp_path / "data" / "match_analysis").exists()
+
+
+def test_fallback_detail_reads_linked_immutable_formal_contract_without_backfill(tmp_path, monkeypatch):
+    make_source_tree(tmp_path, include_contract=False)
+    dashboard_path = tmp_path / "data" / "prediction_dashboard" / "latest.json"
+    dashboard = json.loads(dashboard_path.read_text(encoding="utf-8"))
+    dashboard["fixtures"][0].update({
+        "prediction_id": "FORMAL-PROJECTION-1",
+        "selected_prediction_id": "FORMAL-PROJECTION-1",
+    })
+    write_json(dashboard_path, dashboard)
+    write_json(
+        tmp_path / "data" / "model_governance" / "predictions" / "FORMAL-PROJECTION-1.json",
+        formal_record(prediction_id="FORMAL-PROJECTION-1", match_id="1001"),
+    )
+    monkeypatch.setattr(build_public_site, "ROOT", tmp_path)
+
+    build_public_site.build(tmp_path / "site")
+
+    detail = (tmp_path / "site" / "matches/1001/index.html").read_text(encoding="utf-8")
+    assert detail.count('data-formal-cell-home=') == 169
+    assert 'data-formal-market="jc_total_goals" data-formal-market-status="AVAILABLE"' in detail
+    assert 'data-formal-market="jc_handicap" data-formal-market-status="AVAILABLE"' in detail
+    assert 'data-formal-cell-home="13"' not in detail
     assert not (tmp_path / "data" / "match_analysis").exists()
 
 

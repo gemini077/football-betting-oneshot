@@ -37,6 +37,17 @@ try:
 except ImportError:  # package import used by tests
     from scripts.closed_beta_copy import render_closed_beta_notice
 
+try:
+    from formal_market_projection import (
+        project_frozen_formal_markets,
+        summarize_formal_markets,
+    )
+except ImportError:  # package import used by tests
+    from scripts.formal_market_projection import (
+        project_frozen_formal_markets,
+        summarize_formal_markets,
+    )
+
 
 BASE_DIR = Path(__file__).resolve().parents[1]
 UNIVERSE_ROOT = BASE_DIR / "data" / "prediction_universe"
@@ -233,6 +244,7 @@ def _prediction_projection(
         prediction_output = record.get("prediction_output")
         if isinstance(prediction_output, dict):
             canonical_direction = prediction_output.get("one_x_two_direction")
+    formal_markets = summarize_formal_markets(project_frozen_formal_markets(record))
     return {
         "product_role": record.get("product_role"),
         "model_family": record.get("model_family"),
@@ -262,6 +274,9 @@ def _prediction_projection(
         "source_cutoff_at": record.get("source_cutoff_at") or record.get("model_input_as_of_at"),
         "input_snapshot_ref": record.get("input_snapshot_ref") or record.get("model_input_snapshot_ref"),
         "source_references": record.get("source_references") or [],
+        # Dashboard receives only the compact status/probability summary.  The
+        # 169-cell matrix remains a Match Detail concern.
+        "formal_markets": formal_markets,
     }
 
 
@@ -707,7 +722,6 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .match-number,
 .kickoff,
 .identity-competition,
-.goal-signal,
 .score-caption,
 .score-top3,
 .action-note {
@@ -798,16 +812,6 @@ button, a { -webkit-tap-highlight-color: transparent; }
 }
 .score-top3 span { white-space: nowrap; }
 .score-serving-note { margin-top: 4px; color: var(--warning); font-size: 10px; font-weight: 650; }
-.goal-signals {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 3px 10px;
-  min-width: 0;
-}
-.goal-signal {
-  white-space: nowrap;
-  font-variant-numeric: tabular-nums;
-}
 .row-action {
   display: flex;
   align-items: center;
@@ -951,10 +955,7 @@ button, a { -webkit-tap-highlight-color: transparent; }
     margin-top: 4px;
     font-size: 10px;
   }
-  .goal-signals {
-    gap: 3px 12px;
-    padding-top: 1px;
-  }
+
   .row-action {
     justify-content: flex-start;
     text-align: left;
@@ -980,7 +981,7 @@ button, a { -webkit-tap-highlight-color: transparent; }
   .team-match { font-size: 16px; }
   .probability-grid { gap: 6px; }
   .probability-cell strong { font-size: 14px; }
-  .goal-signals { gap: 3px 8px; }
+
 }
 """
 
@@ -1187,56 +1188,6 @@ def _one_x_two_html(prediction: dict[str, Any]) -> str:
     return f'<div class="probability-grid">{"".join(cells)}</div>' if cells else ""
 
 
-def _goal_signal_values(prediction: dict[str, Any]) -> list[tuple[str, str]]:
-    signals: list[tuple[str, str]] = []
-    btts = prediction.get("btts")
-    if isinstance(btts, dict):
-        yes = _number(btts.get("yes"))
-        no = _number(btts.get("no"))
-        candidates = [(yes, "\u53cc\u65b9\u8fdb\u7403 \u662f"), (no, "\u53cc\u65b9\u8fdb\u7403 \u5426")]
-        for value, label in candidates:
-            if value is None or not 0 <= value <= 1:
-                continue
-            percent = _format_percent(value)
-            if percent:
-                signals.append((label, percent))
-    totals = prediction.get("totals")
-    if isinstance(totals, list):
-        under = 0.0
-        over = 0.0
-        has_under = False
-        has_over = False
-        for item in totals:
-            if not isinstance(item, dict):
-                continue
-            probability = _number(item.get("probability"))
-            goals = str(item.get("goals") or "").strip()
-            if probability is None or probability < 0:
-                continue
-            if goals in {"0", "1", "2"}:
-                under += probability
-                has_under = True
-            elif goals in {"3", "4", "5", "6+"}:
-                over += probability
-                has_over = True
-        if has_under and has_over:
-            for value, label in ((under, "\u5927\u5c0f2.5 \u5c0f"), (over, "\u5927\u5c0f2.5 \u5927")):
-                percent = _format_percent(value)
-                if percent:
-                    signals.append((label, percent))
-    return signals
-
-
-def _goal_signals_html(prediction: dict[str, Any]) -> str:
-    signals = _goal_signal_values(prediction)
-    if not signals:
-        return ""
-    return '<div class="goal-signals">' + "".join(
-        f'<span class="goal-signal">{html.escape(label)} {html.escape(percent)}</span>'
-        for label, percent in signals
-    ) + "</div>"
-
-
 def _score_summary_html(
     prediction: dict[str, Any],
     *,
@@ -1376,7 +1327,7 @@ def _modern_card_html(
         else '<div class="score-cell empty-score-cell" aria-hidden="true"></div>'
     )
     goals_html = (
-        f'{_goal_signals_html(prediction)}{_market_divergence_html(prediction)}'
+        _market_divergence_html(prediction)
         if prediction
         else ""
     )
