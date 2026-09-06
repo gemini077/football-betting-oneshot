@@ -24,6 +24,7 @@ from sync_postmatch_workflow import sync as sync_postmatch_workflow
 from postmatch_queue import SHANGHAI
 from model_governance import build_prediction_record, freeze_prediction
 from baseline_production import run_benchmark_for_frozen_prediction
+from official_jc_handicap import build_official_jc_handicap_state
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -586,6 +587,14 @@ def build_payload(
     }
     official_spf = official_match.get("spf") or trade_match.get("official_spf_visible")
     official_rqspf = official_match.get("rqspf") or trade_match.get("official_rqspf_visible")
+    official_jc_handicap_state = build_official_jc_handicap_state(
+        official,
+        {
+            **match,
+            "match_id": trade_match.get("match_id") or trade_match.get("matchId"),
+        },
+        source_ref=((manifest.get("sources") or {}).get("sporttery") or {}).get("file"),
+    )
     pinnacle = deep.get("ouzhi", {}).get("pinnacle") or {}
     tier_config = load_json(PROJECT_ROOT / "config" / "bookmaker_tiers.json")
     history_path = PROJECT_ROOT / "data" / "market_history" / str(deep.get("shuju_id")) / "market_history.jsonl"
@@ -705,6 +714,7 @@ def build_payload(
             state.get("model_name", "Football Betting OneShot"),
             state.get("model_version", "v0.12.0"),
         ),
+        "_prediction_time_official_jc_handicap_state": official_jc_handicap_state,
     }
     payload = normalize_page_pl_labels(enforce_complete_report_gate(merge_dict(base, analysis or {})))
     if trend_panel.get("snapshot_count"):
@@ -1559,6 +1569,7 @@ def main() -> int:
     analysis = load_json(Path(args.analysis_json)) if args.analysis_json else None
     payload = build_payload(manifest, official, trade, deep, state, analysis, polymarket)
     exact_distribution_state = payload.pop("_prediction_time_exact_distribution_state", None)
+    official_jc_handicap_state = payload.pop("_prediction_time_official_jc_handicap_state", None)
     model = payload.get("model") or {}
     if isinstance(model.get("probabilities"), dict) and model.get("lambda_home") is not None and model.get("lambda_away") is not None:
         # The deterministic execution stage already persisted the exact
@@ -1570,6 +1581,7 @@ def main() -> int:
             repository_root=PROJECT_ROOT,
             input_payload=governance_input,
             exact_distribution_state=exact_distribution_state,
+            official_jc_handicap_state=official_jc_handicap_state,
             require_exact_distribution=True,
         )
         frozen = freeze_prediction(governance_record)

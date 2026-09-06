@@ -46,6 +46,7 @@ from model_governance import (  # noqa: E402
 from nowscore_markets import fetch_match_markets  # noqa: E402
 from prediction_universe import load_prediction_universe  # noqa: E402
 from prediction_quality import recent_form_is_usable  # noqa: E402
+from official_jc_handicap import build_official_jc_handicap_state  # noqa: E402
 from recent_form_cache import (  # noqa: E402
     load_authoritative_recent_form,
     load_recent_form_cache,
@@ -61,6 +62,7 @@ from football_state_memory import (  # noqa: E402
 JOBS_ROOT = PROJECT_ROOT / "data" / "base_prediction_jobs"
 ANALYSIS_INPUT_ROOT = PROJECT_ROOT / "data" / "analysis_inputs" / "automated"
 UNIVERSE_ROOT = PROJECT_ROOT / "data" / "prediction_universe"
+OFFICIAL_JC_SOURCE_ROOT = PROJECT_ROOT / "data" / "source_cache" / "sporttery"
 LOCAL_TZ = timezone(timedelta(hours=8))
 RETRYABLE_STATUSES = {"PENDING", "INSUFFICIENT_DATA", "PREDICTION_FAILED", "FROZEN"}
 TERMINAL_STATUSES = {"MISSED_PREMATCH_WINDOW", "PREDICTED"}
@@ -288,6 +290,21 @@ def _load_json(path: Path) -> dict[str, Any] | None:
     except (OSError, json.JSONDecodeError):
         return None
     return value if isinstance(value, dict) else None
+
+
+def _official_jc_source_document(
+    business_date: str,
+    universe: dict[str, Any],
+) -> tuple[dict[str, Any] | None, str | None]:
+    """Load only the existing official Sporttery cache; absence stays unavailable."""
+
+    if str(universe.get("source") or "").casefold() == "sporttery.cn":
+        return universe, _relative_ref(UNIVERSE_ROOT / f"{business_date}.json")
+    path = OFFICIAL_JC_SOURCE_ROOT / f"{business_date}_jingcai.json"
+    document = _load_json(path)
+    if isinstance(document, dict) and str(document.get("source") or "").casefold() == "sporttery.cn":
+        return document, _relative_ref(path)
+    return None, None
 
 
 def _write_json(path: Path, value: dict[str, Any]) -> None:
@@ -1149,6 +1166,15 @@ def _assemble_context(
 
     source_clock = _as_now(None) if real_time else now
     official, official_error = _official_market_baseline(universe, fixture, kickoff)
+    official_jc_source_document, official_jc_source_ref = _official_jc_source_document(
+        business_date,
+        universe,
+    )
+    official_jc_handicap_state = build_official_jc_handicap_state(
+        official_jc_source_document,
+        fixture,
+        source_ref=official_jc_source_ref,
+    )
     official_capture = _parse_timestamp((official or {}).get("captured_at")) if official else None
     if official is not None and (official_capture is None or official_capture > source_clock):
         official = None
@@ -1177,6 +1203,8 @@ def _assemble_context(
         _relative_ref(UNIVERSE_ROOT / f"{business_date}.json"),
         *existing_refs,
     ]
+    if official_jc_source_ref:
+        source_refs.append(official_jc_source_ref)
 
     nowscore, nowscore_signal, nowscore_refs = _nowscore_source(
         job,
@@ -1385,6 +1413,9 @@ def _assemble_context(
         },
         "source_snapshots": source_snapshots,
         "official_market_baseline": official or {},
+        "official_jc_handicap_state": official_jc_handicap_state,
+        "competition": _first(fixture, "league", "competition") or "UNKNOWN",
+        "universe": str(universe.get("source") or "prediction_universe"),
         "prematch_fundamentals": {
             "recent_form": form["recent_form"],
             "form_source": form_source,
@@ -1495,11 +1526,19 @@ def _assemble_context(
         "market_families": market_families,
         "market_source_references": source_refs,
         "market_only_baseline": market_only,
+        "official_jc_handicap_state": context.get("official_jc_handicap_state") or {},
+        "competition": context.get("competition") or "UNKNOWN",
+        "universe": context.get("universe") or "prediction_universe",
         "form_source": form_source,
         "form_captured_at": form_captured_at,
         "prediction_created_at": prediction_time.isoformat(),
         "source_references": [
             _source_ref(UNIVERSE_ROOT / f"{business_date}.json", universe.get("fetched_at")),
+            *(
+                [_source_ref(Path(official_jc_source_ref), official_jc_handicap_state.get("captured_at"))]
+                if official_jc_source_ref
+                else []
+            ),
             *form_refs,
         ],
         "data_quality": {
@@ -1547,6 +1586,9 @@ def _build_payload(
             "home": job.get("home"),
             "away": job.get("away"),
             "kickoff_local": job.get("kickoff"),
+            "business_date": business_date,
+            "competition": metadata.get("competition") or "UNKNOWN",
+            "universe": metadata.get("universe") or "prediction_universe",
         },
         "data_quality": {
             "missing": [],
@@ -1564,6 +1606,7 @@ def _build_payload(
             "model_input_snapshot": input_snapshot,
         },
         "business_date": business_date,
+        "_prediction_time_official_jc_handicap_state": metadata.get("official_jc_handicap_state"),
     }
 
 

@@ -5,6 +5,9 @@ on:
     paths:
       - "scripts/automatic_model_core.py"
       - "scripts/exact_distribution.py"
+      - "scripts/official_jc_handicap.py"
+      - "scripts/official_jc_handicap_source_audit.py"
+      - "scripts/fetch_sporttery.py"
       - "scripts/exact_distribution_freeze_readiness_audit.py"
       - "scripts/model_governance.py"
       - "scripts/base_prediction_runner.py"
@@ -14,6 +17,7 @@ on:
       - "scripts/automatic_postmatch_review.py"
       - "schemas/exact_score_distribution.schema.json"
       - "schemas/jc_total_goals.schema.json"
+      - "schemas/jc_handicap.schema.json"
       - "tests/test_exact_distribution_freeze.py"
       - "tests/fixtures/exact_distribution/current_model_input.json"
       - "tests/test_automatic_model_core.py"
@@ -21,6 +25,11 @@ on:
       - "tests/test_base_prediction_runner.py"
       - "tests/test_prospective_settlement.py"
       - "tests/test_automatic_postmatch_review.py"
+      - "tests/test_market_contracts.py"
+      - "tests/test_prediction_universe.py"
+      - "tests/test_jc_handicap_official_line.py"
+      - "tests/test_jc_handicap_source_audit.py"
+      - "tests/fixtures/jc_handicap/official_source_audit.json"
       - "docs/exact-distribution-freeze.md"
       - ".github/workflows/exact-distribution-freeze.yml"
   workflow_dispatch:
@@ -56,12 +65,19 @@ jobs:
           tests/test_base_prediction_runner.py
           tests/test_prospective_settlement.py
           tests/test_automatic_postmatch_review.py
+          tests/test_market_contracts.py
+          tests/test_prediction_universe.py
+          tests/test_jc_handicap_official_line.py
+          tests/test_jc_handicap_source_audit.py
 
       - name: Compile changed Python paths
         run: >-
           python -m py_compile
           scripts/automatic_model_core.py
           scripts/exact_distribution.py
+          scripts/official_jc_handicap.py
+          scripts/official_jc_handicap_source_audit.py
+          scripts/fetch_sporttery.py
           scripts/exact_distribution_freeze_readiness_audit.py
           scripts/model_governance.py
           scripts/base_prediction_runner.py
@@ -69,6 +85,8 @@ jobs:
           scripts/generate_analysis_report.py
           scripts/prospective_settlement.py
           scripts/automatic_postmatch_review.py
+          scripts/market_contracts.py
+          scripts/prediction_universe.py
 
       - name: Run bounded offline repository-data audit
         run: python scripts/exact_distribution_freeze_readiness_audit.py --limit 200 --output exact-distribution-readiness.json

@@ -1,0 +1,342 @@
+{
+  "audit_contract_version": "jc_handicap_source_audit.v1",
+  "probe_policy": "Sporttery-owned page/calculator only; one request per surface; no retry; no production writes",
+  "runner": {
+    "platform": "Windows-10-10.0.22631-SP0",
+    "python": "3.10.11"
+  },
+  "audit": {
+    "schema_version": "jc_handicap_source_audit.v1",
+    "target_business_date": "2026-09-06",
+    "captured_at": "2026-09-05T19:19:52.758341+00:00",
+    "source": "sporttery.cn",
+    "market": "rqspf",
+    "market_identity": "JC_HANDICAP_1X2",
+    "request_contract": {
+      "method": "GET",
+      "url": "https://webapi.sporttery.cn/gateway/jc/football/getMatchCalculatorV1.qry?channel=c&poolCode=had,hhad,crs,ttg,hafu",
+      "params": {
+        "channel": "c",
+        "poolCode": "had,hhad,crs,ttg,hafu"
+      },
+      "required_headers": [
+        "Accept",
+        "Accept-Encoding",
+        "Accept-Language",
+        "Origin",
+        "Referer",
+        "User-Agent",
+        "X-Requested-With"
+      ],
+      "source_surface": "https://m.sporttery.cn/mjc/jsq/zqspf/"
+    },
+    "official_page_probe": {
+      "url": "https://m.sporttery.cn/mjc/jsq/zqspf/",
+      "request_headers": [
+        "Accept",
+        "Accept-Encoding",
+        "Accept-Language",
+        "Origin",
+        "Referer",
+        "User-Agent",
+        "X-Requested-With"
+      ],
+      "http_status": 200,
+      "response_bytes": 4640,
+      "response_sha256": "d44dcb15720ee099494365d83a6f99f496909db631f782ffa2b68c99c9a61894",
+      "content_type": "text/html; charset=utf-8",
+      "response_type": "HTML",
+      "success": true,
+      "payload_success": null,
+      "error": null,
+      "wire_response_bytes": 1488,
+      "wire_response_sha256": "4bcfe07c54c818645dbff10902afc38a563bbe6a0bdecd011eec5643516ad861",
+      "duration_ms": 171.0
+    },
+    "official_calculator_probe": {
+      "url": "https://webapi.sporttery.cn/gateway/jc/football/getMatchCalculatorV1.qry?channel=c&poolCode=had,hhad,crs,ttg,hafu",
+      "request_headers": [
+        "Accept",
+        "Accept-Encoding",
+        "Accept-Language",
+        "Origin",
+        "Referer",
+        "User-Agent",
+        "X-Requested-With"
+      ],
+      "http_status": 200,
+      "response_bytes": 327581,
+      "response_sha256": "beebe0abbccc7ff83e4dffa0454f4e7f7c4333b4e71af20e0c725ed93b61920c",
+      "content_type": "application/json;charset=utf-8",
+      "response_type": "JSON",
+      "success": true,
+      "payload_success": true,
+      "error": null,
+      "wire_response_bytes": 19711,
+      "wire_response_sha256": "353ffd5958df0dd39bf73c93b2f5a8fee923ad7970e35fbd1c864a3928328954",
+      "duration_ms": 94.0
+    },
+    "current_source_status": "AVAILABLE",
+    "official_rows_returned": 24,
+    "hhad_line_available": 24,
+    "hhad_three_prices_available": 24,
+    "binding_funnel": {
+      "status": "AVAILABLE",
+      "universe_path": "data/prediction_universe/2026-09-06.json",
+      "jc_fixtures": 24,
+      "official_rows": 24,
+      "exact_bound": 24,
+      "ambiguous": 0,
+      "unmatched": 0,
+      "duplicates": 0,
+      "conflicts": 0,
+      "duplicate_diagnostics": {
+        "duplicate_provider_match_id_count": 0,
+        "duplicate_provider_match_num_count": 0,
+        "duplicate_identity_count": 0,
+        "conflict_identity_group_count": 0
+      },
+      "line_available": 24,
+      "odds_available": 24
+    },
+    "delivery_decision": "JC_HANDICAP_FORMAL_TRUTH_READY",
+    "evidence_rows": [
+      {
+        "raw_row_sha256": "39dbe7cfdea8996740c8282b817e4a0e9b8f66e89b1e566ec40060e381558973",
+        "raw_row": {
+          "businessDate": "2026-09-06",
+          "matchId": 2041296,
+          "matchNumStr": "周日001",
+          "matchDate": "2026-09-06",
+          "matchTime": "17:00:00",
+          "homeTeamAbbName": "鹿岛鹿角",
+          "awayTeamAbbName": "浦和红钻",
+          "hhad": {
+            "a": "1.91",
+            "af": "0",
+            "d": "3.40",
+            "df": "0",
+            "goalLine": "-1",
+            "goalLineValue": "-1.00",
+            "h": "3.22",
+            "hf": "0",
+            "updateDate": "2026-09-04",
+            "updateTime": "09:50:21"
+          }
+        },
+        "parsed": {
+          "matchId": "2041296",
+          "matchNum": "周日001",
+          "homeTeam": "鹿岛鹿角",
+          "awayTeam": "浦和红钻",
+          "league": "日职",
+          "businessDate": "2026-09-06",
+          "matchDate": "2026-09-06",
+          "matchTime": "17:00:00",
+          "spf": {
+            "home": 1.69,
+            "draw": 3.55,
+            "away": 3.9
+          },
+          "rqspf": {
+            "handicap": -1,
+            "home": 3.22,
+            "draw": 3.4,
+            "away": 1.91
+          }
+        }
+      },
+      {
+        "raw_row_sha256": "dac7c151ea3272ed29ba6dfe5799faaf627dbac2f76c1b0047f3e4c2cfec6b52",
+        "raw_row": {
+          "businessDate": "2026-09-06",
+          "matchId": 2041297,
+          "matchNumStr": "周日002",
+          "matchDate": "2026-09-06",
+          "matchTime": "17:00:00",
+          "homeTeamAbbName": "名古屋鲸",
+          "awayTeamAbbName": "町田泽维",
+          "hhad": {
+            "a": "4.15",
+            "af": "0",
+            "d": "3.70",
+            "df": "0",
+            "goalLine": "+1",
+            "goalLineValue": "+1.00",
+            "h": "1.62",
+            "hf": "0",
+            "updateDate": "2026-09-04",
+            "updateTime": "09:50:21"
+          }
+        },
+        "parsed": {
+          "matchId": "2041297",
+          "matchNum": "周日002",
+          "homeTeam": "名古屋鲸",
+          "awayTeam": "町田泽维",
+          "league": "日职",
+          "businessDate": "2026-09-06",
+          "matchDate": "2026-09-06",
+          "matchTime": "17:00:00",
+          "spf": {
+            "home": 3.05,
+            "draw": 3.35,
+            "away": 1.99
+          },
+          "rqspf": {
+            "handicap": 1,
+            "home": 1.62,
+            "draw": 3.7,
+            "away": 4.15
+          }
+        }
+      },
+      {
+        "raw_row_sha256": "caf4ef68c03d09d6ed826bdba73006d00540bc79e04c9b75460bce9aa61ced3c",
+        "raw_row": {
+          "businessDate": "2026-09-06",
+          "matchId": 2041298,
+          "matchNumStr": "周日003",
+          "matchDate": "2026-09-06",
+          "matchTime": "18:00:00",
+          "homeTeamAbbName": "安养FC",
+          "awayTeamAbbName": "江原FC",
+          "hhad": {
+            "a": "4.70",
+            "af": "0",
+            "d": "3.70",
+            "df": "0",
+            "goalLine": "+1",
+            "goalLineValue": "+1.00",
+            "h": "1.55",
+            "hf": "0",
+            "updateDate": "2026-09-04",
+            "updateTime": "09:50:21"
+          }
+        },
+        "parsed": {
+          "matchId": "2041298",
+          "matchNum": "周日003",
+          "homeTeam": "安养FC",
+          "awayTeam": "江原FC",
+          "league": "韩职",
+          "businessDate": "2026-09-06",
+          "matchDate": "2026-09-06",
+          "matchTime": "18:00:00",
+          "spf": {
+            "home": 2.98,
+            "draw": 3.1,
+            "away": 2.12
+          },
+          "rqspf": {
+            "handicap": 1,
+            "home": 1.55,
+            "draw": 3.7,
+            "away": 4.7
+          }
+        }
+      },
+      {
+        "raw_row_sha256": "418c5fbcaa3764f75f0edc08012a9d385cc02fa0152cfcdf9ce3e12f36fb752a",
+        "raw_row": {
+          "businessDate": "2026-09-06",
+          "matchId": 2041299,
+          "matchNumStr": "周日004",
+          "matchDate": "2026-09-06",
+          "matchTime": "18:00:00",
+          "homeTeamAbbName": "金泉尚武",
+          "awayTeamAbbName": "光州FC",
+          "hhad": {
+            "a": "2.30",
+            "af": "0",
+            "d": "3.25",
+            "df": "0",
+            "goalLine": "-1",
+            "goalLineValue": "-1.00",
+            "h": "2.60",
+            "hf": "0",
+            "updateDate": "2026-09-04",
+            "updateTime": "09:50:21"
+          }
+        },
+        "parsed": {
+          "matchId": "2041299",
+          "matchNum": "周日004",
+          "homeTeam": "金泉尚武",
+          "awayTeam": "光州FC",
+          "league": "韩职",
+          "businessDate": "2026-09-06",
+          "matchDate": "2026-09-06",
+          "matchTime": "18:00:00",
+          "spf": {
+            "home": 1.46,
+            "draw": 3.8,
+            "away": 5.5
+          },
+          "rqspf": {
+            "handicap": -1,
+            "home": 2.6,
+            "draw": 3.25,
+            "away": 2.3
+          }
+        }
+      },
+      {
+        "raw_row_sha256": "6b084b948302bf1e660b6d386d72a38616f42adb0c9cc4e45985ca75aa0571a6",
+        "raw_row": {
+          "businessDate": "2026-09-06",
+          "matchId": 2041300,
+          "matchNumStr": "周日005",
+          "matchDate": "2026-09-06",
+          "matchTime": "18:30:00",
+          "homeTeamAbbName": "东京FC",
+          "awayTeamAbbName": "京都",
+          "hhad": {
+            "a": "2.27",
+            "af": "0",
+            "d": "3.30",
+            "df": "0",
+            "goalLine": "-1",
+            "goalLineValue": "-1.00",
+            "h": "2.60",
+            "hf": "0",
+            "updateDate": "2026-09-04",
+            "updateTime": "09:50:21"
+          }
+        },
+        "parsed": {
+          "matchId": "2041300",
+          "matchNum": "周日005",
+          "homeTeam": "东京FC",
+          "awayTeam": "京都",
+          "league": "日职",
+          "businessDate": "2026-09-06",
+          "matchDate": "2026-09-06",
+          "matchTime": "18:30:00",
+          "spf": {
+            "home": 1.48,
+            "draw": 3.9,
+            "away": 5.1
+          },
+          "rqspf": {
+            "handicap": -1,
+            "home": 2.6,
+            "draw": 3.3,
+            "away": 2.27
+          }
+        }
+      }
+    ],
+    "parser_contract": {
+      "source_field": "hhad.goalLine",
+      "prices": {
+        "home": "hhad.h",
+        "draw": "hhad.d",
+        "away": "hhad.a"
+      },
+      "line_type": "integer",
+      "home_perspective_formula": "home_goals + handicap_line compared to away_goals"
+    },
+    "decision": "JC_HANDICAP_SOURCE_AUTHORITY_PROVEN"
+  }
+}

@@ -19,7 +19,11 @@ from match_identity import identity_aliases
 from postmatch_evidence import fetch_postmatch_evidence
 from paper_ledger import pair_key
 from risk_engine import dixon_coles_score_matrix
-from exact_distribution import classify_frozen_exact_score, classify_frozen_jc_total_goals
+from exact_distribution import (
+    classify_frozen_exact_score,
+    classify_frozen_jc_handicap,
+    classify_frozen_jc_total_goals,
+)
 from model_governance import DEFAULT_RECORD_ROOT, load_frozen_prediction, validate_postmatch_review_link
 from baseline_production import (
     DEFAULT_PREDICTION_ROOT as BENCHMARK_PREDICTION_ROOT,
@@ -177,6 +181,7 @@ def _model_diagnostics(report: dict, home_goals: int, away_goals: int) -> dict:
     frozen_record = load_frozen_prediction(str(governance.get("prediction_id") or ""), DEFAULT_RECORD_ROOT)
     frozen_exact = classify_frozen_exact_score(frozen_record or {}, home_goals, away_goals)
     frozen_jc_total_goals = classify_frozen_jc_total_goals(frozen_record or {}, home_goals, away_goals)
+    frozen_jc_handicap = classify_frozen_jc_handicap(frozen_record or {}, home_goals, away_goals)
     if frozen_exact["FORMAL_EXACT_DISTRIBUTION_FROZEN"]:
         score_probability = frozen_exact["probability"]
         score_rank = frozen_exact["rank"]
@@ -215,6 +220,24 @@ def _model_diagnostics(report: dict, home_goals: int, away_goals: int) -> dict:
         "jc_total_goals_top_selection_hit": frozen_jc_total_goals["jc_total_goals_top_selection_hit"],
         "same_time_official_market_baseline_status": frozen_jc_total_goals[
             "same_time_official_market_baseline_status"
+        ],
+        "FORMAL_JC_HANDICAP_FROZEN": frozen_jc_handicap["FORMAL_JC_HANDICAP_FROZEN"],
+        "JC_HANDICAP_3WAY_EXACTLY_REPRESENTED": frozen_jc_handicap[
+            "JC_HANDICAP_3WAY_EXACTLY_REPRESENTED"
+        ],
+        "jc_handicap_line": frozen_jc_handicap["jc_handicap_line"],
+        "actual_jc_handicap_selection": frozen_jc_handicap[
+            "actual_jc_handicap_selection"
+        ],
+        "jc_handicap_probability": frozen_jc_handicap["jc_handicap_probability"],
+        "jc_handicap_status": frozen_jc_handicap["jc_handicap_status"],
+        "jc_handicap_authority_status": frozen_jc_handicap["authority_status"],
+        "jc_handicap_top_selection": frozen_jc_handicap["jc_handicap_top_selection"],
+        "jc_handicap_top_selection_hit": frozen_jc_handicap[
+            "jc_handicap_top_selection_hit"
+        ],
+        "same_time_official_handicap_market_baseline_status": frozen_jc_handicap[
+            "same_time_official_handicap_market_baseline_status"
         ],
         "lambda_home_residual": round(home_goals - lambda_home, 4),
         "lambda_away_residual": round(away_goals - lambda_away, 4),
@@ -659,6 +682,9 @@ def build_review(schedule: dict, report: dict, now: datetime) -> dict:
     jc_total_pick = diagnostics.get("jc_total_goals_top_selection")
     jc_total_actual = diagnostics.get("actual_jc_total_goals_bucket")
     jc_total_hit = diagnostics.get("jc_total_goals_top_selection_hit")
+    jc_handicap_pick = diagnostics.get("jc_handicap_top_selection")
+    jc_handicap_actual = diagnostics.get("actual_jc_handicap_selection")
+    jc_handicap_hit = diagnostics.get("jc_handicap_top_selection_hit")
     btts_hit = btts_pick == btts_actual if btts_pick else None
     score_trace = decisions.get("score_selection_trace") or {}
     misses = []
@@ -735,6 +761,8 @@ def build_review(schedule: dict, report: dict, now: datetime) -> dict:
         error_tags.append("goal_total_error")
     if jc_total_hit is False:
         error_tags.append("jc_total_goals_error")
+    if jc_handicap_hit is False:
+        error_tags.append("jc_handicap_error")
     if btts_hit is False:
         error_tags.append("btts_error")
     if not checkpoint_count:
@@ -836,6 +864,19 @@ def build_review(schedule: dict, report: dict, now: datetime) -> dict:
                     "same_time_official_market_baseline_status"
                 ),
                 "rule": "仅从冻结的官方竞彩8类总进球投影结算；旧版通用6+不代表该语义",
+            },
+            "official_jc_handicap": {
+                "pick": jc_handicap_pick,
+                "actual": jc_handicap_actual,
+                "hit": jc_handicap_hit,
+                "line": diagnostics.get("jc_handicap_line"),
+                "probability": diagnostics.get("jc_handicap_probability"),
+                "authority_status": diagnostics.get("jc_handicap_authority_status"),
+                "status": diagnostics.get("jc_handicap_status"),
+                "same_time_official_market_baseline_status": diagnostics.get(
+                    "same_time_official_handicap_market_baseline_status"
+                ),
+                "rule": "official sporttery.cn RQSPF frozen three-way settlement; Asian handicap is not official JC handicap",
             },
             "btts": {"pick": btts_pick, "actual": btts_actual, "hit": btts_hit},
             "expected_goals": {

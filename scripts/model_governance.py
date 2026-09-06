@@ -16,7 +16,10 @@ from pathlib import Path
 from typing import Any
 
 from prediction_quality import BASE_PREDICTION_POLICY, classify_base_prediction, classify_prediction
-from exact_distribution import build_exact_distribution_contract, validate_exact_distribution_contract
+from exact_distribution import (
+    build_exact_distribution_contract,
+    validate_exact_distribution_contract,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -80,11 +83,15 @@ MODEL_SOURCE_COMPONENTS = (
 GOVERNANCE_FILES = (
     "scripts/model_governance.py",
     "scripts/exact_distribution.py",
+    "scripts/fetch_sporttery.py",
+    "scripts/official_jc_handicap.py",
+    "scripts/official_jc_handicap_source_audit.py",
     "scripts/generate_analysis_report.py",
     "scripts/automatic_postmatch_review.py",
     "config/model_governance.json",
     "schemas/analysis_report.schema.json",
     "schemas/postmatch_review.schema.json",
+    "schemas/jc_handicap.schema.json",
 )
 CORE_FILES = MODEL_SOURCE_FILES + GOVERNANCE_FILES
 
@@ -979,6 +986,7 @@ def build_prediction_record(
     commit_sha: str | None = None,
     repository_root: Path = ROOT,
     exact_distribution_state: dict[str, Any] | None = None,
+    official_jc_handicap_state: dict[str, Any] | None = None,
     require_exact_distribution: bool = False,
 ) -> dict[str, Any]:
     if not isinstance(payload, dict):
@@ -1160,6 +1168,14 @@ def build_prediction_record(
         "schema_version": "1.1",
         "prediction_id": "FBOS-PRED-" + _sha256_value(prediction_identity)[:24],
         "match_key": match_identity["match_key"],
+        "business_date": match.get("business_date") or payload.get("business_date"),
+        "competition": match.get("competition") or "UNKNOWN",
+        "universe": (
+            match.get("universe")
+            or report.get("universe")
+            or payload.get("universe")
+            or "JC"
+        ),
         "created_at": created_at,
         "prediction_created_at": prediction_created_at,
         "kickoff_at": kickoff,
@@ -1260,6 +1276,13 @@ def build_prediction_record(
             if require_exact_distribution:
                 raise ValueError("formal Champion freeze is missing prediction-time exact distribution state")
         else:
+            captured_official_jc_handicap_state = official_jc_handicap_state
+            if captured_official_jc_handicap_state is None:
+                candidate_official_jc_handicap_state = payload.get(
+                    "_prediction_time_official_jc_handicap_state"
+                )
+                if isinstance(candidate_official_jc_handicap_state, dict):
+                    captured_official_jc_handicap_state = candidate_official_jc_handicap_state
             record["exact_score_distribution"] = build_exact_distribution_contract(
                 captured_exact_state,
                 model_identity={
@@ -1274,11 +1297,16 @@ def build_prediction_record(
                     "effective_calibration_fingerprint": record["effective_calibration_fingerprint"],
                     "input_sha256": record["input_sha256"],
                 },
+                official_jc_handicap_state=captured_official_jc_handicap_state,
             )
             jc_total_goals = record["exact_score_distribution"].get("jc_total_goals")
             if isinstance(jc_total_goals, dict):
                 record["jc_total_goals"] = deepcopy(jc_total_goals)
                 record["prediction_output"]["jc_total_goals"] = deepcopy(jc_total_goals)
+            jc_handicap = record["exact_score_distribution"].get("jc_handicap")
+            if isinstance(jc_handicap, dict):
+                record["jc_handicap"] = deepcopy(jc_handicap)
+                record["prediction_output"]["jc_handicap"] = deepcopy(jc_handicap)
     record["prediction_sha256"] = prediction_content_hash(record)
     return record
 
@@ -1315,6 +1343,16 @@ def _validate_record(record: dict[str, Any]) -> None:
             raise ValueError("prediction_output JC total-goals projection does not match frozen exact distribution")
         if exact_jc_total_goals is None and prediction_output_jc_total_goals is not None:
             raise ValueError("prediction_output JC total-goals projection has no frozen exact-distribution authority")
+        exact_jc_handicap = record["exact_score_distribution"].get("jc_handicap")
+        if exact_jc_handicap is not None and record.get("jc_handicap") != exact_jc_handicap:
+            raise ValueError("JC handicap projection does not match frozen exact distribution")
+        if exact_jc_handicap is None and record.get("jc_handicap") is not None:
+            raise ValueError("JC handicap projection has no frozen exact-distribution authority")
+        prediction_output_jc_handicap = (record.get("prediction_output") or {}).get("jc_handicap")
+        if exact_jc_handicap is not None and prediction_output_jc_handicap != exact_jc_handicap:
+            raise ValueError("prediction_output JC handicap projection does not match frozen exact distribution")
+        if exact_jc_handicap is None and prediction_output_jc_handicap is not None:
+            raise ValueError("prediction_output JC handicap projection has no frozen exact-distribution authority")
     snapshot = record.get("input_snapshot") or {}
     if snapshot.get("canonical_input_sha256") != record.get("input_sha256"):
         raise ValueError("input snapshot hash does not match input_sha256")

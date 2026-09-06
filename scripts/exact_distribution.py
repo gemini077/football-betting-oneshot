@@ -15,6 +15,13 @@ import json
 import math
 from typing import Any, Mapping
 
+from official_jc_handicap import (
+    OFFICIAL_JC_HANDICAP_DEVIG_METHOD,
+    OFFICIAL_JC_HANDICAP_MARKET_ID,
+    _is_current_request_contract,
+    _is_official_source_url,
+)
+
 
 EXACT_DISTRIBUTION_CONTRACT_VERSION = "exact_score_distribution.v1"
 EXACT_DISTRIBUTION_MAX_GOALS = 12
@@ -23,6 +30,9 @@ EXACT_DISTRIBUTION_NORMALIZATION_TOLERANCE = 1e-12
 JC_TOTAL_GOALS_CONTRACT_VERSION = "jc_total_goals.v1"
 JC_TOTAL_GOALS_BUCKET_ORDER = ("0", "1", "2", "3", "4", "5", "6", "7+")
 JC_TOTAL_GOALS_SELECTION_ORDER = JC_TOTAL_GOALS_BUCKET_ORDER
+JC_HANDICAP_CONTRACT_VERSION = "jc_handicap.v1"
+JC_HANDICAP_SELECTION_ORDER = ("home", "draw", "away")
+JC_HANDICAP_MARKET_CODE = "JC_HANDICAP"
 
 
 def canonical_distribution_json(value: Any) -> str:
@@ -253,6 +263,380 @@ def validate_jc_total_goals_contract(contract: Mapping[str, Any]) -> None:
         raise ValueError("JC total-goals content hash mismatch")
 
 
+def _jc_handicap_outcome(home_goals: int, away_goals: int, line: int) -> str:
+    adjusted_margin = home_goals + line - away_goals
+    return "home" if adjusted_margin > 0 else "draw" if adjusted_margin == 0 else "away"
+
+
+def _jc_handicap_unavailable_source() -> dict[str, Any]:
+    return {
+        "contract_version": "jc_handicap_source.v1",
+        "status": "NOT_AVAILABLE",
+        "authority": "official_sporttery_rqspf_only",
+        "provider": None,
+        "market": "rqspf",
+        "market_identity": OFFICIAL_JC_HANDICAP_MARKET_ID,
+        "business_date": None,
+        "source_ref": None,
+        "source_url": None,
+        "request_contract": None,
+        "http_status": None,
+        "raw_response_sha256": None,
+        "captured_at": None,
+        "match_binding": {"status": "NOT_AVAILABLE"},
+        "handicap_line": None,
+        "line": None,
+        "official_odds": None,
+        "same_time_official_market_baseline": {
+            "status": "NOT_AVAILABLE",
+            "probabilities": None,
+            "source_odds": None,
+            "captured_at": None,
+            "source": None,
+            "reason": "OFFICIAL_SPORTTERY_RQSPF_EVIDENCE_NOT_SUPPLIED",
+            "derived_from_asian_handicap": False,
+            "devig_method": None,
+            "overround": None,
+        },
+        "reason": "OFFICIAL_SPORTTERY_RQSPF_EVIDENCE_NOT_SUPPLIED",
+    }
+
+
+def build_jc_handicap_contract(
+    cells: Any,
+    *,
+    official_source: Mapping[str, Any] | None = None,
+    model_identity: Mapping[str, Any] | None = None,
+    forecast_horizon: str = "prematch_to_regulation_90m_plus_stoppage",
+) -> dict[str, Any]:
+    """Freeze a three-way official JC handicap projection from exact cells.
+
+    The projection is formal only when an exact, prematch Sporttery RQSPF
+    source state supplies the integer official line.  No line is inferred
+    from Asian quotes, generic market rows, or a third-party source.
+    """
+
+    validated_cells = _validated_cells(cells)
+    state = (
+        deepcopy(dict(official_source))
+        if isinstance(official_source, Mapping)
+        else _jc_handicap_unavailable_source()
+    )
+    line_value = _number(state.get("handicap_line", state.get("line")))
+    source_binding = state.get("match_binding")
+    source_available = (
+        state.get("status") == "AVAILABLE"
+        and state.get("authority") == "official_sporttery_rqspf"
+        and state.get("provider") == "sporttery.cn"
+        and line_value is not None
+        and int(line_value) == line_value
+        and isinstance(source_binding, Mapping)
+        and source_binding.get("status") == "EXACT"
+    )
+    if source_available:
+        line = int(line_value)
+        probabilities = {selection: 0.0 for selection in JC_HANDICAP_SELECTION_ORDER}
+        for cell in validated_cells:
+            selection = _jc_handicap_outcome(
+                cell["home_goals"], cell["away_goals"], line
+            )
+            probabilities[selection] += float(cell["probability"])
+        rows = [
+            {"selection": selection, "probability": probabilities[selection]}
+            for selection in JC_HANDICAP_SELECTION_ORDER
+        ]
+        top_selection = max(
+            JC_HANDICAP_SELECTION_ORDER,
+            key=lambda selection: (
+                probabilities[selection],
+                -JC_HANDICAP_SELECTION_ORDER.index(selection),
+            ),
+        )
+        baseline = state.get("same_time_official_market_baseline")
+        if not isinstance(baseline, Mapping):
+            baseline = {
+                "status": "NOT_AVAILABLE",
+                "probabilities": None,
+                "source_odds": None,
+                "captured_at": None,
+                "source": None,
+                "reason": "OFFICIAL_RQSPF_BASELINE_NOT_SUPPLIED",
+                "derived_from_asian_handicap": False,
+            }
+        contract: dict[str, Any] = {
+            "contract_version": JC_HANDICAP_CONTRACT_VERSION,
+            "status": "FORMAL_JC_HANDICAP_FROZEN",
+            "authority": "frozen_effective_exact_distribution_plus_official_sporttery_rqspf_line",
+            "market_code": JC_HANDICAP_MARKET_CODE,
+            "market_identity": OFFICIAL_JC_HANDICAP_MARKET_ID,
+            "market_family": "official_jc_handicap",
+            "market_name": "official JC handicap win/draw/loss",
+            "selection_order": list(JC_HANDICAP_SELECTION_ORDER),
+            "forecast_horizon": forecast_horizon,
+            "model_identity": deepcopy(dict(model_identity or {})),
+            "business_date": state.get("business_date"),
+            "line": line,
+            "handicap_line": line,
+            "line_semantics": {
+                "official_market": "sporttery.cn.rqspf",
+                "applied_to": "home_goals",
+                "formula": "home_goals + handicap_line compared to away_goals",
+                "draw_when_adjusted_margin": 0,
+                "not_asian_handicap": True,
+                "source_field": "sporttery.cn.rqspf.hhad.goalLine",
+                "sign_semantics_status": "SOURCE_FIELD_PRESERVED",
+            },
+            "buckets": rows,
+            "probabilities": probabilities,
+            "top_selection": top_selection,
+            "top_probability": probabilities[top_selection],
+            "normalization": {
+                "represented_probability_sum": sum(probabilities.values()),
+                "target_probability_sum": 1.0,
+                "absolute_error": abs(sum(probabilities.values()) - 1.0),
+                "tolerance": EXACT_DISTRIBUTION_NORMALIZATION_TOLERANCE,
+                "status": "NORMALIZED_FROM_FROZEN_EFFECTIVE_EXACT_DISTRIBUTION",
+            },
+            "source_authority": state,
+            "source_content_sha256": state.get("raw_response_sha256"),
+            "same_time_official_market_baseline": deepcopy(dict(baseline)),
+            "content_sha256": None,
+        }
+    else:
+        contract = {
+            "contract_version": JC_HANDICAP_CONTRACT_VERSION,
+            "status": "NOT_AVAILABLE",
+            "authority": "official_sporttery_rqspf_only",
+            "market_code": JC_HANDICAP_MARKET_CODE,
+            "market_identity": OFFICIAL_JC_HANDICAP_MARKET_ID,
+            "market_family": "official_jc_handicap",
+            "market_name": "official JC handicap win/draw/loss",
+            "selection_order": list(JC_HANDICAP_SELECTION_ORDER),
+            "forecast_horizon": forecast_horizon,
+            "model_identity": deepcopy(dict(model_identity or {})),
+            "business_date": state.get("business_date"),
+            "line": None,
+            "handicap_line": None,
+            "line_semantics": {
+                "official_market": "sporttery.cn.rqspf",
+                "applied_to": "home_goals",
+                "formula": "home_goals + handicap_line compared to away_goals",
+                "draw_when_adjusted_margin": 0,
+                "not_asian_handicap": True,
+                "source_field": "sporttery.cn.rqspf.hhad.goalLine",
+                "sign_semantics_status": "SOURCE_FIELD_PRESERVED",
+            },
+            "buckets": [],
+            "probabilities": None,
+            "top_selection": None,
+            "top_probability": None,
+            "normalization": {
+                "represented_probability_sum": None,
+                "target_probability_sum": 1.0,
+                "absolute_error": None,
+                "tolerance": EXACT_DISTRIBUTION_NORMALIZATION_TOLERANCE,
+                "status": "NOT_AVAILABLE",
+            },
+            "source_authority": state,
+            "source_content_sha256": None,
+            "same_time_official_market_baseline": {
+                "status": "NOT_AVAILABLE",
+                "probabilities": None,
+                "source_odds": None,
+                "captured_at": None,
+                "source": None,
+                "reason": state.get("reason") or "OFFICIAL_SPORTTERY_RQSPF_EVIDENCE_NOT_VERIFIED",
+                "derived_from_asian_handicap": False,
+            },
+            "content_sha256": None,
+        }
+    content = {key: value for key, value in contract.items() if key != "content_sha256"}
+    contract["content_sha256"] = distribution_content_sha256(content)
+    validate_jc_handicap_contract(contract)
+    return contract
+
+
+def validate_jc_handicap_contract(contract: Mapping[str, Any]) -> None:
+    if not isinstance(contract, Mapping):
+        raise ValueError("JC handicap contract must be an object")
+    if (
+        contract.get("contract_version") != JC_HANDICAP_CONTRACT_VERSION
+        or contract.get("market_code") != JC_HANDICAP_MARKET_CODE
+        or contract.get("market_identity") != OFFICIAL_JC_HANDICAP_MARKET_ID
+        or contract.get("market_family") != "official_jc_handicap"
+        or contract.get("market_name") != "official JC handicap win/draw/loss"
+    ):
+        raise ValueError("JC handicap frozen contract identity is invalid")
+    if contract.get("selection_order") != list(JC_HANDICAP_SELECTION_ORDER):
+        raise ValueError("JC handicap selection order is invalid")
+    semantics = contract.get("line_semantics")
+    if (
+        not isinstance(semantics, Mapping)
+        or semantics.get("official_market") != "sporttery.cn.rqspf"
+        or semantics.get("applied_to") != "home_goals"
+        or semantics.get("not_asian_handicap") is not True
+        or semantics.get("source_field") != "sporttery.cn.rqspf.hhad.goalLine"
+        or semantics.get("sign_semantics_status") != "SOURCE_FIELD_PRESERVED"
+    ):
+        raise ValueError("JC handicap line semantics are invalid")
+    if (
+        not isinstance(contract.get("forecast_horizon"), str)
+        or not contract.get("forecast_horizon")
+        or not isinstance(contract.get("model_identity"), Mapping)
+        or "business_date" not in contract
+        or "source_content_sha256" not in contract
+    ):
+        raise ValueError("JC handicap forecast/model identity is invalid")
+    baseline = contract.get("same_time_official_market_baseline")
+    if (
+        not isinstance(baseline, Mapping)
+        or baseline.get("status") not in {"AVAILABLE", "NOT_AVAILABLE"}
+        or baseline.get("derived_from_asian_handicap") is not False
+    ):
+        raise ValueError("JC handicap same-time baseline status is invalid")
+    source = contract.get("source_authority")
+    status = contract.get("status")
+    if status == "FORMAL_JC_HANDICAP_FROZEN":
+        if contract.get("authority") != "frozen_effective_exact_distribution_plus_official_sporttery_rqspf_line":
+            raise ValueError("JC handicap formal authority is invalid")
+        line = _number(contract.get("line"))
+        if line is None or int(line) != line or contract.get("handicap_line") != int(line):
+            raise ValueError("JC handicap official line is invalid")
+        if (
+            not isinstance(source, Mapping)
+            or source.get("status") != "AVAILABLE"
+            or source.get("provider") != "sporttery.cn"
+            or source.get("market") != "rqspf"
+            or source.get("market_identity") != OFFICIAL_JC_HANDICAP_MARKET_ID
+            or source.get("authority") != "official_sporttery_rqspf"
+            or (source.get("match_binding") or {}).get("status") != "EXACT"
+            or not _is_official_source_url(source.get("source_url"))
+            or not source.get("business_date")
+            or not isinstance(source.get("request_contract"), Mapping)
+            or not _is_current_request_contract(
+                source.get("request_contract"), source.get("source_url")
+            )
+            or source.get("http_status") != 200
+            or not isinstance(source.get("raw_response_sha256"), str)
+            or len(source.get("raw_response_sha256")) != 64
+            or any(character not in "0123456789abcdef" for character in source.get("raw_response_sha256", "").casefold())
+            or contract.get("business_date") != source.get("business_date")
+            or contract.get("source_content_sha256") != source.get("raw_response_sha256")
+        ):
+            raise ValueError("JC handicap source authority is invalid")
+        binding = source.get("match_binding")
+        if (
+            not isinstance(binding, Mapping)
+            or not binding.get("provider_match_id")
+            or not binding.get("provider_match_num")
+            or not binding.get("business_date")
+            or binding.get("business_date") != source.get("business_date")
+            or not binding.get("home")
+            or not binding.get("away")
+            or not binding.get("kickoff_at")
+            or not isinstance(binding.get("identity_basis"), list)
+            or not {"provider_match_id", "provider_match_num", "business_date", "home_away_orientation", "kickoff_at"}.issubset(
+                set(binding.get("identity_basis") or [])
+            )
+        ):
+            raise ValueError("JC handicap exact binding provenance is invalid")
+        rows = contract.get("buckets")
+        if not isinstance(rows, list) or len(rows) != len(JC_HANDICAP_SELECTION_ORDER):
+            raise ValueError("JC handicap contract must contain three buckets")
+        row_probabilities: dict[str, float] = {}
+        for expected, row in zip(JC_HANDICAP_SELECTION_ORDER, rows):
+            if not isinstance(row, Mapping) or row.get("selection") != expected:
+                raise ValueError("JC handicap buckets are out of order or incomplete")
+            probability = _number(row.get("probability"))
+            if probability is None or probability < 0:
+                raise ValueError("JC handicap bucket probability is invalid")
+            row_probabilities[expected] = probability
+        probabilities = contract.get("probabilities")
+        if (
+            not isinstance(probabilities, Mapping)
+            or set(probabilities) != set(JC_HANDICAP_SELECTION_ORDER)
+        ):
+            raise ValueError("JC handicap probability map is incomplete")
+        for selection in JC_HANDICAP_SELECTION_ORDER:
+            declared = _number(probabilities.get(selection))
+            if declared is None or abs(declared - row_probabilities[selection]) > EXACT_DISTRIBUTION_NORMALIZATION_TOLERANCE:
+                raise ValueError("JC handicap probability map does not match buckets")
+        represented_sum = sum(row_probabilities.values())
+        normalization = contract.get("normalization")
+        declared_sum = _number((normalization or {}).get("represented_probability_sum")) if isinstance(normalization, Mapping) else None
+        tolerance = _number((normalization or {}).get("tolerance")) if isinstance(normalization, Mapping) else None
+        if (
+            declared_sum is None
+            or tolerance is None
+            or tolerance <= 0
+            or abs(represented_sum - declared_sum) > tolerance
+            or abs(represented_sum - 1.0) > tolerance
+            or (normalization or {}).get("status") != "NORMALIZED_FROM_FROZEN_EFFECTIVE_EXACT_DISTRIBUTION"
+        ):
+            raise ValueError("JC handicap normalization diagnostics do not match buckets")
+        top_selection = max(
+            JC_HANDICAP_SELECTION_ORDER,
+            key=lambda selection: (row_probabilities[selection], -JC_HANDICAP_SELECTION_ORDER.index(selection)),
+        )
+        if (
+            contract.get("top_selection") != top_selection
+            or _number(contract.get("top_probability")) != row_probabilities[top_selection]
+        ):
+            raise ValueError("JC handicap top selection does not match probabilities")
+        if baseline.get("status") == "AVAILABLE":
+            baseline_probabilities = baseline.get("probabilities")
+            baseline_odds = baseline.get("source_odds")
+            inverse_total = (
+                sum(1.0 / float(baseline_odds[selection]) for selection in JC_HANDICAP_SELECTION_ORDER)
+                if isinstance(baseline_odds, Mapping)
+                and set(baseline_odds) == set(JC_HANDICAP_SELECTION_ORDER)
+                and all(_number(baseline_odds.get(selection)) is not None and float(baseline_odds[selection]) > 1.0 for selection in JC_HANDICAP_SELECTION_ORDER)
+                else None
+            )
+            if (
+                not isinstance(baseline_probabilities, Mapping)
+                or set(baseline_probabilities) != set(JC_HANDICAP_SELECTION_ORDER)
+                or any(
+                    _number(baseline_probabilities.get(selection)) is None
+                    or _number(baseline_probabilities.get(selection)) < 0
+                    for selection in JC_HANDICAP_SELECTION_ORDER
+                )
+                or abs(sum(float(baseline_probabilities[selection]) for selection in JC_HANDICAP_SELECTION_ORDER) - 1.0) > EXACT_DISTRIBUTION_NORMALIZATION_TOLERANCE
+                or baseline.get("source") != "sporttery.cn.rqspf"
+                or baseline.get("devig_method") != OFFICIAL_JC_HANDICAP_DEVIG_METHOD
+                or _number(baseline.get("overround")) is None
+                or inverse_total is None
+                or abs(float(baseline.get("overround")) - inverse_total) > EXACT_DISTRIBUTION_NORMALIZATION_TOLERANCE
+                or baseline.get("captured_at") != source.get("captured_at")
+                or baseline.get("source_odds") is None
+                or baseline.get("line") != int(line)
+            ):
+                raise ValueError("JC handicap same-time official baseline is invalid")
+        elif baseline.get("probabilities") is not None:
+            raise ValueError("JC handicap unavailable baseline contains probabilities")
+    elif status == "NOT_AVAILABLE":
+        if (
+            contract.get("authority") != "official_sporttery_rqspf_only"
+            or contract.get("line") is not None
+            or contract.get("handicap_line") is not None
+            or contract.get("probabilities") is not None
+            or contract.get("buckets") != []
+            or contract.get("top_selection") is not None
+            or contract.get("top_probability") is not None
+            or not isinstance(source, Mapping)
+            or source.get("status") != "NOT_AVAILABLE"
+            or baseline.get("status") != "NOT_AVAILABLE"
+            or baseline.get("probabilities") is not None
+        ):
+            raise ValueError("JC handicap unavailable contract is invalid")
+    else:
+        raise ValueError("JC handicap contract status is invalid")
+    supplied_hash = contract.get("content_sha256")
+    content = {key: value for key, value in contract.items() if key != "content_sha256"}
+    if not isinstance(supplied_hash, str) or supplied_hash != distribution_content_sha256(content):
+        raise ValueError("JC handicap content hash mismatch")
+
+
 def build_prediction_time_exact_distribution_state(
     matrix: Mapping[tuple[int, int], float],
     *,
@@ -301,6 +685,7 @@ def build_exact_distribution_contract(
     state: Mapping[str, Any],
     *,
     model_identity: Mapping[str, Any],
+    official_jc_handicap_state: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Build the immutable inline contract used by a new formal freeze."""
 
@@ -352,6 +737,11 @@ def build_exact_distribution_contract(
             "basis": "risk_engine exposes a normalized finite grid; no frozen pre-normalization tail mass is available",
         },
         "jc_total_goals": build_jc_total_goals_contract(cells),
+        "jc_handicap": build_jc_handicap_contract(
+            cells,
+            official_source=official_jc_handicap_state,
+            model_identity=model_identity,
+        ),
         "content_sha256": None,
     }
     content = {key: value for key, value in contract.items() if key != "content_sha256"}
@@ -401,6 +791,8 @@ def validate_exact_distribution_contract(
         raise ValueError("exact distribution normalization diagnostics do not match cells")
     if contract.get("jc_total_goals") is not None:
         validate_jc_total_goals_contract(contract["jc_total_goals"])
+    if contract.get("jc_handicap") is not None:
+        validate_jc_handicap_contract(contract["jc_handicap"])
     identity = contract.get("model_identity")
     if not isinstance(identity, Mapping):
         raise ValueError("exact distribution model identity is missing")
@@ -562,6 +954,91 @@ def classify_frozen_jc_total_goals(
         "jc_total_goals_top_selection_hit": jc_contract["top_selection"] == bucket,
         "same_time_official_market_baseline_status": (
             jc_contract["same_time_official_market_baseline"]["status"]
+        ),
+    })
+    return base
+
+
+def classify_frozen_jc_handicap(
+    record: Mapping[str, Any],
+    home_goals: Any,
+    away_goals: Any,
+) -> dict[str, Any]:
+    """Classify a verified 90-minute score using frozen official JC truth."""
+
+    base = {
+        "FORMAL_JC_HANDICAP_FROZEN": False,
+        "JC_HANDICAP_3WAY_EXACTLY_REPRESENTED": False,
+        "jc_handicap_status": "MISSING_FROZEN_JC_HANDICAP",
+        "authority_status": "RESEARCH_RECONSTRUCTED",
+        "jc_handicap_line": None,
+        "actual_jc_handicap_selection": None,
+        "actual_jc_handicap_outcome": None,
+        "jc_handicap_probability": None,
+        "jc_handicap_outcome_probability": None,
+        "jc_handicap_top_selection": None,
+        "jc_handicap_top_selection_hit": None,
+        "same_time_official_handicap_market_baseline_status": None,
+        "same_time_official_market_baseline_status": None,
+    }
+    exact_contract = record.get("exact_score_distribution") if isinstance(record, Mapping) else None
+    if not isinstance(exact_contract, Mapping):
+        return base
+    expected_identity = {
+        "prediction_id": record.get("prediction_id"),
+        "model_family": record.get("model_family"),
+        "model_core_version": record.get("model_core_version"),
+        "release_version": record.get("release_version"),
+        "model_source_fingerprint": record.get("model_source_fingerprint"),
+        "model_run_fingerprint": record.get("model_run_fingerprint"),
+        "calibration_artifact_sha256": record.get("calibration_artifact_sha256"),
+        "effective_calibration_fingerprint": record.get("effective_calibration_fingerprint"),
+        "input_sha256": record.get("input_sha256"),
+    }
+    try:
+        validate_exact_distribution_contract(
+            exact_contract,
+            expected_model_identity={key: value for key, value in expected_identity.items() if value is not None},
+        )
+    except ValueError:
+        base["jc_handicap_status"] = "INVALID_FROZEN_JC_HANDICAP"
+        base["authority_status"] = "FAIL_CLOSED"
+        return base
+    jc_contract = exact_contract.get("jc_handicap")
+    if not isinstance(jc_contract, Mapping) or jc_contract.get("status") != "FORMAL_JC_HANDICAP_FROZEN":
+        if isinstance(jc_contract, Mapping) and jc_contract.get("status") == "NOT_AVAILABLE":
+            base["jc_handicap_status"] = "OFFICIAL_JC_HANDICAP_NOT_AVAILABLE"
+        return base
+    home = _goal(home_goals)
+    away = _goal(away_goals)
+    line = _goal(jc_contract.get("line"))
+    probabilities = jc_contract.get("probabilities")
+    if home is None or away is None or home < 0 or away < 0:
+        base["jc_handicap_status"] = "INVALID_REALIZED_SCORE"
+        return base
+    if line is None or not isinstance(probabilities, Mapping):
+        base["jc_handicap_status"] = "INVALID_FROZEN_JC_HANDICAP"
+        base["authority_status"] = "FAIL_CLOSED"
+        return base
+    selection = _jc_handicap_outcome(home, away, line)
+    probability = _number(probabilities.get(selection))
+    base.update({
+        "FORMAL_JC_HANDICAP_FROZEN": True,
+        "JC_HANDICAP_3WAY_EXACTLY_REPRESENTED": True,
+        "jc_handicap_status": "FORMAL_JC_HANDICAP_FROZEN",
+        "authority_status": "FROZEN_PREDICTION_TIME",
+        "jc_handicap_line": line,
+        "actual_jc_handicap_selection": selection,
+        "actual_jc_handicap_outcome": selection,
+        "jc_handicap_probability": probability,
+        "jc_handicap_outcome_probability": probability,
+        "jc_handicap_top_selection": jc_contract.get("top_selection"),
+        "jc_handicap_top_selection_hit": jc_contract.get("top_selection") == selection,
+        "same_time_official_handicap_market_baseline_status": (
+            (jc_contract.get("same_time_official_market_baseline") or {}).get("status")
+        ),
+        "same_time_official_market_baseline_status": (
+            (jc_contract.get("same_time_official_market_baseline") or {}).get("status")
         ),
     })
     return base

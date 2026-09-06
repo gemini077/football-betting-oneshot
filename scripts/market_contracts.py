@@ -56,6 +56,15 @@ def settle_contract(contract: dict | None, score: tuple[int, int]) -> dict:
                         delta = -delta
                 parts.append(1.0 if delta > 0 else 0.0 if delta == 0 else -1.0)
             units = sum(parts) / len(parts)
+    elif family in {"jc_handicap", "official_jc_handicap"}:
+        try:
+            line = float(contract["line"])
+        except (KeyError, TypeError, ValueError):
+            units = None
+        else:
+            adjusted_margin = home + line - away
+            actual = "home" if adjusted_margin > 0 else "draw" if adjusted_margin == 0 else "away"
+            units = 1.0 if selection == actual else -1.0
     elif family == "exact_total":
         target = str(contract.get("goals") or "")
         if target == "6+":

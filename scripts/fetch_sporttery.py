@@ -4,7 +4,7 @@
 
 抓取策略: webapi REST API → 快速失败
 - 🥇 主源: webapi.sporttery.cn REST API (SPA页面实际使用的数据接口)
-- 失败时直接报告, 由上层调用方降级到 500.com 后备 ("竞*官*" 行)
+- Official-source failure is reported directly; no third-party fallback is emitted.
 
 修复记录:
   v1.1 (2026-06-26): 原脚本抓取 m.sporttery.cn 的 HTML 空壳页面,
@@ -20,6 +20,8 @@
 """
 
 import argparse
+import gzip
+import hashlib
 import json
 import sys
 import time
@@ -29,7 +31,11 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 # ── 配置 ──────────────────────────────────────────
-SPORTTERY_API = "https://webapi.sporttery.cn/gateway/uniform/football/getMatchCalculatorV1.qry?channel=tycp"
+SPORTTERY_POOL_CODE = "had,hhad,crs,ttg,hafu"
+SPORTTERY_API = (
+    "https://webapi.sporttery.cn/gateway/jc/football/"
+    f"getMatchCalculatorV1.qry?channel=c&poolCode={SPORTTERY_POOL_CODE}"
+)
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CACHE_DIR = PROJECT_ROOT / "data" / "source_cache" / "sporttery"
 CACHE_TTL_HOURS = 1
@@ -38,6 +44,16 @@ USER_AGENT = (
     "AppleWebKit/605.1.15 (KHTML, like Gecko) "
     "Version/17.0 Mobile/15E148 Safari/604.1"
 )
+SPORTTERY_REQUEST_HEADERS = {
+    "User-Agent": USER_AGENT,
+    "Accept": "application/json, text/javascript, */*; q=0.01",
+    "Accept-Language": "zh-CN,zh;q=0.9",
+    "Referer": "https://m.sporttery.cn/mjc/jsq/zqspf/",
+    "Origin": "https://m.sporttery.cn",
+    "X-Requested-With": "XMLHttpRequest",
+    "Accept-Encoding": "gzip",
+}
+LAST_FETCH_METADATA: dict = {}
 
 # ── 工具函数 ──────────────────────────────────────
 def log(msg: str, level: str = "INFO"):
@@ -47,24 +63,52 @@ def log(msg: str, level: str = "INFO"):
 
 def fetch_json(url: str, retries: int = 3) -> dict | None:
     """抓取 JSON API，带重试"""
+    global LAST_FETCH_METADATA
+    LAST_FETCH_METADATA = {
+        "http_status": None,
+        "response_bytes": 0,
+        "raw_response_sha256": None,
+        "content_type": None,
+        "attempts": 0,
+    }
     for attempt in range(retries):
+        LAST_FETCH_METADATA["attempts"] = attempt + 1
         try:
             req = urllib.request.Request(
                 url,
-                headers={
-                    "User-Agent": USER_AGENT,
-                    "Accept": "application/json",
-                    "Accept-Language": "zh-CN,zh;q=0.9",
-                    "Referer": "https://m.sporttery.cn/",
-                }
+                headers=SPORTTERY_REQUEST_HEADERS,
             )
             with urllib.request.urlopen(req, timeout=15) as resp:
-                raw = resp.read().decode("utf-8")
-                return json.loads(raw)
+                wire = resp.read()
+                raw = gzip.decompress(wire) if "gzip" in str(resp.headers.get("Content-Encoding") or "").casefold() else wire
+                LAST_FETCH_METADATA.update({
+                    "http_status": int(resp.getcode()),
+                    "response_bytes": len(raw),
+                    "raw_response_sha256": hashlib.sha256(raw).hexdigest(),
+                    "wire_response_bytes": len(wire),
+                    "wire_response_sha256": hashlib.sha256(wire).hexdigest(),
+                    "content_type": str(resp.headers.get("Content-Type") or ""),
+                })
+                return json.loads(raw.decode("utf-8"))
         except urllib.error.HTTPError as e:
+            raw = b""
+            try:
+                wire = e.read()
+                raw = gzip.decompress(wire) if "gzip" in str(e.headers.get("Content-Encoding") if e.headers else "").casefold() else wire
+            except Exception:
+                wire = b""
+                pass
+            LAST_FETCH_METADATA.update({
+                "http_status": int(e.code),
+                "response_bytes": len(raw),
+                "raw_response_sha256": hashlib.sha256(raw).hexdigest() if raw else None,
+                "wire_response_bytes": len(wire),
+                "wire_response_sha256": hashlib.sha256(wire).hexdigest() if wire else None,
+                "content_type": str(e.headers.get("Content-Type") if e.headers else ""),
+            })
             log(f"HTTP {e.code} attempt {attempt+1}/{retries}", "WARN")
-            # GitHub runners currently receive a stable gateway 567 here.
-            # Retrying only delays the deterministic 500.com fallback.
+            # GitHub runners may receive a stable gateway 567 here.  The
+            # official lane never substitutes a third-party source.
             if e.code == 567:
                 return None
         except Exception as e:
@@ -112,19 +156,29 @@ def parse_api_matches(match_info_list: list) -> list[dict]:
             # 让球胜平负 (hhad 池)
             hhad = sub.get("hhad", {})
             if hhad:
-                gl = hhad.get("goalLine", "0")
-                hh_h, hh_d, hh_a = hhad.get("h"), hhad.get("d"), hhad.get("a")
-                if hh_h and hh_d and hh_a and hh_h != "?" and hh_d != "?" and hh_a != "?":
-                    try:
-                        handicap = int(float(gl)) if gl else 0
-                    except (ValueError, TypeError):
-                        handicap = 0
-                    match["rqspf"] = {
-                        "handicap": handicap,
-                        "home": float(hh_h),
-                        "draw": float(hh_d),
-                        "away": float(hh_a),
-                    }
+                gl = hhad.get("goalLine")
+                handicap = None
+                try:
+                    candidate_line = float(gl)
+                    if candidate_line == int(candidate_line):
+                        handicap = int(candidate_line)
+                except (ValueError, TypeError, OverflowError):
+                    pass
+                if handicap is not None:
+                    rqspf = {"handicap": handicap}
+                    for key, value in (
+                        ("home", hhad.get("h")),
+                        ("draw", hhad.get("d")),
+                        ("away", hhad.get("a")),
+                    ):
+                        if value not in (None, "", "?"):
+                            try:
+                                parsed_value = float(value)
+                            except (ValueError, TypeError, OverflowError):
+                                parsed_value = None
+                            if parsed_value is not None:
+                                rqspf[key] = parsed_value
+                    match["rqspf"] = rqspf
             
             parsed.append(match)
     return parsed
@@ -145,22 +199,42 @@ def fetch_jingcai_odds(date: str, no_cache: bool = False, cache_dir=None) -> dic
         if datetime.now() - mtime < timedelta(hours=CACHE_TTL_HOURS):
             log(f"Cache hit: {cache_file}", "INFO")
             with open(cache_file, "r", encoding="utf-8") as f:
-                return json.load(f)
+                cached = json.load(f)
+            if (
+                isinstance(cached, dict)
+                and cached.get("source") == "sporttery.cn"
+                and cached.get("url") == SPORTTERY_API
+                and isinstance(cached.get("request_contract"), dict)
+                and cached["request_contract"].get("url") == SPORTTERY_API
+                and cached.get("raw_response_sha256")
+            ):
+                return cached
+            log("Ignoring cache without the current official request contract", "WARN")
     
     log(f"Fetching sporttery.cn API for {date}...", "INFO")
     
     result: dict = {
         "source": "sporttery.cn",
         "url": SPORTTERY_API,
+        "business_date": date,
         "fetch_time": datetime.now().astimezone().isoformat(),
         "date": date,
         "success": False,
         "matches": [],
         "status": "UNKNOWN",
+        "request_contract": {
+            "method": "GET",
+            "url": SPORTTERY_API,
+            "params": {"channel": "c", "poolCode": SPORTTERY_POOL_CODE},
+            "required_headers": sorted(SPORTTERY_REQUEST_HEADERS),
+            "source_surface": "https://m.sporttery.cn/mjc/jsq/zqspf/",
+        },
     }
     
     # 🥇 主源: 调用 webapi REST API (SPA 页面实际使用的数据接口)
     api_data = fetch_json(SPORTTERY_API)
+    result.update(LAST_FETCH_METADATA)
+    result["payload_success"] = bool(api_data and api_data.get("success") is True)
     
     if api_data and api_data.get("success") and api_data.get("value", {}).get("matchInfoList"):
         all_matches = parse_api_matches(api_data["value"]["matchInfoList"])
@@ -209,7 +283,7 @@ def main():
         status = "✅" if result["success"] else "❌"
         print(f"{status} sporttery.cn: {result['status']} ({len(result['matches'])} matches)")
         if result["status"] in ("FETCH_FAILED", "API_FAILED"):
-            print("⚠️  降级到 500.com 后备源")
+            print("Official source unavailable; formal JC handicap remains NOT_AVAILABLE")
     
     return 0 if result["success"] else 1
 

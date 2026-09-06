@@ -471,6 +471,8 @@ def _attempt_record(
             "primary_source", "business_date_source", "business_date_source_url",
             "jc_contract", "business_date_contract",
             "jc_membership_source", "date_provenance", "publication_status",
+            "request_contract", "http_status", "response_bytes", "content_type",
+            "raw_response_sha256", "response_sha256", "payload_success",
             "diagnostics",
         ):
             if key == "diagnostics" and status != NOT_YET_PUBLISHED:

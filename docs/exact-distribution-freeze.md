@@ -77,6 +77,40 @@ ignore extra time and penalties, and do not regenerate probabilities from
 current lambdas or market lines. Legacy Exact contracts without this additive
 projection remain readable and report the JC dimension as unavailable.
 
+## Official JC handicap
+
+New formal Champion Exact freezes also carry `jc_handicap.v1` when the same
+prematch input contains an exact match-bound row from the official
+`sporttery.cn` `rqspf` source. The source binding records the
+`JC_HANDICAP_1X2` identity, provider match ID/number, business date,
+home/away names, kickoff, current official request contract, HTTP status,
+capture time, raw-response SHA-256, source reference, and the integer official
+line. The line is applied only as `home_goals + official_line` versus
+`away_goals`; it is explicitly not an Asian-handicap quote.
+
+The bounded source audit is Sporttery-only and records the current official
+calculator request (`channel=c`, `poolCode=had,hhad,crs,ttg,hafu`), page/API
+diagnostics, response hashes, and parser-drift evidence for raw `hhad` rows.
+When the official cache is absent, stale, ambiguous, or missing these
+provenance fields, the frozen contract is `NOT_AVAILABLE` rather than guessed.
+
+The frozen three-way vector uses the fixed order `[home, draw, away]` and is a
+deterministic projection of the same frozen effective Exact cells. The
+official RQSPF odds, when all three are present in that same source row, are
+stored as a separate same-time market baseline with raw prices, overround,
+and proportional inverse-odds de-vig provenance. Missing, stale,
+ambiguous, third-party, 500, or Asian-only evidence produces
+`NOT_AVAILABLE`; no fallback or fuzzy binding is performed.
+
+Post-match settlement reads only the frozen line, vector, and same-time
+baseline against a verified 90-minute-plus-stoppage result. Formal evaluation
+persists model and official-market Log Loss, multiclass Brier, ordered RPS in
+`[home, draw, away]`, paired model-minus-market deltas, with fail-closed
+eligibility and a prospective summary containing served/paired coverage, class
+mix, per-class recall, line counts, horizon, competition/universe, and baseline
+availability. Legacy records and records without a verified official line
+remain readable but are not formal JC handicap samples.
+
 The formal JC evaluation lane is eligible only when the record is formally
 eligible, the frozen `jc_total_goals.v1` contract validates, and the result is
 a verified regulation-time artifact. It persists `jc_total_goals_log_loss`,
