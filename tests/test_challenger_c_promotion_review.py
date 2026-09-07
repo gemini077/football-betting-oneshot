@@ -11,6 +11,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 
 from challenger_c_promotion_review import (  # noqa: E402
     EXPECTED_ACCEPTED_VERSION_ROW_METRICS,
+    _market_exact_observation,
     _metric_projection_matches,
     _safety_triggers,
     run_review,
@@ -34,7 +35,47 @@ def test_review_reproduces_109_unique_metrics_and_separates_natural_growth():
     assert evidence["immutable_exact_authority"]["status"] == "PASS"
     assert evidence["market_control"]["status"] == "COMPARABLE"
     assert evidence["market_control"]["cohort_match_count"] == 107
+    market_exact = evidence["market_control"]["market_exact"]
+    assert market_exact["sample_count"] == 107
+    assert market_exact["support_count"] == 107
+    assert market_exact["out_of_support_count"] == 0
+    assert market_exact["score_space"]["explicit_cell_count"] == 441
+    assert market_exact["score_space"]["tail_bucket_present"] is False
+    exact_control = evidence["market_control"]["C_minus_market_exact"]
+    assert exact_control["n"] == 107
+    assert exact_control["iid_bootstrap_95_ci"]["resamples"] == 10_000
+    assert exact_control["moving_block_bootstrap_95_ci"]["resamples"] == 10_000
+    assert exact_control["moving_block_bootstrap_95_ci"]["block_length"] == 10
+    assert evidence["market_control"]["MARKET_EXACT_CONTROL"] in {
+        "C_BETTER",
+        "MARKET_BETTER",
+        "NEITHER_ESTABLISHED",
+    }
     assert evidence["source"]["new_matches_fetched"] is False
+
+
+def test_market_exact_observation_respects_rank_and_out_of_support():
+    projection = {
+        "matrix": {
+            (0, 0): 0.40,
+            (1, 1): 0.30,
+            (2, 0): 0.20,
+            (0, 2): 0.10,
+        },
+        "score_matrix_tail_probability": 0.02,
+    }
+
+    observed = _market_exact_observation(projection, (1, 1))
+    assert observed["actual_score_probability"] == 0.30
+    assert observed["actual_score_rank"] == 2
+    assert observed["exact_top1"] is False
+    assert observed["exact_top3"] is True
+    assert observed["out_of_support"] is False
+
+    unsupported = _market_exact_observation(projection, (3, 0))
+    assert unsupported["actual_score_probability"] is None
+    assert unsupported["actual_score_rank"] is None
+    assert unsupported["out_of_support"] is True
 
 
 def test_expected_metric_projection_is_strict():

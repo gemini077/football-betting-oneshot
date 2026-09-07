@@ -63,6 +63,8 @@ IID_BOOTSTRAP_SEED = 221_1001
 BLOCK_BOOTSTRAP_SEED = 221_1002
 MARKET_BRIER_SEED = 221_1891
 MARKET_LOGLOSS_SEED = 221_1892
+MARKET_EXACT_IID_SEED = 221_1901
+MARKET_EXACT_BLOCK_SEED = 221_1902
 EXACT_MAX_GOALS = 12
 EXACT_CELL_COUNT = (EXACT_MAX_GOALS + 1) ** 2
 EXACT_SUM_TOLERANCE = 1e-9
@@ -1228,6 +1230,135 @@ def _market_observation(probabilities: Mapping[str, float], actual: tuple[int, i
     }
 
 
+def _market_exact_observation(projection: Mapping[str, Any], actual: tuple[int, int]) -> dict[str, Any]:
+    """Score one actual result against the accepted finite Market score matrix."""
+
+    matrix = projection.get("matrix")
+    if not isinstance(matrix, Mapping):
+        raise MarketAuditError("MARKET_SCORE_MATRIX_MISSING")
+    ranked = sorted(
+        ((tuple(score), float(probability)) for score, probability in matrix.items()),
+        key=lambda item: (-item[1], item[0][0], item[0][1]),
+    )
+    if not ranked:
+        raise MarketAuditError("MARKET_SCORE_MATRIX_EMPTY")
+    rank_by_score = {score: rank for rank, (score, _) in enumerate(ranked, start=1)}
+    actual_probability = matrix.get(actual)
+    supported = actual_probability is not None and float(actual_probability) > 0.0
+    actual_probability_value = float(actual_probability) if supported else None
+    return {
+        "actual_score_probability": actual_probability_value,
+        "exact_nll": -math.log(max(MARKET_EPSILON, actual_probability_value)) if supported else None,
+        "actual_score_rank": rank_by_score.get(actual) if supported else None,
+        "exact_top1": bool(supported and actual == ranked[0][0]),
+        "exact_top3": bool(supported and actual in {score for score, _ in ranked[:3]}),
+        "top1_score": _score_text(ranked[0][0]),
+        "top1_probability": ranked[0][1],
+        "top3_scores": [_score_text(score) for score, _ in ranked[:3]],
+        "top5_scores": [_score_text(score) for score, _ in ranked[:5]],
+        "one_one_top1": ranked[0][0] == (1, 1),
+        "score_matrix_tail_probability": _number(projection.get("score_matrix_tail_probability")),
+        "out_of_support": not supported,
+    }
+
+
+def _score_count_order(counts: Mapping[str, int]) -> dict[str, int]:
+    return dict(sorted(
+        ((str(score), int(count)) for score, count in counts.items()),
+        key=lambda item: _score_pair(item[0]) or (math.inf, math.inf),
+    ))
+
+
+def _market_exact_aggregate(observations: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+    rows = list(observations)
+    supported = [row for row in rows if not row.get("out_of_support") and _number(row.get("exact_nll")) is not None]
+    ranks = [float(row["actual_score_rank"]) for row in supported if row.get("actual_score_rank") is not None]
+    tail_values = [
+        float(row["score_matrix_tail_probability"])
+        for row in rows
+        if _number(row.get("score_matrix_tail_probability")) is not None
+    ]
+    top1_counts = Counter(str(row["top1_score"]) for row in rows if row.get("top1_score"))
+    top3_counts = Counter(
+        str(score)
+        for row in rows
+        for score in (row.get("top3_scores") or [])
+        if score
+    )
+    base = {
+        "sample_count": len(rows),
+        "support_count": len(supported),
+        "out_of_support_count": len(rows) - len(supported),
+        "support_rate": len(supported) / len(rows) if rows else None,
+        "nll": statistics.fmean(float(row["exact_nll"]) for row in supported) if supported else None,
+        "mean_probability_assigned_to_actual_score": statistics.fmean(
+            float(row["actual_score_probability"]) for row in supported
+        ) if supported else None,
+        "top1_hit_rate": statistics.fmean(float(row["exact_top1"]) for row in supported) if supported else None,
+        "top3_hit_rate": statistics.fmean(float(row["exact_top3"]) for row in supported) if supported else None,
+        "actual_score_rank": _quantiles(ranks),
+        "mean_actual_score_rank": statistics.fmean(ranks) if ranks else None,
+        "one_one_top1_share": statistics.fmean(float(row["one_one_top1"]) for row in rows) if rows else None,
+        "top1_score_counts": _score_count_order(top1_counts),
+        "top3_score_counts": _score_count_order(top3_counts),
+        "top1_score_support_size": len(top1_counts),
+    }
+    base["score_space"] = {
+        "home_goals_min": 0,
+        "home_goals_max": MARKET_MAX_GOALS,
+        "away_goals_min": 0,
+        "away_goals_max": MARKET_MAX_GOALS,
+        "explicit_cell_count": (MARKET_MAX_GOALS + 1) ** 2,
+        "representation": "finite normalized independent-Poisson matrix",
+        "tail_bucket_present": False,
+        "tail_semantics": "raw Poisson mass beyond the explicit matrix is reported as score_matrix_tail_probability and is not an explicit scored cell",
+    }
+    base["tail"] = {
+        "mean_omitted_probability": statistics.fmean(tail_values) if tail_values else None,
+        "max_omitted_probability": max(tail_values) if tail_values else None,
+        "min_omitted_probability": min(tail_values) if tail_values else None,
+    }
+    return base
+
+
+def _market_exact_delta_summary(values: Sequence[float], *, support_complete: bool) -> dict[str, Any]:
+    values = [float(value) for value in values]
+    iid = iid_bootstrap_summary(values, seed=MARKET_EXACT_IID_SEED)
+    block = moving_block_bootstrap_summary(values, seed=MARKET_EXACT_BLOCK_SEED)
+    iid_ci = iid.get("ci95") or [None, None]
+    block_ci = block.get("ci95") or [None, None]
+    mean = statistics.fmean(values) if values else None
+    c_better = bool(
+        support_complete
+        and mean is not None
+        and mean < 0.0
+        and _number(iid_ci[1]) is not None
+        and _number(block_ci[1]) is not None
+        and iid_ci[1] < 0.0
+        and block_ci[1] < 0.0
+    )
+    market_better = bool(
+        support_complete
+        and mean is not None
+        and mean > 0.0
+        and _number(iid_ci[0]) is not None
+        and _number(block_ci[0]) is not None
+        and iid_ci[0] > 0.0
+        and block_ci[0] > 0.0
+    )
+    return {
+        "metric": "exact_nll",
+        "direction": "C - Market; lower is better",
+        "n": len(values),
+        "mean": mean,
+        "median": statistics.median(values) if values else None,
+        "iid_bootstrap_95_ci": iid,
+        "moving_block_bootstrap_95_ci": block,
+        "support_complete": support_complete,
+        "control": "C_BETTER" if c_better else "MARKET_BETTER" if market_better else "NEITHER_ESTABLISHED",
+    }
+
+
 def _market_aggregate(observations: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     rows = list(observations)
     if not rows:
@@ -1286,7 +1417,9 @@ def _build_market_control(
         if baseline.get("status") != "EVALUABLE":
             failures[str(baseline.get("reason") or "MARKET_BASELINE_NOT_EVALUABLE")] += 1
             continue
-        market = _market_observation(baseline["projection"]["probabilities"], actual)
+        projection = baseline["projection"]
+        market = _market_observation(projection["probabilities"], actual)
+        market_exact = _market_exact_observation(projection, actual)
         evaluated.append({
             "pair_id": pair.get("pair_id"),
             "match_id": pair.get("match_id"),
@@ -1298,8 +1431,9 @@ def _build_market_control(
             "ou_raw_row_count": ou.get("raw_row_count"),
             "ou_valid_bookmaker_count": ou.get("valid_bookmaker_count"),
             "market": market,
+            "market_exact": market_exact,
             "market_projection": {
-                key: baseline["projection"][key]
+                key: projection[key]
                 for key in ("lambda_home", "lambda_away", "lambda_total", "btts_yes", "total_over_2_5", "score_matrix_tail_probability")
             },
         })
@@ -1309,6 +1443,10 @@ def _build_market_control(
             "reason": ";".join(f"{key}={value}" for key, value in sorted(failures.items())) or "NO_EVALUABLE_MARKET_ROWS",
             "cohort_match_count": 0,
             "failure_counts": dict(sorted(failures.items())),
+            "market_exact": _market_exact_aggregate([]),
+            "C_minus_market_exact": _market_exact_delta_summary([], support_complete=False),
+            "market_exact_control": "NEITHER_ESTABLISHED",
+            "MARKET_EXACT_CONTROL": "NEITHER_ESTABLISHED",
             "paired_rows": [],
         }
     evaluated_ids = {item["pair_id"] for item in evaluated}
@@ -1319,6 +1457,25 @@ def _build_market_control(
     c_log_loss = [float(c["log_loss"]) - float(m["log_loss"]) for c, m in zip(c_rows, market_rows)]
     brier_delta = _delta_summary(c_brier, seed=MARKET_BRIER_SEED)
     log_loss_delta = _delta_summary(c_log_loss, seed=MARKET_LOGLOSS_SEED)
+    c_observations_by_id = {
+        row.get("pair_id"): row["c_observation"]
+        for row in rows
+        if row.get("pair_id") in evaluated_ids
+    }
+    exact_deltas: list[float] = []
+    for item in evaluated:
+        c_observation = c_observations_by_id[item["pair_id"]]
+        c_exact_nll = float(c_observation["exact_nll"])
+        market_exact_nll = _number(item["market_exact"].get("exact_nll"))
+        item["C_exact_nll"] = c_exact_nll
+        item["C_minus_market_exact_nll"] = c_exact_nll - market_exact_nll if market_exact_nll is not None else None
+        if market_exact_nll is not None:
+            exact_deltas.append(c_exact_nll - market_exact_nll)
+    market_exact = _market_exact_aggregate([item["market_exact"] for item in evaluated])
+    market_exact_delta = _market_exact_delta_summary(
+        exact_deltas,
+        support_complete=(market_exact["out_of_support_count"] == 0 and len(exact_deltas) == len(evaluated)),
+    )
     dominates = (
         brier_delta["iid_bootstrap_95_ci"]["ci95"][0] is not None
         and log_loss_delta["iid_bootstrap_95_ci"]["ci95"][0] is not None
@@ -1337,6 +1494,10 @@ def _build_market_control(
         "C": _market_aggregate(c_rows),
         "market": _market_aggregate(market_rows),
         "C_minus_market": {"brier": brier_delta, "log_loss": log_loss_delta},
+        "market_exact": market_exact,
+        "C_minus_market_exact": market_exact_delta,
+        "market_exact_control": market_exact_delta["control"],
+        "MARKET_EXACT_CONTROL": market_exact_delta["control"],
         "contract": {
             "source": "Issue #189 accepted Market-only contract / PR #190",
             "one_x2": "same-time frozen 1X2 proportional inverse-odds de-vig; equal-weight valid-bookmaker consensus",
@@ -1916,6 +2077,9 @@ def render_report(evidence: Mapping[str, Any]) -> str:
     primary = evidence["primary_exact_nll"]
     one_x_two = evidence["one_x_two_C_vs_champion"]
     market = evidence["market_control"]
+    market_exact = market.get("market_exact") or {}
+    market_exact_delta = market.get("C_minus_market_exact") or {}
+    market_exact_control = market.get("MARKET_EXACT_CONTROL", market.get("market_exact_control"))
     lines = [
         f"# {REVIEW_ID}",
         "",
@@ -1968,6 +2132,18 @@ def render_report(evidence: Mapping[str, Any]) -> str:
         f"- Credible Market dominance on both 1X2 scores: `{market.get('market_dominates_c_on_both_1x2_scores')}`.",
         "- Contract: same-time frozen 1X2 proportional inverse-odds de-vig/equal-bookmaker consensus; positive HK water to decimal; exact quarter-line settlement; per-book total-intensity solve with median; home-share solve; rho=0; AH held out; no closing quote or outcome-conditioned reconstruction.",
         "",
+        "## EXACT_REPAIR_REQUIRED: Market-only Exact control",
+        "",
+        f"- Market-only Exact sample/support: `{market_exact.get('sample_count')}/{market_exact.get('support_count')}`; out-of-support actual scores: `{market_exact.get('out_of_support_count')}`.",
+        f"- Market Exact NLL: `{_format_number(market_exact.get('nll'))}`; mean p(actual): `{_format_number(market_exact.get('mean_probability_assigned_to_actual_score'))}`; Top1: `{_format_number(market_exact.get('top1_hit_rate'))}`; Top3: `{_format_number(market_exact.get('top3_hit_rate'))}`.",
+        f"- Market actual-score rank P10/P25/P50/P75/P90: `{json.dumps(market_exact.get('actual_score_rank'), sort_keys=True)}`; mean rank: `{_format_number(market_exact.get('mean_actual_score_rank'))}`.",
+        f"- Market 1-1 Top1 share: `{_format_number(market_exact.get('one_one_top1_share'))}`; Top-score distribution: `{json.dumps(market_exact.get('top1_score_counts'), ensure_ascii=False, sort_keys=True)}`.",
+        f"- Score space: `{json.dumps(market_exact.get('score_space'), ensure_ascii=False, sort_keys=True)}`; tail summary: `{json.dumps(market_exact.get('tail'), sort_keys=True)}`.",
+        f"- C-minus-Market Exact NLL mean/median: `{_format_number(market_exact_delta.get('mean'))}` / `{_format_number(market_exact_delta.get('median'))}`.",
+        f"- C-minus-Market Exact IID 10,000x 95% CI: `{json.dumps(((market_exact_delta.get('iid_bootstrap_95_ci') or {}).get('ci95')), sort_keys=True)}`; moving-block 95% CI: `{json.dumps(((market_exact_delta.get('moving_block_bootstrap_95_ci') or {}).get('ci95')), sort_keys=True)}`.",
+        f"- `MARKET_EXACT_CONTROL`: **`{market_exact_control}`**; support complete: `{market_exact_delta.get('support_complete')}`.",
+        "- Product consequence: this is secondary/control evidence only; the preregistered 109-match C-vs-Champion promotion decision remains unchanged.",
+        "",
         "## Slices",
         "",
         "Slices are descriptive only. Every slice below with n < 10 is explicitly `INSUFFICIENT_SAMPLE`; no slice tunes or changes a formula.",
@@ -1981,7 +2157,7 @@ def render_report(evidence: Mapping[str, Any]) -> str:
         "",
         "## Required paired artifact and final decision",
         "",
-        f"- `summary.json` contains `{len(evidence['paired_rows'])}` formal paired rows sufficient to recompute the primary delta, both bootstrap inputs, LOO, 1X2 deltas, and secondary metrics.",
+        f"- `summary.json` contains `{len(evidence['paired_rows'])}` formal paired rows and `{len(market.get('paired_rows', []))}` same-time Market-control rows; the repair rows include Market Exact scoring and both fixed bootstrap inputs.",
         f"- Decision checks: `{json.dumps(evidence['decision_checks'], ensure_ascii=False, sort_keys=True)}`.",
         f"- Final decision: **`{evidence['decision']}`**.",
         "- STOP: research-only evidence; no merge and no automatic promotion.",

@@ -45,6 +45,18 @@ C - Champion; lower NLL is better. IID bootstrap is 10,000 resamples with the fi
 - Credible Market dominance on both 1X2 scores: `False`.
 - Contract: same-time frozen 1X2 proportional inverse-odds de-vig/equal-bookmaker consensus; positive HK water to decimal; exact quarter-line settlement; per-book total-intensity solve with median; home-share solve; rho=0; AH held out; no closing quote or outcome-conditioned reconstruction.
 
+## EXACT_REPAIR_REQUIRED: Market-only Exact control
+
+- Market-only Exact sample/support: `107/107`; out-of-support actual scores: `0`.
+- Market Exact NLL: `3.037953804`; mean p(actual): `0.061950717`; Top1: `0.112149533`; Top3: `0.271028037`.
+- Market actual-score rank P10/P25/P50/P75/P90: `{"P10": 1.0, "P25": 3.0, "P50": 7.0, "P75": 11.0, "P90": 16.200000000000017}`; mean rank: `8.355140187`.
+- Market 1-1 Top1 share: `0.514018692`; Top-score distribution: `{"0-1": 3, "0-2": 8, "0-4": 1, "1-0": 12, "1-1": 55, "1-2": 7, "2-0": 10, "2-1": 8, "3-0": 3}`.
+- Score space: `{"away_goals_max": 20, "away_goals_min": 0, "explicit_cell_count": 441, "home_goals_max": 20, "home_goals_min": 0, "representation": "finite normalized independent-Poisson matrix", "tail_bucket_present": false, "tail_semantics": "raw Poisson mass beyond the explicit matrix is reported as score_matrix_tail_probability and is not an explicit scored cell"}`; tail summary: `{"max_omitted_probability": 7.063422846620426e-09, "mean_omitted_probability": 6.777590223214406e-11, "min_omitted_probability": 0.0}`.
+- C-minus-Market Exact NLL mean/median: `0.010153944` / `-0.003159180`.
+- C-minus-Market Exact IID 10,000x 95% CI: `[-0.02010957746688966, 0.04016001135879877]`; moving-block 95% CI: `[-0.024087195821039104, 0.04747592502254446]`.
+- `MARKET_EXACT_CONTROL`: **`NEITHER_ESTABLISHED`**; support complete: `True`.
+- Product consequence: this is secondary/control evidence only; the preregistered 109-match C-vs-Champion promotion decision remains unchanged.
+
 ## Slices
 
 Slices are descriptive only. Every slice below with n < 10 is explicitly `INSUFFICIENT_SAMPLE`; no slice tunes or changes a formula.
@@ -99,7 +111,7 @@ Slices are descriptive only. Every slice below with n < 10 is explicitly `INSUFF
 
 ## Required paired artifact and final decision
 
-- `summary.json` contains `109` formal paired rows sufficient to recompute the primary delta, both bootstrap inputs, LOO, 1X2 deltas, and secondary metrics.
+- `summary.json` contains `109` formal paired rows and `107` same-time Market-control rows; the repair rows include Market Exact scoring and both fixed bootstrap inputs.
 - Decision checks: `{"1x2_no_ci_entirely_worse": true, "1x2_point_estimates_not_worse": true, "exact_block_ci_upper_negative": false, "exact_iid_ci_upper_negative": false, "exact_mean_delta_negative": true, "loo_no_sign_flip": true, "market_control_not_credible_both_score_dominance": true}`.
 - Final decision: **`C_PROMOTION_REVIEW_INCONCLUSIVE`**.
 - STOP: research-only evidence; no merge and no automatic promotion.
