@@ -1,4 +1,5 @@
 import json
+import csv
 import math
 from pathlib import Path
 import sys
@@ -9,6 +10,8 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
+import solution_first_goal_intensity_shadow as shadow_module  # noqa: E402
+
 from accepted_market_lambda import (  # noqa: E402
     market_lambdas_from_snapshot,
     poisson_pmf,
@@ -16,9 +19,12 @@ from accepted_market_lambda import (  # noqa: E402
 from market_side_shadow import load_persisted_pairs  # noqa: E402
 from solution_first_goal_intensity_shadow import (  # noqa: E402
     DEFAULT_PAIR_ROOT,
+    EXTERNAL_SOURCE_SCOPE,
     FEATURE_NAMES,
+    FEATURE_EVENT_SCOPE,
     FEATURE_SCHEMA,
     FIXED_107_PAIR_IDS,
+    LIVE_SOURCE_SCOPE,
     MODEL_BACKEND,
     MODEL_FAMILY,
     XGB_PARAMS,
@@ -27,6 +33,9 @@ from solution_first_goal_intensity_shadow import (  # noqa: E402
     _build_features,
     _exclude_fixed_107_rows,
     _fixed_107_identity_keys,
+    _live_feature_contract,
+    _live_features,
+    _load_external_rows,
     _load_authoritative_prediction,
     _load_legal_snapshot,
     _score_output,
@@ -74,17 +83,147 @@ def test_known_poisson_tail_is_omitted_raw_mass_not_represented_mass():
     assert expected_tail > 0.0
 
 
-def test_train_and_live_feature_contract_is_symmetric():
-    train = _build_features(_form(), source_scope="football_data_all_available_events_v1")
-    live = _build_features(_form(), source_scope="nowscore_all_events_v1")
+def _frozen_truth_document(form: dict[str, dict[str, float]]) -> dict:
+    return {
+        "input": {
+            "frozen_competition_truth": {
+                "status": "VERIFIED",
+                "source": "authoritative_historical_results",
+                "coverage_status": "SUPPORTED",
+                "historical_challenger_allowed": True,
+                "competition_id": "competition:england-premier-league",
+                "scope_key": "football-data:E0",
+                "training_source_scope": EXTERNAL_SOURCE_SCOPE,
+                "feature_source_scope": EXTERNAL_SOURCE_SCOPE,
+                "history_key": "(league, exact_source_team_name)",
+                "event_scope": FEATURE_EVENT_SCOPE,
+                "recent_form": form,
+            }
+        }
+    }
+
+
+def test_train_and_live_feature_contract_is_source_scope_symmetric():
+    train = _build_features(_form(), source_scope=EXTERNAL_SOURCE_SCOPE, scope_key="football-data:E0")
+    live = _live_features(
+        {"shuju": {"recent_form": {"home_overall": {"matches": 10, "goals_for": 99, "goals_against": 1}}}},
+        _frozen_truth_document(_form()),
+    )
     assert train is not None and live is not None
     assert train["schema"] == live["schema"] == FEATURE_SCHEMA
-    assert train["event_scope"] == live["event_scope"] == "ALL_PREMATCH_EVENTS"
+    assert train["event_scope"] == live["event_scope"] == FEATURE_EVENT_SCOPE
+    assert train["scope_key"] == live["scope_key"] == "football-data:E0"
     assert train["names"] == live["names"]
     assert train["values"] == pytest.approx(live["values"])
     assert train["fallback_home_venue"] == live["fallback_home_venue"]
     assert train["fallback_away_venue"] == live["fallback_away_venue"]
-    assert train["source_scope"] != live["source_scope"]
+    assert train["source_scope"] == EXTERNAL_SOURCE_SCOPE
+    assert live["source_scope"] == LIVE_SOURCE_SCOPE
+
+
+def test_live_feature_scope_requires_frozen_competition_truth_not_nowscore_all_events():
+    snapshot = {"shuju": {"recent_form": _form()}}
+    document = {"input": {"prematch_fundamentals": {"recent_form": _form()}}}
+    features, reason = _live_feature_contract(snapshot, document)
+    assert features is None
+    assert reason == "LIVE_COMPETITION_TRUTH_MISSING"
+
+
+def test_live_feature_scope_rejects_unsupported_frozen_competition():
+    document = _frozen_truth_document(_form())
+    truth = document["input"]["frozen_competition_truth"]
+    truth["coverage_status"] = "UNSUPPORTED"
+    features, reason = _live_feature_contract({"shuju": {"recent_form": _form()}}, document)
+    assert features is None
+    assert reason == "UNSUPPORTED_COMPETITION_SCOPE"
+
+
+def test_live_feature_scope_requires_exact_frozen_base_job_authority(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    job_root = tmp_path / "base_jobs"
+    job_root.mkdir()
+    (job_root / "2026-09-07.json").write_text(
+        json.dumps(
+            {
+                "jobs": [
+                    {
+                        "match_id": "M-1",
+                        "kickoff": "2026-09-08T02:45:00+08:00",
+                        "coverage": {
+                            "status": "SUPPORTED",
+                            "competition_id": "competition:england-premier-league",
+                            "scope_key": "football-data:E0",
+                            "historical_challenger_allowed": True,
+                        },
+                        "coverage_status": "SUPPORTED",
+                        "historical_challenger_allowed": True,
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(shadow_module, "BASE_JOB_ROOT", job_root)
+    shadow_module._frozen_base_job_records.cache_clear()
+    pair = {"match_id": "M-1", "kickoff_at": "2026-09-08T02:45:00+08:00"}
+    features, reason = _live_feature_contract({}, _frozen_truth_document(_form()), pair)
+    assert reason == "OK"
+    assert features is not None
+    assert features["scope_key"] == "football-data:E0"
+
+    mismatched = _frozen_truth_document(_form())
+    mismatched["input"]["frozen_competition_truth"]["scope_key"] = "football-data:E1"
+    features, reason = _live_feature_contract({}, mismatched, pair)
+    assert features is None
+    assert reason == "TRAIN_LIVE_SCOPE_MISMATCH"
+
+
+def _write_external_scope_fixture(path: Path, league: str, home_attack: int) -> None:
+    rows = []
+    for index, (home, away, home_goals, away_goals) in enumerate(
+        (
+            ("A", "X", home_attack, 0),
+            ("Y", "A", 0, home_attack),
+            ("A", "Z", home_attack, 0),
+            ("Q", "B", 0, 1),
+            ("R", "B", 0, 1),
+            ("S", "B", 0, 1),
+            ("A", "B", 1, 1),
+        ),
+        start=1,
+    ):
+        rows.append(
+            {
+                "Div": league,
+                "Date": f"{index:02d}/08/2022",
+                "Time": "12:00",
+                "HomeTeam": home,
+                "AwayTeam": away,
+                "FTHG": home_goals,
+                "FTAG": away_goals,
+                "AvgH": "2.0",
+                "AvgD": "3.5",
+                "AvgA": "4.0",
+                "Avg>2.5": "2.0",
+                "Avg<2.5": "2.0",
+            }
+        )
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=rows[0].keys())
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+def test_external_training_history_is_keyed_by_same_league_source_scope(tmp_path: Path):
+    _write_external_scope_fixture(tmp_path / "2223-E0.csv", "E0", 3)
+    _write_external_scope_fixture(tmp_path / "2223-E1.csv", "E1", 0)
+    rows, manifest = _load_external_rows(tmp_path)
+    targets = {(row["league"], row["home"]): row for row in rows if row["home"] == "A" and row["away"] == "B"}
+    assert set(targets) == {("E0", "A"), ("E1", "A")}
+    assert targets[("E0", "A")]["features"]["scope_key"] == "football-data:E0"
+    assert targets[("E1", "A")]["features"]["scope_key"] == "football-data:E1"
+    assert targets[("E0", "A")]["features"]["names"]["home_attack_overall_rate"] == pytest.approx(3.0)
+    assert targets[("E1", "A")]["features"]["names"]["home_attack_overall_rate"] == pytest.approx(0.0)
+    assert manifest["history_key"] == "(league, exact_source_team_name)"
 
 
 def test_poisson_offset_xgboost_models_are_deterministic_and_use_base_margin():
@@ -159,19 +298,22 @@ def test_committed_shadow_artifact_is_external_pretrain_only_and_not_serving():
     summary = json.loads(SUMMARY_PATH.read_text(encoding="utf-8"))
     model = json.loads(MODEL_PATH.read_text(encoding="utf-8"))
     shadow = json.loads(SHADOW_PATH.read_text(encoding="utf-8"))
-    assert summary["decision"] == "SHADOW_CHALLENGER_WIRED"
+    assert summary["decision"] == "FAIL_CLOSED"
     assert summary["training_authority"] == "EXTERNAL_PRETRAIN_ONLY/HORIZON_TRANSFER"
     assert summary["fixed_107_outcomes_used_for_fit"] is False
     assert summary["fixed_107_identity_exclusion"]["status"] == "ENFORCED_BEFORE_TRAINING"
     assert summary["fixed_107_identity_authority"]["pair_count"] == 107
     assert summary["current_serving_changed"] is False
-    assert summary["shadow_output_count"] > 0
+    assert summary["shadow_output_count"] == 0
     assert summary["model_family"] == MODEL_FAMILY
     assert summary["backend"] == MODEL_BACKEND
     assert summary["feature_schema"] == FEATURE_SCHEMA
-    assert summary["feature_authority"]["status"] == "SHARED_CONTRACT_VERIFIED"
-    assert summary["market_contract_parity"]["status"] == "PASS"
-    assert summary["market_contract_parity"]["passed_live_rows"] == summary["market_contract_parity"]["checked_live_rows"] == summary["shadow_output_count"]
+    assert summary["feature_authority"]["status"] == "TRAINING_AUTHORITY_BLOCKED"
+    assert summary["feature_authority"]["event_scope"] == FEATURE_EVENT_SCOPE
+    assert summary["feature_authority"]["unsupported_policy"].startswith("missing, unsupported")
+    assert summary["source_level_scope_audit"]["status"] == "TRAINING_AUTHORITY_BLOCKED"
+    assert summary["market_contract_parity"]["status"] == "NOT_RUN_SCOPE_BLOCKED"
+    assert summary["market_contract_parity"]["passed_live_rows"] == summary["market_contract_parity"]["checked_live_rows"] == 0
     assert summary["feature_names"] == list(FEATURE_NAMES)
     assert summary["integrity"]["production_enabled"] is False
     assert summary["integrity"]["automatic_promotion"] is False
@@ -186,7 +328,12 @@ def test_committed_shadow_artifact_is_external_pretrain_only_and_not_serving():
 
 def test_shadow_rows_keep_frozen_prematch_contract_and_same_matrix_outputs():
     shadow = json.loads(SHADOW_PATH.read_text(encoding="utf-8"))
-    assert shadow["rows"]
+    if not shadow["rows"]:
+        summary = json.loads(SUMMARY_PATH.read_text(encoding="utf-8"))
+        assert summary["decision"] == "FAIL_CLOSED"
+        assert sum(summary["shadow_output_skipped"].values()) > 0
+        assert any(key in summary["shadow_output_skipped"] for key in ("UNSUPPORTED_COMPETITION_SCOPE", "LIVE_COMPETITION_TRUTH_MISSING", "FROZEN_COMPETITION_TRUTH_SOURCE_MISSING"))
+        return
     for row in shadow["rows"][:5]:
         assert row["source_cutoff"] < row["kickoff_at"]
         assert row["prediction_id"].startswith("SFGI-")
@@ -195,7 +342,8 @@ def test_shadow_rows_keep_frozen_prematch_contract_and_same_matrix_outputs():
         assert row["production_enabled"] is False
         assert row["user_visible"] is False
         assert row["feature_contract"]["training_live_vector_builder"] == "_build_features"
-        assert row["feature_contract"]["event_scope"] == "ALL_PREMATCH_EVENTS"
+        assert row["feature_contract"]["event_scope"] == FEATURE_EVENT_SCOPE
+        assert row["feature_contract"]["scope_key"].startswith("football-data:")
         assert row["prediction"]["rho"] == 0.0
         assert len(row["prediction"]["score_matrix"]) == 169
         assert row["prediction"]["exact_top1"] == row["prediction"]["exact_top3"][0]

@@ -13,37 +13,37 @@
       "n": 0
     },
     "market": {
-      "1x2_brier": 0.598124531808663,
-      "btts_brier": 0.2435966275017214,
-      "exact_nll": 2.8525426832551757,
-      "exact_top1": 0.12564671101256467,
-      "exact_top3": 0.3340724316334072,
-      "exact_top5": 0.500369549150037,
+      "1x2_brier": 0.5979217407923939,
+      "btts_brier": 0.24363164298102957,
+      "exact_nll": 2.8519237156164365,
+      "exact_top1": 0.12601927353595255,
+      "exact_top3": 0.335063009636768,
+      "exact_top5": 0.5018532246108228,
       "lambda_calibration": {
         "away": {
-          "bias_observed_minus_predicted": 0.004606750044824835,
-          "mae": 0.8212712896793999,
-          "observed_mean": 1.2424242424242424,
-          "predicted_mean": 1.2378174923794176
+          "bias_observed_minus_predicted": 0.0028848831705470743,
+          "mae": 0.8214599371204048,
+          "observed_mean": 1.2409191994069682,
+          "predicted_mean": 1.238034316236421
         },
         "home": {
-          "bias_observed_minus_predicted": -0.04678519752080192,
-          "mae": 0.9315705520069497,
-          "observed_mean": 1.4900221729490022,
-          "predicted_mean": 1.5368073704698042
+          "bias_observed_minus_predicted": -0.04862465444501779,
+          "mae": 0.9317949330986132,
+          "observed_mean": 1.4885100074128985,
+          "predicted_mean": 1.5371346618579163
         },
         "total": {
-          "bias_observed_minus_predicted": -0.042178447475963055,
-          "mae": 1.2498378468676439,
-          "observed_mean": 2.7324464153732446,
-          "predicted_mean": 2.774624862849208
+          "bias_observed_minus_predicted": -0.04573977127445813,
+          "mae": 1.2501075572999674,
+          "observed_mean": 2.7294292068198667,
+          "predicted_mean": 2.775168978094325
         }
       },
-      "mean_actual_score_probability": 0.07189338111189948,
-      "n": 1353,
-      "one_one_actual_rate": 0.12564671101256467,
-      "one_one_top_score_share": 0.5838876570583887,
-      "total_over_2_5_brier": 0.2438421370159088
+      "mean_actual_score_probability": 0.07195530665567532,
+      "n": 1349,
+      "one_one_actual_rate": 0.12601927353595255,
+      "one_one_top_score_share": 0.5826538176426983,
+      "total_over_2_5_brier": 0.2437590844197868
     }
   },
   "controls_retained": [
@@ -52,10 +52,10 @@
     "Challenger C"
   ],
   "current_serving_changed": false,
-  "decision": "SHADOW_CHALLENGER_WIRED",
+  "decision": "FAIL_CLOSED",
   "external_source_manifest": {
-    "eligible_rows": 9015,
-    "feature_scope": "ALL_PREMATCH_EVENTS",
+    "eligible_rows": 8993,
+    "feature_scope": "COMPETITION_SCOPED_PREMATCH_EVENTS",
     "files": [
       {
         "bytes": 139305,
@@ -251,23 +251,44 @@
       }
     ],
     "fixed_107_rows_excluded_by_identity": 0,
-    "history_key": "exact_source_team_name_across_all_committed_files; no same-league filter",
+    "history_key": "(league, exact_source_team_name)",
     "odds_semantics": "Avg 1X2 plus Avg O/U2.5 where available, B365 fallback; source timing is preserved as historical timing and is not relabeled as an FBOS horizon.",
     "raw_match_rows": 9290,
+    "scope_keys": [
+      "football-data:D1",
+      "football-data:E0",
+      "football-data:E1",
+      "football-data:F1",
+      "football-data:I1",
+      "football-data:SP1"
+    ],
     "skipped": {},
     "source": "Football-Data.co.uk",
+    "source_scope": "football_data_league_v1",
     "training_cutoff": "2026-08-30T19:30:00+08:00"
   },
   "feature_authority": {
-    "event_scope": "ALL_PREMATCH_EVENTS",
-    "schema": "prematch_recent_form_all_events_v2",
+    "blocked_reason": "NO_VERIFIED_FROZEN_COMPETITION_TRUTH_FOR_PROSPECTIVE_LIVE_SCOPE",
+    "event_scope": "COMPETITION_SCOPED_PREMATCH_EVENTS",
+    "live": {
+      "scope_key": "football-data:<LEAGUE_CODE>",
+      "source_scope": "frozen_competition_truth_v1",
+      "truth": "frozen verified competition truth"
+    },
+    "schema": "prematch_recent_form_competition_scoped_v3",
     "shared_vector_builder": "_build_features",
     "source_scopes": [
-      "football_data_all_available_events_v1",
-      "nowscore_all_events_v1"
+      "football_data_league_v1",
+      "frozen_competition_truth_v1"
     ],
-    "status": "SHARED_CONTRACT_VERIFIED",
-    "train_live_semantics": "same four-block aggregate and venue fallback; source coverage remains HORIZON_TRANSFER"
+    "status": "TRAINING_AUTHORITY_BLOCKED",
+    "train": {
+      "history_key": "(league, exact_source_team_name)",
+      "scope_key": "football-data:<LEAGUE_CODE>",
+      "source_scope": "football_data_league_v1"
+    },
+    "train_live_semantics": "same four-block aggregate, venue fallback, explicit competition/league scope, and exact chronology contract",
+    "unsupported_policy": "missing, unsupported, cup, continental, and national competition coverage fails closed; never labelled ALL_EVENTS"
   },
   "feature_names": [
     "home_attack_venue_rate",
@@ -283,10 +304,10 @@
     "home_overall_matches_norm",
     "away_overall_matches_norm"
   ],
-  "feature_schema": "prematch_recent_form_all_events_v2",
+  "feature_schema": "prematch_recent_form_competition_scoped_v3",
   "feature_schema_definition": {
-    "contract": "one shared four-block aggregate of the latest <=10 pre-kickoff events in the source-native all-events stream; venue blocks are a filtered view of the same stream",
-    "external_source": "immutable Football-Data rows merged across the committed source files before chronological aggregation; no same-league filter",
+    "contract": "one shared four-block aggregate of the latest <=10 pre-kickoff events within one explicit competition/league scope; venue blocks are a filtered view of that same scoped stream",
+    "external_source": "immutable Football-Data rows keyed by (league, exact_source_team_name) before chronological aggregation; histories never cross league files",
     "fields": [
       "home_attack_venue_rate",
       "home_defence_venue_rate",
@@ -301,11 +322,11 @@
       "home_overall_matches_norm",
       "away_overall_matches_norm"
     ],
-    "live_source": "immutable prematch Nowscore shuju.recent_form, accepted repository scope ALL_EVENTS",
+    "live_source": "frozen verified competition truth with explicit competition_id, scope_key, chronology, and historical-challenger coverage; Nowscore aggregate recent_form is not an eligible feature source",
     "missingness": "venue block requires 3 prior matches; otherwise same-team overall block is used; rows without 3 overall matches are excluded",
     "result_leakage_guard": "features are read before source_cutoff in live and before current kickoff in external chronological construction; source event rows are immutable prematch inputs",
-    "scope_guard": "the model consumes only the shared ALL_EVENTS contract; source-specific coverage remains HORIZON_TRANSFER and is not promotion evidence",
-    "version": "prematch_recent_form_all_events_v2",
+    "scope_guard": "train and live must carry the same explicit league scope contract; missing, unsupported, cup, continental, or national coverage fails closed instead of being labelled ALL_EVENTS",
+    "version": "prematch_recent_form_competition_scoped_v3",
     "window": 10
   },
   "fixed_107_identity_authority": {
@@ -367,15 +388,16 @@
     "result_leakage": false,
     "same_time_market_lambda_for_live": true,
     "source": "Football-Data.co.uk",
-    "status": "PASS",
+    "status": "FAIL_CLOSED",
     "user_visible": false
   },
   "market_contract_parity": {
-    "checked_live_rows": 97,
+    "checked_live_rows": 0,
     "contract": "accepted_same_time_market_lambda_v1",
-    "passed_live_rows": 97,
+    "passed_live_rows": 0,
+    "prior_accepted_evidence": "5ba8f8be000911b91b6bfdf7983d16c485dcb7ed",
     "source": "Issue #189 / PR #190",
-    "status": "PASS"
+    "status": "NOT_RUN_SCOPE_BLOCKED"
   },
   "market_offset": {
     "away": "base_margin=log(lambda_market_away)",
@@ -384,11 +406,11 @@
     "source": "Issue #189 / PR #190"
   },
   "milestone": "SOLUTION-FIRST-GOAL-INTENSITY-CHALLENGER-1",
-  "model_digest": "37e5938dfc37d5c9c8c0b553f9bc412db2cea34839ab07fc8d9b6a8ffc5a8a63",
+  "model_digest": "c0027055c68e7510da030e211ff51fa02d32ff926ddd411955a7101d694017af",
   "model_family": "market_offset_goal_intensity_boosted_poisson_v1",
   "native_history_audit": {
     "decision": "NATIVE_HISTORY_INSUFFICIENT_USE_EXTERNAL",
-    "eligible_count": 1,
+    "eligible_count": 0,
     "evaluation_cutoff": "2026-08-30T19:30:00+08:00",
     "market_contract_validation": "deferred_until_native_route_is_selected",
     "result_matching": {
@@ -403,10 +425,11 @@
       "result_identity_conflicts": 0
     }
   },
-  "reviewed_at": "2026-09-07T07:55:56.106659+00:00",
+  "reviewed_at": "2026-09-07T09:26:41.422869+00:00",
   "schema_version": "solution_first_goal_intensity_shadow_1.v1",
-  "shadow_output_count": 97,
+  "shadow_output_count": 0,
   "shadow_output_skipped": {
+    "UNSUPPORTED_COMPETITION_SCOPE": 97,
     "not_future_prospective": 1254
   },
   "source": {
@@ -414,74 +437,87 @@
     "pair_root": "data/prediction_quality/market_side_shadow_1/pairs",
     "shadow_namespace": "solution_first_goal_intensity_shadow_1"
   },
+  "source_level_scope_audit": {
+    "accepted_rows": 0,
+    "blocked_reasons": {
+      "UNSUPPORTED_COMPETITION_SCOPE": 97,
+      "not_future_prospective": 1254
+    },
+    "blocked_rows": 97,
+    "live_scope": "frozen competition truth exact scope_key",
+    "non_prospective_rows": 1254,
+    "prospective_rows": 97,
+    "status": "TRAINING_AUTHORITY_BLOCKED",
+    "train_scope": "(league, exact_source_team_name)"
+  },
   "test_metrics": {
-    "1x2_brier": 0.5978869544065502,
-    "btts_brier": 0.24358335090541502,
-    "exact_nll": 2.8524731374312684,
-    "exact_top1": 0.12416851441241686,
-    "exact_top3": 0.3340724316334072,
-    "exact_top5": 0.5025868440502587,
+    "1x2_brier": 0.5977505100257016,
+    "btts_brier": 0.2436328914770177,
+    "exact_nll": 2.8516401758996452,
+    "exact_top1": 0.12750185322461083,
+    "exact_top3": 0.335063009636768,
+    "exact_top5": 0.5040770941438102,
     "lambda_calibration": {
       "away": {
-        "bias_observed_minus_predicted": -0.0010604920293761997,
-        "mae": 0.822183922472847,
-        "observed_mean": 1.2424242424242424,
-        "predicted_mean": 1.2434847344536186
+        "bias_observed_minus_predicted": 0.0025546437859644165,
+        "mae": 0.8214907968945574,
+        "observed_mean": 1.2409191994069682,
+        "predicted_mean": 1.2383645556210037
       },
       "home": {
-        "bias_observed_minus_predicted": -0.03331658735332594,
-        "mae": 0.9294227323352535,
-        "observed_mean": 1.4900221729490022,
-        "predicted_mean": 1.5233387603023283
+        "bias_observed_minus_predicted": -0.03929786738683543,
+        "mae": 0.9302900420726709,
+        "observed_mean": 1.4885100074128985,
+        "predicted_mean": 1.527807874799734
       },
       "total": {
-        "bias_observed_minus_predicted": -0.03437707938271323,
-        "mae": 1.2496623250835486,
-        "observed_mean": 2.7324464153732446,
-        "predicted_mean": 2.7668234947559576
+        "bias_observed_minus_predicted": -0.03674322360086064,
+        "mae": 1.249670622236564,
+        "observed_mean": 2.7294292068198667,
+        "predicted_mean": 2.766172430420727
       }
     },
-    "mean_actual_score_probability": 0.07197978792072653,
-    "n": 1353,
-    "one_one_actual_rate": 0.12564671101256467,
-    "one_one_top_score_share": 0.5838876570583887,
-    "total_over_2_5_brier": 0.24373000180306126
+    "mean_actual_score_probability": 0.07207803745449073,
+    "n": 1349,
+    "one_one_actual_rate": 0.12601927353595255,
+    "one_one_top_score_share": 0.5796886582653817,
+    "total_over_2_5_brier": 0.24370454170888797
   },
-  "test_n": 1353,
+  "test_n": 1349,
   "training_authority": "EXTERNAL_PRETRAIN_ONLY/HORIZON_TRANSFER",
-  "training_n": 6310,
+  "training_n": 6295,
   "validation_metrics": {
-    "1x2_brier": 0.5853518441726231,
-    "btts_brier": 0.24744248313175993,
-    "exact_nll": 2.8586076238952396,
-    "exact_top1": 0.1390532544378698,
-    "exact_top3": 0.3380177514792899,
-    "exact_top5": 0.518491124260355,
+    "1x2_brier": 0.5857622128859348,
+    "btts_brier": 0.24747280437400312,
+    "exact_nll": 2.8591399563461453,
+    "exact_top1": 0.14232765011119347,
+    "exact_top3": 0.34099332839140106,
+    "exact_top5": 0.5174203113417346,
     "lambda_calibration": {
       "away": {
-        "bias_observed_minus_predicted": -0.012624404001864643,
-        "mae": 0.8469008310923793,
-        "observed_mean": 1.2218934911242603,
-        "predicted_mean": 1.2345178951261249
+        "bias_observed_minus_predicted": -0.0006515309048702745,
+        "mae": 0.8460038463834293,
+        "observed_mean": 1.2268346923647147,
+        "predicted_mean": 1.227486223269585
       },
       "home": {
-        "bias_observed_minus_predicted": -0.005783127786137577,
-        "mae": 0.9200606053397411,
-        "observed_mean": 1.5044378698224852,
-        "predicted_mean": 1.5102209976086227
+        "bias_observed_minus_predicted": -0.010726103480440325,
+        "mae": 0.9189940613671624,
+        "observed_mean": 1.503335804299481,
+        "predicted_mean": 1.5140619077799213
       },
       "total": {
-        "bias_observed_minus_predicted": -0.018407531788014787,
-        "mae": 1.2893824552202278,
-        "observed_mean": 2.7263313609467454,
-        "predicted_mean": 2.7447388927347607
+        "bias_observed_minus_predicted": -0.01137763438531727,
+        "mae": 1.2893238995055694,
+        "observed_mean": 2.7301704966641958,
+        "predicted_mean": 2.7415481310495133
       }
     },
-    "mean_actual_score_probability": 0.07260895213041493,
-    "n": 1352,
-    "one_one_actual_rate": 0.11908284023668639,
-    "one_one_top_score_share": 0.5673076923076923,
-    "total_over_2_5_brier": 0.2423048239795632
+    "mean_actual_score_probability": 0.07264150811605782,
+    "n": 1349,
+    "one_one_actual_rate": 0.11934766493699037,
+    "one_one_top_score_share": 0.56412157153447,
+    "total_over_2_5_brier": 0.24252233866381595
   },
-  "validation_n": 1352
+  "validation_n": 1349
 }

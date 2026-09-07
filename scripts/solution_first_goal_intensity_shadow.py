@@ -15,6 +15,7 @@ import argparse
 from collections import Counter, defaultdict
 import csv
 from datetime import datetime, timedelta, timezone
+from functools import lru_cache
 import hashlib
 import json
 import math
@@ -54,10 +55,11 @@ MILESTONE = "SOLUTION-FIRST-GOAL-INTENSITY-CHALLENGER-1"
 SCHEMA_VERSION = "solution_first_goal_intensity_shadow_1.v1"
 MODEL_FAMILY = "market_offset_goal_intensity_boosted_poisson_v1"
 MODEL_BACKEND = "xgboost_count_poisson_base_margin_v1"
-FEATURE_SCHEMA = "prematch_recent_form_all_events_v2"
+FEATURE_SCHEMA = "prematch_recent_form_competition_scoped_v3"
 TRAINING_AUTHORITY = "EXTERNAL_PRETRAIN_ONLY/HORIZON_TRANSFER"
 EXTERNAL_SOURCE = "Football-Data.co.uk"
 EXTERNAL_ROOT = ROOT / "artifacts" / "solution-first-goal-intensity-1" / "external"
+BASE_JOB_ROOT = ROOT / "data" / "base_prediction_jobs"
 OUTPUT_ROOT = ROOT / "data" / "prediction_quality" / "solution_first_goal_intensity_shadow_1"
 DEFAULT_SUMMARY = OUTPUT_ROOT / "summary.json"
 DEFAULT_REPORT = OUTPUT_ROOT / "report.md"
@@ -98,14 +100,17 @@ FEATURE_SCHEMA_DEFINITION = {
     "version": FEATURE_SCHEMA,
     "window": ROLLING_WINDOW,
     "fields": list(FEATURE_NAMES),
-    "contract": "one shared four-block aggregate of the latest <=10 pre-kickoff events in the source-native all-events stream; venue blocks are a filtered view of the same stream",
-    "live_source": "immutable prematch Nowscore shuju.recent_form, accepted repository scope ALL_EVENTS",
-    "external_source": "immutable Football-Data rows merged across the committed source files before chronological aggregation; no same-league filter",
-    "scope_guard": "the model consumes only the shared ALL_EVENTS contract; source-specific coverage remains HORIZON_TRANSFER and is not promotion evidence",
+    "contract": "one shared four-block aggregate of the latest <=10 pre-kickoff events within one explicit competition/league scope; venue blocks are a filtered view of that same scoped stream",
+    "live_source": "frozen verified competition truth with explicit competition_id, scope_key, chronology, and historical-challenger coverage; Nowscore aggregate recent_form is not an eligible feature source",
+    "external_source": "immutable Football-Data rows keyed by (league, exact_source_team_name) before chronological aggregation; histories never cross league files",
+    "scope_guard": "train and live must carry the same explicit league scope contract; missing, unsupported, cup, continental, or national coverage fails closed instead of being labelled ALL_EVENTS",
     "missingness": "venue block requires 3 prior matches; otherwise same-team overall block is used; rows without 3 overall matches are excluded",
     "result_leakage_guard": "features are read before source_cutoff in live and before current kickoff in external chronological construction; source event rows are immutable prematch inputs",
 }
-FEATURE_SOURCE_SCOPES = frozenset({"nowscore_all_events_v1", "football_data_all_available_events_v1"})
+EXTERNAL_SOURCE_SCOPE = "football_data_league_v1"
+LIVE_SOURCE_SCOPE = "frozen_competition_truth_v1"
+FEATURE_EVENT_SCOPE = "COMPETITION_SCOPED_PREMATCH_EVENTS"
+FEATURE_SOURCE_SCOPES = frozenset({EXTERNAL_SOURCE_SCOPE, LIVE_SOURCE_SCOPE})
 LEAGUE_CODES = ("E0", "E1", "D1", "I1", "SP1", "F1")
 SEASON_CODES = ("2223", "2324", "2425", "2526")
 FIXED_107_PAIR_IDS = frozenset({
@@ -327,10 +332,12 @@ def _valid_block(value: Any) -> dict[str, float] | None:
     }
 
 
-def _build_features(form: Mapping[str, Any], *, source_scope: str) -> dict[str, Any] | None:
-    """Build the same feature vector from either source's four-block contract."""
+def _build_features(form: Mapping[str, Any], *, source_scope: str, scope_key: str) -> dict[str, Any] | None:
+    """Build a feature vector only after an explicit source-level scope is attached."""
     if source_scope not in FEATURE_SOURCE_SCOPES:
         raise TrainingAuthorityBlocked(f"FEATURE_SOURCE_SCOPE_NOT_AUTHORISED:{source_scope}")
+    if not str(scope_key or "").strip():
+        raise TrainingAuthorityBlocked("FEATURE_SCOPE_KEY_MISSING")
     home_overall = _valid_block(form.get("home_overall")) or _valid_block(form.get("home_home"))
     away_overall = _valid_block(form.get("away_overall")) or _valid_block(form.get("away_away"))
     if home_overall is None or away_overall is None or home_overall["matches"] < MIN_FORM_MATCHES or away_overall["matches"] < MIN_FORM_MATCHES:
@@ -355,8 +362,9 @@ def _build_features(form: Mapping[str, Any], *, source_scope: str) -> dict[str, 
     }
     return {
         "schema": FEATURE_SCHEMA,
-        "event_scope": "ALL_PREMATCH_EVENTS",
+        "event_scope": FEATURE_EVENT_SCOPE,
         "source_scope": source_scope,
+        "scope_key": str(scope_key),
         "names": named,
         "values": [named[name] for name in FEATURE_NAMES],
         "fallback_home_venue": home_venue_raw is None or home_venue_raw["matches"] < MIN_FORM_MATCHES,
@@ -426,6 +434,9 @@ def _load_external_rows(root: Path, *, fixed_identity_keys: set[str] | None = No
         if len(parts) != 2:
             continue
         season, league = parts
+        if league not in LEAGUE_CODES:
+            skipped["unsupported_competition_scope"] += 1
+            continue
         file_manifest.append({"file": _repo_relative(path), "sha256": _sha256_file(path), "bytes": path.stat().st_size, "season": season, "league": league, "url": f"https://football-data.co.uk/mmz4281/{season}/{league}.csv"})
         try:
             handle = path.open("r", encoding="utf-8-sig", newline="")
@@ -447,20 +458,21 @@ def _load_external_rows(root: Path, *, fixed_identity_keys: set[str] | None = No
                 identity = f"football-data:{path.name}:{row_number}:{kickoff.isoformat()}:{home}:{away}"
                 raw_matches.append({"kickoff": kickoff, "home": home, "away": away, "home_goals": int(home_goals), "away_goals": int(away_goals), "league": league, "season": season, "file": path.name, "row_number": row_number, "odds": row, "identity_keys": [identity]})
     raw_matches.sort(key=lambda row: (row["kickoff"], row["file"], row["row_number"]))
-    history: dict[str, list[tuple[datetime, float, float, str]]] = defaultdict(list)
+    history: dict[tuple[str, str], list[tuple[datetime, float, float, str]]] = defaultdict(list)
     output: list[dict[str, Any]] = []
     excluded_fixed_107 = 0
     fixed_identity_keys = fixed_identity_keys or set()
     for raw in raw_matches:
-        home_history = history[raw["home"]]
-        away_history = history[raw["away"]]
+        scope_key = f"football-data:{raw['league']}"
+        home_history = history[(raw["league"], raw["home"])]
+        away_history = history[(raw["league"], raw["away"])]
         form = {
             "home_overall": _aggregate(home_history),
             "home_home": _aggregate(home_history, "home"),
             "away_overall": _aggregate(away_history),
             "away_away": _aggregate(away_history, "away"),
         }
-        features = _build_features(form, source_scope="football_data_all_available_events_v1")
+        features = _build_features(form, source_scope=EXTERNAL_SOURCE_SCOPE, scope_key=scope_key)
         market = external_market_lambdas(raw["odds"])
         if features is not None and market is not None and raw["kickoff"] < DEFAULT_EVAL_CUTOFF:
             row_key = f"{raw['file']}|{raw['row_number']}|{raw['kickoff'].isoformat()}|{raw['home']}|{raw['away']}"
@@ -470,9 +482,9 @@ def _load_external_rows(root: Path, *, fixed_identity_keys: set[str] | None = No
                 excluded_fixed_107 += count
             else:
                 output.extend(filtered)
-        history[raw["home"]].append((raw["kickoff"], float(raw["home_goals"]), float(raw["away_goals"]), "home"))
-        history[raw["away"]].append((raw["kickoff"], float(raw["away_goals"]), float(raw["home_goals"]), "away"))
-    return output, {"source": EXTERNAL_SOURCE, "files": file_manifest, "raw_match_rows": len(raw_matches), "eligible_rows": len(output), "fixed_107_rows_excluded_by_identity": excluded_fixed_107, "history_key": "exact_source_team_name_across_all_committed_files; no same-league filter", "feature_scope": "ALL_PREMATCH_EVENTS", "skipped": dict(sorted(skipped.items())), "odds_semantics": "Avg 1X2 plus Avg O/U2.5 where available, B365 fallback; source timing is preserved as historical timing and is not relabeled as an FBOS horizon.", "training_cutoff": DEFAULT_EVAL_CUTOFF.isoformat()}
+        history[(raw["league"], raw["home"])].append((raw["kickoff"], float(raw["home_goals"]), float(raw["away_goals"]), "home"))
+        history[(raw["league"], raw["away"])].append((raw["kickoff"], float(raw["away_goals"]), float(raw["home_goals"]), "away"))
+    return output, {"source": EXTERNAL_SOURCE, "files": file_manifest, "raw_match_rows": len(raw_matches), "eligible_rows": len(output), "fixed_107_rows_excluded_by_identity": excluded_fixed_107, "history_key": "(league, exact_source_team_name)", "scope_keys": sorted({f"football-data:{league}" for league in LEAGUE_CODES if any(item.get("league") == league for item in raw_matches)}), "feature_scope": FEATURE_EVENT_SCOPE, "source_scope": EXTERNAL_SOURCE_SCOPE, "skipped": dict(sorted(skipped.items())), "odds_semantics": "Avg 1X2 plus Avg O/U2.5 where available, B365 fallback; source timing is preserved as historical timing and is not relabeled as an FBOS horizon.", "training_cutoff": DEFAULT_EVAL_CUTOFF.isoformat()}
 
 
 # ---------------------------------------------------------------------------
@@ -876,12 +888,154 @@ def _load_legal_snapshot(pair: Mapping[str, Any]) -> tuple[dict[str, Any] | None
     return snapshot, None
 
 
-def _live_features(snapshot: Mapping[str, Any], input_document: Mapping[str, Any]) -> dict[str, Any] | None:
-    shuju = snapshot.get("shuju") or {}
-    form = shuju.get("recent_form") or ((input_document.get("prematch_fundamentals") or {}).get("recent_form") or {})
-    if not form:
+def _base_job_scope(job: Mapping[str, Any]) -> tuple[str | None, str | None, str | None, bool | None]:
+    coverage = job.get("coverage") if isinstance(job.get("coverage"), Mapping) else {}
+    competition_id = str(job.get("competition_id") or coverage.get("competition_id") or "").strip() or None
+    scope_key = str(job.get("scope_key") or coverage.get("scope_key") or "").strip() or None
+    status = str(job.get("coverage_status") or coverage.get("status") or "").strip() or None
+    allowed_value = job.get("historical_challenger_allowed")
+    if allowed_value is None:
+        allowed_value = coverage.get("historical_challenger_allowed")
+    allowed = allowed_value if isinstance(allowed_value, bool) else None
+    return competition_id, scope_key, status, allowed
+
+
+@lru_cache(maxsize=4)
+def _frozen_base_job_records(root_text: str) -> tuple[tuple[str, str, dict[str, Any], str], ...]:
+    records: list[tuple[str, str, dict[str, Any], str]] = []
+    root = Path(root_text)
+    for path in sorted(root.glob("*.json")):
+        try:
+            document = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        jobs = document.get("jobs") if isinstance(document, Mapping) else None
+        if not isinstance(jobs, list):
+            continue
+        for job in jobs:
+            if not isinstance(job, Mapping):
+                continue
+            match_id = str(job.get("match_id") or "").strip()
+            kickoff = _parse_datetime(job.get("kickoff"))
+            if not match_id or kickoff is None:
+                continue
+            records.append((match_id, kickoff.isoformat(), dict(job), _repo_relative(path)))
+    return tuple(records)
+
+
+def _load_frozen_base_job(pair: Mapping[str, Any], root: Path | None = None) -> dict[str, Any] | None:
+    root = root or BASE_JOB_ROOT
+    match_id = str(pair.get("match_id") or "").strip()
+    kickoff = _parse_datetime(pair.get("kickoff_at"))
+    if not match_id or kickoff is None:
         return None
-    return _build_features(form, source_scope="nowscore_all_events_v1")
+    target = (match_id, kickoff.isoformat())
+    candidates = [record for record in _frozen_base_job_records(str(Path(root).resolve())) if record[:2] == target]
+    if not candidates:
+        return None
+
+    def recency(record: tuple[str, str, dict[str, Any], str]) -> tuple[str, str, str, str]:
+        job = record[2]
+        return (
+            str(job.get("freeze_created_at") or ""),
+            str(job.get("updated_at") or ""),
+            str(job.get("created_at") or ""),
+            record[3],
+        )
+
+    selected = max(candidates, key=recency)
+    result = dict(selected[2])
+    result["_authority_file"] = selected[3]
+    return result
+
+
+def _frozen_competition_truth(input_document: Mapping[str, Any]) -> Mapping[str, Any] | None:
+    input_data = input_document.get("input") if isinstance(input_document.get("input"), Mapping) else {}
+    for candidate in (
+        input_data.get("frozen_competition_truth"),
+        input_document.get("frozen_competition_truth"),
+    ):
+        if isinstance(candidate, Mapping):
+            return candidate
+    return None
+
+
+def _scope_key_is_supported(scope_key: str) -> bool:
+    prefix, _, league = scope_key.partition(":")
+    return prefix == "football-data" and league in LEAGUE_CODES
+
+
+def _live_feature_contract(
+    snapshot: Mapping[str, Any],
+    input_document: Mapping[str, Any],
+    pair: Mapping[str, Any] | None = None,
+) -> tuple[dict[str, Any] | None, str]:
+    """Require frozen source-level competition truth; never fall back to ALL_EVENTS aggregates."""
+    del snapshot  # Legal timing is enforced by _load_legal_snapshot before this contract is called.
+    truth = _frozen_competition_truth(input_document)
+    if truth is not None:
+        truth_coverage = str(truth.get("coverage_status") or "").strip()
+        if truth_coverage and truth_coverage != "SUPPORTED":
+            return None, "UNSUPPORTED_COMPETITION_SCOPE"
+
+    frozen_job = _load_frozen_base_job(pair) if pair is not None else None
+    if pair is not None and frozen_job is not None:
+        _, _, job_status, job_allowed = _base_job_scope(frozen_job)
+        if job_status != "SUPPORTED" or job_allowed is not True:
+            return None, "UNSUPPORTED_COMPETITION_SCOPE"
+    elif pair is not None and truth is None:
+        return None, "FROZEN_COMPETITION_TRUTH_SOURCE_MISSING"
+
+    if truth is None:
+        return None, "LIVE_COMPETITION_TRUTH_MISSING"
+    if str(truth.get("status") or "").strip() != "VERIFIED":
+        return None, "FROZEN_COMPETITION_TRUTH_INCOMPLETE"
+    if str(truth.get("source") or "").strip() != "authoritative_historical_results":
+        return None, "FROZEN_COMPETITION_TRUTH_INCOMPLETE"
+    if str(truth.get("coverage_status") or "").strip() != "SUPPORTED":
+        return None, "UNSUPPORTED_COMPETITION_SCOPE"
+    if truth.get("historical_challenger_allowed") is not True:
+        return None, "UNSUPPORTED_COMPETITION_SCOPE"
+    competition_id = str(truth.get("competition_id") or "").strip()
+    scope_key = str(truth.get("scope_key") or "").strip()
+    if not competition_id.startswith("competition:") or not scope_key or not _scope_key_is_supported(scope_key):
+        return None, "FROZEN_COMPETITION_TRUTH_INCOMPLETE"
+    if str(truth.get("training_source_scope") or "").strip() != EXTERNAL_SOURCE_SCOPE:
+        return None, "FROZEN_COMPETITION_TRUTH_INCOMPLETE"
+    if str(truth.get("feature_source_scope") or "").strip() != EXTERNAL_SOURCE_SCOPE:
+        return None, "FROZEN_COMPETITION_TRUTH_INCOMPLETE"
+    if str(truth.get("history_key") or "").strip() != "(league, exact_source_team_name)":
+        return None, "FROZEN_COMPETITION_TRUTH_INCOMPLETE"
+    if str(truth.get("event_scope") or "").strip() != FEATURE_EVENT_SCOPE:
+        return None, "FROZEN_COMPETITION_TRUTH_INCOMPLETE"
+    form = truth.get("recent_form")
+    if not isinstance(form, Mapping):
+        return None, "FROZEN_COMPETITION_TRUTH_INCOMPLETE"
+
+    if pair is not None:
+        if frozen_job is None:
+            return None, "FROZEN_COMPETITION_TRUTH_SOURCE_MISSING"
+        job_competition_id, job_scope_key, job_status, job_allowed = _base_job_scope(frozen_job)
+        if job_status != "SUPPORTED" or job_allowed is not True:
+            return None, "UNSUPPORTED_COMPETITION_SCOPE"
+        if not job_competition_id or not job_scope_key:
+            return None, "FROZEN_COMPETITION_TRUTH_INCOMPLETE"
+        if job_competition_id != competition_id or job_scope_key != scope_key:
+            return None, "TRAIN_LIVE_SCOPE_MISMATCH"
+
+    features = _build_features(form, source_scope=LIVE_SOURCE_SCOPE, scope_key=scope_key)
+    if features is None:
+        return None, "LIVE_FEATURE_HISTORY_INSUFFICIENT"
+    return features, "OK"
+
+
+def _live_features(
+    snapshot: Mapping[str, Any],
+    input_document: Mapping[str, Any],
+    pair: Mapping[str, Any] | None = None,
+) -> dict[str, Any] | None:
+    features, _ = _live_feature_contract(snapshot, input_document, pair)
+    return features
 
 
 def _load_authoritative_prediction(pair: Mapping[str, Any]) -> dict[str, Any] | None:
@@ -920,9 +1074,9 @@ def _build_live_shadow_rows(pair_root: Path, home_model: XGBoostPoissonModel, aw
         except (OSError, json.JSONDecodeError):
             skipped["invalid_input_document"] += 1
             continue
-        features = _live_features(snapshot, document)
+        features, feature_reason = _live_feature_contract(snapshot, document, pair)
         if features is None:
-            skipped["missing_reproducible_features"] += 1
+            skipped[feature_reason] += 1
             continue
         try:
             market = market_lambdas_from_snapshot(snapshot)
@@ -937,7 +1091,7 @@ def _build_live_shadow_rows(pair_root: Path, home_model: XGBoostPoissonModel, aw
             continue
         prediction = _model_prediction(base_row, home_model, away_model, controls=authoritative_controls)
         prediction_id = "SFGI-" + _sha256_bytes((str(pair.get("pair_id")) + "|" + model_digest).encode("utf-8"))[:24]
-        shadow_record = {"pair_id": pair.get("pair_id"), "match_id": pair.get("match_id"), "match_key": pair.get("match_key"), "kickoff_at": pair.get("kickoff_at"), "source_cutoff": pair.get("source_cutoff"), "input_snapshot_ref": pair.get("input_snapshot_ref"), "frozen_input_digest": pair.get("frozen_input_digest"), "source_snapshot": snapshot.get("_source_name"), "prediction_id": prediction_id, "model_family": MODEL_FAMILY, "model_version": f"{MODEL_FAMILY}:{model_digest[:12]}", "model_digest": model_digest, "feature_schema": FEATURE_SCHEMA, "feature_contract": {"event_scope": features["event_scope"], "source_scope": features["source_scope"], "source_cutoff": pair.get("source_cutoff"), "training_live_vector_builder": "_build_features"}, "feature_values": features["names"], "feature_missingness": {"home_venue_fallback_to_overall": features["fallback_home_venue"], "away_venue_fallback_to_overall": features["fallback_away_venue"]}, "market_baseline": market, "prediction": prediction["model"], "controls": {"market": prediction["market"], "champion": prediction["champion"], "challenger_c": prediction["challenger_c"]}, "offset_and_correction": prediction["offsets"], "namespace": "solution_first_goal_intensity_shadow_1", "production_enabled": False, "user_visible": False, "post_match_input_used_for_generation": False, "settlement_adapter": {"actual_score_source": "existing_verified_postmatch_result", "uses_frozen_score_matrix": True, "derived_markets_from_same_matrix": True}}
+        shadow_record = {"pair_id": pair.get("pair_id"), "match_id": pair.get("match_id"), "match_key": pair.get("match_key"), "kickoff_at": pair.get("kickoff_at"), "source_cutoff": pair.get("source_cutoff"), "input_snapshot_ref": pair.get("input_snapshot_ref"), "frozen_input_digest": pair.get("frozen_input_digest"), "source_snapshot": snapshot.get("_source_name"), "prediction_id": prediction_id, "model_family": MODEL_FAMILY, "model_version": f"{MODEL_FAMILY}:{model_digest[:12]}", "model_digest": model_digest, "feature_schema": FEATURE_SCHEMA, "feature_contract": {"event_scope": features["event_scope"], "source_scope": features["source_scope"], "scope_key": features["scope_key"], "source_cutoff": pair.get("source_cutoff"), "training_live_vector_builder": "_build_features"}, "feature_values": features["names"], "feature_missingness": {"home_venue_fallback_to_overall": features["fallback_home_venue"], "away_venue_fallback_to_overall": features["fallback_away_venue"]}, "market_baseline": market, "prediction": prediction["model"], "controls": {"market": prediction["market"], "champion": prediction["champion"], "challenger_c": prediction["challenger_c"]}, "offset_and_correction": prediction["offsets"], "namespace": "solution_first_goal_intensity_shadow_1", "production_enabled": False, "user_visible": False, "post_match_input_used_for_generation": False, "settlement_adapter": {"actual_score_source": "existing_verified_postmatch_result", "uses_frozen_score_matrix": True, "derived_markets_from_same_matrix": True}}
         shadow_record["prediction_sha256"] = _sha256_bytes(_canonical_json(shadow_record).encode("utf-8"))
         output.append(shadow_record)
     return output, dict(sorted(skipped.items()))
@@ -962,7 +1116,7 @@ def _native_history_audit(pair_root: Path) -> dict[str, Any]:
             document = json.loads(reference.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
             continue
-        if _live_features(snapshot, document) is None:
+        if _live_features(snapshot, document, pair) is None:
             continue
         if _actual_for_pair(pair, result_map) is not None:
             legal += 1
@@ -1023,6 +1177,9 @@ def run_shadow(*, external_root: Path = EXTERNAL_ROOT, pair_root: Path = DEFAULT
     shadow_rows, shadow_skips = _build_live_shadow_rows(pair_root, home_model, away_model, model_digest, prospective_after)
     market_parity_passed = sum(1 for row in shadow_rows if all((row.get("controls", {}).get("market", {}).get("authority", {}).get("parity_checks", {}) or {}).values()))
     now = datetime.now(timezone.utc).isoformat()
+    scope_parity_status = "COMPETITION_SCOPE_PARITY_VERIFIED" if shadow_rows else "TRAINING_AUTHORITY_BLOCKED"
+    non_prospective_skip_keys = {"not_future_prospective", "pair_contract"}
+    scope_blocked_rows = sum(count for key, count in shadow_skips.items() if key not in non_prospective_skip_keys)
     summary = {
         "schema_version": SCHEMA_VERSION,
         "milestone": MILESTONE,
@@ -1031,7 +1188,28 @@ def run_shadow(*, external_root: Path = EXTERNAL_ROOT, pair_root: Path = DEFAULT
         "training_authority": TRAINING_AUTHORITY,
         "native_history_audit": native_audit,
         "external_source_manifest": external_manifest,
-        "feature_authority": {"shared_vector_builder": "_build_features", "schema": FEATURE_SCHEMA, "event_scope": "ALL_PREMATCH_EVENTS", "source_scopes": sorted(FEATURE_SOURCE_SCOPES), "train_live_semantics": "same four-block aggregate and venue fallback; source coverage remains HORIZON_TRANSFER", "status": "SHARED_CONTRACT_VERIFIED"},
+        "feature_authority": {
+            "shared_vector_builder": "_build_features",
+            "schema": FEATURE_SCHEMA,
+            "event_scope": FEATURE_EVENT_SCOPE,
+            "source_scopes": sorted(FEATURE_SOURCE_SCOPES),
+            "train": {"source_scope": EXTERNAL_SOURCE_SCOPE, "history_key": "(league, exact_source_team_name)", "scope_key": "football-data:<LEAGUE_CODE>"},
+            "live": {"source_scope": LIVE_SOURCE_SCOPE, "truth": "frozen verified competition truth", "scope_key": "football-data:<LEAGUE_CODE>"},
+            "train_live_semantics": "same four-block aggregate, venue fallback, explicit competition/league scope, and exact chronology contract",
+            "unsupported_policy": "missing, unsupported, cup, continental, and national competition coverage fails closed; never labelled ALL_EVENTS",
+            "status": scope_parity_status,
+            "blocked_reason": "NO_VERIFIED_FROZEN_COMPETITION_TRUTH_FOR_PROSPECTIVE_LIVE_SCOPE" if not shadow_rows else None,
+        },
+        "source_level_scope_audit": {
+            "status": scope_parity_status,
+            "train_scope": "(league, exact_source_team_name)",
+            "live_scope": "frozen competition truth exact scope_key",
+            "prospective_rows": len(shadow_rows) + scope_blocked_rows,
+            "accepted_rows": len(shadow_rows),
+            "blocked_rows": scope_blocked_rows,
+            "non_prospective_rows": sum(count for key, count in shadow_skips.items() if key in non_prospective_skip_keys),
+            "blocked_reasons": shadow_skips,
+        },
         "fixed_107_identity_authority": fixed_107_authority,
         "training_n": len(train_rows),
         "validation_n": len(validation_rows),
@@ -1053,7 +1231,7 @@ def run_shadow(*, external_root: Path = EXTERNAL_ROOT, pair_root: Path = DEFAULT
         "current_serving_changed": False,
         "controls_retained": ["Market", "Champion", "Challenger C"],
         "control_authority": {"live": "IMMUTABLE_PAIR_TRUTH", "market": "FROZEN_INPUT_MARKET_RECONSTRUCTION", "external": "OMITTED_FORMULA_PROXIES"},
-        "market_contract_parity": {"contract": "accepted_same_time_market_lambda_v1", "source": "Issue #189 / PR #190", "checked_live_rows": len(shadow_rows), "passed_live_rows": market_parity_passed, "status": "PASS" if market_parity_passed == len(shadow_rows) and shadow_rows else "FAIL_CLOSED"},
+        "market_contract_parity": {"contract": "accepted_same_time_market_lambda_v1", "source": "Issue #189 / PR #190", "checked_live_rows": len(shadow_rows), "passed_live_rows": market_parity_passed, "status": "PASS" if market_parity_passed == len(shadow_rows) and shadow_rows else "NOT_RUN_SCOPE_BLOCKED", "prior_accepted_evidence": "5ba8f8be000911b91b6bfdf7983d16c485dcb7ed" if not shadow_rows else None},
         "integrity": {
             "status": "PASS" if shadow_rows else "FAIL_CLOSED",
             "source": EXTERNAL_SOURCE,
