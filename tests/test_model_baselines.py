@@ -9,12 +9,8 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
-from model_baselines import (  # noqa: E402
-    MARKET_REFERENCE_VERSION,
-    SIMPLE_POISSON_VERSION,
-    build_market_reference,
-    build_simple_poisson_baseline,
-)
+from market_engine import MARKET_REFERENCE_VERSION, build_market_reference  # noqa: E402
+from model_baselines import SIMPLE_POISSON_VERSION, build_simple_poisson_baseline  # noqa: E402
 
 
 def make_snapshot(*, venue=True, market=True, checkpoint_stage="T-30M"):

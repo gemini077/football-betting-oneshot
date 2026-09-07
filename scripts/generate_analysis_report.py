@@ -18,7 +18,7 @@ from market_history import load_history
 from live_ev_profile import DEFAULT_OUTPUT_ROOT as DEFAULT_PROFILE_OUTPUT_ROOT
 from live_ev_profile import publish_live_ev_profiles
 from risk_engine import analyze as analyze_risk_engine
-from risk_engine import dixon_coles_score_matrix
+from score_engine import dixon_coles_score_matrix, outcome_probabilities
 from postmatch_schedule import create_schedule
 from sync_postmatch_workflow import sync as sync_postmatch_workflow
 from postmatch_queue import SHANGHAI
@@ -455,14 +455,12 @@ def score_matrix_summary(model: dict, max_goals: int = 12) -> dict:
     matrix = dixon_coles_score_matrix(model, max_goals=max_goals)
     if not matrix:
         return {}
-    home = sum(value for (h, a), value in matrix.items() if h > a)
-    draw = sum(value for (h, a), value in matrix.items() if h == a)
-    away = sum(value for (h, a), value in matrix.items() if h < a)
+    probabilities = outcome_probabilities(matrix)
     under_25 = sum(value for (h, a), value in matrix.items() if h + a <= 2)
     top_score, top_probability = max(matrix.items(), key=lambda item: item[1])
     return {
         "matrix": matrix,
-        "probabilities": {"home": home, "draw": draw, "away": away},
+        "probabilities": probabilities,
         "under_25": under_25,
         "top_score": f"{top_score[0]}-{top_score[1]}",
         "top_probability": top_probability,

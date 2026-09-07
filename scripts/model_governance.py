@@ -53,6 +53,8 @@ POSTMATCH_FIELDS = {
 # prediction source chain; the second list is the audit/recording chain.
 MODEL_SOURCE_FILES = (
     "scripts/automatic_model_core.py",
+    "scripts/market_engine.py",
+    "scripts/score_engine.py",
     "scripts/risk_engine.py",
     "scripts/market_contracts.py",
     "scripts/checkpoint_features.py",
@@ -62,6 +64,8 @@ MODEL_SOURCE_FILES = (
 )
 MODEL_SOURCE_COMPONENTS = (
     ("scripts/automatic_model_core.py", None),
+    ("scripts/market_engine.py", None),
+    ("scripts/score_engine.py", None),
     ("scripts/risk_engine.py", None),
     ("scripts/market_contracts.py", None),
     ("scripts/checkpoint_features.py", None),

@@ -9,6 +9,13 @@ import math
 from pathlib import Path
 from statistics import fmean, median, pstdev
 
+from score_engine import (
+    asian_handicap_settlement,
+    asian_total_settlement,
+    dixon_coles_score_matrix,
+    exact_total_goals_set,
+)
+
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_RULES = PROJECT_ROOT / "config" / "trap_rules.json"
@@ -35,37 +42,6 @@ def _bookmaker_map(deep: dict) -> dict[int, dict]:
 
 def _asian_map(deep: dict) -> dict[int, dict]:
     return {int(item.get("cid") or 0): item for item in deep.get("yazhi", {}).get("companies", [])}
-
-
-def dixon_coles_score_matrix(model: dict | None, max_goals: int = 12) -> dict[tuple[int, int], float]:
-    """Build a normalized score matrix from explicit model parameters."""
-    model = (model or {}).get("model", model or {})
-    lambda_home = model.get("lambda_home")
-    lambda_away = model.get("lambda_away")
-    if lambda_home is None or lambda_away is None:
-        return {}
-    lambda_home = float(lambda_home)
-    lambda_away = float(lambda_away)
-    if lambda_home <= 0 or lambda_away <= 0:
-        return {}
-    rho = float(model.get("rho") or 0.0)
-    matrix = {}
-    for home_goals in range(max_goals + 1):
-        home_probability = math.exp(-lambda_home) * lambda_home ** home_goals / math.factorial(home_goals)
-        for away_goals in range(max_goals + 1):
-            away_probability = math.exp(-lambda_away) * lambda_away ** away_goals / math.factorial(away_goals)
-            probability = home_probability * away_probability
-            if (home_goals, away_goals) == (0, 0):
-                probability *= 1 - lambda_home * lambda_away * rho
-            elif (home_goals, away_goals) == (0, 1):
-                probability *= 1 + lambda_home * rho
-            elif (home_goals, away_goals) == (1, 0):
-                probability *= 1 + lambda_away * rho
-            elif (home_goals, away_goals) == (1, 1):
-                probability *= 1 - rho
-            matrix[(home_goals, away_goals)] = max(0.0, probability)
-    total = sum(matrix.values())
-    return {score: probability / total for score, probability in matrix.items()} if total else {}
 
 
 def lambdas_from_home_away_rates(
@@ -289,105 +265,6 @@ def half_full_time_probabilities(
             "requires phase-specific opponent-adjusted and time-weighted rate estimates upstream",
             "red cards substitutions tactical switches and score effects require conditional calibration",
         ],
-    }
-
-
-def _asian_line_parts(handicap: float) -> list[float]:
-    quarter_units = round(float(handicap) * 4)
-    if quarter_units % 2 == 0:
-        return [quarter_units / 4]
-    return [(quarter_units - 1) / 4, (quarter_units + 1) / 4]
-
-
-def asian_handicap_settlement(matrix: dict[tuple[int, int], float], handicap: float) -> dict:
-    """Price a home-side Asian handicap with full/half win-loss and push handling."""
-    categories = {"full_win": 0.0, "half_win": 0.0, "push": 0.0, "half_loss": 0.0, "full_loss": 0.0}
-    parts = _asian_line_parts(handicap)
-    for (home_goals, away_goals), probability in matrix.items():
-        component_results = []
-        for part in parts:
-            adjusted_margin = home_goals - away_goals + part
-            component_results.append(1 if adjusted_margin > 1e-9 else -1 if adjusted_margin < -1e-9 else 0)
-        net = sum(component_results) / len(component_results)
-        category = {
-            1.0: "full_win",
-            0.5: "half_win",
-            0.0: "push",
-            -0.5: "half_loss",
-            -1.0: "full_loss",
-        }[net]
-        categories[category] += probability
-    win_units = categories["full_win"] + 0.5 * categories["half_win"]
-    loss_units = categories["full_loss"] + 0.5 * categories["half_loss"]
-    fair_odds = 1 + loss_units / win_units if win_units else None
-    return {
-        "handicap": float(handicap),
-        "parts": parts,
-        **categories,
-        "win_units": win_units,
-        "loss_units": loss_units,
-        "fair_decimal_odds": fair_odds,
-        "expected_net_at_2_00": win_units - loss_units,
-    }
-
-
-def asian_total_settlement(matrix: dict[tuple[int, int], float], total_line: float, side: str) -> dict:
-    """Price an Asian goal total, including quarter-line half settlements."""
-    if side not in {"over", "under"}:
-        raise ValueError("side must be 'over' or 'under'")
-    categories = {"full_win": 0.0, "half_win": 0.0, "push": 0.0, "half_loss": 0.0, "full_loss": 0.0}
-    parts = _asian_line_parts(total_line)
-    for (home_goals, away_goals), probability in matrix.items():
-        goals = home_goals + away_goals
-        component_results = []
-        for part in parts:
-            margin = goals - part if side == "over" else part - goals
-            component_results.append(1 if margin > 1e-9 else -1 if margin < -1e-9 else 0)
-        net = sum(component_results) / len(component_results)
-        category = {
-            1.0: "full_win",
-            0.5: "half_win",
-            0.0: "push",
-            -0.5: "half_loss",
-            -1.0: "full_loss",
-        }[net]
-        categories[category] += probability
-    win_units = categories["full_win"] + 0.5 * categories["half_win"]
-    loss_units = categories["full_loss"] + 0.5 * categories["half_loss"]
-    fair_odds = 1 + loss_units / win_units if win_units else None
-    return {
-        "total_line": float(total_line),
-        "side": side,
-        "parts": parts,
-        **categories,
-        "win_units": win_units,
-        "loss_units": loss_units,
-        "fair_decimal_odds": fair_odds,
-        "expected_net_at_2_00": win_units - loss_units,
-    }
-
-
-def exact_total_goals_set(matrix: dict[tuple[int, int], float], totals) -> dict:
-    """Price a discrete set of exact total-goal outcomes, such as 1-or-3 goals."""
-    normalized = sorted({int(total) for total in totals})
-    if not normalized or any(total < 0 for total in normalized):
-        raise ValueError("totals must contain at least one non-negative integer")
-    per_total = {
-        total: sum(
-            probability
-            for (home_goals, away_goals), probability in matrix.items()
-            if home_goals + away_goals == total
-        )
-        for total in normalized
-    }
-    probability = sum(per_total.values())
-    return {
-        "totals": normalized,
-        "per_total_probability": per_total,
-        "probability": probability,
-        "fair_decimal_odds": 1 / probability if probability else None,
-        "break_even_probability_at_2_00": 0.5,
-        "edge_at_2_00": 2 * probability - 1,
     }
 
 

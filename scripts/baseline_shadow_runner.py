@@ -9,11 +9,8 @@ import json
 from pathlib import Path
 from typing import Any
 
-from model_baselines import (
-    SNAPSHOT_FIELDS,
-    build_market_reference,
-    build_simple_poisson_baseline,
-)
+from market_engine import SNAPSHOT_FIELDS, build_market_reference
+from model_baselines import build_simple_poisson_baseline
 
 
 ROOT = Path(__file__).resolve().parents[1]

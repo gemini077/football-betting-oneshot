@@ -13,8 +13,8 @@ sys.path.insert(0, str(ROOT / "scripts"))
 
 from automatic_model_core import build_automatic_model  # noqa: E402
 from market_contracts import settle_contract  # noqa: E402
-from model_baselines import build_market_reference  # noqa: E402
-from risk_engine import (  # noqa: E402
+from market_engine import build_market_reference  # noqa: E402
+from score_engine import (  # noqa: E402
     asian_handicap_settlement,
     asian_total_settlement,
     dixon_coles_score_matrix,
