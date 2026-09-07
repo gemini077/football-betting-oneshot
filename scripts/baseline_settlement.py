@@ -14,6 +14,7 @@ from baseline_shadow_runner import (
     BENCHMARK_CONTRACT_VERSION,
     BenchmarkConflictError,
 )
+from score_engine import dixon_coles_score_matrix
 
 
 OUTCOMES = ("home", "draw", "away")
@@ -126,8 +127,6 @@ def _full_score_rows(prediction: dict[str, Any]) -> tuple[list[dict[str, Any]], 
     if expected is None:
         return rows, False
     try:
-        from risk_engine import dixon_coles_score_matrix
-
         matrix = dixon_coles_score_matrix({
             "lambda_home": expected[0],
             "lambda_away": expected[1],

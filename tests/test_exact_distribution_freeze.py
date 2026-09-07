@@ -33,7 +33,7 @@ from model_governance import (  # noqa: E402
     prediction_content_hash,
 )
 from prospective_settlement import evaluate_prediction, settle_records  # noqa: E402
-from risk_engine import dixon_coles_score_matrix  # noqa: E402
+from score_engine import dixon_coles_score_matrix  # noqa: E402
 from test_model_governance import prediction_payload  # noqa: E402
 import automatic_postmatch_review as review_module  # noqa: E402
 import exact_distribution_freeze_readiness_audit as readiness_audit  # noqa: E402

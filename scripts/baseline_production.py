@@ -24,6 +24,7 @@ from baseline_shadow_runner import (
     load_frozen_comparison,
 )
 from model_governance import DEFAULT_INPUT_SNAPSHOT_ROOT, load_input_snapshot
+from score_engine import dixon_coles_score_matrix, outcome_probabilities, score_matrix_rows
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -289,19 +290,6 @@ def _valid_probabilities(value: Any) -> bool:
     return all(math.isfinite(number) and number >= 0 for number in values) and sum(values) > 0
 
 
-def _score_rows(matrix: dict[tuple[int, int], float]) -> list[dict[str, Any]]:
-    rows = [
-        {
-            "score": f"{home}-{away}",
-            "home_goals": home,
-            "away_goals": away,
-            "probability": float(probability),
-        }
-        for (home, away), probability in matrix.items()
-    ]
-    return sorted(rows, key=lambda row: (-row["probability"], row["home_goals"], row["away_goals"]))
-
-
 def _close(left: Any, right: Any, tolerance: float = 1e-6) -> bool:
     try:
         return abs(float(left) - float(right)) <= tolerance
@@ -322,12 +310,9 @@ def _market_direction_candidate(
             _calibration_state,
             _market_share,
             _mix_dispersion,
-            _model_rows,
-            _outcomes,
             _reweight_outcomes,
             build_automatic_model,
         )
-        from risk_engine import dixon_coles_score_matrix
 
         replay = build_automatic_model(model_input)
     except Exception as error:
@@ -395,8 +380,8 @@ def _market_direction_candidate(
             (calibration_artifact.get("direction") or {}).get("logit_offsets") or {},
             calibration_strength,
         )
-    probabilities = _outcomes(matrix)
-    score_rows = _score_rows(matrix)
+    probabilities = outcome_probabilities(matrix)
+    score_rows = score_matrix_rows(matrix)
     if not score_rows or not _valid_probabilities(probabilities):
         return None, "candidate_matrix_unavailable", {"parity": parity}
     candidate = {

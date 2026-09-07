@@ -24,14 +24,16 @@ SCRIPT_ROOT = PROJECT_ROOT / "scripts"
 if str(SCRIPT_ROOT) not in sys.path:
     sys.path.insert(0, str(SCRIPT_ROOT))
 
-from automatic_model_core import (  # noqa: E402
-    MODEL_FAMILY,
-    _consensus_probabilities,
-    build_automatic_model,
-)
+from automatic_model_core import MODEL_FAMILY, build_automatic_model  # noqa: E402
 from fetch_and_parse import DEFAULT_CACHE_DIR, fetch_and_parse  # noqa: E402
 from fetch_trade_matches import fetch_trade_matches  # noqa: E402
 from match_identity import canonical_match_id  # noqa: E402
+from market_engine import (  # noqa: E402
+    champion_consensus_probabilities,
+    proportional_devig_three_way,
+    valid_champion_bookmakers,
+    valid_three_way_decimal_odds,
+)
 from model_governance import (  # noqa: E402
     DEFAULT_INPUT_SNAPSHOT_ROOT,
     DEFAULT_RECORD_ROOT,
@@ -468,21 +470,12 @@ def _form_is_usable(form: Any) -> bool:
 
 
 def _valid_spf(odds: Any) -> dict[str, float] | None:
-    if not isinstance(odds, dict):
-        return None
-    try:
-        values = {key: float(odds[key]) for key in ("home", "draw", "away")}
-    except (KeyError, TypeError, ValueError):
-        return None
-    if any(not math.isfinite(value) or value <= 1.0 for value in values.values()):
-        return None
-    return values
+    return valid_three_way_decimal_odds(odds)
 
 
 def _fair_probabilities(odds: dict[str, float]) -> dict[str, float]:
-    inverse = {key: 1.0 / value for key, value in odds.items()}
-    total = sum(inverse.values())
-    return {key: round(value / total, 9) for key, value in inverse.items()}
+    fair = proportional_devig_three_way(odds) or {}
+    return {key: round(fair[key], 9) for key in ("home", "draw", "away")}
 
 
 def _official_market_baseline(
@@ -547,13 +540,7 @@ def _snapshot_capture(snapshot: dict[str, Any]) -> datetime | None:
 
 
 def _valid_bookmakers(snapshot: dict[str, Any]) -> list[dict[str, Any]]:
-    rows = ((snapshot.get("ouzhi") or {}).get("bookmakers") or [])
-    valid: list[dict[str, Any]] = []
-    for row in rows:
-        if not isinstance(row, dict) or _valid_spf(row.get("spf_current")) is None:
-            continue
-        valid.append(row)
-    return valid
+    return valid_champion_bookmakers(snapshot)
 
 
 def _company_name(row: dict[str, Any]) -> str | None:
@@ -688,7 +675,7 @@ def _has_full_market(snapshot: dict[str, Any]) -> bool:
 def _market_only_baseline(
     snapshot: dict[str, Any], source: str | list[str], source_refs: list[str]
 ) -> dict[str, Any] | None:
-    probabilities = _consensus_probabilities(snapshot)
+    probabilities = champion_consensus_probabilities(snapshot)
     if not probabilities:
         return None
     sources = [source] if isinstance(source, str) else list(source)

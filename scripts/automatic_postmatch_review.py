@@ -18,7 +18,7 @@ from postmatch_queue import BASE_DIR, SHANGHAI, load_json
 from match_identity import identity_aliases
 from postmatch_evidence import fetch_postmatch_evidence
 from paper_ledger import pair_key
-from risk_engine import dixon_coles_score_matrix
+from score_engine import dixon_coles_score_matrix
 from exact_distribution import classify_frozen_exact_score, classify_frozen_jc_total_goals
 from official_jc_handicap import classify_frozen_jc_handicap
 from model_governance import DEFAULT_RECORD_ROOT, load_frozen_prediction, validate_postmatch_review_link

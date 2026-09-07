@@ -19,7 +19,8 @@ from baseline_production import (  # noqa: E402
     settle_benchmark_for_verified_result,
 )
 from baseline_settlement import settle_comparison  # noqa: E402
-from model_baselines import build_market_reference, build_simple_poisson_baseline  # noqa: E402
+from market_engine import build_market_reference  # noqa: E402
+from model_baselines import build_simple_poisson_baseline  # noqa: E402
 import automatic_postmatch_review as postmatch_review  # noqa: E402
 import generate_analysis_report as analysis_report  # noqa: E402
 from model_governance import (  # noqa: E402

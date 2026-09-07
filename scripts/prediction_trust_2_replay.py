@@ -23,14 +23,13 @@ if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
 from automatic_model_core import (  # noqa: E402
-    _consensus_probabilities,
     _deep_snapshot,
     _market_share,
-    _market_total,
     _mean,
     _rate,
     build_automatic_model,
 )
+from market_engine import champion_consensus_probabilities, champion_market_total  # noqa: E402
 from prediction_trust_audit import (  # noqa: E402
     _is_formally_eligible,
     _load_exclusion_ids,
@@ -38,7 +37,7 @@ from prediction_trust_audit import (  # noqa: E402
     _normalise_text,
     build_unique_match_cohort,
 )
-from risk_engine import dixon_coles_score_matrix  # noqa: E402
+from score_engine import dixon_coles_score_matrix  # noqa: E402
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -334,8 +333,8 @@ def _form_and_market_inputs(context: Mapping[str, Any]) -> dict[str, Any]:
     away_general = _mean([_rate(away_overall, "goals_for"), _rate(home_overall, "goals_against")])
     home_form = _mean([home_venue, home_venue, home_general])
     away_form = _mean([away_venue, away_venue, away_general])
-    market_probabilities = _consensus_probabilities(deep) or (context.get("official_market_baseline") or {}).get("fair_probabilities")
-    market_total = _market_total(deep)
+    market_probabilities = champion_consensus_probabilities(deep) or (context.get("official_market_baseline") or {}).get("fair_probabilities")
+    market_total = champion_market_total(deep)
     if home_form is None or away_form is None or not isinstance(market_probabilities, dict):
         raise ValueError("frozen input is missing the form or 1X2 market fields required by all candidates")
     market_probabilities = {

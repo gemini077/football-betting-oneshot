@@ -21,6 +21,58 @@ def split_quarter_line(line: float) -> tuple[float, ...]:
     return (quarter,)
 
 
+def settle_asian_contract(contract: dict | None, score: tuple[int, int]) -> dict[str, Any]:
+    """Resolve one Asian contract into its canonical settlement units/category."""
+    contract = contract or {}
+    family = str(contract.get("family") or "")
+    selection = str(contract.get("selection") or "")
+    result = {
+        "family": family or None,
+        "selection": selection or None,
+        "line": None,
+        "parts": [],
+        "component_units": [],
+        "units": None,
+        "category": None,
+    }
+    if family not in {"total", "asian_handicap"}:
+        return result
+    try:
+        line = float(contract["line"])
+    except (KeyError, TypeError, ValueError):
+        return result
+
+    home, away = score
+    parts = split_quarter_line(line)
+    component_units = []
+    for component in parts:
+        if family == "total":
+            delta = home + away - component
+            if selection == "under":
+                delta = -delta
+        else:
+            delta = home - away + component
+            if selection == "away":
+                delta = -delta
+        component_units.append(1.0 if delta > 0 else 0.0 if delta == 0 else -1.0)
+
+    units = sum(component_units) / len(component_units)
+    result.update({
+        "line": line,
+        "parts": list(parts),
+        "component_units": component_units,
+        "units": units,
+        "category": {
+            1.0: "full_win",
+            0.5: "half_win",
+            0.0: "push",
+            -0.5: "half_loss",
+            -1.0: "full_loss",
+        }[units],
+    })
+    return result
+
+
 def settle_contract(contract: dict | None, score: tuple[int, int]) -> dict:
     """Settle one frozen contract against a verified 90-minute score."""
     contract = contract or {}
@@ -39,23 +91,7 @@ def settle_contract(contract: dict | None, score: tuple[int, int]) -> dict:
         actual = "yes" if home > 0 and away > 0 else "no"
         units = 1.0 if selection == actual else -1.0
     elif family in {"total", "asian_handicap"}:
-        try:
-            line = float(contract["line"])
-        except (KeyError, TypeError, ValueError):
-            units = None
-        else:
-            parts = []
-            for component in split_quarter_line(line):
-                if family == "total":
-                    delta = home + away - component
-                    if selection == "under":
-                        delta = -delta
-                else:
-                    delta = home - away + component
-                    if selection == "away":
-                        delta = -delta
-                parts.append(1.0 if delta > 0 else 0.0 if delta == 0 else -1.0)
-            units = sum(parts) / len(parts)
+        units = settle_asian_contract(contract, score)["units"]
     elif family == "exact_total":
         target = str(contract.get("goals") or "")
         if target == "6+":

@@ -8,9 +8,19 @@ import math
 from pathlib import Path
 from statistics import fmean, median
 
-from market_contracts import split_quarter_line
 from exact_distribution import build_prediction_time_exact_distribution_state
-from risk_engine import dixon_coles_score_matrix
+from market_engine import (
+    champion_consensus_probabilities,
+    champion_market_handicap,
+    champion_market_total,
+    price_total_line,
+)
+from score_engine import (
+    dixon_coles_score_matrix,
+    matrix_settlement_probability,
+    outcome_probabilities,
+    project_score_matrix,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -54,130 +64,16 @@ def _mean(values: list[float | None]) -> float | None:
     return fmean(clean) if clean else None
 
 
-def _consensus_probabilities(deep: dict) -> dict | None:
-    rows = []
-    for bookmaker in (deep.get("ouzhi") or {}).get("bookmakers") or []:
-        odds = bookmaker.get("spf_current") or {}
-        try:
-            prices = [float(odds[key]) for key in ("home", "draw", "away")]
-        except (KeyError, TypeError, ValueError):
-            continue
-        if any(price <= 1 for price in prices):
-            continue
-        inverse = [1 / price for price in prices]
-        total = sum(inverse)
-        rows.append([value / total for value in inverse])
-    if not rows:
-        return None
-    return {key: fmean(row[index] for row in rows) for index, key in enumerate(("home", "draw", "away"))}
-
-
-def _market_total(deep: dict) -> float | None:
-    lines = []
-    for company in (deep.get("daxiao") or {}).get("companies") or []:
-        try:
-            line = float(company.get("current_line"))
-        except (TypeError, ValueError):
-            continue
-        if 1.0 <= line <= 5.0:
-            lines.append(line)
-    return median(lines) if lines else None
-
-
-def _market_handicap(deep: dict) -> float | None:
-    """Return the median home-team Asian handicap from current quotes."""
-    lines = []
-    for company in (deep.get("yazhi") or {}).get("companies") or []:
-        try:
-            line = float(company.get("current_handicap"))
-        except (TypeError, ValueError):
-            continue
-        if -5.0 <= line <= 5.0:
-            lines.append(line)
-    return median(lines) if lines else None
-
-
-def _total_line_pricing(expected_goals: float, line: float) -> dict:
-    """Price an Asian total at its exact quarter line, including pushes/halves."""
-    distribution = []
-    covered = 0.0
-    for goals in range(16):
-        probability = math.exp(-expected_goals) * expected_goals ** goals / math.factorial(goals)
-        distribution.append((goals, probability))
-        covered += probability
-    distribution.append((16, max(0.0, 1.0 - covered)))
-
-    def component(goals: int, component_line: float, side: str) -> tuple[float, float]:
-        if side == "over":
-            return (1.0, 0.0) if goals > component_line else ((0.0, 1.0) if goals < component_line else (0.0, 0.0))
-        return (1.0, 0.0) if goals < component_line else ((0.0, 1.0) if goals > component_line else (0.0, 0.0))
-
-    quarter = round(line * 4) / 4
-    if int(round(quarter * 4)) % 2:
-        lower = math.floor(quarter * 2) / 2
-        components = (lower, lower + 0.5)
-    else:
-        components = (quarter,)
-    priced = {"line": quarter}
-    for side in ("over", "under"):
-        win_equivalent = loss_equivalent = 0.0
-        for goals, probability in distribution:
-            outcomes = [component(goals, value, side) for value in components]
-            win_equivalent += probability * fmean(item[0] for item in outcomes)
-            loss_equivalent += probability * fmean(item[1] for item in outcomes)
-        fair_odds = 1.0 + loss_equivalent / win_equivalent if win_equivalent > 0 else None
-        priced[side] = {
-            "win_equivalent_probability": round(win_equivalent, 6),
-            "loss_equivalent_probability": round(loss_equivalent, 6),
-            "push_equivalent_probability": round(max(0.0, 1.0 - win_equivalent - loss_equivalent), 6),
-            "fair_odds": round(fair_odds, 4) if fair_odds is not None else None,
-        }
-    return priced
-
-
-def _outcomes(matrix: dict[tuple[int, int], float]) -> dict:
-    result = {"home": 0.0, "draw": 0.0, "away": 0.0}
-    for (home, away), probability in matrix.items():
-        result["home" if home > away else "draw" if home == away else "away"] += probability
-    return result
-
-
 def _market_share(total: float, target: dict) -> float:
     best = (float("inf"), 0.5)
     for step in range(151, 850):
         share = step / 1000
         matrix = dixon_coles_score_matrix({"lambda_home": total * share, "lambda_away": total * (1 - share), "rho": 0.0})
-        outcomes = _outcomes(matrix)
+        outcomes = outcome_probabilities(matrix)
         error = sum((outcomes[key] - target[key]) ** 2 for key in target)
         if error < best[0]:
             best = (error, share)
     return best[1]
-
-
-def _model_rows(matrix: dict[tuple[int, int], float]) -> tuple[list[dict], list[dict], dict]:
-    scores = sorted(matrix.items(), key=lambda item: item[1], reverse=True)
-    score_rows = [
-        {
-            "score": f"{home}-{away}",
-            "probability": round(probability, 6),
-            "fair_odds": round(1 / probability, 4) if probability > 0 else None,
-            "rank": rank,
-        }
-        for rank, ((home, away), probability) in enumerate(scores[:10], 1)
-    ]
-    exact_totals: dict[int, float] = {}
-    btts_yes = 0.0
-    for (home, away), probability in matrix.items():
-        exact_totals[home + away] = exact_totals.get(home + away, 0.0) + probability
-        if home > 0 and away > 0:
-            btts_yes += probability
-    total_rows = [
-        {"goals": str(goals) if goals < 6 else "6+", "probability": round(
-            probability if goals < 6 else sum(value for key, value in exact_totals.items() if key >= 6), 6
-        )}
-        for goals, probability in sorted(exact_totals.items()) if goals <= 6
-    ]
-    return score_rows, total_rows, {"yes": round(btts_yes, 6), "no": round(1 - btts_yes, 6)}
 
 
 def _load_model_calibration(context: dict) -> dict:
@@ -382,39 +278,6 @@ def _scenario_score_pick(
     )
 
 
-def _split_quarter(line: float) -> list[float]:
-    return list(split_quarter_line(line))
-
-
-def _settlement_probability(matrix: dict[tuple[int, int], float], *, family: str, side: str, line: float) -> dict:
-    win = push = loss = 0.0
-    for (home, away), probability in matrix.items():
-        results = []
-        for split in _split_quarter(line):
-            if family == "total":
-                delta = home + away - split
-                if side == "under":
-                    delta = -delta
-            else:
-                delta = home - away + split
-                if side == "away":
-                    delta = -delta
-            results.append(1 if delta > 0 else 0 if delta == 0 else -1)
-        factor = sum(results) / len(results)
-        if factor > 0:
-            win += probability * factor
-            if factor < 1:
-                push += probability * (1 - factor)
-        elif factor < 0:
-            loss += probability * -factor
-            if factor > -1:
-                push += probability * (1 + factor)
-        else:
-            push += probability
-    fair_odds = 1 + loss / win if win > 0 else None
-    return {"win": win, "push": push, "loss": loss, "fair_odds": fair_odds}
-
-
 def _price_audit(deep: dict, matrix: dict[tuple[int, int], float], probabilities: dict) -> list[dict]:
     rows = []
     for outcome, label in (("home", "SPF主胜"), ("draw", "SPF平局"), ("away", "SPF客胜")):
@@ -434,7 +297,7 @@ def _price_audit(deep: dict, matrix: dict[tuple[int, int], float], probabilities
         except (TypeError, ValueError):
             continue
         for side, label, water_key in (("over", "大", "current_over_water"), ("under", "小", "current_under_water")):
-            probability = _settlement_probability(matrix, family="total", side=side, line=line)
+            probability = matrix_settlement_probability(matrix, family="total", side=side, line=line)
             water = company.get(water_key)
             odds = 1 + float(water) if isinstance(water, (int, float)) else None
             rows.append({
@@ -452,7 +315,7 @@ def _price_audit(deep: dict, matrix: dict[tuple[int, int], float], probabilities
         except (TypeError, ValueError):
             continue
         for side, label, water_key in (("home", "主", "current_water_home"), ("away", "客", "current_water_away")):
-            probability = _settlement_probability(matrix, family="handicap", side=side, line=line)
+            probability = matrix_settlement_probability(matrix, family="handicap", side=side, line=line)
             water = company.get(water_key)
             odds = 1 + float(water) if isinstance(water, (int, float)) else None
             displayed_line = line if side == "home" else -line
@@ -569,7 +432,7 @@ def _market_candidates(
     for line in total_lines:
         line_rows = [row for row in total_companies if row.get("current_line") is not None and abs(float(row["current_line"]) - line) < 0.01]
         for selection, water_key, label in (("over", "current_over_water", "大"), ("under", "current_under_water", "小")):
-            priced = _settlement_probability(matrix, family="total", side=selection, line=line)
+            priced = matrix_settlement_probability(matrix, family="total", side=selection, line=line)
             odds = _median_decimal([1 + float(row[water_key]) for row in line_rows if isinstance(row.get(water_key), (int, float))])
             effective = priced["win"] / max(1e-12, priced["win"] + priced["loss"])
             rows.append(_market_candidate(
@@ -584,7 +447,7 @@ def _market_candidates(
     for line in handicap_lines:
         line_rows = [row for row in handicap_companies if row.get("current_handicap") is not None and abs(float(row["current_handicap"]) - line) < 0.01]
         for selection, water_key, side_label in (("home", "current_water_home", "主队"), ("away", "current_water_away", "客队")):
-            priced = _settlement_probability(matrix, family="handicap", side=selection, line=line)
+            priced = matrix_settlement_probability(matrix, family="handicap", side=selection, line=line)
             odds = _median_decimal([1 + float(row[water_key]) for row in line_rows if isinstance(row.get(water_key), (int, float))])
             effective = priced["win"] / max(1e-12, priced["win"] + priced["loss"])
             displayed = line if selection == "home" else -line
@@ -839,9 +702,9 @@ def build_automatic_model(context: dict, *, include_exact_distribution: bool = F
     away_general = _mean([_rate(away_overall, "goals_for"), _rate(home_overall, "goals_against")])
     home_form = _mean([home_venue, home_venue, home_general])
     away_form = _mean([away_venue, away_venue, away_general])
-    market_probabilities = _consensus_probabilities(deep) or (context.get("official_market_baseline") or {}).get("fair_probabilities")
-    market_total = _market_total(deep)
-    market_handicap = _market_handicap(deep)
+    market_probabilities = champion_consensus_probabilities(deep) or (context.get("official_market_baseline") or {}).get("fair_probabilities")
+    market_total = champion_market_total(deep)
+    market_handicap = champion_market_handicap(deep)
     if home_form is None or away_form is None or not market_probabilities:
         return {"model": None, "data_quality": {"status": "仅市场基线", "missing": ["可解析的主客场近期攻防样本"]}}
 
@@ -874,7 +737,7 @@ def build_automatic_model(context: dict, *, include_exact_distribution: bool = F
             (calibration_artifact.get("direction") or {}).get("logit_offsets") or {},
             calibration_strength,
         )
-    probabilities = _outcomes(matrix)
+    probabilities = outcome_probabilities(matrix)
     exact_distribution_state = (
         build_prediction_time_exact_distribution_state(
             matrix,
@@ -892,7 +755,7 @@ def build_automatic_model(context: dict, *, include_exact_distribution: bool = F
         if include_exact_distribution
         else None
     )
-    score_rows, total_rows, btts = _model_rows(matrix)
+    score_rows, total_rows, btts = project_score_matrix(matrix)
     btts["judgement"] = _btts_judgement(btts["yes"])
     top_result = max(probabilities, key=probabilities.get)
     labels = {"home": "主胜", "draw": "平局", "away": "客胜"}
@@ -915,7 +778,7 @@ def build_automatic_model(context: dict, *, include_exact_distribution: bool = F
         "market_predictions": market_candidates,
         "dimension_predictions": dimension_predictions,
         "total_line_analysis": [
-            _total_line_pricing(total, line)
+            price_total_line(total, line)
             for line in (2.5, 2.75, 3.0, 3.25, 3.5)
         ],
         "calibration": {
