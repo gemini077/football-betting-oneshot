@@ -57,6 +57,24 @@ def _tree(path: Path) -> ast.Module:
     return ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
 
 
+def _function(tree: ast.Module, name: str) -> ast.FunctionDef:
+    matches = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.FunctionDef) and node.name == name
+    ]
+    assert len(matches) == 1, f"expected one function named {name}"
+    return matches[0]
+
+
+def _called_names(node: ast.AST) -> set[str]:
+    return {
+        call.func.id
+        for call in ast.walk(node)
+        if isinstance(call, ast.Call) and isinstance(call.func, ast.Name)
+    }
+
+
 def test_moved_domain_functions_have_one_implementation_owner():
     for relative_path, forbidden in MOVED_DEFINITIONS.items():
         defined = {
@@ -94,3 +112,26 @@ def test_legacy_score_exports_are_import_only_compatibility_aliases():
         "asian_total_settlement",
         "exact_total_goals_set",
     } <= score_imports
+
+
+def test_asian_contract_semantics_have_one_owner_and_pricers_delegate():
+    canonical_tree = _tree(SCRIPTS / "market_contracts.py")
+    canonical_definitions = [
+        node
+        for node in ast.walk(canonical_tree)
+        if isinstance(node, ast.FunctionDef) and node.name == "settle_asian_contract"
+    ]
+    assert len(canonical_definitions) == 1
+
+    delegated_functions = (
+        ("scripts/market_contracts.py", "settle_contract"),
+        ("scripts/market_engine.py", "price_total_line"),
+        ("scripts/score_engine.py", "matrix_settlement_probability"),
+        ("scripts/score_engine.py", "_settlement_categories"),
+    )
+    for relative_path, function_name in delegated_functions:
+        calls = _called_names(_function(_tree(ROOT / relative_path), function_name))
+        assert "settle_asian_contract" in calls, f"{relative_path}::{function_name} bypasses canonical semantics"
+
+    for relative_path in ("scripts/market_engine.py", "scripts/score_engine.py"):
+        assert "split_quarter_line" not in _called_names(_tree(ROOT / relative_path))

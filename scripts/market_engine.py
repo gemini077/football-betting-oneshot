@@ -15,7 +15,7 @@ from statistics import fmean, median
 from typing import Any, Mapping, Sequence
 import unicodedata
 
-from market_contracts import split_quarter_line
+from market_contracts import settle_asian_contract
 
 
 MARKET_REFERENCE_VERSION = "market_reference.v1"
@@ -132,19 +132,16 @@ def price_total_line(expected_goals: float, line: float) -> dict:
         covered += probability
     distribution.append((16, max(0.0, 1.0 - covered)))
 
-    def component(goals: int, component_line: float, side: str) -> tuple[float, float]:
-        if side == "over":
-            return (1.0, 0.0) if goals > component_line else ((0.0, 1.0) if goals < component_line else (0.0, 0.0))
-        return (1.0, 0.0) if goals < component_line else ((0.0, 1.0) if goals > component_line else (0.0, 0.0))
-
-    components = split_quarter_line(line)
     priced = {"line": round(float(line) * 4) / 4}
     for side in ("over", "under"):
         win_equivalent = loss_equivalent = 0.0
         for goals, probability in distribution:
-            outcomes = [component(goals, value, side) for value in components]
-            win_equivalent += probability * fmean(item[0] for item in outcomes)
-            loss_equivalent += probability * fmean(item[1] for item in outcomes)
+            units = settle_asian_contract(
+                {"family": "total", "selection": side, "line": line},
+                (goals, 0),
+            )["units"]
+            win_equivalent += probability * max(0.0, units)
+            loss_equivalent += probability * max(0.0, -units)
         fair_odds = 1.0 + loss_equivalent / win_equivalent if win_equivalent > 0 else None
         priced[side] = {
             "win_equivalent_probability": round(win_equivalent, 6),

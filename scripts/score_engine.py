@@ -6,7 +6,7 @@ from __future__ import annotations
 import math
 from typing import Any, Mapping
 
-from market_contracts import split_quarter_line
+from market_contracts import settle_asian_contract
 
 
 SCORE_ENGINE_VERSION = "score_engine.v1"
@@ -155,27 +155,21 @@ def matrix_settlement_probability(
     matrix: Mapping[tuple[int, int], float], *, family: str, side: str, line: float
 ) -> dict[str, float | None]:
     win = push = loss = 0.0
+    contract = {
+        "family": "total" if family == "total" else "asian_handicap",
+        "selection": side,
+        "line": line,
+    }
     for (home, away), probability in matrix.items():
-        results = []
-        for split in split_quarter_line(line):
-            if family == "total":
-                delta = home + away - split
-                if side == "under":
-                    delta = -delta
-            else:
-                delta = home - away + split
-                if side == "away":
-                    delta = -delta
-            results.append(1 if delta > 0 else 0 if delta == 0 else -1)
-        factor = sum(results) / len(results)
-        if factor > 0:
-            win += probability * factor
-            if factor < 1:
-                push += probability * (1 - factor)
-        elif factor < 0:
-            loss += probability * -factor
-            if factor > -1:
-                push += probability * (1 + factor)
+        units = settle_asian_contract(contract, (home, away))["units"]
+        if units > 0:
+            win += probability * units
+            if units < 1:
+                push += probability * (1 - units)
+        elif units < 0:
+            loss += probability * -units
+            if units > -1:
+                push += probability * (1 + units)
         else:
             push += probability
     fair_odds = 1 + loss / win if win > 0 else None
@@ -184,24 +178,13 @@ def matrix_settlement_probability(
 
 def _settlement_categories(matrix: Mapping[tuple[int, int], float], *, family: str, line: float, side: str = "home") -> dict:
     categories = {"full_win": 0.0, "half_win": 0.0, "push": 0.0, "half_loss": 0.0, "full_loss": 0.0}
-    parts = list(split_quarter_line(line))
+    contract = {
+        "family": "total" if family == "total" else "asian_handicap",
+        "selection": side if family == "total" else "home",
+        "line": line,
+    }
     for (home_goals, away_goals), probability in matrix.items():
-        component_results = []
-        for part in parts:
-            if family == "handicap":
-                adjusted_margin = home_goals - away_goals + part
-            else:
-                goals = home_goals + away_goals
-                adjusted_margin = goals - part if side == "over" else part - goals
-            component_results.append(1 if adjusted_margin > 1e-9 else -1 if adjusted_margin < -1e-9 else 0)
-        net = sum(component_results) / len(component_results)
-        category = {
-            1.0: "full_win",
-            0.5: "half_win",
-            0.0: "push",
-            -0.5: "half_loss",
-            -1.0: "full_loss",
-        }[net]
+        category = settle_asian_contract(contract, (home_goals, away_goals))["category"]
         categories[category] += probability
     win_units = categories["full_win"] + 0.5 * categories["half_win"]
     loss_units = categories["full_loss"] + 0.5 * categories["half_loss"]
@@ -216,7 +199,9 @@ def asian_handicap_settlement(matrix: Mapping[tuple[int, int], float], handicap:
     fair_odds = 1 + loss_units / win_units if win_units else None
     return {
         "handicap": float(handicap),
-        "parts": list(split_quarter_line(handicap)),
+        "parts": list(settle_asian_contract(
+            {"family": "asian_handicap", "selection": "home", "line": handicap}, (0, 0)
+        )["parts"]),
         "full_win": categories["full_win"],
         "half_win": categories["half_win"],
         "push": categories["push"],
@@ -240,7 +225,9 @@ def asian_total_settlement(matrix: Mapping[tuple[int, int], float], total_line: 
     return {
         "total_line": float(total_line),
         "side": side,
-        "parts": list(split_quarter_line(total_line)),
+        "parts": list(settle_asian_contract(
+            {"family": "total", "selection": side, "line": total_line}, (0, 0)
+        )["parts"]),
         "full_win": categories["full_win"],
         "half_win": categories["half_win"],
         "push": categories["push"],
