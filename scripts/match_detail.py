@@ -33,6 +33,11 @@ try:
 except ImportError:
     from closed_beta_copy import render_closed_beta_notice
 
+try:
+    from .public_ui_shared import render_public_document, render_team_badge
+except ImportError:
+    from public_ui_shared import render_public_document, render_team_badge
+
 
 SHANGHAI = timezone(timedelta(hours=8))
 DASH = "\u2014"
@@ -177,26 +182,46 @@ def _score_rows(contract: dict[str, Any], *, limit: int = 5) -> list[dict[str, A
     return rows[:limit]
 
 
+def _lane_serving_state(contract: dict[str, Any], lane: str) -> str:
+    quality = contract.get("prediction_quality_health")
+    if not isinstance(quality, dict):
+        return "CAUTION" if lane == "ft_1x2" else "UNVERIFIED"
+    authority = quality.get("lane_serving_authority")
+    lane_authority = authority.get(lane) if isinstance(authority, dict) else None
+    if isinstance(lane_authority, dict) and lane_authority.get("canonical") is True:
+        state = str(lane_authority.get("state") or "").strip().upper()
+        if state in {"NORMAL", "CAUTION", "DEGRADED", "UNVERIFIED"}:
+            return state
+    return "CAUTION" if lane == "ft_1x2" else "UNVERIFIED"
+
+
 def _render_probability_cards(contract: dict[str, Any]) -> str:
     probabilities = _probabilities(contract)
+    lane_state = _lane_serving_state(contract, "ft_1x2")
+    lane_note = (
+        '<p class="lane-status-note">\u5f53\u524d\u4ec5\u4f5c\u8d5b\u524d\u5206\u6790\u53c2\u8003</p>'
+        if lane_state != "NORMAL"
+        else ""
+    )
     values = [
         ("home", "\u4e3b\u80dc", _percent_number(probabilities.get("home"))),
         ("draw", "\u5e73", _percent_number(probabilities.get("draw"))),
         ("away", "\u5ba2\u80dc", _percent_number(probabilities.get("away"))),
     ]
+    section_attrs = f'data-one-x-two-serving-state="{html.escape(lane_state, quote=True)}"'
     if any(value is None for _, _, value in values):
         return (
-            '<section class="probability-section lane-unavailable" aria-labelledby="probability-title">'
+            f'<section class="probability-section lane-unavailable" {section_attrs} aria-labelledby="probability-title">'
             '<div class="section-kicker">\u7b2c\u4e00\u5c42\u5224\u65ad</div><h2 id="probability-title">\u80dc\u5e73\u8d1f\u6982\u7387</h2>'
-            '<p>\u80dc\u5e73\u8d1f\u6982\u7387\u6682\u4e0d\u53ef\u7528\uff1b\u9875\u9762\u4e0d\u8865\u5199\u7f3a\u5931\u7684\u6982\u7387\u3002</p></section>'
+            f'{lane_note}<p>\u80dc\u5e73\u8d1f\u6982\u7387\u6682\u4e0d\u53ef\u7528\uff1b\u9875\u9762\u4e0d\u8865\u5199\u7f3a\u5931\u7684\u6982\u7387\u3002</p></section>'
         )
     numeric = [value for _, _, value in values if value is not None]
     total = sum(numeric)
     if total <= 0:
         return (
-            '<section class="probability-section lane-unavailable" aria-labelledby="probability-title">'
+            f'<section class="probability-section lane-unavailable" {section_attrs} aria-labelledby="probability-title">'
             '<div class="section-kicker">\u7b2c\u4e00\u5c42\u5224\u65ad</div><h2 id="probability-title">\u80dc\u5e73\u8d1f\u6982\u7387</h2>'
-            '<p>\u80dc\u5e73\u8d1f\u6982\u7387\u6682\u4e0d\u53ef\u7528\uff1b\u9875\u9762\u4e0d\u8865\u5199\u7f3a\u5931\u7684\u6982\u7387\u3002</p></section>'
+            f'{lane_note}<p>\u80dc\u5e73\u8d1f\u6982\u7387\u6682\u4e0d\u53ef\u7528\uff1b\u9875\u9762\u4e0d\u8865\u5199\u7f3a\u5931\u7684\u6982\u7387\u3002</p></section>'
         )
     leader = max(values, key=lambda item: item[2] or 0.0)[0]
     cards = []
@@ -221,23 +246,24 @@ def _render_probability_cards(contract: dict[str, Any]) -> str:
         aria_values.append(f"{label} {_percent(number)}")
     aria_label = "\uFF1B".join(aria_values)
     return (
-        '<section class="probability-section" aria-labelledby="probability-title">'
+        f'<section class="probability-section" {section_attrs} aria-labelledby="probability-title">'
         '<div class="section-kicker">\u7b2c\u4e00\u5c42\u5224\u65ad</div><h2 id="probability-title">\u80dc\u5e73\u8d1f\u6982\u7387</h2>'
+        f'{lane_note}'
         '<div class="hero-probabilities">' + "".join(cards) + '</div>'
         '<div class="probability-strip-wrap">'
-        f'<div class="probability-strip" role="img" aria-label="\u80dc\u5e73\u8d1f\u6982\u7387\uFF1A{aria_label}">'
+        f'<div class="probability-strip" role="img" aria-label="\u80dc\u5e73\u8d1f\u6982\u7387\uff1a{aria_label}">'
         + "".join(segments)
         + '</div><div class="probability-legend">'
         + "".join(legend)
         + '</div></div></section>'
     )
 
+
 def _score_serving_context(contract: dict[str, Any]) -> dict[str, str]:
     quality = contract.get("prediction_quality_health")
     if isinstance(quality, dict):
         return exact_score_serving_presentation(quality)
-    return {"state": "NORMAL", "label": "", "note": ""}
-
+    return exact_score_serving_presentation(None)
 
 def _render_score_distribution(contract: dict[str, Any]) -> str:
     rows = _score_rows(contract)
@@ -279,40 +305,45 @@ def _render_score_distribution(contract: dict[str, Any]) -> str:
     )
 
 
+def _exact_distribution_contract(contract: dict[str, Any]) -> dict[str, Any] | None:
+    item = _formal_market_item(_formal_markets(contract), "exact_score")
+    exact_contract = item.get("contract") if _formal_status(item) == "AVAILABLE" else None
+    return exact_contract if isinstance(exact_contract, dict) else None
+
+
 def _total_goal_distribution(contract: dict[str, Any]) -> list[tuple[str, float]]:
-    totals = _model(contract).get("totals")
-    if not isinstance(totals, list):
+    exact_contract = _exact_distribution_contract(contract)
+    cells = exact_contract.get("cells") if isinstance(exact_contract, dict) else None
+    if not isinstance(cells, list):
         return []
     buckets: dict[str, float] = {}
-    for item in totals:
-        if not isinstance(item, dict):
+    for cell in cells:
+        if not isinstance(cell, dict):
             continue
-        number = _percent_number(item.get("probability"))
-        if number is None:
+        try:
+            total_goals = int(cell.get("home_goals")) + int(cell.get("away_goals"))
+        except (TypeError, ValueError):
             continue
-        raw_goals = str(item.get("goals") or item.get("total") or "").strip()
-        if raw_goals.endswith("+"):
-            try:
-                bucket = "4+" if int(raw_goals[:-1]) >= 4 else raw_goals
-            except ValueError:
-                continue
-        elif raw_goals.isdigit():
-            bucket = raw_goals if int(raw_goals) <= 3 else "4+"
-        else:
+        probability = _percent_number(cell.get("probability"))
+        if probability is None:
             continue
-        buckets[bucket] = buckets.get(bucket, 0.0) + number
+        bucket = str(total_goals) if total_goals <= 3 else "4+"
+        buckets[bucket] = buckets.get(bucket, 0.0) + probability
     order = ["0", "1", "2", "3", "4+"]
     return [(bucket, buckets[bucket]) for bucket in order if bucket in buckets]
 
 
 def _render_goals(contract: dict[str, Any]) -> str:
     rows = _total_goal_distribution(contract)
+    source_copy = "\u7531\u5f53\u524d\u6bd4\u5206\u5206\u5e03\u6c47\u603b"
     if not rows:
         return (
-            '<section class="detail-section goals-section lane-unavailable" id="goals">'
-            '<div class="section-heading"><div><div class="section-kicker">\u8fdb\u7403\u5206\u5e03</div>'
-            '<h2>\u603b\u8fdb\u7403\u5206\u5e03</h2></div><p>\u5f53\u524d\u6ca1\u6709\u53ef\u7528\u7684\u8fdb\u7403\u5206\u5e03</p></div>'
-            '<p>\u603b\u8fdb\u7403\u6982\u7387\u6682\u4e0d\u53ef\u7528\uff1b\u9875\u9762\u4e0d\u8865\u5199\u7f3a\u5931\u7684\u5206\u5e03\u3002</p></section>'
+            '<section class="detail-section goals-section supporting-section lane-unavailable" id="goals" '
+            'data-goals-source="exact-score">'
+            '<div class="section-heading"><div><div class="section-kicker">\u8f85\u52a9\u89c6\u56fe</div>'
+            '<h2>\u603b\u8fdb\u7403\u5206\u5e03</h2></div>'
+            f'<p>{source_copy}</p></div>'
+            '<p>\u5f53\u524d\u6ca1\u6709\u53ef\u6838\u9a8c\u7684 Exact \u6bd4\u5206\u5206\u5e03\uff0c\u4e0d\u8865\u5199\u603b\u8fdb\u7403\u6982\u7387\u3002</p></section>'
         )
     top = max(rows, key=lambda item: item[1])
     rendered = []
@@ -324,14 +355,13 @@ def _render_goals(contract: dict[str, Any]) -> str:
             f'<strong>{_percent(number)}</strong></div>'
         )
     return (
-        '<section class="detail-section goals-section" id="goals">'
-        '<div class="section-heading"><div><div class="section-kicker">\u8fdb\u7403\u5206\u5e03</div>'
-        '<h2>\u603b\u8fdb\u7403\u5206\u5e03</h2></div><p>\u5f53\u524d\u6a21\u578b\u6982\u7387</p></div>'
+        '<section class="detail-section goals-section supporting-section" id="goals" data-goals-source="exact-score">'
+        '<div class="section-heading"><div><div class="section-kicker">\u8f85\u52a9\u89c6\u56fe</div>'
+        f'<h2>\u603b\u8fdb\u7403\u5206\u5e03</h2></div><p>{source_copy}</p></div>'
         f'<div class="goal-grid">{"".join(rendered)}</div>'
-        f'<p class="section-note">\u5206\u5e03\u6700\u9ad8\u6bb5\uff1a{html.escape(top[0])} \u00b7 {_percent(top[1])}\u3002\u4e0d\u4ee3\u8868\u786e\u5b9a\u8d5b\u679c\u3002</p>'
+        f'<p class="section-note">\u6570\u636e\u6765\u81ea Exact \u6bd4\u5206\u683c\u7684\u5408\u8ba1\uff1b\u5f53\u524d\u6700\u9ad8\u6bb5\uff1a{html.escape(top[0])} \u00b7 {_percent(top[1])}\u3002\u4e0d\u662f\u72ec\u7acb\u73a9\u6cd5\u3002</p>'
         '</section>'
     )
-
 
 def _formal_markets(contract: dict[str, Any]) -> dict[str, Any]:
     value = contract.get("formal_markets")
@@ -561,8 +591,9 @@ def _render_change_awareness(contract: dict[str, Any]) -> str:
         return (
             '<section class="detail-section change-awareness-section change-awareness-unavailable" '
             'id="change-awareness" data-change-awareness="true" '
+            'data-evidence-role="MISSING_OR_UNVERIFIED" '
             f'data-change-awareness-status="{html.escape(status, quote=True)}">'
-            '<div class="section-heading"><div><div class="section-kicker">\u8d5b\u524d\u53d8\u5316</div>'
+            '<div class="section-heading"><div><div class="evidence-role">\u7f3a\u5931\u6216\u672a\u786e\u8ba4</div><div class="section-kicker">\u8d5b\u524d\u53d8\u5316</div>'
             '<h2>\u6682\u65e0\u53ef\u6bd4\u7684\u8d5b\u524d\u8bb0\u5f55</h2></div><p>\u5f53\u524d\u9884\u6d4b\u4fdd\u6301\u4e0d\u53d8</p></div>'
             '<p class="change-unavailable-copy">\u5f53\u524d\u6ca1\u6709\u5408\u6cd5\u7684\u66f4\u65e9\u8d5b\u524d\u5feb\u7167\uff0c\u6682\u4e0d\u8865\u5199\u53d8\u5316\u3002</p></section>'
         )
@@ -588,15 +619,28 @@ def _render_change_awareness(contract: dict[str, Any]) -> str:
     )
     return (
         '<section class="detail-section change-awareness-section" id="change-awareness" '
-        'data-change-awareness="true" data-change-awareness-status="AVAILABLE" '
+        'data-change-awareness="true" data-evidence-role="MARKET_REACTION" data-change-awareness-status="AVAILABLE" '
         f'data-change-awareness-current-id="{html.escape(str(current.get("prediction_id") or ""), quote=True)}" '
         f'data-change-awareness-previous-id="{html.escape(str(previous.get("prediction_id") or ""), quote=True)}">'
-        '<div class="section-heading"><div><div class="section-kicker">\u8d5b\u524d\u53d8\u5316</div>'
+        '<div class="section-heading"><div><div class="evidence-role">\u5e02\u573a\u53d8\u5316</div><div class="section-kicker">\u8d5b\u524d\u53d8\u5316</div>'
         '<h2>\u770b\u6e05\u4e00\u6b21\u53d8\u5316</h2></div>'
         f'<p>{html.escape(timeline or empty_timeline)}</p></div>'
         f'<div class="change-lane-grid">{lanes}</div>'
         '<p class="section-note">\u53ea\u5c55\u793a\u5f53\u524d\u8bb0\u5f55\u95f4\u7684\u53ef\u6bd4\u53d8\u5316\uff1b\u4e0d\u5bf9\u53d8\u5316\u4f5c\u56e0\u679c\u63a8\u65ad\u3002</p></section>'
     )
+
+
+_EVIDENCE_ROLE_LABELS = {
+    "MODEL_INPUT": "\u6a21\u578b\u8f93\u5165",
+    "MARKET_REACTION": "\u5e02\u573a\u53d8\u5316",
+    "CONTEXT_ONLY": "\u80cc\u666f\u4fe1\u606f",
+    "MISSING_OR_UNVERIFIED": "\u7f3a\u5931\u6216\u672a\u786e\u8ba4",
+}
+
+
+def _normalise_evidence_role(value: Any) -> str | None:
+    role = str(value or "").strip().upper().replace("-", "_")
+    return role if role in _EVIDENCE_ROLE_LABELS else None
 
 
 def _render_form(evidence: dict[str, Any]) -> str:
@@ -626,7 +670,13 @@ def _render_form(evidence: dict[str, Any]) -> str:
         return ""
     captured = _format_datetime(fundamentals.get("captured_at"), include_date=True)
     captured_html = f'<p class="source-line">\u91c7\u96c6\u4e8e {captured}</p>' if captured else ""
-    return '<article class="evidence-block"><h3>\u8fd1\u671f\u8868\u73b0</h3>' + "".join(rows) + captured_html + "</article>"
+    return (
+        '<article class="evidence-block" data-evidence-role="MODEL_INPUT">'
+        '<div class="evidence-role">\u6a21\u578b\u8f93\u5165</div><h3>\u8fd1\u671f\u8868\u73b0</h3>'
+        + "".join(rows)
+        + captured_html
+        + "</article>"
+    )
 
 
 def _support_lines(items: Any) -> str:
@@ -642,7 +692,34 @@ def _support_lines(items: Any) -> str:
     return '<ul class="support-list">' + "".join(lines) + "</ul>" if lines else ""
 
 
-def _render_key_takeaways(contract: dict[str, Any], *, exact_state: str = "NORMAL") -> str:
+def _role_text_items(value: Any, *, default_role: str | None = None) -> list[tuple[str, str]]:
+    values = value if isinstance(value, list) else [value]
+    rows: list[tuple[str, str]] = []
+    for item in values:
+        if isinstance(item, dict):
+            role = _normalise_evidence_role(item.get("evidence_role") or item.get("role")) or default_role
+            text = item.get("text") or item.get("label") or item.get("summary") or item.get("reason")
+        else:
+            role = default_role
+            text = item
+        if role and text not in (None, ""):
+            rows.append((role, str(text)))
+    return rows
+
+
+def _render_role_block(role: str, title: str, texts: list[str]) -> str:
+    if not texts:
+        return ""
+    role_label = _EVIDENCE_ROLE_LABELS[role]
+    items = "".join(f"<li>{_esc(text)}</li>" for text in texts)
+    return (
+        f'<article class="evidence-block" data-evidence-role="{role}">'
+        f'<div class="evidence-role">{role_label}</div><h3>{_esc(title)}</h3>'
+        f'<ul class="support-list">{items}</ul></article>'
+    )
+
+
+def _render_key_takeaways(contract: dict[str, Any], *, exact_state: str = "UNVERIFIED") -> str:
     probabilities = _probabilities(contract)
     takeaways: list[str] = []
     outcomes = [
@@ -654,17 +731,12 @@ def _render_key_takeaways(contract: dict[str, Any], *, exact_state: str = "NORMA
     if outcomes:
         label, number = max(outcomes, key=lambda item: item[1])
         takeaways.append(f"{label}\u76f8\u5bf9\u5360\u4f18 \u00b7 {_percent(number)}")
-    goals = _total_goal_distribution(contract)
-    if goals:
-        bucket, number = max(goals, key=lambda item: item[1])
-        takeaways.append(f"\u603b\u8fdb\u7403\u5206\u5e03\u6700\u9ad8\u6bb5\uff1a{bucket} \u00b7 {_percent(number)}")
-    exact_item = _formal_market_item(_formal_markets(contract), "exact_score")
-    exact_contract = exact_item.get("contract") if _formal_status(exact_item) == "AVAILABLE" else None
+    exact_contract = _exact_distribution_contract(contract)
     if isinstance(exact_contract, dict):
         selected, _, _ = _exact_compact_projection(exact_contract)
         if selected:
             primary = selected[0]
-            exact_copy = f"\u6700\u9ad8\u6982\u7387\u6bd4\u5206\uff1a{int(primary['home_goals'])}-{int(primary['away_goals'])} \u00b7 {_percent(primary.get('probability'))}"
+            exact_copy = f"Exact \u6700\u9ad8\u6982\u7387\u6bd4\u5206\uff1a{int(primary['home_goals'])}-{int(primary['away_goals'])} \u00b7 {_percent(primary.get('probability'))}"
             if exact_state != "NORMAL":
                 exact_copy += " \u00b7 \u4ec5\u4f9b\u89c2\u5bdf"
             takeaways.append(exact_copy)
@@ -679,54 +751,52 @@ def _render_key_takeaways(contract: dict[str, Any], *, exact_state: str = "NORMA
         f'<div class="takeaways">{items}</div></section>'
     )
 
+
 def _render_key_evidence(contract: dict[str, Any]) -> str:
-    evidence = contract.get("evidence") or {}
+    evidence = contract.get("evidence") if isinstance(contract.get("evidence"), dict) else {}
     blocks = []
     form_html = _render_form(evidence)
     if form_html:
         blocks.append(form_html)
 
-    hero = contract.get("hero") or {}
-    support_html = _support_lines(hero.get("supports"))
-    conflict_html = _support_lines(hero.get("conflicts"))
-    if support_html or conflict_html:
-        parts = ['<article class="evidence-block"><h3>\u5173\u952e\u4f9d\u636e</h3>']
-        if support_html:
-            parts.append('<div class="evidence-subheading">\u652f\u6301</div>' + support_html)
-        if conflict_html:
-            parts.append('<div class="evidence-subheading">\u5206\u6b67</div>' + conflict_html)
-        parts.append("</article>")
-        blocks.append("".join(parts))
+    role_sources = (
+        ("MARKET_REACTION", ("market_reaction", "market_changes"), "MARKET_REACTION"),
+        ("CONTEXT_ONLY", ("context_only", "background", "background_info"), "CONTEXT_ONLY"),
+        ("MISSING_OR_UNVERIFIED", ("missing_or_unverified", "missing"), "MISSING_OR_UNVERIFIED"),
+    )
+    for role, keys, default_role in role_sources:
+        items: list[str] = []
+        for key in keys:
+            for item_role, text in _role_text_items(evidence.get(key), default_role=default_role):
+                if item_role == role:
+                    items.append(text)
+        block = _render_role_block(role, _EVIDENCE_ROLE_LABELS[role], items)
+        if block:
+            blocks.append(block)
 
-    for section in contract.get("analysis_sections") or []:
-        if not isinstance(section, dict):
-            continue
-        supports = _support_lines(section.get("supports"))
-        conflicts = _support_lines(section.get("conflicts"))
-        conclusion = str(section.get("conclusion") or "").strip()
-        explanation = str(section.get("explanation") or "").strip()
-        if not (supports or conflicts or conclusion):
-            continue
-        if "\u6ca1\u6709\u53ef\u8ffd\u6eaf\u7684\u6b63\u5f0f\u5206\u6790\u7ed3\u8bba" in conclusion or "\u539f\u59cb\u57fa\u672c\u9762" in explanation:
-            continue
-        text = conclusion or explanation
-        if not text:
-            continue
-        section_title = _esc(section.get("title"), "\u5173\u952e\u4f9d\u636e")
-        parts = [f'<article class="evidence-block"><h3>{section_title}</h3><p>{_esc(text)}</p>']
-        if supports:
-            parts.append('<div class="evidence-subheading">\u652f\u6301</div>' + supports)
-        if conflicts:
-            parts.append('<div class="evidence-subheading">\u5206\u6b67</div>' + conflicts)
-        parts.append("</article>")
-        blocks.append("".join(parts))
+    hero = contract.get("hero") if isinstance(contract.get("hero"), dict) else {}
+    explicit_items: dict[str, list[str]] = {role: [] for role in _EVIDENCE_ROLE_LABELS}
+    for group in (hero.get("supports"), hero.get("conflicts")):
+        for item_role, text in _role_text_items(group):
+            explicit_items[item_role].append(text)
+    for role, texts in explicit_items.items():
+        block = _render_role_block(role, "\u5173\u952e\u8bb0\u5f55", texts)
+        if block:
+            blocks.append(block)
+
+    source_quality = evidence.get("source_quality") if isinstance(evidence.get("source_quality"), dict) else {}
+    missing = source_quality.get("missing")
+    missing_items = [text for role, text in _role_text_items(missing, default_role="MISSING_OR_UNVERIFIED") if role == "MISSING_OR_UNVERIFIED"]
+    missing_block = _render_role_block("MISSING_OR_UNVERIFIED", _EVIDENCE_ROLE_LABELS["MISSING_OR_UNVERIFIED"], missing_items)
+    if missing_block and not any('data-evidence-role="MISSING_OR_UNVERIFIED"' in block for block in blocks):
+        blocks.append(missing_block)
 
     if not blocks:
         return ""
     return (
         '<section class="detail-section evidence-section" id="evidence">'
         '<div class="section-heading"><div><div class="section-kicker">UNDERSTAND MATCH</div><h2>\u5173\u952e\u4f9d\u636e</h2></div>'
-        '<p>\u53ea\u5c55\u793a\u5f53\u524d\u8bb0\u5f55\u4e2d\u771f\u5b9e\u5b58\u5728\u7684\u89e3\u91ca</p></div><div class="evidence-grid">'
+        '<p>\u53ea\u5c55\u793a\u5df2\u660e\u786e\u6807\u6ce8\u89d2\u8272\u7684\u8bc1\u636e</p></div><div class="evidence-grid">'
         + "".join(blocks)
         + "</div></section>"
     )
@@ -968,37 +1038,6 @@ def _render_status_panel(contract: dict[str, Any]) -> str:
 
 
 DETAIL_CSS = """
-    :root {
-      --shell-bg:#07111A; --workspace-bg:#F7F7F5; --surface:#FFFFFF; --surface-subtle:#FAFAF8;
-      --ink:#121417; --muted:#626870; --quiet:#8B9198; --line:#E6E7E4;
-      --accent:#FF6A00; --accent-soft:#FFF1E8;
-      --home:#1F5EA8; --draw:#A9ADB2; --away:#E23B3B;
-      --matrix-low:#F3F7F2; --matrix-high:#4A9A62;
-      --warning:#B75C00; --warning-soft:#FFF4E8; --danger:#B42318; --danger-soft:#FFF1F0; --verified:#18794E;
-      --max:1240px;
-    }
-    * { box-sizing:border-box; }
-    html { background:var(--shell-bg); scroll-behavior:smooth; }
-    body { min-width:0; margin:0; background:var(--workspace-bg); color:var(--ink); font:14px/1.5 Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif; -webkit-font-smoothing:antialiased; }
-    a { color:inherit; }
-    button { font:inherit; }
-    a:focus-visible,button:focus-visible,summary:focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
-    [hidden] { display:none !important; }
-    .app-shell { display:grid; grid-template-columns:184px minmax(0,1fr); min-height:100vh; }
-    .side-rail { display:flex; flex-direction:column; min-height:100vh; padding:30px 18px 22px; background:var(--shell-bg); color:#F5F7F8; }
-    .rail-brand { display:block; text-decoration:none; }
-    .rail-mark { display:block; font-size:25px; font-weight:750; letter-spacing:-.06em; }
-    .rail-caption { display:block; margin-top:3px; color:#A9B3BB; font-size:10px; line-height:1.4; letter-spacing:.12em; text-transform:uppercase; }
-    .rail-nav { display:grid; gap:5px; margin-top:54px; }
-    .nav-item { display:flex; align-items:baseline; justify-content:space-between; gap:8px; min-height:44px; padding:11px 10px; border-left:2px solid transparent; color:#A9B3BB; font-size:13px; text-decoration:none; }
-    .nav-item small { color:#65727C; font-size:9px; letter-spacing:.06em; text-transform:uppercase; }
-    .nav-item:hover,.nav-item.active { border-left-color:var(--accent); background:rgba(255,255,255,.06); color:#FFF; }
-    .nav-item.active small { color:#F6A26D; }
-    .rail-footer { margin-top:auto; padding:14px 10px 0; border-top:1px solid rgba(255,255,255,.12); color:#7F8B94; font-size:10px; }
-    .rail-footer strong { display:block; color:#D7DDE1; font-size:11px; font-weight:650; }
-    .rail-footer span { display:block; margin-top:4px; }
-    .workspace { min-width:0; background:var(--workspace-bg); }
-    .mobile-topbar { display:none; }
     .page { width:min(calc(100% - 48px),var(--max)); margin:0 auto; padding:28px 0 42px; }
     .site-header { display:flex; align-items:center; justify-content:space-between; gap:20px; padding-bottom:17px; border-bottom:1px solid var(--line); }
     .brand { display:flex; align-items:baseline; gap:12px; min-width:0; color:var(--ink); text-decoration:none; }
@@ -1016,17 +1055,19 @@ DETAIL_CSS = """
     .match-identity { padding:28px 0 23px; border-bottom:1px solid var(--line); }
     .match-meta { color:var(--muted); font-size:12px; }
     .match-identity h1 { max-width:100%; margin:11px 0 0; font-size:28px; line-height:1.18; letter-spacing:-.045em; overflow-wrap:anywhere; }
-    .match-identity h1 span { color:var(--muted); font-weight:450; }
+    .match-identity h1 > span:not(.identity-team) { color:var(--muted); font-weight:450; }
+    .identity-team { display:inline-flex; align-items:center; gap:8px; color:var(--ink) !important; font-weight:750 !important; vertical-align:middle; }
+    .identity-team .team-badge { flex:0 0 30px; width:30px; height:30px; }
     .quality-warning,.pilot-note { margin-top:15px; padding:11px 14px; border-left:3px solid var(--warning); background:var(--warning-soft); color:var(--warning); font-size:12px; }
     .quality-warning strong { color:var(--ink); }
     .quality-warning span { margin-left:8px; color:var(--muted); }
     .pilot-note { border-left-color:var(--line); background:transparent; color:var(--muted); }
-    .detail-section,.result-panel,.status-panel { margin-top:24px; padding:20px; border:1px solid var(--line); border-radius:12px; background:var(--surface); }
+    .detail-section,.result-panel,.status-panel { margin-top:30px; padding:20px 0 22px; border-top:2px solid var(--ink); border-bottom:1px solid var(--line); background:transparent; }
     .section-heading { display:flex; align-items:baseline; justify-content:space-between; gap:18px; margin-bottom:16px; }
     .section-heading h2 { margin:4px 0 0; font-size:17px; line-height:1.2; letter-spacing:-.025em; }
     .section-heading p { max-width:45%; margin:0; color:var(--muted); font-size:11px; text-align:right; }
     .forecast-section { padding:0; border:0; background:transparent; }
-    .probability-section { margin-top:24px; padding:20px; border:1px solid var(--line); border-radius:12px; background:var(--surface); }
+    .probability-section { margin-top:30px; padding:20px 0 22px; border-top:2px solid var(--ink); border-bottom:1px solid var(--line); background:transparent; }
     .probability-section h2 { margin:4px 0 16px; font-size:17px; letter-spacing:-.025em; }
     .hero-probabilities { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:1px; border:1px solid var(--line); background:var(--line); }
     .probability-card { min-width:0; padding:15px; background:var(--surface); }
@@ -1049,6 +1090,7 @@ DETAIL_CSS = """
     .probability-legend-item strong { font-size:14px; font-variant-numeric:tabular-nums; }
     .probability-legend-item.is-leading strong { font-weight:800; }
     .probability-legend-item small { color:var(--muted); font-size:10px; }
+    .lane-status-note { margin:-8px 0 14px; color:var(--warning); font-size:11px; }
     .lane-unavailable { border-style:dashed; background:var(--surface-subtle); }
     .lane-unavailable p { margin:7px 0 0; color:var(--muted); font-size:12px; }
     .exact-section { margin-top:24px; }
@@ -1085,6 +1127,7 @@ DETAIL_CSS = """
     .goal-row > strong { text-align:right; }
     .goal-bar { height:6px; overflow:hidden; background:var(--line); }
     .goal-bar > span { display:block; height:100%; background:var(--accent); }
+    .supporting-section { border-top-width:1px; }
     .decision-context { margin-top:24px; }
     .takeaways { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; }
     .takeaway { min-width:0; padding:13px 14px; border-left:3px solid var(--accent); background:var(--accent-soft); font-size:13px; font-weight:650; overflow-wrap:anywhere; }
@@ -1106,6 +1149,7 @@ DETAIL_CSS = """
     .evidence-section { margin-top:0; }
     .evidence-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
     .evidence-block { min-width:0; padding:15px; border:1px solid var(--line); background:var(--surface); }
+    .evidence-role { margin-bottom:5px; color:var(--accent); font-size:10px; font-weight:750; letter-spacing:.12em; }
     .evidence-block h3 { margin:0 0 10px; font-size:14px; }
     .evidence-block p { margin:0; }
     .evidence-fact { display:flex; justify-content:space-between; gap:10px; padding:8px 0; border-top:1px solid var(--line); font-size:12px; }
@@ -1157,16 +1201,8 @@ DETAIL_CSS = """
     .closed-beta strong,.closed-beta span { display:block; margin-top:4px; }
     .detail-footer { display:flex; justify-content:space-between; gap:12px; padding-top:18px; color:var(--muted); font-size:11px; }
     .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
-    @media (max-width:980px) {
-      .app-shell { grid-template-columns:156px minmax(0,1fr); }
-      .side-rail { padding-left:14px; padding-right:14px; }
-    }
+
     @media (max-width:820px) {
-      .app-shell { display:block; }
-      .side-rail { display:none; }
-      .mobile-topbar { display:flex; align-items:center; justify-content:space-between; min-height:56px; padding:0 16px; background:var(--shell-bg); color:#F5F7F8; }
-      .mobile-topbar a { font-weight:750; letter-spacing:-.05em; text-decoration:none; }
-      .mobile-topbar span { color:#B7C0C7; font-size:12px; }
       .page { width:calc(100% - 32px); padding-top:18px; }
       .site-header { align-items:baseline; padding-bottom:14px; }
       .detail-nav { gap:3px 13px; margin-top:11px; }
@@ -1184,7 +1220,7 @@ DETAIL_CSS = """
       .match-identity h1 { font-size:20px; line-height:1.22; }
       .quality-warning { display:block; }
       .quality-warning span { display:block; margin:5px 0 0; }
-      .detail-section,.result-panel,.status-panel,.probability-section { margin-top:18px; padding:15px; border-radius:10px; }
+      .detail-section,.result-panel,.status-panel,.probability-section { margin-top:20px; padding:15px 0 18px; border-radius:0; }
       .section-heading { display:block; margin-bottom:12px; }
       .section-heading p { max-width:none; margin-top:5px; text-align:left; }
       .hero-probabilities { grid-template-columns:repeat(3,minmax(0,1fr)); }
@@ -1235,7 +1271,6 @@ DETAIL_CSS = """
       .detail-footer span { display:block; margin-top:5px; }
     }
     @media (max-width:360px) {
-      .mobile-topbar { padding-left:12px; padding-right:12px; }
       .page { width:calc(100% - 16px); }
       .site-header { gap:8px; }
       .match-identity h1 { font-size:18px; }
@@ -1275,8 +1310,20 @@ def render_match_detail(contract: dict[str, Any]) -> str:
         else ""
     )
     kickoff = _format_datetime(identity.get("kickoff_at"), include_date=True)
-    home = _esc(identity.get("home"), "\u4e3b\u961f")
-    away = _esc(identity.get("away"), "\u5ba2\u961f")
+    home_value = identity.get("home") or "\u4e3b\u961f"
+    away_value = identity.get("away") or "\u5ba2\u961f"
+    home = _esc(home_value)
+    away = _esc(away_value)
+    home_badge = render_team_badge(
+        home_value,
+        identity.get("home_crest") or identity.get("home_logo") or identity.get("home_badge"),
+        side="home",
+    )
+    away_badge = render_team_badge(
+        away_value,
+        identity.get("away_crest") or identity.get("away_logo") or identity.get("away_badge"),
+        side="away",
+    )
     meta = " \u00b7 ".join(
         value for value in (_esc(identity.get("competition")), _esc(identity.get("match_num")), _esc(kickoff)) if value
     )
@@ -1334,26 +1381,7 @@ def render_match_detail(contract: dict[str, Any]) -> str:
             nav_items.append('<a href="#sources">\u8bb0\u5f55\u4e0e\u6765\u6e90</a>')
     nav_html = f'<nav class="detail-nav" aria-label="\u9875\u9762\u5185\u5bfc">{"".join(nav_items)}</nav>' if nav_items else ""
     closed_beta = render_closed_beta_notice("closed-beta")
-    return f"""<!doctype html>
-<html lang="zh-CN">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{title}</title>
-<style>{DETAIL_CSS}</style>
-</head>
-<body class="detail-page status-{_esc(_status_class(contract))}">
-<div class="app-shell">
-<aside class="side-rail">
-  <a class="rail-brand" href="../../prediction_dashboard/latest.html"><span class="rail-mark">FBOS</span><span class="rail-caption">Football Prediction<br>Intelligence</span></a>
-  <nav class="rail-nav" aria-label="\u4e3b\u5bfc\u822a">
-    <a class="nav-item active" href="../../prediction_dashboard/latest.html"><span>\u4eca\u65e5\u6bd4\u8d5b</span><small>Matches</small></a>
-    <a class="nav-item" href="../../prediction_dashboard/latest.html#historical-results"><span>\u5386\u53f2\u9a8c\u8bc1</span><small>History</small></a>
-  </nav>
-  <div class="rail-footer"><strong>\u8d5b\u524d\u5206\u6790</strong><span>\u53ea\u5c55\u793a\u80fd\u6539\u53d8\u5f53\u524d\u5224\u65ad\u7684\u5185\u5bb9\u3002</span></div>
-</aside>
-<main class="workspace">
-<div class="mobile-topbar"><a href="../../prediction_dashboard/latest.html">FBOS</a><span>\u6bd4\u8d5b\u8be6\u60c5</span></div>
+    content_html = f"""
 <div class="page">
 <header class="site-header">
   <a class="brand" href="../../prediction_dashboard/latest.html"><span class="brand-name">FBOS</span><span class="brand-subtitle">Football Prediction Intelligence</span></a>
@@ -1364,7 +1392,7 @@ def render_match_detail(contract: dict[str, Any]) -> str:
   <div class="detail-main">
     <section class="match-identity" id="conclusion">
       <div class="match-meta"><span>{meta}</span></div>
-      <h1>{home} <span>vs</span> {away}</h1>
+      <h1><span class="identity-team home">{home}{home_badge}</span> <span>vs</span> <span class="identity-team away">{away_badge}{away}</span></h1>
       {quality_warning}
       {pilot_note}
     </section>
@@ -1379,10 +1407,16 @@ def render_match_detail(contract: dict[str, Any]) -> str:
 {closed_beta}
 <footer class="detail-footer"><span>\u8d5b\u524d\u8bb0\u5f55\u4fdd\u6301\u4e0d\u53d8\uff1b\u8d5b\u540e\u7ed3\u679c\u5355\u72ec\u6838\u9a8c\u3002</span><span>\u9875\u9762\u6570\u636e\u6765\u81ea\u5f53\u524d\u53ef\u7528\u7684\u6bd4\u8d5b\u8bb0\u5f55\u3002</span></footer>
 </div>
-</main>
-</div>
-</body>
-</html>"""
+"""
+    return render_public_document(
+        title=f"{home_value} vs {away_value} \u00b7 \u6bd4\u8d5b\u8be6\u60c5",
+        css=DETAIL_CSS,
+        content_html=content_html,
+        dashboard_href="../../prediction_dashboard/latest.html",
+        history_href="../../prediction_dashboard/latest.html#historical-results",
+        mobile_label="\u6bd4\u8d5b\u8be6\u60c5",
+        body_class=f"detail-page status-{_status_class(contract)}",
+    )
 
 
 

@@ -52,7 +52,15 @@ def exact_score_serving_state(health: Mapping[str, Any] | None) -> str:
     matched = str(health.get("provenance_status") or "").strip().upper() == "MATCHED"
 
     if current_serving and matched and status == "HEALTHY":
-        return NORMAL
+        authority = health.get("lane_serving_authority")
+        exact_authority = authority.get("exact_score") if isinstance(authority, Mapping) else None
+        if isinstance(exact_authority, Mapping) and exact_authority.get("canonical") is True:
+            state = str(exact_authority.get("state") or "").strip().upper()
+            if state in {NORMAL, DEGRADED, UNVERIFIED}:
+                return state
+        # Runtime health proves that a record is current and internally
+        # matched; it does not prove that the exact-score lane is trusted.
+        return DEGRADED
     if current_serving and matched and status:
         return DEGRADED
     return UNVERIFIED

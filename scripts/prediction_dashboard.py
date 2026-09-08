@@ -38,6 +38,11 @@ except ImportError:  # package import used by tests
     from scripts.closed_beta_copy import render_closed_beta_notice
 
 try:
+    from public_ui_shared import render_public_document, render_team_badge
+except ImportError:  # package import used by tests
+    from scripts.public_ui_shared import render_public_document, render_team_badge
+
+try:
     from formal_market_projection import (
         project_frozen_formal_markets,
         summarize_formal_markets,
@@ -196,6 +201,8 @@ def _fixture_projection(fixture: dict[str, Any]) -> dict[str, Any]:
         "competition": _pick(fixture, "league", "competition"),
         "home": _pick(fixture, "homeTeam", "home_team", "home"),
         "away": _pick(fixture, "awayTeam", "away_team", "away"),
+        "home_crest": _pick(fixture, "homeCrest", "home_crest", "homeLogo", "home_logo"),
+        "away_crest": _pick(fixture, "awayCrest", "away_crest", "awayLogo", "away_logo"),
         "kickoff": kickoff,
         "kickoff_timestamp": _kickoff_timestamp(kickoff),
     }
@@ -534,65 +541,7 @@ def _esc(value: Any, fallback: str = "\u2014") -> str:
 
 
 MODERN_CSS = r"""
-:root {
-  --shell-bg: #07111A;
-  --workspace-bg: #F7F7F5;
-  --surface: #FFFFFF;
-  --surface-subtle: #FAFAF8;
-  --text: #121417;
-  --muted: #626870;
-  --quiet: #8B9198;
-  --line: #E6E7E4;
-  --accent: #FF6A00;
-  --accent-soft: #FFF1E8;
-  --home: #1F5EA8;
-  --draw: #A9ADB2;
-  --away: #E23B3B;
-  --warning: #B75C00;
-  --warning-soft: #FFF4E8;
-  --danger: #B42318;
-  --danger-soft: #FFF1F0;
-  --verified: #18794E;
-}
-* { box-sizing: border-box; }
-html { background: var(--shell-bg); scroll-behavior: smooth; }
-body {
-  min-width: 0;
-  margin: 0;
-  background: var(--workspace-bg);
-  color: var(--text);
-  font: 14px/1.5 Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
-  -webkit-font-smoothing: antialiased;
-}
-a { color: inherit; }
-button { font: inherit; }
-button, a { -webkit-tap-highlight-color: transparent; }
-button:focus-visible, a:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
-[hidden] { display: none !important; }
-
-.app-shell { display: grid; grid-template-columns: 184px minmax(0, 1fr); min-height: 100vh; }
-.side-rail {
-  display: flex;
-  flex-direction: column;
-  min-height: 100vh;
-  padding: 30px 18px 22px;
-  background: var(--shell-bg);
-  color: #F5F7F8;
-}
-.rail-brand { display: block; text-decoration: none; }
-.rail-mark { display: block; font-size: 25px; font-weight: 750; letter-spacing: -.06em; }
-.rail-caption { display: block; margin-top: 3px; color: #A9B3BB; font-size: 10px; line-height: 1.4; letter-spacing: .12em; text-transform: uppercase; }
-.rail-nav { display: grid; gap: 5px; margin-top: 54px; }
-.nav-item { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; min-height: 44px; padding: 11px 10px; border-left: 2px solid transparent; color: #A9B3BB; font-size: 13px; text-decoration: none; }
-.nav-item small { color: #65727C; font-size: 9px; letter-spacing: .06em; text-transform: uppercase; }
-.nav-item:hover, .nav-item.active { border-left-color: var(--accent); background: rgba(255,255,255,.06); color: #FFFFFF; }
-.nav-item.active small { color: #F6A26D; }
-.rail-footer { margin-top: auto; padding: 14px 10px 0; border-top: 1px solid rgba(255,255,255,.12); color: #7F8B94; font-size: 10px; }
-.rail-footer strong { display: block; color: #D7DDE1; font-size: 11px; font-weight: 650; }
-.rail-footer span { display: block; margin-top: 4px; }
-.workspace { min-width: 0; background: var(--workspace-bg); }
 .workspace-inner { width: min(calc(100% - 48px), 1220px); margin: 0 auto; padding: 28px 0 44px; }
-.mobile-topbar { display: none; }
 .workspace-header { display: flex; align-items: end; justify-content: space-between; gap: 24px; padding-bottom: 20px; border-bottom: 1px solid var(--line); }
 .workspace-kicker { color: var(--quiet); font-size: 10px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; }
 .workspace-title { margin: 8px 0 0; font-size: 24px; line-height: 1.15; letter-spacing: -.045em; }
@@ -600,6 +549,7 @@ button:focus-visible, a:focus-visible, summary:focus-visible { outline: 2px soli
 .header-note { color: var(--muted); font-size: 11px; text-align: right; white-space: nowrap; }
 .dashboard-heading { display: flex; align-items: end; justify-content: space-between; gap: 24px; padding: 22px 0 14px; }
 .dashboard-heading h1 { display: none; }
+.queue-kicker { color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
 .fixture-count { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
 .filters { display: flex; flex-wrap: wrap; gap: 7px; }
 .filter { min-height: 36px; padding: 6px 14px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface); color: var(--text); cursor: pointer; font-size: 12px; }
@@ -614,12 +564,12 @@ button:focus-visible, a:focus-visible, summary:focus-visible { outline: 2px soli
 .dashboard-trust { padding: 15px 0 0; border-top: 1px solid var(--line); }
 .dashboard-trust strong, .dashboard-trust span { display: block; margin-top: 3px; }
 
-.fixture-table { overflow: hidden; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
-.table-header, .fixture-row { display: grid; grid-template-columns: 112px 74px minmax(220px, 1.35fr) minmax(245px, 1.5fr) minmax(160px, 1fr) minmax(150px, .95fr); column-gap: 16px; padding-left: 16px; padding-right: 16px; }
+.fixture-table { overflow: hidden; border-top: 2px solid var(--text); border-bottom: 1px solid var(--line); background: var(--surface); }
+.table-header, .fixture-row { display: grid; grid-template-columns: 112px 74px minmax(220px, 1.35fr) minmax(245px, 1.5fr) minmax(190px, 1.05fr); column-gap: 16px; padding-left: 16px; padding-right: 16px; }
 .table-header { min-height: 38px; align-items: center; border-bottom: 1px solid var(--line); background: var(--surface-subtle); color: var(--muted); font-size: 10px; font-weight: 650; }
-.fixture-row { position: relative; min-height: 86px; align-items: center; border-bottom: 1px solid var(--line); }
+.fixture-row { position: relative; min-height: 104px; align-items: center; border-bottom: 1px solid var(--line); }
 .fixture-row:last-of-type { border-bottom: 0; }
-.fixture-row:hover { background: #FFFDFC; }
+.fixture-row:hover { background: #FFFDFC; box-shadow: inset 3px 0 0 var(--accent); }
 .fixture-row > * { min-width: 0; }
 .fixture-row > *:not(.fixture-row-target) { position: relative; z-index: 1; pointer-events: none; }
 .fixture-row-target { position: absolute; inset: 0; z-index: 0; border-radius: inherit; }
@@ -630,10 +580,11 @@ button:focus-visible, a:focus-visible, summary:focus-visible { outline: 2px soli
 .identity-competition { display: block; margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .kickoff { color: var(--text); font-variant-numeric: tabular-nums; }
 .teams-cell { min-width: 0; }
-.team-match { display: flex; align-items: baseline; gap: 7px; min-width: 0; font-weight: 700; letter-spacing: -.02em; }
+.team-match { display: flex; align-items: center; gap: 7px; min-width: 0; font-weight: 700; letter-spacing: -.02em; }
 .team-match .team { min-width: 0; overflow-wrap: anywhere; }
 .team-match .home { text-align: right; }
 .team-match .away { text-align: left; }
+.team-match .team-badge { flex: 0 0 24px; width: 24px; height: 24px; }
 .versus { flex: 0 0 auto; color: var(--muted); font-size: 10px; font-weight: 500; }
 .result-inline { margin-top: 4px; color: var(--verified); font-size: 11px; font-weight: 650; }
 .row-action { display: flex; align-items: baseline; justify-content: flex-start; flex-wrap: wrap; gap: 5px 9px; margin-top: 6px; }
@@ -658,14 +609,17 @@ button:focus-visible, a:focus-visible, summary:focus-visible { outline: 2px soli
 .probability-cell strong { font-size: 13px; line-height: 1.1; font-variant-numeric: tabular-nums; }
 .probability-cell.is-leading strong { font-weight: 800; }
 .probability-lead { color: var(--muted); font-size: 10px; }
-.score-cell, .queue-context { min-width: 0; }
+.score-cell { min-width: 0; }
 .score-caption, .context-label { display: block; margin-bottom: 3px; }
 .score-primary { display: flex; align-items: baseline; gap: 6px; font-size: 15px; font-weight: 750; font-variant-numeric: tabular-nums; }
 .score-primary span { color: var(--muted); font-size: 11px; font-weight: 500; }
+.queue-score-list { display: grid; gap: 3px; }
+.queue-score-row { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; min-width: 0; font-size: 12px; font-variant-numeric: tabular-nums; }
+.queue-score-row strong { font-weight: 750; }
+.queue-score-row span { color: var(--muted); }
+.queue-score-row:first-child strong { font-size: 14px; }
 .score-serving-note { margin-top: 4px; color: var(--warning); font-size: 10px; font-weight: 650; }
 .score-unavailable { color: var(--muted); font-size: 12px; }
-.context-value { display: block; font-size: 12px; font-weight: 650; font-variant-numeric: tabular-nums; }
-.context-note { display: block; margin-top: 3px; color: var(--muted); font-size: 10px; }
 .data-warning { margin: 14px 0; padding: 11px 14px; border-left: 3px solid var(--warning); background: var(--warning-soft); color: var(--warning); font-size: 12px; }
 .filter-empty { padding: 54px 20px; color: var(--muted); text-align: center; }
 
@@ -686,16 +640,9 @@ button:focus-visible, a:focus-visible, summary:focus-visible { outline: 2px soli
 .page-footer span:last-child { max-width: 52%; text-align: right; }
 
 @media (max-width: 980px) {
-  .app-shell { grid-template-columns: 156px minmax(0, 1fr); }
-  .side-rail { padding-left: 14px; padding-right: 14px; }
-  .table-header, .fixture-row { grid-template-columns: 100px 64px minmax(190px, 1.2fr) minmax(220px, 1.4fr) minmax(145px, 1fr) minmax(125px, .9fr); column-gap: 12px; padding-left: 12px; padding-right: 12px; }
+  .table-header, .fixture-row { grid-template-columns: 100px 64px minmax(190px, 1.2fr) minmax(220px, 1.4fr) minmax(165px, 1fr); column-gap: 12px; padding-left: 12px; padding-right: 12px; }
 }
 @media (max-width: 820px) {
-  .app-shell { display: block; }
-  .side-rail { display: none; }
-  .mobile-topbar { display: flex; align-items: center; justify-content: space-between; min-height: 56px; padding: 0 16px; background: var(--shell-bg); color: #F5F7F8; }
-  .mobile-topbar a { font-weight: 750; letter-spacing: -.05em; text-decoration: none; }
-  .mobile-topbar span { color: #B7C0C7; font-size: 12px; }
   .workspace-inner { width: calc(100% - 32px); padding: 18px 0 30px; }
   .workspace-header { align-items: baseline; gap: 12px; padding-bottom: 15px; }
   .workspace-title { font-size: 21px; }
@@ -704,6 +651,7 @@ button:focus-visible, a:focus-visible, summary:focus-visible { outline: 2px soli
   .dashboard-heading { align-items: center; gap: 12px; padding: 16px 0 12px; }
   .dashboard-heading h1 { display: block; margin: 0; font-size: 15px; font-weight: 700; }
   .fixture-count { display: block; margin-top: 3px; font-size: 11px; }
+  .queue-kicker { margin-top: 3px; font-size: 10px; }
   .filters { gap: 5px; }
   .filter { min-width: 58px; min-height: 44px; padding: 8px 10px; }
   .table-header { display: none; }
@@ -723,7 +671,11 @@ button:focus-visible, a:focus-visible, summary:focus-visible { outline: 2px soli
   .probability-grid { gap: 8px; }
   .probability-cell strong { font-size: 16px; }
   .probability-lead { font-size: 10px; }
-  .queue-score, .queue-context { display: none; }
+  .queue-score { display: block; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+  .queue-score-list { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+  .queue-score-row { display: grid; justify-items: start; gap: 1px; padding: 7px 8px; background: var(--surface-subtle); }
+  .queue-score-row:first-child strong { font-size: 14px; }
+  .queue-score-row span { font-size: 11px; }
   .history { margin-top: 25px; }
   .history-row { grid-template-columns: minmax(0, 1fr) auto; gap: 5px 12px; padding: 11px 0; }
   .history-meta, .history-links { grid-column: 1 / -1; }
@@ -732,7 +684,6 @@ button:focus-visible, a:focus-visible, summary:focus-visible { outline: 2px soli
   .page-footer span:last-child { max-width: none; margin-top: 6px; text-align: left; }
 }
 @media (max-width: 360px) {
-  .mobile-topbar { padding-left: 12px; padding-right: 12px; }
   .workspace-inner { width: calc(100% - 24px); }
   .workspace-header { align-items: flex-start; }
   .workspace-kicker { max-width: 190px; line-height: 1.35; }
@@ -744,6 +695,9 @@ button:focus-visible, a:focus-visible, summary:focus-visible { outline: 2px soli
   .team-match { font-size: 17px; }
   .probability-legend { gap: 5px; }
   .probability-cell strong { font-size: 15px; }
+  .queue-score-list { gap: 4px; }
+  .queue-score-row { padding-left: 5px; padding-right: 5px; }
+  .queue-score-row:first-child strong { font-size: 13px; }
 }
 """
 
@@ -893,9 +847,15 @@ def _format_percent(value: Any) -> str | None:
 
 def _score_rows(prediction: dict[str, Any], limit: int = 5) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
-    seen: set[str] = set()
-    distribution = prediction.get("score_distribution")
-    if isinstance(distribution, list):
+    by_score: dict[str, dict[str, Any]] = {}
+    sources = (
+        prediction.get("score_distribution"),
+        prediction.get("top_scores"),
+        prediction.get("score_top3"),
+    )
+    for distribution in sources:
+        if not isinstance(distribution, list):
+            continue
         for item in distribution:
             if isinstance(item, dict):
                 score = _score_label(item.get("score") or item.get("value"))
@@ -903,25 +863,19 @@ def _score_rows(prediction: dict[str, Any], limit: int = 5) -> list[dict[str, An
             else:
                 score = _score_label(item)
                 probability = None
-            if score and score not in seen:
-                rows.append({"score": score, "probability": probability})
-                seen.add(score)
-    if not rows:
-        for item in prediction.get("score_top3") or prediction.get("top_scores") or []:
-            if isinstance(item, dict):
-                score = _score_label(item.get("score") or item.get("value"))
-                probability = _number(item.get("probability"))
-            else:
-                score = _score_label(item)
-                probability = None
-            if score and score not in seen:
-                rows.append({"score": score, "probability": probability})
-                seen.add(score)
+            if not score:
+                continue
+            current = by_score.get(score)
+            if current is None:
+                current = {"score": score, "probability": probability}
+                by_score[score] = current
+                rows.append(current)
+            elif current.get("probability") is None and probability is not None:
+                current["probability"] = probability
     primary = _score_label(prediction.get("primary_score") or prediction.get("unique_score"))
-    if primary and primary not in seen:
+    if primary and primary not in by_score:
         rows.insert(0, {"score": primary, "probability": None})
     return rows[:limit]
-
 
 def _one_x_two_html(prediction: dict[str, Any]) -> str:
     probabilities = prediction.get("probabilities") or {}
@@ -1000,34 +954,34 @@ def _score_summary_html(
     *,
     exact_score_serving: dict[str, Any] | None = None,
 ) -> str:
-    serving_state = str((exact_score_serving or {}).get("state") or "NORMAL")
+    serving_state = str((exact_score_serving or {}).get("state") or "UNVERIFIED")
     if not _prediction_exact_available(prediction):
         return (
             '<div class="queue-score score-unavailable" data-score-serving-state="UNAVAILABLE">'
-            '<span class="score-caption">比分概率</span><strong>暂不可用</strong></div>'
+            '<span class="score-caption">\u6bd4\u5206\u6982\u7387</span><strong>\u6682\u4e0d\u53ef\u7528</strong></div>'
         )
-    rows = [
-        row for row in _score_rows(prediction, limit=5)
-        if row.get("probability") is not None
-    ]
-    if not rows:
+    rows = [row for row in _score_rows(prediction, limit=3) if row.get("probability") is not None]
+    rendered_rows = []
+    for rank, row in enumerate(rows, start=1):
+        probability = _format_percent(row.get("probability"))
+        if not probability:
+            continue
+        rendered_rows.append(
+            f'<div class="queue-score-row" data-score-rank="{rank}">'
+            f'<strong>{html.escape(str(row["score"]))}</strong><span>{html.escape(probability)}</span></div>'
+        )
+    if not rendered_rows:
         return ""
-    primary = rows[0]
-    primary_probability = _format_percent(primary.get("probability"))
-    primary_probability_html = (
-        f'<span>{html.escape(primary_probability)}</span>' if primary_probability else ""
-    )
     local_context = ""
     if serving_state != "NORMAL":
-        local_context = '<div class="score-serving-note">比分概率仅供观察</div>'
+        local_context = '<div class="score-serving-note">\u6bd4\u5206\u6982\u7387\u4ec5\u4f9b\u89c2\u5bdf</div>'
     return (
         f'<div class="queue-score score-cell{" score-unverified" if serving_state != "NORMAL" else ""}" '
         f'data-score-serving-state="{html.escape(serving_state, quote=True)}">'
-        '<div class="score-caption">最高概率比分</div>'
-        f'<div class="score-primary"><strong>{html.escape(primary["score"])}</strong>{primary_probability_html}</div>'
+        '<div class="score-caption">Exact Top3</div>'
+        f'<div class="queue-score-list">{"".join(rendered_rows)}</div>'
         f'{local_context}</div>'
     )
-
 
 def _market_divergence_html(prediction: dict[str, Any]) -> str:
     market = prediction.get("market_summary")
@@ -1059,18 +1013,9 @@ def _market_divergence_html(prediction: dict[str, Any]) -> str:
 
 
 def _queue_context_html(prediction: dict[str, Any]) -> str:
-    parts = []
-    total = _total_goal_summary(prediction)
-    if total:
-        parts.append(
-            '<div class="context-item"><span class="context-label">总进球分布</span>'
-            f'<span class="context-value">最高段 {html.escape(str(total["bucket"]))} · '
-            f'{html.escape(_format_percent(total["probability"]) or "—")}</span></div>'
-        )
-    market = _market_divergence_html(prediction)
-    if market:
-        parts.append(market)
-    return '<div class="queue-context">' + "".join(parts) + '</div>' if parts else '<div class="queue-context"></div>'
+    # The default Today queue has one launch hierarchy: FT 1X2 plus Exact
+    # Top3. Totals and market context remain detail-level supporting views.
+    return ""
 
 
 def _card_status_copy(card: dict[str, Any]) -> str:
@@ -1104,7 +1049,7 @@ def _modern_card_html(
         action_html = f'<span class="completed-note">{_card_status_copy(card)}</span>{detail_link}'
     elif prediction:
         pilot_html = (
-            '<span class="action-note">概率仅供观察</span>'
+            '<span class="action-note">\u6982\u7387\u4ec5\u4f9b\u89c2\u5bdf</span>'
             if card.get("pilot_excluded")
             else ""
         )
@@ -1128,13 +1073,15 @@ def _modern_card_html(
             f'<span class="exception-note{note_class}">{html.escape(exact_copy)}</span>'
             f'{reason_html}{detail_link}'
         )
-    home_text = _esc(card.get("home"), "\u4e3b\u961f\u5f85\u5b9a")
-    away_text = _esc(card.get("away"), "\u5ba2\u961f\u5f85\u5b9a")
+    home_value = card.get("home") or "\u4e3b\u961f\u5f85\u5b9a"
+    away_value = card.get("away") or "\u5ba2\u961f\u5f85\u5b9a"
+    home_text = html.escape(str(home_value))
+    away_text = html.escape(str(away_value))
     teams_html = (
         '<div class="team-match">'
-        f'<span class="team home">{home_text}</span>'
+        f'<span class="team home">{home_text}{render_team_badge(home_value, card.get("home_crest"), side="home")}</span>'
         '<span class="versus">vs</span>'
-        f'<span class="team away">{away_text}</span>'
+        f'<span class="team away">{render_team_badge(away_value, card.get("away_crest"), side="away")}{away_text}</span>'
         '</div>'
     )
     if has_result:
@@ -1143,9 +1090,8 @@ def _modern_card_html(
     score_html = (
         _score_summary_html(prediction, exact_score_serving=exact_score_serving)
         if prediction
-        else '<div class="queue-score score-unavailable"><span class="score-caption">比分概率</span><strong>暂不可用</strong></div>'
+        else '<div class="queue-score score-unavailable" data-score-serving-state="UNAVAILABLE"><span class="score-caption">\u6bd4\u5206\u6982\u7387</span><strong>\u6682\u4e0d\u53ef\u7528</strong></div>'
     )
-    goals_html = _queue_context_html(prediction) if prediction else '<div class="queue-context"></div>'
     match_number_text = _esc(card.get("match_num"), "\u2014")
     competition_text = _esc(card.get("competition"), "\u8d5b\u4e8b\u5f85\u5b9a")
     kickoff_timestamp = html.escape(str(card.get("kickoff_timestamp") or _kickoff_timestamp(card.get("kickoff")) or ""), quote=True)
@@ -1166,20 +1112,19 @@ def _modern_card_html(
         f'data-status="{html.escape(status, quote=True)}" '
         f'data-result="{"yes" if has_result else "no"}" '
         f'data-kickoff="{kickoff_timestamp}" '
-        f'data-prediction-kind="{prediction_kind}">'
+        f'data-prediction-kind="{prediction_kind}" '
+        'data-one-x-two-serving-state="CAUTION">'
         f'{detail_target}'
         '<div class="identity-cell">'
         f'<span class="match-number">{match_number_text}</span>'
         f'<span class="identity-competition">{competition_text}</span>'
         '</div>'
         f'<div class="kickoff">{html.escape(_format_kickoff(card.get("kickoff")))}</div>'
-         f'<div class="teams-cell">{teams_html}<div class="row-action">{action_html}</div></div>'
-         f'<div class="probability-cell-group">{probability_html}</div>'
-         f'{score_html}'
-         f'{goals_html}'
-         '</article>'
-     )
-
+        f'<div class="teams-cell">{teams_html}<div class="row-action">{action_html}</div></div>'
+        f'<div class="probability-cell-group">{probability_html}</div>'
+        f'{score_html}'
+        '</article>'
+    )
 
 def _historical_results_html(rows: list[dict[str, Any]]) -> str:
     if not rows:
@@ -1333,34 +1278,14 @@ def render_dashboard(payload: dict[str, Any]) -> str:
     page_version = "|".join(
         str(payload.get(key) or "") for key in ("business_date", "generated_at")
     )
-    history_nav = '<a class="nav-item" href="#historical-results"><span>\u5386\u53f2\u9a8c\u8bc1</span><small>History</small></a>' if historical_html else ""
-    return f"""<!doctype html>
-<html lang="zh-CN">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>\u4eca\u65e5\u6bd4\u8d5b \u00b7 FBOS</title>
-<style>{MODERN_CSS}</style>
-</head>
-<body>
-<div class="app-shell">
-<aside class="side-rail">
-  <a class="rail-brand" href="./latest.html"><span class="rail-mark">FBOS</span><span class="rail-caption">Football Prediction<br>Intelligence</span></a>
-  <nav class="rail-nav" aria-label="\u4e3b\u5bfc\u822a">
-    <a class="nav-item active" href="./latest.html" aria-current="page"><span>\u4eca\u65e5\u6bd4\u8d5b</span><small>Matches</small></a>
-    {history_nav}
-  </nav>
-  <div class="rail-footer"><strong>\u8d5b\u524d\u5206\u6790</strong><span>\u53ea\u5c55\u793a\u80fd\u6539\u53d8\u5f53\u524d\u5224\u65ad\u7684\u5185\u5bb9\u3002</span></div>
-</aside>
-<main class="workspace">
-<div class="mobile-topbar"><a href="./latest.html">FBOS</a><span>\u4eca\u65e5\u6bd4\u8d5b</span></div>
+    content_html = f"""
 <div class="workspace-inner">
 <header class="workspace-header">
   <div><div class="workspace-kicker">Football Prediction Intelligence</div><h1 class="workspace-title">\u4eca\u65e5\u6bd4\u8d5b<span>{html.escape(business_date_label)}</span></h1></div>
   <div class="header-note">\u6d4b\u8bd5\u9636\u6bb5 \u00b7 \u4ec5\u4f9b\u8d5b\u524d\u5206\u6790</div>
 </header>
 <section class="dashboard-heading">
-  <h1>\u4eca\u65e5\u6bd4\u8d5b<span class="fixture-count">{fixture_count} \u573a</span></h1>
+  <div><h1>\u4eca\u65e5\u6bd4\u8d5b<span class="fixture-count">{fixture_count} \u573a</span></h1><div class="queue-kicker">FT 1X2 + Exact Top3</div></div>
   <div class="filters" aria-label="\u6bd4\u8d5b\u7b5b\u9009">
     <button class="filter" type="button" data-filter="ALL" aria-pressed="true">\u5168\u90e8</button>
     <button class="filter" type="button" data-filter="UPCOMING" aria-pressed="false">\u672a\u5f00\u8d5b</button>
@@ -1371,7 +1296,7 @@ def render_dashboard(payload: dict[str, Any]) -> str:
 <section class="fixture-table" id="fixture-list" aria-label="\u7ade\u5f69\u65e5\u6bd4\u8d5b\u5217\u8868">
   <div class="table-header" aria-hidden="true">
     <span>\u6bd4\u8d5b / \u8d5b\u4e8b</span><span>\u5f00\u7403</span><span>\u5bf9\u9635 / \u8d5b\u679c</span>
-    <span>1X2 \u6982\u7387</span><span>\u6bd4\u5206\u6982\u7387</span><span>\u51b3\u7b56\u8bed\u5883</span>
+    <span>1X2 \u6982\u7387</span><span>Exact Top3</span>
   </div>
   {cards_html}
   {filter_empty_html}
@@ -1383,34 +1308,40 @@ def render_dashboard(payload: dict[str, Any]) -> str:
   <span>Closed Beta \u00b7 \u9884\u6d4b\u53ef\u80fd\u51fa\u9519\uff0c\u4ec5\u4f9b\u6bd4\u8d5b\u5206\u6790\u4e0e\u7814\u7a76\u53c2\u8003\uff1b\u7406\u6027\u53c2\u4e0e\uff0c\u672a\u6210\u5e74\u4eba\u9650\u5236\u3002</span>
 </footer>
 </div>
-</main>
-</div>
-<script>
+"""
+    interaction_script = """<script>
 const buttons = Array.from(document.querySelectorAll('[data-filter]'));
 const cards = Array.from(document.querySelectorAll('.fixture-row'));
 const historicalResults = document.querySelector('#historical-results');
 const emptyStates = Array.from(document.querySelectorAll('[data-filter-empty]'));
-buttons.forEach(button => button.addEventListener('click', () => {{
+buttons.forEach(button => button.addEventListener('click', () => {
   const filter = button.dataset.filter;
   buttons.forEach(item => item.setAttribute('aria-pressed', String(item === button)));
-  cards.forEach(card => {{
+  cards.forEach(card => {
     const kickoffTimestamp = Date.parse(card.dataset.kickoff || '');
     const isUpcoming = Number.isFinite(kickoffTimestamp) && Date.now() < kickoffTimestamp;
     const match = filter === 'ALL'
       || (filter === 'UPCOMING' && isUpcoming)
       || (filter === 'RESULT' && card.dataset.result === 'yes');
     card.hidden = !match;
-  }});
+  });
   const visibleCount = cards.filter(card => !card.hidden).length;
-  emptyStates.forEach(empty => {{
+  emptyStates.forEach(empty => {
     empty.hidden = empty.dataset.filterEmpty !== filter || visibleCount !== 0;
-  }});
+  });
   if (historicalResults) historicalResults.hidden = filter !== 'ALL';
-}}));
-</script>
-{STATIC_REFRESH_SCRIPT.replace("__PAGE_VERSION__", json.dumps(page_version, ensure_ascii=False))}
-</body>
-</html>"""
+}));
+</script>"""
+    body_suffix = interaction_script + STATIC_REFRESH_SCRIPT.replace("__PAGE_VERSION__", json.dumps(page_version, ensure_ascii=False))
+    return render_public_document(
+        title="\u4eca\u65e5\u6bd4\u8d5b \u00b7 FBOS",
+        css=MODERN_CSS,
+        content_html=content_html,
+        dashboard_href="./latest.html",
+        history_href="#historical-results" if historical_html else None,
+        mobile_label="\u4eca\u65e5\u6bd4\u8d5b",
+        body_suffix=body_suffix,
+    )
 
 def build_dashboard(
     business_date: str,

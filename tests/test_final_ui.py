@@ -47,6 +47,7 @@ def dashboard_payload() -> dict:
                     "score_distribution": [
                         {"score": "1-0", "probability": 0.147},
                         {"score": "1-1", "probability": 0.122},
+                        {"score": "2-0", "probability": 0.101},
                     ],
                     "formal_markets": {
                         "markets": {
@@ -68,9 +69,14 @@ def test_dashboard_uses_locked_probability_desk_surface():
     assert 'class="side-rail"' in html
     assert "1X2 \u6982\u7387" in html
     assert html.count('class="probability-segment ') == 3
-    assert 'data-score-serving-state="NORMAL"' in html
-    assert "\u6700\u9ad8\u6982\u7387\u6bd4\u5206" in html
-    assert "\u51b3\u7b56\u8bed\u5883" in html
+    assert 'data-score-serving-state="NORMAL"' not in html
+    assert 'data-score-serving-state="DEGRADED"' in html
+    assert html.count('data-score-rank=') == 3
+    assert "Exact Top3" in html
+    assert "\u603b\u8fdb\u7403\u5206\u5e03" not in html
+    assert "\u5e02\u573a\u5bf9\u7167" not in html
+    assert "\u51b3\u7b56\u8bed\u5883" not in html
+    assert ".queue-score, .queue-context { display: none; }" not in html
     assert "JC" not in html
     assert "Top10" not in html
     assert "Top15" not in html
@@ -89,6 +95,10 @@ def test_detail_keeps_exact_score_as_separate_truthful_lane(tmp_path):
         {"goals": "3", "probability": 0.22},
         {"goals": "4+", "probability": 0.22},
     ]
+    contract["evidence"]["fundamentals"] = {
+        "captured_at": "2026-09-08T12:00:00+08:00",
+        "recent_form": {"home_overall": {"matches": 5, "wins": 3, "draws": 1, "losses": 1}},
+    }
     html = render_match_detail(contract)
 
     assert html.count('data-exact-cell-home=') == 169
@@ -102,6 +112,9 @@ def test_detail_keeps_exact_score_as_separate_truthful_lane(tmp_path):
     assert "Top10" not in html
     assert "Top15" not in html
     assert "\u63a8\u8350" not in html
+    assert "\u7531\u5f53\u524d\u6bd4\u5206\u5206\u5e03\u6c47\u603b" in html
+    assert "\u603b\u8fdb\u7403\u5206\u5e03\u6700\u9ad8\u6bb5" not in html
+    assert 'data-evidence-role="MODEL_INPUT"' in html
 
     unavailable = copy.deepcopy(contract)
     unavailable["formal_markets"]["markets"]["exact_score"] = {
@@ -132,3 +145,32 @@ def test_completed_detail_prioritizes_90_minute_result(tmp_path):
     assert "90\u5206\u949f\u8d5b\u679c" in html
     assert "\u9884\u6d4b vs \u5b9e\u9645" in html
     assert "actual_probability" not in html
+
+
+def test_understand_match_separates_only_explicit_evidence_roles(tmp_path):
+    contract = assemble(roots(tmp_path, include_formal_markets=True))
+    contract["evidence"] = {
+        "fundamentals": {
+            "recent_form": {"home_overall": {"matches": 5, "wins": 3}},
+        },
+        "market_reaction": [{"text": "同一场赛前快照记录了主胜变化。"}],
+        "context_only": [{"text": "赛事背景仅供阅读。"}],
+        "missing_or_unverified": [{"text": "伤停信息未确认。"}],
+    }
+    contract["change_awareness"] = {
+        "status": "AVAILABLE",
+        "current_snapshot": {"prediction_id": "CURRENT"},
+        "previous_snapshot": {"prediction_id": "PREVIOUS"},
+        "markets": {},
+    }
+
+    html = render_match_detail(contract)
+
+    assert 'data-evidence-role="MODEL_INPUT"' in html
+    assert 'data-evidence-role="MARKET_REACTION"' in html
+    assert 'data-evidence-role="CONTEXT_ONLY"' in html
+    assert 'data-evidence-role="MISSING_OR_UNVERIFIED"' in html
+    assert "模型输入" in html
+    assert "市场变化" in html
+    assert "背景信息" in html
+    assert "缺失或未确认" in html

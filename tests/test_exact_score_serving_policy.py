@@ -17,9 +17,24 @@ NORMAL_HEALTH = {
 }
 
 
-def test_healthy_matched_current_serving_is_normal():
-    assert exact_score_serving_state(NORMAL_HEALTH) == NORMAL
+def test_healthy_matched_current_serving_is_degraded_without_canonical_lane_authority():
+    assert exact_score_serving_state(NORMAL_HEALTH) == DEGRADED
     presentation = exact_score_serving_presentation(NORMAL_HEALTH)
+    assert "\u4ec5\u4f9b\u89c2\u5bdf" in presentation["label"]
+    assert presentation["note"]
+
+
+def test_healthy_matched_current_serving_can_be_normal_only_with_canonical_lane_authority():
+    health = {
+        **NORMAL_HEALTH,
+        "lane_serving_authority": {
+            "exact_score": {"canonical": True, "state": NORMAL},
+        },
+    }
+
+    presentation = exact_score_serving_presentation(health)
+
+    assert exact_score_serving_state(health) == NORMAL
     assert presentation["label"] == "\u7cfb\u7edf\u9996\u63a8\u6bd4\u5206"
     assert presentation["note"] == ""
 

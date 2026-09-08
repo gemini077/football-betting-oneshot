@@ -1047,7 +1047,7 @@ def test_dashboard_keeps_exact_score_state_visible_inside_each_score_cell(tmp_pa
     assert "\u4fdd\u7559\u539f\u59cb\u6bd4\u5206\u6982\u7387" in html
 
 
-def test_dashboard_uses_normal_exact_score_copy_only_for_healthy_matched_current_serving(tmp_path):
+def test_dashboard_keeps_healthy_matched_current_serving_fail_closed_without_lane_authority(tmp_path):
     roots, runtime = _quality_roots(tmp_path, [f"{index}-{index + 1}" for index in range(1, 11)])
     write_json(roots["health_watch_path"], {
         "schema_version": "1.0",
@@ -1070,8 +1070,8 @@ def test_dashboard_uses_normal_exact_score_copy_only_for_healthy_matched_current
     assert payload["prediction_quality_health"]["status"] == "HEALTHY"
     assert payload["prediction_quality_health"]["available"] is True
     assert payload["prediction_quality_health"]["provenance_status"] == "MATCHED"
-    assert "预测质量降级" not in html
-    assert 'class="quality-warning"' not in html
+    assert 'class="quality-warning"' in html
+    assert 'data-score-serving-state="NORMAL"' not in html
     assert 'data-score-serving-state="UNAVAILABLE"' in html
 
 
