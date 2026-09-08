@@ -15,6 +15,7 @@ sys.path.insert(0, str(ROOT / "tests"))
 
 from automatic_model_core import build_automatic_model  # noqa: E402
 from automatic_postmatch_review import _model_diagnostics  # noqa: E402
+import evaluation_kernel as evaluation_module  # noqa: E402
 from exact_distribution import (  # noqa: E402
     EXACT_DISTRIBUTION_CELL_COUNT,
     EXACT_DISTRIBUTION_CONTRACT_VERSION,
@@ -285,7 +286,7 @@ def test_formal_record_freezes_contract_and_evaluator_uses_it_only(tmp_path, mon
     }
     monkeypatch.setattr(review_module, "DEFAULT_RECORD_ROOT", tmp_path / "predictions")
     monkeypatch.setattr(
-        review_module,
+        evaluation_module,
         "dixon_coles_score_matrix",
         lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("formal review replayed current code")),
     )

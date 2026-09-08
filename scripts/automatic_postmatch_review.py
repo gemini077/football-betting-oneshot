@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import math
 import re
 from datetime import datetime
 from pathlib import Path
@@ -18,8 +17,8 @@ from postmatch_queue import BASE_DIR, SHANGHAI, load_json
 from match_identity import identity_aliases
 from postmatch_evidence import fetch_postmatch_evidence
 from paper_ledger import pair_key
-from score_engine import dixon_coles_score_matrix
-from exact_distribution import classify_frozen_exact_score, classify_frozen_jc_total_goals
+from evaluation_kernel import evaluate_1x2_probabilities, evaluate_prediction_common
+from exact_distribution import classify_frozen_jc_total_goals
 from official_jc_handicap import classify_frozen_jc_handicap
 from model_governance import DEFAULT_RECORD_ROOT, load_frozen_prediction, validate_postmatch_review_link
 from baseline_production import (
@@ -165,46 +164,35 @@ def _btts_pick(report: dict) -> str | None:
 
 def _model_diagnostics(report: dict, home_goals: int, away_goals: int) -> dict:
     model = report.get("model") or {}
-    probabilities = model.get("probabilities") or {}
-    actual_key = "home" if home_goals > away_goals else "draw" if home_goals == away_goals else "away"
-    actual_vector = {"home": 1.0 if actual_key == "home" else 0.0, "draw": 1.0 if actual_key == "draw" else 0.0, "away": 1.0 if actual_key == "away" else 0.0}
-    clean = {key: float(probabilities.get(key) or 0.0) for key in actual_vector}
-    brier = sum((clean[key] - actual_vector[key]) ** 2 for key in actual_vector)
-    actual_probability = max(clean.get(actual_key, 0.0), 1e-12)
-    log_loss = -math.log(actual_probability)
-    lambda_home = float(model.get("lambda_home") or 0.0)
-    lambda_away = float(model.get("lambda_away") or 0.0)
     governance = report.get("model_governance") or {}
     frozen_record = load_frozen_prediction(str(governance.get("prediction_id") or ""), DEFAULT_RECORD_ROOT)
-    frozen_exact = classify_frozen_exact_score(frozen_record or {}, home_goals, away_goals)
+    common = evaluate_prediction_common(
+        model,
+        {"home_goals": home_goals, "away_goals": away_goals},
+        frozen_record=frozen_record or {},
+        allow_research_reconstruction=True,
+        research_source="matrix",
+        include_distribution=False,
+        log_loss_epsilon=1e-12,
+        fallback_missing_values=True,
+    )
     frozen_jc_total_goals = classify_frozen_jc_total_goals(frozen_record or {}, home_goals, away_goals)
     frozen_jc_handicap = classify_frozen_jc_handicap(frozen_record or {}, home_goals, away_goals)
-    if frozen_exact["FORMAL_EXACT_DISTRIBUTION_FROZEN"]:
-        score_probability = frozen_exact["probability"]
-        score_rank = frozen_exact["rank"]
-        exact_authority = frozen_exact["authority_status"]
-    else:
-        # Historical reviews may retain a clearly research-only reconstruction;
-        # a formal frozen distribution is never regenerated here.
-        matrix = dixon_coles_score_matrix({"lambda_home": lambda_home, "lambda_away": lambda_away, "rho": float(model.get("rho") or 0.0)}) if lambda_home > 0 and lambda_away > 0 else {}
-        score_probability = float(matrix.get((home_goals, away_goals)) or 0.0) if matrix else None
-        ranked = sorted(matrix.items(), key=lambda item: (-item[1], item[0][0], item[0][1]))
-        score_rank = next((index + 1 for index, (score, _) in enumerate(ranked) if score == (home_goals, away_goals)), None)
-        exact_authority = frozen_exact["authority_status"]
     market = (model.get("calibration") or {}).get("market_probabilities") or {}
-    market_actual = float(market.get(actual_key) or 0.0) if market else None
+    market_metrics = evaluate_1x2_probabilities(market, common["actual_outcome"], log_loss_epsilon=1e-12)
+    market_actual = market_metrics["actual_outcome_probability"] if market else None
     return {
-        "actual_outcome_key": actual_key,
-        "actual_outcome_probability": round(actual_probability, 6),
-        "brier_score_1x2": round(brier, 6),
-        "log_loss_1x2": round(log_loss, 6),
-        "actual_score_probability": round(score_probability, 6) if score_probability is not None else None,
-        "actual_score_rank": score_rank,
-        "exact_score_authority_status": exact_authority,
-        "FORMAL_EXACT_DISTRIBUTION_FROZEN": frozen_exact["FORMAL_EXACT_DISTRIBUTION_FROZEN"],
-        "FINITE_GRID_EXACTLY_REPRESENTED": frozen_exact["FINITE_GRID_EXACTLY_REPRESENTED"],
-        "OUT_OF_EXPLICIT_SUPPORT": frozen_exact["OUT_OF_EXPLICIT_SUPPORT"],
-        "FORMAL_EXACT_LOG_SCORE_ELIGIBLE": frozen_exact["FORMAL_EXACT_LOG_SCORE_ELIGIBLE"],
+        "actual_outcome_key": common["actual_outcome"],
+        "actual_outcome_probability": round(common["actual_outcome_probability"], 6),
+        "brier_score_1x2": round(common["brier_score_1x2"], 6),
+        "log_loss_1x2": round(common["log_loss_1x2"], 6),
+        "actual_score_probability": round(common["actual_score_probability"], 6) if common["actual_score_probability"] is not None else None,
+        "actual_score_rank": common["actual_score_rank"],
+        "exact_score_authority_status": common["exact_score_authority_status"],
+        "FORMAL_EXACT_DISTRIBUTION_FROZEN": common["FORMAL_EXACT_DISTRIBUTION_FROZEN"],
+        "FINITE_GRID_EXACTLY_REPRESENTED": common["FINITE_GRID_EXACTLY_REPRESENTED"],
+        "OUT_OF_EXPLICIT_SUPPORT": common["OUT_OF_EXPLICIT_SUPPORT"],
+        "FORMAL_EXACT_LOG_SCORE_ELIGIBLE": common["FORMAL_EXACT_LOG_SCORE_ELIGIBLE"],
         "FORMAL_JC_TOTAL_GOALS_FROZEN": frozen_jc_total_goals["FORMAL_JC_TOTAL_GOALS_FROZEN"],
         "JC_TOTAL_GOALS_BUCKET_EXACTLY_REPRESENTED": frozen_jc_total_goals[
             "JC_TOTAL_GOALS_BUCKET_EXACTLY_REPRESENTED"
@@ -230,11 +218,13 @@ def _model_diagnostics(report: dict, home_goals: int, away_goals: int) -> dict:
         "jc_handicap_same_time_official_market_baseline_status": frozen_jc_handicap[
             "same_time_official_market_baseline_status"
         ],
-        "lambda_home_residual": round(home_goals - lambda_home, 4),
-        "lambda_away_residual": round(away_goals - lambda_away, 4),
-        "total_goals_residual": round((home_goals + away_goals) - (lambda_home + lambda_away), 4),
+        "lambda_home_residual": round(common["lambda_home_residual"], 4),
+        "lambda_away_residual": round(common["lambda_away_residual"], 4),
+        "total_goals_residual": round(common["total_goals_residual"], 4),
         "market_actual_outcome_probability": round(market_actual, 6) if market_actual is not None else None,
-        "model_minus_market_actual_outcome": round(actual_probability - market_actual, 6) if market_actual is not None else None,
+        "model_minus_market_actual_outcome": (
+            round(common["actual_outcome_probability"] - market_actual, 6) if market_actual is not None else None
+        ),
         "interpretation": "Brier与Log Loss评估方向概率；比分排名和λ残差评估比赛剧本偏差，不能用相邻比分冒充命中。",
     }
 

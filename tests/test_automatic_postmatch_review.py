@@ -84,6 +84,30 @@ def test_new_review_carries_exact_frozen_prediction_join(tmp_path, monkeypatch):
     assert review["prediction_link_status"] == "verified"
 
 
+def test_postmatch_diagnostics_uses_canonical_probability_for_market_delta(monkeypatch):
+    monkeypatch.setattr(review_module, "load_frozen_prediction", lambda *_args: {})
+    diagnostics = review_module._model_diagnostics(
+        {
+            "model": {
+                "probabilities": {"home": 0.45, "draw": 0.3, "away": 0.25},
+                "lambda_home": 1.2,
+                "lambda_away": 0.9,
+                "rho": 0.0,
+                "calibration": {
+                    "market_probabilities": {"home": 0.4, "draw": 0.35, "away": 0.25},
+                },
+            },
+            "model_governance": {"prediction_id": "MKT-PROB-REGRESSION-001"},
+        },
+        1,
+        0,
+    )
+    assert diagnostics["actual_outcome_key"] == "home"
+    assert diagnostics["actual_outcome_probability"] == 0.45
+    assert diagnostics["market_actual_outcome_probability"] == 0.4
+    assert diagnostics["model_minus_market_actual_outcome"] == 0.05
+
+
 def test_postmatch_diagnostics_read_frozen_jc_total_goals_truth_only(monkeypatch):
     state = build_prediction_time_exact_distribution_state(
         {(home, away): 1 / 169 for home in range(13) for away in range(13)},

@@ -53,6 +53,32 @@ MOVED_PRIVATE_IMPORTS = {
 }
 
 
+EVALUATION_DUPLICATE_DEFINITIONS = {
+    "scripts/baseline_settlement.py": {
+        "_actual_result",
+        "_outcome",
+        "_probabilities",
+        "_score_rows",
+        "_row_score",
+        "_expected_goals",
+        "_full_score_rows",
+    },
+    "scripts/prospective_settlement.py": {
+        "_outcome",
+        "_probabilities",
+        "_score_rows",
+        "_score_pair",
+    },
+}
+
+
+EVALUATION_CALLERS = (
+    ("scripts/baseline_settlement.py", "calculate_metrics"),
+    ("scripts/automatic_postmatch_review.py", "_model_diagnostics"),
+    ("scripts/prospective_settlement.py", "evaluate_prediction"),
+)
+
+
 def _tree(path: Path) -> ast.Module:
     return ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
 
@@ -135,3 +161,38 @@ def test_asian_contract_semantics_have_one_owner_and_pricers_delegate():
 
     for relative_path in ("scripts/market_engine.py", "scripts/score_engine.py"):
         assert "split_quarter_line" not in _called_names(_tree(ROOT / relative_path))
+
+
+def test_common_evaluation_semantics_have_one_owner():
+    canonical = _tree(SCRIPTS / "evaluation_kernel.py")
+    canonical_names = {
+        node.name
+        for node in ast.walk(canonical)
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
+    }
+    assert {
+        "normalize_verified_result",
+        "evaluate_prediction_common",
+        "evaluate_exact_score",
+        "evaluate_goal_residuals",
+    } <= canonical_names
+
+    for relative_path, forbidden in EVALUATION_DUPLICATE_DEFINITIONS.items():
+        defined = {
+            node.name
+            for node in ast.walk(_tree(ROOT / relative_path))
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
+        }
+        assert defined.isdisjoint(forbidden), f"duplicate evaluation implementation in {relative_path}"
+
+
+def test_evaluation_callers_delegate_common_semantics_to_canonical_owner():
+    for relative_path, function_name in EVALUATION_CALLERS:
+        calls = _called_names(_function(_tree(ROOT / relative_path), function_name))
+        assert "evaluate_prediction_common" in calls, f"{relative_path}::{function_name} bypasses evaluation owner"
+
+
+def test_production_review_does_not_reconstruct_formal_exact_truth_locally():
+    calls = _called_names(_function(_tree(ROOT / "scripts/automatic_postmatch_review.py"), "_model_diagnostics"))
+    assert "dixon_coles_score_matrix" not in calls
+    assert "classify_frozen_exact_score" not in calls

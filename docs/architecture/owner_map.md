@@ -30,3 +30,21 @@ Champion and `market_reference.v1` intentionally retain different aggregation
 semantics. This PR changes ownership only; it does not unify averaging,
 bookmaker selection, de-vig, line selection, score formulas, calibration,
 serving, UI, or frozen history.
+
+## Phase B — Issue #238 evaluation ownership
+
+This section records the behavior-preserving evaluation migration.  It does
+not make `evaluation_kernel.py` a model, serving, wager-contract, or Exact
+freeze owner.
+
+| Domain behavior | Old implementation owners | Canonical owner | Migrated callers | Duplicate disposition |
+| --- | --- | --- | --- | --- |
+| Verified regulation-90m result normalization and outcome identity | `baseline_settlement.py`, `prospective_settlement.py`, postmatch review inputs | `scripts/evaluation_kernel.py::normalize_verified_result` | benchmark settlement, prospective settlement, production review evaluation | Old parsing/normalization implementations deleted; `prospective_settlement.py::normalize_result` remains a shape/legacy-label wrapper only. |
+| 1X2 outcome probability, Brier, Log Loss and Top-1 evaluation | `baseline_settlement.py`, `automatic_postmatch_review.py`, `prospective_settlement.py` | `scripts/evaluation_kernel.py::evaluate_1x2_probabilities` | benchmark settlement, production review, formal prospective settlement | Duplicate formulas deleted; report/benchmark/prospective output shaping remains local. |
+| Exact actual-score probability/rank, Top-k and NLL evaluation | `baseline_settlement.py`, `automatic_postmatch_review.py`, `prospective_settlement.py` | `scripts/evaluation_kernel.py::evaluate_exact_score` | benchmark settlement, production review, formal prospective settlement | Shared row/rank/NLL semantics deleted from old owners; `exact_distribution.py` remains the formal frozen authority and is consumed, not reconstructed. |
+| Lambda/goal residual diagnostics | `baseline_settlement.py`, `automatic_postmatch_review.py`, `prospective_settlement.py` | `scripts/evaluation_kernel.py::evaluate_goal_residuals` | benchmark settlement, production review, formal prospective settlement | Signed/absolute residual formulas now have one owner; report and benchmark field names remain compatibility shaping. |
+
+Intentionally retained outside the evaluation owner: `market_contracts.py`
+wager settlement, `exact_distribution.py` formal immutable freeze/classification,
+JC total-goals/handicap-specific evaluation, benchmark persistence, postmatch
+report text/presentation, and model/score construction.

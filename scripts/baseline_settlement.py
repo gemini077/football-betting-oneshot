@@ -14,7 +14,7 @@ from baseline_shadow_runner import (
     BENCHMARK_CONTRACT_VERSION,
     BenchmarkConflictError,
 )
-from score_engine import dixon_coles_score_matrix
+from evaluation_kernel import evaluate_prediction_common, extract_probabilities, normalize_verified_result
 
 
 OUTCOMES = ("home", "draw", "away")
@@ -40,106 +40,6 @@ def _metric_number(value: Any) -> float | None:
     if isinstance(value, bool):
         return 1.0 if value else 0.0
     return _number(value)
-
-
-def _actual_result(result: Any) -> dict[str, int]:
-    if isinstance(result, (tuple, list)) and len(result) == 2:
-        home_goals, away_goals = result
-    elif isinstance(result, dict):
-        home_goals = result.get("home_goals", result.get("home"))
-        away_goals = result.get("away_goals", result.get("away"))
-    else:
-        raise ValueError("actual result must contain home and away goals")
-    home_number = _number(home_goals)
-    away_number = _number(away_goals)
-    if home_number is None or away_number is None or home_number < 0 or away_number < 0:
-        raise ValueError("actual goals must be finite non-negative numbers")
-    if int(home_number) != home_number or int(away_number) != away_number:
-        raise ValueError("actual goals must be whole numbers")
-    return {"home_goals": int(home_number), "away_goals": int(away_number)}
-
-
-def _outcome(actual: dict[str, int]) -> str:
-    if actual["home_goals"] > actual["away_goals"]:
-        return "home"
-    if actual["home_goals"] < actual["away_goals"]:
-        return "away"
-    return "draw"
-
-
-def _probabilities(prediction: dict[str, Any]) -> dict[str, float] | None:
-    values = prediction.get("probabilities") or prediction.get("outcome_probabilities")
-    if not isinstance(values, dict):
-        return None
-    numbers = {key: _number(values.get(key)) for key in OUTCOMES}
-    if any(value is None or value < 0 for value in numbers.values()):
-        return None
-    return {key: float(numbers[key]) for key in OUTCOMES}
-
-
-def _score_rows(prediction: dict[str, Any]) -> list[dict[str, Any]]:
-    candidates = [prediction.get("score_matrix"), prediction.get("score_probabilities")]
-    output = prediction.get("prediction_output")
-    if isinstance(output, dict):
-        candidates.extend((output.get("score_matrix"), output.get("score_probabilities")))
-    for candidate in candidates:
-        if isinstance(candidate, list):
-            rows = [row for row in candidate if isinstance(row, dict) and _number(row.get("probability")) is not None]
-            if rows:
-                return sorted(rows, key=lambda row: (-float(row["probability"]), str(row.get("score") or "")))
-    return []
-
-
-def _row_score(row: dict[str, Any]) -> tuple[int, int] | None:
-    score = str(row.get("score") or "")
-    if "-" in score:
-        left, right = score.split("-", 1)
-        try:
-            return int(left), int(right)
-        except ValueError:
-            pass
-    home = _number(row.get("home_goals"))
-    away = _number(row.get("away_goals"))
-    if home is not None and away is not None and int(home) == home and int(away) == away:
-        return int(home), int(away)
-    return None
-
-
-def _expected_goals(prediction: dict[str, Any]) -> tuple[float, float] | None:
-    home = _number(prediction.get("lambda_home"))
-    away = _number(prediction.get("lambda_away"))
-    expected = prediction.get("expected_goals")
-    if isinstance(expected, dict):
-        home = home if home is not None else _number(expected.get("home"))
-        away = away if away is not None else _number(expected.get("away"))
-    if home is None or away is None:
-        return None
-    return home, away
-
-
-def _full_score_rows(prediction: dict[str, Any]) -> tuple[list[dict[str, Any]], bool]:
-    rows = _score_rows(prediction)
-    if prediction.get("score_matrix_complete") is True:
-        return rows, bool(rows)
-    if prediction.get("derive_full_matrix") is not True:
-        return rows, False
-    expected = _expected_goals(prediction)
-    if expected is None:
-        return rows, False
-    try:
-        matrix = dixon_coles_score_matrix({
-            "lambda_home": expected[0],
-            "lambda_away": expected[1],
-            "rho": _number(prediction.get("rho")) or 0.0,
-        })
-    except (ImportError, TypeError, ValueError):
-        return rows, False
-    return _score_rows({
-        "score_matrix": [
-            {"score": f"{home}-{away}", "home_goals": home, "away_goals": away, "probability": probability}
-            for (home, away), probability in matrix.items()
-        ],
-    }), bool(matrix)
 
 
 def _ece(rows: list[dict[str, Any]], model_name: str, bins: int = 10) -> float | None:
@@ -168,34 +68,23 @@ def _ece(rows: list[dict[str, Any]], model_name: str, bins: int = 10) -> float |
     return fmean(values) if values else None
 
 
-def _btts_probability(prediction: dict[str, Any], score_rows: list[dict[str, Any]]) -> float | None:
-    btts = prediction.get("btts")
-    if isinstance(btts, dict):
-        yes = _number(btts.get("yes"))
-        if yes is not None:
-            return yes
-    if score_rows and (prediction.get("score_matrix_complete") is True or len(score_rows) >= 100):
-        return sum(
-            float(row["probability"])
-            for row in score_rows
-            if (_row_score(row) or (-1, -1))[0] > 0 and (_row_score(row) or (-1, -1))[1] > 0
-        )
-    return None
-
-
 def _prediction_evaluable(prediction: dict[str, Any] | None) -> bool:
-    probabilities = _probabilities(prediction or {})
-    return probabilities is not None
+    return extract_probabilities(prediction or {}, include_output=False) is not None
 
 
 def calculate_metrics(prediction: dict[str, Any], result: Any) -> dict[str, Any]:
     """Return common 1X2 metrics plus model-only score/goal diagnostics."""
-    actual = _actual_result(result)
-    actual_outcome = _outcome(actual)
-    probabilities = _probabilities(prediction)
+    common_metrics = evaluate_prediction_common(
+        prediction,
+        result,
+        allow_research_reconstruction=True,
+        include_distribution=False,
+        include_output_probabilities=False,
+    )
+    actual_outcome = common_metrics["actual_outcome"]
     common: dict[str, Any] = {
         "actual_outcome": actual_outcome,
-        "actual_score": f"{actual['home_goals']}-{actual['away_goals']}",
+        "actual_score": common_metrics["actual_score"],
         "brier_score_1x2": None,
         "log_loss_1x2": None,
         "top1_accuracy_1x2": None,
@@ -233,81 +122,36 @@ def calculate_metrics(prediction: dict[str, Any], result: Any) -> dict[str, Any]
         "roi": None,
         "clv": None,
     }
-    if probabilities is not None:
-        one_hot = {key: 1.0 if key == actual_outcome else 0.0 for key in OUTCOMES}
-        brier = sum((probabilities[key] - one_hot[key]) ** 2 for key in OUTCOMES)
-        actual_probability = max(probabilities[actual_outcome], 1e-15)
-        log_loss = -math.log(actual_probability)
-        top = max(OUTCOMES, key=lambda key: probabilities[key])
-        common.update({
-            "brier_score_1x2": brier,
-            "log_loss_1x2": log_loss,
-            "top1_accuracy_1x2": int(top == actual_outcome),
-            "brier": brier,
-            "log_loss": log_loss,
-            "top1": int(top == actual_outcome),
-            "top1_accuracy": int(top == actual_outcome),
-            "outcome_probabilities": probabilities,
-        })
+    brier = common_metrics["brier_score_1x2"]
+    top1 = common_metrics["top1_accuracy_1x2"]
+    common.update({
+        "brier_score_1x2": brier,
+        "log_loss_1x2": common_metrics["log_loss_1x2"],
+        "top1_accuracy_1x2": top1,
+        "brier": brier,
+        "log_loss": common_metrics["log_loss_1x2"],
+        "top1": top1,
+        "top1_accuracy": top1,
+        "outcome_probabilities": common_metrics["outcome_probabilities"],
+    })
 
     model_name = str(prediction.get("model") or "").lower()
     if model_name in {"market", "market_reference"}:
         return common
 
-    score_rows, full_score_matrix = _full_score_rows(prediction)
-    actual_pair = (actual["home_goals"], actual["away_goals"])
-    if score_rows:
-        matching = [(index + 1, float(row["probability"])) for index, row in enumerate(score_rows) if _row_score(row) == actual_pair]
-        if matching:
-            common["actual_score_rank"] = matching[0][0]
-            common["actual_score_probability"] = matching[0][1]
-            common["actual_score_assigned_probability"] = matching[0][1]
-        common["score_top1"] = any(_row_score(row) == actual_pair for row in score_rows[:1])
-        common["score_top3"] = any(_row_score(row) == actual_pair for row in score_rows[:3])
-        common["score_top5"] = any(_row_score(row) == actual_pair for row in score_rows[:5])
-        common["score_top10"] = any(_row_score(row) == actual_pair for row in score_rows[:10])
-        common["exact_score_top1"] = common["score_top1"]
-        common["exact_score_top3"] = common["score_top3"]
-        common["exact_score_top5"] = common["score_top5"]
-        common["exact_score_top10"] = common["score_top10"]
-        common["top1_1_1"] = _row_score(score_rows[0]) == (1, 1)
-        if full_score_matrix:
-            actual_total = actual["home_goals"] + actual["away_goals"]
-            total_probability = sum(
-                float(row["probability"])
-                for row in score_rows
-                if (_row_score(row) or (-1, -1))[0] + (_row_score(row) or (-1, -1))[1] == actual_total
-            )
-            if total_probability > 0:
-                common["total_goals_nll"] = -math.log(max(total_probability, 1e-15))
-            if matching and matching[0][1] > 0:
-                common["actual_score_nll"] = -math.log(max(matching[0][1], 1e-15))
-
-    btts_probability = _btts_probability(prediction, score_rows)
-    if btts_probability is not None:
-        btts_actual = actual["home_goals"] > 0 and actual["away_goals"] > 0
-        common.update({
-            "btts_probability": btts_probability,
-            "btts_actual": btts_actual,
-            "btts_hit": bool(btts_probability >= 0.5) == btts_actual,
-            "btts_accuracy": bool(btts_probability >= 0.5) == btts_actual,
-        })
-
-    expected = _expected_goals(prediction)
-    if expected is not None:
-        home_error = actual["home_goals"] - expected[0]
-        away_error = actual["away_goals"] - expected[1]
-        total_error = actual["home_goals"] + actual["away_goals"] - expected[0] - expected[1]
-        common.update({
-            "total_goal_error": total_error,
-            "total_goal_absolute_error": abs(total_error),
-            "expected_goal_error": (abs(home_error) + abs(away_error)) / 2.0,
-            "expected_goal_error_home": abs(home_error),
-            "expected_goal_error_away": abs(away_error),
-            "lambda_sum": expected[0] + expected[1],
-            "lambda_gap": abs(expected[0] - expected[1]),
-            "lambda_gap_lt_0_5": abs(expected[0] - expected[1]) < 0.5,
-        })
+    common.update({
+        key: common_metrics[key]
+        for key in (
+            "btts_probability", "btts_actual", "btts_hit", "btts_accuracy",
+            "total_goal_error", "total_goal_absolute_error", "expected_goal_error",
+            "expected_goal_error_home", "expected_goal_error_away", "score_top1",
+            "score_top3", "score_top5", "score_top10", "exact_score_top1",
+            "exact_score_top3", "exact_score_top5", "exact_score_top10",
+            "actual_score_rank", "actual_score_probability", "actual_score_assigned_probability",
+            "actual_score_nll", "total_goals_nll", "lambda_sum", "lambda_gap",
+            "lambda_gap_lt_0_5", "top1_1_1",
+        )
+    })
     return common
 
 
@@ -319,7 +163,11 @@ def settle_comparison(
 ) -> dict[str, Any]:
     if not isinstance(comparison, dict):
         raise ValueError("comparison must be an object")
-    actual = _actual_result(actual_result)
+    normalized_actual = normalize_verified_result(actual_result)
+    actual = {
+        "home_goals": normalized_actual["home_score_90m"],
+        "away_goals": normalized_actual["away_score_90m"],
+    }
     if isinstance(actual_result, dict):
         actual.update({key: actual_result[key] for key in ("regulation_minutes", "synthetic") if key in actual_result})
     predictors = comparison.get("predictors") or {}

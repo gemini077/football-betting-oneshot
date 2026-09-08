@@ -23,11 +23,19 @@ from postmatch_result import (
     resolve_nowscore_id,
     safe_key,
 )
+from evaluation_kernel import (
+    evaluate_1x2_probabilities,
+    evaluate_prediction_common,
+    extract_probabilities,
+    extract_score_rows,
+    is_verified_result_artifact,
+    normalize_verified_result,
+    parse_score_pair,
+)
 from exact_distribution import (
     EXACT_DISTRIBUTION_NORMALIZATION_TOLERANCE,
     JC_TOTAL_GOALS_BUCKET_ORDER,
     JC_TOTAL_GOALS_CONTRACT_VERSION,
-    classify_frozen_exact_score,
     classify_frozen_jc_total_goals,
 )
 from official_jc_handicap import (
@@ -134,119 +142,19 @@ def is_formally_eligible(record: dict[str, Any]) -> bool:
     )
 
 
-def _score_pair(value: Any) -> tuple[int, int] | None:
-    if isinstance(value, (tuple, list)) and len(value) == 2:
-        left, right = value
-    elif isinstance(value, dict):
-        left, right = value.get("home_score"), value.get("away_score")
-    else:
-        text = str(value or "").strip()
-        if "-" not in text:
-            return None
-        left, right = text.split("-", 1)
-    try:
-        home, away = int(left), int(right)
-    except (TypeError, ValueError):
-        return None
-    if home < 0 or away < 0:
-        return None
-    return home, away
-
-
-def _outcome(home: int, away: int) -> str:
-    if home > away:
-        return "HOME"
-    if home < away:
-        return "AWAY"
-    return "DRAW"
-
-
 def normalize_result(result: dict[str, Any]) -> dict[str, Any]:
     """Normalize an existing postmatch artifact/provider result to 90m."""
-    if not isinstance(result, dict):
-        raise ValueError("result must be an object")
-    status = str(result.get("status") or "").strip().lower()
-    if status in {"live", "in_progress", "scheduled", "pending", "result_pending"}:
-        raise ValueError("result is not final")
-    if status and status not in {"result_verified", "verified", "reviewed"}:
-        raise ValueError("result verification status is not final")
-    scope = str(result.get("scope") or "regulation_90m_plus_stoppage").strip()
-    if scope not in {"regulation_90m_plus_stoppage", "90m", "regulation_90m"}:
-        raise ValueError("result scope is not regulation-only")
-    score = result.get("score_90m") or result.get("result_90m")
-    if score is None:
-        score = (result.get("home_score_90m"), result.get("away_score_90m"))
-    if score in (None, (None, None), [None, None]):
-        score = (result.get("home_score"), result.get("away_score"))
-    pair = _score_pair(score)
-    if pair is None:
-        raise ValueError("result has no valid 90-minute score")
-    home, away = pair
+    normalized = normalize_verified_result(result)
     return {
         **result,
-        "home_score_90m": home,
-        "away_score_90m": away,
-        "actual_outcome": _outcome(home, away),
-        "total_goals": home + away,
-        "btts_actual": home > 0 and away > 0,
-        "scope": scope,
-        "result_verified_at": result.get("result_verified_at") or result.get("verified_at"),
+        "home_score_90m": normalized["home_score_90m"],
+        "away_score_90m": normalized["away_score_90m"],
+        "actual_outcome": normalized["actual_outcome"].upper(),
+        "total_goals": normalized["total_goals"],
+        "btts_actual": normalized["btts_actual"],
+        "scope": normalized["scope"],
+        "result_verified_at": normalized["result_verified_at"],
     }
-
-
-def _is_verified_result_artifact(result: dict[str, Any]) -> bool:
-    """Require a provider-verified final artifact before settlement."""
-    if not isinstance(result, dict):
-        return False
-    status = str(result.get("status") or "").strip().lower()
-    if status in {"live", "in_progress", "scheduled", "pending", "result_pending"}:
-        return False
-    if status and status not in {"result_verified", "verified", "reviewed"}:
-        return False
-    scope = str(result.get("scope") or "").strip()
-    if scope not in {"regulation_90m_plus_stoppage", "90m", "regulation_90m"}:
-        return False
-    verified_at = result.get("result_verified_at") or result.get("verified_at")
-    if not verified_at:
-        return False
-    return any(
-        result.get(field) not in (None, "")
-        for field in ("score_90m", "result_90m", "home_score_90m", "home_score")
-    )
-
-
-def _probabilities(record: dict[str, Any]) -> dict[str, float] | None:
-    output = record.get("prediction_output") or {}
-    values = record.get("probabilities") or output.get("probabilities")
-    if not isinstance(values, dict):
-        return None
-    result = {key: _number(values.get(key)) for key in ("home", "draw", "away")}
-    if any(value is None or value < 0 for value in result.values()):
-        return None
-    return {key: float(value) for key, value in result.items()}
-
-
-def _score_rows(record: dict[str, Any]) -> list[dict[str, Any]]:
-    output = record.get("prediction_output") or {}
-    for candidate in (
-        record.get("score_distribution"),
-        record.get("score_matrix"),
-        record.get("score_probabilities"),
-        record.get("top_scores"),
-        output.get("score_matrix"),
-        output.get("score_probabilities"),
-    ):
-        if not isinstance(candidate, list):
-            continue
-        rows = [
-            row for row in candidate
-            if isinstance(row, dict) and _number(row.get("probability")) is not None
-        ]
-        if rows:
-            if any(row.get("rank") is not None for row in rows):
-                return sorted(rows, key=lambda row: (int(row.get("rank") or 999999), str(row.get("score") or "")))
-            return sorted(rows, key=lambda row: (-float(row["probability"]), str(row.get("score") or "")))
-    return []
 
 
 def _empty_jc_total_goals_evaluation(status: str) -> dict[str, Any]:
@@ -471,7 +379,7 @@ def _market_baseline(record: dict[str, Any]) -> dict[str, float] | None:
 
 
 def _has_minimum_prediction_output(record: dict[str, Any]) -> bool:
-    probabilities = _probabilities(record)
+    probabilities = extract_probabilities(record)
     if probabilities is None:
         return False
     if _number(record.get("lambda_home")) is None or _number(record.get("lambda_away")) is None:
@@ -480,7 +388,14 @@ def _has_minimum_prediction_output(record: dict[str, Any]) -> bool:
         return False
     output = record.get("prediction_output") or {}
     unique_score = record.get("unique_score") or output.get("unique_score") or record.get("score_top1")
-    return bool(unique_score and (_score_rows(record) or record.get("score_top3") or record.get("score_top5")))
+    return bool(
+        unique_score
+        and (
+            extract_score_rows(record, preserve_declared_rank=True)
+            or record.get("score_top3")
+            or record.get("score_top5")
+        )
+    )
 
 
 def evaluate_prediction(record: dict[str, Any], actual: dict[str, Any]) -> dict[str, Any]:
@@ -488,6 +403,14 @@ def evaluate_prediction(record: dict[str, Any], actual: dict[str, Any]) -> dict[
     normalized = normalize_result(actual)
     home, away = normalized["home_score_90m"], normalized["away_score_90m"]
     outcome = normalized["actual_outcome"]
+    common = evaluate_prediction_common(
+        record,
+        actual,
+        frozen_record=record,
+        include_distribution=True,
+        preserve_declared_rank=True,
+        top10_requires_ten=True,
+    )
     metrics: dict[str, Any] = {
         "actual_outcome": outcome,
         "top1_predicted_outcome": None,
@@ -555,25 +478,32 @@ def evaluate_prediction(record: dict[str, Any], actual: dict[str, Any]) -> dict[
         "market_only_1x2_logloss": None,
         "market_only_metric_status": None,
     }
-    probabilities = _probabilities(record)
-    if probabilities is not None:
-        top = max(probabilities, key=probabilities.get).upper()
-        actual_key = outcome.lower()
-        one_hot = {key: float(key == actual_key) for key in probabilities}
-        metrics.update({
-            "top1_predicted_outcome": top,
-            "top1_accuracy_1x2": int(top == outcome),
-            "brier_score_1x2": sum((probabilities[key] - one_hot[key]) ** 2 for key in probabilities),
-            "log_loss_1x2": -math.log(max(probabilities[actual_key], EPSILON)),
-        })
-
-    lambdas = (_number(record.get("lambda_home")), _number(record.get("lambda_away")))
-    if all(value is not None for value in lambdas):
-        metrics.update({
-            "home_goal_absolute_error": abs(home - lambdas[0]),
-            "away_goal_absolute_error": abs(away - lambdas[1]),
-            "total_goal_absolute_error": abs(home + away - sum(lambdas)),
-        })
+    metrics.update({
+        "top1_predicted_outcome": (
+            common["top1_predicted_outcome"].upper()
+            if common["top1_predicted_outcome"] is not None
+            else None
+        ),
+        "top1_accuracy_1x2": common["top1_accuracy_1x2"],
+        "brier_score_1x2": common["brier_score_1x2"],
+        "log_loss_1x2": common["log_loss_1x2"],
+        "home_goal_absolute_error": common["home_goal_absolute_error"],
+        "away_goal_absolute_error": common["away_goal_absolute_error"],
+        "total_goal_absolute_error": common["total_goal_absolute_error"],
+        "exact_score_top1": common["exact_score_top1"],
+        "exact_score_top3": common["exact_score_top3"],
+        "exact_score_top5": common["exact_score_top5"],
+        "exact_score_top10": common["exact_score_top10"],
+        "actual_score_probability": common["actual_score_probability"],
+        "actual_score_nll": common["actual_score_nll"],
+        "actual_score_nll_status": common["actual_score_nll_status"],
+        "exact_score_authority_status": common["exact_score_authority_status"],
+        "exact_score_frozen_rank": common["actual_score_rank"],
+        "FORMAL_EXACT_DISTRIBUTION_FROZEN": common["FORMAL_EXACT_DISTRIBUTION_FROZEN"],
+        "FINITE_GRID_EXACTLY_REPRESENTED": common["FINITE_GRID_EXACTLY_REPRESENTED"],
+        "OUT_OF_EXPLICIT_SUPPORT": common["OUT_OF_EXPLICIT_SUPPORT"],
+        "FORMAL_EXACT_LOG_SCORE_ELIGIBLE": common["FORMAL_EXACT_LOG_SCORE_ELIGIBLE"],
+    })
 
     btts = _btts(record)
     if btts is not None:
@@ -581,27 +511,20 @@ def evaluate_prediction(record: dict[str, Any], actual: dict[str, Any]) -> dict[
     else:
         metrics["btts_metric_status"] = "UNAVAILABLE_IN_FROZEN_RECORD"
 
-    frozen_exact = classify_frozen_exact_score(record, home, away)
     frozen_jc_total_goals = classify_frozen_jc_total_goals(record, home, away)
     frozen_jc_handicap = classify_frozen_jc_handicap(record, home, away)
     jc_evaluation = _evaluate_frozen_jc_total_goals(
         record,
         frozen_jc_total_goals,
-        verified_result=_is_verified_result_artifact(actual),
+        verified_result=is_verified_result_artifact(actual),
     )
     jc_handicap_evaluation = evaluate_frozen_jc_handicap(
         record,
         (home, away),
-        verified_result=_is_verified_result_artifact(actual),
+        verified_result=is_verified_result_artifact(actual),
         formally_eligible=is_formally_eligible(record),
     )
     metrics.update({
-        "FORMAL_EXACT_DISTRIBUTION_FROZEN": frozen_exact["FORMAL_EXACT_DISTRIBUTION_FROZEN"],
-        "FINITE_GRID_EXACTLY_REPRESENTED": frozen_exact["FINITE_GRID_EXACTLY_REPRESENTED"],
-        "OUT_OF_EXPLICIT_SUPPORT": frozen_exact["OUT_OF_EXPLICIT_SUPPORT"],
-        "FORMAL_EXACT_LOG_SCORE_ELIGIBLE": frozen_exact["FORMAL_EXACT_LOG_SCORE_ELIGIBLE"],
-        "exact_score_authority_status": frozen_exact["authority_status"],
-        "exact_score_frozen_rank": frozen_exact["rank"],
         "FORMAL_JC_TOTAL_GOALS_FROZEN": frozen_jc_total_goals["FORMAL_JC_TOTAL_GOALS_FROZEN"],
         "JC_TOTAL_GOALS_BUCKET_EXACTLY_REPRESENTED": frozen_jc_total_goals[
             "JC_TOTAL_GOALS_BUCKET_EXACTLY_REPRESENTED"
@@ -627,60 +550,11 @@ def evaluate_prediction(record: dict[str, Any], actual: dict[str, Any]) -> dict[
     })
     metrics.update(jc_evaluation)
     metrics.update(jc_handicap_evaluation)
-    if frozen_exact["FORMAL_EXACT_LOG_SCORE_ELIGIBLE"]:
-        metrics.update({
-            "actual_score_probability": frozen_exact["probability"],
-            "actual_score_nll": frozen_exact["log_score"],
-            "actual_score_nll_status": "FROZEN_EXACT_DISTRIBUTION",
-        })
-    elif frozen_exact["OUT_OF_EXPLICIT_SUPPORT"]:
-        metrics["actual_score_nll_status"] = "OUT_OF_EXPLICIT_SUPPORT"
-    elif frozen_exact["FORMAL_EXACT_DISTRIBUTION_FROZEN"]:
-        metrics["actual_score_nll_status"] = frozen_exact["formal_exact_distribution_status"]
-
-    rows = _score_rows(record)
-    actual_pair = (home, away)
-    if rows:
-        for index, row in enumerate(rows):
-            if (
-                not frozen_exact["FORMAL_EXACT_DISTRIBUTION_FROZEN"]
-                and _score_pair(row.get("score")) == actual_pair
-            ):
-                metrics["actual_score_probability"] = float(row["probability"])
-                metrics["actual_score_nll"] = -math.log(max(float(row["probability"]), EPSILON))
-                metrics["actual_score_nll_status"] = "RESEARCH_RECONSTRUCTED_NO_FROZEN_AUTHORITY"
-                break
-        metrics.update({
-            "exact_score_top1": any(_score_pair(row.get("score")) == actual_pair for row in rows[:1]),
-            "exact_score_top3": any(_score_pair(row.get("score")) == actual_pair for row in rows[:3]),
-            "exact_score_top5": any(_score_pair(row.get("score")) == actual_pair for row in rows[:5]),
-            "exact_score_top10": (
-                any(_score_pair(row.get("score")) == actual_pair for row in rows[:10])
-                if len(rows) >= 10
-                else None
-            ),
-        })
-        if metrics["actual_score_nll"] is None and metrics["actual_score_nll_status"] is None:
-            metrics["actual_score_nll_status"] = "UNAVAILABLE_IN_FROZEN_RECORD"
-    else:
-        metrics["actual_score_nll_status"] = "UNAVAILABLE_IN_FROZEN_RECORD"
-
-    if not rows:
-        top1 = _score_pair(record.get("score_top1"))
-        top3 = [_score_pair(value) for value in record.get("score_top3") or []]
-        top5 = [_score_pair(value) for value in record.get("score_top5") or []]
-        metrics.update({
-            "exact_score_top1": top1 == actual_pair if top1 else None,
-            "exact_score_top3": actual_pair in {value for value in top3 if value},
-            "exact_score_top5": actual_pair in {value for value in top5 if value},
-        })
-
     market = _market_baseline(record)
     if market is not None:
-        actual_key = outcome.lower()
-        one_hot = {key: float(key == actual_key) for key in market}
-        metrics["market_only_1x2_brier"] = sum((market[key] - one_hot[key]) ** 2 for key in market)
-        metrics["market_only_1x2_logloss"] = -math.log(max(market[actual_key], EPSILON))
+        market_metrics = evaluate_1x2_probabilities(market, common["actual_outcome"])
+        metrics["market_only_1x2_brier"] = market_metrics["brier_score_1x2"]
+        metrics["market_only_1x2_logloss"] = market_metrics["log_loss_1x2"]
     else:
         metrics["market_only_metric_status"] = "UNAVAILABLE_IN_FROZEN_RECORD"
     return metrics
@@ -995,7 +869,7 @@ def settle_records(
         if str(fetched.get("status") or "").upper() in {"RESULT_PENDING", "PENDING", "RETRY_SCHEDULED"}:
             result["pending_results"] += 1
             continue
-        if not _is_verified_result_artifact(fetched):
+        if not is_verified_result_artifact(fetched):
             result["result_failures"] += 1
             result["failure_reasons"]["RESULT_NOT_FINAL"] = result["failure_reasons"].get("RESULT_NOT_FINAL", 0) + 1
             continue
