@@ -4,7 +4,9 @@
 from __future__ import annotations
 
 import argparse
+from copy import deepcopy
 from datetime import datetime, timezone
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -21,6 +23,7 @@ if str(ROOT / "scripts") not in sys.path:
 from market_side_shadow import (  # noqa: E402
     DEFAULT_PAIR_ROOT,
     build_shadow_document,
+    canonical_json,
     load_persisted_pairs,
 )
 from postmatch_result import RESULT_ROOT as POSTMATCH_RESULT_ROOT  # noqa: E402
@@ -31,6 +34,17 @@ from prospective_settlement import normalize_result  # noqa: E402
 
 MILESTONE = "MARKET-SIDE-SHADOW-1"
 REFRESH_SCHEMA_VERSION = "market_side_shadow_1.refresh.v2"
+CURRENT_VIEW_SCHEMA_VERSION = "market_side_shadow_1.current.v2"
+PAIR_INDEX_SCHEMA_VERSION = "market_side_shadow_1.pair_index.v2"
+CURRENT_EVALUATION_KEYS = (
+    "schema_version",
+    "metric_unit",
+    "version_row_metric_unit",
+    "post_match_input_used_for_generation",
+    "actual_results_used_for_evaluation_only",
+    "candidates",
+    "early_kill",
+)
 DEFAULT_RESULT_ROOT = POSTMATCH_RESULT_ROOT
 DEFAULT_OUTPUT = ROOT / "data" / "prediction_quality" / "market_side_shadow_1" / "latest.json"
 RESULT_SOURCE_LABEL = "data/postmatch_automation/results/*.json"
@@ -151,6 +165,115 @@ def build_identity_safe_result_map(
     return result_map, stats
 
 
+def _pair_identity_record(pair: Mapping[str, Any]) -> dict[str, Any]:
+    if not isinstance(pair, Mapping):
+        raise ValueError("shadow pair must be an object")
+    pair_id = str(pair.get("pair_id") or "").strip()
+    if not pair_id or Path(pair_id).name != pair_id:
+        raise ValueError("shadow pair must contain a safe pair_id")
+    return {
+        "pair_id": pair_id,
+        "pair_digest": pair.get("pair_digest"),
+        "content_digest": hashlib.sha256(canonical_json(dict(pair)).encode("utf-8")).hexdigest(),
+    }
+
+
+def pair_set_digest(pairs: Iterable[Mapping[str, Any]]) -> str:
+    """Return a bounded digest over the sorted canonical pair identity/content set."""
+
+    records = [_pair_identity_record(pair) for pair in pairs]
+    pair_ids = [record["pair_id"] for record in records]
+    if len(pair_ids) != len(set(pair_ids)):
+        raise ValueError("shadow pair set contains duplicate pair_id")
+    canonical_records = "\n".join(
+        canonical_json(record)
+        for record in sorted(records, key=lambda record: record["pair_id"])
+    )
+    return hashlib.sha256(canonical_records.encode("utf-8")).hexdigest()
+
+
+def build_bounded_current_evaluation(evaluation: Mapping[str, Any]) -> dict[str, Any]:
+    """Persist only bounded evaluation fields consumed by current-view readers."""
+
+    if not isinstance(evaluation, Mapping):
+        raise ValueError("full shadow document must contain an evaluation object")
+    required = {"candidates", "early_kill"}
+    if not required.issubset(evaluation):
+        raise ValueError("full shadow evaluation is missing current-view consumer fields")
+    return {
+        key: deepcopy(evaluation[key])
+        for key in CURRENT_EVALUATION_KEYS
+        if key in evaluation
+    }
+
+
+def build_compact_shadow_view(
+    document: Mapping[str, Any],
+    pairs: Iterable[Mapping[str, Any]],
+) -> dict[str, Any]:
+    """Keep derived evaluation in the current view and point to pair authority."""
+
+    pair_list = list(pairs)
+    embedded_pairs = document.get("pairs")
+    if not isinstance(embedded_pairs, list):
+        raise ValueError("full shadow document must contain pair history before compaction")
+    embedded_digest = pair_set_digest(embedded_pairs)
+    indexed_digest = pair_set_digest(pair_list)
+    if embedded_digest != indexed_digest:
+        raise ValueError("full shadow document pair history does not match pair authority")
+    compact = {key: value for key, value in document.items() if key != "pairs"}
+    compact["schema_version"] = CURRENT_VIEW_SCHEMA_VERSION
+    compact["evaluation"] = build_bounded_current_evaluation(document.get("evaluation"))
+    compact["pair_index"] = {
+        "schema_version": PAIR_INDEX_SCHEMA_VERSION,
+        "root": "pairs",
+        "pair_count": len(pair_list),
+        "pair_set_digest": indexed_digest,
+    }
+    return compact
+
+
+def load_indexed_pairs(
+    pair_index: Mapping[str, Any],
+    pair_root: Path,
+) -> list[dict[str, Any]]:
+    """Load the immutable pair root and verify its exact compact-view identity."""
+
+    if pair_index.get("schema_version") != PAIR_INDEX_SCHEMA_VERSION:
+        raise ValueError("unsupported shadow pair index schema")
+    root_reference = Path(str(pair_index.get("root") or ""))
+    if root_reference.is_absolute() or ".." in root_reference.parts or not root_reference.parts:
+        raise ValueError("shadow pair index root must be a safe relative path")
+    expected_count = pair_index.get("pair_count")
+    if isinstance(expected_count, bool) or not isinstance(expected_count, int) or expected_count < 0:
+        raise ValueError("shadow pair index count must be a non-negative integer")
+    expected_digest = str(pair_index.get("pair_set_digest") or "").strip().lower()
+    if len(expected_digest) != 64 or any(character not in "0123456789abcdef" for character in expected_digest):
+        raise ValueError("shadow pair index digest must be a SHA-256 hex value")
+
+    pair_root = Path(pair_root)
+    if not pair_root.is_dir():
+        raise ValueError("shadow pair root is missing")
+    candidate_paths = sorted(pair_root.glob("MS-SHADOW-PAIR-*.json"))
+    pairs = load_persisted_pairs(pair_root)
+    if len(candidate_paths) != len(pairs):
+        raise ValueError("shadow pair root contains unreadable or noncanonical pair files")
+    expected_names: set[str] = set()
+    for pair in pairs:
+        pair_id = str(pair.get("pair_id") or "").strip()
+        if not pair_id or Path(pair_id).name != pair_id:
+            raise ValueError("shadow pair root contains an unsafe pair_id")
+        expected_names.add(f"{pair_id}.json")
+    if len(expected_names) != len(pairs) or {path.name for path in candidate_paths} != expected_names:
+        raise ValueError("shadow pair root filenames do not match pair identities")
+    if expected_count != len(pairs):
+        raise ValueError("shadow pair index count mismatch")
+    actual_digest = pair_set_digest(pairs)
+    if expected_digest != actual_digest:
+        raise ValueError("shadow pair index digest mismatch")
+    return pairs
+
+
 def _atomic_persist(document: Mapping[str, Any], output: Path) -> str:
     output = Path(output)
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -196,8 +319,9 @@ def refresh_shadow(
         **matching,
         "actual_results_persisted": False,
     }
-    latest_status = _atomic_persist(document, Path(output))
     evaluation = document["evaluation"]
+    document = build_compact_shadow_view(document, pairs)
+    latest_status = _atomic_persist(document, Path(output))
     return {
         "status": "SUCCESS",
         "milestone": MILESTONE,

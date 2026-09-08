@@ -8,8 +8,10 @@ on:
       - ".github/workflows/challenger-c-normalized-result-linkage-fix-1.yml"
       - "scripts/market_side_shadow.py"
       - "scripts/market_side_shadow_refresh.py"
+      - "scripts/challenger_c_promotion_review.py"
       - "scripts/prediction_trust_2_replay.py"
       - "tests/test_challenger_c_unique_cohort_semantics.py"
+      - "tests/test_generated_state_architecture_guard.py"
       - "tests/test_market_side_shadow.py"
       - "tests/test_market_side_shadow_refresh.py"
       - "tests/test_prospective_settlement.py"
@@ -40,6 +42,7 @@ jobs:
         run: >-
           pytest -q
           tests/test_challenger_c_unique_cohort_semantics.py
+          tests/test_generated_state_architecture_guard.py
           tests/test_market_side_shadow.py
           tests/test_market_side_shadow_refresh.py
           tests/test_prospective_settlement.py
@@ -49,6 +52,7 @@ jobs:
           python -m py_compile
           scripts/market_side_shadow.py
           scripts/market_side_shadow_refresh.py
+          scripts/challenger_c_promotion_review.py
           scripts/prediction_trust_2_replay.py
 
       - name: Run real current-main C refresh and review
@@ -87,6 +91,26 @@ jobs:
           evaluation = document["evaluation"]
           refresh = document["refresh"]
           metrics = evaluation["candidates"]
+          pair_index = document.get("pair_index") or {}
+          compact_current_view = (
+              document.get("schema_version") == "market_side_shadow_1.current.v2"
+              and "pairs" not in document
+              and pair_index.get("schema_version") == "market_side_shadow_1.pair_index.v2"
+              and "entries" not in pair_index
+              and isinstance(pair_index.get("pair_set_digest"), str)
+              and len(pair_index.get("pair_set_digest")) == 64
+              and set(evaluation) == {
+                  "schema_version",
+                  "metric_unit",
+                  "version_row_metric_unit",
+                  "post_match_input_used_for_generation",
+                  "actual_results_used_for_evaluation_only",
+                  "candidates",
+                  "early_kill",
+              }
+              and "representative_selector" not in evaluation
+              and Path(sys.argv[1]).stat().st_size <= 1_000_000
+          )
           reference = {
               "pr": 173,
               "artifact": "9921627053",
@@ -133,6 +157,7 @@ jobs:
                   "result_network_fetch": False,
                   "result_backfill": False,
                   "fuzzy_matching": False,
+                  "compact_current_view": compact_current_view,
                   "frozen_prediction_modified": False,
                   "authoritative_result_modified": False,
                   "champion_modified": False,
@@ -198,6 +223,7 @@ jobs:
           assert current["refresh"]["result_identity_conflicts"] == 0
           assert current["refresh"]["result_identity_mismatches"] == 0
           assert checks["integrity"] == "PASS"
+          assert checks["compact_current_view"] is True
           assert all(checks[key] is False for key in (
               "result_network_fetch", "result_backfill", "fuzzy_matching",
               "frozen_prediction_modified", "authoritative_result_modified",
