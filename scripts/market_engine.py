@@ -8,6 +8,7 @@ extraction mechanics without changing either policy's aggregation semantics.
 
 from __future__ import annotations
 
+from collections import Counter
 from copy import deepcopy
 import math
 import re
@@ -16,11 +17,36 @@ from typing import Any, Mapping, Sequence
 import unicodedata
 
 from market_contracts import settle_asian_contract
+from score_engine import (
+    SCORE_ENGINE_VERSION,
+    asian_handicap_settlement,
+    btts_probabilities,
+    independent_poisson_score_matrix_with_tail,
+    matrix_settlement_probability,
+    outcome_probabilities,
+    ranked_exact_score_rows,
+    score_matrix_rows,
+    total_goal_distribution,
+)
 
 
 MARKET_REFERENCE_VERSION = "market_reference.v1"
 MARKET_REFERENCE_POLICY = MARKET_REFERENCE_VERSION
 CHAMPION_MARKET_POLICY = "champion.multibook_proportional_devig_mean.v1"
+PURE_MARKET_EXACT_VERSION = "pure_market_exact_prospective_1"
+PURE_MARKET_EXACT_MARKET_POLICY = "market_189.same_time_proportional_devig.v1"
+PURE_MARKET_EXACT_MAX_GOALS_PER_TEAM = 20
+PURE_MARKET_EXACT_LAMBDA_LOWER = 0.001
+PURE_MARKET_EXACT_LAMBDA_UPPER = 20.0
+PURE_MARKET_EXACT_LAMBDA_ITERATIONS = 90
+PURE_MARKET_EXACT_SHARE_LOWER = 0.01
+PURE_MARKET_EXACT_SHARE_UPPER = 0.99
+PURE_MARKET_EXACT_SHARE_ITERATIONS = 70
+PURE_MARKET_EXACT_TOTAL_LINES = (0.5, 1.5, 2.5, 3.5, 4.5, 5.5)
+PURE_MARKET_EXACT_HANDICAP_LINES = (
+    -1.5, -1.0, -0.75, -0.5, -0.25, 0.0,
+    0.25, 0.5, 0.75, 1.0, 1.5,
+)
 OUTCOMES = ("home", "draw", "away")
 MARKET_PROVIDER_PRIORITY = {"nowscore": 0, "500_deep": 1}
 SNAPSHOT_FIELDS = (
@@ -435,6 +461,397 @@ def build_market_reference(snapshot: dict[str, Any]) -> dict[str, Any]:
             "market_dispersion": max(dispersion_by_outcome.values()),
         })
     return {**_metadata(snapshot), **result}
+
+
+def _pure_market_source(snapshot: Mapping[str, Any]) -> Mapping[str, Any]:
+    nested = snapshot.get("input")
+    return nested if isinstance(nested, Mapping) else snapshot
+
+
+def _pure_market_rows(snapshot: Mapping[str, Any] | None, family: str) -> list[dict[str, Any]]:
+    if not isinstance(snapshot, Mapping):
+        return []
+    source = _pure_market_source(snapshot)
+    section = source.get(family)
+    if not isinstance(section, Mapping):
+        return []
+    key = "bookmakers" if family == "ouzhi" else "companies"
+    rows = section.get(key)
+    return [dict(row) for row in rows if isinstance(row, Mapping)] if isinstance(rows, list) else []
+
+
+def _pure_quote_key(row: Mapping[str, Any]) -> str:
+    for key in ("cid", "source_company_id", "company_id", "name"):
+        value = str(row.get(key) or "").strip()
+        if value:
+            return value.casefold()
+    return ""
+
+
+def _pure_valid_quarter_line(value: Any, *, allow_negative: bool = False) -> float | None:
+    number = _number(value)
+    if number is None or (not allow_negative and number < 0.0):
+        return None
+    rounded = round(number * 4.0) / 4.0
+    return rounded if abs(number - rounded) <= 1e-8 else None
+
+
+def hk_water_to_decimal(water: Any) -> float:
+    """Convert a positive Hong Kong water quote to decimal odds."""
+    value = _number(water)
+    if value is None or value <= 0.0:
+        raise ValueError("INVALID_HK_WATER_DOMAIN")
+    decimal = 1.0 + value
+    if not math.isfinite(decimal) or decimal <= 1.0:
+        raise ValueError("INVALID_DECIMAL_ODDS_DOMAIN")
+    return decimal
+
+
+def proportional_devig_two_way(first: Any, second: Any) -> tuple[float, float]:
+    decimals = (hk_water_to_decimal(first), hk_water_to_decimal(second))
+    inverse = tuple(1.0 / value for value in decimals)
+    total = sum(inverse)
+    if not math.isfinite(total) or total <= 0.0:
+        raise ValueError("INVALID_INVERSE_ODDS_SUM")
+    return inverse[0] / total, inverse[1] / total
+
+
+def extract_pure_market_1x2_quotes(snapshot: Mapping[str, Any] | None) -> dict[str, Any]:
+    """Extract the accepted #189 same-time 1X2 quote authority."""
+    rows = _pure_market_rows(snapshot, "ouzhi")
+    valid: list[dict[str, Any]] = []
+    rejected: Counter[str] = Counter()
+    seen: set[str] = set()
+    for row in rows:
+        key = _pure_quote_key(row)
+        if not key:
+            rejected["MISSING_BOOKMAKER_IDENTITY"] += 1
+            continue
+        if key in seen:
+            rejected["DUPLICATE_BOOKMAKER_ROW"] += 1
+            continue
+        seen.add(key)
+        odds = valid_three_way_decimal_odds(row.get("spf_current"))
+        if odds is None:
+            rejected["INVALID_1X2_DECIMAL_ODDS_DOMAIN"] += 1
+            continue
+        fair = proportional_devig_three_way(odds)
+        if fair is None:
+            rejected["INVALID_1X2_DEVIG"] += 1
+            continue
+        valid.append({"bookmaker": key, "odds": odds, "fair_probabilities": fair})
+    consensus = None
+    if valid:
+        consensus = {
+            outcome: fmean(row["fair_probabilities"][outcome] for row in valid)
+            for outcome in OUTCOMES
+        }
+        total = sum(consensus.values())
+        consensus = {outcome: consensus[outcome] / total for outcome in OUTCOMES}
+    return {
+        "valid": valid,
+        "consensus": consensus,
+        "raw_row_count": len(rows),
+        "valid_bookmaker_count": len(valid),
+        "rejected_reasons": dict(sorted(rejected.items())),
+        "reason": None if valid else ("NO_FROZEN_1X2_QUOTE_ROWS" if not rows else "NO_VALID_1X2_QUOTE_ROWS"),
+    }
+
+
+def extract_pure_market_ou_quotes(snapshot: Mapping[str, Any] | None) -> dict[str, Any]:
+    """Extract and de-vig the accepted #189 Asian O/U quote rows."""
+    rows = _pure_market_rows(snapshot, "daxiao")
+    valid: list[dict[str, Any]] = []
+    rejected: Counter[str] = Counter()
+    seen: set[str] = set()
+    for row in rows:
+        key = _pure_quote_key(row)
+        if not key:
+            rejected["MISSING_BOOKMAKER_IDENTITY"] += 1
+            continue
+        if key in seen:
+            rejected["DUPLICATE_BOOKMAKER_ROW"] += 1
+            continue
+        seen.add(key)
+        line = _pure_valid_quarter_line(row.get("current_line"))
+        if line is None:
+            rejected["INVALID_QUARTER_LINE"] += 1
+            continue
+        try:
+            fair_over, fair_under = proportional_devig_two_way(
+                row.get("current_over_water"), row.get("current_under_water")
+            )
+        except ValueError as error:
+            rejected[str(error)] += 1
+            continue
+        valid.append({
+            "bookmaker": key,
+            "line": line,
+            "over_decimal": hk_water_to_decimal(row.get("current_over_water")),
+            "under_decimal": hk_water_to_decimal(row.get("current_under_water")),
+            "fair_over_probability": fair_over,
+            "fair_under_probability": fair_under,
+        })
+    return {
+        "valid": valid,
+        "raw_row_count": len(rows),
+        "valid_bookmaker_count": len(valid),
+        "rejected_reasons": dict(sorted(rejected.items())),
+        "reason": None if valid else ("NO_FROZEN_DAXIAO_QUOTE_ROWS" if not rows else "NO_VALID_DAXIAO_QUOTE_ROWS"),
+    }
+
+
+def pure_market_fair_probability(
+    matrix: Mapping[tuple[int, int], float], line: float, selection: str = "over"
+) -> float:
+    """Return a two-sided fair probability using canonical Asian settlement."""
+    if selection not in {"over", "under"}:
+        raise ValueError("UNSUPPORTED_TOTAL_SELECTION")
+    valid_line = _pure_valid_quarter_line(line)
+    if valid_line is None:
+        raise ValueError("INVALID_QUARTER_LINE")
+    priced = matrix_settlement_probability(
+        matrix,
+        family="total",
+        side=selection,
+        line=valid_line,
+    )
+    win = float(priced["win"] or 0.0)
+    loss = float(priced["loss"] or 0.0)
+    denominator = win + loss
+    if win <= 1e-12 or loss <= 1e-12 or denominator <= 1e-12:
+        raise ValueError("SETTLEMENT_PRICE_NOT_IDENTIFIABLE")
+    return win / denominator
+
+
+def solve_pure_market_total_lambda(line: float, target_over_probability: float) -> dict[str, float]:
+    """Solve total intensity against the exact #189 Asian O/U price."""
+    valid_line = _pure_valid_quarter_line(line)
+    target = _number(target_over_probability)
+    if valid_line is None or target is None or not (1e-12 < target < 1.0 - 1e-12):
+        raise ValueError("OU_SOLVE_DOMAIN_INVALID")
+
+    def model_probability(lam: float) -> float:
+        matrix, _ = independent_poisson_score_matrix_with_tail(
+            lam,
+            0.0,
+            max_goals_per_team=PURE_MARKET_EXACT_MAX_GOALS_PER_TEAM,
+        )
+        return pure_market_fair_probability(matrix, valid_line, "over")
+
+    lower, upper = PURE_MARKET_EXACT_LAMBDA_LOWER, PURE_MARKET_EXACT_LAMBDA_UPPER
+    try:
+        low_probability = model_probability(lower)
+        high_probability = model_probability(upper)
+    except ValueError as error:
+        raise ValueError("OU_SOLVE_DOMAIN_INVALID") from error
+    if target < low_probability - 1e-10 or target > high_probability + 1e-10:
+        raise ValueError("OU_SOLVE_NOT_IDENTIFIABLE")
+    for _ in range(PURE_MARKET_EXACT_LAMBDA_ITERATIONS):
+        middle = (lower + upper) / 2.0
+        if model_probability(middle) < target:
+            lower = middle
+        else:
+            upper = middle
+    lam = (lower + upper) / 2.0
+    residual = model_probability(lam) - target
+    if not math.isfinite(residual) or abs(residual) > 1e-7:
+        raise ValueError("OU_SOLVE_NO_CONVERGENCE")
+    return {
+        "lambda_total": lam,
+        "target_probability": target,
+        "model_probability": target + residual,
+        "residual": residual,
+    }
+
+
+def solve_pure_market_home_share(
+    lambda_total: float, target_probabilities: Mapping[str, Any]
+) -> dict[str, float]:
+    """Fit only the 1X2 home share; no handicap or calibration input is used."""
+    target = {key: _number(target_probabilities.get(key)) for key in OUTCOMES}
+    if any(value is None or value < 0.0 for value in target.values()):
+        raise ValueError("HOME_SHARE_TARGET_INVALID")
+    total = sum(float(value) for value in target.values())
+    if total <= 0.0 or not math.isfinite(total):
+        raise ValueError("HOME_SHARE_TARGET_INVALID")
+    target = {key: float(value) / total for key, value in target.items()}
+
+    def evaluate(share: float) -> float:
+        matrix, _ = independent_poisson_score_matrix_with_tail(
+            lambda_total * share,
+            lambda_total * (1.0 - share),
+            max_goals_per_team=PURE_MARKET_EXACT_MAX_GOALS_PER_TEAM,
+        )
+        probabilities = outcome_probabilities(matrix)
+        return sum((probabilities[key] - target[key]) ** 2 for key in OUTCOMES)
+
+    left, right = PURE_MARKET_EXACT_SHARE_LOWER, PURE_MARKET_EXACT_SHARE_UPPER
+    golden = (math.sqrt(5.0) - 1.0) / 2.0
+    x1 = right - golden * (right - left)
+    x2 = left + golden * (right - left)
+    f1, f2 = evaluate(x1), evaluate(x2)
+    for _ in range(PURE_MARKET_EXACT_SHARE_ITERATIONS):
+        if f1 > f2:
+            left, x1, f1 = x1, x2, f2
+            x2 = left + golden * (right - left)
+            f2 = evaluate(x2)
+        else:
+            right, x2, f2 = x2, x1, f1
+            x1 = right - golden * (right - left)
+            f1 = evaluate(x1)
+    share = (left + right) / 2.0
+    matrix, _ = independent_poisson_score_matrix_with_tail(
+        lambda_total * share,
+        lambda_total * (1.0 - share),
+        max_goals_per_team=PURE_MARKET_EXACT_MAX_GOALS_PER_TEAM,
+    )
+    probabilities = outcome_probabilities(matrix)
+    return {
+        "share": share,
+        "lambda_home": lambda_total * share,
+        "lambda_away": lambda_total * (1.0 - share),
+        "loss": sum((probabilities[key] - target[key]) ** 2 for key in OUTCOMES),
+        "iterations": PURE_MARKET_EXACT_SHARE_ITERATIONS,
+    }
+
+
+def _pure_market_line_key(line: float) -> str:
+    text = f"{float(line):.2f}".rstrip("0")
+    return text if not text.endswith(".") else f"{text}0"
+
+
+def _pure_market_settlement_projection(
+    matrix: Mapping[tuple[int, int], float], *, side: str, line: float
+) -> dict[str, Any]:
+    priced = matrix_settlement_probability(matrix, family="total", side=side, line=line)
+    return {
+        **priced,
+        "win_probability": priced["win"],
+        "push_probability": priced["push"],
+        "loss_probability": priced["loss"],
+    }
+
+
+def build_pure_market_exact_projection(snapshot: Mapping[str, Any]) -> dict[str, Any]:
+    """Build the pure #189 Market full-score projection from one frozen snapshot."""
+    one_x2 = extract_pure_market_1x2_quotes(snapshot)
+    ou = extract_pure_market_ou_quotes(snapshot)
+    base = {
+        "model": "pure_market_exact",
+        "version": PURE_MARKET_EXACT_VERSION,
+        "market_policy": PURE_MARKET_EXACT_MARKET_POLICY,
+        "score_engine_version": SCORE_ENGINE_VERSION,
+        "rho": 0.0,
+        "one_x2_quotes": one_x2,
+        "ou_quotes": ou,
+    }
+    if one_x2["reason"]:
+        return {**base, "status": "NOT_EVALUABLE", "reason": one_x2["reason"]}
+    if ou["reason"]:
+        return {**base, "status": "NOT_EVALUABLE", "reason": ou["reason"]}
+
+    estimates: list[dict[str, Any]] = []
+    solve_reasons: Counter[str] = Counter()
+    for quote in ou["valid"]:
+        try:
+            solved = solve_pure_market_total_lambda(
+                quote["line"], quote["fair_over_probability"]
+            )
+        except ValueError as error:
+            solve_reasons[str(error)] += 1
+            continue
+        estimates.append({**quote, **solved})
+    if not estimates:
+        return {
+            **base,
+            "status": "NOT_EVALUABLE",
+            "reason": "OU_SOLVE_FAILED_FOR_ALL_VALID_BOOKMAKERS",
+            "solve_reasons": dict(sorted(solve_reasons.items())),
+        }
+
+    lambda_total = float(median(item["lambda_total"] for item in estimates))
+    try:
+        share = solve_pure_market_home_share(lambda_total, one_x2["consensus"])
+    except ValueError as error:
+        return {
+            **base,
+            "status": "NOT_EVALUABLE",
+            "reason": str(error),
+            "solve_reasons": dict(sorted(solve_reasons.items())),
+        }
+
+    matrix, tail = independent_poisson_score_matrix_with_tail(
+        share["lambda_home"],
+        share["lambda_away"],
+        max_goals_per_team=PURE_MARKET_EXACT_MAX_GOALS_PER_TEAM,
+    )
+    rows = score_matrix_rows(matrix)
+    top_scores = ranked_exact_score_rows(matrix, limit=5)
+    probabilities = outcome_probabilities(matrix)
+    btts = btts_probabilities(matrix)
+    totals = {
+        _pure_market_line_key(line): {
+            side: _pure_market_settlement_projection(matrix, side=side, line=line)
+            for side in ("over", "under")
+        }
+        for line in PURE_MARKET_EXACT_TOTAL_LINES
+    }
+    handicaps = {
+        _pure_market_line_key(line): asian_handicap_settlement(matrix, line)
+        for line in PURE_MARKET_EXACT_HANDICAP_LINES
+    }
+    return {
+        **base,
+        "status": "EVALUABLE",
+        "reason": None,
+        "lambda_total": lambda_total,
+        "lambda_home": share["lambda_home"],
+        "lambda_away": share["lambda_away"],
+        "one_x2_consensus": one_x2["consensus"],
+        "lambda_total_bookmaker_count": len(estimates),
+        "lambda_total_bookmaker_estimates": [
+            {
+                "bookmaker": item["bookmaker"],
+                "line": item["line"],
+                "lambda_total": item["lambda_total"],
+                "residual": item["residual"],
+            }
+            for item in estimates
+        ],
+        "lambda_total_residuals": [item["residual"] for item in estimates],
+        "solve_reasons": dict(sorted(solve_reasons.items())),
+        "share_solver": share,
+        "score_matrix": rows,
+        "score_matrix_complete": True,
+        "score_matrix_support": {
+            "representation": "FINITE_NORMALIZED_GRID",
+            "max_goals_per_team": PURE_MARKET_EXACT_MAX_GOALS_PER_TEAM,
+            "cell_count": len(rows),
+            "full_support": False,
+            "tail_bucket": False,
+            "out_of_support_policy": "OUT_OF_EXPLICIT_SUPPORT",
+            "omitted_probability_mass": tail,
+        },
+        "score_matrix_tail_probability": tail,
+        "score_top1": top_scores[0]["score"],
+        "score_top3": [row["score"] for row in top_scores[:3]],
+        "score_top5": [row["score"] for row in top_scores[:5]],
+        "probabilities": probabilities,
+        "expected_goals": {
+            "home": share["lambda_home"],
+            "away": share["lambda_away"],
+            "total": lambda_total,
+        },
+        "btts": btts,
+        "derived_markets": {
+            "ft_1x2": probabilities,
+            "totals": totals,
+            "btts": btts,
+            "asian_handicap": handicaps,
+            "total_goal_distribution": total_goal_distribution(rows),
+        },
+    }
 
 
 market_reference = build_market_reference
