@@ -21,15 +21,25 @@ from market_engine import (  # noqa: E402
     solve_pure_market_total_lambda,
 )
 from pure_market_exact_prospective import (  # noqa: E402
+    LaneConflictError,
+    PREDICTION_SCHEMA_VERSION,
+    RESULT_SCOPE,
     aggregate_settlements,
     build_compact_index,
     build_prospective_prediction,
     load_persisted_predictions,
+    load_persisted_settlements,
+    iter_persisted_prediction_paths,
+    prediction_digest,
+    prediction_shard_path,
+    prediction_shard_prefix,
     persist_settlement,
     persist_prediction,
     run_lane,
     settle_prediction,
     select_legal_market_snapshot,
+    settlement_digest,
+    settlement_shard_path,
 )
 from score_engine import (  # noqa: E402
     independent_poisson_score_matrix,
@@ -107,6 +117,37 @@ def _record(*, kickoff: str = "2026-09-08T12:00:00+00:00") -> dict:
         "canonical_model_input_sha256": "model-input-sha",
         "input_snapshot": {"snapshot_id": "FBOS-SNAPSHOT-TEST"},
     }
+
+
+def _synthetic_prediction(index: int) -> dict:
+    prediction = {
+        "schema_version": PREDICTION_SCHEMA_VERSION,
+        "prediction_id": f"PME-HIGH-WATER-{index:05d}",
+        "match_key": f"HIGH-WATER-MATCH-{index:05d}",
+        "kickoff_at": "2026-09-10T12:00:00+00:00",
+        "implementation_activated_at": "2026-09-08T09:00:00+00:00",
+        "generated_at": "2026-09-08T09:00:00+00:00",
+        "source_cutoff_at": "2026-09-08T08:00:00+00:00",
+        "model_role": "shadow",
+        "result_scope": RESULT_SCOPE,
+        "production_enabled": False,
+        "serving_enabled": False,
+        "user_visible": False,
+        "auto_promote": False,
+        "score_matrix": [{
+            "score": "0-0",
+            "home_goals": 0,
+            "away_goals": 0,
+            "probability": 1.0,
+        }],
+        "probabilities": {"home": 0.0, "draw": 1.0, "away": 0.0},
+        "lambda_home": 0.1,
+        "lambda_away": 0.1,
+        "rho": 0.0,
+    }
+    prediction["prediction_digest"] = prediction_digest(prediction)
+    prediction["prediction_sha256"] = prediction["prediction_digest"]
+    return prediction
 
 
 def test_pure_market_solver_matches_the_accepted_quarter_line_contract():
@@ -282,8 +323,64 @@ def test_future_prediction_is_write_once_and_never_contains_settlement(tmp_path)
     assert prediction["solver_identity"]["version"] == "market_189.solver.v1"
     stored = json.loads(first["path"].read_text(encoding="utf-8"))
     assert "settlement" not in stored
-    assert "score_matrix" in stored
-    assert (tmp_path / "predictions" / f"{prediction['prediction_id']}.json").is_file()
+    assert len(stored["score_matrix"]) == 441
+    assert first["path"] == prediction_shard_path(prediction["prediction_id"], tmp_path / "predictions")
+    assert first["path"].is_file()
+    assert not (tmp_path / "predictions" / f"{prediction['prediction_id']}.json").exists()
+
+
+def test_legacy_flat_and_future_sharded_predictions_share_one_loader_and_conflict_closed(tmp_path):
+    prediction = build_prospective_prediction(
+        _record(),
+        _snapshot(),
+        activation_at=datetime(2026, 9, 8, 9, 0, tzinfo=UTC),
+        generated_at=datetime(2026, 9, 8, 9, 0, tzinfo=UTC),
+        repository_commit_sha="head-sha",
+    )
+    prediction_root = tmp_path / "predictions"
+    prediction_root.mkdir()
+    legacy_path = prediction_root / f"{prediction['prediction_id']}.json"
+    legacy_bytes = (json.dumps(prediction, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
+    legacy_path.write_bytes(legacy_bytes)
+
+    assert load_persisted_predictions(tmp_path) == [prediction]
+    existing = persist_prediction(prediction, tmp_path)
+    assert existing["status"] == "existing"
+    assert existing["path"] == legacy_path
+    sharded_path = prediction_shard_path(prediction["prediction_id"], prediction_root)
+    sharded_path.parent.mkdir()
+    sharded_path.write_bytes(legacy_bytes)
+    assert load_persisted_predictions(tmp_path) == [prediction]
+    assert legacy_path.read_bytes() == legacy_bytes
+
+    conflicting = deepcopy(prediction)
+    conflicting["match_key"] = "CONFLICTING-MATCH"
+    conflicting["prediction_digest"] = prediction_digest(conflicting)
+    conflicting["prediction_sha256"] = conflicting["prediction_digest"]
+    sharded_path.write_text(json.dumps(conflicting, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    with pytest.raises(LaneConflictError):
+        load_persisted_predictions(tmp_path)
+    with pytest.raises(LaneConflictError):
+        persist_prediction(prediction, tmp_path)
+
+
+def test_future_prediction_shards_keep_directory_width_bounded_at_high_water(tmp_path):
+    total = 5000
+    for index in range(total):
+        prediction = _synthetic_prediction(index)
+        written = persist_prediction(prediction, tmp_path)
+        assert written["path"] == prediction_shard_path(prediction["prediction_id"], tmp_path / "predictions")
+
+    paths = iter_persisted_prediction_paths(tmp_path)
+    widths: dict[str, int] = {}
+    for path in paths:
+        widths[path.parent.name] = widths.get(path.parent.name, 0) + 1
+    assert len(paths) == total
+    assert len(load_persisted_predictions(tmp_path)) == total
+    assert not list((tmp_path / "predictions").glob("*.json"))
+    assert len(widths) >= 32
+    assert max(widths.values()) < 3000
+    assert all(path.parent.name == prediction_shard_prefix(path.stem) for path in paths)
 
 
 def test_repeated_lane_run_reuses_immutable_prediction_without_rewriting_it(tmp_path):
@@ -361,8 +458,30 @@ def test_settlement_is_separate_idempotent_and_uses_unique_match_observations(tm
     persisted = persist_settlement(second, tmp_path)
     assert persisted["status"] == "existing"
     assert persisted["settlement"]["evaluated_at"] == first["evaluated_at"]
-    assert (tmp_path / "predictions" / f"{prediction['prediction_id']}.json").is_file()
-    assert (tmp_path / "settlements" / f"{prediction['prediction_id']}.json").is_file()
+    assert (tmp_path / "predictions" / prediction_shard_prefix(prediction["prediction_id"]) / f"{prediction['prediction_id']}.json").is_file()
+    assert persist_settlement(first, tmp_path)["status"] == "existing"
+    settlement_path = settlement_shard_path(prediction["prediction_id"], tmp_path / "settlements")
+    assert settlement_path.is_file()
+    assert not (tmp_path / "settlements" / f"{prediction['prediction_id']}.json").exists()
+    expected = deepcopy(first)
+    expected["settlement_digest"] = settlement_digest(first)
+    assert load_persisted_settlements(tmp_path) == [expected]
+    legacy_settlement_path = tmp_path / "settlements" / f"{prediction['prediction_id']}.json"
+    legacy_settlement_path.write_bytes(settlement_path.read_bytes())
+    assert load_persisted_settlements(tmp_path) == [expected]
+
+    conflicting_settlement = deepcopy(expected)
+    conflicting_settlement["metrics"] = deepcopy(conflicting_settlement["metrics"])
+    conflicting_settlement["metrics"]["exact_top1"] = 0.0
+    conflicting_settlement["settlement_digest"] = settlement_digest(conflicting_settlement)
+    settlement_path.write_text(
+        json.dumps(conflicting_settlement, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(LaneConflictError):
+        load_persisted_settlements(tmp_path)
+    with pytest.raises(LaneConflictError):
+        persist_settlement(first, tmp_path)
 
     duplicate_version = deepcopy(first)
     duplicate_version["prediction_id"] = "PME-DUPLICATE-VERSION"

@@ -43,6 +43,8 @@ DEFAULT_OUTPUT_ROOT = ROOT / "data" / "prediction_quality" / PURE_MARKET_EXACT_V
 DEFAULT_RESULT_ROOT = ROOT / "data" / "postmatch_automation" / "results"
 PREDICTION_DIRNAME = "predictions"
 SETTLEMENT_DIRNAME = "settlements"
+PREDICTION_SHARD_PREFIX_LENGTH = 2
+SETTLEMENT_SHARD_PREFIX_LENGTH = 2
 INDEX_FILENAME = "latest_index.json"
 SETTLEMENT_SUMMARY_FILENAME = "settlement_summary.json"
 PREDICTION_SCHEMA_VERSION = "pure_market_exact_prospective.prediction.v1"
@@ -460,15 +462,148 @@ def _json_file(path: Path) -> dict[str, Any]:
     return value
 
 
+def _safe_storage_id(value: Any, label: str) -> str:
+    identifier = str(value or "").strip()
+    if (
+        not identifier
+        or identifier in {".", ".."}
+        or Path(identifier).name != identifier
+        or any(separator in identifier for separator in ("/", "\\", ":"))
+    ):
+        raise ValueError(f"{label} must contain a safe identifier")
+    return identifier
+
+
+def _storage_shard_prefix(identifier: str, *, length: int) -> str:
+    return hashlib.sha256(_safe_storage_id(identifier, "storage").encode("utf-8")).hexdigest()[:length]
+
+
+def prediction_shard_prefix(prediction_id: str) -> str:
+    """Return the deterministic shallow directory for a future prediction."""
+
+    return _storage_shard_prefix(prediction_id, length=PREDICTION_SHARD_PREFIX_LENGTH)
+
+
+def prediction_shard_path(
+    prediction_id: str,
+    prediction_root: Path = DEFAULT_OUTPUT_ROOT / PREDICTION_DIRNAME,
+) -> Path:
+    prediction_id = _safe_storage_id(prediction_id, "prediction")
+    return Path(prediction_root) / prediction_shard_prefix(prediction_id) / f"{prediction_id}.json"
+
+
+def settlement_shard_prefix(prediction_id: str) -> str:
+    """Return the deterministic shallow directory for a future settlement."""
+
+    return _storage_shard_prefix(prediction_id, length=SETTLEMENT_SHARD_PREFIX_LENGTH)
+
+
+def settlement_shard_path(
+    prediction_id: str,
+    settlement_root: Path = DEFAULT_OUTPUT_ROOT / SETTLEMENT_DIRNAME,
+) -> Path:
+    prediction_id = _safe_storage_id(prediction_id, "settlement")
+    return Path(settlement_root) / settlement_shard_prefix(prediction_id) / f"{prediction_id}.json"
+
+
+def _iter_one_level_json_paths(root: Path) -> list[Path]:
+    """Enumerate one legacy-flat level and one deterministic shard level."""
+
+    root = Path(root)
+    if not root.is_dir():
+        return []
+    paths = [path for path in root.iterdir() if path.is_file() and path.suffix == ".json"]
+    for directory in sorted(path for path in root.iterdir() if path.is_dir()):
+        paths.extend(
+            path
+            for path in directory.iterdir()
+            if path.is_file() and path.suffix == ".json"
+        )
+    return sorted(
+        paths,
+        key=lambda path: (len(path.relative_to(root).parts), path.relative_to(root).as_posix()),
+    )
+
+
+def iter_persisted_prediction_paths(output_root: Path = DEFAULT_OUTPUT_ROOT) -> list[Path]:
+    """Enumerate the supported legacy-flat and future-sharded prediction layout."""
+
+    return _iter_one_level_json_paths(Path(output_root) / PREDICTION_DIRNAME)
+
+
+def iter_persisted_settlement_paths(output_root: Path = DEFAULT_OUTPUT_ROOT) -> list[Path]:
+    """Enumerate the supported legacy-flat and future-sharded settlement layout."""
+
+    return _iter_one_level_json_paths(Path(output_root) / SETTLEMENT_DIRNAME)
+
+
+def _prediction_shard_relative_path(prediction_id: str) -> str:
+    prediction_id = _safe_storage_id(prediction_id, "prediction")
+    return f"{PREDICTION_DIRNAME}/{prediction_shard_prefix(prediction_id)}/{prediction_id}.json"
+
+
+def _settlement_shard_relative_path(prediction_id: str) -> str:
+    prediction_id = _safe_storage_id(prediction_id, "settlement")
+    return f"{SETTLEMENT_DIRNAME}/{settlement_shard_prefix(prediction_id)}/{prediction_id}.json"
+
+
+def _load_persisted_prediction_file(path: Path, prediction_root: Path) -> dict[str, Any]:
+    try:
+        value = _json_file(path)
+    except (OSError, ValueError, json.JSONDecodeError) as error:
+        raise LaneConflictError(f"prediction is unreadable: {path}") from error
+    validate_prospective_prediction(value)
+    prediction_id = _safe_storage_id(value.get("prediction_id"), "prediction")
+    if path.name != f"{prediction_id}.json":
+        raise ValueError(f"prediction filename does not match prediction_id: {path}")
+    relative = path.relative_to(prediction_root)
+    if len(relative.parts) == 1:
+        return value
+    if len(relative.parts) == 2 and relative.parts[0] == prediction_shard_prefix(prediction_id):
+        return value
+    raise ValueError(f"prediction is outside the supported layout: {path}")
+
+
+def _load_persisted_prediction_documents(
+    output_root: Path = DEFAULT_OUTPUT_ROOT,
+) -> tuple[list[dict[str, Any]], dict[str, str]]:
+    output_root = Path(output_root)
+    prediction_root = output_root / PREDICTION_DIRNAME
+    by_id: dict[str, tuple[Path, dict[str, Any]]] = {}
+    for path in iter_persisted_prediction_paths(output_root):
+        value = _load_persisted_prediction_file(path, prediction_root)
+        prediction_id = _safe_storage_id(value.get("prediction_id"), "prediction")
+        existing = by_id.get(prediction_id)
+        if existing is not None:
+            if canonical_json(existing[1]) != canonical_json(value):
+                raise LaneConflictError(f"conflicting duplicate prediction identity: {prediction_id}")
+            continue
+        by_id[prediction_id] = (path, value)
+    rows = [by_id[prediction_id][1] for prediction_id in sorted(by_id)]
+    paths = {
+        prediction_id: by_id[prediction_id][0].relative_to(output_root).as_posix()
+        for prediction_id in sorted(by_id)
+    }
+    return rows, paths
+
+
 def persist_prediction(prediction: Mapping[str, Any], output_root: Path = DEFAULT_OUTPUT_ROOT) -> dict[str, Any]:
     value = dict(prediction)
     validate_prospective_prediction(value)
+    prediction_id = _safe_storage_id(value["prediction_id"], "prediction")
     output_root = Path(output_root)
-    target = output_root / PREDICTION_DIRNAME / f"{value['prediction_id']}.json"
-    target.parent.mkdir(parents=True, exist_ok=True)
-    if target.exists():
-        existing = _json_file(target)
-        validate_prospective_prediction(existing)
+    prediction_root = output_root / PREDICTION_DIRNAME
+    legacy_path = prediction_root / f"{prediction_id}.json"
+    sharded_path = prediction_shard_path(prediction_id, prediction_root)
+    existing_paths = [path for path in (legacy_path, sharded_path) if path.exists()]
+    if existing_paths:
+        existing_values = [
+            _load_persisted_prediction_file(path, prediction_root)
+            for path in existing_paths
+        ]
+        if any(canonical_json(existing_values[0]) != canonical_json(item) for item in existing_values[1:]):
+            raise LaneConflictError(f"conflicting duplicate prediction identity: {prediction_id}")
+        existing = existing_values[0]
         stable_fields = {
             "generated_at", "implementation_activated_at", "frozen_prediction_at",
             "prediction_created_at", "repository_commit_sha",
@@ -477,8 +612,11 @@ def persist_prediction(prediction: Mapping[str, Any], output_root: Path = DEFAUL
         existing_stable = {key: item for key, item in existing.items() if key not in stable_fields}
         value_stable = {key: item for key, item in value.items() if key not in stable_fields}
         if canonical_json(existing_stable) != canonical_json(value_stable):
-            raise LaneConflictError(f"prediction content conflict: {target}")
+            raise LaneConflictError(f"prediction content conflict: {legacy_path if legacy_path.exists() else sharded_path}")
+        target = legacy_path if legacy_path.exists() else sharded_path
         return {"status": "existing", "path": target, "record": existing}
+    target = sharded_path
+    target.parent.mkdir(parents=True, exist_ok=True)
     try:
         with target.open("x", encoding="utf-8") as handle:
             handle.write(json.dumps(value, ensure_ascii=False, indent=2) + "\n")
@@ -488,16 +626,17 @@ def persist_prediction(prediction: Mapping[str, Any], output_root: Path = DEFAUL
 
 
 def load_persisted_predictions(output_root: Path = DEFAULT_OUTPUT_ROOT) -> list[dict[str, Any]]:
-    root = Path(output_root) / PREDICTION_DIRNAME
-    rows: list[dict[str, Any]] = []
-    for path in sorted(root.glob("*.json")) if root.is_dir() else []:
-        row = _json_file(path)
-        validate_prospective_prediction(row)
-        rows.append(row)
+    rows, _ = _load_persisted_prediction_documents(output_root)
     return rows
 
 
-def _prediction_index_entry(record: Mapping[str, Any], settlement_ids: set[str]) -> dict[str, Any]:
+def _prediction_index_entry(
+    record: Mapping[str, Any],
+    settlement_ids: set[str],
+    *,
+    prediction_path: str | None = None,
+    settlement_path: str | None = None,
+) -> dict[str, Any]:
     prediction_id = str(record["prediction_id"])
     return {
         "prediction_id": prediction_id,
@@ -507,9 +646,9 @@ def _prediction_index_entry(record: Mapping[str, Any], settlement_ids: set[str])
         "generated_at": record.get("generated_at"),
         "source_cutoff_at": record.get("source_cutoff_at"),
         "status": record.get("status"),
-        "prediction_path": f"{PREDICTION_DIRNAME}/{prediction_id}.json",
+        "prediction_path": prediction_path or _prediction_shard_relative_path(prediction_id),
         "settlement_path": (
-            f"{SETTLEMENT_DIRNAME}/{prediction_id}.json"
+            settlement_path or _settlement_shard_relative_path(prediction_id)
             if prediction_id in settlement_ids else None
         ),
     }
@@ -519,11 +658,23 @@ def build_compact_index(
     predictions: Iterable[Mapping[str, Any]],
     *,
     settlement_ids: set[str] | None = None,
+    prediction_paths: Mapping[str, str] | None = None,
+    settlement_paths: Mapping[str, str] | None = None,
     refreshed_at: str | None = None,
 ) -> dict[str, Any]:
     settlement_ids = settlement_ids or set()
+    prediction_paths = prediction_paths or {}
+    settlement_paths = settlement_paths or {}
     rows = sorted(
-        [_prediction_index_entry(row, settlement_ids) for row in predictions],
+        [
+            _prediction_index_entry(
+                row,
+                settlement_ids,
+                prediction_path=prediction_paths.get(str(row.get("prediction_id") or "")),
+                settlement_path=settlement_paths.get(str(row.get("prediction_id") or "")),
+            )
+            for row in predictions
+        ],
         key=lambda row: (str(row.get("match_key") or ""), str(row.get("generated_at") or ""), str(row["prediction_id"])),
     )
     latest_by_match: dict[str, str] = {}
@@ -738,10 +889,20 @@ def settle_prediction(
 def persist_settlement(settlement: Mapping[str, Any], output_root: Path = DEFAULT_OUTPUT_ROOT) -> dict[str, Any]:
     value = dict(settlement)
     value["settlement_digest"] = settlement_digest(value)
-    target = Path(output_root) / SETTLEMENT_DIRNAME / f"{value['prediction_id']}.json"
-    target.parent.mkdir(parents=True, exist_ok=True)
-    if target.exists():
-        existing = _json_file(target)
+    prediction_id = _safe_storage_id(value.get("prediction_id"), "settlement")
+    output_root = Path(output_root)
+    settlement_root = output_root / SETTLEMENT_DIRNAME
+    legacy_path = settlement_root / f"{prediction_id}.json"
+    sharded_path = settlement_shard_path(prediction_id, settlement_root)
+    existing_paths = [path for path in (legacy_path, sharded_path) if path.exists()]
+    if existing_paths:
+        existing_values = [
+            _load_persisted_settlement_file(path, settlement_root)
+            for path in existing_paths
+        ]
+        if any(canonical_json(existing_values[0]) != canonical_json(item) for item in existing_values[1:]):
+            raise LaneConflictError(f"conflicting duplicate settlement identity: {prediction_id}")
+        existing = existing_values[0]
         existing_stable = {
             key: item for key, item in existing.items()
             if key not in {"evaluated_at", "settlement_digest"}
@@ -751,8 +912,13 @@ def persist_settlement(settlement: Mapping[str, Any], output_root: Path = DEFAUL
             if key not in {"evaluated_at", "settlement_digest"}
         }
         if canonical_json(existing_stable) != canonical_json(value_stable):
-            raise LaneConflictError(f"settlement content conflict: {target}")
+            raise LaneConflictError(
+                f"settlement content conflict: {legacy_path if legacy_path.exists() else sharded_path}"
+            )
+        target = legacy_path if legacy_path.exists() else sharded_path
         return {"status": "existing", "path": target, "settlement": existing}
+    target = sharded_path
+    target.parent.mkdir(parents=True, exist_ok=True)
     try:
         with target.open("x", encoding="utf-8") as handle:
             handle.write(json.dumps(value, ensure_ascii=False, indent=2) + "\n")
@@ -761,14 +927,50 @@ def persist_settlement(settlement: Mapping[str, Any], output_root: Path = DEFAUL
     return {"status": "created", "path": target, "settlement": value}
 
 
+def _load_persisted_settlement_file(path: Path, settlement_root: Path) -> dict[str, Any]:
+    try:
+        value = _json_file(path)
+    except (OSError, ValueError, json.JSONDecodeError) as error:
+        raise LaneConflictError(f"settlement is unreadable: {path}") from error
+    prediction_id = _safe_storage_id(value.get("prediction_id"), "settlement")
+    if path.name != f"{prediction_id}.json":
+        raise ValueError(f"settlement filename does not match prediction_id: {path}")
+    relative = path.relative_to(settlement_root)
+    if len(relative.parts) != 1 and not (
+        len(relative.parts) == 2
+        and relative.parts[0] == settlement_shard_prefix(prediction_id)
+    ):
+        raise ValueError(f"settlement is outside the supported layout: {path}")
+    if value.get("settlement_digest") != settlement_digest(value):
+        raise ValueError(f"SETTLEMENT_DIGEST_MISMATCH:{path}")
+    return value
+
+
+def _load_persisted_settlement_documents(
+    output_root: Path = DEFAULT_OUTPUT_ROOT,
+) -> tuple[list[dict[str, Any]], dict[str, str]]:
+    output_root = Path(output_root)
+    settlement_root = output_root / SETTLEMENT_DIRNAME
+    by_id: dict[str, tuple[Path, dict[str, Any]]] = {}
+    for path in iter_persisted_settlement_paths(output_root):
+        value = _load_persisted_settlement_file(path, settlement_root)
+        prediction_id = _safe_storage_id(value.get("prediction_id"), "settlement")
+        existing = by_id.get(prediction_id)
+        if existing is not None:
+            if canonical_json(existing[1]) != canonical_json(value):
+                raise LaneConflictError(f"conflicting duplicate settlement identity: {prediction_id}")
+            continue
+        by_id[prediction_id] = (path, value)
+    rows = [by_id[prediction_id][1] for prediction_id in sorted(by_id)]
+    paths = {
+        prediction_id: by_id[prediction_id][0].relative_to(output_root).as_posix()
+        for prediction_id in sorted(by_id)
+    }
+    return rows, paths
+
+
 def load_persisted_settlements(output_root: Path = DEFAULT_OUTPUT_ROOT) -> list[dict[str, Any]]:
-    root = Path(output_root) / SETTLEMENT_DIRNAME
-    rows: list[dict[str, Any]] = []
-    for path in sorted(root.glob("*.json")) if root.is_dir() else []:
-        row = _json_file(path)
-        if row.get("settlement_digest") != settlement_digest(row):
-            raise ValueError(f"SETTLEMENT_DIGEST_MISMATCH:{path}")
-        rows.append(row)
+    rows, _ = _load_persisted_settlement_documents(output_root)
     return rows
 
 
@@ -910,40 +1112,64 @@ def run_lane(
             reason = str(error).split(":", 1)[0] or type(error).__name__
             skipped[reason] += 1
 
-    predictions = load_persisted_predictions(output_root)
-    result_map = discover_verified_results(result_root)
     settlement_created = 0
     settlement_existing = 0
     settlement_skipped: Counter[str] = Counter()
-    for prediction in predictions:
-        result_item, reason = _find_verified_result(prediction, result_map)
-        if result_item is None:
-            settlement_skipped[reason or "RESULT_NOT_AVAILABLE"] += 1
-            continue
-        try:
-            settlement = settle_prediction(
-                prediction,
-                result_item["payload"],
-                result_path=result_item["path"],
-                settled_at=now,
-            )
-            persisted = persist_settlement(settlement, output_root)
-            if persisted["status"] == "created":
-                settlement_created += 1
-            else:
-                settlement_existing += 1
-        except (LaneConflictError, OSError, ValueError, json.JSONDecodeError) as error:
-            conflicts.append(str(error))
-
-    settlements = load_persisted_settlements(output_root)
-    summary = aggregate_settlements(settlements, generated_at=now)
-    settlement_ids = {str(row.get("prediction_id") or "") for row in settlements}
-    index = build_compact_index(predictions, settlement_ids=settlement_ids, refreshed_at=now.isoformat())
     index_path = Path(output_root) / INDEX_FILENAME
     summary_path = Path(output_root) / SETTLEMENT_SUMMARY_FILENAME
-    # Derived views are allowed to refresh; they never embed prediction distributions.
-    _write_derived_if_changed(index_path, index, ignored_keys=frozenset({"refreshed_at"}))
-    _write_derived_if_changed(summary_path, summary, ignored_keys=frozenset({"generated_at"}))
+    storage_load_failed = False
+    try:
+        predictions, prediction_paths = _load_persisted_prediction_documents(output_root)
+    except (LaneConflictError, OSError, ValueError, json.JSONDecodeError) as error:
+        conflicts.append(str(error))
+        predictions = []
+        prediction_paths = {}
+        storage_load_failed = True
+
+    settlement_paths: dict[str, str] = {}
+    settlements: list[dict[str, Any]] = []
+    if not storage_load_failed:
+        result_map = discover_verified_results(result_root)
+        for prediction in predictions:
+            result_item, reason = _find_verified_result(prediction, result_map)
+            if result_item is None:
+                settlement_skipped[reason or "RESULT_NOT_AVAILABLE"] += 1
+                continue
+            try:
+                settlement = settle_prediction(
+                    prediction,
+                    result_item["payload"],
+                    result_path=result_item["path"],
+                    settled_at=now,
+                )
+                persisted = persist_settlement(settlement, output_root)
+                if persisted["status"] == "created":
+                    settlement_created += 1
+                else:
+                    settlement_existing += 1
+            except (LaneConflictError, OSError, ValueError, json.JSONDecodeError) as error:
+                conflicts.append(str(error))
+        try:
+            settlements, settlement_paths = _load_persisted_settlement_documents(output_root)
+        except (LaneConflictError, OSError, ValueError, json.JSONDecodeError) as error:
+            conflicts.append(str(error))
+            settlements = []
+            settlement_paths = {}
+            storage_load_failed = True
+
+    if not storage_load_failed:
+        summary = aggregate_settlements(settlements, generated_at=now)
+        settlement_ids = {str(row.get("prediction_id") or "") for row in settlements}
+        index = build_compact_index(
+            predictions,
+            settlement_ids=settlement_ids,
+            prediction_paths=prediction_paths,
+            settlement_paths=settlement_paths,
+            refreshed_at=now.isoformat(),
+        )
+        # Derived views are allowed to refresh; they never embed prediction distributions.
+        _write_derived_if_changed(index_path, index, ignored_keys=frozenset({"refreshed_at"}))
+        _write_derived_if_changed(summary_path, summary, ignored_keys=frozenset({"generated_at"}))
     completion_state = "FAIL_CLOSED" if conflicts else (
         "PURE_MARKET_PROSPECTIVE_WIRED" if predictions else "PURE_MARKET_PROSPECTIVE_WIRED_NO_CURRENT_ROWS"
     )
