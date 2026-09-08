@@ -10,6 +10,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
 from market_side_shadow import load_persisted_pairs  # noqa: E402
 from market_side_shadow_refresh import (  # noqa: E402
+    CURRENT_EVALUATION_KEYS,
+    CURRENT_VIEW_SCHEMA_VERSION,
     PAIR_INDEX_SCHEMA_VERSION,
     load_indexed_pairs,
     pair_set_digest,
@@ -73,12 +75,22 @@ def test_compact_view_owner_does_not_serialize_full_pair_history():
     assert "entries" not in ast.unparse(function)
 
 
+def test_current_evaluation_projection_drops_recomputable_history_arrays():
+    tree = _tree(ROOT / "scripts" / "market_side_shadow_refresh.py")
+    compact_source = ast.unparse(_function(tree, "build_compact_shadow_view"))
+    projection_source = ast.unparse(_function(tree, "build_bounded_current_evaluation"))
+    assert "build_bounded_current_evaluation" in compact_source
+    assert "representative_selector" not in projection_source
+    assert "selected_representative_pair_ids" not in projection_source
+    assert "verified_representative_pair_ids" not in projection_source
+
+
 def test_current_latest_artifact_is_a_bounded_compact_index():
     latest_path = ROOT / "data" / "prediction_quality" / "market_side_shadow_1" / "latest.json"
     latest = json.loads(latest_path.read_text(encoding="utf-8"))
     pair_index = latest["pair_index"]
 
-    assert latest["schema_version"] == "market_side_shadow_1.current.v1"
+    assert latest["schema_version"] == CURRENT_VIEW_SCHEMA_VERSION
     assert "pairs" not in latest
     assert latest_path.stat().st_size <= 1_000_000
     assert pair_index["schema_version"] == PAIR_INDEX_SCHEMA_VERSION
@@ -88,3 +100,5 @@ def test_current_latest_artifact_is_a_bounded_compact_index():
     assert pair_index["pair_count"] == len(pairs)
     assert pair_index["pair_set_digest"] == pair_set_digest(pairs)
     assert len(load_indexed_pairs(pair_index, pair_root)) == len(pairs)
+    assert set(latest["evaluation"]) == set(CURRENT_EVALUATION_KEYS)
+    assert "representative_selector" not in latest["evaluation"]

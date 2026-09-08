@@ -1,6 +1,7 @@
 import json
 import shutil
 import sys
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -11,8 +12,10 @@ sys.path.insert(0, str(ROOT / "scripts"))
 
 from market_side_shadow import build_shadow_document, load_persisted_pairs  # noqa: E402
 from market_side_shadow_refresh import (  # noqa: E402
+    CURRENT_EVALUATION_KEYS,
     CURRENT_VIEW_SCHEMA_VERSION,
     PAIR_INDEX_SCHEMA_VERSION,
+    build_bounded_current_evaluation,
     build_identity_safe_result_map,
     build_compact_shadow_view,
     discover_verified_results,
@@ -67,7 +70,6 @@ def test_refresh_discovers_verified_result_and_writes_latest(tmp_path):
     assert latest["counts"]["paired"] == 1
     assert latest["counts"]["promotion_eligible_pairs"] == 0
     assert latest["counts"]["excluded_non_promotion_pair_count"] == 1
-    assert latest["evaluation"]["verified_paired_count"] == 0
     assert latest["counts"]["total_pair_version_rows"] == 1
     assert latest["counts"]["verified_unique_matches"] == 0
     assert latest["checkpoint"]["verified_unique_matches"] == 0
@@ -75,6 +77,8 @@ def test_refresh_discovers_verified_result_and_writes_latest(tmp_path):
     assert latest["checkpoint"]["auto_promote"] is False
     assert latest["checkpoint"]["status"] == "NOT_REACHED"
     assert latest["evaluation"]["candidates"]["challenger"]["sample_count"] == 0
+    assert latest["evaluation"]["early_kill"]["status"] == "NOT_TRIGGERED"
+    assert "representative_selector" not in latest["evaluation"]
     assert "pairs" not in latest
     indexed_pairs = load_indexed_pairs(latest["pair_index"], pair_root)
     assert indexed_pairs[0]["pair_status"] == "PAIRED"
@@ -111,7 +115,7 @@ def test_refresh_writes_compact_pair_index_without_changing_evaluation(tmp_path)
     assert "pairs" not in latest
     assert latest["counts"] == expected["counts"]
     assert latest["checkpoint"] == expected["checkpoint"]
-    assert latest["evaluation"] == expected["evaluation"]
+    assert latest["evaluation"] == build_bounded_current_evaluation(expected["evaluation"])
     assert latest["pair_index"]["schema_version"] == PAIR_INDEX_SCHEMA_VERSION
     assert latest["pair_index"]["root"] == "pairs"
     assert latest["pair_index"]["pair_count"] == len(pairs)
@@ -121,33 +125,51 @@ def test_refresh_writes_compact_pair_index_without_changing_evaluation(tmp_path)
     assert output.stat().st_size <= 1_000_000
 
 
-def _synthetic_pair(index):
+def _production_shaped_growth_pair(index):
+    kickoff = datetime(2026, 1, 1, tzinfo=timezone.utc) + timedelta(days=index)
     return {
-        "pair_id": f"MS-SHADOW-PAIR-{index:08d}",
+        "pair_id": f"MS-SHADOW-PAIR-GROWTH-{index:05d}",
         "pair_digest": f"{index:064x}",
-        "match_id": f"MATCH-{index:08d}",
-        "match_key": f"MATCH-{index:08d}",
+        "match_id": f"GROWTH-MATCH-{index:05d}",
+        "match_key": f"GROWTH-MATCH-{index:05d}",
         "pair_status": "PAIRED",
         "promotion_eligible": True,
-        "source_cutoff": "2026-08-30T00:00:00+08:00",
-        "freeze_created_at": "2026-08-30T00:00:00+08:00",
+        "kickoff_at": kickoff.isoformat(),
+        "source_cutoff": (kickoff - timedelta(hours=1)).isoformat(),
+        "freeze_created_at": (kickoff - timedelta(hours=2)).isoformat(),
+        "same_fixture": True,
+        "champion_preserved": True,
+        "same_source_cutoff": True,
+        "same_freeze_eligibility": True,
+        "same_frozen_input_digest": True,
+        "post_match_input_used_for_generation": False,
+        "integrity": {
+            "same_fixture": True,
+            "same_source_cutoff": True,
+            "same_freeze_eligibility": True,
+            "same_frozen_input_digest": True,
+            "champion_preserved": True,
+        },
     }
 
 
-def test_pair_index_high_water_shape_stays_bounded_with_thousands_of_pairs():
-    small_pairs = [_synthetic_pair(index) for index in range(10)]
-    high_water_pairs = [_synthetic_pair(index) for index in range(5000)]
-    small = build_compact_shadow_view({"pairs": small_pairs, "counts": {"pairs": 0}}, small_pairs)
-    high_water = build_compact_shadow_view(
-        {"pairs": high_water_pairs, "counts": {"pairs": 0}},
-        high_water_pairs,
-    )
+def test_final_current_view_high_water_shape_stays_bounded_with_thousands_of_matches():
+    small_pairs = [_production_shaped_growth_pair(index) for index in range(10)]
+    high_water_pairs = [_production_shaped_growth_pair(index) for index in range(5000)]
+    small_full = build_shadow_document(small_pairs, {})
+    high_water_full = build_shadow_document(high_water_pairs, {})
+    small = build_compact_shadow_view(small_full, small_pairs)
+    high_water = build_compact_shadow_view(high_water_full, high_water_pairs)
 
-    small_size = len(json.dumps(small, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8"))
+    small_size = len(json.dumps(small, ensure_ascii=False, sort_keys=True, indent=2).encode("utf-8"))
     high_water_size = len(
-        json.dumps(high_water, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        json.dumps(high_water, ensure_ascii=False, sort_keys=True, indent=2).encode("utf-8")
     )
 
+    assert len(small_full["evaluation"]["representative_selector"]["groups"]) == 10
+    assert len(high_water_full["evaluation"]["representative_selector"]["groups"]) == 5000
+    assert set(high_water["evaluation"]) == set(CURRENT_EVALUATION_KEYS)
+    assert "representative_selector" not in high_water["evaluation"]
     assert set(high_water["pair_index"]) == {
         "schema_version",
         "root",
@@ -157,7 +179,7 @@ def test_pair_index_high_water_shape_stays_bounded_with_thousands_of_pairs():
     assert high_water["pair_index"]["pair_count"] == 5000
     assert len(high_water["pair_index"]["pair_set_digest"]) == 64
     assert high_water_size < 100_000
-    assert high_water_size - small_size < 128
+    assert high_water_size - small_size < 2048
     assert pair_set_digest(high_water_pairs) == pair_set_digest(reversed(high_water_pairs))
 
 

@@ -28,6 +28,7 @@ from market_side_shadow import (  # noqa: E402
     _is_promotion_eligible_pair,
 )
 from market_side_shadow_refresh import (  # noqa: E402
+    CURRENT_VIEW_SCHEMA_VERSION,
     build_identity_safe_result_map,
     discover_verified_results,
     load_indexed_pairs,
@@ -581,6 +582,8 @@ def run_review(
     latest = _load_json(latest_path)
     if not isinstance(latest, dict):
         raise ValueError("latest shadow artifact must be an object")
+    if str(latest.get("schema_version") or "") != CURRENT_VIEW_SCHEMA_VERSION:
+        raise ValueError("unsupported current shadow view schema")
     if str(latest.get("candidate_id") or "") != CANDIDATE_ID:
         raise ValueError("latest artifact is not Challenger C")
     pair_index = latest.get("pair_index")

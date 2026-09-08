@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+from copy import deepcopy
 from datetime import datetime, timezone
 import hashlib
 import json
@@ -33,8 +34,17 @@ from prospective_settlement import normalize_result  # noqa: E402
 
 MILESTONE = "MARKET-SIDE-SHADOW-1"
 REFRESH_SCHEMA_VERSION = "market_side_shadow_1.refresh.v2"
-CURRENT_VIEW_SCHEMA_VERSION = "market_side_shadow_1.current.v1"
+CURRENT_VIEW_SCHEMA_VERSION = "market_side_shadow_1.current.v2"
 PAIR_INDEX_SCHEMA_VERSION = "market_side_shadow_1.pair_index.v2"
+CURRENT_EVALUATION_KEYS = (
+    "schema_version",
+    "metric_unit",
+    "version_row_metric_unit",
+    "post_match_input_used_for_generation",
+    "actual_results_used_for_evaluation_only",
+    "candidates",
+    "early_kill",
+)
 DEFAULT_RESULT_ROOT = POSTMATCH_RESULT_ROOT
 DEFAULT_OUTPUT = ROOT / "data" / "prediction_quality" / "market_side_shadow_1" / "latest.json"
 RESULT_SOURCE_LABEL = "data/postmatch_automation/results/*.json"
@@ -182,6 +192,21 @@ def pair_set_digest(pairs: Iterable[Mapping[str, Any]]) -> str:
     return hashlib.sha256(canonical_records.encode("utf-8")).hexdigest()
 
 
+def build_bounded_current_evaluation(evaluation: Mapping[str, Any]) -> dict[str, Any]:
+    """Persist only bounded evaluation fields consumed by current-view readers."""
+
+    if not isinstance(evaluation, Mapping):
+        raise ValueError("full shadow document must contain an evaluation object")
+    required = {"candidates", "early_kill"}
+    if not required.issubset(evaluation):
+        raise ValueError("full shadow evaluation is missing current-view consumer fields")
+    return {
+        key: deepcopy(evaluation[key])
+        for key in CURRENT_EVALUATION_KEYS
+        if key in evaluation
+    }
+
+
 def build_compact_shadow_view(
     document: Mapping[str, Any],
     pairs: Iterable[Mapping[str, Any]],
@@ -198,6 +223,7 @@ def build_compact_shadow_view(
         raise ValueError("full shadow document pair history does not match pair authority")
     compact = {key: value for key, value in document.items() if key != "pairs"}
     compact["schema_version"] = CURRENT_VIEW_SCHEMA_VERSION
+    compact["evaluation"] = build_bounded_current_evaluation(document.get("evaluation"))
     compact["pair_index"] = {
         "schema_version": PAIR_INDEX_SCHEMA_VERSION,
         "root": "pairs",
@@ -293,9 +319,9 @@ def refresh_shadow(
         **matching,
         "actual_results_persisted": False,
     }
+    evaluation = document["evaluation"]
     document = build_compact_shadow_view(document, pairs)
     latest_status = _atomic_persist(document, Path(output))
-    evaluation = document["evaluation"]
     return {
         "status": "SUCCESS",
         "milestone": MILESTONE,

@@ -93,12 +93,22 @@ jobs:
           metrics = evaluation["candidates"]
           pair_index = document.get("pair_index") or {}
           compact_current_view = (
-              document.get("schema_version") == "market_side_shadow_1.current.v1"
+              document.get("schema_version") == "market_side_shadow_1.current.v2"
               and "pairs" not in document
               and pair_index.get("schema_version") == "market_side_shadow_1.pair_index.v2"
               and "entries" not in pair_index
               and isinstance(pair_index.get("pair_set_digest"), str)
               and len(pair_index.get("pair_set_digest")) == 64
+              and set(evaluation) == {
+                  "schema_version",
+                  "metric_unit",
+                  "version_row_metric_unit",
+                  "post_match_input_used_for_generation",
+                  "actual_results_used_for_evaluation_only",
+                  "candidates",
+                  "early_kill",
+              }
+              and "representative_selector" not in evaluation
               and Path(sys.argv[1]).stat().st_size <= 1_000_000
           )
           reference = {
