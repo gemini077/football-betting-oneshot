@@ -129,7 +129,10 @@ def test_pre_change_legacy_flat_pair_manifest_is_byte_for_byte_immutable():
         entry["path"] for entry in entries
     ]
     for path, entry in zip(expected_paths, entries):
-        payload = path.read_bytes()
+        # The manifest freezes repository (LF) bytes; normalize only the
+        # checkout newline transform so Windows and Linux verify the same Git
+        # blob content.
+        payload = path.read_bytes().replace(b"\r\n", b"\n")
         assert len(payload) == entry["bytes"]
         assert hashlib.sha256(payload).hexdigest() == entry["sha256"]
 
