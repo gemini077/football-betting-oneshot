@@ -245,6 +245,27 @@ def evaluate_1x2_probabilities(
     return result
 
 
+def ranked_probability_score(
+    probabilities: Mapping[str, Any] | None,
+    actual_outcome: str,
+) -> float | None:
+    """Return the accepted three-way cumulative ranked probability score."""
+    if actual_outcome not in OUTCOMES or not isinstance(probabilities, Mapping):
+        return None
+    values = {key: _number(probabilities.get(key)) for key in OUTCOMES}
+    if any(value is None or value < 0 for value in values.values()):
+        return None
+    observed = {key: float(key == actual_outcome) for key in OUTCOMES}
+    predicted_cumulative = 0.0
+    observed_cumulative = 0.0
+    score = 0.0
+    for key in OUTCOMES[:-1]:
+        predicted_cumulative += float(values[key])
+        observed_cumulative += observed[key]
+        score += (predicted_cumulative - observed_cumulative) ** 2
+    return score / (len(OUTCOMES) - 1)
+
+
 def evaluate_goal_residuals(
     prediction: Mapping[str, Any],
     actual_pair: tuple[int, int],

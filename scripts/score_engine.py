@@ -118,6 +118,18 @@ def score_matrix_rows(matrix: Mapping[tuple[int, int], float]) -> list[dict[str,
 def independent_poisson_score_matrix(
     lambda_home: float, lambda_away: float, *, max_goals_per_team: int = 12
 ) -> dict[tuple[int, int], float]:
+    matrix, _ = independent_poisson_score_matrix_with_tail(
+        lambda_home,
+        lambda_away,
+        max_goals_per_team=max_goals_per_team,
+    )
+    return matrix
+
+
+def independent_poisson_score_matrix_with_tail(
+    lambda_home: float, lambda_away: float, *, max_goals_per_team: int = 12
+) -> tuple[dict[tuple[int, int], float], float]:
+    """Build the canonical independent-Poisson matrix and expose omitted mass."""
     raw: dict[tuple[int, int], float] = {}
     for home_goals in range(max_goals_per_team + 1):
         home_probability = math.exp(-lambda_home) * lambda_home ** home_goals / math.factorial(home_goals)
@@ -125,7 +137,12 @@ def independent_poisson_score_matrix(
             away_probability = math.exp(-lambda_away) * lambda_away ** away_goals / math.factorial(away_goals)
             raw[(home_goals, away_goals)] = home_probability * away_probability
     total = sum(raw.values())
-    return {score: probability / total for score, probability in raw.items()}
+    if total <= 0 or not math.isfinite(total):
+        return {}, 1.0
+    return (
+        {score: probability / total for score, probability in raw.items()},
+        max(0.0, 1.0 - total),
+    )
 
 
 def independent_poisson_score_rows(

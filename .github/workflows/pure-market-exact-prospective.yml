@@ -1,0 +1,147 @@
+name: Pure Market Exact prospective authority
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - "scripts/market_engine.py"
+      - "scripts/score_engine.py"
+      - "scripts/evaluation_kernel.py"
+      - "scripts/pure_market_exact_prospective.py"
+      - "tests/test_pure_market_exact_prospective.py"
+      - "tests/test_kernel_characterization.py"
+      - "tests/test_kernel_ownership_guard.py"
+      - "tests/test_evaluation_kernel_characterization.py"
+      - "tests/test_baseline_production_integration.py"
+      - "tests/test_baseline_settlement.py"
+      - "tests/test_prospective_settlement.py"
+      - "tests/test_exact_distribution_freeze.py"
+      - ".github/workflows/pure-market-exact-prospective.yml"
+      - "data/prediction_quality/pure_market_exact_prospective_1/**"
+  schedule:
+    - cron: "17 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pure-market-exact-prospective-${{ github.event_name == 'pull_request' && github.event.pull_request.number || 'main' }}
+  cancel-in-progress: false
+
+jobs:
+  exact-head-validation:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out exact PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - name: Assert checkout is the exact PR head
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          test -n "$EXPECTED_SHA"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+
+      - name: Enforce bounded file scope
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          while IFS= read -r path; do
+            case "$path" in
+              scripts/market_engine.py|scripts/score_engine.py|scripts/evaluation_kernel.py|scripts/pure_market_exact_prospective.py|tests/test_pure_market_exact_prospective.py|tests/test_kernel_characterization.py|tests/test_kernel_ownership_guard.py|tests/test_evaluation_kernel_characterization.py|tests/test_baseline_production_integration.py|tests/test_baseline_settlement.py|tests/test_prospective_settlement.py|tests/test_exact_distribution_freeze.py|.github/workflows/pure-market-exact-prospective.yml|data/prediction_quality/pure_market_exact_prospective_1/*) ;;
+              *) echo "out-of-scope file: $path"; exit 1 ;;
+            esac
+          done < <(git diff --name-only "$BASE_SHA...$HEAD_SHA")
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install project dependencies
+        run: python -m pip install -r requirements.txt
+
+      - name: Run focused authority and regression tests
+        run: >-
+          python -m pytest -q
+          tests/test_pure_market_exact_prospective.py
+          tests/test_kernel_characterization.py
+          tests/test_kernel_ownership_guard.py
+          tests/test_evaluation_kernel_characterization.py
+          tests/test_baseline_production_integration.py
+          tests/test_baseline_settlement.py
+          tests/test_prospective_settlement.py
+          tests/test_exact_distribution_freeze.py
+
+      - name: Compile touched Python modules and tests
+        run: >-
+          python -m py_compile
+          scripts/market_engine.py
+          scripts/score_engine.py
+          scripts/evaluation_kernel.py
+          scripts/pure_market_exact_prospective.py
+          tests/test_pure_market_exact_prospective.py
+
+      - name: Check patch whitespace
+        run: git diff --check "${{ github.event.pull_request.base.sha }}...${{ github.event.pull_request.head.sha }}"
+
+  future-current-smoke:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Check out main
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install project dependencies
+        run: python -m pip install -r requirements.txt
+
+      - name: Run the real future/current smoke
+        run: python scripts/pure_market_exact_prospective.py --smoke | tee pure-market-exact-smoke.json
+
+      - name: Require an evidence-ready completion state
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          payload = json.loads(Path("pure-market-exact-smoke.json").read_text())
+          allowed = {
+              "PURE_MARKET_PROSPECTIVE_WIRED",
+              "PURE_MARKET_PROSPECTIVE_WIRED_NO_CURRENT_ROWS",
+          }
+          if payload.get("completion_state") not in allowed:
+              raise SystemExit(f"unexpected completion state: {payload.get('completion_state')}")
+          PY
+
+      - name: Commit only the bounded prospective namespace
+        shell: bash
+        run: |
+          git add data/prediction_quality/pure_market_exact_prospective_1
+          if git diff --cached --quiet; then
+            echo "no prospective evidence changes"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "refresh pure Market Exact prospective evidence [skip ci]"
+          python scripts/durable_main_write.py --remote origin --branch main --max-attempts 3 --retry-delay-seconds 2
