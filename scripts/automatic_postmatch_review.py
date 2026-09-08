@@ -222,7 +222,9 @@ def _model_diagnostics(report: dict, home_goals: int, away_goals: int) -> dict:
         "lambda_away_residual": round(common["lambda_away_residual"], 4),
         "total_goals_residual": round(common["total_goals_residual"], 4),
         "market_actual_outcome_probability": round(market_actual, 6) if market_actual is not None else None,
-        "model_minus_market_actual_outcome": round(actual_probability - market_actual, 6) if market_actual is not None else None,
+        "model_minus_market_actual_outcome": (
+            round(common["actual_outcome_probability"] - market_actual, 6) if market_actual is not None else None
+        ),
         "interpretation": "Brier与Log Loss评估方向概率；比分排名和λ残差评估比赛剧本偏差，不能用相邻比分冒充命中。",
     }
 
