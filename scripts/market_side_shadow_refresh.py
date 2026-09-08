@@ -25,10 +25,8 @@ from market_side_shadow import (  # noqa: E402
 )
 from postmatch_result import RESULT_ROOT as POSTMATCH_RESULT_ROOT  # noqa: E402
 from postmatch_queue import parse_datetime  # noqa: E402
-from prospective_settlement import (  # noqa: E402
-    _is_verified_result_artifact,
-    normalize_result,
-)
+from evaluation_kernel import is_verified_result_artifact  # noqa: E402
+from prospective_settlement import normalize_result  # noqa: E402
 
 
 MILESTONE = "MARKET-SIDE-SHADOW-1"
@@ -71,7 +69,7 @@ def discover_verified_results(result_root: Path = DEFAULT_RESULT_ROOT) -> tuple[
         except (OSError, json.JSONDecodeError):
             stats["result_files_rejected"] += 1
             continue
-        if not isinstance(raw, dict) or not _is_verified_result_artifact(raw):
+        if not isinstance(raw, dict) or not is_verified_result_artifact(raw):
             stats["result_files_rejected"] += 1
             continue
         try:
