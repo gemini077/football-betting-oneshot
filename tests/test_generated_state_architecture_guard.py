@@ -3,6 +3,17 @@ from __future__ import annotations
 import ast
 import json
 from pathlib import Path
+import sys
+
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+
+from market_side_shadow import load_persisted_pairs  # noqa: E402
+from market_side_shadow_refresh import (  # noqa: E402
+    PAIR_INDEX_SCHEMA_VERSION,
+    load_indexed_pairs,
+    pair_set_digest,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -59,6 +70,7 @@ def test_compact_view_owner_does_not_serialize_full_pair_history():
     }
     assert "pairs" in serialized_keys
     assert "pair_index" in serialized_keys
+    assert "entries" not in ast.unparse(function)
 
 
 def test_current_latest_artifact_is_a_bounded_compact_index():
@@ -69,10 +81,10 @@ def test_current_latest_artifact_is_a_bounded_compact_index():
     assert latest["schema_version"] == "market_side_shadow_1.current.v1"
     assert "pairs" not in latest
     assert latest_path.stat().st_size <= 1_000_000
-    assert pair_index["schema_version"] == "market_side_shadow_1.pair_index.v1"
-    assert pair_index["pair_count"] == len(pair_index["entries"])
-    assert pair_index["entries"]
-    assert all(
-        (ROOT / "data" / "prediction_quality" / "market_side_shadow_1" / entry["path"]).is_file()
-        for entry in pair_index["entries"]
-    )
+    assert pair_index["schema_version"] == PAIR_INDEX_SCHEMA_VERSION
+    assert set(pair_index) == {"schema_version", "root", "pair_count", "pair_set_digest"}
+    pair_root = ROOT / "data" / "prediction_quality" / "market_side_shadow_1" / "pairs"
+    pairs = load_persisted_pairs(pair_root)
+    assert pair_index["pair_count"] == len(pairs)
+    assert pair_index["pair_set_digest"] == pair_set_digest(pairs)
+    assert len(load_indexed_pairs(pair_index, pair_root)) == len(pairs)

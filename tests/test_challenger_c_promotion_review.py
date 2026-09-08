@@ -86,7 +86,8 @@ def test_review_input_is_current_shadow_artifact(path):
     document = json.loads(path.read_text(encoding="utf-8"))
     assert document["candidate_id"] == "market_side_only_hybrid"
     assert "pairs" not in document
-    assert document["pair_index"]["pair_count"] == len(document["pair_index"]["entries"])
+    assert len(document["pair_index"]["pair_set_digest"]) == 64
+    assert "entries" not in document["pair_index"]
     assert document["checkpoint"]["status"] == "NOT_REACHED"
     assert document["checkpoint"]["verified_unique_matches"] == 29
     assert document["checkpoint"]["verified_pair_version_rows"] == 112

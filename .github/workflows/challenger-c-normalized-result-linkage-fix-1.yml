@@ -95,8 +95,10 @@ jobs:
           compact_current_view = (
               document.get("schema_version") == "market_side_shadow_1.current.v1"
               and "pairs" not in document
-              and pair_index.get("schema_version") == "market_side_shadow_1.pair_index.v1"
-              and pair_index.get("pair_count") == len(pair_index.get("entries") or [])
+              and pair_index.get("schema_version") == "market_side_shadow_1.pair_index.v2"
+              and "entries" not in pair_index
+              and isinstance(pair_index.get("pair_set_digest"), str)
+              and len(pair_index.get("pair_set_digest")) == 64
               and Path(sys.argv[1]).stat().st_size <= 1_000_000
           )
           reference = {
