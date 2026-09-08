@@ -7,7 +7,14 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
-from market_side_shadow_refresh import refresh_shadow  # noqa: E402
+from market_side_shadow import build_shadow_document, load_persisted_pairs  # noqa: E402
+from market_side_shadow_refresh import (  # noqa: E402
+    CURRENT_VIEW_SCHEMA_VERSION,
+    build_identity_safe_result_map,
+    discover_verified_results,
+    load_indexed_pairs,
+    refresh_shadow,
+)
 
 
 PAIR_SOURCE = ROOT / "data" / "prediction_quality" / "market_side_shadow_1" / "pairs" / "MS-SHADOW-PAIR-c2419d933d267e88530442231cace2e5.json"
@@ -63,7 +70,49 @@ def test_refresh_discovers_verified_result_and_writes_latest(tmp_path):
     assert latest["checkpoint"]["auto_promote"] is False
     assert latest["checkpoint"]["status"] == "NOT_REACHED"
     assert latest["evaluation"]["candidates"]["challenger"]["sample_count"] == 0
-    assert "actual_result" not in latest["pairs"][0]
+    assert "pairs" not in latest
+    indexed_pairs = load_indexed_pairs(latest["pair_index"], pair_root)
+    assert indexed_pairs[0]["pair_status"] == "PAIRED"
+    assert "actual_result" not in indexed_pairs[0]
+
+
+def test_refresh_writes_compact_pair_index_without_changing_evaluation(tmp_path):
+    pair_root, result_root = _copy_smoke_inputs(tmp_path)
+    output = tmp_path / "latest.json"
+    pairs = load_persisted_pairs(pair_root)
+    catalog, discovery = discover_verified_results(result_root)
+    result_map, matching = build_identity_safe_result_map(pairs, catalog)
+    expected = build_shadow_document(
+        pairs,
+        result_map,
+        source_manifest={
+            "result_source": "data/postmatch_automation/results/*.json",
+            "result_files_scanned": discovery["result_files_scanned"],
+            "result_files_accepted": discovery["result_files_accepted"],
+            "matched_pair_count": matching["matched_pair_count"],
+        },
+    )
+
+    summary = refresh_shadow(
+        pair_root=pair_root,
+        result_root=result_root,
+        output=output,
+        refreshed_at="2026-08-30T12:00:00+08:00",
+    )
+
+    latest = json.loads(output.read_text(encoding="utf-8"))
+    assert summary["status"] == "SUCCESS"
+    assert latest["schema_version"] == CURRENT_VIEW_SCHEMA_VERSION
+    assert "pairs" not in latest
+    assert latest["counts"] == expected["counts"]
+    assert latest["checkpoint"] == expected["checkpoint"]
+    assert latest["evaluation"] == expected["evaluation"]
+    assert latest["pair_index"]["schema_version"] == "market_side_shadow_1.pair_index.v1"
+    assert latest["pair_index"]["root"] == "pairs"
+    assert latest["pair_index"]["pair_count"] == len(pairs)
+    assert load_indexed_pairs(latest["pair_index"], pair_root) == pairs
+    assert output.stat().st_size <= 1_000_000
+    assert all(entry["path"].startswith("pairs/") for entry in latest["pair_index"]["entries"])
 
 
 def test_refresh_uses_identity_safe_final_scope_only(tmp_path):

@@ -17,6 +17,15 @@ from challenger_c_promotion_review import (  # noqa: E402
 )
 
 
+def test_review_loads_compact_pair_index_and_reproduces_stored_evaluation():
+    evidence = run_review()
+
+    assert evidence["overall_reproduction"]["status"] == "PASS"
+    assert evidence["integrity"]["status"] == "PASS"
+    assert evidence["counts"]["pair_rows"] == evidence["counts"]["total_pair_version_rows"]
+    assert evidence["source"]["pair_root"].endswith("market_side_shadow_1/pairs")
+
+
 def test_review_reproduces_unique_metrics_and_stops_below_unique_match_gate():
     evidence = run_review()
 
@@ -76,6 +85,8 @@ def test_safety_floor_only_uses_explicit_proper_metric_floors():
 def test_review_input_is_current_shadow_artifact(path):
     document = json.loads(path.read_text(encoding="utf-8"))
     assert document["candidate_id"] == "market_side_only_hybrid"
+    assert "pairs" not in document
+    assert document["pair_index"]["pair_count"] == len(document["pair_index"]["entries"])
     assert document["checkpoint"]["status"] == "NOT_REACHED"
     assert document["checkpoint"]["verified_unique_matches"] == 29
     assert document["checkpoint"]["verified_pair_version_rows"] == 112

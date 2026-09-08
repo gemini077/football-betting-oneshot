@@ -48,3 +48,22 @@ Intentionally retained outside the evaluation owner: `market_contracts.py`
 wager settlement, `exact_distribution.py` formal immutable freeze/classification,
 JC total-goals/handicap-specific evaluation, benchmark persistence, postmatch
 report text/presentation, and model/score construction.
+
+## Generated-state bounded index — Issue #242
+
+This slice changes only the generated current view.  Immutable Market-Side
+pair files and verified result artifacts remain the evidence authorities; the
+current view is a derived summary/index and never a second history store.
+
+| Domain behavior | Canonical owner | Consumers / boundary | Guard |
+| --- | --- | --- | --- |
+| Immutable Market-Side pair capture and pair-file persistence | `scripts/market_side_shadow.py::persist_pair` and `load_persisted_pairs` | `data/prediction_quality/market_side_shadow_1/pairs/*.json` remains the pair/version evidence authority | Pair files are loaded by the compact index and are not rewritten by refresh. |
+| Current generated summary/index shape and atomic refresh | `scripts/market_side_shadow_refresh.py::build_compact_shadow_view`, `refresh_shadow` | `market_side_shadow_1/latest.json` retains counts, checkpoint, evaluation, provenance and pointer metadata without embedding pair documents | `tests/test_generated_state_architecture_guard.py` and compact-view size/shape tests. |
+| Evaluation, checkpoint and one-match-one-observation semantics | `scripts/market_side_shadow.py::evaluate_paired_cohort`, `checkpoint_status`, `build_shadow_document` | Refresh computes the accepted full semantic document, then removes only the embedded pair history; Challenger C reloads the indexed canonical pairs | Compact refresh parity tests compare counts/checkpoint/evaluation to the full semantic document. |
+| Challenger C review pair input | `scripts/market_side_shadow_refresh.py::load_indexed_pairs` | `scripts/challenger_c_promotion_review.py::run_review` consumes the canonical files named by `pair_index`; review/promotion policy remains unchanged | Architecture guard forbids direct `latest["pairs"]` consumption. |
+| Production cycle summary | `scripts/market_side_shadow_refresh.py::refresh_shadow` return payload | `scripts/automation_cycle.py::_summary` consumes bounded status/count fields only; Pages stages the directory as before | Production refresh regression checks pair/result hashes and compact output size. |
+
+The compact current-view schema is `market_side_shadow_1.current.v1`, with
+`market_side_shadow_1.pair_index.v1` pointer metadata.  No pair, frozen
+prediction, verified result, model, serving, UI, promotion, runner, package,
+workflow, or Git-history authority is moved by this slice.

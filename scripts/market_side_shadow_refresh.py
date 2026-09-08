@@ -31,6 +31,8 @@ from prospective_settlement import normalize_result  # noqa: E402
 
 MILESTONE = "MARKET-SIDE-SHADOW-1"
 REFRESH_SCHEMA_VERSION = "market_side_shadow_1.refresh.v2"
+CURRENT_VIEW_SCHEMA_VERSION = "market_side_shadow_1.current.v1"
+PAIR_INDEX_SCHEMA_VERSION = "market_side_shadow_1.pair_index.v1"
 DEFAULT_RESULT_ROOT = POSTMATCH_RESULT_ROOT
 DEFAULT_OUTPUT = ROOT / "data" / "prediction_quality" / "market_side_shadow_1" / "latest.json"
 RESULT_SOURCE_LABEL = "data/postmatch_automation/results/*.json"
@@ -151,6 +153,90 @@ def build_identity_safe_result_map(
     return result_map, stats
 
 
+def _pair_index_entry(pair: Mapping[str, Any]) -> dict[str, Any]:
+    pair_id = str(pair.get("pair_id") or "").strip()
+    if not pair_id or Path(pair_id).name != pair_id:
+        raise ValueError("shadow pair must contain a safe pair_id")
+    return {
+        "pair_id": pair_id,
+        "path": f"pairs/{pair_id}.json",
+        "pair_digest": pair.get("pair_digest"),
+        "match_id": pair.get("match_id"),
+        "match_key": pair.get("match_key"),
+        "pair_status": pair.get("pair_status"),
+        "promotion_eligible": pair.get("promotion_eligible") is True,
+        "source_cutoff": pair.get("source_cutoff"),
+        "freeze_created_at": pair.get("freeze_created_at"),
+    }
+
+
+def build_compact_shadow_view(
+    document: Mapping[str, Any],
+    pairs: Iterable[Mapping[str, Any]],
+) -> dict[str, Any]:
+    """Keep derived evaluation in the current view and point to pair authority."""
+
+    pair_list = list(pairs)
+    if "pairs" not in document:
+        raise ValueError("full shadow document must contain pair history before compaction")
+    compact = {key: value for key, value in document.items() if key != "pairs"}
+    compact["schema_version"] = CURRENT_VIEW_SCHEMA_VERSION
+    compact["pair_index"] = {
+        "schema_version": PAIR_INDEX_SCHEMA_VERSION,
+        "root": "pairs",
+        "pair_count": len(pair_list),
+        "entries": [_pair_index_entry(pair) for pair in pair_list],
+    }
+    return compact
+
+
+def load_indexed_pairs(
+    pair_index: Mapping[str, Any],
+    pair_root: Path,
+) -> list[dict[str, Any]]:
+    """Load exactly the immutable pair files named by a compact current view."""
+
+    if pair_index.get("schema_version") != PAIR_INDEX_SCHEMA_VERSION:
+        raise ValueError("unsupported shadow pair index schema")
+    entries = pair_index.get("entries")
+    if not isinstance(entries, list):
+        raise ValueError("shadow pair index entries must be a list")
+    expected_count = int(pair_index.get("pair_count") or 0)
+    if expected_count != len(entries):
+        raise ValueError("shadow pair index count mismatch")
+    persisted = {
+        str(pair.get("pair_id")): pair
+        for pair in load_persisted_pairs(Path(pair_root))
+        if pair.get("pair_id")
+    }
+    pairs: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for entry in entries:
+        if not isinstance(entry, Mapping):
+            raise ValueError("shadow pair index entry must be an object")
+        pair_id = str(entry.get("pair_id") or "").strip()
+        relative_path = Path(str(entry.get("path") or ""))
+        if (
+            not pair_id
+            or pair_id in seen
+            or relative_path.is_absolute()
+            or relative_path.parts[:1] != ("pairs",)
+            or relative_path.name != f"{pair_id}.json"
+        ):
+            raise ValueError("shadow pair index contains an invalid pair pointer")
+        pair = persisted.get(pair_id)
+        if pair is None:
+            raise ValueError(f"indexed shadow pair is missing: {pair_id}")
+        if entry.get("pair_digest") not in (None, pair.get("pair_digest")):
+            raise ValueError(f"indexed shadow pair digest mismatch: {pair_id}")
+        for field in ("match_id", "match_key", "pair_status"):
+            if entry.get(field) not in (None, pair.get(field)):
+                raise ValueError(f"indexed shadow pair metadata mismatch: {pair_id}")
+        seen.add(pair_id)
+        pairs.append(pair)
+    return pairs
+
+
 def _atomic_persist(document: Mapping[str, Any], output: Path) -> str:
     output = Path(output)
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -196,6 +282,7 @@ def refresh_shadow(
         **matching,
         "actual_results_persisted": False,
     }
+    document = build_compact_shadow_view(document, pairs)
     latest_status = _atomic_persist(document, Path(output))
     evaluation = document["evaluation"]
     return {

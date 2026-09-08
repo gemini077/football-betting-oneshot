@@ -30,6 +30,7 @@ from market_side_shadow import (  # noqa: E402
 from market_side_shadow_refresh import (  # noqa: E402
     build_identity_safe_result_map,
     discover_verified_results,
+    load_indexed_pairs,
 )
 
 
@@ -572,6 +573,7 @@ def render_report(evidence: dict[str, Any]) -> str:
 def run_review(
     *,
     latest_path: Path = DEFAULT_LATEST,
+    pair_root: Path | None = None,
     result_root: Path = DEFAULT_RESULT_ROOT,
     universe_root: Path = DEFAULT_UNIVERSE_ROOT,
     config_path: Path = DEFAULT_CONFIG,
@@ -579,9 +581,16 @@ def run_review(
     latest = _load_json(latest_path)
     if not isinstance(latest, dict):
         raise ValueError("latest shadow artifact must be an object")
-    pairs = [pair for pair in latest.get("pairs") or [] if isinstance(pair, dict)]
     if str(latest.get("candidate_id") or "") != CANDIDATE_ID:
         raise ValueError("latest artifact is not Challenger C")
+    pair_index = latest.get("pair_index")
+    if not isinstance(pair_index, dict):
+        raise ValueError("latest artifact must contain a compact pair index")
+    root_reference = Path(str(pair_index.get("root") or "pairs"))
+    if pair_root is None and (root_reference.is_absolute() or ".." in root_reference.parts):
+        raise ValueError("latest artifact pair index root must be relative")
+    indexed_root = Path(pair_root) if pair_root is not None else Path(latest_path).parent / root_reference
+    pairs = load_indexed_pairs(pair_index, indexed_root)
 
     catalog, discovery = discover_verified_results(result_root)
     result_map, matching = build_identity_safe_result_map(pairs, catalog)
@@ -647,6 +656,7 @@ def run_review(
         "decision": "KEEP CHAMPION / KEEP C SHADOW" if safety_gate["status"] == "FAIL" else "PROMOTE",
         "source": {
             "latest": latest_path.relative_to(ROOT).as_posix() if latest_path.is_relative_to(ROOT) else str(latest_path),
+            "pair_root": indexed_root.relative_to(ROOT).as_posix() if indexed_root.is_relative_to(ROOT) else str(indexed_root),
             "result_root": result_root.relative_to(ROOT).as_posix() if result_root.is_relative_to(ROOT) else str(result_root),
             "universe_root": universe_root.relative_to(ROOT).as_posix() if universe_root.is_relative_to(ROOT) else str(universe_root),
             "source_pins": latest.get("source_pins"),
@@ -698,6 +708,7 @@ def run_review(
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--latest", type=Path, default=DEFAULT_LATEST)
+    parser.add_argument("--pair-root", type=Path)
     parser.add_argument("--result-root", type=Path, default=DEFAULT_RESULT_ROOT)
     parser.add_argument("--universe-root", type=Path, default=DEFAULT_UNIVERSE_ROOT)
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
@@ -707,6 +718,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     evidence = run_review(
         latest_path=args.latest,
+        pair_root=args.pair_root,
         result_root=args.result_root,
         universe_root=args.universe_root,
         config_path=args.config,
