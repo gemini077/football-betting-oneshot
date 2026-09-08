@@ -135,7 +135,7 @@ def test_build_is_a_selective_read_only_projection(tmp_path, monkeypatch):
     assert not (output / "postmatch_dashboard/old/raw.json").exists()
     assert not (output / "analysis_reports/old/raw.json").exists()
     assert not (output / "postmatch_reports/internal.txt").exists()
-    assert len(copy_calls) == 7
+    assert len(copy_calls) == 6
     assert hashlib.sha256(source_contract.read_bytes()).hexdigest() == before
 
 
@@ -150,8 +150,10 @@ def test_build_renders_missing_contract_from_current_dashboard_fixture_without_w
     assert detail.is_file()
     detail_html = detail.read_text(encoding="utf-8")
     assert "Home FC" in detail_html
-    assert 'id="formal-markets"' in detail_html
-    assert detail_html.count('data-formal-market-status="NOT_RECORDED"') == 6
+    assert 'id="score-distribution"' in detail_html
+    assert 'data-exact-state="UNAVAILABLE"' in detail_html
+    assert 'data-exact-cell-home=' not in detail_html
+    assert 'data-formal-market=' not in detail_html
     assert not (tmp_path / "data" / "match_analysis").exists()
 
 
@@ -173,11 +175,11 @@ def test_fallback_detail_reads_linked_immutable_formal_contract_without_backfill
     build_public_site.build(tmp_path / "site")
 
     detail = (tmp_path / "site" / "matches/1001/index.html").read_text(encoding="utf-8")
-    assert detail.count('data-formal-cell-home=') == 169
-    assert 'data-formal-market="jc_total_goals" data-formal-market-status="AVAILABLE"' in detail
-    assert 'data-formal-market="jc_handicap" data-formal-market-status="AVAILABLE"' in detail
-    assert 'data-formal-cell-home="13"' not in detail
-    assert not (tmp_path / "data" / "match_analysis").exists()
+    assert detail.count('data-exact-cell-home=') == 169
+    assert 'data-exact-status="AVAILABLE"' in detail
+    assert 'data-formal-' not in detail
+    assert "jc_total_goals" not in detail
+    assert "jc_handicap" not in detail
 
 
 def test_fixture_contract_prefers_selected_freeze_and_cutoff_timestamps(tmp_path):
@@ -252,6 +254,6 @@ def test_build_propagates_current_prediction_quality_warning_to_linked_detail(tm
     build_public_site.build(tmp_path / "site")
 
     detail = (tmp_path / "site" / "matches/1001/index.html").read_text(encoding="utf-8")
-    assert "\u6bd4\u5206\u9884\u6d4b\u8d28\u91cf\u5f02\u5e38\uff0c\u4ec5\u4f9b\u89c2\u5bdf" in detail
-    assert "\u5f53\u524d\u8d28\u91cf\u5f02\u5e38\uff0c\u6682\u4e0d\u4f5c\u4e3a\u6b63\u5e38\u6bd4\u5206\u63a8\u8350\uff1b\u539f\u59cb\u6bd4\u5206\u6982\u7387\u7ee7\u7eed\u4fdd\u7559\u3002\u0031X2\u3001\u53cc\u65b9\u8fdb\u7403\u3001\u5927\u5c0f\u0032.5\u6309\u5404\u81ea\u6982\u7387\u5c55\u793a\u3002" in detail
+    assert "\u6bd4\u5206\u6982\u7387\u4ec5\u4f9b\u89c2\u5bdf" in detail
+    assert "\u63a8\u8350" not in detail
     assert "首推比分" not in detail

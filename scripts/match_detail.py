@@ -23,10 +23,10 @@ except ImportError:
 
 try:
     from .exact_distribution import EXACT_DISTRIBUTION_CELL_COUNT, EXACT_DISTRIBUTION_MAX_GOALS
-    from .formal_market_projection import FORMAL_MARKET_STATUS_LABELS, verify_formal_markets
+    from .formal_market_projection import FORMAL_MARKET_STATUS_LABELS
 except ImportError:
     from exact_distribution import EXACT_DISTRIBUTION_CELL_COUNT, EXACT_DISTRIBUTION_MAX_GOALS
-    from formal_market_projection import FORMAL_MARKET_STATUS_LABELS, verify_formal_markets
+    from formal_market_projection import FORMAL_MARKET_STATUS_LABELS
 
 try:
     from .closed_beta_copy import render_closed_beta_notice
@@ -35,6 +35,7 @@ except ImportError:
 
 
 SHANGHAI = timezone(timedelta(hours=8))
+DASH = "\u2014"
 
 
 def _esc(value: Any, fallback: str = "") -> str:
@@ -179,32 +180,57 @@ def _score_rows(contract: dict[str, Any], *, limit: int = 5) -> list[dict[str, A
 def _render_probability_cards(contract: dict[str, Any]) -> str:
     probabilities = _probabilities(contract)
     values = [
-        ("\u4e3b\u80dc", probabilities.get("home")),
-        ("\u5e73", probabilities.get("draw")),
-        ("\u5ba2\u80dc", probabilities.get("away")),
+        ("home", "\u4e3b\u80dc", _percent_number(probabilities.get("home"))),
+        ("draw", "\u5e73", _percent_number(probabilities.get("draw"))),
+        ("away", "\u5ba2\u80dc", _percent_number(probabilities.get("away"))),
     ]
-    numeric = [(_percent_number(value) or 0.0) for _, value in values]
-    maximum = max(numeric) if any(numeric) else None
+    if any(value is None for _, _, value in values):
+        return (
+            '<section class="probability-section lane-unavailable" aria-labelledby="probability-title">'
+            '<div class="section-kicker">\u7b2c\u4e00\u5c42\u5224\u65ad</div><h2 id="probability-title">\u80dc\u5e73\u8d1f\u6982\u7387</h2>'
+            '<p>\u80dc\u5e73\u8d1f\u6982\u7387\u6682\u4e0d\u53ef\u7528\uff1b\u9875\u9762\u4e0d\u8865\u5199\u7f3a\u5931\u7684\u6982\u7387\u3002</p></section>'
+        )
+    numeric = [value for _, _, value in values if value is not None]
+    total = sum(numeric)
+    if total <= 0:
+        return (
+            '<section class="probability-section lane-unavailable" aria-labelledby="probability-title">'
+            '<div class="section-kicker">\u7b2c\u4e00\u5c42\u5224\u65ad</div><h2 id="probability-title">\u80dc\u5e73\u8d1f\u6982\u7387</h2>'
+            '<p>\u80dc\u5e73\u8d1f\u6982\u7387\u6682\u4e0d\u53ef\u7528\uff1b\u9875\u9762\u4e0d\u8865\u5199\u7f3a\u5931\u7684\u6982\u7387\u3002</p></section>'
+        )
+    leader = max(values, key=lambda item: item[2] or 0.0)[0]
     cards = []
-    for (label, value), number in zip(values, numeric):
-        if value is None or maximum is None:
-            continue
-        highest = " probability-highest" if number == maximum else ""
+    legend = []
+    segments = []
+    aria_values = []
+    for key, label, number in values:
+        assert number is not None
+        highest = " probability-highest" if key == leader else ""
         cards.append(
             f'<div class="probability-card{highest}" data-probability="{number:.6f}">'
-            f'<span class="probability-label">{label}</span>'
-            f"<strong>{_percent(number)}</strong>"
-            f'<div class="probability-track" aria-hidden="true"><span style="width:{number * 100:.1f}%"></span></div>'
-            "</div>"
+            f'<span class="probability-label">{label}</span><strong>{_percent(number)}</strong></div>'
         )
-    if not cards:
-        return ""
+        leader_copy = '<small>\u76f8\u5bf9\u5360\u4f18</small>' if key == leader else '<small>&nbsp;</small>'
+        legend.append(
+            f'<div class="probability-legend-item {key}{" is-leading" if key == leader else ""}">'
+            f'<span>{label}</span><strong>{_percent(number)}</strong>{leader_copy}</div>'
+        )
+        segments.append(
+            f'<span class="probability-segment {key}" style="width:{number / total * 100:.3f}%" aria-hidden="true"></span>'
+        )
+        aria_values.append(f"{label} {_percent(number)}")
+    aria_label = "\uFF1B".join(aria_values)
     return (
         '<section class="probability-section" aria-labelledby="probability-title">'
         '<div class="section-kicker">\u7b2c\u4e00\u5c42\u5224\u65ad</div><h2 id="probability-title">\u80dc\u5e73\u8d1f\u6982\u7387</h2>'
-        '<div class="hero-probabilities">' + "".join(cards) + "</div></section>"
+        '<div class="hero-probabilities">' + "".join(cards) + '</div>'
+        '<div class="probability-strip-wrap">'
+        f'<div class="probability-strip" role="img" aria-label="\u80dc\u5e73\u8d1f\u6982\u7387\uFF1A{aria_label}">'
+        + "".join(segments)
+        + '</div><div class="probability-legend">'
+        + "".join(legend)
+        + '</div></div></section>'
     )
-
 
 def _score_serving_context(contract: dict[str, Any]) -> dict[str, str]:
     quality = contract.get("prediction_quality_health")
@@ -253,73 +279,63 @@ def _render_score_distribution(contract: dict[str, Any]) -> str:
     )
 
 
-def _goal_values(model: dict[str, Any]) -> tuple[tuple[float, float] | None, tuple[float, float] | None]:
-    btts = model.get("btts") if isinstance(model.get("btts"), dict) else {}
-    btts_yes = _percent_number(btts.get("yes"))
-    btts_no = _percent_number(btts.get("no"))
-    btts_values = (btts_yes, btts_no) if btts_yes is not None and btts_no is not None else None
-
-    totals = model.get("totals")
-    under = over = None
-    if isinstance(totals, dict):
-        under = _percent_number(totals.get("under_2_5") or totals.get("under"))
-        over = _percent_number(totals.get("over_2_5") or totals.get("over"))
-    elif isinstance(totals, list):
-        under = sum(
-            _percent_number(item.get("probability")) or 0.0
-            for item in totals
-            if isinstance(item, dict) and str(item.get("goals") or "").strip() in {"0", "1", "2"}
-        )
-        if under or any(isinstance(item, dict) and item.get("probability") is not None for item in totals):
-            over = max(0.0, 1.0 - under)
-    totals_values = (under, over) if under is not None and over is not None else None
-    return btts_values, totals_values
+def _total_goal_distribution(contract: dict[str, Any]) -> list[tuple[str, float]]:
+    totals = _model(contract).get("totals")
+    if not isinstance(totals, list):
+        return []
+    buckets: dict[str, float] = {}
+    for item in totals:
+        if not isinstance(item, dict):
+            continue
+        number = _percent_number(item.get("probability"))
+        if number is None:
+            continue
+        raw_goals = str(item.get("goals") or item.get("total") or "").strip()
+        if raw_goals.endswith("+"):
+            try:
+                bucket = "4+" if int(raw_goals[:-1]) >= 4 else raw_goals
+            except ValueError:
+                continue
+        elif raw_goals.isdigit():
+            bucket = raw_goals if int(raw_goals) <= 3 else "4+"
+        else:
+            continue
+        buckets[bucket] = buckets.get(bucket, 0.0) + number
+    order = ["0", "1", "2", "3", "4+"]
+    return [(bucket, buckets[bucket]) for bucket in order if bucket in buckets]
 
 
 def _render_goals(contract: dict[str, Any]) -> str:
-    btts, totals = _goal_values(_model(contract))
-    cards = []
-    if btts:
-        cards.append(
-            '<article class="goal-card"><span class="goal-card-label">\u53cc\u65b9\u8fdb\u7403</span>'
-            f"<strong>\u662f {_percent(btts[0])} / \u5426 {_percent(btts[1])}</strong></article>"
+    rows = _total_goal_distribution(contract)
+    if not rows:
+        return (
+            '<section class="detail-section goals-section lane-unavailable" id="goals">'
+            '<div class="section-heading"><div><div class="section-kicker">\u8fdb\u7403\u5206\u5e03</div>'
+            '<h2>\u603b\u8fdb\u7403\u5206\u5e03</h2></div><p>\u5f53\u524d\u6ca1\u6709\u53ef\u7528\u7684\u8fdb\u7403\u5206\u5e03</p></div>'
+            '<p>\u603b\u8fdb\u7403\u6982\u7387\u6682\u4e0d\u53ef\u7528\uff1b\u9875\u9762\u4e0d\u8865\u5199\u7f3a\u5931\u7684\u5206\u5e03\u3002</p></section>'
         )
-    if totals:
-        cards.append(
-            '<article class="goal-card"><span class="goal-card-label">\u5927\u5c0f2.5（O/U）</span>'
-            f"<strong>\u5c0f {_percent(totals[0])} / \u5927 {_percent(totals[1])}</strong></article>"
+    top = max(rows, key=lambda item: item[1])
+    rendered = []
+    for bucket, number in rows:
+        rendered.append(
+            f'<div class="goal-row" data-goals="{html.escape(bucket, quote=True)}">'
+            f'<span>{html.escape(bucket)}</span>'
+            f'<div class="goal-bar" aria-hidden="true"><span style="width:{number * 100:.1f}%"></span></div>'
+            f'<strong>{_percent(number)}</strong></div>'
         )
-    if not cards:
-        return ""
     return (
         '<section class="detail-section goals-section" id="goals">'
-        '<div class="section-heading"><div><div class="section-kicker">\u8fdb\u7403\u73af\u5883</div>'
-        '<h2>\u8fdb\u7403\u4fe1\u53f7</h2></div><p>\u7531\u5f53\u524d\u6a21\u578b\u6982\u7387\u8ba1\u7b97</p></div>'
-        '<div class="goal-grid">' + "".join(cards) + "</div></section>"
+        '<div class="section-heading"><div><div class="section-kicker">\u8fdb\u7403\u5206\u5e03</div>'
+        '<h2>\u603b\u8fdb\u7403\u5206\u5e03</h2></div><p>\u5f53\u524d\u6a21\u578b\u6982\u7387</p></div>'
+        f'<div class="goal-grid">{"".join(rendered)}</div>'
+        f'<p class="section-note">\u5206\u5e03\u6700\u9ad8\u6bb5\uff1a{html.escape(top[0])} \u00b7 {_percent(top[1])}\u3002\u4e0d\u4ee3\u8868\u786e\u5b9a\u8d5b\u679c\u3002</p>'
+        '</section>'
     )
-
-
-_FORMAL_MARKET_LABELS = {
-    "exact_score": "Exact",
-    "jc_total_goals": "JC\u603b\u8fdb\u7403",
-    "jc_handicap": "JC\u8ba9\u7403",
-}
-_FORMAL_SELECTION_LABELS = {
-    "home": "H",
-    "draw": "D",
-    "away": "A",
-}
 
 
 def _formal_markets(contract: dict[str, Any]) -> dict[str, Any]:
     value = contract.get("formal_markets")
     return value if isinstance(value, dict) else {}
-
-
-def _formal_exact_is_available(contract: dict[str, Any]) -> bool:
-    formal = _formal_markets(contract)
-    item = _formal_market_item(formal, "exact_score")
-    return _formal_status(item) == "AVAILABLE" and isinstance(item.get("contract"), dict)
 
 
 def _formal_market_item(formal: dict[str, Any], key: str) -> dict[str, Any]:
@@ -331,32 +347,6 @@ def _formal_market_item(formal: dict[str, Any], key: str) -> dict[str, Any]:
 def _formal_status(item: dict[str, Any]) -> str:
     status = str(item.get("status") or "NOT_RECORDED").upper()
     return status if status in FORMAL_MARKET_STATUS_LABELS else "UNAVAILABLE"
-
-
-def _formal_status_reason(status: str) -> str:
-    if status == "NOT_RECORDED":
-        return "\u65e7\u8bb0\u5f55\u6ca1\u6709\u8be5\u6b63\u5f0f\u73a9\u6cd5\u7684\u51bb\u7ed3\u5408\u7ea6\uff0c\u672a\u56de\u7b97\u3002"
-    if status == "UNAVAILABLE":
-        return "\u8be5\u73a9\u6cd5\u7684\u51bb\u7ed3\u5408\u7ea6\u4e0d\u53ef\u7528\uff1b\u5176\u4ed6\u6b63\u5f0f\u73a9\u6cd5\u4ecd\u72ec\u7acb\u5c55\u793a\u3002"
-    return ""
-
-
-def _formal_probability(value: Any) -> str:
-    number = _percent_number(value)
-    return f"{number * 100:.2f}%" if number is not None else "\u2014"
-
-
-def _formal_unavailable_html(key: str, item: dict[str, Any]) -> str:
-    status = _formal_status(item)
-    label = _FORMAL_MARKET_LABELS[key]
-    status_label = FORMAL_MARKET_STATUS_LABELS.get(status, status)
-    return (
-        f'<div class="formal-market-unavailable status-{status.lower()}" '
-        f'data-formal-market="{html.escape(key, quote=True)}" '
-        f'data-formal-market-status="{html.escape(status, quote=True)}">'
-        f'<strong>{_esc(label)}</strong><span>{_esc(status_label)}</span>'
-        f'<p>{_esc(_formal_status_reason(status))}</p></div>'
-    )
 
 
 def _exact_compact_projection(
@@ -389,34 +379,40 @@ def _render_exact_compact_projection(contract: dict[str, Any]) -> str:
         probability = _percent_number(cell.get("probability")) or 0.0
         score = f"{home}-{away}"
         rows.append(
-            f'<div class="exact-compact-row" data-formal-compact-score="{score}" '
-            f'data-formal-compact-rank="{rank}" data-formal-compact-probability="{probability:.12f}">'
+            f'<div class="exact-compact-row" data-exact-compact-score="{score}" '
+            f'data-exact-compact-rank="{rank}" data-exact-compact-probability="{probability:.12f}">'
             f'<span class="exact-compact-score"><b>#{rank}</b>{html.escape(score)}</span>'
             f'<span class="exact-compact-bar" aria-hidden="true"><span style="width:{probability * 100:.2f}%"></span></span>'
-            f'<strong class="exact-compact-probability">{_formal_probability(probability)}</strong></div>'
+            f'<strong class="exact-compact-probability">{_percent(probability)}</strong></div>'
         )
     return (
-        '<div class="exact-compact" data-formal-exact-compact="true" '
-        f'data-formal-compact-source-cell-count="{len(selected) + remainder_count}" '
-        f'data-formal-compact-top-count="{len(selected)}" '
-        f'data-formal-compact-remainder-count="{remainder_count}" '
-        f'data-formal-compact-remainder-probability="{remainder:.12f}" '
-        'aria-label="移动端 Exact 冻结概率摘要">'
-        '<div class="exact-compact-heading"><h4>Exact 紧凑概率</h4><span>冻结格 Top 6</span></div>'
+        '<div class="exact-compact" data-exact-compact="true" '
+        f'data-exact-compact-source-cell-count="{len(selected) + remainder_count}" '
+        f'data-exact-compact-top-count="{len(selected)}" '
+        f'data-exact-compact-remainder-count="{remainder_count}" '
+        f'data-exact-compact-remainder-probability="{remainder:.12f}" '
+        'aria-label="\u79fb\u52a8\u7aef\u6bd4\u5206\u6982\u7387\u6458\u8981">'
+        '<div class="exact-compact-heading"><h3>\u6bd4\u5206\u6982\u7387</h3><span>\u524d 6 \u4e2a\u5df2\u8868\u793a\u6bd4\u5206</span></div>'
         '<div class="exact-compact-list">'
         + "".join(rows)
         + '</div>'
-        f'<div class="exact-compact-remainder"><span>其余 {remainder_count} 个已表示格</span>'
-        f'<strong>{_formal_probability(remainder)}</strong></div>'
-        '<p class="exact-compact-note">仅合计 0–12 × 0–12 内其余已表示格；显式范围之外的比分未表示，不是已知尾部。</p>'
+        f'<div class="exact-compact-remainder"><span>\u5176\u4f59\u5df2\u8868\u793a\u6bd4\u5206\u5408\u8ba1</span>'
+        f'<strong>{_percent(remainder)}</strong></div>'
+        '<p class="exact-compact-note">\u4ec5\u5408\u8ba1 0\u201312 \u00d7 0\u201312 \u5185\u5176\u4f59\u5df2\u8868\u793a\u6bd4\u5206\uff1b\u8303\u56f4\u5916\u4e0d\u63a8\u7b97\u3002</p>'
         '</div>'
     )
 
-
-def _render_exact_formal_market(item: dict[str, Any]) -> str:
+def _render_exact_formal_market(item: dict[str, Any], *, serving_state: str = "NORMAL") -> str:
     contract = item.get("contract") if isinstance(item.get("contract"), dict) else None
-    if _formal_status(item) != "AVAILABLE" or contract is None:
-        return _formal_unavailable_html("exact_score", item)
+    status = _formal_status(item)
+    if status != "AVAILABLE" or contract is None:
+        return (
+            '<section class="detail-section exact-section lane-unavailable" id="score-distribution" '
+            f'data-exact-state="UNAVAILABLE" data-exact-status="{html.escape(status, quote=True)}">'
+            '<div class="section-heading"><div><div class="section-kicker">\u6bd4\u5206\u5206\u5e03</div>'
+            '<h2>\u6bd4\u5206\u6982\u7387</h2></div><p>\u5f53\u524d\u6ca1\u6709\u53ef\u6838\u9a8c\u7684\u5b8c\u6574\u6bd4\u5206\u6982\u7387</p></div>'
+            '<p>\u6bd4\u5206\u6982\u7387\u6682\u4e0d\u53ef\u7528\uff1b\u672a\u8bb0\u5f55\u7684\u5206\u5e03\u4e0d\u8865\u5199\u3002</p></section>'
+        )
     cells = contract.get("cells") if isinstance(contract.get("cells"), list) else []
     by_score = {
         (cell.get("home_goals"), cell.get("away_goals")): cell
@@ -424,6 +420,10 @@ def _render_exact_formal_market(item: dict[str, Any]) -> str:
         if isinstance(cell, dict)
     }
     max_goals = EXACT_DISTRIBUTION_MAX_GOALS
+    max_probability = max(
+        (_percent_number(cell.get("probability")) or 0.0 for cell in cells if isinstance(cell, dict)),
+        default=0.0,
+    )
     headers = "".join(f'<th scope="col">{goal}</th>' for goal in range(max_goals + 1))
     rows = []
     for home in range(max_goals + 1):
@@ -432,124 +432,49 @@ def _render_exact_formal_market(item: dict[str, Any]) -> str:
             cell = by_score.get((home, away))
             probability = _percent_number(cell.get("probability")) if cell else None
             probability_attr = f' data-probability="{probability:.6f}"' if probability is not None else ""
+            alpha = probability / max_probability if probability is not None and max_probability else 0.0
+            style = f' style="--cell-alpha:{alpha:.3f}"' if probability is not None else ""
+            cell_text = _percent(probability) if probability is not None else "\u2014"
             cells_html.append(
-                f'<td data-formal-cell-home="{home}" data-formal-cell-away="{away}"{probability_attr}>'
-                f'{_formal_probability(probability)}</td>'
+                f'<td data-exact-cell-home="{home}" data-exact-cell-away="{away}"{probability_attr}{style}>'
+                f'{cell_text}</td>'
             )
         rows.append(f'<tr><th scope="row">{home}</th>{"".join(cells_html)}</tr>')
+    selected, _, _ = _exact_compact_projection(contract)
+    primary = selected[0] if selected else None
+    primary_summary = (
+        f'{int(primary["home_goals"])}-{int(primary["away_goals"])} \u00b7 {_percent(primary.get("probability"))}'
+        if primary
+        else "\u2014"
+    )
+    section_title = "\u6bd4\u5206\u6982\u7387\u5206\u5e03" if serving_state == "NORMAL" else "\u6bd4\u5206\u6982\u7387\u5206\u5e03\uff08\u4ec5\u4f9b\u89c2\u5bdf\uff09"
+    quality_note = "" if serving_state == "NORMAL" else '<span>\u5f53\u524d\u4ec5\u4f9b\u89c2\u5bdf</span>'
     return (
-        '<div class="formal-market-panel formal-exact-panel" data-formal-market="exact_score" '
-        'data-formal-market-status="AVAILABLE">'
-        '<div class="formal-panel-heading"><h3>Exact</h3>'
-        f'<span>{EXACT_DISTRIBUTION_CELL_COUNT}\u683c\u00b7\u663e\u5f0f\u7f51\u683c</span></div>'
+        f'<section class="detail-section exact-section" id="score-distribution" data-exact-state="{html.escape(serving_state, quote=True)}" data-exact-status="AVAILABLE">'
+        '<div class="section-heading"><div><div class="section-kicker">\u6bd4\u5206\u5206\u5e03</div>'
+        f'<h2>{section_title}</h2></div><p>\u6bcf\u4e00\u683c\u4e3a\u5bf9\u5e94\u6bd4\u5206\u7684\u7edd\u5bf9\u6982\u7387</p></div>'
+        f'<div class="exact-summary"><strong>\u6700\u9ad8\u6982\u7387\u6bd4\u5206\uff1a{html.escape(primary_summary)}</strong>{quality_note}</div>'
         + _render_exact_compact_projection(contract)
-        + '<details open class="exact-full-disclosure" data-formal-exact-disclosure>'
-        '<summary>\u67e5\u770b\u5b8c\u6574\u51bb\u7ed3 169 \u683c\u77e9\u9635</summary>'
-        '<p class="exact-disclosure-cue">\u79fb\u52a8\u7aef\u6253\u5f00\u540e\u5728 Exact \u533a\u57df\u5185\u5de6\u53f3\u6ed1\u52a8\uff1bH \u4e3a\u4e3b\u961f\u8fdb\u7403\uff0cA \u4e3a\u5ba2\u961f\u8fdb\u7403\u3002</p>'
-        '<div class="exact-grid-wrap" role="region" tabindex="0" aria-label="\u51bb\u7ed3 Exact 169 \u683c\u6982\u7387\u77e9\u9635\uff1bH \u4e3a\u4e3b\u961f\u8fdb\u7403\uff0cA \u4e3a\u5ba2\u961f\u8fdb\u7403">'
-        '<table class="exact-grid"><caption class="sr-only">\u51bb\u7ed3 Exact 169 \u683c\uff1a\u4e3b\u961f\u8fdb\u7403 H \u00d7 \u5ba2\u961f\u8fdb\u7403 A</caption><thead><tr><th scope="col">H\\A</th>'
+        + '<details open class="exact-full-disclosure" data-exact-disclosure>'
+        '<summary>\u67e5\u770b\u5b8c\u6574 169 \u683c\u77e9\u9635</summary>'
+        '<p class="exact-disclosure-cue">\u4e3b\u961f\u8fdb\u7403\u4e3a H\uff0c\u5ba2\u961f\u8fdb\u7403\u4e3a A\uff1b\u79fb\u52a8\u7aef\u5c55\u5f00\u540e\u5728\u77e9\u9635\u533a\u57df\u5185\u6a2a\u5411\u67e5\u770b\u3002</p>'
+        '<div class="exact-grid-wrap" role="region" tabindex="0" aria-label="\u6bd4\u5206\u6982\u7387 169 \u683c\u77e9\u9635\uff1b\u4e3b\u961f\u8fdb\u7403 H\uff0c\u5ba2\u961f\u8fdb\u7403 A">'
+        '<table class="exact-grid"><caption class="sr-only">\u6bd4\u5206\u6982\u7387 169 \u683c\uff1a\u4e3b\u961f\u8fdb\u7403 H \u00d7 \u5ba2\u961f\u8fdb\u7403 A</caption><thead><tr><th scope="col">H\\A</th>'
         + headers
         + '</tr></thead><tbody>'
         + "".join(rows)
         + '</tbody></table></div></details>'
-        '<p class="formal-market-note">\u4ec5\u5c55\u793a\u51bb\u7ed3\u5408\u7ea6\u4e2d 0\u201312 \u7403\u7684 169 \u4e2a\u663e\u5f0f\u683c\uff1b\u4e0d\u4f2a\u9020\u65e0\u9650\u5c3e\u90e8\u3002</p>'
-        '</div>'
+        '<p class="exact-grid-caption">\u4ec5\u5c55\u793a\u5f53\u524d\u8bb0\u5f55\u4e2d\u7684 0\u201312 \u00d7 0\u201312 \u663e\u5f0f\u683c\uff1b\u5176\u4f59\u5df2\u8868\u793a\u6bd4\u5206\u5408\u8ba1\u89c1\u4e0a\u65b9\uff0c\u8303\u56f4\u5916\u4e0d\u63a8\u7b97\u3002</p>'
+        '<script>(() => { const disclosures = document.querySelectorAll("[data-exact-disclosure]"); const isMobile = window.matchMedia("(max-width: 560px)").matches; disclosures.forEach((disclosure) => { if (isMobile) disclosure.open = false; }); })();</script>'
+        '</section>'
     )
-
-
-def _render_total_formal_market(item: dict[str, Any]) -> str:
-    contract = item.get("contract") if isinstance(item.get("contract"), dict) else None
-    if _formal_status(item) != "AVAILABLE" or contract is None:
-        return _formal_unavailable_html("jc_total_goals", item)
-    probabilities = contract.get("probabilities") if isinstance(contract.get("probabilities"), dict) else {}
-    top = contract.get("top_selection")
-    order = contract.get("selection_order") if isinstance(contract.get("selection_order"), list) else []
-    rows = []
-    for bucket in order:
-        number = _percent_number(probabilities.get(bucket))
-        top_class = " formal-market-top" if bucket == top else ""
-        rows.append(
-            f'<div class="formal-total-row{top_class}" data-formal-selection="{html.escape(str(bucket), quote=True)}">'
-            f'<span>{_esc(bucket)}</span><div class="formal-total-bar" aria-hidden="true"><span style="width:{(number or 0.0) * 100:.1f}%"></span></div>'
-            f'<strong>{_formal_probability(number)}</strong></div>'
-        )
-    return (
-        '<div class="formal-market-panel" data-formal-market="jc_total_goals" data-formal-market-status="AVAILABLE">'
-        '<div class="formal-panel-heading"><h3>JC\u603b\u8fdb\u7403</h3><span>0\u20136\uff0c7+</span></div>'
-        '<div class="formal-total-list">' + "".join(rows) + '</div>'
-        '<p class="formal-market-note">\u53ea\u8bfb\u51bb\u7ed3\u7684 official JC \u603b\u8fdb\u7403\u5408\u7ea6\u3002</p>'
-        '</div>'
-    )
-
-
-def _render_handicap_formal_market(item: dict[str, Any]) -> str:
-    contract = item.get("contract") if isinstance(item.get("contract"), dict) else None
-    if _formal_status(item) != "AVAILABLE" or contract is None:
-        return _formal_unavailable_html("jc_handicap", item)
-    probabilities = contract.get("probabilities") if isinstance(contract.get("probabilities"), dict) else {}
-    order = contract.get("selection_order") if isinstance(contract.get("selection_order"), list) else []
-    top = contract.get("top_selection")
-    cards = []
-    for selection in order:
-        number = _percent_number(probabilities.get(selection))
-        top_class = " formal-market-top" if selection == top else ""
-        code = _FORMAL_SELECTION_LABELS.get(str(selection), str(selection))
-        cards.append(
-            f'<div class="formal-handicap-card{top_class}" data-formal-selection="{html.escape(str(selection), quote=True)}">'
-            f'<span>{html.escape(code, quote=True)}</span><strong>{_formal_probability(number)}</strong>'
-            f'<em>{_esc(selection)}</em></div>'
-        )
-    line = contract.get("official_integer_line", contract.get("line"))
-    return (
-        '<div class="formal-market-panel" data-formal-market="jc_handicap" data-formal-market-status="AVAILABLE">'
-        f'<div class="formal-panel-heading"><h3>JC\u8ba9\u7403 H/D/A</h3><span>\u5b98\u65b9\u6574\u6570\u8ba9\u7403 {html.escape(str(line), quote=True)}</span></div>'
-        '<div class="formal-handicap-grid">' + "".join(cards) + '</div>'
-        '<p class="formal-market-note">H=\u4e3b\u80dc\uff0cD=\u5e73\uff0cA=\u5ba2\u80dc\uff1b\u53ea\u8bfb\u51bb\u7ed3\u7684\u6574\u6570\u8ba9\u7403\u5408\u7ea6\u3002</p>'
-        '</div>'
-    )
-
-
-def _render_formal_markets(contract: dict[str, Any]) -> str:
-    formal = _formal_markets(contract)
-    markets = formal.get("markets")
-    if not isinstance(markets, dict):
-        return ""
-    items = {key: _formal_market_item(formal, key) for key in _FORMAL_MARKET_LABELS}
-    status_matrix = "".join(
-        f'<span class="formal-market-status status-{_formal_status(item).lower()}" '
-        f'data-formal-market-status="{_formal_status(item)}">{_esc(_FORMAL_MARKET_LABELS[key])} '
-        f'{_esc(FORMAL_MARKET_STATUS_LABELS.get(_formal_status(item), _formal_status(item)))}</span>'
-        for key, item in items.items()
-    )
-    return (
-        '<section class="detail-section formal-markets-section" id="formal-markets">'
-        '<div class="section-heading"><div><div class="section-kicker">\u51bb\u7ed3\u8d5b\u524d\u5408\u7ea6</div>'
-        '<h2>\u6b63\u5f0f\u73a9\u6cd5\u6982\u7387</h2></div>'
-        '<p>\u53ea\u8bfb\u51bb\u7ed3\u7684 Exact \u4e0e official JC</p></div>'
-        '<div class="formal-market-status-matrix" aria-label="\u6b63\u5f0f\u73a9\u6cd5\u72b6\u6001">'
-        + status_matrix
-        + '</div><div class="formal-market-grid">'
-        + _render_exact_formal_market(items["exact_score"])
-        + _render_total_formal_market(items["jc_total_goals"])
-        + _render_handicap_formal_market(items["jc_handicap"])
-        + '''</div><script>
-(() => {
-  const disclosures = document.querySelectorAll('[data-formal-exact-disclosure]');
-  const isMobile = window.matchMedia('(max-width: 560px)').matches;
-  disclosures.forEach((disclosure) => {
-    if (isMobile) disclosure.open = false;
-  });
-})();
-</script></section>'''
-    )
-
 
 def _format_change_delta(value: Any) -> str:
     number = _finite(value)
     if number is None:
-        return "—"
+        return "\u2014"
     sign = "+" if number > 0 else ""
-    return f"{sign}{number:.2f} 个百分点"
+    return f"{sign}{number:.2f} \u4e2a\u767e\u5206\u70b9"
 
 
 def _format_change_gap(seconds: Any) -> str:
@@ -558,90 +483,70 @@ def _format_change_gap(seconds: Any) -> str:
         return ""
     minutes = int(round(number / 60))
     if minutes < 60:
-        return f"间隔 {minutes} 分钟"
+        return f"\u7ea6 {minutes} \u5206\u949f"
     hours, remainder = divmod(minutes, 60)
     if hours < 24:
-        return f"间隔 {hours} 小时" if remainder == 0 else f"间隔 {hours} 小时 {remainder} 分钟"
+        return f"\u7ea6 {hours} \u5c0f\u65f6" if remainder == 0 else f"\u7ea6 {hours} \u5c0f\u65f6 {remainder} \u5206\u949f"
     days, remainder = divmod(hours, 24)
-    return f"间隔 {days} 天" if remainder == 0 else f"间隔 {days} 天 {remainder} 小时"
+    return f"\u7ea6 {days} \u5929" if remainder == 0 else f"\u7ea6 {days} \u5929 {remainder} \u5c0f\u65f6"
 
 
 def _render_change_rows(items: Any, *, include_ranks: bool = False) -> str:
     if not isinstance(items, list):
-        return '<p class="change-empty">当前没有明显变化。</p>'
+        return '<p class="change-empty">\u5f53\u524d\u6ca1\u6709\u53ef\u6bd4\u53d8\u5316\u3002</p>'
     rows = []
     for item in items:
         if not isinstance(item, dict):
             continue
         before = _percent_number(item.get("before"))
         now = _percent_number(item.get("now"))
-        label = _esc(item.get("label") or item.get("key"), "—")
+        label = _esc(item.get("label") or item.get("key"), DASH)
         rank = ""
         if include_ranks:
             rank = (
-                f'<span class="change-rank">#{_esc(item.get("before_rank"), "—")} → '
-                f'#{_esc(item.get("now_rank"), "—")}</span>'
+                f'<span class="change-rank">#{_esc(item.get("before_rank"), DASH)} \u2192 '
+                f'#{_esc(item.get("now_rank"), DASH)}</span>'
             )
         rows.append(
             f'<div class="change-row" data-change-key="{html.escape(str(item.get("key") or ""), quote=True)}">'
             f'<span class="change-label">{label}{rank}</span>'
-            f'<span class="change-before-now"><span>{_esc(_percent(before), "—")}</span>'
-            f'<b aria-hidden="true">→</b><strong>{_esc(_percent(now), "—")}</strong></span>'
+            f'<span class="change-before-now"><span>{_esc(_percent(before), DASH)}</span>'
+            f'<b aria-hidden="true">\u2192</b><strong>{_esc(_percent(now), DASH)}</strong></span>'
             f'<span class="change-delta">{_esc(_format_change_delta(item.get("delta_probability_points")))}</span>'
             '</div>'
         )
-    return "".join(rows) if rows else '<p class="change-empty">当前没有明显变化。</p>'
+    return "".join(rows) if rows else '<p class="change-empty">\u5f53\u524d\u6ca1\u6709\u660e\u663e\u53d8\u5316\u3002</p>'
 
 
 def _render_change_lane(name: str, lane: dict[str, Any]) -> str:
-    labels = {
-        "ft_1x2": "胜平负",
-        "exact_score": "比分概率",
-        "jc_total_goals": "JC 总进球",
-        "jc_handicap": "JC 让球",
-    }
-    title = labels[name]
+    labels = {"ft_1x2": "\u80dc\u5e73\u8d1f\u6982\u7387", "exact_score": "\u6bd4\u5206\u6982\u7387"}
+    title = labels.get(name, "\u5f53\u524d\u6982\u7387")
     status = str(lane.get("status") or "UNAVAILABLE").upper()
     if status == "UNAVAILABLE":
         return (
-            f'<article class="change-lane change-lane-unavailable" data-change-lane="{name}" '
+            f'<article class="change-lane change-lane-unavailable" data-change-lane="{html.escape(name, quote=True)}" '
             f'data-change-lane-status="{status}"><h3>{title}</h3>'
-            '<p>此前没有可比记录，当前玩法保持独立展示。</p></article>'
-        )
-    if name == "jc_handicap" and status == "LINE_CHANGED":
-        return (
-            f'<article class="change-lane change-lane-line" data-change-lane="{name}" '
-            f'data-change-lane-status="{status}"><h3>{title}</h3>'
-            f'<p class="change-line-value">让球线：{_esc(lane.get("before_line"), "—")} → '
-            f'{_esc(lane.get("now_line"), "—")}</p>'
-            '<p>让球线已变化；本栏不把两条不同的线当作同一市场比较概率。</p></article>'
+            '<p>\u5f53\u524d\u6ca1\u6709\u53ef\u6bd4\u7684\u8d5b\u524d\u8bb0\u5f55\uff0c\u6682\u4e0d\u5c55\u793a\u53d8\u5316\u3002</p></article>'
         )
     if name == "exact_score":
         support = lane.get("support") if isinstance(lane.get("support"), dict) else {}
         support_text = (
-            f'仅比较已记录的 {html.escape(str(support.get("cell_count") or "—"))} 格显式比分；'
-            '范围外概率不补写。'
+            f'\u57fa\u4e8e {html.escape(str(support.get("cell_count") or DASH))} \u4e2a\u6bd4\u5206\u683c\uff1b'
+            '\u4ec5\u5c55\u793a\u6709\u8bb0\u5f55\u7684\u53d8\u5316\u3002'
         )
         rows = _render_change_rows(lane.get("items"), include_ranks=True)
         if not lane.get("items"):
-            rows = '<p class="change-empty">Top 比分没有明显变化。</p>'
+            rows = '<p class="change-empty">\u5f53\u524d\u6ca1\u6709\u660e\u663e\u53d8\u5316\u3002</p>'
         return (
             f'<article class="change-lane change-lane-wide" data-change-lane="{name}" '
             f'data-change-lane-status="{status}"><h3>{title}</h3>'
             f'<div class="change-rows">{rows}</div><p class="change-lane-note">{support_text}</p></article>'
         )
     rows = _render_change_rows(lane.get("items"))
-    if name == "jc_handicap":
-        line = f' · 让球线 {html.escape(str(lane.get("line") or "—"))}'
-        note = f'<p class="change-lane-note">同一官方整数让球线{line}。</p>'
-    elif name == "jc_total_goals":
-        note = '<p class="change-lane-note">同一官方 0、1、2、3、4、5、6、7+ 分类。</p>'
-    else:
-        note = ""
     return (
         f'<article class="change-lane" data-change-lane="{name}" '
         f'data-change-lane-status="{status}"><h3>{title}</h3>'
-        f'<div class="change-rows">{rows}</div>{note}</article>'
+        f'<div class="change-rows">{rows}</div></article>'
     )
 
 
@@ -657,9 +562,9 @@ def _render_change_awareness(contract: dict[str, Any]) -> str:
             '<section class="detail-section change-awareness-section change-awareness-unavailable" '
             'id="change-awareness" data-change-awareness="true" '
             f'data-change-awareness-status="{html.escape(status, quote=True)}">'
-            '<div class="section-heading"><div><div class="section-kicker">赛前变化</div>'
-            '<h2>暂无可比的此前记录</h2></div><p>当前预测保持不变</p></div>'
-            '<p class="change-unavailable-copy">当前没有合法的更早赛前快照，暂不补写变化。</p></section>'
+            '<div class="section-heading"><div><div class="section-kicker">\u8d5b\u524d\u53d8\u5316</div>'
+            '<h2>\u6682\u65e0\u53ef\u6bd4\u7684\u8d5b\u524d\u8bb0\u5f55</h2></div><p>\u5f53\u524d\u9884\u6d4b\u4fdd\u6301\u4e0d\u53d8</p></div>'
+            '<p class="change-unavailable-copy">\u5f53\u524d\u6ca1\u6709\u5408\u6cd5\u7684\u66f4\u65e9\u8d5b\u524d\u5feb\u7167\uff0c\u6682\u4e0d\u8865\u5199\u53d8\u5316\u3002</p></section>'
         )
     previous_time = _format_datetime(
         previous.get("chronology_timestamp")
@@ -674,22 +579,23 @@ def _render_change_awareness(contract: dict[str, Any]) -> str:
         include_date=True,
     )
     gap = _format_change_gap(change.get("elapsed_seconds"))
-    timeline = " · ".join(value for value in (f"此前 {previous_time}" if previous_time else "", f"现在 {current_time}" if current_time else "", gap) if value)
+    timeline = " \u00b7 ".join(value for value in (f"\u6b64\u524d {previous_time}" if previous_time else "", f"\u5f53\u524d {current_time}" if current_time else "", gap) if value)
+    empty_timeline = "\u53ea\u663e\u793a\u771f\u5b9e\u53d8\u5316"
     markets = change.get("markets") if isinstance(change.get("markets"), dict) else {}
     lanes = "".join(
         _render_change_lane(name, markets.get(name) if isinstance(markets.get(name), dict) else {})
-        for name in ("ft_1x2", "exact_score", "jc_total_goals", "jc_handicap")
+        for name in ("ft_1x2", "exact_score")
     )
     return (
         '<section class="detail-section change-awareness-section" id="change-awareness" '
         'data-change-awareness="true" data-change-awareness-status="AVAILABLE" '
         f'data-change-awareness-current-id="{html.escape(str(current.get("prediction_id") or ""), quote=True)}" '
         f'data-change-awareness-previous-id="{html.escape(str(previous.get("prediction_id") or ""), quote=True)}">'
-        '<div class="section-heading"><div><div class="section-kicker">赛前变化</div>'
-        '<h2>较上一版</h2></div>'
-        f'<p>{html.escape(timeline or "只显示事实变化")}</p></div>'
+        '<div class="section-heading"><div><div class="section-kicker">\u8d5b\u524d\u53d8\u5316</div>'
+        '<h2>\u770b\u6e05\u4e00\u6b21\u53d8\u5316</h2></div>'
+        f'<p>{html.escape(timeline or empty_timeline)}</p></div>'
         f'<div class="change-lane-grid">{lanes}</div>'
-        '<p class="section-note">只展示此前与现在的可比记录，不从变化本身推断原因。</p></section>'
+        '<p class="section-note">\u53ea\u5c55\u793a\u5f53\u524d\u8bb0\u5f55\u95f4\u7684\u53ef\u6bd4\u53d8\u5316\uff1b\u4e0d\u5bf9\u53d8\u5316\u4f5c\u56e0\u679c\u63a8\u65ad\u3002</p></section>'
     )
 
 
@@ -736,36 +642,49 @@ def _support_lines(items: Any) -> str:
     return '<ul class="support-list">' + "".join(lines) + "</ul>" if lines else ""
 
 
-def _render_key_evidence(contract: dict[str, Any]) -> str:
-    evidence = contract.get("evidence") or {}
+def _render_key_takeaways(contract: dict[str, Any], *, exact_state: str = "NORMAL") -> str:
     probabilities = _probabilities(contract)
-    blocks = []
-    form_html = _render_form(evidence)
-    if form_html:
-        blocks.append(form_html)
-
-    outcome_values = [
+    takeaways: list[str] = []
+    outcomes = [
         ("\u4e3b\u80dc", _percent_number(probabilities.get("home"))),
         ("\u5e73", _percent_number(probabilities.get("draw"))),
         ("\u5ba2\u80dc", _percent_number(probabilities.get("away"))),
     ]
-    outcome_values = [(label, value) for label, value in outcome_values if value is not None]
-    score_rows = _score_rows(contract, limit=3)
-    derived = []
-    if outcome_values:
-        outcome = max(outcome_values, key=lambda item: item[1])
-        derived.append(f"\u5f53\u524d\u80dc\u5e73\u8d1f\u4e2d\uff0c{outcome[0]}\u6982\u7387\u6700\u9ad8\uff08{_percent(outcome[1])}\uff09\u3002")
-    if score_rows:
-        primary = score_rows[0]
-        alternatives = "\u3001".join(row["score"] for row in score_rows[1:3])
-        suffix = f"\uff1b\u66ff\u4ee3\u6bd4\u5206\u4e3a{alternatives}" if alternatives else ""
-        derived.append(f'\u6700\u9ad8\u6982\u7387\u6bd4\u5206\u4e3a{primary["score"]}\uff08{_percent(primary["probability"])}\uff09{suffix}\uff0c\u5b83\u4e0d\u662f\u786e\u5b9a\u8d5b\u679c\u3002')
-    if derived:
-        blocks.append(
-            '<article class="evidence-block"><h3>\u5f53\u524d\u5224\u65ad</h3><p>'
-            + "<br>".join(_esc(value) for value in derived)
-            + "</p></article>"
-        )
+    outcomes = [(label, value) for label, value in outcomes if value is not None]
+    if outcomes:
+        label, number = max(outcomes, key=lambda item: item[1])
+        takeaways.append(f"{label}\u76f8\u5bf9\u5360\u4f18 \u00b7 {_percent(number)}")
+    goals = _total_goal_distribution(contract)
+    if goals:
+        bucket, number = max(goals, key=lambda item: item[1])
+        takeaways.append(f"\u603b\u8fdb\u7403\u5206\u5e03\u6700\u9ad8\u6bb5\uff1a{bucket} \u00b7 {_percent(number)}")
+    exact_item = _formal_market_item(_formal_markets(contract), "exact_score")
+    exact_contract = exact_item.get("contract") if _formal_status(exact_item) == "AVAILABLE" else None
+    if isinstance(exact_contract, dict):
+        selected, _, _ = _exact_compact_projection(exact_contract)
+        if selected:
+            primary = selected[0]
+            exact_copy = f"\u6700\u9ad8\u6982\u7387\u6bd4\u5206\uff1a{int(primary['home_goals'])}-{int(primary['away_goals'])} \u00b7 {_percent(primary.get('probability'))}"
+            if exact_state != "NORMAL":
+                exact_copy += " \u00b7 \u4ec5\u4f9b\u89c2\u5bdf"
+            takeaways.append(exact_copy)
+    if not takeaways:
+        return ""
+    items = "".join(f'<div class="takeaway">{html.escape(value)}</div>' for value in takeaways[:3])
+    return (
+        '<section class="detail-section decision-context" id="decision-context">'
+        '<div class="section-heading"><div><div class="section-kicker">\u51b3\u7b56\u8bed\u5883</div>'
+        '<h2>\u8bfb\u61c2\u8fd9\u573a\u6bd4\u8d5b</h2></div>'
+        '<p>\u53ea\u7ffb\u8bd1\u5f53\u524d\u8bb0\u5f55\u91cc\u5df2\u5b58\u5728\u7684\u6982\u7387</p></div>'
+        f'<div class="takeaways">{items}</div></section>'
+    )
+
+def _render_key_evidence(contract: dict[str, Any]) -> str:
+    evidence = contract.get("evidence") or {}
+    blocks = []
+    form_html = _render_form(evidence)
+    if form_html:
+        blocks.append(form_html)
 
     hero = contract.get("hero") or {}
     support_html = _support_lines(hero.get("supports"))
@@ -806,14 +725,13 @@ def _render_key_evidence(contract: dict[str, Any]) -> str:
         return ""
     return (
         '<section class="detail-section evidence-section" id="evidence">'
-        '<div class="section-heading"><div><div class="section-kicker">\u4e3a\u4ec0\u4e48</div><h2>\u5173\u952e\u4f9d\u636e</h2></div>'
+        '<div class="section-heading"><div><div class="section-kicker">UNDERSTAND MATCH</div><h2>\u5173\u952e\u4f9d\u636e</h2></div>'
         '<p>\u53ea\u5c55\u793a\u5f53\u524d\u8bb0\u5f55\u4e2d\u771f\u5b9e\u5b58\u5728\u7684\u89e3\u91ca</p></div><div class="evidence-grid">'
         + "".join(blocks)
         + "</div></section>"
     )
 
-
-def _market_comparison(contract: dict[str, Any]) -> dict[str, float] | None:
+def _market_comparison(contract: dict[str, Any]) -> dict[str, Any] | None:
     market = contract.get("market")
     if not isinstance(market, dict):
         evidence_market = (contract.get("evidence") or {}).get("market")
@@ -821,29 +739,55 @@ def _market_comparison(contract: dict[str, Any]) -> dict[str, float] | None:
     comparison = market.get("model_comparison") if isinstance(market, dict) else None
     if not isinstance(comparison, dict):
         return None
-    model_home = _percent_number(comparison.get("model_home_probability"))
-    market_home = _percent_number(comparison.get("market_home_probability"))
-    if model_home is None or market_home is None:
-        return None
-    return {"model_home": model_home, "market_home": market_home}
+    labels = {"home": "\u4e3b\u80dc", "draw": "\u5e73", "away": "\u5ba2\u80dc"}
+    model_probabilities = comparison.get("model_probabilities")
+    market_probabilities = comparison.get("market_probabilities")
+    if not isinstance(model_probabilities, dict):
+        model_probabilities = {}
+    if not isinstance(market_probabilities, dict):
+        market_probabilities = {}
+    rows = []
+    for key in ("home", "draw", "away"):
+        model_value = _percent_number(
+            model_probabilities.get(key)
+            or comparison.get(f"model_{key}_probability")
+            or comparison.get(f"model_{key}")
+        )
+        market_value = _percent_number(
+            market_probabilities.get(key)
+            or comparison.get(f"market_{key}_probability")
+            or comparison.get(f"market_{key}")
+        )
+        if model_value is None or market_value is None:
+            continue
+        rows.append({"key": key, "label": labels[key], "model": model_value, "market": market_value})
+    return {"rows": rows, "devigged": bool(comparison.get("market_is_devigged") or comparison.get("is_devigged"))} if rows else None
 
 
 def _render_market_comparison(contract: dict[str, Any]) -> str:
     comparison = _market_comparison(contract)
     if comparison is None:
         return ""
-    difference = comparison["model_home"] - comparison["market_home"]
-    direction = "\u4f4e\u4e8e" if difference < 0 else "\u9ad8\u4e8e"
+    market_label = "\u5e02\u573a\uff08\u53bb\u6c34\uff09" if comparison.get("devigged") else "\u5e02\u573a"
+    cells = []
+    deltas = []
+    for row in comparison["rows"]:
+        difference = row["model"] - row["market"]
+        sign = "+" if difference >= 0 else ""
+        cells.append(
+            f'<div><span>{row["label"]} \u00b7 \u6a21\u578b</span><strong>{_percent(row["model"])}</strong></div>'
+            f'<div><span>{row["label"]} \u00b7 {market_label}</span><strong>{_percent(row["market"])}</strong></div>'
+        )
+        deltas.append(f'{row["label"]} {sign}{difference * 100:.1f} \u4e2a\u767e\u5206\u70b9')
+    delta_text = "\uFF1B".join(deltas)
     return (
         '<section class="detail-section market-section" id="market">'
-        '<div class="section-heading"><div><div class="section-kicker">\u771f\u5b9e\u5bf9\u7167</div><h2>\u6a21\u578b\u4e0e\u5e02\u573a</h2></div>'
+        '<div class="section-heading"><div><div class="section-kicker">\u771f\u5b9e\u5bf9\u7167</div><h2>\u5e02\u573a\u5bf9\u7167</h2></div>'
         '<p>\u4ec5\u5728\u540c\u65f6\u5b58\u5728\u4e24\u4fa7\u6982\u7387\u65f6\u663e\u793a</p></div><div class="market-compare">'
-        f'<div><span>\u6a21\u578b \u00b7 \u4e3b\u80dc</span><strong>{_percent(comparison["model_home"])}</strong></div>'
-        f'<div><span>\u5e02\u573a\u65e0 vig \u00b7 \u4e3b\u80dc</span><strong>{_percent(comparison["market_home"])}</strong></div>'
-        f"<p>\u6a21\u578b\u4e3b\u80dc\u6982\u7387{direction}\u5e02\u573a {abs(difference) * 100:.1f} \u4e2a\u767e\u5206\u70b9\u3002</p>"
-        "</div></section>"
+        + "".join(cells)
+        + f'<p>\u6a21\u578b\u76f8\u5bf9\u5e02\u573a\u7684\u5dee\u5f02\uff1a{delta_text}\u3002\u5dee\u5f02\u672c\u8eab\u4e0d\u8868\u793a\u597d\u574f\u3002</p>'
+        + '</div></section>'
     )
-
 
 def _source_items(contract: dict[str, Any]) -> list[str]:
     source_quality = contract.get("source_quality") or (contract.get("evidence") or {}).get("source_quality") or {}
@@ -899,30 +843,28 @@ def _render_technical_details(contract: dict[str, Any]) -> str:
 
 def _render_trust(contract: dict[str, Any]) -> str:
     timestamps = contract.get("timestamps") or {}
-    source_quality = contract.get("source_quality") or (contract.get("evidence") or {}).get("source_quality") or {}
     status = _status_code(contract)
     rows = []
-    frozen_at = timestamps.get("prediction_frozen_at") or timestamps.get("freeze_created_at")
-    if frozen_at:
-        rows.append(f'<div class="trust-lock"><strong>\u8d5b\u524d\u9884\u6d4b\u5df2\u9501\u5b9a\u4e8e {_esc(_format_datetime(frozen_at))}</strong><span>\u8d5b\u540e\u4e0d\u4fee\u6539</span></div>')
+    recorded_at = timestamps.get("prediction_frozen_at") or timestamps.get("freeze_created_at")
+    if recorded_at:
+        rows.append(
+            f'<div class="trust-lock"><strong>\u8d5b\u524d\u8bb0\u5f55\uff1a{_esc(_format_datetime(recorded_at, include_date=True))}</strong>'
+            '<span>\u8d5b\u540e\u4e0d\u4fee\u6539</span></div>'
+        )
     elif status == "FROZEN":
-        rows.append('<div class="trust-lock"><strong>\u8d5b\u524d\u9884\u6d4b\u5df2\u9501\u5b9a</strong><span>\u8d5b\u540e\u4e0d\u4fee\u6539</span></div>')
-    cutoff = timestamps.get("source_cutoff_at") or timestamps.get("evidence_updated_at") or source_quality.get("recent_form_captured_at")
-    if cutoff:
-        rows.append(f'<div class="trust-line"><span>\u6570\u636e\u622a\u6b62</span><strong>{_esc(_format_datetime(cutoff, include_date=True))}</strong></div>')
+        rows.append('<div class="trust-lock"><strong>\u8d5b\u524d\u8bb0\u5f55\u5df2\u4fdd\u5b58</strong><span>\u8d5b\u540e\u4e0d\u4fee\u6539</span></div>')
     references = _source_items(contract)
     if references:
         list_html = "".join(f"<li>{_esc(item)}</li>" for item in references[:5])
-        rows.append(f'<div class="trust-source"><span>\u6765\u6e90</span><ul>{list_html}</ul></div>')
+        rows.append(f'<div class="trust-source"><span>\u53c2\u8003\u6765\u6e90</span><ul>{list_html}</ul></div>')
     technical = _render_technical_details(contract)
     if technical:
         rows.append(technical)
     if not rows:
         return ""
     title = "\u53ef\u4fe1\u5ea6\u4e0e\u6765\u6e90" if references else "\u8d5b\u524d\u8bb0\u5f55"
-    kicker = "\u53ef\u4fe1\u5ea6" if references else "\u8bb0\u5f55"
-    return f'<aside class="trust-panel" id="sources"><div class="section-kicker">{kicker}</div><h2>{title}</h2>' + "".join(rows) + "</aside>"
-
+    kicker = "\u8bb0\u5f55\u4e0e\u65b9\u6cd5" if references else "\u8bb0\u5f55\u8bf4\u660e"
+    return f'<section class="trust-panel" id="sources"><div class="section-kicker">{kicker}</div><h2>{title}</h2>' + "".join(rows) + "</section>"
 
 def _result_score(result: dict[str, Any]) -> tuple[int, int] | None:
     text = str(result.get("score_90m") or "").strip()
@@ -937,65 +879,18 @@ def _outcome(score: tuple[int, int]) -> str:
     return "\u4e3b\u80dc" if score[0] > score[1] else "\u5ba2\u80dc" if score[0] < score[1] else "\u5e73"
 
 
-def _formal_verification_label(key: str, verification: dict[str, Any]) -> str:
-    status = str(verification.get("verification_status") or "NOT_RECORDED").upper()
-    if status == "VERIFIED":
-        actual = verification.get("actual_selection") or "\u2014"
-        if key == "jc_handicap":
-            actual = _FORMAL_SELECTION_LABELS.get(str(actual), str(actual))
-        if key == "exact_score":
-            rank = verification.get("actual_rank")
-            rank_text = f"frozen rank #{rank}" if isinstance(rank, int) and rank > 0 else "frozen rank unavailable"
-            support = str(verification.get("represented_support_status") or "UNAVAILABLE")
-            return f"{actual} · {rank_text} · {support}"
-        hit = "\uff0c\u8d5b\u524d\u9996\u9009\u547d\u4e2d" if verification.get("top_selection_hit") else "\uff0c\u8d5b\u524d\u9996\u9009\u672a\u547d\u4e2d"
-        return f"{actual}{hit}"
-    if status == "OUT_OF_EXPLICIT_SUPPORT":
-        actual = verification.get("actual_selection") or "\u2014"
-        support = str(verification.get("represented_support_status") or "OUT_OF_EXPLICIT_SUPPORT")
-        return f"{actual} · {support} · \u672a\u8ba1\u5165 frozen rank / probability"
-    if status == "NOT_RECORDED":
-        return "\u672a\u8bb0\u5f55"
-    if status == "UNAVAILABLE":
-        return "\u4e0d\u53ef\u7528"
-    if status == "INVALID_90M_SCORE":
-        return "\u8d5b\u679c\u65e0\u6cd5\u6838\u9a8c"
-    return status
-
-
-def _render_formal_verification(verification: dict[str, dict[str, Any]]) -> str:
-    if not isinstance(verification, dict):
-        return ""
-    rows = []
-    for key in _FORMAL_MARKET_LABELS:
-        item = verification.get(key) if isinstance(verification.get(key), dict) else {}
-        status = str(item.get("verification_status") or "NOT_RECORDED").upper()
-        detail = _formal_verification_label(key, item)
-        probability = item.get("actual_probability")
-        probability_text = f"\uff1b\u8be5\u7ed3\u679c\u5728\u51bb\u7ed3\u5408\u7ea6\u4e2d\u4e3a {_formal_probability(probability)}" if probability is not None else ""
-        rows.append(
-            f'<div class="formal-verification-row status-{html.escape(status.lower(), quote=True)}" '
-            f'data-formal-verification-market="{html.escape(key, quote=True)}" '
-            f'data-formal-verification-status="{html.escape(status, quote=True)}" '
-            f'data-formal-actual-rank="{html.escape(str(item.get("actual_rank") or ""), quote=True)}" '
-            f'data-formal-support-status="{html.escape(str(item.get("represented_support_status") or ""), quote=True)}">'
-            f'<span>{_esc(_FORMAL_MARKET_LABELS[key])}</span>'
-            f'<strong>{_esc(detail)}</strong>'
-            f'<em>{_esc(probability_text)}</em></div>'
-        )
-    return (
-        '<div class="formal-verification"><div class="formal-verification-heading">'
-        '<strong>\u6b63\u5f0f\u73a9\u6cd5\u6838\u9a8c</strong>'
-        '<span>\u4ec5\u6309 90 \u5206\u949f + \u8865\u65f6\u7684\u5df2\u6838\u9a8c\u8d5b\u679c</span></div>'
-        + "".join(rows)
-        + '</div>'
-    )
-
-
 def _completed_comparison(contract: dict[str, Any]) -> dict[str, Any]:
     result = contract.get("result") or {}
     score = _result_score(result) if isinstance(result, dict) else None
-    primary = str((contract.get("hero") or {}).get("primary_score") or _model(contract).get("unique_score") or "").strip()
+    exact_item = _formal_market_item(_formal_markets(contract), "exact_score")
+    exact_contract = exact_item.get("contract") if _formal_status(exact_item) == "AVAILABLE" else None
+    primary = ""
+    if isinstance(exact_contract, dict):
+        selected, _, _ = _exact_compact_projection(exact_contract)
+        if selected:
+            primary = f'{int(selected[0]["home_goals"])}-{int(selected[0]["away_goals"])}'
+    if not primary:
+        primary = str((contract.get("hero") or {}).get("primary_score") or _model(contract).get("unique_score") or "").strip()
     probabilities = _probabilities(contract)
     choices = (
         ("\u4e3b\u80dc", _percent_number(probabilities.get("home"))),
@@ -1007,10 +902,6 @@ def _completed_comparison(contract: dict[str, Any]) -> dict[str, Any]:
     actual_outcome = _outcome(score) if score else ""
     exact_status = "\u547d\u4e2d" if primary and actual_score and primary == actual_score else "\u672a\u547d\u4e2d" if primary and actual_score else "\u5f85\u786e\u8ba4"
     direction_status = "\u547d\u4e2d" if predicted and actual_outcome and predicted == actual_outcome else "\u672a\u547d\u4e2d" if predicted and actual_outcome else "\u5f85\u786e\u8ba4"
-    formal_verification = verify_formal_markets(
-        _formal_markets(contract),
-        score,
-    )
     return {
         "actual_score": actual_score,
         "primary_score": primary,
@@ -1018,9 +909,7 @@ def _completed_comparison(contract: dict[str, Any]) -> dict[str, Any]:
         "predicted_direction": predicted,
         "actual_direction": actual_outcome,
         "direction_status": direction_status,
-        "formal_market_verification": formal_verification,
     }
-
 
 def _render_completed_result(contract: dict[str, Any]) -> str:
     result = contract.get("result") or {}
@@ -1029,27 +918,24 @@ def _render_completed_result(contract: dict[str, Any]) -> str:
     verified = _format_datetime(result.get("verified_at"), include_date=True)
     verified_html = f"<span>\u6838\u9a8c\u4e8e {verified}</span>" if verified else ""
     comparison = _completed_comparison(contract)
-    value = lambda key: _esc(comparison.get(key) or "\u2014")
+    value = lambda key: _esc(comparison.get(key) or DASH)
     facts = (
         '<div class="completed-facts">'
         f'<div><span>\u5b9e\u9645\u6bd4\u5206</span><strong>{value("actual_score")}</strong></div>'
-        f'<div><span>\u5f53\u65f6\u6700\u9ad8\u6982\u7387\u6bd4\u5206</span><strong>{value("primary_score")}</strong></div>'
+        f'<div><span>\u8d5b\u524d\u6700\u9ad8\u6982\u7387\u6bd4\u5206</span><strong>{value("primary_score")}</strong></div>'
         f'<div><span>\u6bd4\u5206</span><strong>{value("exact_status")}</strong></div>'
-        f'<div><span>\u5f53\u65f6\u0031X2\u65b9\u5411</span><strong>{value("predicted_direction")}</strong></div>'
+        f'<div><span>\u8d5b\u524d 1X2 \u65b9\u5411</span><strong>{value("predicted_direction")}</strong></div>'
         f'<div><span>\u5b9e\u9645\u65b9\u5411</span><strong>{value("actual_direction")}</strong></div>'
         f'<div><span>\u65b9\u5411</span><strong>{value("direction_status")}</strong></div>'
         '</div>'
     )
-    formal_verification_html = _render_formal_verification(comparison.get("formal_market_verification") or {})
     return (
         '<section class="result-panel" id="result"><div class="section-kicker">\u8d5b\u540e\u9a8c\u8bc1</div><h2>\u5b9e\u9645\u8d5b\u679c</h2>'
         f'<div class="actual-score">{_display_score(result.get("score_90m"))}</div>'
         f'<div class="actual-meta"><strong>90\u5206\u949f\u8d5b\u679c</strong>{verified_html}</div>'
         + facts
-        + formal_verification_html
         + "</section>"
     )
-
 
 def _render_verification(contract: dict[str, Any]) -> str:
     result = contract.get("result") or {}
@@ -1082,144 +968,145 @@ def _render_status_panel(contract: dict[str, Any]) -> str:
 
 
 DETAIL_CSS = """
-    :root { --bg:#F7F5F1; --surface:#FFFFFF; --ink:#111111; --muted:#6B7280; --line:#E5E7EB; --accent:#FF6A00; --soft:#FFF2E8; --max:1240px; }
+    :root {
+      --shell-bg:#07111A; --workspace-bg:#F7F7F5; --surface:#FFFFFF; --surface-subtle:#FAFAF8;
+      --ink:#121417; --muted:#626870; --quiet:#8B9198; --line:#E6E7E4;
+      --accent:#FF6A00; --accent-soft:#FFF1E8;
+      --home:#1F5EA8; --draw:#A9ADB2; --away:#E23B3B;
+      --matrix-low:#F3F7F2; --matrix-high:#4A9A62;
+      --warning:#B75C00; --warning-soft:#FFF4E8; --danger:#B42318; --danger-soft:#FFF1F0; --verified:#18794E;
+      --max:1240px;
+    }
     * { box-sizing:border-box; }
-    html { scroll-behavior:smooth; }
-    body { margin:0; background:var(--bg); color:var(--ink); font:14px/1.55 Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI","Microsoft YaHei",sans-serif; }
+    html { background:var(--shell-bg); scroll-behavior:smooth; }
+    body { min-width:0; margin:0; background:var(--workspace-bg); color:var(--ink); font:14px/1.5 Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif; -webkit-font-smoothing:antialiased; }
     a { color:inherit; }
-    .page { width:min(calc(100% - 40px), var(--max)); margin:0 auto; padding:18px 0 52px; }
-    .site-header { display:flex; align-items:center; justify-content:space-between; gap:18px; padding:6px 0 18px; }
-    .brand { display:flex; align-items:baseline; gap:10px; text-decoration:none; }
-    .brand-name { font-size:20px; font-weight:850; letter-spacing:-.05em; }
-    .brand-subtitle,.eyebrow,.section-kicker { color:var(--muted); font-size:11px; letter-spacing:.09em; }
-    .header-actions { display:flex; align-items:center; gap:14px; }
-    .back { color:var(--muted); text-decoration:none; font-size:13px; }
-    .back:hover { color:var(--ink); }
-    .detail-nav { display:none; flex-wrap:wrap; gap:16px; border-top:1px solid var(--line); border-bottom:1px solid var(--line); padding:10px 0; margin-bottom:18px; }
-    .detail-nav a { color:var(--muted); text-decoration:none; font-size:12px; }
+    button { font:inherit; }
+    a:focus-visible,button:focus-visible,summary:focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
+    [hidden] { display:none !important; }
+    .app-shell { display:grid; grid-template-columns:184px minmax(0,1fr); min-height:100vh; }
+    .side-rail { display:flex; flex-direction:column; min-height:100vh; padding:30px 18px 22px; background:var(--shell-bg); color:#F5F7F8; }
+    .rail-brand { display:block; text-decoration:none; }
+    .rail-mark { display:block; font-size:25px; font-weight:750; letter-spacing:-.06em; }
+    .rail-caption { display:block; margin-top:3px; color:#A9B3BB; font-size:10px; line-height:1.4; letter-spacing:.12em; text-transform:uppercase; }
+    .rail-nav { display:grid; gap:5px; margin-top:54px; }
+    .nav-item { display:flex; align-items:baseline; justify-content:space-between; gap:8px; min-height:44px; padding:11px 10px; border-left:2px solid transparent; color:#A9B3BB; font-size:13px; text-decoration:none; }
+    .nav-item small { color:#65727C; font-size:9px; letter-spacing:.06em; text-transform:uppercase; }
+    .nav-item:hover,.nav-item.active { border-left-color:var(--accent); background:rgba(255,255,255,.06); color:#FFF; }
+    .nav-item.active small { color:#F6A26D; }
+    .rail-footer { margin-top:auto; padding:14px 10px 0; border-top:1px solid rgba(255,255,255,.12); color:#7F8B94; font-size:10px; }
+    .rail-footer strong { display:block; color:#D7DDE1; font-size:11px; font-weight:650; }
+    .rail-footer span { display:block; margin-top:4px; }
+    .workspace { min-width:0; background:var(--workspace-bg); }
+    .mobile-topbar { display:none; }
+    .page { width:min(calc(100% - 48px),var(--max)); margin:0 auto; padding:28px 0 42px; }
+    .site-header { display:flex; align-items:center; justify-content:space-between; gap:20px; padding-bottom:17px; border-bottom:1px solid var(--line); }
+    .brand { display:flex; align-items:baseline; gap:12px; min-width:0; color:var(--ink); text-decoration:none; }
+    .brand-name { flex:0 0 auto; font-size:18px; font-weight:750; letter-spacing:-.05em; }
+    .brand-subtitle { color:var(--muted); font-size:10px; letter-spacing:.1em; text-transform:uppercase; }
+    .header-actions { display:flex; align-items:center; gap:14px; color:var(--muted); font-size:11px; }
+    .back { text-decoration:none; }
+    .back:hover { color:var(--accent); }
+    .eyebrow,.section-kicker { color:var(--quiet); font-size:10px; font-weight:700; letter-spacing:.14em; text-transform:uppercase; }
+    .detail-nav { display:flex; flex-wrap:wrap; gap:5px 15px; margin:15px 0 0; padding-bottom:2px; color:var(--muted); font-size:11px; }
+    .detail-nav a { padding:6px 0; text-decoration:none; }
     .detail-nav a:hover { color:var(--accent); }
-    .detail-layout { display:grid; grid-template-columns:minmax(0,1fr) 286px; gap:36px; align-items:start; }
+    .detail-layout { display:block; }
     .detail-main { min-width:0; }
-    .match-identity { padding:8px 0 20px; border-bottom:1px solid var(--line); }
-    .match-meta { display:flex; flex-wrap:wrap; gap:5px 12px; color:var(--muted); font-size:12px; }
-    .match-identity h1 { margin:9px 0 0; font-size:clamp(28px,3.6vw,46px); line-height:1.08; letter-spacing:-.06em; font-weight:820; }
-    .match-identity h1 span { color:var(--muted); font-weight:450; letter-spacing:-.02em; }
-    .quality-warning { display:flex; align-items:flex-start; gap:10px; margin:18px 0 0; padding:10px 12px; border-left:3px solid var(--accent); background:var(--soft); }
-    .quality-warning strong { font-size:13px; }
-    .quality-warning span { color:var(--muted); font-size:12px; }
-    .pilot-note { display:inline-flex; margin-top:12px; color:#A34700; font-size:12px; }
-    .result-panel,.status-panel { margin:20px 0 0; padding:19px 0; border-top:2px solid var(--accent); border-bottom:1px solid var(--line); }
-    .result-panel h2,.status-panel h2 { margin:3px 0 2px; font-size:22px; letter-spacing:-.03em; }
-    .actual-score { margin:12px 0 1px; font-size:56px; line-height:1; font-weight:850; letter-spacing:-.08em; }
-    .actual-meta { display:flex; flex-wrap:wrap; gap:8px 12px; color:var(--muted); font-size:12px; }
-    .result-panel p { margin:10px 0 0; color:var(--muted); }
-    .completed-facts { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:7px; margin-top:16px; }
-    .completed-facts > div { padding:9px 10px; border:1px solid var(--line); background:var(--surface); }
-    .completed-facts span,.completed-facts strong { display:block; }
-    .completed-facts span { color:var(--muted); font-size:11px; }
-    .completed-facts strong { margin-top:3px; font-size:14px; font-variant-numeric:tabular-nums; }
-    .status-panel { display:flex; gap:13px; align-items:flex-start; border-top-color:var(--line); }
-    .status-mark { display:grid; place-items:center; width:25px; height:25px; border-radius:50%; background:var(--soft); color:var(--accent); font-weight:800; }
-    .status-panel p { margin:7px 0 0; color:var(--muted); }
-    .detail-section { padding:26px 0; border-bottom:1px solid var(--line); }
-    .section-heading { display:flex; align-items:end; justify-content:space-between; gap:18px; margin-bottom:14px; }
-    .section-heading h2 { margin:3px 0 0; font-size:23px; letter-spacing:-.04em; }
-    .section-heading p { margin:0; color:var(--muted); font-size:12px; text-align:right; }
-    .hero-probabilities { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; }
-    .probability-card { min-width:0; padding:13px 13px 12px; border:1px solid var(--line); background:var(--surface); }
-    .probability-card.probability-highest { border-color:var(--accent); }
+    .match-identity { padding:28px 0 23px; border-bottom:1px solid var(--line); }
+    .match-meta { color:var(--muted); font-size:12px; }
+    .match-identity h1 { max-width:100%; margin:11px 0 0; font-size:28px; line-height:1.18; letter-spacing:-.045em; overflow-wrap:anywhere; }
+    .match-identity h1 span { color:var(--muted); font-weight:450; }
+    .quality-warning,.pilot-note { margin-top:15px; padding:11px 14px; border-left:3px solid var(--warning); background:var(--warning-soft); color:var(--warning); font-size:12px; }
+    .quality-warning strong { color:var(--ink); }
+    .quality-warning span { margin-left:8px; color:var(--muted); }
+    .pilot-note { border-left-color:var(--line); background:transparent; color:var(--muted); }
+    .detail-section,.result-panel,.status-panel { margin-top:24px; padding:20px; border:1px solid var(--line); border-radius:12px; background:var(--surface); }
+    .section-heading { display:flex; align-items:baseline; justify-content:space-between; gap:18px; margin-bottom:16px; }
+    .section-heading h2 { margin:4px 0 0; font-size:17px; line-height:1.2; letter-spacing:-.025em; }
+    .section-heading p { max-width:45%; margin:0; color:var(--muted); font-size:11px; text-align:right; }
+    .forecast-section { padding:0; border:0; background:transparent; }
+    .probability-section { margin-top:24px; padding:20px; border:1px solid var(--line); border-radius:12px; background:var(--surface); }
+    .probability-section h2 { margin:4px 0 16px; font-size:17px; letter-spacing:-.025em; }
+    .hero-probabilities { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:1px; border:1px solid var(--line); background:var(--line); }
+    .probability-card { min-width:0; padding:15px; background:var(--surface); }
+    .probability-card.probability-highest { background:var(--surface-subtle); }
     .probability-label { display:block; color:var(--muted); font-size:12px; }
-    .probability-card strong { display:block; margin-top:3px; font-size:28px; line-height:1; letter-spacing:-.06em; font-variant-numeric:tabular-nums; }
-    .probability-track,.score-bar { overflow:hidden; background:#F0EFEC; }
-    .probability-track { height:5px; margin-top:14px; }
-    .probability-track span,.score-bar span { display:block; height:100%; background:var(--accent); }
-    .score-list { display:grid; gap:0; }
-    .score-row { display:grid; grid-template-columns:100px minmax(80px,1fr) 64px; align-items:center; gap:13px; min-height:35px; border-top:1px solid var(--line); }
-    .score-row:first-child { border-top:0; }
-    .score-name { display:flex; align-items:baseline; gap:8px; min-width:0; }
-    .score-name strong { font-size:18px; letter-spacing:-.04em; font-variant-numeric:tabular-nums; }
-    .score-name span { color:var(--muted); font-size:11px; white-space:nowrap; }
-    .score-bar { height:7px; }
-    .score-probability { text-align:right; font-variant-numeric:tabular-nums; }
-    .section-note,.source-line { margin:11px 0 0; color:var(--muted); font-size:12px; }
-    .goal-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:9px; }
-    .goal-card { padding:14px; border:1px solid var(--line); background:var(--surface); }
-    .goal-card-label { display:block; color:var(--muted); font-size:12px; }
-    .goal-card strong { display:block; margin-top:5px; font-size:18px; font-variant-numeric:tabular-nums; letter-spacing:-.03em; }
-    .change-awareness-section { padding-top:22px; }
-    .change-awareness-section .section-heading { margin-bottom:12px; }
-    .change-lane-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:9px; }
-    .change-lane { min-width:0; padding:12px; border:1px solid var(--line); background:var(--surface); }
-    .change-lane-wide { grid-column:1/-1; }
-    .change-lane h3 { margin:0 0 8px; font-size:14px; }
-    .change-rows { display:grid; gap:0; }
-    .change-row { display:grid; grid-template-columns:minmax(62px,.65fr) minmax(140px,1fr) minmax(86px,.6fr); align-items:center; gap:8px; min-height:28px; border-top:1px solid var(--line); font-size:11px; font-variant-numeric:tabular-nums; }
-    .change-row:first-child { border-top:0; }
-    .change-label { min-width:0; color:var(--muted); }
-    .change-rank { display:block; margin-top:1px; color:var(--quiet); font-size:10px; }
-    .change-before-now { display:flex; align-items:baseline; justify-content:center; gap:7px; min-width:0; }
-    .change-before-now > span { color:var(--muted); }
-    .change-before-now > b { color:var(--quiet); font-weight:500; }
-    .change-before-now > strong { font-weight:700; }
-    .change-delta { text-align:right; white-space:nowrap; }
-    .change-lane-note,.change-lane-line,.change-lane-unavailable p,.change-empty { margin:8px 0 0; color:var(--muted); font-size:11px; }
-    .change-lane-line { border-color:#F2C4A8; background:#FFF9F3; }
-    .change-line-value { color:var(--ink); font-weight:700; font-variant-numeric:tabular-nums; }
-    .change-awareness-unavailable { border-top:1px solid var(--line); }
-    .change-unavailable-copy { margin:0; color:var(--muted); font-size:12px; }
-    .formal-market-status-matrix { display:flex; flex-wrap:wrap; gap:5px; margin:-2px 0 12px; }
-    .formal-market-status { padding:4px 7px; border:1px solid var(--line); background:var(--surface); color:var(--muted); font-size:11px; white-space:nowrap; }
-    .formal-market-status.status-available { border-color:#B7D8C1; color:var(--ink); }
-    .formal-market-status.status-unavailable { border-color:#F2C4A8; color:#A34700; }
-    .formal-market-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
-    .formal-market-panel { min-width:0; padding:14px; border:1px solid var(--line); background:var(--surface); }
-    .formal-exact-panel { grid-column:1/-1; }
-    .formal-panel-heading { display:flex; align-items:baseline; justify-content:space-between; gap:10px; margin-bottom:10px; }
-    .formal-panel-heading h3 { margin:0; font-size:15px; }
-    .formal-panel-heading span { color:var(--muted); font-size:11px; text-align:right; }
-    .formal-market-note { margin:9px 0 0; color:var(--muted); font-size:11px; }
+    .probability-card strong { display:block; margin-top:4px; font-size:24px; line-height:1; font-variant-numeric:tabular-nums; }
+    .probability-card.probability-highest strong { font-weight:800; }
+    .probability-track { display:none; }
+    .probability-strip-wrap { margin-top:17px; }
+    .probability-strip { display:flex; width:100%; height:9px; overflow:hidden; border-radius:99px; background:var(--line); }
+    .probability-segment { display:block; min-width:2px; height:100%; }
+    .probability-segment.home { background:var(--home); }
+    .probability-segment.draw { background:var(--draw); }
+    .probability-segment.away { background:var(--away); }
+    .probability-legend { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; margin-top:11px; }
+    .probability-legend-item { display:flex; align-items:baseline; gap:7px; min-width:0; font-size:12px; }
+    .probability-legend-item::before { content:""; flex:0 0 8px; width:8px; height:8px; border-radius:50%; background:var(--draw); }
+    .probability-legend-item.home::before { background:var(--home); }
+    .probability-legend-item.away::before { background:var(--away); }
+    .probability-legend-item strong { font-size:14px; font-variant-numeric:tabular-nums; }
+    .probability-legend-item.is-leading strong { font-weight:800; }
+    .probability-legend-item small { color:var(--muted); font-size:10px; }
+    .lane-unavailable { border-style:dashed; background:var(--surface-subtle); }
+    .lane-unavailable p { margin:7px 0 0; color:var(--muted); font-size:12px; }
+    .exact-section { margin-top:24px; }
+    .exact-summary { display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin:-4px 0 14px; }
+    .exact-summary strong { font-size:15px; font-variant-numeric:tabular-nums; }
+    .exact-summary span { color:var(--muted); font-size:11px; }
     .exact-compact { display:none; }
-    .exact-full-disclosure { margin-top:2px; }
+    .exact-full-disclosure { margin-top:4px; }
+    .exact-full-disclosure > summary { padding:4px 0 9px; cursor:pointer; font-size:12px; font-weight:700; }
+    .exact-disclosure-cue { margin:0 0 9px; color:var(--muted); font-size:11px; }
+    .exact-grid-wrap { max-width:100%; overflow-x:auto; overscroll-behavior-inline:contain; }
+    .exact-grid { width:100%; min-width:720px; border-collapse:collapse; table-layout:fixed; font-size:10px; font-variant-numeric:tabular-nums; }
+    .exact-grid th,.exact-grid td { width:7.14%; padding:6px 3px; border:1px solid var(--line); text-align:center; white-space:nowrap; }
+    .exact-grid th { background:var(--surface-subtle); color:var(--muted); font-weight:650; }
+    .exact-grid td { --cell-alpha:0; background:var(--matrix-low); color:var(--ink); }
+    @supports (background:color-mix(in srgb, white, black)) { .exact-grid td[data-probability] { background:color-mix(in srgb,var(--matrix-high) calc(12% + var(--cell-alpha) * 78%),var(--matrix-low)); } }
+    .exact-grid-caption { margin:9px 0 0; color:var(--muted); font-size:11px; }
     .exact-full-disclosure:not([open]) > :not(summary) { display:none; }
-    .exact-full-disclosure > summary { padding:3px 0 7px; cursor:pointer; font-size:12px; font-weight:700; }
-    .exact-disclosure-cue { margin:0 0 8px; color:var(--muted); font-size:11px; }
-    .exact-grid-wrap { max-width:100%; overflow-x:auto; }
-    .exact-grid { width:100%; min-width:650px; border-collapse:collapse; table-layout:fixed; font-size:10px; font-variant-numeric:tabular-nums; }
-    .exact-grid th,.exact-grid td { width:7.14%; padding:5px 3px; border:1px solid var(--line); text-align:center; white-space:nowrap; }
-    .exact-grid th { background:#FAF9F6; color:var(--muted); font-weight:650; }
-    .exact-grid td { color:var(--ink); }
-    .formal-total-list { display:grid; gap:2px; }
-    .formal-total-row { display:grid; grid-template-columns:30px minmax(0,1fr) 52px; align-items:center; gap:8px; min-height:27px; border-top:1px solid var(--line); font-size:11px; font-variant-numeric:tabular-nums; }
-    .formal-total-row:first-child { border-top:0; }
-    .formal-total-row > span { color:var(--muted); }
-    .formal-total-row > strong { text-align:right; font-weight:650; }
-    .formal-total-row.formal-market-top > span { color:var(--ink); font-weight:700; }
-    .formal-total-bar { height:5px; overflow:hidden; background:#F0EFEC; }
-    .formal-total-bar span { display:block; height:100%; background:var(--accent); }
-    .formal-handicap-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:5px; }
-    .formal-handicap-card { min-width:0; padding:10px 7px; border:1px solid var(--line); text-align:center; }
-    .formal-handicap-card.formal-market-top { border-color:var(--accent); }
-    .formal-handicap-card span,.formal-handicap-card strong,.formal-handicap-card em { display:block; }
-    .formal-handicap-card span { color:var(--muted); font-size:11px; }
-    .formal-handicap-card strong { margin-top:2px; font-size:18px; font-variant-numeric:tabular-nums; }
-    .formal-handicap-card em { margin-top:2px; color:var(--muted); font-size:10px; font-style:normal; }
-    .formal-market-unavailable { min-height:116px; padding:11px; border:1px dashed var(--line); background:#FAF9F6; }
-    .formal-market-unavailable strong,.formal-market-unavailable span { display:inline-block; }
-    .formal-market-unavailable span { margin-left:7px; color:var(--muted); font-size:11px; }
-    .formal-market-unavailable p { margin:9px 0 0; color:var(--muted); font-size:11px; }
-    .formal-market-unavailable.status-unavailable { border-color:#F2C4A8; }
-    .formal-verification { margin-top:16px; padding-top:12px; border-top:1px solid var(--line); }
-    .formal-verification-heading { display:flex; flex-wrap:wrap; align-items:baseline; gap:8px; margin-bottom:5px; }
-    .formal-verification-heading strong { font-size:13px; }
-    .formal-verification-heading span { color:var(--muted); font-size:11px; }
-    .formal-verification-row { display:grid; grid-template-columns:95px minmax(0,1fr) minmax(120px,1fr); gap:10px; align-items:baseline; padding:7px 0; border-top:1px solid var(--line); font-size:11px; }
-    .formal-verification-row > span { color:var(--muted); }
-    .formal-verification-row > strong { font-weight:650; }
-    .formal-verification-row > em { color:var(--muted); font-style:normal; text-align:right; }
-    .formal-verification-row.status-unavailable > strong,.formal-verification-row.status-not_recorded > strong { color:#A34700; }
-    .evidence-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
-    .evidence-block { padding:15px; border:1px solid var(--line); background:var(--surface); }
-    .evidence-block h3 { margin:0 0 10px; font-size:15px; }
+    .score-list { display:grid; gap:2px; }
+    .score-row { display:grid; grid-template-columns:90px minmax(0,1fr) 60px; gap:12px; align-items:center; min-height:33px; border-top:1px solid var(--line); font-size:12px; }
+    .score-row:first-child { border-top:0; }
+    .score-name { display:flex; align-items:baseline; gap:7px; }
+    .score-name strong { font-size:15px; font-variant-numeric:tabular-nums; }
+    .score-name span { color:var(--muted); font-size:10px; }
+    .score-bar { height:6px; overflow:hidden; background:var(--line); }
+    .score-bar > span { display:block; height:100%; background:var(--accent); }
+    .score-probability { text-align:right; font-size:12px; font-variant-numeric:tabular-nums; }
+    .section-note { margin:12px 0 0; color:var(--muted); font-size:11px; }
+    .goals-section { margin-top:24px; }
+    .goal-grid { display:grid; gap:3px; }
+    .goal-row { display:grid; grid-template-columns:44px minmax(0,1fr) 58px; gap:10px; align-items:center; min-height:29px; border-top:1px solid var(--line); font-size:12px; font-variant-numeric:tabular-nums; }
+    .goal-row:first-child { border-top:0; }
+    .goal-row > span { color:var(--muted); }
+    .goal-row > strong { text-align:right; }
+    .goal-bar { height:6px; overflow:hidden; background:var(--line); }
+    .goal-bar > span { display:block; height:100%; background:var(--accent); }
+    .decision-context { margin-top:24px; }
+    .takeaways { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; }
+    .takeaway { min-width:0; padding:13px 14px; border-left:3px solid var(--accent); background:var(--accent-soft); font-size:13px; font-weight:650; overflow-wrap:anywhere; }
+    .change-awareness-section { margin-top:24px; }
+    .change-lane-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+    .change-lane { min-width:0; padding:13px; border:1px solid var(--line); background:var(--surface-subtle); }
+    .change-lane-wide { grid-column:1/-1; }
+    .change-lane h3 { margin:0 0 9px; font-size:13px; }
+    .change-rows { display:grid; }
+    .change-row { display:grid; grid-template-columns:82px minmax(100px,1fr) 92px; gap:9px; align-items:center; min-height:28px; border-top:1px solid var(--line); font-size:11px; font-variant-numeric:tabular-nums; }
+    .change-row:first-child { border-top:0; }
+    .change-label { min-width:0; overflow-wrap:anywhere; }
+    .change-before-now { display:flex; align-items:baseline; gap:7px; }
+    .change-before-now > span { color:var(--muted); }
+    .change-delta { color:var(--muted); text-align:right; }
+    .change-lane-note,.change-empty,.change-unavailable-copy { margin:9px 0 0; color:var(--muted); font-size:11px; }
+    .change-rank { display:block; color:var(--muted); font-size:10px; }
+    .deeper-details { margin-top:24px; }
+    .evidence-section { margin-top:0; }
+    .evidence-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+    .evidence-block { min-width:0; padding:15px; border:1px solid var(--line); background:var(--surface); }
+    .evidence-block h3 { margin:0 0 10px; font-size:14px; }
     .evidence-block p { margin:0; }
     .evidence-fact { display:flex; justify-content:space-between; gap:10px; padding:8px 0; border-top:1px solid var(--line); font-size:12px; }
     .evidence-fact:first-of-type { border-top:0; }
@@ -1228,108 +1115,143 @@ DETAIL_CSS = """
     .evidence-subheading { margin-top:10px; color:var(--muted); font-size:11px; }
     .support-list { margin:4px 0 0; padding-left:17px; }
     .support-list li { margin:4px 0; }
-    .market-compare { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:9px; }
-    .market-compare > div { padding:14px; border:1px solid var(--line); background:var(--surface); }
-    .market-compare span { display:block; color:var(--muted); font-size:12px; }
-    .market-compare strong { display:block; margin-top:4px; font-size:24px; font-variant-numeric:tabular-nums; }
-    .market-compare p { grid-column:1/-1; margin:0; color:var(--muted); font-size:12px; }
-    .trust-panel { position:sticky; top:18px; padding:17px; border:1px solid var(--line); background:var(--surface); }
-    .trust-panel h2 { margin:3px 0 15px; font-size:21px; letter-spacing:-.04em; }
-    .trust-lock { padding:11px 0 13px; border-top:2px solid var(--accent); border-bottom:1px solid var(--line); }
-    .trust-lock strong,.trust-lock span { display:block; }
+    .market-section { margin-top:8px; }
+    .market-compare { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+    .market-compare > div { padding:14px; border:1px solid var(--line); background:var(--surface-subtle); }
+    .market-compare span { display:block; color:var(--muted); font-size:11px; }
+    .market-compare strong { display:block; margin-top:4px; font-size:22px; font-variant-numeric:tabular-nums; }
+    .market-compare p { grid-column:1/-1; margin:0; color:var(--muted); font-size:11px; }
+    .trust-panel { margin-top:24px; padding:18px 20px; border-top:1px solid var(--line); border-bottom:1px solid var(--line); background:transparent; }
+    .trust-panel h2 { margin:5px 0 14px; font-size:18px; letter-spacing:-.03em; }
+    .trust-lock { display:flex; flex-wrap:wrap; align-items:baseline; gap:8px; padding:10px 0 12px; border-top:2px solid var(--accent); border-bottom:1px solid var(--line); }
     .trust-lock strong { font-size:13px; }
-    .trust-lock span { margin-top:3px; color:var(--muted); font-size:12px; }
-    .trust-line,.trust-source { padding:11px 0; border-bottom:1px solid var(--line); font-size:12px; }
-    .trust-line span,.trust-source > span { display:block; color:var(--muted); }
-    .trust-line strong { display:block; margin-top:3px; font-weight:650; }
-    .trust-source ul { margin:5px 0 0; padding-left:17px; color:var(--muted); overflow-wrap:anywhere; }
-    .technical-details { margin-top:12px; border-top:1px solid var(--line); }
-    .technical-details summary { padding:11px 0; cursor:pointer; color:var(--ink); font-size:12px; }
+    .trust-lock span { color:var(--muted); font-size:12px; }
+    .trust-source { padding:11px 0; border-bottom:1px solid var(--line); font-size:12px; }
+    .trust-source > span { color:var(--muted); }
+    .trust-source ul { display:flex; flex-wrap:wrap; gap:5px 18px; margin:6px 0 0; padding-left:17px; color:var(--muted); overflow-wrap:anywhere; }
+    .technical-details { margin-top:12px; }
+    .technical-details summary { padding:10px 0; cursor:pointer; color:var(--ink); font-size:12px; }
     .technical-list { border-top:1px solid var(--line); }
     .technical-row { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.3fr); gap:10px; padding:7px 0; border-bottom:1px solid var(--line); font-size:11px; }
     .technical-row span { color:var(--muted); }
     .technical-row code { overflow-wrap:anywhere; text-align:right; font:inherit; }
-    .closed-beta { margin-top:32px; padding-top:13px; border-top:1px solid var(--line); color:var(--muted); font-size:11px; }
+    .result-panel { margin-top:24px; }
+    .actual-score { margin-top:7px; font-size:40px; font-weight:800; line-height:1; letter-spacing:-.06em; font-variant-numeric:tabular-nums; }
+    .actual-meta { display:flex; flex-wrap:wrap; gap:7px 12px; align-items:baseline; margin-top:9px; color:var(--muted); font-size:11px; }
+    .actual-meta strong { color:var(--verified); font-weight:700; }
+    .completed-facts { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:1px; margin-top:18px; border:1px solid var(--line); background:var(--line); }
+    .completed-facts > div { min-width:0; padding:11px; background:var(--surface); }
+    .completed-facts span,.completed-facts strong { display:block; }
+    .completed-facts span { color:var(--muted); font-size:11px; }
+    .completed-facts strong { margin-top:3px; font-size:13px; overflow-wrap:anywhere; }
+    .verification-section { margin-top:8px; }
+    .verification-list { display:grid; }
+    .verification-row { display:grid; grid-template-columns:82px minmax(70px,auto) minmax(0,1fr); gap:10px; align-items:baseline; padding:9px 0; border-top:1px solid var(--line); font-size:12px; }
+    .verification-row > span,.verification-row > em { color:var(--muted); }
+    .verification-row > em { font-style:normal; text-align:right; }
+    .status-panel { display:flex; gap:14px; align-items:flex-start; background:var(--surface); }
+    .status-mark { display:grid; place-items:center; flex:0 0 28px; width:28px; height:28px; border-radius:50%; background:var(--warning-soft); color:var(--warning); font-weight:800; }
+    .status-panel h2 { margin:4px 0 6px; font-size:17px; }
+    .status-panel p { margin:0; color:var(--muted); font-size:12px; }
+    .closed-beta { margin-top:30px; padding-top:13px; border-top:1px solid var(--line); color:var(--muted); font-size:11px; }
     .closed-beta strong,.closed-beta span { display:block; margin-top:4px; }
     .detail-footer { display:flex; justify-content:space-between; gap:12px; padding-top:18px; color:var(--muted); font-size:11px; }
     .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
-    @media (max-width:900px) {
-      .page { width:min(calc(100% - 28px), var(--max)); }
-      .detail-layout { grid-template-columns:1fr; gap:0; }
-      .trust-panel { position:static; margin-top:21px; }
+    @media (max-width:980px) {
+      .app-shell { grid-template-columns:156px minmax(0,1fr); }
+      .side-rail { padding-left:14px; padding-right:14px; }
+    }
+    @media (max-width:820px) {
+      .app-shell { display:block; }
+      .side-rail { display:none; }
+      .mobile-topbar { display:flex; align-items:center; justify-content:space-between; min-height:56px; padding:0 16px; background:var(--shell-bg); color:#F5F7F8; }
+      .mobile-topbar a { font-weight:750; letter-spacing:-.05em; text-decoration:none; }
+      .mobile-topbar span { color:#B7C0C7; font-size:12px; }
+      .page { width:calc(100% - 32px); padding-top:18px; }
+      .site-header { align-items:baseline; padding-bottom:14px; }
+      .detail-nav { gap:3px 13px; margin-top:11px; }
+      .match-identity { padding-top:22px; }
+      .match-identity h1 { font-size:23px; }
     }
     @media (max-width:560px) {
       .page { width:calc(100% - 20px); padding-top:11px; }
-      .site-header { padding-bottom:13px; }
-      .brand-subtitle { display:none; }
-      .detail-nav { display:none; }
-      .match-identity { padding-bottom:20px; }
-      .match-identity h1 { font-size:31px; line-height:1.12; }
+      .brand-subtitle,.eyebrow { display:none; }
+      .header-actions { gap:9px; }
+      .header-actions .eyebrow { display:none; }
+      .detail-nav { display:flex; max-width:100%; overflow:hidden; }
+      .detail-nav a { min-height:36px; padding:9px 0; }
+      .match-identity { padding-bottom:18px; }
+      .match-identity h1 { font-size:20px; line-height:1.22; }
       .quality-warning { display:block; }
-      .quality-warning strong { display:inline; margin-right:7px; }
-      .quality-warning span { display:inline; }
-      .section-heading { display:block; }
-      .section-heading p { margin-top:4px; text-align:left; }
-      .hero-probabilities { gap:5px; }
+      .quality-warning span { display:block; margin:5px 0 0; }
+      .detail-section,.result-panel,.status-panel,.probability-section { margin-top:18px; padding:15px; border-radius:10px; }
+      .section-heading { display:block; margin-bottom:12px; }
+      .section-heading p { max-width:none; margin-top:5px; text-align:left; }
+      .hero-probabilities { grid-template-columns:repeat(3,minmax(0,1fr)); }
       .probability-card { padding:11px 9px; }
-      .probability-card strong { font-size:23px; }
-      .completed-facts { grid-template-columns:repeat(2,minmax(0,1fr)); gap:5px; }
-      .completed-facts > div { padding:8px; }
-      .change-lane-grid { grid-template-columns:1fr; }
+      .probability-card strong { font-size:19px; }
+      .probability-label { font-size:11px; }
+      .probability-legend { gap:6px; }
+      .probability-legend-item { gap:5px; font-size:11px; }
+      .probability-legend-item strong { font-size:13px; }
+      .probability-legend-item small { display:block; font-size:10px; }
+      .takeaways { grid-template-columns:1fr; gap:5px; }
+      .change-lane-grid,.evidence-grid,.market-compare { grid-template-columns:1fr; }
       .change-lane-wide { grid-column:auto; }
-      .change-lane { padding:11px; }
-      .change-row { grid-template-columns:64px minmax(105px,1fr) 78px; gap:6px; }
+      .change-row { grid-template-columns:64px minmax(90px,1fr) 78px; gap:6px; }
       .change-before-now { gap:5px; }
       .change-delta { font-size:10px; }
-      .formal-market-grid { grid-template-columns:1fr; }
-      .formal-exact-panel { grid-column:auto; }
-      .formal-market-panel { padding:11px; }
       .exact-compact { display:block; }
       .exact-compact-heading { display:flex; align-items:baseline; justify-content:space-between; gap:8px; margin-bottom:8px; }
-      .exact-compact-heading h4 { margin:0; font-size:13px; }
+      .exact-compact-heading h3 { margin:0; font-size:13px; }
       .exact-compact-heading span { color:var(--muted); font-size:11px; }
       .exact-compact-list { display:grid; gap:2px; }
-      .exact-compact-row { display:grid; grid-template-columns:64px minmax(0,1fr) 58px; align-items:center; gap:8px; min-height:29px; border-top:1px solid var(--line); }
+      .exact-compact-row { display:grid; grid-template-columns:64px minmax(0,1fr) 58px; gap:8px; align-items:center; min-height:29px; border-top:1px solid var(--line); }
       .exact-compact-row:first-child { border-top:0; }
       .exact-compact-score { font-size:13px; font-variant-numeric:tabular-nums; white-space:nowrap; }
       .exact-compact-score b { margin-right:5px; color:var(--muted); font-size:11px; font-weight:650; }
-      .exact-compact-bar { height:6px; overflow:hidden; background:#F0EFEC; }
+      .exact-compact-bar { height:6px; overflow:hidden; background:var(--line); }
       .exact-compact-bar > span { display:block; height:100%; background:var(--accent); }
       .exact-compact-probability { text-align:right; font-size:13px; font-variant-numeric:tabular-nums; }
       .exact-compact-remainder { display:flex; align-items:baseline; justify-content:space-between; gap:8px; margin-top:7px; padding-top:7px; border-top:1px solid var(--line); font-size:12px; }
       .exact-compact-remainder strong { font-size:13px; font-variant-numeric:tabular-nums; }
       .exact-compact-note { margin:7px 0 0; color:var(--muted); font-size:11px; }
       .exact-full-disclosure { margin-top:10px; border-top:1px solid var(--line); }
-      .exact-full-disclosure > summary { min-height:34px; padding:9px 0 7px; }
+      .exact-full-disclosure > summary { min-height:36px; padding:10px 0 7px; }
       .exact-grid-wrap { overflow-x:auto; }
-      .exact-grid { min-width:650px; font-size:10px; }
-      .exact-grid th,.exact-grid td { padding:5px 3px; overflow:visible; }
-      .formal-verification-row { grid-template-columns:72px minmax(0,1fr); gap:5px 8px; }
-      .formal-verification-row > em { grid-column:2; text-align:left; }
-      .score-row { grid-template-columns:40px minmax(45px,1fr) 44px; gap:8px; min-height:29px; }
-      .score-name { display:flex; align-items:baseline; gap:6px; }
-      .score-name strong { font-size:15px; }
-      .score-name span { display:none; }
-      .score-probability { font-size:12px; }
-      .goal-grid,.evidence-grid,.market-compare { grid-template-columns:1fr; }
-      .market-compare p { grid-column:auto; }
+      .exact-grid { min-width:720px; font-size:10px; }
+      .exact-grid th,.exact-grid td { padding:6px 3px; }
+      .goal-grid { gap:2px; }
+      .goal-row { grid-template-columns:39px minmax(0,1fr) 54px; gap:8px; }
+      .completed-facts { grid-template-columns:repeat(2,minmax(0,1fr)); }
+      .completed-facts > div { padding:9px; }
+      .verification-row { grid-template-columns:68px minmax(65px,auto) minmax(0,1fr); gap:7px; }
+      .verification-row > em { text-align:right; }
+      .actual-score { font-size:35px; }
+      .trust-panel { margin-top:18px; padding:15px 0; }
+      .trust-source ul { display:block; }
+      .trust-source li { margin-top:4px; }
       .detail-footer { display:block; }
       .detail-footer span { display:block; margin-top:5px; }
     }
     @media (max-width:360px) {
+      .mobile-topbar { padding-left:12px; padding-right:12px; }
       .page { width:calc(100% - 16px); }
-      .match-identity h1 { font-size:28px; }
-      .probability-card strong { font-size:20px; }
-      .formal-panel-heading { display:block; }
-      .formal-panel-heading span { display:block; margin-top:3px; text-align:left; }
-      .change-row { grid-template-columns:54px minmax(85px,1fr) 72px; gap:5px; }
-      .change-before-now { gap:3px; }
-      .change-delta { font-size:9px; }
+      .site-header { gap:8px; }
+      .match-identity h1 { font-size:18px; }
+      .match-meta { font-size:11px; overflow-wrap:anywhere; }
+      .probability-card { padding-left:6px; padding-right:6px; }
+      .probability-card strong { font-size:17px; }
+      .probability-legend-item { gap:3px; font-size:10px; }
+      .probability-legend-item::before { flex-basis:6px; width:6px; height:6px; }
+      .probability-legend-item strong { font-size:12px; }
       .exact-compact-row { grid-template-columns:56px minmax(0,1fr) 54px; gap:6px; }
       .exact-compact-probability { font-size:12px; }
-      .score-row { grid-template-columns:40px minmax(35px,1fr) 42px; gap:6px; }
+      .change-row { grid-template-columns:54px minmax(80px,1fr) 72px; gap:5px; }
+      .verification-row { grid-template-columns:59px minmax(57px,auto) minmax(0,1fr); gap:5px; font-size:11px; }
     }
 """
+
 
 
 def render_match_detail(contract: dict[str, Any]) -> str:
@@ -1338,20 +1260,17 @@ def render_match_detail(contract: dict[str, Any]) -> str:
     status_code = _status_code(contract)
     serving = status_code in {"FROZEN", "COMPLETED"}
     result = contract.get("result") if isinstance(contract.get("result"), dict) else {}
-    quality = contract.get("prediction_quality_health")
-    exact_score_serving = (
-        exact_score_serving_presentation(quality)
-        if isinstance(quality, dict)
-        else {"state": "NORMAL", "label": "", "note": ""}
-    )
+    serving_context = _score_serving_context(contract)
     quality_warning = ""
-    if serving and exact_score_serving["state"] != "NORMAL":
+    if serving and serving_context["state"] != "NORMAL":
+        warning_label = "\u6bd4\u5206\u6982\u7387\u4ec5\u4f9b\u89c2\u5bdf" if serving_context["state"] == "DEGRADED" else "\u6bd4\u5206\u6982\u7387\u8d28\u91cf\u5f85\u786e\u8ba4"
+        warning_note = "\u4fdd\u7559\u539f\u59cb\u6bd4\u5206\u6982\u7387\uff0c\u6682\u4e0d\u5c55\u5f00\u89e3\u8bfb\u3002"
         quality_warning = (
-            f'<div class="quality-warning" role="status"><strong>{_esc(exact_score_serving["label"])}</strong>'
-            f'<span>{_esc(exact_score_serving["note"])}</span></div>'
+            f'<div class="quality-warning" role="status"><strong>{warning_label}</strong>'
+            f'<span>{warning_note}</span></div>'
         )
     pilot_note = (
-        '<div class="pilot-note">\u8bd5\u8fd0\u884c\u9884\u6d4b \u00b7 \u4ec5\u4f9b\u89c2\u5bdf</div>'
+        '<div class="pilot-note">\u5f53\u524d\u6982\u7387\u4ec5\u4f9b\u89c2\u5bdf</div>'
         if serving and (contract.get("governance") or {}).get("pilot_excluded")
         else ""
     )
@@ -1362,57 +1281,58 @@ def render_match_detail(contract: dict[str, Any]) -> str:
         value for value in (_esc(identity.get("competition")), _esc(identity.get("match_num")), _esc(kickoff)) if value
     )
     title = f"{home} vs {away} \u00b7 \u6bd4\u8d5b\u8be6\u60c5"
-    result_html = _render_completed_result(contract) if serving else ""
+    result_html = _render_completed_result(contract) if result.get("score_90m") else ""
+    verification_html = _render_verification(contract) if result.get("score_90m") else ""
     probability_html = _render_probability_cards(contract) if serving else ""
-    change_awareness_html = _render_change_awareness(contract) if serving else ""
-    formal_markets_html = _render_formal_markets(contract) if serving else ""
-    score_html = (
-        _render_score_distribution(contract)
-        if serving and not _formal_exact_is_available(contract)
+    exact_html = (
+        _render_exact_formal_market(
+            _formal_market_item(_formal_markets(contract), "exact_score"),
+            serving_state=serving_context["state"],
+        )
+        if serving
         else ""
     )
     goals_html = _render_goals(contract) if serving else ""
+    takeaways_html = _render_key_takeaways(contract, exact_state=serving_context["state"]) if serving else ""
+    change_awareness_html = _render_change_awareness(contract) if serving else ""
     evidence_html = _render_key_evidence(contract) if serving else ""
     market_html = _render_market_comparison(contract) if serving else ""
     if serving:
-        forecast_html = "".join(
-            [
-                '<section class="detail-section forecast-section" id="analysis">',
-                probability_html,
-                change_awareness_html,
-                formal_markets_html,
-                score_html,
-                goals_html,
-                "</section>",
-            ]
+        forecast_html = (
+            '<div class="forecast-section" id="analysis">'
+            + probability_html
+            + exact_html
+            + goals_html
+            + '</div>'
         )
-        deeper_html = (
-            f'<div class="deeper-details" id="deeper-analysis">{evidence_html}{market_html}</div>'
-            if evidence_html or market_html
-            else ""
-        )
+        decision_parts = [part for part in (takeaways_html, change_awareness_html, market_html) if part]
+        decision_html = "".join(decision_parts)
+        deeper_html = f'<div class="deeper-details">{evidence_html}</div>' if evidence_html else ""
     else:
         forecast_html = _render_status_panel(contract)
+        decision_html = ""
         deeper_html = ""
     trust_html = _render_trust(contract) if serving else ""
     nav_items = []
     if serving:
-        nav_items.append('<a href="#analysis">\u9884\u6d4b</a>')
+        nav_items.append('<a href="#analysis">\u6982\u7387\u6838\u5fc3</a>')
+        if takeaways_html:
+            nav_items.append('<a href="#decision-context">\u51b3\u7b56\u8bed\u5883</a>')
+        if verification_html:
+            nav_items.append('<a href="#verification">\u6838\u9a8c</a>')
         if change_awareness_html:
-            nav_items.append('<a href="#change-awareness">赛前变化</a>')
-        if score_html:
+            nav_items.append('<a href="#change-awareness">\u8d5b\u524d\u53d8\u5316</a>')
+        if exact_html:
             nav_items.append('<a href="#score-distribution">\u6bd4\u5206</a>')
         if goals_html:
-            nav_items.append('<a href="#goals">\u8fdb\u7403\u4fe1\u53f7</a>')
-        if formal_markets_html:
-            nav_items.append('<a href="#formal-markets">\u6b63\u5f0f\u73a9\u6cd5</a>')
+            nav_items.append('<a href="#goals">\u603b\u8fdb\u7403</a>')
         if evidence_html:
             nav_items.append('<a href="#evidence">\u5173\u952e\u4f9d\u636e</a>')
         if market_html:
-            nav_items.append('<a href="#market">\u6a21\u578b\u4e0e\u5e02\u573a</a>')
+            nav_items.append('<a href="#market">\u5e02\u573a\u5bf9\u7167</a>')
         if trust_html:
-            nav_items.append('<a href="#sources">\u6765\u6e90</a>')
-    nav_html = f'<nav class="detail-nav" aria-label="\u9875\u9762\u5185\u5bfc\u822a">{"".join(nav_items)}</nav>' if nav_items else ""
+            nav_items.append('<a href="#sources">\u8bb0\u5f55\u4e0e\u6765\u6e90</a>')
+    nav_html = f'<nav class="detail-nav" aria-label="\u9875\u9762\u5185\u5bfc">{"".join(nav_items)}</nav>' if nav_items else ""
     closed_beta = render_closed_beta_notice("closed-beta")
     return f"""<!doctype html>
 <html lang="zh-CN">
@@ -1423,9 +1343,20 @@ def render_match_detail(contract: dict[str, Any]) -> str:
 <style>{DETAIL_CSS}</style>
 </head>
 <body class="detail-page status-{_esc(_status_class(contract))}">
-<main class="page">
+<div class="app-shell">
+<aside class="side-rail">
+  <a class="rail-brand" href="../../prediction_dashboard/latest.html"><span class="rail-mark">FBOS</span><span class="rail-caption">Football Prediction<br>Intelligence</span></a>
+  <nav class="rail-nav" aria-label="\u4e3b\u5bfc\u822a">
+    <a class="nav-item active" href="../../prediction_dashboard/latest.html"><span>\u4eca\u65e5\u6bd4\u8d5b</span><small>Matches</small></a>
+    <a class="nav-item" href="../../prediction_dashboard/latest.html#historical-results"><span>\u5386\u53f2\u9a8c\u8bc1</span><small>History</small></a>
+  </nav>
+  <div class="rail-footer"><strong>\u8d5b\u524d\u5206\u6790</strong><span>\u53ea\u5c55\u793a\u80fd\u6539\u53d8\u5f53\u524d\u5224\u65ad\u7684\u5185\u5bb9\u3002</span></div>
+</aside>
+<main class="workspace">
+<div class="mobile-topbar"><a href="../../prediction_dashboard/latest.html">FBOS</a><span>\u6bd4\u8d5b\u8be6\u60c5</span></div>
+<div class="page">
 <header class="site-header">
-  <a class="brand" href="../../prediction_dashboard/latest.html"><span class="brand-name">FBOS</span><span class="brand-subtitle">\u8d5b\u524d\u6982\u7387 \u00b7 \u8d5b\u540e\u9a8c\u8bc1</span></a>
+  <a class="brand" href="../../prediction_dashboard/latest.html"><span class="brand-name">FBOS</span><span class="brand-subtitle">Football Prediction Intelligence</span></a>
   <div class="header-actions"><a class="back" href="../../prediction_dashboard/latest.html">\u2190 \u4eca\u65e5\u6bd4\u8d5b</a><span class="eyebrow">\u6bd4\u8d5b\u8be6\u60c5</span></div>
 </header>
 {nav_html}
@@ -1438,16 +1369,21 @@ def render_match_detail(contract: dict[str, Any]) -> str:
       {pilot_note}
     </section>
     {result_html}
+    {verification_html}
     {forecast_html}
+    {decision_html}
     {deeper_html}
+    {trust_html}
   </div>
-  {trust_html}
 </div>
 {closed_beta}
 <footer class="detail-footer"><span>\u8d5b\u524d\u8bb0\u5f55\u4fdd\u6301\u4e0d\u53d8\uff1b\u8d5b\u540e\u7ed3\u679c\u5355\u72ec\u6838\u9a8c\u3002</span><span>\u9875\u9762\u6570\u636e\u6765\u81ea\u5f53\u524d\u53ef\u7528\u7684\u6bd4\u8d5b\u8bb0\u5f55\u3002</span></footer>
+</div>
 </main>
+</div>
 </body>
 </html>"""
+
 
 
 def write_match_detail_page(contract: dict[str, Any], output_root: Path) -> Path:

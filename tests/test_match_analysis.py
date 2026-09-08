@@ -256,29 +256,24 @@ def test_formal_markets_are_wired_to_detail_and_completed_verification(tmp_path)
     }
     html = render_match_detail(contract)
 
-    assert 'id="formal-markets"' in html
-    assert html.count('data-formal-cell-home=') == 169
-    assert "JC\u603b\u8fdb\u7403" in html
-    assert "JC\u8ba9\u7403 H/D/A" in html
-    assert 'data-formal-cell-home="13"' not in html
-    assert ">13+<" not in html
-    assert 'data-formal-verification-status="VERIFIED"' in html
-    assert 'data-formal-verification-market="jc_handicap"' in html
-    assert 'data-formal-actual-rank="14"' in html
-    assert 'data-formal-support-status="REPRESENTED"' in html
-    assert "frozen rank #14" in html
-    assert 'class="exact-grid-wrap" role="region" tabindex="0"' in html
-    assert 'data-formal-exact-compact="true"' in html
-    assert 'data-formal-compact-source-cell-count="169"' in html
-    assert 'data-formal-compact-top-count="6"' in html
-    assert 'data-formal-compact-remainder-count="163"' in html
-    assert 'data-formal-compact-remainder-probability="0.964497041420"' in html
-    assert html.count('data-formal-compact-score=') == 6
-    assert 'data-formal-exact-disclosure' in html
+    assert 'id="score-distribution"' in html
+    assert html.count('data-exact-cell-home=') == 169
+    assert "JC" not in html
+    assert 'data-exact-cell-home="13"' not in html
+    assert 'data-exact-cell-home="12"' in html
+    assert 'data-exact-status="AVAILABLE"' in html
+    assert 'data-exact-compact="true"' in html
+    assert 'data-exact-compact-source-cell-count="169"' in html
+    assert 'data-exact-compact-top-count="6"' in html
+    assert 'data-exact-compact-remainder-count="163"' in html
+    assert 'data-exact-compact-remainder-probability="0.964497041420"' in html
+    assert html.count('data-exact-compact-score=') == 6
+    assert 'data-exact-disclosure' in html
     assert '<details open class="exact-full-disclosure"' in html
     assert 'font-size:8px' not in html
     assert "actual_probability" not in html
-    assert 'id="score-distribution"' not in html
+    assert 'id="verification"' in html
+
 
     selected, remainder, remainder_count = _exact_compact_projection(
         markets["exact_score"]["contract"]
@@ -307,10 +302,13 @@ def test_formal_market_unavailability_is_scoped_to_one_market(tmp_path):
     assert markets["jc_total_goals"]["status"] == "AVAILABLE"
     assert markets["jc_handicap"]["status"] == "NOT_RECORDED"
     html = render_match_detail(contract)
-    assert html.count('data-formal-cell-home=') == 169
-    assert 'data-formal-market="jc_total_goals"' in html
-    assert 'data-formal-market="jc_handicap"' in html
-    assert "\u65e7\u8bb0\u5f55\u6ca1\u6709\u8be5\u6b63\u5f0f\u73a9\u6cd5" in html
+    assert html.count('data-exact-cell-home=') == 169
+    assert 'data-exact-status="AVAILABLE"' in html
+    assert 'id="goals"' in html
+    assert 'data-formal-' not in html
+    assert "jc_total_goals" not in html
+    assert "jc_handicap" not in html
+
 
 
 def test_exact_unavailability_does_not_render_compact_or_matrix(tmp_path):
@@ -322,12 +320,15 @@ def test_exact_unavailability_does_not_render_compact_or_matrix(tmp_path):
 
     html = render_match_detail(contract)
 
-    assert 'data-formal-market="exact_score"' in html
-    assert 'data-formal-market-status="NOT_RECORDED"' in html
-    assert 'data-formal-exact-compact="true"' not in html
-    assert 'data-formal-cell-home=' not in html
-    assert 'data-formal-market="jc_total_goals"' in html
-    assert 'data-formal-market-status="AVAILABLE"' in html
+    assert 'id="score-distribution"' in html
+    assert 'data-exact-state="UNAVAILABLE"' in html
+    assert 'data-exact-status="NOT_RECORDED"' in html
+    assert 'data-exact-compact="true"' not in html
+    assert 'data-exact-cell-home=' not in html
+    assert 'data-formal-' not in html
+    assert "jc_total_goals" not in html
+    assert "jc_handicap" not in html
+
 
 
 def test_pilot_contract_is_explicit_and_uses_real_frozen_outputs(tmp_path):
@@ -674,9 +675,9 @@ def test_legacy_material_is_really_discovered_and_consistency_checked(tmp_path, 
     assert contract["analysis_material"]["lineage"]
     assert contract["candidate_scores"][0]["script_label"] == "主队优势兑现，客队得分路径受限"
     html = render_match_detail(contract)
-    assert "最高概率比分" in html
-    assert "1-0</strong>" in html
-    assert "15.5%" in html
+    assert "\u6bd4\u5206\u6982\u7387\u6682\u4e0d\u53ef\u7528" in html
+    assert 'data-exact-state="UNAVAILABLE"' in html
+    assert "1-0</strong>" not in html
     assert "主队优势兑现，客队得分路径受限" not in html
 
 
@@ -793,36 +794,32 @@ def test_selector_prefers_evidence_complete_real_frozen_sample(tmp_path):
     assert selected["prediction_id"] == "FBOS-PRED-test"
 
 
-def test_detail_renderer_has_three_layers_and_uses_same_contract_for_statuses(tmp_path):
+def test_detail_renderer_has_user_facing_layers_and_fails_closed_for_statuses(tmp_path):
     contract = assemble(roots(tmp_path, pilot=True))
     html = render_match_detail(contract)
 
     assert 'id="conclusion"' in html
     assert 'id="analysis"' in html
     assert 'id="evidence"' in html
-    assert "试运行预测 · 仅供观察" in html
-    assert "1-0" in html
-    assert "1-0</strong>" in html
-    assert "15.5%" in html
-    assert "胜平负概率" in html
-    assert "比分概率 · 不是确定答案" in html
-    assert "进球信号" in html
-    assert "关键依据" in html
-    assert "赛前预测已锁定于" in html
-    assert "首推" not in html
+    assert "\u6982\u7387\u4ec5\u4f9b\u89c2\u5bdf" in html
+    assert "\u80dc\u5e73\u8d1f\u6982\u7387" in html
+    assert "\u6bd4\u5206\u6982\u7387\u6682\u4e0d\u53ef\u7528" in html
+    assert "\u603b\u8fdb\u7403\u5206\u5e03" in html
+    assert "\u5173\u952e\u4f9d\u636e" in html
+    assert "\u9996\u63a8" not in html
     assert 'class="status-badge"' not in html
 
     pending = assemble(roots(tmp_path / "pending", status="PENDING", with_prediction=False))
     pending_html = render_match_detail(pending)
-    assert "预测尚未形成" in pending_html
-    assert "胜平负概率" not in pending_html
+    assert "\u9884\u6d4b\u5c1a\u672a\u5f62\u6210" in pending_html
+    assert "\u80dc\u5e73\u8d1f\u6982\u7387" not in pending_html
     assert "1-0" not in pending_html
 
     insufficient = assemble(roots(tmp_path / "insufficient", status="INSUFFICIENT_DATA", with_prediction=False))
     insufficient_html = render_match_detail(insufficient)
-    assert "数据不足，暂不预测" in insufficient_html
-    assert "胜平负概率" not in insufficient_html
-    assert "score-distribution" not in insufficient_html
+    assert "\u6570\u636e\u4e0d\u8db3\uff0c\u6682\u4e0d\u9884\u6d4b" in insufficient_html
+    assert "\u80dc\u5e73\u8d1f\u6982\u7387" not in insufficient_html
+    assert 'id="analysis"' not in insufficient_html
 
 
 def test_serving_detail_with_null_market_renders_safely(tmp_path):
@@ -832,11 +829,13 @@ def test_serving_detail_with_null_market_renders_safely(tmp_path):
 
     html = render_match_detail(contract)
 
-    assert "<html" in html
+    assert "\u6bd4\u5206\u6982\u7387\u6682\u4e0d\u53ef\u7528" in html
+    assert 'data-exact-state="UNAVAILABLE"' in html
     assert 'class="hero-probabilities"' in html
-    assert "比分概率 · 不是确定答案" in html
+    assert "\u6700\u9ad8\u6982\u7387\u6bd4\u5206" not in html
     assert 'id="market"' not in html
     assert "模型与市场" not in html
+
 
 
 def test_completed_detail_leads_with_verified_90m_result_and_compares_frozen_forecast(tmp_path):
@@ -850,25 +849,16 @@ def test_completed_detail_leads_with_verified_90m_result_and_compares_frozen_for
 
     html = render_match_detail(contract)
 
-    assert html.index("\u5b9e\u9645\u8d5b\u679c") < html.index("\u8d5b\u524d\u9884\u6d4b")
+    assert html.index("\u5b9e\u9645\u8d5b\u679c") < html.index("\u80dc\u5e73\u8d1f\u6982\u7387")
+    assert html.index('id="result"') < html.index('id="verification"') < html.index('id="analysis"')
     assert "0-2" in html
     assert "90\u5206\u949f\u8d5b\u679c" in html
-    assert "\u6bd4\u5206" in html and "\u672a\u547d\u4e2d" in html
-    assert "1X2\u65b9\u5411" in html and "\u547d\u4e2d" in html
-    assert "\u8d5b\u524d\u9884\u6d4b\u5df2\u9501\u5b9a" in html
-    assert html.index("\u5b9e\u9645\u8d5b\u679c") < html.index("\u80dc\u5e73\u8d1f\u6982\u7387")
-    assert html.count("\u9884\u6d4b vs \u5b9e\u9645") == 0
-    assert 'id="verification"' not in html
-    result_start = html.index('id="result"')
-    deeper_start = html.index('id="evidence"')
-    result_panel = html[result_start:deeper_start]
-    assert result_panel.index("\u5b9e\u9645\u6bd4\u5206") < result_panel.index("\u6bd4\u5206")
-    assert result_panel.index("\u65b9\u5411") < result_panel.index("\u5b9e\u9645\u65b9\u5411")
-    assert 'data-probability="0.155000"' in html
-    assert 'style="width:15.5%"' in html
-    assert 'style="width:100.0%"' not in html
-    for label in ("\u5f53\u65f6\u6700\u9ad8\u6982\u7387\u6bd4\u5206", "\u5f53\u65f6\u0031X2\u65b9\u5411", "\u5b9e\u9645\u65b9\u5411"):
-        assert label in html
+    assert "\u9884\u6d4b vs \u5b9e\u9645" in html
+    assert 'id="verification"' in html
+    assert "\u8d5b\u524d\u6700\u9ad8\u6982\u7387\u6bd4\u5206" in html
+    assert 'data-exact-state="UNAVAILABLE"' in html
+    assert 'data-exact-cell-home=' not in html
+    assert "actual_probability" not in html
 
 
 def test_degraded_detail_keeps_exact_score_scope_and_local_context(tmp_path):
@@ -882,37 +872,22 @@ def test_degraded_detail_keeps_exact_score_scope_and_local_context(tmp_path):
 
     html = render_match_detail(contract)
 
-    assert "\u6bd4\u5206\u9884\u6d4b\u8d28\u91cf\u5f02\u5e38\uff0c\u4ec5\u4f9b\u89c2\u5bdf" in html
-    assert "\u5f53\u524d\u8d28\u91cf\u5f02\u5e38\uff0c\u6682\u4e0d\u4f5c\u4e3a\u6b63\u5e38\u6bd4\u5206\u63a8\u8350" in html
-    assert "\u6a21\u578b\u539f\u59cb\u6bd4\u5206" in html
-    assert 'data-score-serving-state="DEGRADED"' in html
-    assert 'style="width:15.5%"' in html
+    assert "\u6bd4\u5206\u6982\u7387\u4ec5\u4f9b\u89c2\u5bdf" in html
+    assert "\u4fdd\u7559\u539f\u59cb\u6bd4\u5206\u6982\u7387" in html
+    assert "\u6682\u4e0d\u5c55\u5f00\u89e3\u8bfb" in html
+    assert 'class="quality-warning"' in html
+    assert 'data-exact-state="UNAVAILABLE"' in html
 
 
 @pytest.mark.parametrize(
-    "status, provenance, label, local_label",
+    "status, provenance, label",
     [
-        (
-            "INSUFFICIENT_SAMPLE",
-            "MATCHED",
-            "\u6bd4\u5206\u9884\u6d4b\u5f53\u524d\u6837\u672c\u4e0d\u8db3\uff0c\u4ec5\u4f9b\u89c2\u5bdf",
-            "\u5f53\u524d\u6837\u672c\u4e0d\u8db3\uff0c\u4ec5\u4f9b\u89c2\u5bdf",
-        ),
-        (
-            "ALERT",
-            "MATCHED",
-            "\u6bd4\u5206\u9884\u6d4b\u8d28\u91cf\u5f02\u5e38\uff0c\u4ec5\u4f9b\u89c2\u5bdf",
-            "\u8d28\u91cf\u5f02\u5e38\uff0c\u4ec5\u4f9b\u89c2\u5bdf",
-        ),
-        (
-            "HEALTHY",
-            "MISMATCHED",
-            "\u6bd4\u5206\u9884\u6d4b\u8d28\u91cf\u5f85\u786e\u8ba4\uff0c\u4e0d\u4f5c\u4e3a\u6b63\u5e38\u63a8\u8350",
-            "\u8d28\u91cf\u5f85\u786e\u8ba4\uff0c\u4e0d\u4f5c\u4e3a\u6b63\u5e38\u63a8\u8350",
-        ),
+        ("INSUFFICIENT_SAMPLE", "MATCHED", "\u6bd4\u5206\u6982\u7387\u4ec5\u4f9b\u89c2\u5bdf"),
+        ("ALERT", "MATCHED", "\u6bd4\u5206\u6982\u7387\u4ec5\u4f9b\u89c2\u5bdf"),
+        ("HEALTHY", "MISMATCHED", "\u6bd4\u5206\u6982\u7387\u8d28\u91cf\u5f85\u786e\u8ba4"),
     ],
 )
-def test_detail_quality_copy_matches_raw_health_status(tmp_path, status, provenance, label, local_label):
+def test_detail_quality_copy_matches_lane_state(tmp_path, status, provenance, label):
     contract = assemble(roots(tmp_path))
     contract["prediction_quality_health"] = {
         "status": status,
@@ -924,7 +899,8 @@ def test_detail_quality_copy_matches_raw_health_status(tmp_path, status, provena
     html = render_match_detail(contract)
 
     assert label in html
-    assert f"模型原始比分 · {local_label}" in html
+    assert "\u6682\u4e0d\u5c55\u5f00\u89e3\u8bfb" in html
+    assert 'class="quality-warning"' in html
 
 
 def test_trust_title_changes_when_only_freeze_and_cutoff_are_visible(tmp_path):
@@ -970,15 +946,14 @@ def test_detail_renderer_uses_user_facing_terms_and_hides_internal_metadata(tmp_
         assert technical_value in technical_html
 
     for required in (
-        "胜平负概率",
-        "比分概率 · 不是确定答案",
-        "最高概率",
-        "进球信号",
-        "关键依据",
-        "可信度与来源",
-        "技术详情",
-        "赛前预测已锁定",
-        "试运行预测 · 仅供观察",
+        "\u80dc\u5e73\u8d1f\u6982\u7387",
+        "\u6bd4\u5206\u6982\u7387",
+        "\u8fdb\u7403\u5206\u5e03",
+        "\u5173\u952e\u4f9d\u636e",
+        "\u53ef\u4fe1\u5ea6\u4e0e\u6765\u6e90",
+        "\u6280\u672f\u8be6\u60c5",
+        "\u8d5b\u524d\u8bb0\u5f55",
+        "\u6982\u7387\u4ec5\u4f9b\u89c2\u5bdf",
     ):
         assert required in html
 

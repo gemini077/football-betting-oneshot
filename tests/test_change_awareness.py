@@ -494,8 +494,9 @@ def test_match_detail_renders_fact_only_change_section_and_completed_is_result_b
         assert 'data-change-awareness-status="AVAILABLE"' in document
         assert 'data-change-lane="ft_1x2"' in document
         assert 'data-change-lane="exact_score"' in document
-        assert 'data-change-lane="jc_total_goals"' in document
-        assert 'data-change-lane="jc_handicap"' in document
+        assert document.count('data-change-lane="') == 2
+        assert 'data-change-lane="jc_total_goals"' not in document
+        assert 'data-change-lane="jc_handicap"' not in document
         assert "资金涌入" not in document
         assert "聪明钱" not in document
     section_start = before.index('<section class="detail-section change-awareness-section"')
@@ -526,5 +527,5 @@ def test_match_detail_marks_missing_change_history_without_replacing_current_pre
     })
 
     assert 'data-change-awareness-status="UNAVAILABLE"' in document
-    assert "暂无可比的此前记录" in document
+    assert "\u6682\u65e0\u53ef\u6bd4\u7684\u8d5b\u524d\u8bb0\u5f55" in document
     assert 'class="probability-section"' in document

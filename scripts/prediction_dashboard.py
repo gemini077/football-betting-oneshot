@@ -535,453 +535,215 @@ def _esc(value: Any, fallback: str = "\u2014") -> str:
 
 MODERN_CSS = r"""
 :root {
-  --bg: #F7F5F1;
+  --shell-bg: #07111A;
+  --workspace-bg: #F7F7F5;
   --surface: #FFFFFF;
-  --text: #111111;
-  --muted: #6B7280;
-  --quiet: #9CA3AF;
-  --line: #E5E7EB;
+  --surface-subtle: #FAFAF8;
+  --text: #121417;
+  --muted: #626870;
+  --quiet: #8B9198;
+  --line: #E6E7E4;
   --accent: #FF6A00;
   --accent-soft: #FFF1E8;
-  --warning: #B45309;
-  --warning-soft: #FFF7ED;
-  --danger: #B91C1C;
-  --danger-soft: #FEF2F2;
+  --home: #1F5EA8;
+  --draw: #A9ADB2;
+  --away: #E23B3B;
+  --warning: #B75C00;
+  --warning-soft: #FFF4E8;
+  --danger: #B42318;
+  --danger-soft: #FFF1F0;
+  --verified: #18794E;
 }
 * { box-sizing: border-box; }
-html { background: var(--bg); }
+html { background: var(--shell-bg); scroll-behavior: smooth; }
 body {
   min-width: 0;
   margin: 0;
-  background: var(--bg);
+  background: var(--workspace-bg);
   color: var(--text);
-  font: 14px/1.45 "Inter", "Segoe UI", "Microsoft YaHei", sans-serif;
+  font: 14px/1.5 Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
   -webkit-font-smoothing: antialiased;
 }
 a { color: inherit; }
 button { font: inherit; }
 button, a { -webkit-tap-highlight-color: transparent; }
+button:focus-visible, a:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 [hidden] { display: none !important; }
 
-.site {
-  width: min(calc(100% - 68px), 1372px);
-  margin: 0 auto;
-  padding: 32px 0 44px;
-}
-.site-header {
+.app-shell { display: grid; grid-template-columns: 184px minmax(0, 1fr); min-height: 100vh; }
+.side-rail {
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 24px;
-  padding-bottom: 17px;
-  border-bottom: 1px solid var(--line);
+  flex-direction: column;
+  min-height: 100vh;
+  padding: 30px 18px 22px;
+  background: var(--shell-bg);
+  color: #F5F7F8;
 }
-.brand {
-  display: flex;
-  align-items: baseline;
-  gap: 14px;
-  min-width: 0;
-}
-.brand-name {
-  flex: 0 0 auto;
-  font-size: 25px;
-  font-weight: 750;
-  letter-spacing: -.055em;
-}
-.brand-subtitle {
-  color: var(--muted);
-  font-size: 10px;
-  letter-spacing: .18em;
-  text-transform: uppercase;
-  white-space: nowrap;
-}
-.header-note {
-  color: var(--muted);
-  font-size: 11px;
-  text-align: right;
-  white-space: nowrap;
-}
-.dashboard-heading {
-  display: flex;
-  align-items: end;
-  justify-content: space-between;
-  gap: 24px;
-  padding: 18px 0 12px;
-}
-.dashboard-heading h1 {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  flex: 0 1 auto;
-  min-width: 0;
-  margin: 0;
-  font-size: 22px;
-  line-height: 1.15;
-  letter-spacing: -.04em;
-  white-space: nowrap;
-}
-.dashboard-heading h1 .date-day { font-weight: 750; }
-.dashboard-heading h1 .today { color: var(--muted); font-weight: 500; }
-.fixture-count {
-  margin-left: 8px;
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 400;
-  letter-spacing: 0;
-}
-.filters {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(120px, 1fr));
-  gap: 7px;
-  width: min(100%, 660px);
-}
-.filter {
-  min-height: 26px;
-  padding: 3px 12px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: var(--surface);
-  color: var(--text);
-  cursor: pointer;
-  font-size: 11px;
-}
-.filter:hover,
-.filter[aria-pressed="true"] {
-  border-color: #FFB27F;
-  color: var(--accent);
-}
+.rail-brand { display: block; text-decoration: none; }
+.rail-mark { display: block; font-size: 25px; font-weight: 750; letter-spacing: -.06em; }
+.rail-caption { display: block; margin-top: 3px; color: #A9B3BB; font-size: 10px; line-height: 1.4; letter-spacing: .12em; text-transform: uppercase; }
+.rail-nav { display: grid; gap: 5px; margin-top: 54px; }
+.nav-item { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; min-height: 44px; padding: 11px 10px; border-left: 2px solid transparent; color: #A9B3BB; font-size: 13px; text-decoration: none; }
+.nav-item small { color: #65727C; font-size: 9px; letter-spacing: .06em; text-transform: uppercase; }
+.nav-item:hover, .nav-item.active { border-left-color: var(--accent); background: rgba(255,255,255,.06); color: #FFFFFF; }
+.nav-item.active small { color: #F6A26D; }
+.rail-footer { margin-top: auto; padding: 14px 10px 0; border-top: 1px solid rgba(255,255,255,.12); color: #7F8B94; font-size: 10px; }
+.rail-footer strong { display: block; color: #D7DDE1; font-size: 11px; font-weight: 650; }
+.rail-footer span { display: block; margin-top: 4px; }
+.workspace { min-width: 0; background: var(--workspace-bg); }
+.workspace-inner { width: min(calc(100% - 48px), 1220px); margin: 0 auto; padding: 28px 0 44px; }
+.mobile-topbar { display: none; }
+.workspace-header { display: flex; align-items: end; justify-content: space-between; gap: 24px; padding-bottom: 20px; border-bottom: 1px solid var(--line); }
+.workspace-kicker { color: var(--quiet); font-size: 10px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; }
+.workspace-title { margin: 8px 0 0; font-size: 24px; line-height: 1.15; letter-spacing: -.045em; }
+.workspace-title span { margin-left: 9px; color: var(--muted); font-size: 13px; font-weight: 500; letter-spacing: 0; }
+.header-note { color: var(--muted); font-size: 11px; text-align: right; white-space: nowrap; }
+.dashboard-heading { display: flex; align-items: end; justify-content: space-between; gap: 24px; padding: 22px 0 14px; }
+.dashboard-heading h1 { display: none; }
+.fixture-count { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.filters { display: flex; flex-wrap: wrap; gap: 7px; }
+.filter { min-height: 36px; padding: 6px 14px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface); color: var(--text); cursor: pointer; font-size: 12px; }
+.filter:hover, .filter[aria-pressed="true"] { border-color: #FFB27F; color: var(--accent); }
 .filter[aria-pressed="true"] { background: var(--accent-soft); }
 
-.quality-warning,
-.runtime-warning {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 5px 10px;
-  margin: 0 0 12px;
-  padding: 9px 12px;
-  border-left: 2px solid var(--accent);
-  background: var(--accent-soft);
-  color: var(--muted);
-  font-size: 12px;
-}
-.quality-warning strong,
-.runtime-warning strong { color: var(--text); font-weight: 700; }
+.quality-warning, .runtime-warning { display: flex; flex-wrap: wrap; align-items: baseline; gap: 5px 10px; margin: 0 0 14px; padding: 11px 14px; border-left: 3px solid var(--accent); background: var(--accent-soft); color: var(--muted); font-size: 12px; }
+.quality-warning strong, .runtime-warning strong { color: var(--text); font-weight: 700; }
 .runtime-warning { border-left-color: var(--danger); background: var(--danger-soft); }
 .runtime-warning strong { color: var(--danger); }
-.closed-beta-notice {
-  margin-top: 9px;
-  border-left-color: var(--line);
-  background: transparent;
-  color: var(--quiet);
-  font-size: 11px;
-}
-.dashboard-trust {
-  padding: 11px 0 0;
-  border-top: 1px solid var(--line);
-}
-.dashboard-trust strong,
-.dashboard-trust span {
-  display: block;
-  margin-top: 3px;
-}
+.closed-beta-notice { margin-top: 12px; border-left-color: var(--line); background: transparent; color: var(--quiet); font-size: 11px; }
+.dashboard-trust { padding: 15px 0 0; border-top: 1px solid var(--line); }
+.dashboard-trust strong, .dashboard-trust span { display: block; margin-top: 3px; }
 
-.fixture-table {
-  overflow: hidden;
-  border-top: 1px solid var(--line);
-  background: var(--surface);
-}
-.table-header,
-.fixture-row {
-  display: grid;
-  grid-template-columns: 150px 70px minmax(260px, 1.55fr) minmax(230px, 1.25fr) minmax(235px, 1.3fr) minmax(180px, 1fr);
-  column-gap: 16px;
-  padding-left: 9px;
-  padding-right: 9px;
-}
-.table-header {
-  min-height: 28px;
-  align-items: center;
-  color: var(--muted);
-  background: #FCFBF9;
-  font-size: 10px;
-}
-.fixture-row {
-  position: relative;
-  min-height: 56px;
-  align-items: center;
-  border-bottom: 1px solid var(--line);
-}
-.fixture-row:hover { background: #FFFCF9; }
+.fixture-table { overflow: hidden; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.table-header, .fixture-row { display: grid; grid-template-columns: 112px 74px minmax(220px, 1.35fr) minmax(245px, 1.5fr) minmax(160px, 1fr) minmax(150px, .95fr); column-gap: 16px; padding-left: 16px; padding-right: 16px; }
+.table-header { min-height: 38px; align-items: center; border-bottom: 1px solid var(--line); background: var(--surface-subtle); color: var(--muted); font-size: 10px; font-weight: 650; }
+.fixture-row { position: relative; min-height: 86px; align-items: center; border-bottom: 1px solid var(--line); }
+.fixture-row:last-of-type { border-bottom: 0; }
+.fixture-row:hover { background: #FFFDFC; }
 .fixture-row > * { min-width: 0; }
 .fixture-row > *:not(.fixture-row-target) { position: relative; z-index: 1; pointer-events: none; }
 .fixture-row-target { position: absolute; inset: 0; z-index: 0; border-radius: inherit; }
-.fixture-row-target:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.fixture-row-target:focus-visible { outline: 2px solid var(--accent); outline-offset: -3px; }
 .identity-cell { min-width: 0; }
-.cell-meta,
-.match-number,
-.kickoff,
-.identity-competition,
-.score-caption,
-.score-top3,
-.action-note {
-  color: var(--muted);
-  font-size: 11px;
-}
-.match-number { white-space: nowrap; }
-.competition {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.identity-competition {
-  display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
+.cell-meta, .match-number, .kickoff, .identity-competition, .score-caption, .action-note { color: var(--muted); font-size: 11px; }
+.match-number { display: block; color: var(--text); font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.identity-competition { display: block; margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .kickoff { color: var(--text); font-variant-numeric: tabular-nums; }
 .teams-cell { min-width: 0; }
-.team-match {
-  display: flex;
-  align-items: baseline;
-  gap: 7px;
-  min-width: 0;
-  font-weight: 650;
-  letter-spacing: -.015em;
-}
-.team-match .team {
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
+.team-match { display: flex; align-items: baseline; gap: 7px; min-width: 0; font-weight: 700; letter-spacing: -.02em; }
+.team-match .team { min-width: 0; overflow-wrap: anywhere; }
 .team-match .home { text-align: right; }
 .team-match .away { text-align: left; }
-.versus {
-  flex: 0 0 auto;
-  color: var(--muted);
-  font-size: 10px;
-  font-weight: 400;
-}
-.result-inline {
-  margin-top: 3px;
-  color: var(--accent);
-  font-size: 11px;
-  font-weight: 650;
-}
-.probability-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-}
-.probability-cell {
-  display: grid;
-  gap: 2px;
-  min-width: 0;
-}
-.probability-cell span {
-  color: var(--muted);
-  font-size: 10px;
-}
-.probability-cell strong {
-  font-variant-numeric: tabular-nums;
-  font-size: 13px;
-  line-height: 1;
-}
-.probability-cell.is-leading strong { color: var(--accent); }
-.score-cell { min-width: 0; }
-.score-caption { margin-bottom: 2px; }
-.score-primary {
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-  font-size: 13px;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-}
-.score-primary span {
-  color: var(--muted);
-  font-size: 10px;
-  font-weight: 400;
-}
-.score-top3 {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 3px 10px;
-  margin-top: 3px;
-  font-variant-numeric: tabular-nums;
-}
-.score-top3 span { white-space: nowrap; }
-.score-serving-note { margin-top: 4px; color: var(--warning); font-size: 10px; font-weight: 650; }
-.row-action {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  flex-wrap: wrap;
-  gap: 5px 9px;
-  text-align: right;
-}
-.prediction-unavailable { display: none; }
-.empty-score-cell { visibility: hidden; }
-.detail-link {
-  color: var(--muted);
-  font-size: 11px;
-  text-decoration: none;
-  white-space: nowrap;
-}
-.detail-link:hover { color: var(--accent); text-decoration: underline; }
-.exception-note {
-  color: var(--warning);
-  font-size: 11px;
-  font-weight: 650;
-}
-.exception-note.failed,
-.exception-note.missed { color: var(--danger); }
-.completed-note { color: var(--accent); font-size: 11px; font-weight: 650; }
-.reason-detail {
-  flex-basis: 100%;
-  color: var(--muted);
-  font-size: 10px;
-}
-.data-warning {
-  margin: 12px 0;
-  padding: 9px 12px;
-  border-left: 2px solid var(--warning);
-  background: var(--warning-soft);
-  color: var(--warning);
-  font-size: 11px;
-}
-.empty {
-  padding: 46px 20px;
-  color: var(--muted);
-  text-align: center;
-}
-.filter-empty {
-  padding: 46px 20px;
-  color: var(--muted);
-  text-align: center;
-}
-.history {
-  margin-top: 22px;
-  border-top: 1px solid var(--line);
-}
-.history-heading {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 14px 0 9px;
-}
-.history-heading h2 { margin: 0; font-size: 15px; letter-spacing: -.02em; }
-.history-heading span { color: var(--muted); font-size: 11px; }
-.history-row {
-  display: grid;
-  grid-template-columns: 92px minmax(230px, 1fr) 65px minmax(180px, auto);
-  gap: 14px;
-  align-items: center;
-  min-height: 47px;
-  border-bottom: 1px solid var(--line);
-  font-size: 12px;
-}
-.history-meta { color: var(--muted); font-size: 11px; }
-.history-teams { font-weight: 650; }
-.history-teams span { color: var(--muted); font-weight: 400; }
-.history-score { color: var(--accent); font-size: 16px; font-variant-numeric: tabular-nums; }
-.history-links { display: flex; flex-wrap: wrap; gap: 8px; color: var(--muted); font-size: 11px; }
-.page-footer {
-  display: flex;
-  justify-content: space-between;
-  gap: 18px;
-  margin-top: 19px;
-  padding-top: 12px;
-  border-top: 1px solid var(--line);
-  color: var(--quiet);
-  font-size: 10px;
-}
-.page-footer span:last-child { text-align: right; }
-.page-footer a { text-decoration: none; }
-.page-footer a:hover { color: var(--accent); }
+.versus { flex: 0 0 auto; color: var(--muted); font-size: 10px; font-weight: 500; }
+.result-inline { margin-top: 4px; color: var(--verified); font-size: 11px; font-weight: 650; }
+.row-action { display: flex; align-items: baseline; justify-content: flex-start; flex-wrap: wrap; gap: 5px 9px; margin-top: 6px; }
+.detail-link { color: var(--accent); font-size: 11px; font-weight: 650; text-decoration: none; white-space: nowrap; }
+.detail-link:hover { text-decoration: underline; }
+.exception-note { color: var(--warning); font-size: 11px; font-weight: 650; }
+.exception-note.failed, .exception-note.missed { color: var(--danger); }
+.completed-note { color: var(--verified); font-size: 11px; font-weight: 650; }
+.reason-detail { flex-basis: 100%; color: var(--muted); font-size: 10px; }
+.prediction-unavailable { padding: 8px 0; color: var(--muted); font-size: 12px; }
 
+.probability-cell-group { min-width: 0; }
+.probability-grid { display: grid; gap: 7px; }
+.probability-strip { display: flex; width: 100%; height: 7px; overflow: hidden; border-radius: 99px; background: var(--line); }
+.probability-segment { display: block; min-width: 2px; height: 100%; }
+.probability-segment.home { background: var(--home); }
+.probability-segment.draw { background: var(--draw); }
+.probability-segment.away { background: var(--away); }
+.probability-legend { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; }
+.probability-cell { display: grid; gap: 1px; min-width: 0; }
+.probability-cell > span:first-child { color: var(--muted); font-size: 10px; }
+.probability-cell strong { font-size: 13px; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.probability-cell.is-leading strong { font-weight: 800; }
+.probability-lead { color: var(--muted); font-size: 10px; }
+.score-cell, .queue-context { min-width: 0; }
+.score-caption, .context-label { display: block; margin-bottom: 3px; }
+.score-primary { display: flex; align-items: baseline; gap: 6px; font-size: 15px; font-weight: 750; font-variant-numeric: tabular-nums; }
+.score-primary span { color: var(--muted); font-size: 11px; font-weight: 500; }
+.score-serving-note { margin-top: 4px; color: var(--warning); font-size: 10px; font-weight: 650; }
+.score-unavailable { color: var(--muted); font-size: 12px; }
+.context-value { display: block; font-size: 12px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.context-note { display: block; margin-top: 3px; color: var(--muted); font-size: 10px; }
+.data-warning { margin: 14px 0; padding: 11px 14px; border-left: 3px solid var(--warning); background: var(--warning-soft); color: var(--warning); font-size: 12px; }
+.filter-empty { padding: 54px 20px; color: var(--muted); text-align: center; }
+
+.history { margin-top: 30px; padding-top: 1px; border-top: 1px solid var(--line); }
+.history-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 17px 0 10px; }
+.history-heading h2 { margin: 0; font-size: 16px; letter-spacing: -.02em; }
+.history-heading span { color: var(--muted); font-size: 11px; }
+.history-row { display: grid; grid-template-columns: 100px minmax(220px, 1fr) 116px minmax(170px, auto); gap: 16px; align-items: center; min-height: 60px; border-bottom: 1px solid var(--line); font-size: 12px; }
+.history-meta { color: var(--muted); font-size: 11px; }
+.history-teams { min-width: 0; font-weight: 650; overflow-wrap: anywhere; }
+.history-teams span { color: var(--muted); font-weight: 400; }
+.history-result span { display: block; color: var(--muted); font-size: 10px; }
+.history-score { display: block; margin-top: 2px; color: var(--verified); font-size: 17px; font-variant-numeric: tabular-nums; }
+.history-links { display: flex; flex-wrap: wrap; gap: 8px; color: var(--muted); font-size: 11px; }
+.history-links a { text-decoration: none; }
+.history-links a:hover { color: var(--accent); text-decoration: underline; }
+.page-footer { display: flex; justify-content: space-between; gap: 18px; margin-top: 22px; padding-top: 14px; border-top: 1px solid var(--line); color: var(--quiet); font-size: 10px; }
+.page-footer span:last-child { max-width: 52%; text-align: right; }
+
+@media (max-width: 980px) {
+  .app-shell { grid-template-columns: 156px minmax(0, 1fr); }
+  .side-rail { padding-left: 14px; padding-right: 14px; }
+  .table-header, .fixture-row { grid-template-columns: 100px 64px minmax(190px, 1.2fr) minmax(220px, 1.4fr) minmax(145px, 1fr) minmax(125px, .9fr); column-gap: 12px; padding-left: 12px; padding-right: 12px; }
+}
 @media (max-width: 820px) {
-  .site { width: calc(100% - 32px); padding: 16px 0 28px; }
-  .site-header { align-items: center; padding-bottom: 13px; }
-  .brand-subtitle { display: none; }
-  .header-note { font-size: 10px; }
-  .dashboard-heading { display: flex; align-items: end; padding: 15px 0 10px; }
-  .dashboard-heading h1 { font-size: 19px; }
-  .filters { width: auto; flex: 0 0 auto; margin-top: 0; grid-template-columns: repeat(3, auto); gap: 5px; }
-  .filter { min-height: 27px; }
+  .app-shell { display: block; }
+  .side-rail { display: none; }
+  .mobile-topbar { display: flex; align-items: center; justify-content: space-between; min-height: 56px; padding: 0 16px; background: var(--shell-bg); color: #F5F7F8; }
+  .mobile-topbar a { font-weight: 750; letter-spacing: -.05em; text-decoration: none; }
+  .mobile-topbar span { color: #B7C0C7; font-size: 12px; }
+  .workspace-inner { width: calc(100% - 32px); padding: 18px 0 30px; }
+  .workspace-header { align-items: baseline; gap: 12px; padding-bottom: 15px; }
+  .workspace-title { font-size: 21px; }
+  .workspace-title span { display: block; margin: 5px 0 0; font-size: 12px; }
+  .header-note { font-size: 10px; white-space: normal; }
+  .dashboard-heading { align-items: center; gap: 12px; padding: 16px 0 12px; }
+  .dashboard-heading h1 { display: block; margin: 0; font-size: 15px; font-weight: 700; }
+  .fixture-count { display: block; margin-top: 3px; font-size: 11px; }
+  .filters { gap: 5px; }
+  .filter { min-width: 58px; min-height: 44px; padding: 8px 10px; }
   .table-header { display: none; }
-  .fixture-row {
-    display: block;
-    padding: 12px 10px 11px;
-  }
-  .fixture-row-target:focus-visible { outline-offset: -2px; }
-  .fixture-row > * { margin-top: 9px; }
+  .fixture-table { border-radius: 10px; }
+  .fixture-row { display: block; min-height: 0; padding: 16px 14px 15px; }
+  .fixture-row > * { margin-top: 11px; }
   .fixture-row > .identity-cell { margin-top: 0; }
-  .identity-cell {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: 10px;
-  }
-  .fixture-row .competition { max-width: 70%; }
-  .teams-cell { margin-top: 7px; }
-  .team-match {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-    gap: 8px;
-    font-size: 18px;
-    line-height: 1.18;
-  }
-  .team-match .home,
-  .team-match .away { text-align: left; }
+  .identity-cell { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+  .identity-competition { max-width: 68%; }
+  .kickoff { font-size: 12px; }
+  .team-match { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 8px; font-size: 19px; line-height: 1.2; }
+  .team-match .home, .team-match .away { text-align: left; }
   .team-match .away { text-align: right; }
   .versus { align-self: center; font-size: 11px; }
-  .probability-grid { gap: 9px; margin-top: 11px; }
-  .probability-cell span { font-size: 10px; }
-  .probability-cell strong { font-size: 15px; }
-  .score-cell {
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr);
-    column-gap: 9px;
-    align-items: baseline;
-    padding-top: 9px;
-    border-top: 1px solid var(--line);
-  }
-  .score-caption { margin: 0; }
-  .score-primary { justify-self: end; }
-  .score-top3 {
-    grid-column: 1 / -1;
-    margin-top: 4px;
-    font-size: 10px;
-  }
-
-  .row-action {
-    justify-content: flex-start;
-    text-align: left;
-  }
-  .empty-score-cell { display: none; }
-  .goals-cell:empty { display: none; }
-  .reason-detail { flex-basis: auto; }
-  .history-row { grid-template-columns: 1fr auto; gap: 5px 12px; padding: 9px 0; }
+  .row-action { justify-content: flex-start; margin-top: 7px; }
+  .probability-cell-group { margin-top: 12px; }
+  .probability-grid { gap: 8px; }
+  .probability-cell strong { font-size: 16px; }
+  .probability-lead { font-size: 10px; }
+  .queue-score, .queue-context { display: none; }
+  .history { margin-top: 25px; }
+  .history-row { grid-template-columns: minmax(0, 1fr) auto; gap: 5px 12px; padding: 11px 0; }
   .history-meta, .history-links { grid-column: 1 / -1; }
   .page-footer { display: block; }
   .page-footer span { display: block; }
-  .page-footer span:last-child { margin-top: 5px; text-align: left; }
+  .page-footer span:last-child { max-width: none; margin-top: 6px; text-align: left; }
 }
 @media (max-width: 360px) {
-  .site { width: calc(100% - 24px); }
-  .brand-name { font-size: 23px; }
-  .header-note { max-width: 126px; white-space: normal; text-align: right; }
-  .dashboard-heading { gap: 7px; }
-  .dashboard-heading h1 { font-size: 16px; gap: 5px; }
-  .fixture-count { margin-left: 3px; font-size: 11px; }
-  .filter { padding-left: 6px; padding-right: 6px; font-size: 10px; }
-  .fixture-row { padding-left: 7px; padding-right: 7px; }
-  .team-match { font-size: 16px; }
-  .probability-grid { gap: 6px; }
-  .probability-cell strong { font-size: 14px; }
-
+  .mobile-topbar { padding-left: 12px; padding-right: 12px; }
+  .workspace-inner { width: calc(100% - 24px); }
+  .workspace-header { align-items: flex-start; }
+  .workspace-kicker { max-width: 190px; line-height: 1.35; }
+  .header-note { max-width: 94px; }
+  .dashboard-heading { align-items: flex-end; gap: 7px; }
+  .filters { flex: 1 1 auto; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .filter { min-width: 0; padding-left: 5px; padding-right: 5px; font-size: 11px; }
+  .fixture-row { padding-left: 10px; padding-right: 10px; }
+  .team-match { font-size: 17px; }
+  .probability-legend { gap: 5px; }
+  .probability-cell strong { font-size: 15px; }
 }
 """
 
@@ -1170,22 +932,67 @@ def _one_x_two_html(prediction: dict[str, Any]) -> str:
         "draw": _number(probabilities.get("draw")),
         "away": _number(probabilities.get("away")),
     }
-    valid = {key: value for key, value in values.items() if value is not None and 0 <= value <= 1}
-    if not valid:
-        return ""
-    leader = max(valid, key=lambda key: valid[key])
-    labels = {"home": "\u4e3b\u80dc", "draw": "\u5e73", "away": "\u5ba2\u80dc"}
+    if not all(value is not None and 0 <= value <= 1 for value in values.values()):
+        return '<div class="prediction-unavailable" role="status">胜平负概率暂不可用</div>'
+    total = sum(values.values())
+    if total <= 0:
+        return '<div class="prediction-unavailable" role="status">胜平负概率暂不可用</div>'
+    leader = max(values, key=values.get)
+    labels = {"home": "主胜", "draw": "平", "away": "客胜"}
+    segments = "".join(
+        f'<span class="probability-segment {key}" style="width:{values[key] / total * 100:.3f}%" aria-hidden="true"></span>'
+        for key in ("home", "draw", "away")
+    )
     cells = []
     for key in ("home", "draw", "away"):
-        percent = _format_percent(values.get(key))
-        if percent is None:
-            continue
+        percent = _format_percent(values[key]) or "—"
         leading = " is-leading" if key == leader else ""
+        lead = '<small class="probability-lead">相对占优</small>' if key == leader else '<small class="probability-lead">&nbsp;</small>'
         cells.append(
             f'<div class="probability-cell{leading}">'
-            f'<span>{labels[key]}</span><strong>{html.escape(percent)}</strong></div>'
+            f'<span>{labels[key]}</span><strong>{html.escape(percent)}</strong>{lead}</div>'
         )
-    return f'<div class="probability-grid">{"".join(cells)}</div>' if cells else ""
+    label = "；".join(f"{labels[key]} {_format_percent(values[key])}" for key in ("home", "draw", "away"))
+    return (
+        f'<div class="probability-grid" aria-label="胜平负概率：{html.escape(label, quote=True)}">'
+        f'<div class="probability-strip" role="img" aria-label="胜平负概率分布">{segments}</div>'
+        f'<div class="probability-legend">{"".join(cells)}</div></div>'
+    )
+
+
+def _prediction_exact_available(prediction: dict[str, Any]) -> bool:
+    formal = prediction.get("formal_markets")
+    markets = formal.get("markets") if isinstance(formal, dict) else None
+    exact = markets.get("exact_score") if isinstance(markets, dict) else None
+    return isinstance(exact, dict) and str(exact.get("status") or "").upper() == "AVAILABLE"
+
+
+def _total_goal_summary(prediction: dict[str, Any]) -> dict[str, Any] | None:
+    totals = prediction.get("totals")
+    if not isinstance(totals, list):
+        return None
+    buckets: dict[str, float] = {}
+    for item in totals:
+        if not isinstance(item, dict):
+            continue
+        probability = _number(item.get("probability"))
+        if probability is None or not 0 <= probability <= 1:
+            continue
+        raw_goals = str(item.get("goals") or item.get("total") or "").strip()
+        if raw_goals.endswith("+"):
+            try:
+                bucket = "4+" if int(raw_goals[:-1]) >= 4 else raw_goals
+            except ValueError:
+                continue
+        elif raw_goals.isdigit():
+            bucket = raw_goals if int(raw_goals) <= 3 else "4+"
+        else:
+            continue
+        buckets[bucket] = buckets.get(bucket, 0.0) + probability
+    if not buckets:
+        return None
+    top_bucket, top_probability = max(buckets.items(), key=lambda item: item[1])
+    return {"bucket": top_bucket, "probability": top_probability, "buckets": buckets}
 
 
 def _score_summary_html(
@@ -1193,6 +1000,12 @@ def _score_summary_html(
     *,
     exact_score_serving: dict[str, Any] | None = None,
 ) -> str:
+    serving_state = str((exact_score_serving or {}).get("state") or "NORMAL")
+    if not _prediction_exact_available(prediction):
+        return (
+            '<div class="queue-score score-unavailable" data-score-serving-state="UNAVAILABLE">'
+            '<span class="score-caption">比分概率</span><strong>暂不可用</strong></div>'
+        )
     rows = [
         row for row in _score_rows(prediction, limit=5)
         if row.get("probability") is not None
@@ -1204,23 +1017,15 @@ def _score_summary_html(
     primary_probability_html = (
         f'<span>{html.escape(primary_probability)}</span>' if primary_probability else ""
     )
-    top3 = "".join(
-        f'<span>{html.escape(row["score"])}'
-        f'{(" " + html.escape(percent)) if (percent := _format_percent(row.get("probability"))) else ""}</span>'
-        for row in rows[:3]
-    )
-    serving_state = str((exact_score_serving or {}).get("state") or "NORMAL")
     local_context = ""
     if serving_state != "NORMAL":
-        local_context = (
-            f'<div class="score-serving-note">\u6a21\u578b\u539f\u59cb\u6bd4\u5206 \u00b7 {html.escape(str((exact_score_serving or {}).get("local_label") or (exact_score_serving or {}).get("label") or ""))}</div>'
-        )
+        local_context = '<div class="score-serving-note">比分概率仅供观察</div>'
     return (
-        f'<div class="score-cell{" score-unverified" if serving_state != "NORMAL" else ""}" '
+        f'<div class="queue-score score-cell{" score-unverified" if serving_state != "NORMAL" else ""}" '
         f'data-score-serving-state="{html.escape(serving_state, quote=True)}">'
-        '<div class="score-caption">\u6700\u9ad8\u6982\u7387\u6bd4\u5206</div>'
+        '<div class="score-caption">最高概率比分</div>'
         f'<div class="score-primary"><strong>{html.escape(primary["score"])}</strong>{primary_probability_html}</div>'
-        f'<div class="score-top3">{top3}</div>{local_context}</div>'
+        f'{local_context}</div>'
     )
 
 
@@ -1247,11 +1052,25 @@ def _market_divergence_html(prediction: dict[str, Any]) -> str:
     sign = "+" if difference >= 0 else ""
     difference_text = f"{sign}{difference * 100:.1f} \u4e2a\u767e\u5206\u70b9"
     return (
-        '<div class="market-divergence"><span>\u6a21\u578b\u4e0e\u5e02\u573a</span>'
-        f'<strong>\u4e3b\u80dc {html.escape(_format_percent(model_probability) or "")}'
-        f' / \u5e02\u573a {html.escape(_format_percent(market_probability) or "")}</strong>'
-        f'<small>\u5dee\u5f02 {html.escape(difference_text)}</small></div>'
+        '<div class="context-item"><span class="context-label">市场对照</span>'
+        f'<span class="context-value">主胜 {_format_percent(model_probability)} · 市场 {_format_percent(market_probability)}</span>'
+        f'<small class="context-note">差异 {html.escape(difference_text)}</small></div>'
     )
+
+
+def _queue_context_html(prediction: dict[str, Any]) -> str:
+    parts = []
+    total = _total_goal_summary(prediction)
+    if total:
+        parts.append(
+            '<div class="context-item"><span class="context-label">总进球分布</span>'
+            f'<span class="context-value">最高段 {html.escape(str(total["bucket"]))} · '
+            f'{html.escape(_format_percent(total["probability"]) or "—")}</span></div>'
+        )
+    market = _market_divergence_html(prediction)
+    if market:
+        parts.append(market)
+    return '<div class="queue-context">' + "".join(parts) + '</div>' if parts else '<div class="queue-context"></div>'
 
 
 def _card_status_copy(card: dict[str, Any]) -> str:
@@ -1285,7 +1104,7 @@ def _modern_card_html(
         action_html = f'<span class="completed-note">{_card_status_copy(card)}</span>{detail_link}'
     elif prediction:
         pilot_html = (
-            '<span class="action-note">\u8bd5\u8fd0\u884c\u9884\u6d4b \u00b7 \u4ec5\u4f9b\u89c2\u5bdf</span>'
+            '<span class="action-note">概率仅供观察</span>'
             if card.get("pilot_excluded")
             else ""
         )
@@ -1324,13 +1143,9 @@ def _modern_card_html(
     score_html = (
         _score_summary_html(prediction, exact_score_serving=exact_score_serving)
         if prediction
-        else '<div class="score-cell empty-score-cell" aria-hidden="true"></div>'
+        else '<div class="queue-score score-unavailable"><span class="score-caption">比分概率</span><strong>暂不可用</strong></div>'
     )
-    goals_html = (
-        _market_divergence_html(prediction)
-        if prediction
-        else ""
-    )
+    goals_html = _queue_context_html(prediction) if prediction else '<div class="queue-context"></div>'
     match_number_text = _esc(card.get("match_num"), "\u2014")
     competition_text = _esc(card.get("competition"), "\u8d5b\u4e8b\u5f85\u5b9a")
     kickoff_timestamp = html.escape(str(card.get("kickoff_timestamp") or _kickoff_timestamp(card.get("kickoff")) or ""), quote=True)
@@ -1358,12 +1173,12 @@ def _modern_card_html(
         f'<span class="identity-competition">{competition_text}</span>'
         '</div>'
         f'<div class="kickoff">{html.escape(_format_kickoff(card.get("kickoff")))}</div>'
-        f'<div class="teams-cell">{teams_html}<div class="row-action">{action_html}</div></div>'
-        f'<div class="probability-cell-group">{probability_html}</div>'
-        f'{score_html}'
-        f'<div class="goals-cell">{goals_html}</div>'
-        '</article>'
-    )
+         f'<div class="teams-cell">{teams_html}<div class="row-action">{action_html}</div></div>'
+         f'<div class="probability-cell-group">{probability_html}</div>'
+         f'{score_html}'
+         f'{goals_html}'
+         '</article>'
+     )
 
 
 def _historical_results_html(rows: list[dict[str, Any]]) -> str:
@@ -1393,16 +1208,16 @@ def _historical_results_html(rows: list[dict[str, Any]]) -> str:
             '<article class="history-row" data-result="yes">'
             f'<div class="history-meta">{kickoff_text}</div>'
             f'<div class="history-teams">{home_text}<span> vs </span>{away_text}</div>'
-            f'<strong class="history-score">{html.escape(str(result))}</strong>'
+            f'<div class="history-result"><span>90分钟结果</span><strong class="history-score">{html.escape(str(result))}</strong></div>'
             f'<div class="history-links">{link_text}</div>'
             '</article>'
         )
     if not cards:
         return ""
     return (
-        '<section id="historical-results" class="history">'
-        '<div class="history-heading"><h2>\u5386\u53f2\u9a8c\u8bc1</h2>'
-        f'<span>{len(cards)} \u573a\u72ec\u7acb\u8bb0\u5f55\uff0c\u4e0d\u53c2\u4e0e\u5f53\u524d\u7b5b\u9009</span></div>'
+        '<section id="historical-results" class="history" aria-labelledby="history-title">'
+        '<div class="history-heading"><h2 id="history-title">历史验证</h2>'
+        f'<span>{len(cards)} 场独立记录 · 结果优先</span></div>'
         f'{"".join(cards)}</section>'
     )
 
@@ -1430,12 +1245,18 @@ def _runtime_warning_html(system_health: dict[str, Any], errors: list[Any]) -> s
 
 def _quality_warning_html(quality_health: dict[str, Any]) -> str:
     exact_score_serving = exact_score_serving_presentation(quality_health)
-    if exact_score_serving["state"] == "NORMAL":
+    state = exact_score_serving["state"]
+    if state == "NORMAL":
         return ""
+    label = "比分概率仅供观察" if state == "DEGRADED" else "比分概率质量待确认"
+    note = (
+        "保留原始比分概率，暂不展开解读。"
+        if state == "DEGRADED"
+        else "先保留已记录的概率，质量确认前暂不展开解读。"
+    )
     return (
         '<div class="quality-warning" role="status">'
-        f'<strong>{html.escape(exact_score_serving["label"])}</strong>'
-        f'<span>{html.escape(exact_score_serving["note"])}</span>'
+        f'<strong>{label}</strong><span>{note}</span>'
         '</div>'
     )
 
@@ -1512,44 +1333,58 @@ def render_dashboard(payload: dict[str, Any]) -> str:
     page_version = "|".join(
         str(payload.get(key) or "") for key in ("business_date", "generated_at")
     )
+    history_nav = '<a class="nav-item" href="#historical-results"><span>\u5386\u53f2\u9a8c\u8bc1</span><small>History</small></a>' if historical_html else ""
     return f"""<!doctype html>
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>{html.escape(date_label)} \u00b7 FBOS</title>
+<title>\u4eca\u65e5\u6bd4\u8d5b \u00b7 FBOS</title>
 <style>{MODERN_CSS}</style>
 </head>
 <body>
-<main class="site">
-<header class="site-header">
-  <div class="brand"><span class="brand-name">FBOS</span><span class="brand-subtitle">Football betting \u00b7 one shot</span></div>
+<div class="app-shell">
+<aside class="side-rail">
+  <a class="rail-brand" href="./latest.html"><span class="rail-mark">FBOS</span><span class="rail-caption">Football Prediction<br>Intelligence</span></a>
+  <nav class="rail-nav" aria-label="\u4e3b\u5bfc\u822a">
+    <a class="nav-item active" href="./latest.html" aria-current="page"><span>\u4eca\u65e5\u6bd4\u8d5b</span><small>Matches</small></a>
+    {history_nav}
+  </nav>
+  <div class="rail-footer"><strong>\u8d5b\u524d\u5206\u6790</strong><span>\u53ea\u5c55\u793a\u80fd\u6539\u53d8\u5f53\u524d\u5224\u65ad\u7684\u5185\u5bb9\u3002</span></div>
+</aside>
+<main class="workspace">
+<div class="mobile-topbar"><a href="./latest.html">FBOS</a><span>\u4eca\u65e5\u6bd4\u8d5b</span></div>
+<div class="workspace-inner">
+<header class="workspace-header">
+  <div><div class="workspace-kicker">Football Prediction Intelligence</div><h1 class="workspace-title">\u4eca\u65e5\u6bd4\u8d5b<span>{html.escape(business_date_label)}</span></h1></div>
   <div class="header-note">\u6d4b\u8bd5\u9636\u6bb5 \u00b7 \u4ec5\u4f9b\u8d5b\u524d\u5206\u6790</div>
 </header>
 <section class="dashboard-heading">
-  <h1><span class="date-day">{html.escape(business_date_label)}</span><span class="fixture-count">{fixture_count} \u573a</span></h1>
+  <h1>\u4eca\u65e5\u6bd4\u8d5b<span class="fixture-count">{fixture_count} \u573a</span></h1>
   <div class="filters" aria-label="\u6bd4\u8d5b\u7b5b\u9009">
     <button class="filter" type="button" data-filter="ALL" aria-pressed="true">\u5168\u90e8</button>
     <button class="filter" type="button" data-filter="UPCOMING" aria-pressed="false">\u672a\u5f00\u8d5b</button>
-  <button class="filter" type="button" data-filter="RESULT" data-result-count="{verified_results}" aria-pressed="false">\u5df2\u7ed3\u675f</button>
+    <button class="filter" type="button" data-filter="RESULT" data-result-count="{verified_results}" aria-pressed="false">\u5df2\u7ed3\u675f</button>
   </div>
 </section>
 {runtime_warning}{quality_warning}{data_warning}
 <section class="fixture-table" id="fixture-list" aria-label="\u7ade\u5f69\u65e5\u6bd4\u8d5b\u5217\u8868">
   <div class="table-header" aria-hidden="true">
-    <span>\u7ade\u5f69\u7f16\u53f7 / \u8d5b\u4e8b</span><span>\u5f00\u7403</span><span>\u5bf9\u9635 / \u8d5b\u679c</span>
-    <span>1X2 \u6982\u7387</span><span>\u6bd4\u5206\u6982\u7387 Top3</span><span>\u8fdb\u7403\u4fe1\u53f7</span>
-   </div>
-   {cards_html}
-   {filter_empty_html}
- </section>
+    <span>\u6bd4\u8d5b / \u8d5b\u4e8b</span><span>\u5f00\u7403</span><span>\u5bf9\u9635 / \u8d5b\u679c</span>
+    <span>1X2 \u6982\u7387</span><span>\u6bd4\u5206\u6982\u7387</span><span>\u51b3\u7b56\u8bed\u5883</span>
+  </div>
+  {cards_html}
+  {filter_empty_html}
+</section>
 {historical_html}
 {dashboard_trust}
 <footer class="page-footer">
   <span>\u6b63\u5e38\u72b6\u6001\u4fdd\u6301\u5b89\u9759\uff1b\u53ea\u6709\u5f71\u54cd\u5224\u65ad\u7684\u5f02\u5e38\u624d\u4f1a\u663e\u793a\u3002</span>
   <span>Closed Beta \u00b7 \u9884\u6d4b\u53ef\u80fd\u51fa\u9519\uff0c\u4ec5\u4f9b\u6bd4\u8d5b\u5206\u6790\u4e0e\u7814\u7a76\u53c2\u8003\uff1b\u7406\u6027\u53c2\u4e0e\uff0c\u672a\u6210\u5e74\u4eba\u9650\u5236\u3002</span>
 </footer>
+</div>
 </main>
+</div>
 <script>
 const buttons = Array.from(document.querySelectorAll('[data-filter]'));
 const cards = Array.from(document.querySelectorAll('.fixture-row'));
@@ -1564,19 +1399,18 @@ buttons.forEach(button => button.addEventListener('click', () => {{
     const match = filter === 'ALL'
       || (filter === 'UPCOMING' && isUpcoming)
       || (filter === 'RESULT' && card.dataset.result === 'yes');
-     card.hidden = !match;
-   }});
-   const visibleCount = cards.filter(card => !card.hidden).length;
-   emptyStates.forEach(empty => {{
-     empty.hidden = empty.dataset.filterEmpty !== filter || visibleCount !== 0;
-   }});
-   if (historicalResults) historicalResults.hidden = filter !== 'ALL';
+    card.hidden = !match;
+  }});
+  const visibleCount = cards.filter(card => !card.hidden).length;
+  emptyStates.forEach(empty => {{
+    empty.hidden = empty.dataset.filterEmpty !== filter || visibleCount !== 0;
+  }});
+  if (historicalResults) historicalResults.hidden = filter !== 'ALL';
 }}));
 </script>
 {STATIC_REFRESH_SCRIPT.replace("__PAGE_VERSION__", json.dumps(page_version, ensure_ascii=False))}
 </body>
 </html>"""
-
 
 def build_dashboard(
     business_date: str,
