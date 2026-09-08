@@ -10,7 +10,12 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
-from market_side_shadow import build_shadow_document, load_persisted_pairs  # noqa: E402
+from challenger_c_promotion_review import run_review  # noqa: E402
+from market_side_shadow import (  # noqa: E402
+    build_shadow_document,
+    load_persisted_pairs,
+    pair_shard_path,
+)
 from market_side_shadow_refresh import (  # noqa: E402
     CURRENT_EVALUATION_KEYS,
     CURRENT_VIEW_SCHEMA_VERSION,
@@ -123,6 +128,63 @@ def test_refresh_writes_compact_pair_index_without_changing_evaluation(tmp_path)
     assert "entries" not in latest["pair_index"]
     assert load_indexed_pairs(latest["pair_index"], pair_root) == pairs
     assert output.stat().st_size <= 1_000_000
+
+
+def test_mixed_legacy_and_sharded_current_refresh_and_review_are_parity_equal(tmp_path):
+    source_root = ROOT / "data" / "prediction_quality" / "market_side_shadow_1" / "pairs"
+    source_paths = sorted(source_root.glob("MS-SHADOW-PAIR-*.json"))[:2]
+    assert len(source_paths) == 2
+    result_root = tmp_path / "results"
+    result_root.mkdir()
+    shutil.copyfile(RESULT_SOURCE, result_root / RESULT_SOURCE.name)
+
+    flat_root = tmp_path / "flat-pairs"
+    mixed_root = tmp_path / "mixed-pairs"
+    flat_root.mkdir()
+    mixed_root.mkdir()
+    for source_path in source_paths:
+        shutil.copyfile(source_path, flat_root / source_path.name)
+        shutil.copyfile(source_path, mixed_root / source_path.name)
+    second_value = json.loads((mixed_root / source_paths[1].name).read_text(encoding="utf-8"))
+    sharded_path = pair_shard_path(second_value["pair_id"], mixed_root)
+    sharded_path.parent.mkdir()
+    shutil.copyfile(mixed_root / source_paths[1].name, sharded_path)
+    (mixed_root / source_paths[1].name).unlink()
+
+    flat_output = tmp_path / "flat-latest.json"
+    mixed_output = tmp_path / "mixed-latest.json"
+    refresh_shadow(
+        pair_root=flat_root,
+        result_root=result_root,
+        output=flat_output,
+        refreshed_at="2026-09-08T00:00:00+00:00",
+    )
+    refresh_shadow(
+        pair_root=mixed_root,
+        result_root=result_root,
+        output=mixed_output,
+        refreshed_at="2026-09-08T00:00:00+00:00",
+    )
+    flat_latest = json.loads(flat_output.read_text(encoding="utf-8"))
+    mixed_latest = json.loads(mixed_output.read_text(encoding="utf-8"))
+    assert mixed_latest["counts"] == flat_latest["counts"]
+    assert mixed_latest["checkpoint"] == flat_latest["checkpoint"]
+    assert mixed_latest["evaluation"] == flat_latest["evaluation"]
+    assert mixed_latest["pair_index"] == flat_latest["pair_index"]
+
+    flat_review = run_review(
+        latest_path=flat_output,
+        pair_root=flat_root,
+        result_root=result_root,
+    )
+    mixed_review = run_review(
+        latest_path=mixed_output,
+        pair_root=mixed_root,
+        result_root=result_root,
+    )
+    assert mixed_review["overall_reproduction"] == flat_review["overall_reproduction"]
+    assert mixed_review["integrity"] == flat_review["integrity"]
+    assert mixed_review["counts"] == flat_review["counts"]
 
 
 def _production_shaped_growth_pair(index):

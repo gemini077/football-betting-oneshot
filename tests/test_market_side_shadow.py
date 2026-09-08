@@ -20,6 +20,10 @@ from market_side_shadow import (  # noqa: E402
     build_shadow_document,
     capture_pair,
     evaluate_paired_cohort,
+    iter_persisted_pair_paths,
+    load_persisted_pairs,
+    pair_shard_path,
+    pair_shard_prefix,
     persist_pair,
     checkpoint_status,
 )
@@ -130,11 +134,75 @@ def test_capture_pair_has_same_identity_and_write_once_persistence(tmp_path):
     second = persist_pair(pair, root)
     assert first["status"] == "created"
     assert second["status"] == "existing"
+    assert first["path"] == pair_shard_path(pair["pair_id"], root)
+    assert not (root / f"{pair['pair_id']}.json").exists()
 
     changed = copy.deepcopy(pair)
     changed["challenger"]["lambda_home"] += 0.01
     with pytest.raises(ShadowCaptureConflictError):
         persist_pair(changed, root)
+
+
+def test_legacy_flat_pairs_and_future_shards_share_one_loader(tmp_path):
+    pair = capture_pair(frozen_record(tmp_path), snapshot_root=tmp_path)
+    root = tmp_path / "pairs"
+    root.mkdir()
+    legacy_path = root / f"{pair['pair_id']}.json"
+    legacy_path.write_text(json.dumps(pair, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+    assert load_persisted_pairs(root) == [pair]
+    existing = persist_pair(pair, root)
+    assert existing["status"] == "existing"
+    assert existing["path"] == legacy_path
+    assert not pair_shard_path(pair["pair_id"], root).exists()
+
+
+def test_conflicting_duplicate_pair_identity_fails_closed(tmp_path):
+    pair = capture_pair(frozen_record(tmp_path), snapshot_root=tmp_path)
+    root = tmp_path / "pairs"
+    root.mkdir()
+    legacy_path = root / f"{pair['pair_id']}.json"
+    legacy_path.write_text(json.dumps(pair, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    duplicate = copy.deepcopy(pair)
+    duplicate["match_key"] = "conflicting-match-key"
+    duplicate_path = pair_shard_path(pair["pair_id"], root)
+    duplicate_path.parent.mkdir()
+    duplicate_path.write_text(json.dumps(duplicate, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+    with pytest.raises(ShadowCaptureConflictError):
+        load_persisted_pairs(root)
+    with pytest.raises(ShadowCaptureConflictError):
+        persist_pair(pair, root)
+
+
+def test_future_pair_shards_keep_directory_width_bounded_at_high_water(tmp_path):
+    root = tmp_path / "pairs"
+    root.mkdir()
+    total = 5000
+    for index in range(total):
+        pair = {
+            "schema_version": "market_side_shadow_1.paired_capture.v1",
+            "pair_id": f"MS-SHADOW-PAIR-HIGH-WATER-{index:05d}",
+            "pair_digest": f"{index:064x}",
+            "match_id": f"HIGH-WATER-MATCH-{index:05d}",
+            "match_key": f"HIGH-WATER-MATCH-{index:05d}",
+            "pair_status": "PAIRED",
+            "promotion_eligible": True,
+        }
+        written = persist_pair(pair, root)
+        assert written["path"] == pair_shard_path(pair["pair_id"], root)
+
+    paths = iter_persisted_pair_paths(root)
+    widths = {}
+    for path in paths:
+        widths.setdefault(path.parent.name, 0)
+        widths[path.parent.name] += 1
+    assert len(paths) == total
+    assert len(load_persisted_pairs(root)) == total
+    assert not list(root.glob("MS-SHADOW-PAIR-*.json"))
+    assert len(widths) >= 32
+    assert max(widths.values()) < 1000
+    assert all(path.parent.name == pair_shard_prefix(path.stem) for path in paths)
 
 
 def test_promotion_cohort_requires_explicit_production_capture_and_formal_eligibility(tmp_path):
@@ -286,7 +354,8 @@ def test_base_runner_shadow_hook_persists_c_without_touching_champion(tmp_path):
     assert result["status"] == "created"
     assert result["pair_status"] == "PAIRED"
     assert result["path"].endswith(".json")
-    assert list((tmp_path / "pairs").glob("*.json"))
-    saved_pair = json.loads(next((tmp_path / "pairs").glob("*.json")).read_text(encoding="utf-8"))
+    saved_path = Path(result["path"])
+    assert saved_path.parent != tmp_path / "pairs"
+    saved_pair = json.loads(saved_path.read_text(encoding="utf-8"))
     assert saved_pair["promotion_eligible"] is True
     assert record["prediction_id"] == "FBOS-PRED-fixture-001"

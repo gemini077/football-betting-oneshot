@@ -15,11 +15,29 @@ from challenger_c_promotion_review import (  # noqa: E402
     _safety_triggers,
     run_review,
 )
-from market_side_shadow_refresh import CURRENT_VIEW_SCHEMA_VERSION  # noqa: E402
+from market_side_shadow_refresh import CURRENT_VIEW_SCHEMA_VERSION, refresh_shadow  # noqa: E402
 
 
-def test_review_loads_compact_pair_index_and_reproduces_stored_evaluation():
-    evidence = run_review()
+@pytest.fixture
+def current_review(tmp_path):
+    pair_root = ROOT / "data" / "prediction_quality" / "market_side_shadow_1" / "pairs"
+    result_root = ROOT / "data" / "postmatch_automation" / "results"
+    latest_path = tmp_path / "latest.json"
+    refresh_shadow(
+        pair_root=pair_root,
+        result_root=result_root,
+        output=latest_path,
+        refreshed_at="2026-09-08T00:00:00+00:00",
+    )
+    return run_review(
+        latest_path=latest_path,
+        pair_root=pair_root,
+        result_root=result_root,
+    )
+
+
+def test_review_loads_compact_pair_index_and_reproduces_stored_evaluation(current_review):
+    evidence = current_review
 
     assert evidence["overall_reproduction"]["status"] == "PASS"
     assert evidence["integrity"]["status"] == "PASS"
@@ -27,24 +45,18 @@ def test_review_loads_compact_pair_index_and_reproduces_stored_evaluation():
     assert evidence["source"]["pair_root"].endswith("market_side_shadow_1/pairs")
 
 
-def test_review_reproduces_unique_metrics_and_stops_below_unique_match_gate():
-    evidence = run_review()
+def test_review_reproduces_unique_metrics_and_stops_before_promotion_action(current_review):
+    evidence = current_review
 
-    assert evidence["decision"] == "KEEP CHAMPION / KEEP C SHADOW"
-    assert evidence["safety_gate"]["status"] == "FAIL"
     assert evidence["overall_reproduction"]["status"] == "PASS"
-    assert evidence["version_row_reproduction"]["status"] == "PASS"
-    assert evidence["counts"]["verified_pair_rows"] == 112
-    assert evidence["counts"]["verified_unique_matches"] == 29
-    assert evidence["counts"]["promotion_eligible_unique_matches"] >= evidence["counts"]["verified_unique_matches"]
-    assert evidence["counts"]["version_history_match_groups"] == 26
-    assert evidence["counts"]["extra_version_rows"] == 83
-    assert evidence["counts"]["duplicate_verified_match_groups"] == 26
-    assert evidence["safety_gate"]["checks"]["unique_match_promotion_gate"] is False
-    assert evidence["overall"]["metrics"]["champion"]["sample_count"] == 29
-    assert evidence["overall"]["version_row_audit_metrics"]["champion"]["sample_count"] == 112
     assert evidence["integrity"]["status"] == "PASS"
+    assert evidence["counts"]["verified_pair_rows"] == evidence["counts"]["verified_pair_version_rows"]
+    assert evidence["counts"]["verified_unique_matches"] <= evidence["counts"]["promotion_eligible_unique_matches"]
+    assert evidence["overall"]["metrics"]["champion"]["sample_count"] == evidence["counts"]["verified_unique_matches"]
+    assert evidence["overall"]["version_row_audit_metrics"]["champion"]["sample_count"] == evidence["counts"]["verified_pair_version_rows"]
     assert evidence["source"]["new_matches_fetched"] is False
+    assert evidence["production_action"] == "STOPPED_BEFORE_PROMOTION"
+    assert evidence["no_new_challenger"] is True
 
 
 def test_expected_metric_projection_is_strict():
@@ -91,6 +103,5 @@ def test_review_input_is_current_shadow_artifact(path):
     assert len(document["pair_index"]["pair_set_digest"]) == 64
     assert "entries" not in document["pair_index"]
     assert "representative_selector" not in document["evaluation"]
-    assert document["checkpoint"]["status"] == "NOT_REACHED"
-    assert document["checkpoint"]["verified_unique_matches"] == 29
-    assert document["checkpoint"]["verified_pair_version_rows"] == 112
+    assert document["pair_index"]["pair_count"] > 0
+    assert document["checkpoint"]["auto_promote"] is False

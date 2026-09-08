@@ -61,6 +61,8 @@ EPSILON = 1e-15
 OUTCOMES = ("home", "draw", "away")
 TAIL_KEYS = ("total_ge_4", "total_ge_5", "total_ge_6")
 FORBIDDEN_CAPTURE_KEYS = {"actual_result", "settlement", "metrics", "settled_at"}
+PAIR_FILENAME_PREFIX = "MS-SHADOW-PAIR-"
+PAIR_SHARD_PREFIX_LENGTH = 2
 
 
 class ShadowCaptureConflictError(RuntimeError):
@@ -611,24 +613,100 @@ def _persist_json(path: Path, value: Mapping[str, Any], label: str) -> dict[str,
         return {"status": "existing", "path": path, "document": existing}
 
 
+def _safe_pair_id(value: Any) -> str:
+    pair_id = str(value or "").strip()
+    if not pair_id or pair_id in {".", ".."} or Path(pair_id).name != pair_id:
+        raise ValueError("shadow pair must contain a safe pair_id")
+    return pair_id
+
+
+def pair_shard_prefix(pair_id: str) -> str:
+    """Return the deterministic shallow directory for a future pair identity."""
+
+    return hashlib.sha256(_safe_pair_id(pair_id).encode("utf-8")).hexdigest()[:PAIR_SHARD_PREFIX_LENGTH]
+
+
+def pair_shard_path(pair_id: str, pair_root: Path = DEFAULT_PAIR_ROOT) -> Path:
+    pair_id = _safe_pair_id(pair_id)
+    return Path(pair_root) / pair_shard_prefix(pair_id) / f"{pair_id}.json"
+
+
+def iter_persisted_pair_paths(pair_root: Path = DEFAULT_PAIR_ROOT) -> list[Path]:
+    """Enumerate the supported one-level legacy-flat and future-sharded layout."""
+
+    root = Path(pair_root)
+    if not root.is_dir():
+        return []
+    paths = [
+        path
+        for path in root.iterdir()
+        if path.is_file() and path.name.startswith(PAIR_FILENAME_PREFIX) and path.suffix == ".json"
+    ]
+    for directory in sorted(path for path in root.iterdir() if path.is_dir()):
+        paths.extend(
+            path
+            for path in directory.iterdir()
+            if path.is_file() and path.name.startswith(PAIR_FILENAME_PREFIX) and path.suffix == ".json"
+        )
+    return sorted(
+        paths,
+        key=lambda path: (len(path.relative_to(root).parts), path.relative_to(root).as_posix()),
+    )
+
+
+def _load_persisted_pair_file(path: Path, pair_root: Path) -> dict[str, Any]:
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise ShadowCaptureConflictError(f"shadow pair is unreadable: {path}") from error
+    if not isinstance(value, dict) or value.get("schema_version") != SCHEMA_VERSION:
+        raise ValueError(f"shadow pair is noncanonical: {path}")
+    pair_id = _safe_pair_id(value.get("pair_id"))
+    if path.name != f"{pair_id}.json":
+        raise ValueError(f"shadow pair filename does not match pair_id: {path}")
+    relative = path.relative_to(pair_root)
+    if len(relative.parts) == 1:
+        return value
+    if len(relative.parts) == 2 and relative.parts[0] == pair_shard_prefix(pair_id):
+        return value
+    raise ValueError(f"shadow pair is outside the supported layout: {path}")
+
+
 def persist_pair(pair: Mapping[str, Any], pair_root: Path = DEFAULT_PAIR_ROOT) -> dict[str, Any]:
     if not isinstance(pair, Mapping) or not pair.get("pair_id"):
         raise ValueError("pair must contain pair_id")
     if FORBIDDEN_CAPTURE_KEYS.intersection(pair):
         raise ValueError("post-match fields are forbidden in shadow capture")
-    return _persist_json(Path(pair_root) / f"{pair['pair_id']}.json", pair, "shadow pair")
+    pair_id = _safe_pair_id(pair.get("pair_id"))
+    pair_root = Path(pair_root)
+    legacy_path = pair_root / f"{pair_id}.json"
+    sharded_path = pair_shard_path(pair_id, pair_root)
+    existing_paths = [path for path in (legacy_path, sharded_path) if path.exists()]
+    if existing_paths:
+        serialized = canonical_json(pair)
+        for path in existing_paths:
+            existing = _load_persisted_pair_file(path, pair_root)
+            if canonical_json(existing) != serialized:
+                raise ShadowCaptureConflictError(f"shadow pair content conflict: {pair_id}")
+        target = legacy_path if legacy_path.exists() else sharded_path
+    else:
+        target = sharded_path
+    return _persist_json(target, pair, "shadow pair")
 
 
 def load_persisted_pairs(pair_root: Path = DEFAULT_PAIR_ROOT) -> list[dict[str, Any]]:
-    pairs = []
-    for path in sorted(Path(pair_root).glob("MS-SHADOW-PAIR-*.json")):
-        try:
-            value = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
+    pair_root = Path(pair_root)
+    by_id: dict[str, tuple[Path, dict[str, Any]]] = {}
+    for path in iter_persisted_pair_paths(pair_root):
+        value = _load_persisted_pair_file(path, pair_root)
+        pair_id = _safe_pair_id(value.get("pair_id"))
+        existing = by_id.get(pair_id)
+        if existing is not None:
+            if canonical_json(existing[1]) != canonical_json(value):
+                raise ShadowCaptureConflictError(f"conflicting duplicate shadow pair identity: {pair_id}")
             continue
-        if isinstance(value, dict) and value.get("schema_version") == SCHEMA_VERSION:
-            pairs.append(value)
-    return pairs
+        by_id[pair_id] = (path, value)
+    return [by_id[pair_id][1] for pair_id in sorted(by_id)]
 
 
 def _reliability_bins(probabilities: Iterable[float], observed: Iterable[bool]) -> list[dict[str, Any]]:

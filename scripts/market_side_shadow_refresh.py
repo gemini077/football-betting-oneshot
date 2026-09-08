@@ -254,18 +254,7 @@ def load_indexed_pairs(
     pair_root = Path(pair_root)
     if not pair_root.is_dir():
         raise ValueError("shadow pair root is missing")
-    candidate_paths = sorted(pair_root.glob("MS-SHADOW-PAIR-*.json"))
     pairs = load_persisted_pairs(pair_root)
-    if len(candidate_paths) != len(pairs):
-        raise ValueError("shadow pair root contains unreadable or noncanonical pair files")
-    expected_names: set[str] = set()
-    for pair in pairs:
-        pair_id = str(pair.get("pair_id") or "").strip()
-        if not pair_id or Path(pair_id).name != pair_id:
-            raise ValueError("shadow pair root contains an unsafe pair_id")
-        expected_names.add(f"{pair_id}.json")
-    if len(expected_names) != len(pairs) or {path.name for path in candidate_paths} != expected_names:
-        raise ValueError("shadow pair root filenames do not match pair identities")
     if expected_count != len(pairs):
         raise ValueError("shadow pair index count mismatch")
     actual_digest = pair_set_digest(pairs)

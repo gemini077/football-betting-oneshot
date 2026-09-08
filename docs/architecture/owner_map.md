@@ -57,7 +57,7 @@ current view is a derived summary/index and never a second history store.
 
 | Domain behavior | Canonical owner | Consumers / boundary | Guard |
 | --- | --- | --- | --- |
-| Immutable Market-Side pair capture and pair-file persistence | `scripts/market_side_shadow.py::persist_pair` and `load_persisted_pairs` | `data/prediction_quality/market_side_shadow_1/pairs/*.json` remains the pair/version evidence authority | Pair files are loaded by the compact index and are not rewritten by refresh. |
+| Immutable Market-Side pair capture and pair-file persistence | `scripts/market_side_shadow.py::persist_pair` and `load_persisted_pairs` | `data/prediction_quality/market_side_shadow_1/pairs/` remains the pair/version evidence authority across legacy-flat and future-sharded files | Pair files are loaded by the compact index and are not rewritten by refresh. |
 | Current generated summary/index shape and atomic refresh | `scripts/market_side_shadow_refresh.py::build_compact_shadow_view`, `build_bounded_current_evaluation`, `refresh_shadow` | `market_side_shadow_1/latest.json` retains bounded counts, checkpoint, consumer-required candidate/early-kill aggregates and pointer metadata without embedding pair documents or representative history arrays | `tests/test_generated_state_architecture_guard.py` and production-shaped compact-view size/shape tests. |
 | Evaluation, checkpoint and one-match-one-observation semantics | `scripts/market_side_shadow.py::evaluate_paired_cohort`, `checkpoint_status`, `build_shadow_document` | Refresh computes the accepted full semantic document, then persists only the bounded consumer projection; Challenger C reloads canonical pairs and recomputes representative provenance | Compact refresh parity tests compare counts/checkpoint and consumer-required evaluation aggregates to the full semantic document. |
 | Challenger C review pair input | `scripts/market_side_shadow_refresh.py::load_indexed_pairs` | `scripts/challenger_c_promotion_review.py::run_review` loads the canonical pair root named by `pair_index` and verifies its pair count/content digest; review/promotion policy remains unchanged | Architecture guard forbids direct `latest["pairs"]` consumption and per-pair current-index entries. |
@@ -70,3 +70,19 @@ pair identity/content records; review reloads the pair root and verifies both
 count and digest before evaluation.  No pair, frozen
 prediction, verified result, model, serving, UI, promotion, runner, package,
 workflow, or Git-history authority is moved by this slice.
+
+## Phase D — Issue #244 future pair-evidence sharding
+
+This slice changes only the physical location used for newly persisted
+Market-Side pair identities.  Existing flat pair files remain the immutable
+historical authority and are not moved, renamed, rewritten, or deleted.
+
+| Domain behavior | Canonical owner | Consumers / boundary | Guard |
+| --- | --- | --- | --- |
+| Future pair path selection and write-once persistence | `scripts/market_side_shadow.py::pair_shard_path`, `pair_shard_prefix`, `persist_pair` | New pair identities use one deterministic two-hex-character shallow directory below `data/prediction_quality/market_side_shadow_1/pairs/`; an existing legacy-flat identity remains authoritative | New writes are never direct flat files; the legacy-flat manifest is byte-for-byte checked. |
+| Legacy-flat + future-sharded pair loading | `scripts/market_side_shadow.py::iter_persisted_pair_paths`, `load_persisted_pairs` | Refresh and review consume the logical union through the canonical loader; no consumer owns a physical glob rule | Filename/layout validation and conflicting duplicate identity content fail closed. |
+| Pair-set/evaluation/checkpoint/review parity | Existing `pair_set_digest`, `build_shadow_document`, `checkpoint_status`, and `load_indexed_pairs` contracts | `market_side_shadow_refresh.py` and `challenger_c_promotion_review.py` remain layout-independent | Mixed-layout refresh/review compares pair index, evaluation, checkpoint, counts, and review integrity; high-water tests guard directory width. |
+
+The two-hex shard is future-only.  It is not a migration, does not rewrite
+historical evidence, and does not change model, Champion, serving, UI,
+promotion, runner, package, workflow, provider, or storage ownership.
