@@ -236,6 +236,196 @@ def _one_x_two_direction(probabilities: dict[str, Any]) -> str | None:
     return {"home": "主胜倾向", "draw": "平局倾向", "away": "客胜倾向"}[direction]
 
 
+_RECOMMENDATION_DIRECTION_LABELS = {
+    "home": "\u4e3b\u80dc",
+    "draw": "\u5e73\u5c40",
+    "away": "\u5ba2\u80dc",
+}
+_RECOMMENDATION_BLOCKED_STATES = {
+    "ABSTAIN",
+    "DEGRADED",
+    "UNAVAILABLE",
+    "UNVERIFIED",
+}
+
+
+def _normalise_probability_map(values: Any) -> dict[str, float] | None:
+    if not isinstance(values, dict):
+        return None
+    parsed: dict[str, float] = {}
+    for key in ("home", "draw", "away"):
+        value = _number(values.get(key))
+        if value is None or not 0 <= value <= 1:
+            return None
+        parsed[key] = value
+    total = sum(parsed.values())
+    if total <= 0:
+        return None
+    return {key: value / total for key, value in parsed.items()}
+
+
+def _score_pair(value: Any) -> tuple[int, int] | None:
+    if isinstance(value, dict):
+        home = value.get("home_goals", value.get("home_score"))
+        away = value.get("away_goals", value.get("away_score"))
+        try:
+            pair = (int(home), int(away))
+        except (TypeError, ValueError):
+            return None
+        return pair if min(pair) >= 0 else None
+    text = str(value or "").strip()
+    if "-" not in text:
+        return None
+    home_text, away_text = text.split("-", 1)
+    try:
+        pair = (int(home_text.strip()), int(away_text.strip()))
+    except ValueError:
+        return None
+    return pair if min(pair) >= 0 else None
+
+
+def _direction_probabilities_from_cells(cells: Any) -> dict[str, float] | None:
+    if not isinstance(cells, list):
+        return None
+    totals = {"home": 0.0, "draw": 0.0, "away": 0.0}
+    total_probability = 0.0
+    for item in cells:
+        if not isinstance(item, dict):
+            continue
+        pair = _score_pair(item)
+        probability = _number(item.get("probability"))
+        if pair is None or probability is None or not 0 <= probability <= 1:
+            continue
+        direction = "home" if pair[0] > pair[1] else "draw" if pair[0] == pair[1] else "away"
+        totals[direction] += probability
+        total_probability += probability
+    if total_probability <= 0:
+        return None
+    return {
+        key: value / total_probability
+        for key, value in totals.items()
+    }
+
+
+def _exact_direction_probabilities(prediction: dict[str, Any]) -> dict[str, float] | None:
+    provided = _normalise_probability_map(prediction.get("exact_direction_probabilities"))
+    if provided is not None:
+        return provided
+    contract = prediction.get("exact_score_distribution")
+    if isinstance(contract, dict):
+        derived = _direction_probabilities_from_cells(contract.get("cells"))
+        if derived is not None:
+            return derived
+    formal = prediction.get("formal_markets")
+    markets = formal.get("markets") if isinstance(formal, dict) else None
+    exact = markets.get("exact_score") if isinstance(markets, dict) else None
+    if isinstance(exact, dict):
+        derived = _direction_probabilities_from_cells(exact.get("cells"))
+        if derived is not None:
+            return derived
+    return _direction_probabilities_from_cells(prediction.get("score_distribution"))
+
+
+def _recommendation_authority_eligible(prediction: dict[str, Any]) -> bool:
+    if prediction.get("pilot_excluded") is True or prediction.get("prediction_kind") == "pilot":
+        return False
+    if prediction.get("formal_eligible") is False or prediction.get("model_formal_eligible") is False:
+        return False
+    if str(prediction.get("prediction_status") or "").strip().lower() not in {"", "formal", "frozen"}:
+        return False
+    if str(prediction.get("model_role") or "").strip().lower() not in {"", "champion"}:
+        return False
+    if str(prediction.get("prediction_variant") or "").strip().lower() not in {"", "model_only"}:
+        return False
+    return prediction.get("manual_override") is not True
+
+
+def _formal_market_status(prediction: dict[str, Any], market_name: str) -> str:
+    formal = prediction.get("formal_markets")
+    markets = formal.get("markets") if isinstance(formal, dict) else None
+    market = markets.get(market_name) if isinstance(markets, dict) else None
+    return str(market.get("status") or "").strip().upper() if isinstance(market, dict) else ""
+
+
+def _recommendation_empty() -> dict[str, Any]:
+    return {
+        "status": "ABSTAIN",
+        "direction": None,
+        "label": "\u6682\u65e0\u660e\u786e\u9996\u9009\u65b9\u5411",
+        "lane": None,
+        "probability": None,
+        "reason": "\u5f53\u524d\u6ca1\u6709\u53ef\u7528\u7684\u6b63\u5f0f\u9884\u6d4b\u65b9\u5411",
+        "eligible_lanes": [],
+    }
+
+
+def select_primary_recommendation(
+    prediction: dict[str, Any] | None,
+    *,
+    exact_score_serving: dict[str, Any] | None = None,
+    prediction_allowed: bool = True,
+) -> dict[str, Any]:
+    """Select one plain-language direction from current authority-eligible lanes."""
+
+    if not isinstance(prediction, dict) or not prediction_allowed or not _recommendation_authority_eligible(prediction):
+        return _recommendation_empty()
+
+    candidates: list[dict[str, Any]] = []
+    one_x_two_state = str(prediction.get("one_x_two_serving_state") or "NORMAL").strip().upper()
+    one_x_two = _normalise_probability_map(prediction.get("probabilities"))
+    if one_x_two_state not in _RECOMMENDATION_BLOCKED_STATES and one_x_two is not None:
+        direction = max(one_x_two, key=lambda key: (one_x_two[key], {"home": 2, "draw": 1, "away": 0}[key]))
+        candidates.append({
+            "lane": "FT_1X2",
+            "direction": direction,
+            "label": _RECOMMENDATION_DIRECTION_LABELS[direction],
+            "probability": one_x_two[direction],
+            "reason": f'{_RECOMMENDATION_DIRECTION_LABELS[direction]}\u6982\u7387\u6700\u9ad8\uff08{one_x_two[direction] * 100:.1f}%\uff09',
+        })
+
+    serving_state = (
+        exact_score_serving.get("state")
+        if isinstance(exact_score_serving, dict)
+        else exact_score_serving
+    ) or prediction.get("exact_score_serving_state")
+    exact_state = str(serving_state or "UNVERIFIED").strip().upper()
+    exact_direction = _exact_direction_probabilities(prediction)
+    if (
+        _formal_market_status(prediction, "exact_score") == "AVAILABLE"
+        and exact_state not in _RECOMMENDATION_BLOCKED_STATES
+        and exact_direction is not None
+    ):
+        direction = max(exact_direction, key=lambda key: (exact_direction[key], {"home": 2, "draw": 1, "away": 0}[key]))
+        primary_score = _score_label(prediction.get("primary_score") or prediction.get("unique_score"))
+        score_reason = f'\uff0c\u6700\u53ef\u80fd\u6bd4\u5206 {primary_score}' if primary_score else ""
+        candidates.append({
+            "lane": "EXACT_SCORE",
+            "direction": direction,
+            "label": _RECOMMENDATION_DIRECTION_LABELS[direction],
+            "probability": exact_direction[direction],
+            "reason": f'\u6bd4\u5206\u65b9\u5411\u504f\u5411{_RECOMMENDATION_DIRECTION_LABELS[direction]}\uff08{exact_direction[direction] * 100:.1f}%\uff09{score_reason}',
+        })
+
+    if not candidates:
+        return _recommendation_empty()
+    selected = max(
+        candidates,
+        key=lambda candidate: (
+            float(candidate["probability"]),
+            1 if candidate["lane"] == "FT_1X2" else 0,
+        ),
+    )
+    return {
+        "status": "SELECTED",
+        "direction": selected["direction"],
+        "label": selected["label"],
+        "lane": selected["lane"],
+        "probability": selected["probability"],
+        "reason": selected["reason"],
+        "eligible_lanes": [candidate["lane"] for candidate in candidates],
+    }
+
+
 def _prediction_projection(
     record: dict[str, Any],
 ) -> dict[str, Any]:
@@ -251,7 +441,13 @@ def _prediction_projection(
         prediction_output = record.get("prediction_output")
         if isinstance(prediction_output, dict):
             canonical_direction = prediction_output.get("one_x_two_direction")
-    formal_markets = summarize_formal_markets(project_frozen_formal_markets(record))
+    formal_projection = project_frozen_formal_markets(record)
+    formal_markets = summarize_formal_markets(formal_projection)
+    exact_entry = (formal_projection.get("markets") or {}).get("exact_score")
+    exact_contract = exact_entry.get("contract") if isinstance(exact_entry, dict) else None
+    exact_direction_probabilities = _direction_probabilities_from_cells(
+        exact_contract.get("cells") if isinstance(exact_contract, dict) else None
+    )
     return {
         "product_role": record.get("product_role"),
         "model_family": record.get("model_family"),
@@ -284,6 +480,7 @@ def _prediction_projection(
         # Dashboard receives only the compact status/probability summary.  The
         # 169-cell matrix remains a Match Detail concern.
         "formal_markets": formal_markets,
+        "exact_direction_probabilities": exact_direction_probabilities,
     }
 
 
@@ -562,7 +759,7 @@ MODERN_CSS = r"""
 .league-title { display: flex; align-items: center; justify-content: space-between; padding: 9px 14px; border-bottom: 1px solid var(--line); background: #FBFBFC; }
 .league-title strong { font-size: 10px; }
 .league-title span { color: var(--muted); font-size: 9px; }
-.fixture-row.match-card { position: relative; display: grid; grid-template-columns: 118px minmax(300px,1.25fr) minmax(220px,1fr) 150px; gap: 14px; align-items: center; min-height: 72px; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+.fixture-row.match-card { position: relative; display: grid; grid-template-columns: 126px minmax(340px,1.35fr) minmax(250px,1fr) minmax(180px,.9fr); gap: 16px; align-items: center; min-height: 94px; padding: 13px 16px; border-bottom: 1px solid var(--line); }
 .fixture-row.match-card:last-child { border-bottom: 0; }
 .fixture-row.match-card:hover { background: #FFFDFC; box-shadow: inset 3px 0 0 var(--orange); }
 .fixture-row > * { min-width: 0; }
@@ -572,36 +769,42 @@ MODERN_CSS = r"""
 .match-id strong, .match-id span { display: block; }
 .match-id strong { color: var(--ink); font-size: 10px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .match-id span { margin-top: 3px; overflow: hidden; color: var(--muted); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
-.teams-line { display: grid; grid-template-columns: minmax(0,1fr) 30px minmax(0,1fr); gap: 9px; align-items: center; }
-.matchup-side { display: flex; align-items: center; gap: 8px; }
+.teams-line { display: grid; grid-template-columns: minmax(0,1fr) 36px minmax(0,1fr); gap: 10px; align-items: center; }
+.matchup-side { display: flex; align-items: center; gap: 10px; }
 .matchup-side.matchup-home { justify-content: flex-end; text-align: right; }
 .matchup-side.matchup-away { justify-content: flex-start; text-align: left; }
-.matchup-name { font-size: 12px; font-weight: 720; line-height: 1.2; }
-.teams-status { grid-column: 1 / -1; margin-top: -2px; color: var(--muted); font-size: 8px; line-height: 1.25; text-align: center; }
-.mini-crest { display: inline-grid; flex: 0 0 30px; place-items: center; width: 30px; height: 30px; border: 0; border-radius: 0; background: transparent; color: var(--blue); font-size: 7px; font-weight: 800; }
-.mini-crest.team-badge { flex-basis: 30px; }
-.mini-crest[data-crest-kind="fallback"], .mini-crest.team-badge-fallback { flex-basis: 28px; width: 28px; height: 28px; border: 1px solid var(--line-2); border-radius: 7px; background: #F4F5F6; }
+.matchup-name { font-size: 14px; font-weight: 760; line-height: 1.2; }
+.teams-status { grid-column: 1 / -1; margin-top: -2px; color: var(--muted); font-size: 9px; line-height: 1.25; text-align: center; }
+.mini-crest { display: inline-grid; flex: 0 0 36px; place-items: center; width: 36px; height: 36px; border: 0; border-radius: 0; background: transparent; color: var(--blue); font-size: 7px; font-weight: 800; }
+.mini-crest.team-badge { flex-basis: 36px; }
+.mini-crest[data-crest-kind="fallback"], .mini-crest.team-badge-fallback { flex-basis: 32px; width: 32px; height: 32px; border: 1px solid var(--line-2); border-radius: 7px; background: #F4F5F6; }
 .mini-crest img { object-fit: contain; }
-.compact-prob { display: grid; gap: 6px; min-width: 0; }
-.compact-prob-label { color: var(--muted); font-size: 8px; }
-.compact-prob-values { display: grid; grid-template-columns: repeat(3,1fr); font-size: 11px; font-weight: 760; font-variant-numeric: tabular-nums; }
+.compact-prob { display: grid; gap: 9px; min-width: 0; }
+.compact-prob-label { color: var(--muted); font-size: 9px; }
+.compact-prob-values { display: grid; grid-template-columns: repeat(3,1fr); font-size: 13px; font-weight: 760; font-variant-numeric: tabular-nums; }
 .compact-prob-values span:nth-child(1) { color: var(--blue); }
 .compact-prob-values span:nth-child(2) { color: var(--ink); text-align: center; }
 .compact-prob-values span:nth-child(3) { color: var(--red); text-align: right; }
-.compact-prob .probbar { margin: 0; height: 7px; }
-.probability-cell-group { display: grid; gap: 7px; min-width: 0; }
-.compact-score { min-width: 0; color: #3F464E; font-size: 8px; font-variant-numeric: tabular-nums; }
-.score-caption { display: block; margin-bottom: 3px; color: var(--muted); font-size: 8px; }
+.compact-prob .probbar { margin: 0; height: 8px; }
+.probability-cell-group { display: grid; gap: 9px; min-width: 0; }
+.compact-score { min-width: 0; color: #3F464E; font-size: 9px; font-variant-numeric: tabular-nums; }
+.score-caption { display: block; margin-bottom: 3px; color: var(--muted); font-size: 9px; }
 .compact-score-lines { display: flex; flex-wrap: wrap; gap: 3px 8px; }
 .compact-score-item { white-space: nowrap; }
 .compact-score-item strong { color: var(--ink); font-weight: 760; }
 .score-serving-note { margin-top: 3px; color: var(--warning); font-size: 8px; }
-.context-mini { color: #606870; font-size: 8px; }
-.context-mini strong { display: block; color: #111820; font-size: 9px; }
+.context-mini { color: #606870; font-size: 9px; }
+.context-mini strong { display: block; color: #111820; font-size: 11px; }
 .context-mini .warn { margin-top: 3px; color: var(--warning); }
 .context-mini .exception-note { color: var(--warning); }
 .context-mini .exception-note.failed, .context-mini .exception-note.missed { color: var(--danger); }
+.context-label { display: block; color: var(--orange); font-size: 9px; }
+.recommendation-context { padding-left: 10px; border-left: 2px solid var(--orange); }
+.recommendation-context strong { margin-top: 4px; font-size: 13px; }
+.recommendation-context.is-abstain strong { color: var(--warning); font-size: 11px; }
+.recommendation-reason { display: block; margin-top: 4px; color: var(--muted); font-size: 9px; line-height: 1.35; }
 .reason-detail { display: block; margin-top: 3px; color: var(--muted); font-size: 8px; line-height: 1.35; }
+.fixture-row .matchup-vs { color: var(--orange); font-size: 10px; }
 .prediction-unavailable, .score-unavailable { color: var(--muted); font-size: 11px; }
 .filter-empty { padding: 42px 20px; color: var(--muted); text-align: center; }
 .history { margin-top: 18px; padding-top: 1px; border-top: 1px solid var(--line); }
@@ -624,7 +827,7 @@ MODERN_CSS = r"""
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
 
 @media (max-width: 980px) {
-  .fixture-row.match-card { grid-template-columns: 104px minmax(250px,1.25fr) minmax(190px,1fr) 132px; gap: 10px; padding-left: 12px; padding-right: 12px; }
+  .fixture-row.match-card { grid-template-columns: 110px minmax(250px,1.2fr) minmax(200px,1fr) minmax(160px,.9fr); gap: 12px; padding-left: 14px; padding-right: 14px; }
 }
 @media (max-width: 820px) {
   .dashboard-page .content { padding-bottom: 71px; }
@@ -638,20 +841,25 @@ MODERN_CSS = r"""
   .fixture-table { margin: 0 -14px; }
   .league-group { margin: 0; border: 0; border-radius: 0; }
   .league-title { padding: 9px 14px; }
-  .fixture-row.match-card { display: block; min-height: 0; padding: 12px 14px; }
+  .fixture-row.match-card { display: block; min-height: 0; padding: 15px 14px; }
   .fixture-row.match-card > * { margin-top: 9px; }
   .fixture-row.match-card > .fixture-row-target { margin-top: 0; }
   .match-id { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
   .match-id span { margin: 0; }
-  .teams-line { margin-top: 9px; grid-template-columns: minmax(0,1fr) 28px minmax(0,1fr); gap: 6px; }
-  .matchup-side { gap: 6px; }
-  .matchup-name { font-size: 12px; }
-  .teams-status { margin-top: 0; font-size: 7px; }
-  .compact-prob { margin-top: 10px; }
-  .compact-prob-values { font-size: 11px; }
-  .compact-score { margin-top: 10px; padding-top: 9px; border-top: 1px solid var(--line); font-size: 8px; }
+  .teams-line { margin-top: 12px; grid-template-columns: minmax(0,1fr) 34px minmax(0,1fr); gap: 8px; }
+  .matchup-side { gap: 8px; }
+  .matchup-name { font-size: 13px; }
+  .teams-status { margin-top: 0; font-size: 8px; }
+  .mini-crest { flex-basis: 34px; width: 34px; height: 34px; }
+  .mini-crest.team-badge { flex-basis: 34px; }
+  .compact-prob { margin-top: 12px; }
+  .compact-prob-label { font-size: 9px; }
+  .compact-prob-values { font-size: 13px; }
+  .compact-score { margin-top: 12px; padding-top: 9px; border-top: 1px solid var(--line); font-size: 9px; }
+  .score-caption { font-size: 9px; }
   .compact-score-lines { gap: 3px 9px; }
-  .context-mini { display: block; margin-top: 8px; }
+  .context-mini { display: block; margin-top: 10px; }
+  .recommendation-context strong { font-size: 12px; }
   .history { margin-top: 25px; }
   .history-row { grid-template-columns: minmax(0,1fr) auto; gap: 5px 12px; padding: 11px 0; }
   .history-meta, .history-links { grid-column: 1 / -1; }
@@ -663,7 +871,9 @@ MODERN_CSS = r"""
   .dashboard-page .content { padding-left: 12px; padding-right: 12px; }
   .fixture-table { margin-left: -12px; margin-right: -12px; }
   .fixture-row.match-card { padding-left: 12px; padding-right: 12px; }
-  .matchup-name { font-size: 11px; }
+  .matchup-name { font-size: 12px; }
+  .mini-crest { flex-basis: 32px; width: 32px; height: 32px; }
+  .mini-crest.team-badge { flex-basis: 32px; }
   .compact-score-lines { gap: 3px 6px; }
   .page-footer { padding-left: 12px; padding-right: 12px; }
 }
@@ -873,10 +1083,10 @@ def _one_x_two_html(prediction: dict[str, Any]) -> str:
         for key in ("home", "draw", "away")
     )
     return (
-        f'<div class="compact-prob" aria-label="1X2 \u6982\u7387\uff1a{html.escape(label, quote=True)}">'
-        '<div class="compact-prob-label">1X2 \u6982\u7387</div>'
+        f'<div class="compact-prob" aria-label="\u80dc / \u5e73 / \u8d1f\u6982\u7387\uff1a{html.escape(label, quote=True)}">'
+        '<div class="compact-prob-label">\u80dc / \u5e73 / \u8d1f\u6982\u7387</div>'
         f'<div class="compact-prob-values">{value_html}</div>'
-        f'<div class="probbar probability-strip" role="img" aria-label="\u80dc\u5e73\u8d1f\u6982\u7387\u5206\u5e03">{segments}</div></div>'
+        f'<div class="probbar probability-strip" role="img" aria-label="\u80dc / \u5e73 / \u8d1f\u6982\u7387\u5206\u5e03">{segments}</div></div>'
     )
 
 
@@ -945,7 +1155,7 @@ def _score_summary_html(
     state_class = " score-unverified" if serving_state != "NORMAL" else ""
     return (
         f'<div class="queue-score score-cell{state_class}" data-score-serving-state="{html.escape(serving_state, quote=True)}">'
-        '<div class="score-caption">Exact Top3</div>'
+        '<div class="score-caption">\u6700\u53ef\u80fd\u6bd4\u5206\uff08\u524d3\uff09</div>'
         f'<div class="compact-score-lines">{"".join(rendered_rows)}</div>'
         f'{local_context}</div>'
     )
@@ -982,7 +1192,7 @@ def _market_divergence_html(prediction: dict[str, Any]) -> str:
 
 def _queue_context_html(prediction: dict[str, Any]) -> str:
     # The default Today queue has one launch hierarchy: FT 1X2 plus Exact
-    # Top3. Totals and market context remain detail-level supporting views.
+    # Score Top3. Totals and market context remain detail-level supporting views.
     return ""
 
 
@@ -1035,15 +1245,33 @@ def _modern_card_html(
         else '<div class="queue-score score-unavailable" data-score-serving-state="UNAVAILABLE"><span class="score-caption">\u6bd4\u5206\u6982\u7387</span><strong>\u6682\u4e0d\u53ef\u7528</strong></div>'
     )
     if prediction:
-        direction = str(prediction.get("one_x_two_direction") or "").strip()
-        direction = direction.replace("\u503e\u5411", "\u76f8\u5bf9\u5360\u4f18") if direction else "\u80dc\u5e73\u8d1f\u6982\u7387"
-        warning = ""
-        serving_state = str((exact_score_serving or {}).get("state") or "UNVERIFIED")
-        if serving_state != "NORMAL":
-            warning = '<div class="warn">\u6bd4\u5206\u6982\u7387\u4ec5\u4f9b\u89c2\u5bdf</div>'
-        elif card.get("pilot_excluded"):
-            warning = '<div class="warn">\u5f53\u524d\u8bb0\u5f55\u4ec5\u4f9b\u89c2\u5bdf</div>'
-        context_html = f'<div class="context-mini"><strong>{html.escape(direction)}</strong>{warning}</div>'
+        recommendation = select_primary_recommendation(
+            prediction,
+            exact_score_serving=exact_score_serving,
+            prediction_allowed=not bool(card.get("pilot_excluded")),
+        )
+        if recommendation["status"] == "SELECTED":
+            context_html = (
+                '<div class="context-mini recommendation-context" data-recommendation-status="SELECTED">'
+                '<span class="context-label">\u9996\u9009\u65b9\u5411</span>'
+                f'<strong>{html.escape(str(recommendation["label"]))}</strong>'
+                f'<span class="recommendation-reason">{html.escape(str(recommendation["reason"]))}</span>'
+                '</div>'
+            )
+        else:
+            pilot_warning = (
+                '<span class="recommendation-warning">\u6bd4\u5206\u6982\u7387\u4ec5\u4f9b\u89c2\u5bdf</span>'
+                if card.get("pilot_excluded")
+                else ""
+            )
+            context_html = (
+                '<div class="context-mini recommendation-context is-abstain" data-recommendation-status="ABSTAIN">'
+                '<span class="context-label">\u9996\u9009\u65b9\u5411</span>'
+                f'<strong class="exception-note">{html.escape(str(recommendation["label"]))}</strong>'
+                f'<span class="recommendation-reason">{html.escape(str(recommendation["reason"]))}</span>'
+                f'{pilot_warning}'
+                '</div>'
+            )
     else:
         note_class = " failed" if status == "PREDICTION_FAILED" else " missed" if status == "MISSED_PREMATCH_WINDOW" else ""
         reason_text = str(card.get("reason_text") or "").strip()
@@ -1053,7 +1281,10 @@ def _modern_card_html(
             else ""
         )
         context_html = (
-            f'<div class="context-mini"><strong class="exception-note{note_class}">{html.escape(status_line)}</strong>'
+            f'<div class="context-mini recommendation-context is-abstain" data-recommendation-status="ABSTAIN">'
+            f'<span class="context-label">\u9996\u9009\u65b9\u5411</span>'
+            f'<strong class="exception-note{note_class}">\u6682\u65e0\u660e\u786e\u9996\u9009\u65b9\u5411</strong>'
+            f'<span class="recommendation-reason">{html.escape(status_line)}</span>'
             f'{reason_html}</div>'
         )
     match_number_text = _esc(card.get("match_num"), "\u2014")
@@ -1065,7 +1296,7 @@ def _modern_card_html(
         match_id_html = html.escape(match_id, quote=True)
         detail_home = _text(card.get("home"), "\u4e3b\u961f\u5f85\u5b9a")
         detail_away = _text(card.get("away"), "\u5ba2\u961f\u5f85\u5b9a")
-        detail_label = html.escape(f'{detail_home} vs {detail_away} \u00b7 \u67e5\u770b\u8be6\u60c5', quote=True)
+        detail_label = html.escape(f'{detail_home} \u5bf9\u9635 {detail_away} \u00b7 \u67e5\u770b\u8be6\u60c5', quote=True)
         detail_target = (
             f'<a class="fixture-row-target" href="../matches/{match_id_html}/" '
             f'aria-label="{detail_label}"></a>'
@@ -1270,14 +1501,14 @@ def render_dashboard(payload: dict[str, Any]) -> str:
   <div class="utility"><button class="icon-btn" type="button" aria-label="\u600e\u4e48\u770b"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><path d="M9.8 9a2.3 2.3 0 014.4.9c0 1.7-2.2 2-2.2 3.6M12 17h.01"/></svg></button><strong>\u600e\u4e48\u770b</strong><button class="icon-btn" type="button" aria-label="\u641c\u7d22"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="11" cy="11" r="7"/><path d="M16 16l5 5"/></svg></button></div>
 </header>
 <div class="content">
-<section class="matches-head"><div><h1>\u4eca\u65e5\u6bd4\u8d5b</h1><p>\u5148\u770b 1X2 \u4e0e\u6bd4\u5206\u7a7a\u95f4\uff1b\u5f02\u5e38\u53ea\u5728\u771f\u6b63\u6539\u53d8\u5224\u65ad\u65f6\u51fa\u73b0\u3002 \u6d4b\u8bd5\u9636\u6bb5 \u00b7 \u4ec5\u4f9b\u8d5b\u524d\u5206\u6790</p></div><div class="chips" aria-label="\u6bd4\u8d5b\u7b5b\u9009"><button class="chip filter" type="button" data-filter="ALL" aria-pressed="true">\u5168\u90e8</button><button class="chip filter" type="button" data-filter="UPCOMING" aria-pressed="false">\u672a\u5f00\u8d5b</button><button class="chip filter" type="button" data-filter="RESULT" data-result-count="{verified_results}" aria-pressed="false">\u5df2\u7ed3\u675f</button></div></section>
+<section class="matches-head"><div><h1>\u4eca\u65e5\u6bd4\u8d5b</h1><p>\u5148\u770b\u8c01\u548c\u8c01\u6bd4\u8d5b\uff0c\u518d\u770b\u80dc / \u5e73 / \u8d1f\u6982\u7387\u4e0e\u6700\u53ef\u80fd\u6bd4\u5206\u3002\u5f02\u5e38\u53ea\u5728\u771f\u6b63\u6539\u53d8\u5224\u65ad\u65f6\u51fa\u73b0\u3002 \u6d4b\u8bd5\u9636\u6bb5 \u00b7 \u4ec5\u4f9b\u8d5b\u524d\u5206\u6790</p></div><div class="chips" aria-label="\u6bd4\u8d5b\u7b5b\u9009"><button class="chip filter" type="button" data-filter="ALL" aria-pressed="true">\u5168\u90e8</button><button class="chip filter" type="button" data-filter="UPCOMING" aria-pressed="false">\u672a\u5f00\u8d5b</button><button class="chip filter" type="button" data-filter="RESULT" data-result-count="{verified_results}" aria-pressed="false">\u5df2\u7ed3\u675f</button></div></section>
 {runtime_warning}{quality_warning}{data_warning}
 <section class="fixture-table" id="fixture-list" aria-label="\u7ade\u5f69\u65e5\u6bd4\u8d5b\u5217\u8868">
   {cards_html}
   {filter_empty_html}
 </section>
 {historical_html}
-<section class="trust-strip dashboard-trust-strip" id="dashboard-trust"><div class="trust-item"><span class="trust-ico">\u26bd</span><div><strong>\u4eca\u65e5\u961f\u5217</strong><span>\u9ed8\u8ba4\u53ea\u7a81\u51fa 1X2 + \u6bd4\u5206\u6982\u7387\u3002</span></div></div><div class="trust-item"><span class="trust-ico">!</span><div><strong>\u5f02\u5e38\u63d0\u793a</strong><span>\u53ea\u6709\u771f\u6b63\u6539\u53d8\u5224\u65ad\u65f6\u624d\u51fa\u73b0\u3002</span></div></div><div class="trust-item"><span class="trust-ico">\u25c7</span><div><strong>\u8d5b\u524d\u8bb0\u5f55</strong><span>\u6bd4\u8d5b\u5f00\u59cb\u524d\u5f62\u6210\u5e76\u4fdd\u7559\u3002</span></div></div><div class="trust-item"><span class="trust-ico">\u2713</span><div><strong>\u5386\u53f2\u9a8c\u8bc1</strong><span>\u6210\u529f\u548c\u5931\u8d25\u540c\u53e3\u5f84\u8bb0\u5f55\u3002</span></div></div><div class="trust-item"><span class="trust-ico">i</span><div><strong>\u65b9\u6cd5\u8bf4\u660e</strong><span>\u6280\u672f\u7ec6\u8282\u4e0b\u6c89\uff0c\u4e0d\u62a2\u9996\u5c4f\u3002</span></div></div></section>
+<section class="trust-strip dashboard-trust-strip" id="dashboard-trust"><div class="trust-item"><span class="trust-ico">\u26bd</span><div><strong>\u4eca\u65e5\u961f\u5217</strong><span>\u9ed8\u8ba4\u53ea\u7a81\u51fa\u80dc / \u5e73 / \u8d1f\u6982\u7387\u4e0e\u6700\u53ef\u80fd\u6bd4\u5206\u3002</span></div></div><div class="trust-item"><span class="trust-ico">!</span><div><strong>\u5f02\u5e38\u63d0\u793a</strong><span>\u53ea\u6709\u771f\u6b63\u6539\u53d8\u5224\u65ad\u65f6\u624d\u51fa\u73b0\u3002</span></div></div><div class="trust-item"><span class="trust-ico">\u25c7</span><div><strong>\u8d5b\u524d\u8bb0\u5f55</strong><span>\u6bd4\u8d5b\u5f00\u59cb\u524d\u5f62\u6210\u5e76\u4fdd\u7559\u3002</span></div></div><div class="trust-item"><span class="trust-ico">\u2713</span><div><strong>\u5386\u53f2\u9a8c\u8bc1</strong><span>\u6210\u529f\u548c\u5931\u8d25\u540c\u53e3\u5f84\u8bb0\u5f55\u3002</span></div></div><div class="trust-item"><span class="trust-ico">i</span><div><strong>\u65b9\u6cd5\u8bf4\u660e</strong><span>\u6280\u672f\u7ec6\u8282\u4e0b\u6c89\uff0c\u4e0d\u62a2\u9996\u5c4f\u3002</span></div></div></section>
 {dashboard_trust}
 </div>
 <section class="footer-principles"><div class="principle-title">OneShot Principles</div><div class="principles"><div class="principle"><span class="principle-icon">\u2606</span><div><strong>\u6e05\u6670\u4f18\u5148</strong><span>\u5148\u770b\u771f\u6b63\u6539\u53d8\u5224\u65ad\u7684\u5185\u5bb9\u3002</span></div></div><div class="principle"><span class="principle-icon">\u25c9</span><div><strong>\u6982\u7387\u8bda\u5b9e</strong><span>\u201c\u6700\u9ad8\u201d\u4e0d\u7b49\u4e8e\u201c\u786e\u5b9a\u201d\u3002</span></div></div><div class="principle"><span class="principle-icon">\u25c7</span><div><strong>\u72ec\u7acb\u5224\u65ad</strong><span>\u6a21\u578b\u548c\u5e02\u573a\u5e76\u5217\u6bd4\u8f83\u3002</span></div></div><div class="principle"><span class="principle-icon">\u2713</span><div><strong>\u4e00\u81f4\u9a8c\u8bc1</strong><span>\u8d5b\u524d\u8bb0\u5f55\u8d5b\u540e\u4e0d\u4fee\u6539\u3002</span></div></div><div class="principle"><span class="principle-icon">\u25a3</span><div><strong>\u6709\u4e0a\u4e0b\u6587\u7684\u6570\u636e</strong><span>\u6570\u5b57\u5fc5\u987b\u80fd\u89e3\u91ca\u3002</span></div></div></div></section><div class="copyright"><span>\u00a9 2026 OneShot</span><span>Closed Beta</span><span>\u4ec5\u4f9b\u6bd4\u8d5b\u5206\u6790\u4e0e\u7814\u7a76\u53c2\u8003</span></div>

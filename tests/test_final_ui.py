@@ -77,12 +77,21 @@ def test_dashboard_uses_locked_probability_desk_surface():
     assert 'class="table-header"' not in html
     assert 'class="footer-principles"' in html
     assert "OneShot" in html
-    assert "1X2 \u6982\u7387" in html
+    assert "胜 / 平 / 负概率" in html
     assert html.count('class="probability-segment ') == 3
     assert 'data-score-serving-state="NORMAL"' not in html
     assert 'data-score-serving-state="DEGRADED"' in html
     assert html.count('data-score-rank=') == 3
-    assert "Exact Top3" in html
+    assert "最可能比分（前3）" in html
+    assert "首选方向" in html
+    assert "主胜" in html
+    assert 'data-recommendation-status="SELECTED"' in html
+    assert 'class="context-mini recommendation-context"' in html
+    assert "先看谁和谁比赛" in html
+    assert "1X2 概率" not in html
+    assert "Exact Top3" not in html
+    assert "@media (max-width: 820px)" in html
+    assert ".matchup-name { font-size: 13px; }" in html
     assert "\u603b\u8fdb\u7403\u5206\u5e03" not in html
     assert "\u5e02\u573a\u5bf9\u7167" not in html
     assert "\u51b3\u7b56\u8bed\u5883" not in html
