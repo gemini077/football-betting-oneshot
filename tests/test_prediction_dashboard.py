@@ -7,7 +7,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
-from scripts.prediction_dashboard import build_dashboard, render_dashboard  # noqa: E402
+from scripts.prediction_dashboard import (  # noqa: E402
+    build_dashboard,
+    render_dashboard,
+    select_primary_recommendation,
+)
 from test_formal_market_projection import formal_record  # noqa: E402
 
 
@@ -176,6 +180,163 @@ def frozen_prediction(
     }
 
 
+def exact_lane_prediction() -> dict:
+    return {
+        "probabilities": {"home": 0.36, "draw": 0.34, "away": 0.30},
+        "primary_score": "2-0",
+        "formal_markets": {"markets": {"exact_score": {"status": "AVAILABLE"}}},
+        "exact_score_distribution": {
+            "cells": [
+                {"home_goals": 2, "away_goals": 0, "probability": 0.42},
+                {"home_goals": 1, "away_goals": 0, "probability": 0.18},
+                {"home_goals": 1, "away_goals": 1, "probability": 0.10},
+                {"home_goals": 0, "away_goals": 1, "probability": 0.20},
+                {"home_goals": 0, "away_goals": 0, "probability": 0.10},
+            ],
+        },
+    }
+
+
+def test_recommendation_returns_generic_single_lane_contract():
+    recommendation = select_primary_recommendation({
+        "probabilities": {"home": 0.58, "draw": 0.24, "away": 0.18},
+    })
+
+    assert recommendation["status"] == "SELECTED"
+    assert recommendation["basis"] == "SINGLE_LANE"
+    assert recommendation["market"] == "FT_1X2"
+    assert recommendation["lane"] == "FT_1X2"
+    assert recommendation["selection"]["kind"] == "result"
+    assert recommendation["selection"]["key"] == "home"
+    assert recommendation["selection"]["label"] == "主胜"
+    assert recommendation["selection"]["comparison_key"] == "result:home"
+    assert recommendation["candidates"][0]["authority"]["eligible"] is True
+    assert recommendation["candidates"][0]["state"] == "NORMAL"
+    assert "仅基于胜 / 平 / 负概率" in recommendation["reason"]
+    assert "主胜概率最高" in recommendation["reason"]
+
+
+def test_recommendation_synthesizes_agreement_without_raw_probability_comparison():
+    recommendation = select_primary_recommendation(
+        exact_lane_prediction(),
+        exact_score_serving={"state": "NORMAL"},
+    )
+
+    assert recommendation["status"] == "SELECTED"
+    assert recommendation["basis"] == "AGREEMENT"
+    assert recommendation["market"] == "MULTI_LANE"
+    assert recommendation["lane"] == "AGREEMENT"
+    assert recommendation["selection"]["kind"] == "agreement"
+    assert recommendation["selection"]["comparison_key"] == "result:home"
+    assert recommendation["selection"]["label"] == "主胜"
+    assert recommendation["selection"]["supporting_selections"][1]["kind"] == "exact_score"
+    assert recommendation["selection"]["supporting_selections"][1]["key"] == "2-0"
+    assert "一致支持主胜" in recommendation["reason"]
+
+
+def test_recommendation_keeps_exact_selection_when_it_is_only_eligible():
+    prediction = exact_lane_prediction()
+    prediction["probabilities"] = {"home": None, "draw": None, "away": None}
+
+    recommendation = select_primary_recommendation(
+        prediction,
+        exact_score_serving={"state": "NORMAL"},
+    )
+
+    assert recommendation["status"] == "SELECTED"
+    assert recommendation["basis"] == "SINGLE_LANE"
+    assert recommendation["market"] == "EXACT_SCORE"
+    assert recommendation["lane"] == "EXACT_SCORE"
+    assert recommendation["selection"]["kind"] == "exact_score"
+    assert recommendation["selection"]["key"] == "2-0"
+    assert recommendation["selection"]["support_direction"] == "home"
+
+
+def test_recommendation_excludes_degraded_or_abstain_exact_lane():
+    for state in ("DEGRADED", "ABSTAIN"):
+        recommendation = select_primary_recommendation(
+            exact_lane_prediction(),
+            exact_score_serving={"state": state},
+        )
+
+        assert recommendation["status"] == "SELECTED"
+        assert recommendation["basis"] == "SINGLE_LANE"
+        assert recommendation["lane"] == "FT_1X2"
+        assert recommendation["eligible_lanes"] == ["FT_1X2"]
+        assert "仅基于胜 / 平 / 负概率" in recommendation["reason"]
+
+
+def test_recommendation_fails_closed_on_conflicting_lane_directions():
+    prediction = exact_lane_prediction()
+    prediction["primary_score"] = "1-1"
+
+    recommendation = select_primary_recommendation(
+        prediction,
+        exact_score_serving={"state": "NORMAL"},
+    )
+
+    assert recommendation["status"] == "ABSTAIN"
+    assert recommendation["basis"] == "CONFLICT"
+    assert recommendation["selection"] is None
+    assert recommendation["reason"] == "玩法结论不一致"
+    assert set(recommendation["eligible_lanes"]) == {"FT_1X2", "EXACT_SCORE"}
+    exact_candidate = next(item for item in recommendation["candidates"] if item["lane"] == "EXACT_SCORE")
+    assert exact_candidate["selection"]["kind"] == "exact_score"
+    assert exact_candidate["selection"]["key"] == "1-1"
+
+
+def test_recommendation_fails_closed_on_non_comparable_lane_candidates():
+    recommendation = select_primary_recommendation({
+        "recommendation_candidates": [
+            {
+                "market": "FT_1X2",
+                "lane": "FT_1X2",
+                "selection": {
+                    "kind": "result",
+                    "key": "home",
+                    "label": "主胜",
+                    "comparison_key": "result:home",
+                },
+                "authority": {"eligible": True, "class": "FORMAL"},
+                "state": "NORMAL",
+                "reason": "胜 / 平 / 负概率支持主胜",
+            },
+            {
+                "market": "TOTAL_GOALS",
+                "lane": "TOTAL_GOALS",
+                "selection": {
+                    "kind": "total_goals",
+                    "key": "2-3",
+                    "label": "总进球 2–3",
+                },
+                "authority": {"eligible": True, "class": "FORMAL"},
+                "state": "NORMAL",
+                "reason": "总进球分布支持 2–3",
+            },
+        ],
+    })
+
+    assert recommendation["status"] == "ABSTAIN"
+    assert recommendation["basis"] == "CONFLICT"
+    assert recommendation["selection"] is None
+    assert recommendation["reason"] == "玩法结论不一致"
+    assert recommendation["eligible_lanes"] == ["FT_1X2", "TOTAL_GOALS"]
+
+
+def test_recommendation_fails_closed_without_eligible_lane():
+    prediction = exact_lane_prediction()
+    prediction["probabilities"] = {"home": None, "draw": None, "away": None}
+    recommendation = select_primary_recommendation(
+        prediction,
+        exact_score_serving={"state": "DEGRADED"},
+    )
+
+    assert recommendation["status"] == "ABSTAIN"
+    assert recommendation["basis"] == "NO_ELIGIBLE_LANE"
+    assert recommendation["selection"] is None
+    assert recommendation["label"] == "暂无明确首选方向"
+
+
 def test_universe_three_produces_three_accountable_cards_and_frozen_fields(tmp_path):
     fixtures = [fixture(index) for index in range(1, 4)]
     prediction_id = "FBOS-PRED-dashboard-1"
@@ -203,7 +364,7 @@ def test_universe_three_produces_three_accountable_cards_and_frozen_fields(tmp_p
     assert "赛前预测已锁定" not in html
     assert "\u6bd4\u5206\u6982\u7387" in html
     assert "1-0 15.5%" not in html
-    assert "1X2 概率" in html
+    assert "胜 / 平 / 负概率" in html
     assert "\u53cc\u65b9\u8fdb\u7403 \u662f 45.0%" not in html
     assert "\u53cc\u65b9\u8fdb\u7403 \u5426 55.0%" not in html
     assert "\u5927\u5c0f2.5" not in html
@@ -868,7 +1029,7 @@ def test_canonical_market_summary_and_score_concentration_are_display_only(tmp_p
     html = (roots["output_root"] / "latest.html").read_text(encoding="utf-8")
     assert "AH · 主 -0.75" not in html
     assert "O/U · 2.25" not in html
-    assert "1X2 概率" in html
+    assert "胜 / 平 / 负概率" in html
 
 
 def test_dashboard_keeps_secondary_goal_package_off_decision_queue(tmp_path):
