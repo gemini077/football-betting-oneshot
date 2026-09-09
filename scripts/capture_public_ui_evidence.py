@@ -31,7 +31,11 @@ from scripts.build_public_site import (  # noqa: E402
 )
 from scripts.match_detail import render_match_detail  # noqa: E402
 from scripts.prediction_dashboard import build_dashboard, render_dashboard  # noqa: E402
-from scripts.team_crest_enrichment import enrich_dashboard_crests  # noqa: E402
+from scripts.team_crest_enrichment import (  # noqa: E402
+    enrich_dashboard_crests,
+    failed_crest_diagnostics,
+    new_crest_diagnostics,
+)
 
 
 class _QuietHandler(SimpleHTTPRequestHandler):
@@ -235,22 +239,33 @@ def _regenerate_dashboard(site_root: Path) -> dict[str, Any]:
     )
     universe_path = data_root / "prediction_universe" / f"{business_date}.json"
     universe = _read_json(universe_path) if universe_path.is_file() else {}
+    crest_diagnostics = new_crest_diagnostics()
     try:
         payload = enrich_dashboard_crests(
             payload,
             universe=universe,
             asset_root=site_root / "assets" / "team-crests",
+            diagnostics=crest_diagnostics,
         )
-    except Exception:
+    except Exception as error:
         # Crest enrichment is optional presentation data and never blocks
         # dashboard regeneration or the existing evidence capture.
-        pass
+        crest_diagnostics = failed_crest_diagnostics(
+            payload,
+            f"ENRICHMENT_EXCEPTION_{type(error).__name__}",
+        )
     dashboard_root = site_root / "prediction_dashboard"
     (dashboard_root / "latest.json").write_text(
         json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
     )
     (dashboard_root / "latest.html").write_text(render_dashboard(payload), encoding="utf-8")
+    crest_diagnostics_path = site_root / "diagnostics" / "team-crest-enrichment.json"
+    crest_diagnostics_path.parent.mkdir(parents=True, exist_ok=True)
+    crest_diagnostics_path.write_text(
+        json.dumps(crest_diagnostics, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
     return payload
 
 
@@ -816,6 +831,16 @@ def main() -> int:
     if current is None:
         raise SystemExit("runtime evidence requires at least one current FROZEN fixture with prediction")
     output.mkdir(parents=True, exist_ok=True)
+    crest_diagnostics_path = site_root / "diagnostics" / "team-crest-enrichment.json"
+    crest_diagnostics = (
+        _read_json(crest_diagnostics_path)
+        if crest_diagnostics_path.is_file()
+        else failed_crest_diagnostics(payload, "DIAGNOSTICS_ARTIFACT_MISSING")
+    )
+    (output / "team-crest-enrichment.json").write_text(
+        json.dumps(crest_diagnostics, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
     _write_fixture_pages(site_root, payload, current)
     records, interaction_checks = _capture_all(site_root, output, payload, current)
 
@@ -970,6 +995,15 @@ def main() -> int:
             "normal_frozen_badge_count": production_frozen_count,
             "normal_health_badge_count": production_health_count,
             "real_crest_counts": production_crest_counts,
+            "team_crest_enrichment": {
+                "fixture_count": crest_diagnostics.get("fixture_count", 0),
+                "total_team_slots": crest_diagnostics.get("total_team_slots", 0),
+                "resolved_real_crests": crest_diagnostics.get("resolved_real_crests", 0),
+                "unresolved_team_slots": crest_diagnostics.get("unresolved_team_slots", 0),
+                "coverage_percent": crest_diagnostics.get("coverage_percent", 0.0),
+                "failure_reasons": crest_diagnostics.get("failure_reasons", {}),
+                "artifact": "team-crest-enrichment.json",
+            },
             "fake_data_graphics": 0,
             "fake_affordances": 0,
             "interaction_checks": interaction_checks,
