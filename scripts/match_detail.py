@@ -1135,7 +1135,8 @@ DETAIL_CSS = r"""
 .detail-page .primary-grid { grid-template-columns: minmax(230px,.88fr) minmax(360px,1.3fr) minmax(245px,.9fr); align-items: start; gap: 10px; margin-top: 10px; }
 .detail-page .supporting-grid { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 10px; margin-top: 9px; }
 .detail-page .supporting-grid > .panel { flex: 1 1 320px; min-height: 0; }
-.detail-page .supporting-grid > .panel:only-child { flex: 0 1 420px; }
+.detail-page .supporting-grid > .panel:only-child { flex: 1 1 100%; width: 100%; display: grid; grid-template-columns: minmax(130px,.7fr) minmax(260px,1.2fr) minmax(160px,.8fr); align-items: center; gap: 14px; }
+.detail-page .supporting-grid > .panel:only-child .bars { width: min(100%, 520px); justify-self: center; }
 .detail-page .primary-grid > .panel { min-height: 0; }
 .detail-page .exact-panel { border-top: 2px solid #6FA879; }
 .detail-page .takeaway-panel { border-top: 2px solid var(--line-2); }
@@ -1284,7 +1285,7 @@ DETAIL_CSS = r"""
   .detail-page .primary-grid { margin-top: 0; }
   .detail-page .supporting-grid { display: block; margin-top: 0; }
   .detail-page .supporting-grid > .panel,
-  .detail-page .supporting-grid > .panel:only-child { width: auto; flex: none; }
+  .detail-page .supporting-grid > .panel:only-child { width: auto; flex: none; display: block; }
   .detail-page .panel { padding: 14px 0; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; box-shadow: none; }
   .detail-page .probability-section .probability-card { padding: 7px 4px 8px; }
   .detail-page .probability-section .probability-card strong { font-size: 17px; }

@@ -123,6 +123,9 @@ def test_detail_keeps_exact_score_as_separate_truthful_lane(tmp_path):
     assert '.detail-page .kick strong { font-size: 14px;' in html
     assert '.detail-page .supporting-grid { display: flex;' in html
     assert '.detail-page .supporting-panel { min-height: 0;' in html
+    assert '.detail-page .supporting-grid > .panel:only-child { flex: 1 1 100%;' in html
+    assert 'grid-template-columns: minmax(130px,.7fr) minmax(260px,1.2fr) minmax(160px,.8fr);' in html
+    assert '.detail-page .supporting-grid > .panel:only-child .bars { width: min(100%, 520px);' in html
     assert 'class="tabs"' in html
     assert html.count('class="grid3') >= 2
     assert 'score-grid signature-grid' in html
