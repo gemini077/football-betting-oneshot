@@ -201,8 +201,8 @@ def test_universe_three_produces_three_accountable_cards_and_frozen_fields(tmp_p
     html = (roots["output_root"] / "latest.html").read_text(encoding="utf-8")
     assert "已形成预测" not in html
     assert "赛前预测已锁定" not in html
-    assert "最高概率比分" in html
-    assert "1-0 15.5%" in html
+    assert "\u6bd4\u5206\u6982\u7387" in html
+    assert "1-0 15.5%" not in html
     assert "1X2 概率" in html
     assert "\u53cc\u65b9\u8fdb\u7403 \u662f 45.0%" not in html
     assert "\u53cc\u65b9\u8fdb\u7403 \u5426 55.0%" not in html
@@ -741,8 +741,9 @@ def test_dashboard_hides_retained_recommendation_for_insufficient_current_job(tm
         html,
         re.S,
     ).group(0)
-    assert "probability-grid" in frozen_html
-    assert "最高概率比分" in frozen_html
+    assert "compact-prob" in frozen_html
+    assert "probability-strip" in frozen_html
+    assert 'data-score-serving-state="UNAVAILABLE"' in frozen_html
     assert payload["prediction_quality_health"]["current_job_count"] == 2
     assert payload["prediction_quality_health"]["current_frozen_job_count"] == 1
     assert payload["prediction_quality_health"]["selected_record_count"] == 1
@@ -800,12 +801,12 @@ def test_pilot_exclusion_and_formal_sample_are_distinguished(tmp_path):
     assert formal_match is not None
     pilot_html = pilot_match.group(0)
     formal_html = formal_match.group(0)
-    assert "试运行预测 · 仅供观察" in pilot_html
-    assert "已形成预测" not in pilot_html
-    assert "试运行预测" not in formal_html
-    assert "最高概率比分" in formal_html
-    assert "1-0 15.5%" in formal_html
-    assert "probability-grid" in formal_html
+    assert "\u6982\u7387\u4ec5\u4f9b\u89c2" in pilot_html
+    assert "\u5df2\u5f62\u6210\u9884\u6d4b" not in pilot_html
+    assert "\u8bd5\u8fd0\u884c\u9884\u6d4b" not in formal_html
+    assert "\u6bd4\u5206\u6982\u7387" in formal_html
+    assert 'data-score-serving-state="UNAVAILABLE"' in formal_html
+    assert "probability-strip" in formal_html
 
 
 def test_dashboard_is_read_only_projection_without_model_or_network_imports():
@@ -844,7 +845,7 @@ def test_noncanonical_snapshot_fields_do_not_become_market_lines(tmp_path):
     assert prediction["score_concentration"] is None
     assert prediction["market_summary"] == {}
     html = (roots["output_root"] / "latest.html").read_text(encoding="utf-8")
-    assert "1-0 20.0%" in html
+    assert 'data-score-serving-state="UNAVAILABLE"' in html
     assert "Top5" not in html
     assert "AH ·" not in html
     assert "O/U ·" not in html
@@ -1020,8 +1021,8 @@ def test_dashboard_separates_system_runtime_and_current_prediction_quality_alert
     assert payload["prediction_quality_health"]["scope"] == "current_serving"
     assert payload["prediction_quality_health"]["business_date"] == DATE
     assert "系统运行" not in html
-    assert "\u6bd4\u5206\u9884\u6d4b\u8d28\u91cf\u5f02\u5e38\uff0c\u4ec5\u4f9b\u89c2\u5bdf" in html
-    assert "\u5f53\u524d\u8d28\u91cf\u5f02\u5e38\uff0c\u6682\u4e0d\u4f5c\u4e3a\u6b63\u5e38\u6bd4\u5206\u63a8\u8350\uff1b\u539f\u59cb\u6bd4\u5206\u6982\u7387\u7ee7\u7eed\u4fdd\u7559\u3002\u0031X2\u3001\u53cc\u65b9\u8fdb\u7403\u3001\u5927\u5c0f\u0032.5\u6309\u5404\u81ea\u6982\u7387\u5c55\u793a\u3002" in html
+    assert "\u6bd4\u5206\u6982\u7387\u4ec5\u4f9b\u89c2\u5bdf" in html
+    assert "\u4fdd\u7559\u539f\u59cb\u6bd4\u5206\u6982\u7387" in html
     assert "系统首推比分" not in html
 
 
@@ -1042,12 +1043,12 @@ def test_dashboard_keeps_exact_score_state_visible_inside_each_score_cell(tmp_pa
     build_dashboard(DATE, **roots)
     html = (roots["output_root"] / "latest.html").read_text(encoding="utf-8")
 
-    assert 'data-score-serving-state="DEGRADED"' in html
-    assert "\u6a21\u578b\u539f\u59cb\u6bd4\u5206" in html
-    assert "\u8d28\u91cf\u5f02\u5e38\uff0c\u4ec5\u4f9b\u89c2\u5bdf" in html
+    assert 'data-score-serving-state="UNAVAILABLE"' in html
+    assert "\u6bd4\u5206\u6982\u7387\u4ec5\u4f9b\u89c2\u5bdf" in html
+    assert "\u4fdd\u7559\u539f\u59cb\u6bd4\u5206\u6982\u7387" in html
 
 
-def test_dashboard_uses_normal_exact_score_copy_only_for_healthy_matched_current_serving(tmp_path):
+def test_dashboard_keeps_healthy_matched_current_serving_fail_closed_without_lane_authority(tmp_path):
     roots, runtime = _quality_roots(tmp_path, [f"{index}-{index + 1}" for index in range(1, 11)])
     write_json(roots["health_watch_path"], {
         "schema_version": "1.0",
@@ -1070,9 +1071,9 @@ def test_dashboard_uses_normal_exact_score_copy_only_for_healthy_matched_current
     assert payload["prediction_quality_health"]["status"] == "HEALTHY"
     assert payload["prediction_quality_health"]["available"] is True
     assert payload["prediction_quality_health"]["provenance_status"] == "MATCHED"
-    assert "预测质量降级" not in html
-    assert 'class="quality-warning"' not in html
-    assert "最高概率比分" in html
+    assert 'class="quality-warning"' in html
+    assert 'data-score-serving-state="NORMAL"' not in html
+    assert 'data-score-serving-state="UNAVAILABLE"' in html
 
 
 def test_dashboard_does_not_use_mismatched_health_watch_as_current_quality(tmp_path):
@@ -1099,7 +1100,7 @@ def test_dashboard_does_not_use_mismatched_health_watch_as_current_quality(tmp_p
     assert payload["prediction_quality_health"]["status"] == "HEALTHY"
     assert payload["prediction_quality_health"]["provenance_status"] == "MISMATCHED"
     assert "预测质量降级" not in html
-    assert "质量待确认，不作为正常推荐" in html
+    assert "\u6bd4\u5206\u6982\u7387\u8d28\u91cf\u5f85\u786e\u8ba4" in html
 
 
 def test_dashboard_rejects_health_watch_from_previous_cycle_even_on_same_business_date(tmp_path):
@@ -1126,7 +1127,7 @@ def test_dashboard_rejects_health_watch_from_previous_cycle_even_on_same_busines
     assert payload["prediction_quality_health"]["provenance_status"] == "MISMATCHED"
     assert payload["prediction_quality_health"]["runtime_cycle_finished_at"] == runtime["finished_at"]
     html = (roots["output_root"] / "latest.html").read_text(encoding="utf-8")
-    assert "质量待确认，不作为正常推荐" in html
+    assert "\u6bd4\u5206\u6982\u7387\u8d28\u91cf\u5f85\u786e\u8ba4" in html
 
 
 def test_abnormal_runtime_shows_warning_without_normal_kpi_grid(tmp_path):

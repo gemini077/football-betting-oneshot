@@ -29,9 +29,7 @@ from scripts.build_public_site import (  # noqa: E402
     _linked_frozen_formal_markets,
     _prediction_records,
 )
-from scripts.formal_market_projection import project_frozen_formal_markets  # noqa: E402
 from scripts.match_detail import render_match_detail  # noqa: E402
-from scripts.official_jc_handicap import build_jc_handicap_contract  # noqa: E402
 from scripts.prediction_dashboard import build_dashboard, render_dashboard  # noqa: E402
 
 
@@ -159,57 +157,51 @@ def _linked_prediction_record(data_root: Path, fixture: dict[str, Any]) -> dict[
     return record
 
 
-def _visual_jc_handicap_capture(fixture: dict[str, Any], prediction_id: str) -> dict[str, Any]:
-    """Return a test-only captured-line shape for the all-formal visual state."""
-
-    return {
-        "status": "CAPTURED",
-        "line": 1,
-        "source_surface": "nowscore_public_jc_analysis",
-        "source_url": "TEST_FIXTURE",
-        "nowscore_id": fixture.get("nowscore_id"),
-        "business_date": fixture.get("business_date"),
-        "match_number": fixture.get("match_num"),
-        "fetched_at": "2026-09-06T00:00:00+08:00",
-        "captured_at": "2026-09-06T00:00:00+08:00",
-        "request_started_at": "2026-09-06T00:00:00+08:00",
-        "response_at": "2026-09-06T00:00:00+08:00",
-        "observed_at": "2026-09-06T00:00:00+08:00",
-        "page_http_status": 200,
-        "response_sha256": f"TEST_FIXTURE_RESPONSE_{prediction_id}",
-        "content_sha256": f"TEST_FIXTURE_RESPONSE_{prediction_id}",
-        "parser_contract_version": "TEST_FIXTURE",
-        "line_binding": "竞彩指数/GoJcUrl(0)",
-        "line_perspective": "home",
-        "identity_status": "TEST_FIXTURE",
-        "page_identity": {},
-        "reason_codes": [],
-    }
+def _exact_unavailable_contract(contract: dict[str, Any]) -> dict[str, Any]:
+    result = copy.deepcopy(contract)
+    formal = result.get("formal_markets") if isinstance(result.get("formal_markets"), dict) else {}
+    markets = formal.get("markets") if isinstance(formal.get("markets"), dict) else {}
+    exact = copy.deepcopy(markets.get("exact_score")) if isinstance(markets.get("exact_score"), dict) else {}
+    exact["status"] = "UNAVAILABLE"
+    exact.pop("contract", None)
+    markets["exact_score"] = exact
+    formal["markets"] = markets
+    result["formal_markets"] = formal
+    return result
 
 
-def _all_formal_markets_for_visual_fixture(
-    data_root: Path,
-    fixture: dict[str, Any],
-) -> dict[str, Any] | None:
-    """Build a labeled visual-only all-formal state without changing production data."""
-
-    record = _linked_prediction_record(data_root, fixture)
-    exact = record.get("exact_score_distribution") if isinstance(record, dict) else None
-    if not isinstance(record, dict) or not isinstance(exact, dict):
-        return None
-    prediction_id = str(record.get("prediction_id") or fixture.get("prediction_id") or "visual")
-    handicap = build_jc_handicap_contract(
-        exact,
-        _visual_jc_handicap_capture(fixture, prediction_id),
-        model_identity={
-            key: record.get(key)
-            for key in ("prediction_id", "model_role", "model_family", "release_version")
-            if record.get(key) is not None
+def _changed_exact_contract(contract: dict[str, Any]) -> dict[str, Any]:
+    result = copy.deepcopy(contract)
+    result["change_awareness"] = {
+        "status": "AVAILABLE",
+        "current_snapshot": {"prediction_id": "TEST-CURRENT"},
+        "previous_snapshot": {"prediction_id": "TEST-PREVIOUS"},
+        "elapsed_seconds": 900,
+        "markets": {
+            "ft_1x2": {
+                "status": "AVAILABLE",
+                "items": [
+                    {"key": "home", "label": "\u4e3b\u80dc", "before": 0.44, "now": 0.48, "delta_probability_points": 4.0},
+                ],
+            },
+            "exact_score": {
+                "status": "AVAILABLE",
+                "support": {"cell_count": 169},
+                "items": [
+                    {
+                        "key": "1-1",
+                        "label": "1-1",
+                        "before": 0.094,
+                        "now": 0.119,
+                        "delta_probability_points": 2.5,
+                        "before_rank": 1,
+                        "now_rank": 2,
+                    },
+                ],
+            },
         },
-    )
-    visual_record = copy.deepcopy(record)
-    visual_record["jc_handicap"] = handicap
-    return project_frozen_formal_markets(visual_record)
+    }
+    return result
 
 
 def _regenerate_dashboard(site_root: Path) -> dict[str, Any]:
@@ -219,7 +211,10 @@ def _regenerate_dashboard(site_root: Path) -> dict[str, Any]:
         ROOT / "data" / "prediction_dashboard" / "latest.json",
         site_root / "prediction_dashboard" / "latest.json",
     )
-    source_payload = next((_read_json(path) for path in source_candidates if path.is_file()), None)
+    source_payload = next(
+        (_read_json(path) for path in source_candidates if path.is_file()),
+        None,
+    )
     business_date = str((source_payload or {}).get("business_date") or "").strip()
     if not business_date:
         raise SystemExit("visual evidence requires a dashboard business_date")
@@ -294,45 +289,20 @@ def _write_fixture_pages(site_root: Path, payload: dict[str, Any], current: dict
         )
     pages["detail-change-no-previous.html"] = _mark_test_fixture(
         render_match_detail(no_previous_contract),
-        "change awareness · no previous snapshot",
+        "change awareness - no previous snapshot",
     )
 
-    changed_line_contract = copy.deepcopy(current_contract)
-    changed_line = copy.deepcopy(current_change_awareness)
-    handicap_lane = changed_line.get("markets", {}).get("jc_handicap")
-    if isinstance(handicap_lane, dict):
-        before_line = handicap_lane.get("line", handicap_lane.get("now_line"))
-        try:
-            now_line = int(before_line) + 1
-        except (TypeError, ValueError):
-            now_line = "TEST_CHANGED_LINE"
-        changed_line["markets"]["jc_handicap"] = {
-            "status": "LINE_CHANGED",
-            "reason": "JC_HANDICAP_LINE_CHANGED",
-            "comparison_allowed": False,
-            "before_line": before_line,
-            "now_line": now_line,
-            "items": [],
-            "changed": True,
-        }
-    changed_line_contract["change_awareness"] = changed_line
-    pages["detail-change-handicap-line.html"] = _mark_test_fixture(
-        render_match_detail(changed_line_contract),
-        "change awareness · JC handicap line changed",
+    changed_contract = _changed_exact_contract(current_contract)
+    pages["detail-change-exact.html"] = _mark_test_fixture(
+        render_match_detail(changed_contract),
+        "change awareness - exact score snapshot",
     )
 
-    all_formal_markets = _all_formal_markets_for_visual_fixture(ROOT / "data", current)
-    if all_formal_markets is not None:
-        all_formal_contract = _fixture_contract(
-            current,
-            business_date,
-            formal_markets=all_formal_markets,
-        )
-        all_formal_contract["prediction_quality_health"] = payload.get("prediction_quality_health") or {}
-        pages["detail-all-formal.html"] = _mark_test_fixture(
-            render_match_detail(all_formal_contract),
-            "all formal markets",
-        )
+    unavailable_contract = _exact_unavailable_contract(current_contract)
+    pages["detail-exact-unavailable.html"] = _mark_test_fixture(
+        render_match_detail(unavailable_contract),
+        "exact score unavailable",
+    )
 
     completed_contract = copy.deepcopy(current_contract)
     completed_contract["prediction_quality_health"] = {
@@ -413,32 +383,16 @@ def _capture_page(
                 "document.documentElement.clientWidth)"
             )
         )
-        formal_exact_metrics = page.locator(".exact-grid-wrap").evaluate_all(
+        exact_metrics = page.locator(".exact-grid-wrap").evaluate_all(
             """elements => elements.map(element => ({
-               cellCount: element.querySelectorAll('[data-formal-cell-home]').length,
+               cellCount: element.querySelectorAll('[data-exact-cell-home]').length,
                horizontalOverflow: element.offsetParent !== null
                  && element.scrollWidth > element.clientWidth + 1,
              }))"""
         )
-        change_metrics = page.locator("[data-change-awareness]").evaluate_all(
-            """elements => elements.map(element => ({
-              visible: (() => {
-                const style = window.getComputedStyle(element);
-                const rect = element.getBoundingClientRect();
-                return style.display !== 'none' && style.visibility !== 'hidden'
-                  && rect.width > 0 && rect.height > 0;
-              })(),
-              status: element.dataset.changeAwarenessStatus || '',
-              laneCount: element.querySelectorAll('[data-change-lane]').length,
-              unavailableLaneCount: element.querySelectorAll('[data-change-lane-status="UNAVAILABLE"]').length,
-              lineChangedCount: element.querySelectorAll('[data-change-lane-status="LINE_CHANGED"]').length,
-              timeline: element.querySelector('.section-heading p')?.textContent || '',
-            }))"""
-        )
-        change = change_metrics[0] if change_metrics else {}
-        formal_exact_cells = sum(int(item.get("cellCount") or 0) for item in formal_exact_metrics)
-        formal_exact_horizontal_overflow = any(
-            bool(item.get("horizontalOverflow")) for item in formal_exact_metrics
+        exact_cells = sum(int(item.get("cellCount") or 0) for item in exact_metrics)
+        exact_horizontal_overflow = any(
+            bool(item.get("horizontalOverflow")) for item in exact_metrics
         )
         compact_metrics = page.locator(".exact-compact").evaluate_all(
             """elements => elements.map(element => {
@@ -453,16 +407,16 @@ def _capture_page(
                 .filter(Number.isFinite);
               return {
                 visible,
-                sourceCellCount: Number(element.dataset.formalCompactSourceCellCount || 0),
-                topCount: Number(element.dataset.formalCompactTopCount || 0),
-                scoreCount: element.querySelectorAll('[data-formal-compact-score]').length,
-                remainderCount: Number(element.dataset.formalCompactRemainderCount || 0),
-                remainderProbability: Number(element.dataset.formalCompactRemainderProbability || 0),
+                sourceCellCount: Number(element.dataset.exactCompactSourceCellCount || 0),
+                topCount: Number(element.dataset.exactCompactTopCount || 0),
+                scoreCount: element.querySelectorAll('[data-exact-compact-score]').length,
+                remainderCount: Number(element.dataset.exactCompactRemainderCount || 0),
+                remainderProbability: Number(element.dataset.exactCompactRemainderProbability || 0),
                 probabilityFontSizeMin: fontSizes.length ? Math.min(...fontSizes) : null,
               };
             })"""
         )
-        disclosure_metrics = page.locator("[data-formal-exact-disclosure]").evaluate_all(
+        disclosure_metrics = page.locator("[data-exact-disclosure]").evaluate_all(
             """elements => elements.map(element => {
               const visible = item => {
                 const style = window.getComputedStyle(item);
@@ -475,8 +429,8 @@ def _capture_page(
                 open: Boolean(element.open),
                 summaryVisible: Boolean(element.querySelector('summary')),
                 cuePresent: Boolean(element.querySelector('.exact-disclosure-cue')),
-                domCellCount: element.querySelectorAll('[data-formal-cell-home]').length,
-                visibleCellCount: [...element.querySelectorAll('[data-formal-cell-home]')]
+                domCellCount: element.querySelectorAll('[data-exact-cell-home]').length,
+                visibleCellCount: [...element.querySelectorAll('[data-exact-cell-home]')]
                   .filter(visible).length,
                 wrapper: wrapper ? {
                   tabIndex: wrapper.tabIndex,
@@ -491,6 +445,14 @@ def _capture_page(
         compact = compact_metrics[0] if compact_metrics else {}
         disclosure = disclosure_metrics[0] if disclosure_metrics else {}
         wrapper = disclosure.get("wrapper") if isinstance(disclosure, dict) else None
+        signature_matrix_visible = _visible_count(page, ".signature-grid") > 0
+        visible_forbidden = page.evaluate(
+            """() => {
+              const text = document.body.innerText || '';
+              return ['FROZEN', 'HEALTHY', 'MATCHED', 'provider', 'prediction_id', 'job_id']
+                .filter(token => text.includes(token));
+            }"""
+        )
         output_path.parent.mkdir(parents=True, exist_ok=True)
         page.screenshot(path=str(output_path), full_page=False)
         visible_status_badges = _visible_count(page, ".status-badge")
@@ -503,41 +465,45 @@ def _capture_page(
             "status": status,
             "url_path": path,
             "horizontal_overflow": overflow,
-            "formal_exact_cells": formal_exact_cells,
-            "formal_exact_horizontal_overflow": formal_exact_horizontal_overflow,
-            "formal_exact_compact_visible": bool(compact.get("visible")),
-            "formal_exact_compact_source_cell_count": int(compact.get("sourceCellCount") or 0),
-            "formal_exact_compact_top_count": int(compact.get("topCount") or 0),
-            "formal_exact_compact_score_count": int(compact.get("scoreCount") or 0),
-            "formal_exact_compact_remainder_count": int(compact.get("remainderCount") or 0),
-            "formal_exact_compact_remainder_probability": compact.get("remainderProbability"),
-            "formal_exact_compact_probability_font_size_min": compact.get("probabilityFontSizeMin"),
-            "formal_exact_disclosure_count": len(disclosure_metrics),
-            "formal_exact_disclosure_open": bool(disclosure.get("open")),
-            "formal_exact_disclosure_summary_visible": bool(disclosure.get("summaryVisible")),
-            "formal_exact_disclosure_cue_present": bool(disclosure.get("cuePresent")),
-            "formal_exact_disclosure_dom_cell_count": int(disclosure.get("domCellCount") or 0),
-            "formal_exact_disclosure_visible_cell_count": int(disclosure.get("visibleCellCount") or 0),
-            "formal_exact_disclosure_focusable": bool(
+            "exact_horizontal_overflow": exact_horizontal_overflow,
+            "exact_cells": exact_cells,
+            "exact_compact_visible": bool(compact.get("visible")),
+            "exact_compact_source_cell_count": int(compact.get("sourceCellCount") or 0),
+            "exact_compact_top_count": int(compact.get("topCount") or 0),
+            "exact_compact_score_count": int(compact.get("scoreCount") or 0),
+            "exact_compact_remainder_count": int(compact.get("remainderCount") or 0),
+            "exact_compact_remainder_probability": compact.get("remainderProbability"),
+            "exact_compact_probability_font_size_min": compact.get("probabilityFontSizeMin"),
+            "exact_signature_matrix_visible": signature_matrix_visible,
+            "exact_disclosure_count": len(disclosure_metrics),
+            "exact_disclosure_open": bool(disclosure.get("open")),
+            "exact_disclosure_summary_visible": bool(disclosure.get("summaryVisible")),
+            "exact_disclosure_cue_present": bool(disclosure.get("cuePresent")),
+            "exact_disclosure_dom_cell_count": int(disclosure.get("domCellCount") or 0),
+            "exact_disclosure_visible_cell_count": int(disclosure.get("visibleCellCount") or 0),
+            "exact_disclosure_focusable": bool(
                 isinstance(wrapper, dict) and int(wrapper.get("tabIndex") or -1) >= 0
             ),
-            "formal_exact_disclosure_labeled": bool(
+            "exact_disclosure_labeled": bool(
                 isinstance(wrapper, dict)
                 and wrapper.get("role") == "region"
                 and str(wrapper.get("ariaLabel") or "").strip()
             ),
-            "formal_exact_disclosure_scrollable": bool(
+            "exact_disclosure_scrollable": bool(
                 isinstance(wrapper, dict)
                 and int(wrapper.get("scrollWidth") or 0) > int(wrapper.get("clientWidth") or 0) + 1
             ),
             "normal_frozen_badge_count": visible_status_badges,
             "normal_health_badge_count": visible_health_badges,
-            "change_awareness_visible": bool(change.get("visible")),
-            "change_awareness_status": str(change.get("status") or ""),
-            "change_awareness_lane_count": int(change.get("laneCount") or 0),
-            "change_awareness_unavailable_lane_count": int(change.get("unavailableLaneCount") or 0),
-            "change_awareness_line_changed_count": int(change.get("lineChangedCount") or 0),
-            "change_awareness_timeline": str(change.get("timeline") or ""),
+            "visible_forbidden_tokens": list(visible_forbidden or []),
+            "change_awareness_visible": _visible_count(page, "[data-change-awareness]") > 0,
+            "change_awareness_status": str(
+                page.locator("[data-change-awareness]").first.get_attribute("data-change-awareness-status") or ""
+            ) if page.locator("[data-change-awareness]").count() else "",
+            "change_awareness_lane_count": page.locator("[data-change-awareness] [data-change-lane]").count(),
+            "change_awareness_exact_row_count": page.locator(
+                '[data-change-awareness] [data-change-lane="exact_score"] .change-row'
+            ).count(),
             "completed_result_visible": _visible_count(page, ".result-panel") > 0,
             "console_errors": console_errors,
             "page_errors": page_errors,
@@ -582,7 +548,7 @@ def _check_interactions(browser: Any, base_url: str) -> dict[str, str]:
         if not href:
             raise RuntimeError("dashboard has no real detail route")
         page.goto(urljoin(f"{base_url}/prediction_dashboard/", href), wait_until="networkidle", timeout=30_000)
-        if page.locator("h1").count() != 1:
+        if page.locator(".detail-page .hero h1").count() != 2:
             raise RuntimeError("dashboard detail route did not resolve")
 
         page.goto(f"{base_url}/visual-fixtures/dashboard-result-empty.html", wait_until="networkidle", timeout=30_000)
@@ -628,7 +594,7 @@ def _check_exact_mobile_interactions(browser: Any, base_url: str) -> dict[str, s
         label = str(width)
         try:
             page.goto(
-                f"{base_url}/visual-fixtures/detail-all-formal.html#formal-markets",
+                f"{base_url}/visual-fixtures/detail-current-frozen.html#score-distribution",
                 wait_until="networkidle",
                 timeout=30_000,
             )
@@ -644,13 +610,13 @@ def _check_exact_mobile_interactions(browser: Any, base_url: str) -> dict[str, s
 
             compact = page.locator(".exact-compact")
             if _visible_count(page, ".exact-compact") != 1:
-                raise RuntimeError(f"{label}px Exact compact projection is not the default view")
+                raise RuntimeError(f"{label}px compact score projection is not the default view")
             compact_metrics = compact.evaluate(
                 """element => ({
-                  sourceCellCount: Number(element.dataset.formalCompactSourceCellCount || 0),
-                  topCount: Number(element.dataset.formalCompactTopCount || 0),
-                  scoreCount: element.querySelectorAll('[data-formal-compact-score]').length,
-                  remainderCount: Number(element.dataset.formalCompactRemainderCount || 0),
+                  sourceCellCount: Number(element.dataset.exactCompactSourceCellCount || 0),
+                  topCount: Number(element.dataset.exactCompactTopCount || 0),
+                  scoreCount: element.querySelectorAll('[data-exact-compact-score]').length,
+                  remainderCount: Number(element.dataset.exactCompactRemainderCount || 0),
                   probabilityFontSizeMin: Math.min(...[...element.querySelectorAll('.exact-compact-probability')]
                     .map(item => Number.parseFloat(window.getComputedStyle(item).fontSize))),
                 })"""
@@ -664,26 +630,26 @@ def _check_exact_mobile_interactions(browser: Any, base_url: str) -> dict[str, s
             if compact_metrics["probabilityFontSizeMin"] < 12:
                 raise RuntimeError(f"{label}px compact probability text is below 12px")
 
-            disclosure = page.locator("[data-formal-exact-disclosure]")
+            disclosure = page.locator("[data-exact-disclosure]")
             if disclosure.count() != 1:
-                raise RuntimeError(f"{label}px Exact disclosure control is missing")
+                raise RuntimeError(f"{label}px score disclosure control is missing")
             if disclosure.evaluate("element => element.open"):
-                raise RuntimeError(f"{label}px full Exact matrix is the default view")
-            if page.locator("[data-formal-cell-home]").count() != 169:
-                raise RuntimeError(f"{label}px DOM does not retain all 169 frozen Exact cells")
-            if _visible_count(page, "[data-formal-cell-home]") != 0:
-                raise RuntimeError(f"{label}px full Exact matrix is visible before disclosure")
+                raise RuntimeError(f"{label}px full score matrix is the default view")
+            if page.locator("[data-exact-cell-home]").count() != 169:
+                raise RuntimeError(f"{label}px DOM does not retain all 169 score cells")
+            if _visible_count(page, "[data-exact-cell-home]") != 0:
+                raise RuntimeError(f"{label}px full score matrix is visible before disclosure")
             summary = disclosure.locator("summary")
             if not summary.get_attribute("aria-label") and not summary.inner_text().strip():
-                raise RuntimeError(f"{label}px Exact disclosure has no readable control label")
+                raise RuntimeError(f"{label}px score disclosure has no readable control label")
             wrapper = page.locator(".exact-grid-wrap")
-            compact_snapshot = compact.get_attribute("data-formal-compact-remainder-probability")
+            compact_snapshot = compact.get_attribute("data-exact-compact-remainder-probability")
 
             summary.click()
             if not disclosure.evaluate("element => element.open"):
-                raise RuntimeError(f"{label}px Exact disclosure did not open by pointer interaction")
-            if _visible_count(page, "[data-formal-cell-home]") != 169:
-                raise RuntimeError(f"{label}px disclosure did not reveal all 169 frozen Exact cells")
+                raise RuntimeError(f"{label}px score disclosure did not open by pointer interaction")
+            if _visible_count(page, "[data-exact-cell-home]") != 169:
+                raise RuntimeError(f"{label}px disclosure did not reveal all 169 score cells")
             wrapper_metrics = wrapper.evaluate(
                 """element => ({
                   tabIndex: element.tabIndex,
@@ -694,14 +660,14 @@ def _check_exact_mobile_interactions(browser: Any, base_url: str) -> dict[str, s
                 })"""
             )
             if wrapper_metrics["tabIndex"] < 0 or wrapper_metrics["role"] != "region":
-                raise RuntimeError(f"{label}px Exact matrix scroll region is not keyboard focusable")
+                raise RuntimeError(f"{label}px score matrix scroll region is not keyboard focusable")
             if not str(wrapper_metrics["ariaLabel"] or "").strip():
-                raise RuntimeError(f"{label}px Exact matrix scroll region is not labeled")
+                raise RuntimeError(f"{label}px score matrix scroll region is not labeled")
             if wrapper_metrics["scrollWidth"] <= wrapper_metrics["clientWidth"] + 1:
-                raise RuntimeError(f"{label}px Exact matrix has no contained horizontal scroll affordance")
+                raise RuntimeError(f"{label}px score matrix has no contained horizontal scroll affordance")
             wrapper.focus()
             if not page.evaluate("() => document.activeElement === document.querySelector('.exact-grid-wrap')"):
-                raise RuntimeError(f"{label}px Exact matrix scroll region did not receive keyboard focus")
+                raise RuntimeError(f"{label}px score matrix scroll region did not receive keyboard focus")
             scroll_left = wrapper.evaluate(
                 """element => {
                   element.scrollLeft = element.scrollWidth;
@@ -709,8 +675,8 @@ def _check_exact_mobile_interactions(browser: Any, base_url: str) -> dict[str, s
                 }"""
             )
             if scroll_left <= 0:
-                raise RuntimeError(f"{label}px Exact matrix scroll region did not scroll")
-            if compact.get_attribute("data-formal-compact-remainder-probability") != compact_snapshot:
+                raise RuntimeError(f"{label}px score matrix scroll region did not scroll")
+            if compact.get_attribute("data-exact-compact-remainder-probability") != compact_snapshot:
                 raise RuntimeError(f"{label}px disclosure mutated frozen compact probability state")
             if int(
                 page.evaluate(
@@ -718,15 +684,15 @@ def _check_exact_mobile_interactions(browser: Any, base_url: str) -> dict[str, s
                     "document.documentElement.clientWidth)"
                 )
             ):
-                raise RuntimeError(f"{label}px opening Exact matrix overflowed the page")
+                raise RuntimeError(f"{label}px opening score matrix overflowed the page")
 
             summary.focus()
             summary.press("Enter")
             if disclosure.evaluate("element => element.open"):
-                raise RuntimeError(f"{label}px Exact disclosure did not close by keyboard interaction")
+                raise RuntimeError(f"{label}px score disclosure did not close by keyboard interaction")
             summary.press("Enter")
             if not disclosure.evaluate("element => element.open"):
-                raise RuntimeError(f"{label}px Exact disclosure did not reopen by keyboard interaction")
+                raise RuntimeError(f"{label}px score disclosure did not reopen by keyboard interaction")
             checks[f"exact_mobile_{label}_compact_default"] = "VERIFIED"
             checks[f"exact_mobile_{label}_full_disclosure"] = "VERIFIED"
             checks[f"exact_mobile_{label}_keyboard_scroll"] = "VERIFIED"
@@ -753,26 +719,23 @@ def _capture_all(
         ("detail-current-frozen-1440x1000.png", "visual-fixtures/detail-current-frozen.html", (1440, 1000), str(current.get("match_id") or "current-frozen"), "PRODUCTION_TRUTH"),
         ("detail-current-frozen-390x844.png", "visual-fixtures/detail-current-frozen.html", (390, 844), str(current.get("match_id") or "current-frozen"), "PRODUCTION_TRUTH"),
         ("detail-current-frozen-320x800.png", "visual-fixtures/detail-current-frozen.html", (320, 800), str(current.get("match_id") or "current-frozen"), "PRODUCTION_TRUTH"),
-        ("change-no-previous-1440x1000.png", "visual-fixtures/detail-change-no-previous.html", (1440, 1000), "TEST FIXTURE · change no previous", "TEST_FIXTURE"),
-        ("change-no-previous-390x844.png", "visual-fixtures/detail-change-no-previous.html", (390, 844), "TEST FIXTURE · change no previous", "TEST_FIXTURE"),
-        ("change-no-previous-320x800.png", "visual-fixtures/detail-change-no-previous.html", (320, 800), "TEST FIXTURE · change no previous", "TEST_FIXTURE"),
-        ("change-handicap-line-1440x1000.png", "visual-fixtures/detail-change-handicap-line.html", (1440, 1000), "TEST FIXTURE · change handicap line", "TEST_FIXTURE"),
-        ("change-handicap-line-390x844.png", "visual-fixtures/detail-change-handicap-line.html", (390, 844), "TEST FIXTURE · change handicap line", "TEST_FIXTURE"),
-        ("change-handicap-line-320x800.png", "visual-fixtures/detail-change-handicap-line.html", (320, 800), "TEST FIXTURE · change handicap line", "TEST_FIXTURE"),
-        ("formal-markets-unavailable-1440x1000.png", "visual-fixtures/detail-current-frozen.html#formal-markets", (1440, 1000), str(current.get("match_id") or "formal-markets-unavailable"), "PRODUCTION_TRUTH"),
-        ("formal-markets-unavailable-390x844.png", "visual-fixtures/detail-current-frozen.html#formal-markets", (390, 844), str(current.get("match_id") or "formal-markets-unavailable"), "PRODUCTION_TRUTH"),
-        ("formal-markets-unavailable-320x800.png", "visual-fixtures/detail-current-frozen.html#formal-markets", (320, 800), str(current.get("match_id") or "formal-markets-unavailable"), "PRODUCTION_TRUTH"),
-        ("all-formal-1440x1000.png", "visual-fixtures/detail-all-formal.html#formal-markets", (1440, 1000), "TEST FIXTURE · all formal markets", "TEST_FIXTURE"),
-        ("all-formal-390x844.png", "visual-fixtures/detail-all-formal.html#formal-markets", (390, 844), "TEST FIXTURE · all formal markets", "TEST_FIXTURE"),
-        ("all-formal-320x800.png", "visual-fixtures/detail-all-formal.html#formal-markets", (320, 800), "TEST FIXTURE · all formal markets", "TEST_FIXTURE"),
-        ("insufficient-evidence-390x844.png", "visual-fixtures/dashboard-insufficient.html", (390, 844), "TEST FIXTURE · INSUFFICIENT_SAMPLE", "TEST_FIXTURE"),
-        ("degraded-evidence-1440x1000.png", "visual-fixtures/dashboard-degraded.html", (1440, 1000), "TEST FIXTURE · DEGRADED", "TEST_FIXTURE"),
-        ("unverified-evidence-390x844.png", "visual-fixtures/dashboard-unverified.html", (390, 844), "TEST FIXTURE · UNVERIFIED", "TEST_FIXTURE"),
-        ("result-empty-evidence-390x844.png", "visual-fixtures/dashboard-result-empty.html", (390, 844), "TEST FIXTURE · RESULT=0", "TEST_FIXTURE"),
-        ("upcoming-empty-evidence-390x844.png", "visual-fixtures/dashboard-upcoming-empty.html", (390, 844), "TEST FIXTURE · UPCOMING=0", "TEST_FIXTURE"),
-        ("completed-evidence-1440x1000.png", "visual-fixtures/detail-completed-verified.html", (1440, 1000), "TEST FIXTURE · completed-verified", "TEST_FIXTURE"),
-        ("completed-evidence-390x844.png", "visual-fixtures/detail-completed-verified.html", (390, 844), "TEST FIXTURE · completed-verified", "TEST_FIXTURE"),
-        ("completed-evidence-320x800.png", "visual-fixtures/detail-completed-verified.html", (320, 800), "TEST FIXTURE / completed-verified", "TEST_FIXTURE"),
+        ("detail-exact-unavailable-1440x1000.png", "visual-fixtures/detail-exact-unavailable.html#score-distribution", (1440, 1000), "exact-unavailable", "TEST_FIXTURE"),
+        ("detail-exact-unavailable-390x844.png", "visual-fixtures/detail-exact-unavailable.html#score-distribution", (390, 844), "exact-unavailable", "TEST_FIXTURE"),
+        ("detail-exact-unavailable-320x800.png", "visual-fixtures/detail-exact-unavailable.html#score-distribution", (320, 800), "exact-unavailable", "TEST_FIXTURE"),
+        ("change-no-previous-1440x1000.png", "visual-fixtures/detail-change-no-previous.html", (1440, 1000), "change-no-previous", "TEST_FIXTURE"),
+        ("change-no-previous-390x844.png", "visual-fixtures/detail-change-no-previous.html", (390, 844), "change-no-previous", "TEST_FIXTURE"),
+        ("change-no-previous-320x800.png", "visual-fixtures/detail-change-no-previous.html", (320, 800), "change-no-previous", "TEST_FIXTURE"),
+        ("change-exact-1440x1000.png", "visual-fixtures/detail-change-exact.html#change-awareness", (1440, 1000), "change-exact", "TEST_FIXTURE"),
+        ("change-exact-390x844.png", "visual-fixtures/detail-change-exact.html#change-awareness", (390, 844), "change-exact", "TEST_FIXTURE"),
+        ("change-exact-320x800.png", "visual-fixtures/detail-change-exact.html#change-awareness", (320, 800), "change-exact", "TEST_FIXTURE"),
+        ("insufficient-evidence-390x844.png", "visual-fixtures/dashboard-insufficient.html", (390, 844), "INSUFFICIENT_SAMPLE", "TEST_FIXTURE"),
+        ("degraded-evidence-1440x1000.png", "visual-fixtures/dashboard-degraded.html", (1440, 1000), "DEGRADED", "TEST_FIXTURE"),
+        ("unverified-evidence-390x844.png", "visual-fixtures/dashboard-unverified.html", (390, 844), "UNVERIFIED", "TEST_FIXTURE"),
+        ("result-empty-evidence-390x844.png", "visual-fixtures/dashboard-result-empty.html", (390, 844), "RESULT=0", "TEST_FIXTURE"),
+        ("upcoming-empty-evidence-390x844.png", "visual-fixtures/dashboard-upcoming-empty.html", (390, 844), "UPCOMING=0", "TEST_FIXTURE"),
+        ("completed-evidence-1440x1000.png", "visual-fixtures/detail-completed-verified.html", (1440, 1000), "completed-verified", "TEST_FIXTURE"),
+        ("completed-evidence-390x844.png", "visual-fixtures/detail-completed-verified.html", (390, 844), "completed-verified", "TEST_FIXTURE"),
+        ("completed-evidence-320x800.png", "visual-fixtures/detail-completed-verified.html", (320, 800), "completed-verified", "TEST_FIXTURE"),
     ]
     records: list[dict[str, Any]] = []
     try:
@@ -818,15 +781,16 @@ def main() -> int:
     if not dashboard_path.is_file():
         raise SystemExit(f"PR renderer did not write regenerated dashboard JSON: {dashboard_path}")
     fixtures = [item for item in payload.get("fixtures") or [] if isinstance(item, dict)]
+    frozen_candidates = [
+        item
+        for item in fixtures
+        if str(item.get("status") or "").upper() == "FROZEN"
+        and isinstance(item.get("prediction"), dict)
+    ]
     current = next(
-        (
-            item
-            for item in fixtures
-            if str(item.get("status") or "").upper() == "FROZEN"
-            and isinstance(item.get("prediction"), dict)
-        ),
+        (item for item in frozen_candidates if not (item.get("result") or {}).get("score_90m")),
         None,
-    )
+    ) or (frozen_candidates[0] if frozen_candidates else None)
     if current is None:
         raise SystemExit("runtime evidence requires at least one current FROZEN fixture with prediction")
     output.mkdir(parents=True, exist_ok=True)
@@ -839,35 +803,36 @@ def main() -> int:
         if record["console_errors"] or record["page_errors"]
     ]
     overflow = [record for record in records if record["horizontal_overflow"]]
-    exact_overflow = [record for record in records if record["formal_exact_horizontal_overflow"]]
+    exact_overflow = [record for record in records if record["exact_horizontal_overflow"]]
     mobile_exact_failures = [
         record
         for record in records
-        if record["formal_exact_cells"] == 169
+        if record["exact_cells"] == 169
         and record["viewport"] in {"390x844", "320x800"}
         and (
-            not record["formal_exact_compact_visible"]
-            or record["formal_exact_compact_source_cell_count"] != 169
-            or record["formal_exact_compact_top_count"] != 6
-            or record["formal_exact_compact_score_count"] != 6
-            or record["formal_exact_compact_remainder_count"] != 163
-            or (record["formal_exact_compact_probability_font_size_min"] or 0) < 12
-            or record["formal_exact_disclosure_count"] != 1
-            or record["formal_exact_disclosure_open"]
-            or record["formal_exact_disclosure_dom_cell_count"] != 169
-            or record["formal_exact_disclosure_summary_visible"] is not True
-            or record["formal_exact_disclosure_cue_present"] is not True
+            not record["exact_compact_visible"]
+            or record["exact_compact_source_cell_count"] != 169
+            or record["exact_compact_top_count"] != 6
+            or record["exact_compact_score_count"] != 6
+            or record["exact_compact_remainder_count"] != 163
+            or (record["exact_compact_probability_font_size_min"] or 0) < 12
+            or record["exact_disclosure_count"] != 1
+            or record["exact_disclosure_open"]
+            or record["exact_disclosure_dom_cell_count"] != 169
+            or record["exact_disclosure_summary_visible"] is not True
+            or record["exact_disclosure_cue_present"] is not True
         )
     ]
-    desktop_exact_failures = [
+    desktop_signature_failures = [
         record
         for record in records
-        if record["formal_exact_cells"] == 169
+        if record["exact_cells"] == 169
         and record["viewport"] == "1440x1000"
         and (
-            record["formal_exact_disclosure_count"] != 1
-            or not record["formal_exact_disclosure_open"]
-            or record["formal_exact_disclosure_visible_cell_count"] != 169
+            record["exact_disclosure_count"] != 1
+            or record["exact_disclosure_open"]
+            or record["exact_disclosure_visible_cell_count"] != 0
+            or not record["exact_signature_matrix_visible"]
         )
     ]
     change_awareness_failures = []
@@ -877,22 +842,23 @@ def main() -> int:
             if (
                 not record["change_awareness_visible"]
                 or record["change_awareness_status"] != "AVAILABLE"
-                or record["change_awareness_lane_count"] < 3
+                or record["change_awareness_lane_count"] != 2
             ):
-                change_awareness_failures.append({"name": name, "reason": "valid multi-lane change missing"})
+                change_awareness_failures.append({"name": name, "reason": "supported change lanes missing"})
         elif name.startswith("change-no-previous-"):
             if (
                 not record["change_awareness_visible"]
                 or record["change_awareness_status"] != "UNAVAILABLE"
             ):
                 change_awareness_failures.append({"name": name, "reason": "no-previous unavailable state missing"})
-        elif name.startswith("change-handicap-line-"):
+        elif name.startswith("change-exact-"):
             if (
                 not record["change_awareness_visible"]
                 or record["change_awareness_status"] != "AVAILABLE"
-                or record["change_awareness_line_changed_count"] != 1
+                or record["change_awareness_lane_count"] != 2
+                or record["change_awareness_exact_row_count"] != 1
             ):
-                change_awareness_failures.append({"name": name, "reason": "changed handicap line state missing"})
+                change_awareness_failures.append({"name": name, "reason": "exact-score change state missing"})
         elif name.startswith("completed-evidence-"):
             if (
                 not record["completed_result_visible"]
@@ -900,16 +866,20 @@ def main() -> int:
                 or record["change_awareness_status"] != "AVAILABLE"
             ):
                 change_awareness_failures.append({"name": name, "reason": "completed change history missing"})
-    if browser_errors or overflow or exact_overflow or mobile_exact_failures or desktop_exact_failures or change_awareness_failures:
+    forbidden_visible = [
+        record for record in records if record["visible_forbidden_tokens"]
+    ]
+    if browser_errors or overflow or exact_overflow or mobile_exact_failures or desktop_signature_failures or change_awareness_failures or forbidden_visible:
         raise SystemExit(
             json.dumps(
                 {
                     "browser_errors": browser_errors,
                     "horizontal_overflow": overflow,
-                    "formal_exact_horizontal_overflow": exact_overflow,
-                    "formal_exact_mobile_default_failures": mobile_exact_failures,
-                    "formal_exact_desktop_full_matrix_failures": desktop_exact_failures,
+                    "exact_horizontal_overflow": exact_overflow,
+                    "exact_mobile_default_failures": mobile_exact_failures,
+                    "exact_desktop_signature_matrix_failures": desktop_signature_failures,
                     "change_awareness_failures": change_awareness_failures,
+                    "visible_forbidden_tokens": forbidden_visible,
                 },
                 ensure_ascii=False,
             )
@@ -938,35 +908,36 @@ def main() -> int:
             "horizontal_overflow_1440": 0,
             "horizontal_overflow_390": 0,
             "horizontal_overflow_320": 0,
-            "formal_exact_horizontal_overflow_390": 0,
-            "formal_exact_horizontal_overflow_320": 0,
-            "formal_exact_cell_counts": {
-                record["name"]: record["formal_exact_cells"]
+            "exact_horizontal_overflow_390": 0,
+            "exact_horizontal_overflow_320": 0,
+            "exact_cell_counts": {
+                record["name"]: record["exact_cells"]
                 for record in records
-                if record["formal_exact_cells"]
+                if record["exact_cells"]
             },
-            "formal_exact_mobile_default": {
+            "exact_mobile_default": {
                 record["name"]: {
-                    "compact_visible": record["formal_exact_compact_visible"],
-                    "source_cell_count": record["formal_exact_compact_source_cell_count"],
-                    "top_count": record["formal_exact_compact_top_count"],
-                    "score_count": record["formal_exact_compact_score_count"],
-                    "remainder_count": record["formal_exact_compact_remainder_count"],
-                    "probability_font_size_min": record["formal_exact_compact_probability_font_size_min"],
-                    "full_matrix_default_open": record["formal_exact_disclosure_open"],
-                    "full_matrix_dom_cell_count": record["formal_exact_disclosure_dom_cell_count"],
+                    "compact_visible": record["exact_compact_visible"],
+                    "source_cell_count": record["exact_compact_source_cell_count"],
+                    "top_count": record["exact_compact_top_count"],
+                    "score_count": record["exact_compact_score_count"],
+                    "remainder_count": record["exact_compact_remainder_count"],
+                    "probability_font_size_min": record["exact_compact_probability_font_size_min"],
+                    "full_matrix_default_open": record["exact_disclosure_open"],
+                    "full_matrix_dom_cell_count": record["exact_disclosure_dom_cell_count"],
                 }
                 for record in records
-                if record["formal_exact_cells"] == 169
+                if record["exact_cells"] == 169
                 and record["viewport"] in {"390x844", "320x800"}
             },
-            "formal_exact_desktop_full_matrix": {
+            "exact_desktop_signature_matrix": {
                 record["name"]: {
-                    "open": record["formal_exact_disclosure_open"],
-                    "visible_cell_count": record["formal_exact_disclosure_visible_cell_count"],
+                    "signature_matrix_visible": record["exact_signature_matrix_visible"],
+                    "full_matrix_default_open": record["exact_disclosure_open"],
+                    "visible_cell_count": record["exact_disclosure_visible_cell_count"],
                 }
                 for record in records
-                if record["formal_exact_cells"] == 169 and record["viewport"] == "1440x1000"
+                if record["exact_cells"] == 169 and record["viewport"] == "1440x1000"
             },
             "dashboard_regenerated_with_pr_renderer": "YES",
             "normal_frozen_badge_count": production_frozen_count,
@@ -985,10 +956,10 @@ def main() -> int:
                     if record["name"].startswith("change-no-previous-")
                     and record["change_awareness_status"] == "UNAVAILABLE"
                 ],
-                "changed_handicap_line_viewports": [
+                "changed_exact_score_viewports": [
                     record["name"] for record in records
-                    if record["name"].startswith("change-handicap-line-")
-                    and record["change_awareness_line_changed_count"] == 1
+                    if record["name"].startswith("change-exact-")
+                    and record["change_awareness_exact_row_count"] == 1
                 ],
                 "completed_viewports": [
                     record["name"] for record in records
@@ -996,6 +967,11 @@ def main() -> int:
                     and record["completed_result_visible"]
                     and record["change_awareness_status"] == "AVAILABLE"
                 ],
+            },
+            "visible_forbidden_tokens": {
+                record["name"]: record["visible_forbidden_tokens"]
+                for record in records
+                if record["visible_forbidden_tokens"]
             },
             "production_data_changed": "NO",
             "model_data_contract_changed": "NO",

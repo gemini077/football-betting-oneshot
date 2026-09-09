@@ -18,6 +18,11 @@ except ImportError:  # pragma: no cover - direct script execution path.
     from match_detail import render_match_detail
 
 try:
+    from .prediction_dashboard import render_dashboard
+except ImportError:  # pragma: no cover - direct script execution path.
+    from prediction_dashboard import render_dashboard
+
+try:
     from .formal_market_projection import project_frozen_formal_markets
 except ImportError:  # pragma: no cover - direct script execution path.
     from formal_market_projection import project_frozen_formal_markets
@@ -118,7 +123,13 @@ def _copy_linked_public_pages(data_root: Path, output: Path) -> set[str]:
         if not source.is_file():
             relative = source.relative_to(data_root).as_posix()
             raise FileNotFoundError(f"required linked public page is missing: {relative}")
-        _copy_file(source, output / source.relative_to(data_root))
+        target = output / source.relative_to(data_root)
+        if source == data_root / "prediction_dashboard" / "latest.html":
+            dashboard_payload = _read_json(data_root / "prediction_dashboard" / "latest.json")
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(render_dashboard(dashboard_payload), encoding="utf-8")
+        else:
+            _copy_file(source, target)
         copied.add(source)
         linked_pages, page_match_ids = _page_references(source, data_root)
         match_ids.update(page_match_ids)
