@@ -119,6 +119,10 @@ def test_detail_keeps_exact_score_as_separate_truthful_lane(tmp_path):
     assert 'class="hero"' in html
     assert 'data-matchup="true"' in html
     assert 'class="matchup-vs hero-vs"' in html
+    assert '.detail-page .hero .team h1 { font-size: 13px;' in html
+    assert '.detail-page .kick strong { font-size: 14px;' in html
+    assert '.detail-page .supporting-grid { display: flex;' in html
+    assert '.detail-page .supporting-panel { min-height: 0;' in html
     assert 'class="tabs"' in html
     assert html.count('class="grid3') >= 2
     assert 'score-grid signature-grid' in html

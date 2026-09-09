@@ -1133,7 +1133,9 @@ DETAIL_CSS = r"""
 .detail-page .quality-warning span { margin-left: 7px; color: var(--muted); }
 .detail-page .pilot-note { border-left-color: var(--line-2); background: transparent; color: var(--muted); }
 .detail-page .primary-grid { grid-template-columns: minmax(230px,.88fr) minmax(360px,1.3fr) minmax(245px,.9fr); align-items: start; gap: 10px; margin-top: 10px; }
-.detail-page .supporting-grid { margin-top: 9px; }
+.detail-page .supporting-grid { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 10px; margin-top: 9px; }
+.detail-page .supporting-grid > .panel { flex: 1 1 320px; min-height: 0; }
+.detail-page .supporting-grid > .panel:only-child { flex: 0 1 420px; }
 .detail-page .primary-grid > .panel { min-height: 0; }
 .detail-page .exact-panel { border-top: 2px solid #6FA879; }
 .detail-page .takeaway-panel { border-top: 2px solid var(--line-2); }
@@ -1185,12 +1187,12 @@ DETAIL_CSS = r"""
 }
 .detail-page .exact-grid-caption { margin: 8px 0 0; color: var(--muted); font-size: 8px; }
 .detail-page .top3line { margin-top: 8px; padding-top: 7px; font-size: 8px; }
-.detail-page .supporting-panel { min-height: 176px; }
+.detail-page .supporting-panel { min-height: 0; }
 .detail-page .supporting-panel h2 { margin-bottom: 11px; }
-.detail-page .goals-panel .bars { height: 122px; }
-.detail-page .goals-panel .bar-col { height: 73px; }
+.detail-page .goals-panel .bars { height: 86px; }
+.detail-page .goals-panel .bar-col { height: 50px; }
 .detail-page .goals-panel .bar-col span { background: var(--blue); }
-.detail-page .goals-panel .subtle-note,
+.detail-page .goals-panel .subtle-note { min-height: 0; margin-top: 4px; }
 .detail-page .market-panel .subtle-note { min-height: 22px; }
 .detail-page .market-panel .compare-head { margin-bottom: 6px; }
 .detail-page .market-panel .compare-grid { min-height: 85px; }
@@ -1268,19 +1270,21 @@ DETAIL_CSS = r"""
 
 @media (max-width: 820px) {
   .detail-page .content { padding: 0 14px 71px; }
-  .detail-page .hero { grid-template-columns: minmax(0,1fr) 72px minmax(0,1fr); min-height: 94px; column-gap: 5px; padding: 10px 0; }
+  .detail-page .hero { grid-template-columns: minmax(0,1fr) 72px minmax(0,1fr); min-height: 100px; column-gap: 5px; padding: 10px 0; }
   .detail-page .hero > .team { gap: 6px; }
-  .detail-page .hero .team-badge { flex-basis: 38px; width: 38px; height: 38px; }
-  .detail-page .hero .team h1 { font-size: 11px; line-height: 1.15; }
+  .detail-page .hero .team-badge { flex-basis: 42px; width: 42px; height: 42px; }
+  .detail-page .hero .team h1 { font-size: 13px; font-weight: 800; line-height: 1.15; }
   .detail-page .hero-vs { font-size: 7px; }
   .detail-page .kick { gap: 1px; }
-  .detail-page .kick small { font-size: 6px; }
-  .detail-page .kick strong { font-size: 17px; }
-  .detail-page .kick span { max-width: 72px; font-size: 6px; line-height: 1.2; text-align: center; }
+  .detail-page .kick small { font-size: 5.5px; }
+  .detail-page .kick strong { font-size: 14px; font-weight: 700; }
+  .detail-page .kick span { max-width: 72px; font-size: 5.5px; line-height: 1.2; text-align: center; }
   .detail-page .quality-warning,
   .detail-page .pilot-note { margin-top: 8px; }
-  .detail-page .primary-grid,
-  .detail-page .supporting-grid { margin-top: 0; }
+  .detail-page .primary-grid { margin-top: 0; }
+  .detail-page .supporting-grid { display: block; margin-top: 0; }
+  .detail-page .supporting-grid > .panel,
+  .detail-page .supporting-grid > .panel:only-child { width: auto; flex: none; }
   .detail-page .panel { padding: 14px 0; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; box-shadow: none; }
   .detail-page .probability-section .probability-card { padding: 7px 4px 8px; }
   .detail-page .probability-section .probability-card strong { font-size: 17px; }
@@ -1333,9 +1337,10 @@ DETAIL_CSS = r"""
 
 @media (max-width: 360px) {
   .detail-page .content { padding-left: 12px; padding-right: 12px; }
-  .detail-page .hero { grid-template-columns: minmax(0,1fr) 64px minmax(0,1fr); }
-  .detail-page .hero .team-badge { flex-basis: 34px; width: 34px; height: 34px; }
-  .detail-page .hero .team h1 { font-size: 10px; }
+  .detail-page .hero { grid-template-columns: minmax(0,1fr) 64px minmax(0,1fr); min-height: 96px; }
+  .detail-page .hero .team-badge { flex-basis: 38px; width: 38px; height: 38px; }
+  .detail-page .hero .team h1 { font-size: 12px; }
+  .detail-page .kick strong { font-size: 13px; }
   .detail-page .probability-section .probability-card strong { font-size: 16px; }
   .detail-page .signature-grid { font-size: 6.5px; }
   .detail-page .exact-compact-row { grid-template-columns: 55px minmax(0,1fr) 51px; gap: 5px; }
