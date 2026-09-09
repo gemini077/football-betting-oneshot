@@ -562,7 +562,7 @@ MODERN_CSS = r"""
 .league-title { display: flex; align-items: center; justify-content: space-between; padding: 9px 14px; border-bottom: 1px solid var(--line); background: #FBFBFC; }
 .league-title strong { font-size: 10px; }
 .league-title span { color: var(--muted); font-size: 9px; }
-.fixture-row.match-card { position: relative; display: grid; grid-template-columns: 135px minmax(220px,1.2fr) minmax(230px,1.4fr) minmax(180px,.95fr); gap: 17px; align-items: center; min-height: 78px; padding: 11px 14px; border-bottom: 1px solid var(--line); }
+.fixture-row.match-card { position: relative; display: grid; grid-template-columns: 118px minmax(300px,1.25fr) minmax(220px,1fr) 150px; gap: 14px; align-items: center; min-height: 72px; padding: 10px 14px; border-bottom: 1px solid var(--line); }
 .fixture-row.match-card:last-child { border-bottom: 0; }
 .fixture-row.match-card:hover { background: #FFFDFC; box-shadow: inset 3px 0 0 var(--orange); }
 .fixture-row > * { min-width: 0; }
@@ -572,14 +572,15 @@ MODERN_CSS = r"""
 .match-id strong, .match-id span { display: block; }
 .match-id strong { color: var(--ink); font-size: 10px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .match-id span { margin-top: 3px; overflow: hidden; color: var(--muted); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
-.teams-line { display: grid; grid-template-columns: 30px minmax(0,1fr) 30px; gap: 8px; align-items: center; }
-.teams-names { min-width: 0; }
-.teams-names strong, .teams-names span { display: block; overflow-wrap: anywhere; }
-.teams-names strong { font-size: 11px; font-weight: 720; }
-.teams-names span { margin-top: 2px; color: var(--muted); font-size: 8px; }
-.mini-crest { display: inline-grid; place-items: center; width: 28px; height: 28px; border: 1.5px solid var(--blue); border-radius: 50%; background: #EEF5FC; color: var(--blue); font-size: 7px; font-weight: 800; }
-.mini-crest.team-badge { flex-basis: 28px; }
-.mini-crest.team-badge-fallback { background: #EEF5FC; }
+.teams-line { display: grid; grid-template-columns: minmax(0,1fr) 30px minmax(0,1fr); gap: 9px; align-items: center; }
+.matchup-side { display: flex; align-items: center; gap: 8px; }
+.matchup-side.matchup-home { justify-content: flex-end; text-align: right; }
+.matchup-side.matchup-away { justify-content: flex-start; text-align: left; }
+.matchup-name { font-size: 12px; font-weight: 720; line-height: 1.2; }
+.teams-status { grid-column: 1 / -1; margin-top: -2px; color: var(--muted); font-size: 8px; line-height: 1.25; text-align: center; }
+.mini-crest { display: inline-grid; flex: 0 0 30px; place-items: center; width: 30px; height: 30px; border: 0; border-radius: 0; background: transparent; color: var(--blue); font-size: 7px; font-weight: 800; }
+.mini-crest.team-badge { flex-basis: 30px; }
+.mini-crest[data-crest-kind="fallback"], .mini-crest.team-badge-fallback { flex-basis: 28px; width: 28px; height: 28px; border: 1px solid var(--line-2); border-radius: 7px; background: #F4F5F6; }
 .mini-crest img { object-fit: contain; }
 .compact-prob { display: grid; gap: 6px; min-width: 0; }
 .compact-prob-label { color: var(--muted); font-size: 8px; }
@@ -623,7 +624,7 @@ MODERN_CSS = r"""
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
 
 @media (max-width: 980px) {
-  .fixture-row.match-card { grid-template-columns: 108px minmax(180px,1.15fr) minmax(190px,1.35fr) minmax(150px,.9fr); gap: 12px; padding-left: 12px; padding-right: 12px; }
+  .fixture-row.match-card { grid-template-columns: 104px minmax(250px,1.25fr) minmax(190px,1fr) 132px; gap: 10px; padding-left: 12px; padding-right: 12px; }
 }
 @media (max-width: 820px) {
   .dashboard-page .content { padding-bottom: 71px; }
@@ -642,8 +643,10 @@ MODERN_CSS = r"""
   .fixture-row.match-card > .fixture-row-target { margin-top: 0; }
   .match-id { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
   .match-id span { margin: 0; }
-  .teams-line { margin-top: 9px; }
-  .teams-names strong { font-size: 12px; }
+  .teams-line { margin-top: 9px; grid-template-columns: minmax(0,1fr) 28px minmax(0,1fr); gap: 6px; }
+  .matchup-side { gap: 6px; }
+  .matchup-name { font-size: 12px; }
+  .teams-status { margin-top: 0; font-size: 7px; }
   .compact-prob { margin-top: 10px; }
   .compact-prob-values { font-size: 11px; }
   .compact-score { margin-top: 10px; padding-top: 9px; border-top: 1px solid var(--line); font-size: 8px; }
@@ -660,7 +663,7 @@ MODERN_CSS = r"""
   .dashboard-page .content { padding-left: 12px; padding-right: 12px; }
   .fixture-table { margin-left: -12px; margin-right: -12px; }
   .fixture-row.match-card { padding-left: 12px; padding-right: 12px; }
-  .teams-names strong { font-size: 11px; }
+  .matchup-name { font-size: 11px; }
   .compact-score-lines { gap: 3px 6px; }
   .page-footer { padding-left: 12px; padding-right: 12px; }
 }
@@ -1016,10 +1019,14 @@ def _modern_card_html(
     if has_result:
         status_line = f'90\u5206\u949f\u8d5b\u679c {result.get("score_90m")}'
     teams_html = (
+        '<div class="matchup-side matchup-home">'
         f'{render_team_badge(home_value, card.get("home_crest"), side="home", variant="mini-crest")}'
-        f'<div class="teams-names"><strong>{home_text} <span class="versus">vs</span> {away_text}</strong>'
-        f'<span>{html.escape(status_line)}</span></div>'
-        f'{render_team_badge(away_value, card.get("away_crest"), side="away", variant="mini-crest")}'
+        f'<strong class="matchup-name">{home_text}</strong></div>'
+        '<span class="matchup-vs" aria-hidden="true">VS</span>'
+        '<div class="matchup-side matchup-away">'
+        f'<strong class="matchup-name">{away_text}</strong>'
+        f'{render_team_badge(away_value, card.get("away_crest"), side="away", variant="mini-crest")}</div>'
+        f'<span class="teams-status">{html.escape(status_line)}</span>'
     )
     probability_html = _one_x_two_html(prediction) if prediction else '<div class="prediction-unavailable">\u2014</div>'
     score_html = (
@@ -1075,7 +1082,7 @@ def _modern_card_html(
         f'<strong class="match-number">{match_number_text}</strong>'
         f'<span>{competition_text} \u00b7 {kickoff_text}</span>'
         '</div>'
-        f'<div class="teams-line">{teams_html}</div>'
+        f'<div class="teams-line" data-matchup="true" aria-label="{home_text} VS {away_text}">{teams_html}</div>'
         f'<div class="probability-cell-group">{probability_html}{score_html}</div>'
         f'{context_html}'
         '</article>'

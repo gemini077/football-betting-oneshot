@@ -69,6 +69,11 @@ def test_dashboard_uses_locked_probability_desk_surface():
     assert 'class="side-rail"' in html
     assert 'class="league-group"' in html
     assert 'class="fixture-row match-card' in html
+    assert 'data-matchup="true"' in html
+    assert 'class="matchup-side matchup-home"' in html
+    assert 'class="matchup-vs"' in html
+    assert 'class="matchup-side matchup-away"' in html
+    assert 'class="teams-status"' in html
     assert 'class="table-header"' not in html
     assert 'class="footer-principles"' in html
     assert "OneShot" in html
@@ -112,6 +117,8 @@ def test_detail_keeps_exact_score_as_separate_truthful_lane(tmp_path):
     assert 'data-exact-compact-remainder-count="163"' in html
     assert 'data-exact-disclosure' in html
     assert 'class="hero"' in html
+    assert 'data-matchup="true"' in html
+    assert 'class="matchup-vs hero-vs"' in html
     assert 'class="tabs"' in html
     assert html.count('class="grid3') >= 2
     assert 'score-grid signature-grid' in html
