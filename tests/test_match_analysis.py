@@ -264,10 +264,10 @@ def test_formal_markets_are_wired_to_detail_and_completed_verification(tmp_path)
     assert 'data-exact-status="AVAILABLE"' in html
     assert 'data-exact-compact="true"' in html
     assert 'data-exact-compact-source-cell-count="169"' in html
-    assert 'data-exact-compact-top-count="6"' in html
-    assert 'data-exact-compact-remainder-count="163"' in html
-    assert 'data-exact-compact-remainder-probability="0.964497041420"' in html
-    assert html.count('data-exact-compact-score=') == 6
+    assert 'data-exact-compact-top-count="3"' in html
+    assert 'data-exact-compact-remainder-count="166"' in html
+    assert 'data-exact-compact-remainder-probability="0.982248520710"' in html
+    assert html.count('data-exact-compact-score=') == 3
     assert 'data-exact-disclosure' in html
     assert '<details class="exact-full-disclosure"' in html
     assert '<details open class="exact-full-disclosure"' not in html
@@ -283,12 +283,9 @@ def test_formal_markets_are_wired_to_detail_and_completed_verification(tmp_path)
         (0, 0),
         (0, 1),
         (0, 2),
-        (0, 3),
-        (0, 4),
-        (0, 5),
     ]
-    assert remainder == pytest.approx(163 / 169)
-    assert remainder_count == 163
+    assert remainder == pytest.approx(166 / 169)
+    assert remainder_count == 166
 
 
 def test_formal_market_unavailability_is_scoped_to_one_market(tmp_path):
@@ -874,9 +871,10 @@ def test_degraded_detail_keeps_exact_score_scope_and_local_context(tmp_path):
     html = render_match_detail(contract)
 
     assert "\u6bd4\u5206\u6982\u7387\u4ec5\u4f9b\u89c2\u5bdf" in html
-    assert "\u4fdd\u7559\u539f\u59cb\u6bd4\u5206\u6982\u7387" in html
-    assert "\u6682\u4e0d\u5c55\u5f00\u89e3\u8bfb" in html
-    assert 'class="quality-warning"' in html
+    assert html.count('class="quality-warning exact-quality-warning"') == 1
+    assert html.count("\u6bd4\u5206\u6982\u7387\u4ec5\u4f9b\u89c2\u5bdf") == 1
+    assert "\u6bd4\u5206\u6982\u7387\u5206\u5e03\uff08\u4ec5\u4f9b\u89c2\u5bdf\uff09" not in html
+    assert "\u5f53\u524d\u4ec5\u4f9b\u89c2\u5bdf" not in html
     assert 'data-exact-state="UNAVAILABLE"' in html
 
 
@@ -900,8 +898,10 @@ def test_detail_quality_copy_matches_lane_state(tmp_path, status, provenance, la
     html = render_match_detail(contract)
 
     assert label in html
-    assert "\u6682\u4e0d\u5c55\u5f00\u89e3\u8bfb" in html
-    assert 'class="quality-warning"' in html
+    assert html.count('class="quality-warning exact-quality-warning"') == 1
+    assert html.count(label) == 1
+    assert "\u6bd4\u5206\u6982\u7387\u5206\u5e03\uff08\u4ec5\u4f9b\u89c2\u5bdf\uff09" not in html
+    assert "\u5f53\u524d\u4ec5\u4f9b\u89c2\u5bdf" not in html
 
 
 def test_trust_title_changes_when_only_freeze_and_cutoff_are_visible(tmp_path):

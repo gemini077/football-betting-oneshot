@@ -8,7 +8,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
 from scripts.match_detail import render_match_detail  # noqa: E402
-from scripts.prediction_dashboard import render_dashboard  # noqa: E402
+from scripts.prediction_dashboard import _historical_results_html, render_dashboard  # noqa: E402
 from test_match_analysis import assemble, roots  # noqa: E402
 
 
@@ -73,7 +73,7 @@ def test_dashboard_uses_locked_probability_desk_surface():
     assert 'class="matchup-side matchup-home"' in html
     assert 'class="matchup-vs"' in html
     assert 'class="matchup-side matchup-away"' in html
-    assert 'class="teams-status"' in html
+    assert 'class="teams-status"' not in html
     assert 'class="table-header"' not in html
     assert 'class="footer-principles"' in html
     assert "OneShot" in html
@@ -94,7 +94,7 @@ def test_dashboard_uses_locked_probability_desk_surface():
     assert "1X2 概率" not in html
     assert "Exact Top3" not in html
     assert "@media (max-width: 820px)" in html
-    assert ".matchup-name { font-size: 13px; }" in html
+    assert ".matchup-name { font-size: var(--type-body); }" in html
     assert "\u603b\u8fdb\u7403\u5206\u5e03" not in html
     assert "\u5e02\u573a\u5bf9\u7167" not in html
     assert "\u51b3\u7b56\u8bed\u5883" not in html
@@ -105,6 +105,11 @@ def test_dashboard_uses_locked_probability_desk_surface():
     assert "\u63a8\u8350" not in html
     assert 'href="./latest.html"' in html
     assert "source" not in html.lower()
+    assert 'href="#analysis"' not in html
+    assert 'href="#closed-beta"' not in html
+    assert 'class="icon-btn"' not in html
+    assert 'id="beginner-help"' in html
+    assert html.count('class="bottom-item') == 4
 
 
 def test_detail_keeps_exact_score_as_separate_truthful_lane(tmp_path):
@@ -124,15 +129,15 @@ def test_detail_keeps_exact_score_as_separate_truthful_lane(tmp_path):
     html = render_match_detail(contract)
 
     assert html.count('data-exact-cell-home=') == 169
-    assert html.count('data-exact-compact-score=') == 6
+    assert html.count('data-exact-compact-score=') == 3
     assert 'data-exact-compact-source-cell-count="169"' in html
-    assert 'data-exact-compact-remainder-count="163"' in html
+    assert 'data-exact-compact-remainder-count="166"' in html
     assert 'data-exact-disclosure' in html
     assert 'class="hero"' in html
     assert 'data-matchup="true"' in html
     assert 'class="matchup-vs hero-vs"' in html
-    assert '.detail-page .hero .team h1 { font-size: 13px;' in html
-    assert '.detail-page .kick strong { font-size: 14px;' in html
+    assert '.detail-page .hero .team h1 { font-size: var(--type-body);' in html
+    assert '.detail-page .kick strong { font-size: calc(17px * var(--ui-text-scale));' in html
     assert '.detail-page .supporting-grid { display: flex;' in html
     assert '.detail-page .supporting-panel { min-height: 0;' in html
     assert '.detail-page .supporting-grid > .panel:only-child { flex: 1 1 100%;' in html
@@ -141,6 +146,9 @@ def test_detail_keeps_exact_score_as_separate_truthful_lane(tmp_path):
     assert 'class="tabs"' in html
     assert html.count('class="grid3') >= 2
     assert 'score-grid signature-grid' in html
+    assert 'class="fav"' not in html
+    assert '.detail-page .signature-grid { font-size: calc(10px * var(--ui-text-scale));' in html
+    assert html.count('class="quality-warning exact-quality-warning"') == 1
     assert 'class="trust-strip detail-trust"' in html
     assert '<details open class="exact-full-disclosure"' not in html
     assert html.count('class="probability-segment') == 3
@@ -152,6 +160,24 @@ def test_detail_keeps_exact_score_as_separate_truthful_lane(tmp_path):
     assert "\u7531\u5f53\u524d\u6bd4\u5206\u5206\u5e03\u6c47\u603b" in html
     assert "\u603b\u8fdb\u7403\u5206\u5e03\u6700\u9ad8\u6bb5" not in html
     assert 'data-evidence-role="MODEL_INPUT"' in html
+    assert 'href="#market"' not in html
+    assert 'href="#evidence"' in html
+
+    with_optional_context = copy.deepcopy(contract)
+    with_optional_context["market"] = {
+        "model_comparison": {
+            "model_probabilities": {"home": 0.48, "draw": 0.27, "away": 0.25},
+            "market_probabilities": {"home": 0.45, "draw": 0.29, "away": 0.26},
+        }
+    }
+    with_optional_context["evidence"] = {
+        "fundamentals": {"recent_form": {"home_overall": {"matches": 5, "wins": 3}}},
+    }
+    optional_html = render_match_detail(with_optional_context)
+    assert 'href="#market"' in optional_html
+    assert 'href="#evidence"' in optional_html
+    assert 'id="market"' in optional_html
+    assert 'id="evidence"' in optional_html
 
     unavailable = copy.deepcopy(contract)
     unavailable["formal_markets"]["markets"]["exact_score"] = {
@@ -163,6 +189,35 @@ def test_detail_keeps_exact_score_as_separate_truthful_lane(tmp_path):
     assert 'data-exact-cell-home=' not in unavailable_html
     assert 'data-exact-compact-score=' not in unavailable_html
     assert "\u6bd4\u5206\u6982\u7387\u6682\u4e0d\u53ef\u7528" in unavailable_html
+
+
+def test_dashboard_history_is_result_first_and_does_not_backfill_missing_prematch_context():
+    row = {
+        "home": "\u4e3b\u961f",
+        "away": "\u5ba2\u961f",
+        "kickoff": "2026-09-08T20:00:00+08:00",
+        "result_90m": "2-1",
+        "prediction_frozen": True,
+        "prematch_context": {
+            "ft_probabilities": {"home": 0.52, "draw": 0.25, "away": 0.23},
+            "exact_top_scores": ["1-0", "2-1", "1-1"],
+        },
+    }
+    html = _historical_results_html([row])
+    assert html.index("90\u5206\u949f\u8d5b\u679c") < html.index("\u4e3b\u961f")
+    assert "\u8d5b\u524d\u80dc / \u5e73 / \u8d1f\u6982\u7387" in html
+    assert "52.0%" in html
+    assert "\u5df2\u547d\u4e2d" in html
+    assert "\u5f53\u65f6\u672a\u6b63\u5f0f\u8bb0\u5f55" not in html
+
+    missing_context = dict(row)
+    missing_context.pop("prematch_context")
+    missing_html = _historical_results_html([missing_context])
+    assert "\u5f53\u65f6\u672a\u6b63\u5f0f\u8bb0\u5f55" in missing_html
+
+    empty_html = _historical_results_html([])
+    assert 'id="historical-results"' in empty_html
+    assert 'data-history-empty="true"' in empty_html
 
 
 def test_completed_detail_prioritizes_90_minute_result(tmp_path):

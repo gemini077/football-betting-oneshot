@@ -34,9 +34,9 @@ except ImportError:
     from closed_beta_copy import render_closed_beta_notice
 
 try:
-    from .public_ui_shared import render_public_document, render_team_badge
+    from .public_ui_shared import render_beginner_help, render_public_document, render_team_badge
 except ImportError:
-    from public_ui_shared import render_public_document, render_team_badge
+    from public_ui_shared import render_beginner_help, render_public_document, render_team_badge
 
 
 SHANGHAI = timezone(timedelta(hours=8))
@@ -212,7 +212,7 @@ def _render_probability_cards(contract: dict[str, Any]) -> str:
     if any(value is None for _, _, value in values):
         return (
             f'<article class="probability-section panel probability-panel lane-unavailable" id="probability" {section_attrs} aria-labelledby="probability-title">'
-            '<h2 id="probability-title">1X2 \u6982\u7387 <i class="info-i">i</i></h2>'
+            '<h2 id="probability-title">\u80dc / \u5e73 / \u8d1f\u6982\u7387 <i class="info-i">i</i></h2>'
             f'{lane_note}<p>\u80dc\u5e73\u8d1f\u6982\u7387\u6682\u4e0d\u53ef\u7528\uff1b\u9875\u9762\u4e0d\u8865\u5199\u7f3a\u5931\u7684\u6982\u7387\u3002</p></article>'
         )
     numeric = [value for _, _, value in values if value is not None]
@@ -220,7 +220,7 @@ def _render_probability_cards(contract: dict[str, Any]) -> str:
     if total <= 0:
         return (
             f'<article class="probability-section panel probability-panel lane-unavailable" id="probability" {section_attrs} aria-labelledby="probability-title">'
-            '<h2 id="probability-title">1X2 \u6982\u7387 <i class="info-i">i</i></h2>'
+            '<h2 id="probability-title">\u80dc / \u5e73 / \u8d1f\u6982\u7387 <i class="info-i">i</i></h2>'
             f'{lane_note}<p>\u80dc\u5e73\u8d1f\u6982\u7387\u6682\u4e0d\u53ef\u7528\uff1b\u9875\u9762\u4e0d\u8865\u5199\u7f3a\u5931\u7684\u6982\u7387\u3002</p></article>'
         )
     leader = max(values, key=lambda item: item[2] or 0.0)[0]
@@ -243,7 +243,7 @@ def _render_probability_cards(contract: dict[str, Any]) -> str:
     aria_label = "\uFF1B".join(aria_values)
     return (
         f'<article class="probability-section panel probability-panel" id="probability" {section_attrs} aria-labelledby="probability-title">'
-        '<h2 id="probability-title">1X2 \u6982\u7387 <i class="info-i">i</i></h2>'
+        '<h2 id="probability-title">\u80dc / \u5e73 / \u8d1f\u6982\u7387 <i class="info-i">i</i></h2>'
         f'{lane_note}'
         '<div class="prob-cells">' + "".join(cards) + '</div>'
         f'<div class="probbar probability-strip" role="img" aria-label="\u80dc\u5e73\u8d1f\u6982\u7387\uff1a{aria_label}">'
@@ -257,6 +257,21 @@ def _score_serving_context(contract: dict[str, Any]) -> dict[str, str]:
     if isinstance(quality, dict):
         return exact_score_serving_presentation(quality)
     return exact_score_serving_presentation(None)
+
+
+def _exact_quality_warning(serving_state: str) -> str:
+    if serving_state == "NORMAL":
+        return ""
+    message = (
+        "\u6bd4\u5206\u6982\u7387\u8d28\u91cf\u5f85\u786e\u8ba4"
+        if serving_state == "UNVERIFIED"
+        else "\u6bd4\u5206\u6982\u7387\u4ec5\u4f9b\u89c2\u5bdf"
+    )
+    return (
+        f'<p class="quality-warning exact-quality-warning" '
+        f'data-exact-warning-state="{html.escape(serving_state, quote=True)}">{message}</p>'
+    )
+
 
 def _render_score_distribution(contract: dict[str, Any]) -> str:
     rows = _score_rows(contract)
@@ -374,7 +389,7 @@ def _formal_status(item: dict[str, Any]) -> str:
 def _exact_compact_projection(
     contract: dict[str, Any],
     *,
-    limit: int = 6,
+    limit: int = 3,
 ) -> tuple[list[dict[str, Any]], float, int]:
     """Project the frozen finite cells without replaying or renormalizing them."""
 
@@ -414,13 +429,13 @@ def _render_exact_compact_projection(contract: dict[str, Any]) -> str:
         f'data-exact-compact-remainder-count="{remainder_count}" '
         f'data-exact-compact-remainder-probability="{remainder:.12f}" '
         'aria-label="\u79fb\u52a8\u7aef\u6bd4\u5206\u6982\u7387\u6458\u8981">'
-        '<div class="exact-compact-heading"><h3>\u6bd4\u5206\u6982\u7387</h3><span>\u524d 6 \u4e2a\u5df2\u8868\u793a\u6bd4\u5206</span></div>'
+        '<div class="exact-compact-heading"><h3>\u6700\u53ef\u80fd\u6bd4\u5206\uff08\u524d3\uff09</h3><span>\u524d 3 \u4e2a\u5df2\u8bb0\u5f55\u6bd4\u5206</span></div>'
         '<div class="exact-compact-list">'
         + "".join(rows)
         + '</div>'
-        f'<div class="exact-compact-remainder"><span>\u5176\u4f59\u5df2\u8868\u793a\u6bd4\u5206\u5408\u8ba1</span>'
+        f'<div class="exact-compact-remainder"><span>\u672a\u5217\u51fa\u6bd4\u5206\u5408\u8ba1</span>'
         f'<strong>{_percent(remainder)}</strong></div>'
-        '<p class="exact-compact-note">\u4ec5\u5408\u8ba1 0\u201312 \u00d7 0\u201312 \u5185\u5176\u4f59\u5df2\u8868\u793a\u6bd4\u5206\uff1b\u8303\u56f4\u5916\u4e0d\u63a8\u7b97\u3002</p>'
+        '<p class="exact-compact-note">\u8be5\u5408\u8ba1\u6765\u81ea\u5df2\u8bb0\u5f55\u7684\u6bd4\u5206\u5206\u5e03\uff1b\u4e0d\u8865\u5199\u7f3a\u5931\u6bd4\u5206\u3002</p>'
         '</div>'
     )
 
@@ -432,7 +447,8 @@ def _render_exact_formal_market(item: dict[str, Any], *, serving_state: str = "N
             '<article class="panel exact-panel lane-unavailable" id="score-distribution" '
             f'data-exact-state="UNAVAILABLE" data-exact-status="{html.escape(status, quote=True)}">'
             '<div class="score-title-row"><h2>\u6bd4\u5206\u6982\u7387</h2><small>\u5f53\u524d\u6ca1\u6709\u53ef\u6838\u9a8c\u7684\u5b8c\u6574\u6bd4\u5206\u6982\u7387</small></div>'
-            '<p>\u6bd4\u5206\u6982\u7387\u6682\u4e0d\u53ef\u7528\uff1b\u672a\u8bb0\u5f55\u7684\u5206\u5e03\u4e0d\u8865\u5199\u3002</p></article>'
+            + _exact_quality_warning(serving_state)
+            + '<p>\u6bd4\u5206\u6982\u7387\u6682\u4e0d\u53ef\u7528\uff1b\u672a\u8bb0\u5f55\u7684\u5206\u5e03\u4e0d\u8865\u5199\u3002</p></article>'
         )
     cells = contract.get("cells") if isinstance(contract.get("cells"), list) else []
     by_score = {
@@ -490,15 +506,7 @@ def _render_exact_formal_market(item: dict[str, Any], *, serving_state: str = "N
             )
         rows.append(f'<tr><th scope="row">{home}</th>{"".join(cells_html)}</tr>')
 
-    selected, _, _ = _exact_compact_projection(contract)
-    primary = selected[0] if selected else None
-    primary_summary = (
-        f'{int(primary["home_goals"])}-{int(primary["away_goals"])} \u00b7 {_percent(primary.get("probability"))}'
-        if primary
-        else "\u2014"
-    )
-    section_title = "\u6bd4\u5206\u6982\u7387\u5206\u5e03" if serving_state == "NORMAL" else "\u6bd4\u5206\u6982\u7387\u5206\u5e03\uff08\u4ec5\u4f9b\u89c2\u5bdf\uff09"
-    quality_note = "" if serving_state == "NORMAL" else '<span>\u5f53\u524d\u4ec5\u4f9b\u89c2\u5bdf</span>'
+    exact_quality_warning = _exact_quality_warning(serving_state)
     signature_headers = "".join(f'<th scope="col">{html.escape(label)}</th>' for label in signature_buckets)
     signature_rows = []
     for home_bucket in signature_buckets:
@@ -518,35 +526,24 @@ def _render_exact_formal_market(item: dict[str, Any], *, serving_state: str = "N
                 f'data-signature-probability="{probability:.6f}" style="--cell-alpha:{alpha:.3f}">{_percent(probability)}</td>'
             )
         signature_rows.append(f'<tr><th scope="row">{html.escape(home_bucket)}</th>{"".join(signature_cells)}</tr>')
-    signature_top = sorted(signature_values.items(), key=lambda entry: (-entry[1], entry[0]))[:3]
-    signature_top_text = " \u00b7 ".join(
-        f"{home}\u2013{away} {_percent(probability)}" for (home, away), probability in signature_top
-    )
-    signature_top_fallback = "\u2014"
-    signature_top_note = (
-        f'<div class="top3line"><strong>Top3\uff1a</strong> '
-        f'{html.escape(signature_top_text) if signature_top_text else signature_top_fallback}</div>'
-    )
     return (
         f'<article class="panel exact-panel" id="score-distribution" data-exact-state="{html.escape(serving_state, quote=True)}" data-exact-status="AVAILABLE">'
         '<div class="score-title-row"><h2>\u6bd4\u5206\u6982\u7387</h2>'
-        f'<small>{html.escape(section_title)}{quality_note}</small></div>'
-        f'<div class="exact-summary"><strong>\u6700\u9ad8\u6982\u7387\uff1a{html.escape(primary_summary)}</strong>'
-        '<span>4+ \u4e3a\u6bd4\u5206\u5206\u5e03\u805a\u5408</span></div>'
-        '<table class="score-grid signature-grid" aria-label="\u6bd4\u5206\u6982\u7387\u7b7e\u540d\u77e9\u9635\uff1b\u4e3b\u961f\u8fdb\u7403\u4e3a H\uff0c\u5ba2\u961f\u8fdb\u7403\u4e3a A">'
-        '<caption class="sr-only">\u6bd4\u5206\u6982\u7387\u7b7e\u540d\u77e9\u9635\uff1a\u4e3b\u961f\u8fdb\u7403 H \u00d7 \u5ba2\u961f\u8fdb\u7403 A\uff0c4+ \u4e3a\u805a\u5408\u89c6\u56fe</caption>'
-        '<thead><tr><th scope="col">H\\A</th>'
+        '<small>\u6bd4\u5206\u6982\u7387\u5206\u5e03</small></div>'
+        + exact_quality_warning
+        + '<table class="score-grid signature-grid" aria-label="\u6bd4\u5206\u6982\u7387\u7b7e\u540d\u77e9\u9635\uff1b\u884c\u4e3a\u4e3b\u961f\u8fdb\u7403\uff0c\u5217\u4e3a\u5ba2\u961f\u8fdb\u7403">'
+        '<caption class="sr-only">\u6bd4\u5206\u6982\u7387\u7b7e\u540d\u77e9\u9635\uff1a\u884c\u4e3a\u4e3b\u961f\u8fdb\u7403 \u00d7 \u5217\u4e3a\u5ba2\u961f\u8fdb\u7403\uff0c4+ \u4e3a\u805a\u5408\u89c6\u56fe</caption>'
+        '<thead><tr><th scope="col">\u4e3b\u961f/\u5ba2\u961f</th>'
         + signature_headers
         + '</tr></thead><tbody>'
         + "".join(signature_rows)
         + '</tbody></table>'
-        + signature_top_note
         + _render_exact_compact_projection(contract)
         + '<details class="exact-full-disclosure" data-exact-disclosure>'
         '<summary aria-label="\u67e5\u770b\u5b8c\u6574 169 \u683c\u6bd4\u5206\u77e9\u9635">\u67e5\u770b\u5b8c\u6574 169 \u683c\u6bd4\u5206\u77e9\u9635</summary>'
-        '<p class="exact-disclosure-cue">\u4e3b\u961f\u8fdb\u7403\u4e3a H\uff0c\u5ba2\u961f\u8fdb\u7403\u4e3a A\uff1b\u79fb\u52a8\u7aef\u5c55\u5f00\u540e\u5728\u77e9\u9635\u533a\u57df\u5185\u6a2a\u5411\u67e5\u770b\u3002</p>'
-        '<div class="exact-grid-wrap" role="region" tabindex="0" aria-label="\u6bd4\u5206\u6982\u7387 169 \u683c\u77e9\u9635\uff1b\u4e3b\u961f\u8fdb\u7403 H\uff0c\u5ba2\u961f\u8fdb\u7403 A">'
-        '<table class="exact-grid"><caption class="sr-only">\u6bd4\u5206\u6982\u7387 169 \u683c\uff1a\u4e3b\u961f\u8fdb\u7403 H \u00d7 \u5ba2\u961f\u8fdb\u7403 A</caption><thead><tr><th scope="col">H\\A</th>'
+        '<p class="exact-disclosure-cue">\u4e3b\u961f\u8fdb\u7403\u4e3a\u884c\uff0c\u5ba2\u961f\u8fdb\u7403\u4e3a\u5217\uff1b\u79fb\u52a8\u7aef\u5c55\u5f00\u540e\u5728\u77e9\u9635\u533a\u57df\u5185\u6a2a\u5411\u67e5\u770b\u3002</p>'
+        '<div class="exact-grid-wrap" role="region" tabindex="0" aria-label="\u6bd4\u5206\u6982\u7387 169 \u683c\u77e9\u9635\uff1b\u884c\u4e3a\u4e3b\u961f\u8fdb\u7403\uff0c\u5217\u4e3a\u5ba2\u961f\u8fdb\u7403">'
+        '<table class="exact-grid"><caption class="sr-only">\u6bd4\u5206\u6982\u7387 169 \u683c\uff1a\u4e3b\u961f\u8fdb\u7403 \u00d7 \u5ba2\u961f\u8fdb\u7403</caption><thead><tr><th scope="col">\u4e3b\u961f/\u5ba2\u961f</th>'
         + headers
         + '</tr></thead><tbody>'
         + "".join(rows)
@@ -787,7 +784,7 @@ def _render_key_takeaways(contract: dict[str, Any], *, exact_state: str = "UNVER
     outcomes = [(label, value) for label, value in outcomes if value is not None]
     if outcomes:
         label, number = max(outcomes, key=lambda item: item[1])
-        takeaways.append(("H", "", f"{label}\u76f8\u5bf9\u5360\u4f18", "\u4e09\u79cd\u8d5b\u679c\u4e2d\u6700\u9ad8\uff0c\u4f46\u4ec5\u662f\u76f8\u5bf9\u5360\u4f18\u3002", _percent(number)))
+        takeaways.append(("\u4e3b", "", f"{label}\u76f8\u5bf9\u5360\u4f18", "\u4e09\u79cd\u8d5b\u679c\u4e2d\u6700\u9ad8\uff0c\u4f46\u4ec5\u662f\u76f8\u5bf9\u5360\u4f18\u3002", _percent(number)))
     exact_contract = _exact_distribution_contract(contract)
     if isinstance(exact_contract, dict):
         selected, _, _ = _exact_compact_projection(exact_contract)
@@ -795,8 +792,6 @@ def _render_key_takeaways(contract: dict[str, Any], *, exact_state: str = "UNVER
             primary = selected[0]
             score = f'{int(primary["home_goals"])}-{int(primary["away_goals"])}'
             takeaways.append(("\u25ce", "orange", "\u6700\u9ad8\u6982\u7387\u6bd4\u5206\u4ecd\u4e0d\u9ad8", f"{score} \u53ea\u662f\u5206\u5e03\u4e2d\u7684\u6700\u5927\u5355\u683c\u3002", _percent(primary.get("probability"))))
-    if exact_state != "NORMAL" and exact_contract:
-        takeaways.append(("!", "purple", "\u6bd4\u5206\u5c42\u6682\u4ec5\u4f9b\u89c2\u5bdf", "\u4e0d\u8981\u628a Top1 \u5f53\u6210\u786e\u5b9a\u7b54\u6848\u3002", "\u89c2\u5bdf"))
     if not takeaways:
         return ""
     items = []
@@ -921,7 +916,7 @@ def _render_market_comparison(contract: dict[str, Any]) -> str:
     columns = f' style="grid-template-columns:66px repeat({len(rows)},minmax(0,1fr))"'
     return (
         '<article class="panel supporting-panel market-panel" id="market">'
-        '<h2>\u6a21\u578b vs \u5e02\u573a\uff081X2\uff09</h2>'
+        '<h2>\u6a21\u578b vs \u5e02\u573a\uff08\u80dc / \u5e73 / \u8d1f\uff09</h2>'
         f'<div class="compare-head"><span>\u6a21\u578b</span><span>{market_label}</span></div>'
         f'<div class="compare-grid"{columns}><div></div>{labels_html}<div></div>{bars_html}<div></div>{delta_html}</div>'
         f'<div class="subtle-note">\u5dee\u5f02\u8868\u793a\u6a21\u578b\u76f8\u5bf9\u5e02\u573a\u7684\u504f\u79bb\uff1a{html.escape(delta_text)}\u3002\u4e0d\u4ee3\u8868\u597d\u574f\u3002</div>'
@@ -1005,7 +1000,7 @@ def _render_trust(contract: dict[str, Any]) -> str:
         for icon, title, text in items
     )
     technical = _render_technical_details(contract)
-    return f'<section class="trust-strip detail-trust" id="sources">{trust_items}</section>{technical}'
+    return f'<section class="trust-strip detail-trust" id="data-method">{trust_items}</section>{technical}'
 
 def _result_score(result: dict[str, Any]) -> tuple[int, int] | None:
     text = str(result.get("score_90m") or "").strip()
@@ -1065,7 +1060,7 @@ def _render_completed_result(contract: dict[str, Any]) -> str:
         f'<div><span>\u5b9e\u9645\u6bd4\u5206</span><strong>{value("actual_score")}</strong></div>'
         f'<div><span>\u8d5b\u524d\u6700\u9ad8\u6982\u7387\u6bd4\u5206</span><strong>{value("primary_score")}</strong></div>'
         f'<div><span>\u6bd4\u5206</span><strong>{value("exact_status")}</strong></div>'
-        f'<div><span>\u8d5b\u524d 1X2 \u65b9\u5411</span><strong>{value("predicted_direction")}</strong></div>'
+        f'<div><span>\u8d5b\u524d\u80dc / \u5e73 / \u8d1f\u65b9\u5411</span><strong>{value("predicted_direction")}</strong></div>'
         f'<div><span>\u5b9e\u9645\u65b9\u5411</span><strong>{value("actual_direction")}</strong></div>'
         f'<div><span>\u65b9\u5411</span><strong>{value("direction_status")}</strong></div>'
         '</div>'
@@ -1087,7 +1082,7 @@ def _render_verification(contract: dict[str, Any]) -> str:
     placeholder = "\u2014"
     rows = [
         f'<div class="verification-row"><span>\u6bd4\u5206</span><strong>{_esc(comparison["exact_status"])}</strong><em>\u8d5b\u524d\u6700\u9ad8\u6982\u7387 {_display_score(comparison["primary_score"]) if comparison["primary_score"] else placeholder}</em></div>',
-        f'<div class="verification-row"><span>1X2\u65b9\u5411</span><strong>{_esc(comparison["direction_status"])}</strong><em>\u8d5b\u524d\u5224\u65ad {_esc(comparison["predicted_direction"] or placeholder)} \u00b7 \u5b9e\u9645 {_esc(comparison["actual_direction"] or placeholder)}</em></div>',
+        f'<div class="verification-row"><span>\u80dc / \u5e73 / \u8d1f\u65b9\u5411</span><strong>{_esc(comparison["direction_status"])}</strong><em>\u8d5b\u524d\u5224\u65ad {_esc(comparison["predicted_direction"] or placeholder)} \u00b7 \u5b9e\u9645 {_esc(comparison["actual_direction"] or placeholder)}</em></div>',
     ]
     return (
         '<section class="detail-section verification-section" id="verification">'
@@ -1112,23 +1107,24 @@ DETAIL_CSS = r"""
 .detail-page .content { padding-top: 12px; }
 .detail-page .topbar { color: var(--ink); }
 .detail-page .crumbs .back { text-decoration: none; }
-.detail-page .crumbs strong { font-size: 11px; }
-.detail-page .utility strong { color: var(--ink); font-size: 10px; }
+.detail-page .crumbs strong { font-size: var(--type-support); }
+.detail-page .utility strong,
+.detail-page .utility a { color: var(--ink); font-size: var(--type-support); }
 .detail-page .hero { grid-template-columns: minmax(0,1fr) 150px minmax(0,1fr); min-height: 122px; column-gap: 18px; margin-top: 0; padding: 17px 24px; }
 .detail-page .hero > .team { justify-content: flex-end; gap: 12px; }
 .detail-page .hero > .team.right { justify-content: flex-start; }
 .detail-page .hero .team-badge { flex-basis: 62px; width: 62px; height: 62px; }
 .detail-page .hero .team-badge[data-crest-kind="fallback"] { border-radius: 10px; }
-.detail-page .hero .team h1 { font-size: 22px; }
+.detail-page .hero .team h1 { font-size: var(--type-display); }
 .detail-page .kick { display: flex; flex-direction: column; align-items: center; gap: 2px; }
-.detail-page .hero-vs { color: var(--orange); font-size: 9px; letter-spacing: .16em; }
-.detail-page .kick strong { font-size: 24px; }
+.detail-page .hero-vs { color: var(--orange); font-size: var(--type-meta); letter-spacing: .16em; }
+.detail-page .kick strong { font-size: calc(24px * var(--ui-text-scale)); }
 .detail-page .team-copy { min-width: 0; }
 .detail-page .team h1 { overflow-wrap: anywhere; }
 .detail-page .team-meta:empty { display: none; }
 .detail-page .tabs { margin-bottom: 0; }
 .detail-page .quality-warning,
-.detail-page .pilot-note { margin: 10px 0 0; padding: 9px 12px; border-left: 2px solid var(--warning); background: var(--warning-soft); color: var(--warning); font-size: 10px; }
+.detail-page .pilot-note { margin: 10px 0 0; padding: 9px 12px; border-left: 2px solid var(--warning); background: var(--warning-soft); color: var(--warning); font-size: var(--type-support); }
 .detail-page .quality-warning strong { color: var(--ink); }
 .detail-page .quality-warning span { margin-left: 7px; color: var(--muted); }
 .detail-page .pilot-note { border-left-color: var(--line-2); background: transparent; color: var(--muted); }
@@ -1148,21 +1144,18 @@ DETAIL_CSS = r"""
 .detail-page .probability-section .probability-label,
 .detail-page .probability-section .probability-card strong,
 .detail-page .probability-section .probability-card small { display: block; }
-.detail-page .probability-section .probability-label { font-size: 10px; }
-.detail-page .probability-section .probability-card strong { margin-top: 8px; font-size: 24px; line-height: 1; font-weight: 760; font-variant-numeric: tabular-nums; }
-.detail-page .probability-section .probability-card small { min-height: 14px; margin-top: 7px; color: var(--muted); font-size: 8px; }
+.detail-page .probability-section .probability-label { font-size: var(--type-meta); }
+.detail-page .probability-section .probability-card strong { margin-top: 8px; font-size: calc(24px * var(--ui-text-scale)); line-height: 1; font-weight: 760; font-variant-numeric: tabular-nums; }
+.detail-page .probability-section .probability-card small { min-height: 14px; margin-top: 7px; color: var(--muted); font-size: var(--type-meta); }
 .detail-page .probability-strip { height: 8px; margin-top: 14px; }
 .detail-page .probability-strip span { display: block; min-width: 2px; height: 100%; }
-.detail-page .lane-status-note { margin: 0 0 9px; color: var(--warning); font-size: 9px; }
-.detail-page .lane-unavailable p { margin: 8px 0 0; color: var(--muted); font-size: 10px; }
+.detail-page .lane-status-note { margin: 0 0 9px; color: var(--warning); font-size: var(--type-meta); }
+.detail-page .lane-unavailable p { margin: 8px 0 0; color: var(--muted); font-size: var(--type-support); }
 .detail-page .exact-panel { overflow: hidden; }
 .detail-page .exact-panel .score-title-row { margin-bottom: 8px; }
 .detail-page .exact-panel .score-title-row h2 { margin-bottom: 0; }
-.detail-page .exact-panel .score-title-row small { max-width: 48%; color: var(--muted); font-size: 8px; text-align: right; }
-.detail-page .exact-summary { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin: 0 0 8px; }
-.detail-page .exact-summary strong { min-width: 0; font-size: 10px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
-.detail-page .exact-summary span { color: var(--muted); font-size: 8px; text-align: right; }
-.detail-page .signature-grid { table-layout: fixed; border-spacing: 2px; font-size: 8px; }
+.detail-page .exact-panel .score-title-row small { max-width: 48%; color: var(--muted); font-size: var(--type-meta); text-align: right; }
+.detail-page .signature-grid { table-layout: fixed; border-spacing: 2px; font-size: var(--matrix-type); }
 .detail-page .signature-grid th { padding: 2px; color: var(--muted); font-weight: 700; }
 .detail-page .signature-grid td { padding: 6px 2px; border-radius: 2px; background: #f1f6f0; font-variant-numeric: tabular-nums; }
 .detail-page .signature-grid td[data-signature-probability] { --cell-alpha: 0; }
@@ -1172,13 +1165,27 @@ DETAIL_CSS = r"""
 .detail-page .signature-grid td.hi1 { background: #92bc93; font-weight: 760; }
 .detail-page .signature-grid td.hi2 { background: #b7d0b7; }
 .detail-page .signature-grid td.hi3 { background: #d4e3d2; }
-.detail-page .exact-compact { display: none; }
+.detail-page .exact-compact { display: block; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); }
+.detail-page .exact-compact-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+.detail-page .exact-compact-heading h3 { margin: 0; font-size: var(--type-support); }
+.detail-page .exact-compact-heading span { color: var(--muted); font-size: var(--type-meta); }
+.detail-page .exact-compact-list { display: grid; gap: 1px; }
+.detail-page .exact-compact-row { display: grid; grid-template-columns: 76px minmax(0,1fr) 60px; gap: 8px; align-items: center; min-height: 32px; border-top: 1px solid var(--line); }
+.detail-page .exact-compact-row:first-child { border-top: 0; }
+.detail-page .exact-compact-score { font-size: var(--type-support); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.detail-page .exact-compact-score b { margin-right: 4px; color: var(--muted); font-size: var(--type-meta); font-weight: 650; }
+.detail-page .exact-compact-bar { height: 6px; overflow: hidden; background: var(--line); }
+.detail-page .exact-compact-bar > span { display: block; height: 100%; background: var(--orange); }
+.detail-page .exact-compact-probability { text-align: right; font-size: var(--type-support); font-variant-numeric: tabular-nums; }
+.detail-page .exact-compact-remainder { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line); font-size: var(--type-meta); }
+.detail-page .exact-compact-remainder strong { font-size: var(--type-support); font-variant-numeric: tabular-nums; }
+.detail-page .exact-compact-note { margin: 7px 0 0; color: var(--muted); font-size: var(--type-meta); }
 .detail-page .exact-full-disclosure { margin-top: 8px; border-top: 1px solid var(--line); }
-.detail-page .exact-full-disclosure > summary { min-height: 31px; padding: 9px 0 4px; cursor: pointer; color: var(--ink); font-size: 9px; font-weight: 700; }
+.detail-page .exact-full-disclosure > summary { display: flex; align-items: center; min-height: 44px; padding: 8px 0; cursor: pointer; color: var(--ink); font-size: var(--type-support); font-weight: 700; }
 .detail-page .exact-full-disclosure:not([open]) > :not(summary) { display: none; }
-.detail-page .exact-disclosure-cue { margin: 0 0 8px; color: var(--muted); font-size: 8px; }
+.detail-page .exact-disclosure-cue { margin: 0 0 8px; color: var(--muted); font-size: var(--type-meta); }
 .detail-page .exact-grid-wrap { max-width: 100%; overflow-x: auto; overscroll-behavior-inline: contain; }
-.detail-page .exact-grid { width: 100%; min-width: 720px; table-layout: fixed; border-collapse: collapse; font-size: 8px; font-variant-numeric: tabular-nums; }
+.detail-page .exact-grid { width: 100%; min-width: 720px; table-layout: fixed; border-collapse: collapse; font-size: var(--matrix-type); font-variant-numeric: tabular-nums; }
 .detail-page .exact-grid th,
 .detail-page .exact-grid td { width: 7.14%; padding: 5px 2px; border: 1px solid var(--line); text-align: center; white-space: nowrap; }
 .detail-page .exact-grid th { background: var(--card-soft); color: var(--muted); font-weight: 650; }
@@ -1186,8 +1193,8 @@ DETAIL_CSS = r"""
 @supports (background: color-mix(in srgb, white, black)) {
   .detail-page .exact-grid td[data-probability] { background: color-mix(in srgb, #2f8d49 calc(12% + var(--cell-alpha) * 78%), #eef5ed); }
 }
-.detail-page .exact-grid-caption { margin: 8px 0 0; color: var(--muted); font-size: 8px; }
-.detail-page .top3line { margin-top: 8px; padding-top: 7px; font-size: 8px; }
+.detail-page .exact-grid-caption { margin: 8px 0 0; color: var(--muted); font-size: var(--type-meta); }
+.detail-page .top3line { margin-top: 8px; padding-top: 7px; font-size: var(--type-support); }
 .detail-page .supporting-panel { min-height: 0; }
 .detail-page .supporting-panel h2 { margin-bottom: 11px; }
 .detail-page .goals-panel .bars { height: 86px; }
@@ -1201,31 +1208,31 @@ DETAIL_CSS = r"""
 .detail-page .evidence-panel-heading { margin-bottom: 7px; }
 .detail-page .evidence-panel-heading .evidence-role { margin-bottom: 3px; }
 .detail-page .evidence-panel-heading h2 { margin-bottom: 3px; }
-.detail-page .evidence-panel-heading p { margin: 0; color: var(--muted); font-size: 8px; }
+.detail-page .evidence-panel-heading p { margin: 0; color: var(--muted); font-size: var(--type-meta); }
 .detail-page .evidence-grid { display: grid; grid-template-columns: 1fr; gap: 0; }
 .detail-page .evidence-block { min-width: 0; padding: 8px 0; border: 0; border-top: 1px solid var(--line); background: transparent; }
 .detail-page .evidence-block:first-child { border-top: 0; }
-.detail-page .evidence-role { margin-bottom: 4px; color: var(--orange); font-size: 8px; font-weight: 750; letter-spacing: .08em; }
-.detail-page .evidence-block h3 { margin: 0 0 6px; font-size: 10px; }
-.detail-page .evidence-fact { padding: 5px 0; font-size: 9px; }
-.detail-page .evidence-fact strong { max-width: 70%; font-size: 9px; }
-.detail-page .source-line { margin: 5px 0 0; color: var(--muted); font-size: 8px; }
-.detail-page .support-list { margin: 3px 0 0; padding-left: 14px; font-size: 9px; }
+.detail-page .evidence-role { margin-bottom: 4px; color: var(--orange); font-size: var(--type-label); font-weight: 750; letter-spacing: .08em; }
+.detail-page .evidence-block h3 { margin: 0 0 6px; font-size: var(--type-support); }
+.detail-page .evidence-fact { padding: 5px 0; font-size: var(--type-support); }
+.detail-page .evidence-fact strong { max-width: 70%; font-size: var(--type-support); }
+.detail-page .source-line { margin: 5px 0 0; color: var(--muted); font-size: var(--type-meta); }
+.detail-page .support-list { margin: 3px 0 0; padding-left: 14px; font-size: var(--type-support); }
 .detail-page .support-list li { margin: 3px 0; }
 .detail-page .detail-section,
 .detail-page .result-panel,
 .detail-page .status-panel { margin-top: 10px; padding: 13px 0 14px; border-top: 1px solid var(--line-2); border-bottom: 1px solid var(--line); background: transparent; }
 .detail-page .section-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
-.detail-page .section-heading h2 { margin: 3px 0 0; font-size: 14px; letter-spacing: -.025em; }
-.detail-page .section-heading p { max-width: 48%; margin: 0; color: var(--muted); font-size: 9px; text-align: right; }
-.detail-page .section-kicker { color: var(--quiet); font-size: 8px; font-weight: 700; letter-spacing: .12em; }
+.detail-page .section-heading h2 { margin: 3px 0 0; font-size: var(--type-section); letter-spacing: -.025em; }
+.detail-page .section-heading p { max-width: 48%; margin: 0; color: var(--muted); font-size: var(--type-support); text-align: right; }
+.detail-page .section-kicker { color: var(--quiet); font-size: var(--type-label); font-weight: 700; letter-spacing: .12em; }
 .detail-page .change-awareness-section { margin-top: 10px; }
 .detail-page .change-lane-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 8px; }
 .detail-page .change-lane { min-width: 0; padding: 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); }
 .detail-page .change-lane-wide { grid-column: 1 / -1; }
-.detail-page .change-lane h3 { margin: 0 0 7px; font-size: 10px; }
+.detail-page .change-lane h3 { margin: 0 0 7px; font-size: var(--type-support); }
 .detail-page .change-rows { display: grid; }
-.detail-page .change-row { display: grid; grid-template-columns: 76px minmax(90px,1fr) 88px; gap: 8px; align-items: center; min-height: 26px; border-top: 1px solid var(--line); font-size: 9px; font-variant-numeric: tabular-nums; }
+.detail-page .change-row { display: grid; grid-template-columns: 76px minmax(90px,1fr) 88px; gap: 8px; align-items: center; min-height: 40px; border-top: 1px solid var(--line); font-size: var(--type-support); font-variant-numeric: tabular-nums; }
 .detail-page .change-row:first-child { border-top: 0; }
 .detail-page .change-before-now { display: flex; align-items: baseline; gap: 5px; }
 .detail-page .change-before-now > span { color: var(--muted); }
@@ -1233,38 +1240,38 @@ DETAIL_CSS = r"""
 .detail-page .change-lane-note,
 .detail-page .change-empty,
 .detail-page .change-unavailable-copy,
-.detail-page .section-note { margin: 8px 0 0; color: var(--muted); font-size: 8px; }
+.detail-page .section-note { margin: 8px 0 0; color: var(--muted); font-size: var(--type-meta); }
 .detail-page .deeper-details { margin-top: 10px; }
 .detail-page .result-panel { margin-top: 10px; }
-.detail-page .result-panel h2 { margin: 3px 0 0; font-size: 14px; }
+.detail-page .result-panel h2 { margin: 3px 0 0; font-size: var(--type-section); }
 .detail-page .actual-score { margin-top: 6px; font-size: 34px; font-weight: 800; line-height: 1; letter-spacing: -.06em; font-variant-numeric: tabular-nums; }
-.detail-page .actual-meta { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: baseline; margin-top: 8px; color: var(--muted); font-size: 9px; }
+.detail-page .actual-meta { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: baseline; margin-top: 8px; color: var(--muted); font-size: var(--type-support); }
 .detail-page .actual-meta strong { color: var(--verified); }
 .detail-page .completed-facts { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 1px; margin-top: 13px; border: 1px solid var(--line); background: var(--line); }
 .detail-page .completed-facts > div { min-width: 0; padding: 8px; background: var(--card); }
 .detail-page .completed-facts span,
 .detail-page .completed-facts strong { display: block; }
-.detail-page .completed-facts span { color: var(--muted); font-size: 8px; }
-.detail-page .completed-facts strong { margin-top: 3px; font-size: 10px; overflow-wrap: anywhere; }
+.detail-page .completed-facts span { color: var(--muted); font-size: var(--type-meta); }
+.detail-page .completed-facts strong { margin-top: 3px; font-size: var(--type-support); overflow-wrap: anywhere; }
 .detail-page .verification-section { margin-top: 8px; }
 .detail-page .verification-list { display: grid; }
-.detail-page .verification-row { display: grid; grid-template-columns: 74px minmax(64px,auto) minmax(0,1fr); gap: 9px; align-items: baseline; padding: 7px 0; border-top: 1px solid var(--line); font-size: 9px; }
+.detail-page .verification-row { display: grid; grid-template-columns: 74px minmax(64px,auto) minmax(0,1fr); gap: 9px; align-items: baseline; padding: 7px 0; border-top: 1px solid var(--line); font-size: var(--type-support); }
 .detail-page .verification-row > span,
 .detail-page .verification-row > em { color: var(--muted); }
 .detail-page .verification-row > em { font-style: normal; text-align: right; }
 .detail-page .status-panel { display: flex; gap: 12px; align-items: flex-start; padding: 15px 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); }
 .detail-page .status-mark { display: grid; place-items: center; flex: 0 0 26px; width: 26px; height: 26px; border-radius: 50%; background: var(--warning-soft); color: var(--warning); font-weight: 800; }
-.detail-page .status-panel h2 { margin: 3px 0 5px; font-size: 14px; }
-.detail-page .status-panel p { margin: 0; color: var(--muted); font-size: 10px; }
+.detail-page .status-panel h2 { margin: 3px 0 5px; font-size: var(--type-section); }
+.detail-page .status-panel p { margin: 0; color: var(--muted); font-size: var(--type-support); }
 .detail-page .detail-trust { margin-top: 10px; }
 .detail-page .technical-details { margin-top: 8px; }
-.detail-page .technical-details summary { padding: 8px 0; cursor: pointer; color: var(--ink); font-size: 9px; }
+.detail-page .technical-details summary { padding: 8px 0; cursor: pointer; color: var(--ink); font-size: var(--type-support); }
 .detail-page .technical-list { border-top: 1px solid var(--line); }
-.detail-page .technical-row { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1.3fr); gap: 9px; padding: 6px 0; border-bottom: 1px solid var(--line); font-size: 8px; }
+.detail-page .technical-row { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1.3fr); gap: 9px; padding: 6px 0; border-bottom: 1px solid var(--line); font-size: var(--type-meta); }
 .detail-page .technical-row span { color: var(--muted); }
 .detail-page .technical-row code { overflow-wrap: anywhere; text-align: right; font: inherit; }
 .detail-page .closed-beta-notice { margin: 10px 14px 0; }
-.detail-page .detail-footer { display: flex; justify-content: space-between; gap: 14px; margin: 0 14px; padding: 12px 0 14px; border-top: 1px solid var(--line); color: var(--muted); font-size: 8px; }
+.detail-page .detail-footer { display: flex; justify-content: space-between; gap: 14px; margin: 0 14px; padding: 12px 0 14px; border-top: 1px solid var(--line); color: var(--muted); font-size: var(--type-meta); }
 .detail-page .detail-footer span { min-width: 0; }
 .detail-page .detail-principles { margin-left: 14px; margin-right: 14px; }
 .detail-page .detail-copyright { padding-left: 14px; padding-right: 14px; }
@@ -1274,12 +1281,12 @@ DETAIL_CSS = r"""
   .detail-page .hero { grid-template-columns: minmax(0,1fr) 72px minmax(0,1fr); min-height: 100px; column-gap: 5px; padding: 10px 0; }
   .detail-page .hero > .team { gap: 6px; }
   .detail-page .hero .team-badge { flex-basis: 42px; width: 42px; height: 42px; }
-  .detail-page .hero .team h1 { font-size: 13px; font-weight: 800; line-height: 1.15; }
-  .detail-page .hero-vs { font-size: 7px; }
+  .detail-page .hero .team h1 { font-size: var(--type-body); font-weight: 800; line-height: 1.15; }
+  .detail-page .hero-vs { font-size: var(--type-meta); }
   .detail-page .kick { gap: 1px; }
-  .detail-page .kick small { font-size: 5.5px; }
-  .detail-page .kick strong { font-size: 14px; font-weight: 700; }
-  .detail-page .kick span { max-width: 72px; font-size: 5.5px; line-height: 1.2; text-align: center; }
+  .detail-page .kick small { font-size: var(--type-meta); }
+  .detail-page .kick strong { font-size: calc(17px * var(--ui-text-scale)); font-weight: 700; }
+  .detail-page .kick span { max-width: 72px; font-size: var(--type-meta); line-height: 1.2; text-align: center; }
   .detail-page .quality-warning,
   .detail-page .pilot-note { margin-top: 8px; }
   .detail-page .primary-grid { margin-top: 0; }
@@ -1288,32 +1295,32 @@ DETAIL_CSS = r"""
   .detail-page .supporting-grid > .panel:only-child { width: auto; flex: none; display: block; }
   .detail-page .panel { padding: 14px 0; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; box-shadow: none; }
   .detail-page .probability-section .probability-card { padding: 7px 4px 8px; }
-  .detail-page .probability-section .probability-card strong { font-size: 17px; }
+  .detail-page .probability-section .probability-card strong { font-size: calc(19px * var(--ui-text-scale)); }
   .detail-page .probability-section .probability-card small { display: none; }
   .detail-page .probability-strip { height: 6px; margin-top: 11px; }
   .detail-page .prob-caption { display: none; }
   .detail-page .exact-panel .score-title-row small { display: none; }
-  .detail-page .signature-grid { font-size: 7px; border-spacing: 1px; }
+  .detail-page .signature-grid { font-size: calc(10px * var(--ui-text-scale)); border-spacing: 1px; }
   .detail-page .signature-grid td { padding: 4px 1px; }
   .detail-page .exact-compact { display: block; margin-top: 10px; }
   .detail-page .exact-compact-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 7px; }
-  .detail-page .exact-compact-heading h3 { margin: 0; font-size: 11px; }
-  .detail-page .exact-compact-heading span { color: var(--muted); font-size: 8px; }
+  .detail-page .exact-compact-heading h3 { margin: 0; font-size: var(--type-support); }
+  .detail-page .exact-compact-heading span { color: var(--muted); font-size: var(--type-meta); }
   .detail-page .exact-compact-list { display: grid; gap: 1px; }
-  .detail-page .exact-compact-row { display: grid; grid-template-columns: 60px minmax(0,1fr) 53px; gap: 7px; align-items: center; min-height: 27px; border-top: 1px solid var(--line); }
+  .detail-page .exact-compact-row { display: grid; grid-template-columns: 60px minmax(0,1fr) 53px; gap: 7px; align-items: center; min-height: 40px; border-top: 1px solid var(--line); }
   .detail-page .exact-compact-row:first-child { border-top: 0; }
-  .detail-page .exact-compact-score { font-size: 11px; font-variant-numeric: tabular-nums; white-space: nowrap; }
-  .detail-page .exact-compact-score b { margin-right: 4px; color: var(--muted); font-size: 9px; font-weight: 650; }
+  .detail-page .exact-compact-score { font-size: var(--type-support); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .detail-page .exact-compact-score b { margin-right: 4px; color: var(--muted); font-size: var(--type-meta); font-weight: 650; }
   .detail-page .exact-compact-bar { height: 5px; overflow: hidden; background: var(--line); }
   .detail-page .exact-compact-bar > span { display: block; height: 100%; background: var(--orange); }
-  .detail-page .exact-compact-probability { text-align: right; font-size: 12px; font-variant-numeric: tabular-nums; }
-  .detail-page .exact-compact-remainder { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--line); font-size: 9px; }
-  .detail-page .exact-compact-remainder strong { font-size: 12px; font-variant-numeric: tabular-nums; }
-  .detail-page .exact-compact-note { margin: 6px 0 0; color: var(--muted); font-size: 8px; }
+  .detail-page .exact-compact-probability { text-align: right; font-size: var(--type-support); font-variant-numeric: tabular-nums; }
+  .detail-page .exact-compact-remainder { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--line); font-size: var(--type-meta); }
+  .detail-page .exact-compact-remainder strong { font-size: var(--type-support); font-variant-numeric: tabular-nums; }
+  .detail-page .exact-compact-note { margin: 6px 0 0; color: var(--muted); font-size: var(--type-meta); }
   .detail-page .exact-full-disclosure { margin-top: 8px; }
-  .detail-page .exact-full-disclosure > summary { min-height: 33px; padding: 9px 0 6px; }
+  .detail-page .exact-full-disclosure > summary { min-height: 44px; padding: 9px 0 6px; }
   .detail-page .exact-grid-wrap { overflow-x: auto; }
-  .detail-page .exact-grid { min-width: 720px; font-size: 8px; }
+  .detail-page .exact-grid { min-width: 720px; font-size: calc(9px * var(--ui-text-scale)); }
   .detail-page .exact-grid th,
   .detail-page .exact-grid td { padding: 5px 2px; }
   .detail-page .supporting-panel { min-height: 0; }
@@ -1322,14 +1329,18 @@ DETAIL_CSS = r"""
   .detail-page .change-lane-grid,
   .detail-page .evidence-grid { grid-template-columns: 1fr; }
   .detail-page .change-lane-wide { grid-column: auto; }
-  .detail-page .change-row { grid-template-columns: 62px minmax(80px,1fr) 74px; gap: 6px; }
+  .detail-page .change-row { grid-template-columns: 62px minmax(80px,1fr) 74px; gap: 6px; min-height: 40px; }
   .detail-page .section-heading { display: block; margin-bottom: 9px; }
   .detail-page .section-heading p { max-width: none; margin-top: 4px; text-align: left; }
   .detail-page .completed-facts { grid-template-columns: repeat(2,minmax(0,1fr)); }
   .detail-page .verification-row { grid-template-columns: 64px minmax(59px,auto) minmax(0,1fr); gap: 7px; }
   .detail-page .verification-row > em { text-align: right; }
   .detail-page .actual-score { font-size: 32px; }
-  .detail-page .detail-trust,
+  .detail-page .detail-trust { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); margin-top: 10px; }
+  .detail-page .detail-trust .trust-item { min-width: 0; padding: 10px 8px; border-right: 0; border-bottom: 1px solid var(--line); }
+  .detail-page .detail-trust .trust-item:nth-child(odd) { border-right: 1px solid var(--line); }
+  .detail-page .detail-trust .trust-item strong { font-size: var(--type-meta); }
+  .detail-page .detail-trust .trust-item span { font-size: var(--type-meta); }
   .detail-page .detail-principles,
   .detail-page .detail-copyright,
   .detail-page .detail-footer { display: none; }
@@ -1340,13 +1351,13 @@ DETAIL_CSS = r"""
   .detail-page .content { padding-left: 12px; padding-right: 12px; }
   .detail-page .hero { grid-template-columns: minmax(0,1fr) 64px minmax(0,1fr); min-height: 96px; }
   .detail-page .hero .team-badge { flex-basis: 38px; width: 38px; height: 38px; }
-  .detail-page .hero .team h1 { font-size: 12px; }
-  .detail-page .kick strong { font-size: 13px; }
-  .detail-page .probability-section .probability-card strong { font-size: 16px; }
-  .detail-page .signature-grid { font-size: 6.5px; }
+  .detail-page .hero .team h1 { font-size: var(--type-body); }
+  .detail-page .kick strong { font-size: calc(16px * var(--ui-text-scale)); }
+  .detail-page .probability-section .probability-card strong { font-size: calc(18px * var(--ui-text-scale)); }
+  .detail-page .signature-grid { font-size: calc(10px * var(--ui-text-scale)); }
   .detail-page .exact-compact-row { grid-template-columns: 55px minmax(0,1fr) 51px; gap: 5px; }
   .detail-page .change-row { grid-template-columns: 55px minmax(70px,1fr) 68px; gap: 5px; }
-  .detail-page .verification-row { grid-template-columns: 58px minmax(55px,auto) minmax(0,1fr); gap: 5px; font-size: 8px; }
+  .detail-page .verification-row { grid-template-columns: 58px minmax(55px,auto) minmax(0,1fr); gap: 5px; font-size: var(--type-support); }
 }
 """
 
@@ -1359,14 +1370,8 @@ def render_match_detail(contract: dict[str, Any]) -> str:
     serving = status_code in {"FROZEN", "COMPLETED"}
     result = contract.get("result") if isinstance(contract.get("result"), dict) else {}
     serving_context = _score_serving_context(contract)
+    # Exact-state caution is rendered once inside the affected score lane.
     quality_warning = ""
-    if serving and serving_context["state"] != "NORMAL":
-        warning_label = "\u6bd4\u5206\u6982\u7387\u4ec5\u4f9b\u89c2\u5bdf" if serving_context["state"] == "DEGRADED" else "\u6bd4\u5206\u6982\u7387\u8d28\u91cf\u5f85\u786e\u8ba4"
-        warning_note = "\u4fdd\u7559\u539f\u59cb\u6bd4\u5206\u6982\u7387\uff0c\u6682\u4e0d\u5c55\u5f00\u89e3\u8bfb\u3002"
-        quality_warning = (
-            f'<div class="quality-warning" role="status"><strong>{warning_label}</strong>'
-            f'<span>{warning_note}</span></div>'
-        )
     pilot_note = (
         '<div class="pilot-note">\u5f53\u524d\u6982\u7387\u4ec5\u4f9b\u89c2\u5bdf</div>'
         if serving and (contract.get("governance") or {}).get("pilot_excluded")
@@ -1424,14 +1429,15 @@ def render_match_detail(contract: dict[str, Any]) -> str:
     else:
         trust_html = ""
         analysis_html = _render_status_panel(contract)
-    utility_html = (
-        '<div class="utility">'
-        '<button class="icon-btn" type="button" aria-label="\u5e2e\u52a9"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><path d="M9.8 9a2.3 2.3 0 014.4.9c0 1.7-2.2 2-2.2 3.6M12 17h.01"/></svg></button>'
-        '<strong>\u600e\u4e48\u770b</strong>'
-        '<button class="icon-btn" type="button" aria-label="\u6536\u85cf"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M6 4h12v17l-6-4-6 4z"/></svg></button>'
-        '<button class="icon-btn" type="button" aria-label="\u901a\u77e5"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M18 8a6 6 0 10-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></svg></button>'
-        '<button class="icon-btn" type="button" aria-label="\u8d26\u6237"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="9" r="3"/><path d="M6.5 18c1.7-3 9.3-3 11 0"/></svg></button>'
-        '</div>'
+    utility_html = '<div class="utility"><a href="#beginner-help">\u600e\u4e48\u770b</a></div>'
+    beginner_help_html = render_beginner_help()
+    market_tab = '<a class="tab" href="#market">\u5e02\u573a</a>' if market_html else ''
+    evidence_tab = '<a class="tab" href="#evidence">\u4f9d\u636e</a>' if evidence_html else ''
+    tabs_html = (
+        '<nav class="tabs" aria-label="\u6bd4\u8d5b\u8be6\u60c5\u5bfc\u822a">'
+        '<a class="tab active" href="#conclusion">\u6982\u89c8</a>'
+        '<a class="tab" href="#analysis">\u6982\u7387</a>'
+        f'{market_tab}{evidence_tab}</nav>'
     )
     closed_beta = render_closed_beta_notice("closed-beta")
     closed_beta_html = f'<div id="closed-beta">{closed_beta}</div>'
@@ -1456,14 +1462,15 @@ def render_match_detail(contract: dict[str, Any]) -> str:
   <section class="hero" id="conclusion" data-matchup="true" aria-label="{home} VS {away}">
     <div class="team matchup-side matchup-home">{home_badge}<div class="team-copy"><h1>{home}</h1>{home_meta}</div></div>
     <div class="kick"><span class="matchup-vs hero-vs" aria-hidden="true">VS</span><small>{html.escape(kickoff_date)}</small><strong>{html.escape(kickoff_time)}</strong><span>{venue} \u00b7 {html.escape(status_line)}</span></div>
-    <div class="team right matchup-side matchup-away"><div class="team-copy"><h1>{away}</h1>{away_meta}</div>{away_badge}<span class="fav" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 3l2.8 5.7L21 9.6l-4.5 4.4 1.1 6.2L12 17.3 6.4 20.2 7.5 14 3 9.6l6.2-.9z"/></svg></span></div>
+    <div class="team right matchup-side matchup-away"><div class="team-copy"><h1>{away}</h1>{away_meta}</div>{away_badge}</div>
   </section>
-  <nav class="tabs" aria-label="\u6bd4\u8d5b\u8be6\u60c5\u5bfc\u822a"><a class="tab active" href="#conclusion">\u6982\u89c8</a><a class="tab" href="#analysis">\u6982\u7387</a><a class="tab" href="#market">\u5e02\u573a</a><a class="tab" href="#evidence">\u4f9d\u636e</a></nav>
+  {tabs_html}
   {quality_warning}
   {pilot_note}
   {result_html}
   {verification_html}
   <div id="analysis" class="detail-analysis">{analysis_html}</div>
+  {beginner_help_html}
 </div>
 {closed_beta_html}
 {footer_html}
@@ -1476,6 +1483,8 @@ def render_match_detail(contract: dict[str, Any]) -> str:
         content_html=content_html,
         dashboard_href="../../prediction_dashboard/latest.html",
         history_href="../../prediction_dashboard/latest.html#historical-results",
+        sources_href="#data-method" if serving else "../../prediction_dashboard/latest.html#data-method",
+        help_href="#beginner-help",
         mobile_label=f"{home_value} vs {away_value}",
         body_class=f"detail-page status-{_status_class(contract)}",
         mobile_variant="detail",

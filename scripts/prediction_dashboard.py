@@ -38,9 +38,9 @@ except ImportError:  # package import used by tests
     from scripts.closed_beta_copy import render_closed_beta_notice
 
 try:
-    from public_ui_shared import render_public_document, render_team_badge
+    from public_ui_shared import render_beginner_help, render_public_document, render_team_badge
 except ImportError:  # package import used by tests
-    from scripts.public_ui_shared import render_public_document, render_team_badge
+    from scripts.public_ui_shared import render_beginner_help, render_public_document, render_team_badge
 
 try:
     from formal_market_projection import (
@@ -919,15 +919,15 @@ MODERN_CSS = r"""
 .dashboard-page { min-height: 100%; }
 .dashboard-page .content { min-width: 0; }
 .matches-head { display: flex; align-items: end; justify-content: space-between; gap: 18px; padding: 9px 2px 10px; }
-.matches-head h1 { margin: 0; font-size: 24px; letter-spacing: -.045em; }
-.matches-head p { margin: 5px 0 0; color: var(--muted); font-size: 9px; }
+.matches-head h1 { margin: 0; font-size: var(--type-display); letter-spacing: -.045em; }
+.matches-head p { margin: 5px 0 0; color: var(--muted); font-size: var(--type-support); }
 .chips { display: flex; gap: 6px; }
-.chip, .filter { padding: 6px 12px; border: 1px solid var(--line); border-radius: 8px; background: #FFF; color: var(--ink); font-size: 9px; }
+.chip, .filter { padding: 8px 12px; border: 1px solid var(--line); border-radius: 8px; background: #FFF; color: var(--ink); font-size: var(--type-support); }
 .chip.active, .filter[aria-pressed="true"] { border-color: #FFAD7A; background: var(--orange-soft); color: var(--orange); }
 .filter { min-height: 36px; cursor: pointer; }
 .filter:hover { border-color: #FFAD7A; color: var(--orange); }
 .filters { display: flex; flex-wrap: wrap; gap: 6px; }
-.quality-warning, .runtime-warning, .data-warning { display: flex; flex-wrap: wrap; align-items: baseline; gap: 5px 10px; margin: 0 0 10px; padding: 10px 14px; border-left: 3px solid var(--orange); background: var(--orange-soft); color: var(--muted); font-size: 11px; }
+.quality-warning, .runtime-warning, .data-warning { display: flex; flex-wrap: wrap; align-items: baseline; gap: 5px 10px; margin: 0 0 10px; padding: 10px 14px; border-left: 3px solid var(--orange); background: var(--orange-soft); color: var(--muted); font-size: var(--type-support); }
 .quality-warning strong, .runtime-warning strong, .data-warning strong { color: var(--ink); font-weight: 700; }
 .runtime-warning { border-left-color: var(--danger); background: var(--danger-soft); }
 .runtime-warning strong { color: var(--danger); }
@@ -935,8 +935,8 @@ MODERN_CSS = r"""
 .fixture-table { min-width: 0; }
 .league-group { margin-top: 10px; overflow: hidden; border: 1px solid var(--line); border-radius: 12px; background: #FFF; }
 .league-title { display: flex; align-items: center; justify-content: space-between; padding: 9px 14px; border-bottom: 1px solid var(--line); background: #FBFBFC; }
-.league-title strong { font-size: 10px; }
-.league-title span { color: var(--muted); font-size: 9px; }
+.league-title strong { font-size: var(--type-support); }
+.league-title span { color: var(--muted); font-size: var(--type-meta); }
 .fixture-row.match-card { position: relative; display: grid; grid-template-columns: 126px minmax(340px,1.35fr) minmax(250px,1fr) minmax(180px,.9fr); gap: 16px; align-items: center; min-height: 94px; padding: 13px 16px; border-bottom: 1px solid var(--line); }
 .fixture-row.match-card:last-child { border-bottom: 0; }
 .fixture-row.match-card:hover { background: #FFFDFC; box-shadow: inset 3px 0 0 var(--orange); }
@@ -945,64 +945,73 @@ MODERN_CSS = r"""
 .fixture-row-target { position: absolute; inset: 0; z-index: 2; border-radius: inherit; }
 .fixture-row-target:focus-visible { outline: 2px solid var(--orange); outline-offset: -3px; }
 .match-id strong, .match-id span { display: block; }
-.match-id strong { color: var(--ink); font-size: 10px; font-weight: 700; font-variant-numeric: tabular-nums; }
-.match-id span { margin-top: 3px; overflow: hidden; color: var(--muted); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.match-id strong { color: var(--ink); font-size: var(--type-meta); font-weight: 700; font-variant-numeric: tabular-nums; }
+.match-id span { margin-top: 3px; overflow: hidden; color: var(--muted); font-size: var(--type-meta); text-overflow: ellipsis; white-space: nowrap; }
 .teams-line { display: grid; grid-template-columns: minmax(0,1fr) 36px minmax(0,1fr); gap: 10px; align-items: center; }
 .matchup-side { display: flex; align-items: center; gap: 10px; }
 .matchup-side.matchup-home { justify-content: flex-end; text-align: right; }
 .matchup-side.matchup-away { justify-content: flex-start; text-align: left; }
-.matchup-name { font-size: 14px; font-weight: 760; line-height: 1.2; }
-.teams-status { grid-column: 1 / -1; margin-top: -2px; color: var(--muted); font-size: 9px; line-height: 1.25; text-align: center; }
-.mini-crest { display: inline-grid; flex: 0 0 36px; place-items: center; width: 36px; height: 36px; border: 0; border-radius: 0; background: transparent; color: var(--blue); font-size: 7px; font-weight: 800; }
+.matchup-name { font-size: var(--type-body); font-weight: 760; line-height: 1.3; }
+.teams-status { grid-column: 1 / -1; margin-top: -2px; color: var(--muted); font-size: var(--type-meta); line-height: 1.35; text-align: center; }
+.mini-crest { display: inline-grid; flex: 0 0 36px; place-items: center; width: 36px; height: 36px; border: 0; border-radius: 0; background: transparent; color: var(--blue); font-size: var(--type-meta); font-weight: 800; }
 .mini-crest.team-badge { flex-basis: 36px; }
 .mini-crest[data-crest-kind="fallback"], .mini-crest.team-badge-fallback { flex-basis: 32px; width: 32px; height: 32px; border: 1px solid var(--line-2); border-radius: 7px; background: #F4F5F6; }
 .mini-crest img { object-fit: contain; }
 .compact-prob { display: grid; gap: 9px; min-width: 0; }
-.compact-prob-label { color: var(--muted); font-size: 9px; }
+.compact-prob-label { color: var(--muted); font-size: var(--type-meta); }
 .compact-prob-values { display: grid; grid-template-columns: repeat(3,1fr); font-size: 13px; font-weight: 760; font-variant-numeric: tabular-nums; }
 .compact-prob-values span:nth-child(1) { color: var(--blue); }
 .compact-prob-values span:nth-child(2) { color: var(--ink); text-align: center; }
 .compact-prob-values span:nth-child(3) { color: var(--red); text-align: right; }
 .compact-prob .probbar { margin: 0; height: 8px; }
 .probability-cell-group { display: grid; gap: 9px; min-width: 0; }
-.compact-score { min-width: 0; color: #3F464E; font-size: 9px; font-variant-numeric: tabular-nums; }
-.score-caption { display: block; margin-bottom: 3px; color: var(--muted); font-size: 9px; }
+.compact-score { min-width: 0; color: #3F464E; font-size: var(--type-support); font-variant-numeric: tabular-nums; }
+.score-caption { display: block; margin-bottom: 3px; color: var(--muted); font-size: var(--type-meta); }
 .compact-score-lines { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 7px; }
 .compact-score-item { display: grid; min-width: 0; gap: 3px; white-space: normal; }
-.score-value { color: var(--ink); font-size: 14px; font-weight: 760; line-height: 1.1; }
-.score-probability { color: var(--muted); font-size: 10px; font-weight: 520; line-height: 1.1; }
+.score-value { color: var(--ink); font-size: calc(15px * var(--ui-text-scale)); font-weight: 760; line-height: 1.1; }
+.score-probability { color: var(--muted); font-size: var(--type-meta); font-weight: 520; line-height: 1.1; }
 .compact-score-item:first-child .score-value { font-weight: 800; }
-.score-serving-note { margin-top: 3px; color: var(--warning); font-size: 8px; }
-.context-mini { color: #606870; font-size: 9px; }
-.context-mini strong { display: block; color: #111820; font-size: 11px; }
+.score-serving-note { margin-top: 5px; color: var(--warning); font-size: var(--type-meta); }
+.context-mini { color: #606870; font-size: var(--type-meta); }
+.context-mini strong { display: block; color: #111820; font-size: var(--type-body); }
 .context-mini .warn { margin-top: 3px; color: var(--warning); }
 .context-mini .exception-note { color: var(--warning); }
 .context-mini .exception-note.failed, .context-mini .exception-note.missed { color: var(--danger); }
-.context-label { display: block; color: var(--orange); font-size: 9px; }
+.context-label { display: block; color: var(--orange); font-size: var(--type-meta); }
 .recommendation-context { padding-left: 10px; border-left: 2px solid var(--orange); }
-.recommendation-context strong { margin-top: 4px; font-size: 13px; }
-.recommendation-context.is-abstain strong { color: var(--warning); font-size: 11px; }
-.recommendation-reason { display: block; margin-top: 4px; color: var(--muted); font-size: 9px; line-height: 1.35; }
-.reason-detail { display: block; margin-top: 3px; color: var(--muted); font-size: 8px; line-height: 1.35; }
-.fixture-row .matchup-vs { color: var(--orange); font-size: 10px; }
-.prediction-unavailable, .score-unavailable { color: var(--muted); font-size: 11px; }
+.recommendation-context strong { margin-top: 4px; font-size: var(--type-body); }
+.recommendation-context.is-abstain strong { color: var(--warning); font-size: var(--type-support); }
+.recommendation-reason { display: block; margin-top: 4px; color: var(--muted); font-size: var(--type-meta); line-height: 1.45; }
+.reason-detail { display: block; margin-top: 3px; color: var(--muted); font-size: var(--type-meta); line-height: 1.45; }
+.fixture-row .matchup-vs { color: var(--orange); font-size: var(--type-meta); }
+.prediction-unavailable, .score-unavailable { color: var(--muted); font-size: var(--type-support); }
 .filter-empty { padding: 42px 20px; color: var(--muted); text-align: center; }
 .history { margin-top: 18px; padding-top: 1px; border-top: 1px solid var(--line); }
 .history-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 17px 0 10px; }
-.history-heading h2 { margin: 0; font-size: 16px; letter-spacing: -.02em; }
-.history-heading span { color: var(--muted); font-size: 11px; }
-.history-row { display: grid; grid-template-columns: 100px minmax(220px,1fr) 116px minmax(170px,auto); gap: 16px; align-items: center; min-height: 60px; border-bottom: 1px solid var(--line); font-size: 12px; }
-.history-meta { color: var(--muted); font-size: 11px; }
+.history-heading h2 { margin: 0; font-size: var(--type-section); letter-spacing: -.02em; }
+.history-heading span { color: var(--muted); font-size: var(--type-meta); }
+.history-row { display: grid; grid-template-columns: 128px minmax(190px,1fr) minmax(310px,1.25fr) minmax(170px,auto); gap: 16px; align-items: center; min-height: 92px; padding: 12px 0; border-bottom: 1px solid var(--line); font-size: var(--type-body); }
+.history-meta { color: var(--muted); font-size: var(--type-meta); }
 .history-teams { min-width: 0; overflow-wrap: anywhere; font-weight: 650; }
 .history-teams span { color: var(--muted); font-weight: 400; }
-.history-result span { display: block; color: var(--muted); font-size: 10px; }
-.history-score { display: block; margin-top: 2px; color: var(--verified); font-size: 17px; font-variant-numeric: tabular-nums; }
-.history-links { display: flex; flex-wrap: wrap; gap: 8px; color: var(--muted); font-size: 11px; }
+.history-result span { display: block; color: var(--muted); font-size: var(--type-meta); }
+.history-score { display: block; margin-top: 2px; color: var(--verified); font-size: 20px; font-variant-numeric: tabular-nums; }
+.history-links { display: flex; flex-wrap: wrap; gap: 8px; color: var(--muted); font-size: var(--type-meta); }
 .history-links a { text-decoration: none; }
 .history-links a:hover { color: var(--orange); text-decoration: underline; }
+.history-match { min-width: 0; }
+.history-context { display: grid; gap: 7px; min-width: 0; }
+.history-context > div { min-width: 0; }
+.history-context span, .history-context strong { display: block; }
+.history-context span { color: var(--muted); font-size: var(--type-meta); }
+.history-context strong { margin-top: 2px; color: var(--ink); font-size: var(--type-support); font-weight: 650; overflow-wrap: anywhere; }
+.history-context-missing strong { color: var(--warning); }
+.history-empty { padding: 22px 0; color: var(--muted); font-size: var(--type-support); }
 .dashboard-trust { padding: 8px 0 0; }
 .dashboard-trust strong, .dashboard-trust span { display: block; margin-top: 3px; }
-.page-footer { display: flex; justify-content: space-between; gap: 18px; margin-top: 10px; padding: 10px 14px 14px; border-top: 1px solid var(--line); color: var(--quiet); font-size: 9px; }
+.dashboard-data-method { scroll-margin-top: 16px; }
+.page-footer { display: flex; justify-content: space-between; gap: 18px; margin-top: 10px; padding: 10px 14px 14px; border-top: 1px solid var(--line); color: var(--quiet); font-size: var(--type-meta); }
 .page-footer span:last-child { max-width: 52%; text-align: right; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
 
@@ -1012,10 +1021,10 @@ MODERN_CSS = r"""
 @media (max-width: 820px) {
   .dashboard-page .content { padding-bottom: 71px; }
   .matches-head { display: block; padding: 12px 0 7px; }
-  .matches-head h1 { font-size: 17px; }
+  .matches-head h1 { font-size: var(--type-section); }
   .matches-head p { display: none; }
   .chips { margin-top: 10px; }
-  .chip { flex: 1; padding: 6px 4px; text-align: center; font-size: 8px; }
+  .chip { flex: 1; padding: 8px 4px; text-align: center; font-size: var(--type-meta); }
   .filters { gap: 5px; }
   .filter { min-width: 58px; min-height: 44px; padding: 8px 10px; }
   .fixture-table { margin: 0 -14px; }
@@ -1028,30 +1037,39 @@ MODERN_CSS = r"""
   .match-id span { margin: 0; }
   .teams-line { margin-top: 12px; grid-template-columns: minmax(0,1fr) 34px minmax(0,1fr); gap: 8px; }
   .matchup-side { gap: 8px; }
-  .matchup-name { font-size: 13px; }
-  .teams-status { margin-top: 0; font-size: 8px; }
+  .matchup-name { font-size: var(--type-body); }
+  .teams-status { margin-top: 0; font-size: var(--type-meta); }
   .mini-crest { flex-basis: 34px; width: 34px; height: 34px; }
   .mini-crest.team-badge { flex-basis: 34px; }
   .compact-prob { margin-top: 12px; }
-  .compact-prob-label { font-size: 9px; }
-  .compact-prob-values { font-size: 13px; }
-  .compact-score { margin-top: 12px; padding-top: 9px; border-top: 1px solid var(--line); font-size: 9px; }
-  .score-caption { font-size: 9px; }
+  .compact-prob-label { font-size: var(--type-meta); }
+  .compact-prob-values { font-size: var(--type-body); }
+  .compact-score { margin-top: 12px; padding-top: 9px; border-top: 1px solid var(--line); font-size: var(--type-support); }
+  .score-caption { font-size: var(--type-meta); }
   .compact-score-lines { gap: 5px; }
   .context-mini { display: block; margin-top: 10px; }
-  .recommendation-context strong { font-size: 12px; }
+  .recommendation-context strong { font-size: var(--type-body); }
   .history { margin-top: 25px; }
-  .history-row { grid-template-columns: minmax(0,1fr) auto; gap: 5px 12px; padding: 11px 0; }
+  .history-row { display: block; min-height: 0; padding: 14px 0; }
+  .history-row > * { margin-top: 10px; }
+  .history-row > .history-result { margin-top: 0; }
+  .history-match { margin-top: 10px; }
+  .history-context { margin-top: 10px; }
+  .history-links { margin-top: 10px; }
   .history-meta, .history-links { grid-column: 1 / -1; }
   .page-footer { display: block; }
   .page-footer span { display: block; }
   .page-footer span:last-child { max-width: none; margin-top: 6px; text-align: left; }
+  .dashboard-data-method { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); margin-top: 14px; }
+  .dashboard-data-method .trust-item { min-width: 0; border-right: 0; border-bottom: 1px solid var(--line); padding: 12px 10px; }
+  .dashboard-data-method .trust-item:nth-child(odd) { border-right: 1px solid var(--line); }
+  .dashboard-data-method .trust-item:nth-last-child(-n+2) { border-bottom: 0; }
 }
 @media (max-width: 360px) {
   .dashboard-page .content { padding-left: 12px; padding-right: 12px; }
   .fixture-table { margin-left: -12px; margin-right: -12px; }
   .fixture-row.match-card { padding-left: 12px; padding-right: 12px; }
-  .matchup-name { font-size: 12px; }
+  .matchup-name { font-size: var(--type-body); }
   .mini-crest { flex-basis: 32px; width: 32px; height: 32px; }
   .mini-crest.team-badge { flex-basis: 32px; }
   .compact-score-lines { gap: 4px; }
@@ -1391,6 +1409,8 @@ def _queue_context_html(prediction: dict[str, Any]) -> str:
 def _card_status_copy(card: dict[str, Any]) -> str:
     if card.get("result"):
         return "\u5df2\u7ed3\u675f"
+    if str(card.get("status") or "").upper() == "FROZEN" and isinstance(card.get("prediction"), dict):
+        return ""
     return {
         "CURRENT_JOB_STATE_CONFLICT": "\u672c\u573a\u72b6\u6001\u5f85\u786e\u8ba4\uff0c\u6682\u4e0d\u9884\u6d4b",
         "PENDING": "\u9884\u6d4b\u5c1a\u672a\u5f62\u6210",
@@ -1420,6 +1440,11 @@ def _modern_card_html(
     status_line = _card_status_copy(card)
     if has_result:
         status_line = f'90\u5206\u949f\u8d5b\u679c {result.get("score_90m")}'
+    status_html = (
+        f'<span class="teams-status">{html.escape(status_line)}</span>'
+        if status_line
+        else ""
+    )
     teams_html = (
         '<div class="matchup-side matchup-home">'
         f'{render_team_badge(home_value, card.get("home_crest"), side="home", variant="mini-crest")}'
@@ -1428,7 +1453,7 @@ def _modern_card_html(
         '<div class="matchup-side matchup-away">'
         f'<strong class="matchup-name">{away_text}</strong>'
         f'{render_team_badge(away_value, card.get("away_crest"), side="away", variant="mini-crest")}</div>'
-        f'<span class="teams-status">{html.escape(status_line)}</span>'
+        f'{status_html}'
     )
     probability_html = _one_x_two_html(prediction) if prediction else '<div class="prediction-unavailable">\u2014</div>'
     score_html = (
@@ -1539,9 +1564,101 @@ def _league_groups_html(
     return "".join(sections)
 
 
+def _history_prematch_context(
+    row: dict[str, Any],
+    records: dict[str, dict[str, Any]] | None = None,
+) -> dict[str, Any] | None:
+    """Project only an already-linked immutable prematch record for history."""
+
+    supplied = row.get("prematch_context") or row.get("_prematch_context")
+    if isinstance(supplied, dict):
+        return supplied or None
+    review = row.get("review") if isinstance(row.get("review"), dict) else {}
+    prediction_id = str(
+        row.get("prediction_id")
+        or review.get("prediction_id")
+        or ""
+    ).strip()
+    if not prediction_id or row.get("prediction_frozen") is False:
+        return None
+    record = (records or {}).get(prediction_id)
+    if not isinstance(record, dict):
+        return None
+    raw_probabilities = record.get("fusion_1X2") or record.get("probabilities")
+    probabilities: dict[str, float] = {}
+    if isinstance(raw_probabilities, dict):
+        for key in ("home", "draw", "away"):
+            number = _number(raw_probabilities.get(key))
+            if number is not None and 0 <= number <= 1:
+                probabilities[key] = number
+    raw_scores = record.get("score_top3") or record.get("top_scores") or []
+    scores: list[str] = []
+    if isinstance(raw_scores, list):
+        for item in raw_scores:
+            value = item.get("score") if isinstance(item, dict) else item
+            value = str(value or "").strip()
+            if value and value not in scores:
+                scores.append(value)
+    if not probabilities and not scores:
+        return None
+    return {
+        "ft_probabilities": probabilities,
+        "exact_top_scores": scores[:3],
+    }
+
+
+def _attach_history_prematch_context(
+    rows: list[dict[str, Any]],
+    records: dict[str, dict[str, Any]],
+) -> list[dict[str, Any]]:
+    enriched: list[dict[str, Any]] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        item = dict(row)
+        context = _history_prematch_context(item, records)
+        if context is not None:
+            item["prematch_context"] = context
+        enriched.append(item)
+    return enriched
+
+
+def _history_context_html(row: dict[str, Any], result: str) -> str:
+    context = _history_prematch_context(row)
+    if not context:
+        return (
+            '<div class="history-context history-context-missing" data-prematch-record="missing">'
+            '<div><span>\u8d5b\u524d\u9884\u6d4b\u6458\u8981</span><strong>\u5f53\u65f6\u672a\u6b63\u5f0f\u8bb0\u5f55</strong></div>'
+            '</div>'
+        )
+    probabilities = context.get("ft_probabilities")
+    if isinstance(probabilities, dict) and all(key in probabilities for key in ("home", "draw", "away")):
+        ft_text = " \u00b7 ".join(
+            f"{label} {_format_percent(probabilities[key])}"
+            for key, label in (("home", "\u4e3b\u80dc"), ("draw", "\u5e73"), ("away", "\u5ba2\u80dc"))
+        )
+    else:
+        ft_text = "\u5f53\u65f6\u672a\u6b63\u5f0f\u8bb0\u5f55"
+    scores = [
+        str(score).strip()
+        for score in context.get("exact_top_scores") or []
+        if str(score).strip()
+    ][:3]
+    if scores:
+        exact_text = " \u00b7 ".join(scores)
+        if result:
+            exact_text += " \u00b7 " + ("\u5df2\u547d\u4e2d" if result in scores else "\u672a\u547d\u4e2d")
+    else:
+        exact_text = "\u5f53\u65f6\u672a\u6b63\u5f0f\u8bb0\u5f55"
+    return (
+        '<div class="history-context" data-prematch-record="available">'
+        f'<div><span>\u8d5b\u524d\u80dc / \u5e73 / \u8d1f\u6982\u7387</span><strong>{html.escape(ft_text)}</strong></div>'
+        f'<div><span>\u8d5b\u524d\u6700\u53ef\u80fd\u6bd4\u5206\uff08\u524d3\uff09</span><strong>{html.escape(exact_text)}</strong></div>'
+        '</div>'
+    )
+
+
 def _historical_results_html(rows: list[dict[str, Any]]) -> str:
-    if not rows:
-        return ""
     cards = []
     for row in rows:
         if not isinstance(row, dict):
@@ -1561,22 +1678,22 @@ def _historical_results_html(rows: list[dict[str, Any]]) -> str:
             links.append(
                 f'<a href="{html.escape(str(row["postmatch_report_url"]), quote=True)}">\u8d5b\u540e\u590d\u76d8</a>'
             )
-        link_text = " \u00b7 ".join(links)
+        link_text = " \u00b7 ".join(links) or '<span>\u6682\u65e0\u53ef\u7528\u590d\u76d8\u94fe\u63a5</span>'
         cards.append(
             '<article class="history-row" data-result="yes">'
-            f'<div class="history-meta">{kickoff_text}</div>'
-            f'<div class="history-teams">{home_text}<span> vs </span>{away_text}</div>'
-            f'<div class="history-result"><span>90分钟结果</span><strong class="history-score">{html.escape(str(result))}</strong></div>'
+            f'<div class="history-result"><span>90\u5206\u949f\u8d5b\u679c</span><strong class="history-score">{html.escape(str(result))}</strong></div>'
+            f'<div class="history-match"><div class="history-teams">{home_text}<span> vs </span>{away_text}</div>'
+            f'<div class="history-meta">{kickoff_text}</div></div>'
+            f'{_history_context_html(row, str(result))}'
             f'<div class="history-links">{link_text}</div>'
             '</article>'
         )
-    if not cards:
-        return ""
     return (
         '<section id="historical-results" class="history" aria-labelledby="history-title">'
-        '<div class="history-heading"><h2 id="history-title">历史验证</h2>'
-        f'<span>{len(cards)} 场独立记录 · 结果优先</span></div>'
-        f'{"".join(cards)}</section>'
+        '<div class="history-heading"><h2 id="history-title">\u5386\u53f2\u9a8c\u8bc1</h2>'
+        f'<span>{len(cards)} \u573a\u5df2\u6838\u9a8c\u8bb0\u5f55 \u00b7 \u7ed3\u679c\u4f18\u5148</span></div>'
+        + ("".join(cards) if cards else '<div class="history-empty" data-history-empty="true">\u6682\u65e0\u5df2\u5b8c\u6210\u5e76\u6838\u9a8c\u7684\u6bd4\u8d5b\u3002</div>')
+        + '</section>'
     )
 
 
@@ -1677,8 +1794,10 @@ def render_dashboard(payload: dict[str, Any]) -> str:
         '<div class="filter-empty" data-filter-empty="RESULT" hidden>\u5f53\u524d\u7ade\u5f69\u65e5\u6682\u65e0\u5df2\u7ed3\u675f\u5e76\u6838\u9a8c\u7684\u6bd4\u8d5b</div>'
     )
     runtime_warning = _runtime_warning_html(system_health, payload.get("data_errors") or [])
-    quality_warning = _quality_warning_html(quality_health)
+    # Exact-state caution is rendered once inside the affected score lane.
+    quality_warning = ""
     historical_html = _historical_results_html(payload.get("completed") or [])
+    beginner_help = render_beginner_help()
     dashboard_trust = render_closed_beta_notice("dashboard-trust")
     data_warning = ""
     if summary.get("silent_missing_fixture"):
@@ -1690,7 +1809,6 @@ def render_dashboard(payload: dict[str, Any]) -> str:
 <section class="page dashboard-page">
 <header class="topbar">
   <div class="crumbs"><strong>\u4eca\u65e5\u6bd4\u8d5b</strong><span>\u00b7</span><span>{html.escape(business_date_label)}</span></div>
-  <div class="utility"><button class="icon-btn" type="button" aria-label="\u600e\u4e48\u770b"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><path d="M9.8 9a2.3 2.3 0 014.4.9c0 1.7-2.2 2-2.2 3.6M12 17h.01"/></svg></button><strong>\u600e\u4e48\u770b</strong><button class="icon-btn" type="button" aria-label="\u641c\u7d22"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="11" cy="11" r="7"/><path d="M16 16l5 5"/></svg></button></div>
 </header>
 <div class="content">
 <section class="matches-head"><div><h1>\u4eca\u65e5\u6bd4\u8d5b</h1><p>\u5148\u770b\u8c01\u548c\u8c01\u6bd4\u8d5b\uff0c\u518d\u770b\u80dc / \u5e73 / \u8d1f\u6982\u7387\u4e0e\u6700\u53ef\u80fd\u6bd4\u5206\u3002\u5f02\u5e38\u53ea\u5728\u771f\u6b63\u6539\u53d8\u5224\u65ad\u65f6\u51fa\u73b0\u3002 \u6d4b\u8bd5\u9636\u6bb5 \u00b7 \u4ec5\u4f9b\u8d5b\u524d\u5206\u6790</p></div><div class="chips" aria-label="\u6bd4\u8d5b\u7b5b\u9009"><button class="chip filter" type="button" data-filter="ALL" aria-pressed="true">\u5168\u90e8</button><button class="chip filter" type="button" data-filter="UPCOMING" aria-pressed="false">\u672a\u5f00\u8d5b</button><button class="chip filter" type="button" data-filter="RESULT" data-result-count="{verified_results}" aria-pressed="false">\u5df2\u7ed3\u675f</button></div></section>
@@ -1700,7 +1818,8 @@ def render_dashboard(payload: dict[str, Any]) -> str:
   {filter_empty_html}
 </section>
 {historical_html}
-<section class="trust-strip dashboard-trust-strip" id="dashboard-trust"><div class="trust-item"><span class="trust-ico">\u26bd</span><div><strong>\u4eca\u65e5\u961f\u5217</strong><span>\u9ed8\u8ba4\u53ea\u7a81\u51fa\u80dc / \u5e73 / \u8d1f\u6982\u7387\u4e0e\u6700\u53ef\u80fd\u6bd4\u5206\u3002</span></div></div><div class="trust-item"><span class="trust-ico">!</span><div><strong>\u5f02\u5e38\u63d0\u793a</strong><span>\u53ea\u6709\u771f\u6b63\u6539\u53d8\u5224\u65ad\u65f6\u624d\u51fa\u73b0\u3002</span></div></div><div class="trust-item"><span class="trust-ico">\u25c7</span><div><strong>\u8d5b\u524d\u8bb0\u5f55</strong><span>\u6bd4\u8d5b\u5f00\u59cb\u524d\u5f62\u6210\u5e76\u4fdd\u7559\u3002</span></div></div><div class="trust-item"><span class="trust-ico">\u2713</span><div><strong>\u5386\u53f2\u9a8c\u8bc1</strong><span>\u6210\u529f\u548c\u5931\u8d25\u540c\u53e3\u5f84\u8bb0\u5f55\u3002</span></div></div><div class="trust-item"><span class="trust-ico">i</span><div><strong>\u65b9\u6cd5\u8bf4\u660e</strong><span>\u6280\u672f\u7ec6\u8282\u4e0b\u6c89\uff0c\u4e0d\u62a2\u9996\u5c4f\u3002</span></div></div></section>
+{beginner_help}
+<section class="trust-strip dashboard-trust-strip dashboard-data-method" id="data-method"><div class="trust-item"><span class="trust-ico">\u26bd</span><div><strong>\u4eca\u65e5\u961f\u5217</strong><span>\u9ed8\u8ba4\u53ea\u7a81\u51fa\u80dc / \u5e73 / \u8d1f\u6982\u7387\u4e0e\u6700\u53ef\u80fd\u6bd4\u5206\u3002</span></div></div><div class="trust-item"><span class="trust-ico">!</span><div><strong>\u5f02\u5e38\u63d0\u793a</strong><span>\u53ea\u6709\u771f\u6b63\u6539\u53d8\u5224\u65ad\u65f6\u624d\u51fa\u73b0\u3002</span></div></div><div class="trust-item"><span class="trust-ico">\u25c7</span><div><strong>\u8d5b\u524d\u8bb0\u5f55</strong><span>\u6bd4\u8d5b\u5f00\u59cb\u524d\u5f62\u6210\u5e76\u4fdd\u7559\u3002</span></div></div><div class="trust-item"><span class="trust-ico">\u2713</span><div><strong>\u5386\u53f2\u9a8c\u8bc1</strong><span>\u6210\u529f\u548c\u5931\u8d25\u540c\u53e3\u5f84\u8bb0\u5f55\u3002</span></div></div><div class="trust-item"><span class="trust-ico">i</span><div><strong>\u65b9\u6cd5\u8bf4\u660e</strong><span>\u6280\u672f\u7ec6\u8282\u4e0b\u6c89\uff0c\u4e0d\u62a2\u9996\u5c4f\u3002</span></div></div></section>
 {dashboard_trust}
 </div>
 <section class="footer-principles"><div class="principle-title">OneShot Principles</div><div class="principles"><div class="principle"><span class="principle-icon">\u2606</span><div><strong>\u6e05\u6670\u4f18\u5148</strong><span>\u5148\u770b\u771f\u6b63\u6539\u53d8\u5224\u65ad\u7684\u5185\u5bb9\u3002</span></div></div><div class="principle"><span class="principle-icon">\u25c9</span><div><strong>\u6982\u7387\u8bda\u5b9e</strong><span>\u201c\u6700\u9ad8\u201d\u4e0d\u7b49\u4e8e\u201c\u786e\u5b9a\u201d\u3002</span></div></div><div class="principle"><span class="principle-icon">\u25c7</span><div><strong>\u72ec\u7acb\u5224\u65ad</strong><span>\u6a21\u578b\u548c\u5e02\u573a\u5e76\u5217\u6bd4\u8f83\u3002</span></div></div><div class="principle"><span class="principle-icon">\u2713</span><div><strong>\u4e00\u81f4\u9a8c\u8bc1</strong><span>\u8d5b\u524d\u8bb0\u5f55\u8d5b\u540e\u4e0d\u4fee\u6539\u3002</span></div></div><div class="principle"><span class="principle-icon">\u25a3</span><div><strong>\u6709\u4e0a\u4e0b\u6587\u7684\u6570\u636e</strong><span>\u6570\u5b57\u5fc5\u987b\u80fd\u89e3\u91ca\u3002</span></div></div></div></section><div class="copyright"><span>\u00a9 2026 OneShot</span><span>Closed Beta</span><span>\u4ec5\u4f9b\u6bd4\u8d5b\u5206\u6790\u4e0e\u7814\u7a76\u53c2\u8003</span></div>
@@ -1739,7 +1858,9 @@ buttons.forEach(button => button.addEventListener('click', () => {
         css=MODERN_CSS,
         content_html=content_html,
         dashboard_href="./latest.html",
-        history_href="#historical-results" if historical_html else None,
+        history_href="#historical-results",
+        sources_href="#data-method",
+        help_href="#beginner-help",
         mobile_label="\u6bd4\u8d5b",
         body_suffix=body_suffix,
     )
@@ -1796,6 +1917,7 @@ def build_dashboard(
     if not isinstance(health_watch, dict):
         health_watch = {}
     completed, history = _workspace_history(Path(workspace_path), errors)
+    completed = _attach_history_prematch_context(completed, records)
     cards: list[dict[str, Any]] = []
     for fixture in fixtures:
         current_job_resolution = resolve_current_job_for_match(

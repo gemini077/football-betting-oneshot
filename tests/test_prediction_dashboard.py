@@ -1182,8 +1182,8 @@ def test_dashboard_separates_system_runtime_and_current_prediction_quality_alert
     assert payload["prediction_quality_health"]["scope"] == "current_serving"
     assert payload["prediction_quality_health"]["business_date"] == DATE
     assert "系统运行" not in html
-    assert "\u6bd4\u5206\u6982\u7387\u4ec5\u4f9b\u89c2\u5bdf" in html
-    assert "\u4fdd\u7559\u539f\u59cb\u6bd4\u5206\u6982\u7387" in html
+    assert 'class="quality-warning"' not in html
+    assert "score-unavailable" in html
     assert "系统首推比分" not in html
 
 
@@ -1205,8 +1205,8 @@ def test_dashboard_keeps_exact_score_state_visible_inside_each_score_cell(tmp_pa
     html = (roots["output_root"] / "latest.html").read_text(encoding="utf-8")
 
     assert 'data-score-serving-state="UNAVAILABLE"' in html
-    assert "\u6bd4\u5206\u6982\u7387\u4ec5\u4f9b\u89c2\u5bdf" in html
-    assert "\u4fdd\u7559\u539f\u59cb\u6bd4\u5206\u6982\u7387" in html
+    assert 'class="quality-warning"' not in html
+    assert "score-unavailable" in html
 
 
 def test_dashboard_keeps_healthy_matched_current_serving_fail_closed_without_lane_authority(tmp_path):
@@ -1232,7 +1232,7 @@ def test_dashboard_keeps_healthy_matched_current_serving_fail_closed_without_lan
     assert payload["prediction_quality_health"]["status"] == "HEALTHY"
     assert payload["prediction_quality_health"]["available"] is True
     assert payload["prediction_quality_health"]["provenance_status"] == "MATCHED"
-    assert 'class="quality-warning"' in html
+    assert 'class="quality-warning"' not in html
     assert 'data-score-serving-state="NORMAL"' not in html
     assert 'data-score-serving-state="UNAVAILABLE"' in html
 
@@ -1261,7 +1261,7 @@ def test_dashboard_does_not_use_mismatched_health_watch_as_current_quality(tmp_p
     assert payload["prediction_quality_health"]["status"] == "HEALTHY"
     assert payload["prediction_quality_health"]["provenance_status"] == "MISMATCHED"
     assert "预测质量降级" not in html
-    assert "\u6bd4\u5206\u6982\u7387\u8d28\u91cf\u5f85\u786e\u8ba4" in html
+    assert 'class="quality-warning"' not in html
 
 
 def test_dashboard_rejects_health_watch_from_previous_cycle_even_on_same_business_date(tmp_path):
@@ -1288,7 +1288,7 @@ def test_dashboard_rejects_health_watch_from_previous_cycle_even_on_same_busines
     assert payload["prediction_quality_health"]["provenance_status"] == "MISMATCHED"
     assert payload["prediction_quality_health"]["runtime_cycle_finished_at"] == runtime["finished_at"]
     html = (roots["output_root"] / "latest.html").read_text(encoding="utf-8")
-    assert "\u6bd4\u5206\u6982\u7387\u8d28\u91cf\u5f85\u786e\u8ba4" in html
+    assert 'class="quality-warning"' not in html
 
 
 def test_abnormal_runtime_shows_warning_without_normal_kpi_grid(tmp_path):
