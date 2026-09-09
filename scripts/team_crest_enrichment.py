@@ -27,10 +27,12 @@ except ImportError:  # pragma: no cover - direct script execution path.
 
 ANALYSIS_PAGE_URL = "https://live.nowscore.com/analysis/{nowscore_id}cn.html"
 ASSET_PREFIX = "../assets/team-crests"
+DIAGNOSTICS_SCHEMA = "team_crest_enrichment_diagnostics.v1"
 MAX_PAGE_BYTES = 2 * 1024 * 1024
 MAX_IMAGE_BYTES = 512 * 1024
 CREST_HOST = "info.nowscore.com"
 IMAGE_EXTENSIONS = {".gif", ".jpeg", ".jpg", ".png", ".webp"}
+EXACT_PROVIDER_STATUSES = {"EXACT_MATCH", "EXACT_PROVIDER_MATCH", "STORED_VERIFIED_BINDING"}
 USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
@@ -126,6 +128,7 @@ class _NowscoreCrestParser(HTMLParser):
         self._side_div_depth = 0
         self._anchor_side: str | None = None
         self._anchor_text: list[str] = []
+        self.section_sequence: list[str] = []
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         attributes = {key.casefold(): value or "" for key, value in attrs}
@@ -134,6 +137,7 @@ class _NowscoreCrestParser(HTMLParser):
             if self._side is None and element_id in {"home", "guest", "away"}:
                 self._side = "home" if element_id == "home" else "away"
                 self._side_div_depth = 1
+                self.section_sequence.append(self._side)
             elif self._side is not None:
                 self._side_div_depth += 1
         if self._side is None:
@@ -191,31 +195,46 @@ def parse_nowscore_analysis_crests(
     expected_nowscore_id: int | str | None = None,
     expected_home: Any = None,
     expected_away: Any = None,
+    exact_provider_identity: bool = False,
 ) -> dict[str, Any]:
     """Parse and verify the ordered home/away crest pair from one page."""
 
     parser = _NowscoreCrestParser()
     reasons: list[str] = []
     identity_reasons: list[str] = []
+    corroboration_reasons: list[str] = []
     try:
         parser.feed(str(page_html))
         parser.close()
     except Exception as error:  # parser failure is presentation-only fallback
-        reasons.append(f"PARSER_ERROR:{type(error).__name__}")
+        parser_error = f"PARSER_ERROR:{type(error).__name__}"
+        reasons.append(parser_error)
+        identity_reasons.append(parser_error)
 
     expected_id = _positive_int(expected_nowscore_id)
-    if expected_id is not None:
+    if exact_provider_identity and expected_id is None:
+        identity_reasons.append("EXPECTED_NOWSCORE_ID_MISSING")
+    elif expected_id is not None:
         if _positive_int(parser.match_id) != expected_id:
             reason = "PAGE_NOWSCORE_ID_CONFLICT" if parser.match_id else "PAGE_NOWSCORE_ID_MISSING"
             reasons.append(reason)
             identity_reasons.append(reason)
 
+    if parser.section_sequence != ["home", "away"]:
+        if parser.section_sequence == ["away", "home"]:
+            identity_reasons.append("TEAM_SECTION_ORDER_CONFLICT")
+        else:
+            identity_reasons.append("AMBIGUOUS_TEAM_SECTIONS")
+
     for side in ("home", "away"):
         team = parser.teams[side]
         if not team["name"]:
             reason = f"{side.upper()}_TEAM_NAME_MISSING"
-            reasons.append(reason)
-            identity_reasons.append(reason)
+            if exact_provider_identity:
+                corroboration_reasons.append(reason)
+            else:
+                reasons.append(reason)
+                identity_reasons.append(reason)
         if not team["team_id"]:
             reason = f"{side.upper()}_TEAM_ID_MISSING"
             reasons.append(reason)
@@ -223,9 +242,34 @@ def parse_nowscore_analysis_crests(
         if not team["crest_url"]:
             reasons.append(f"{side.upper()}_CREST_URL_MISSING")
 
+    home_id = parser.teams["home"]["team_id"]
+    away_id = parser.teams["away"]["team_id"]
+    if home_id and away_id and home_id == away_id:
+        identity_reasons.append("DUPLICATE_TEAM_ID")
+
     expected_names = {"home": _normalise_name(expected_home), "away": _normalise_name(expected_away)}
     observed_names = {side: _normalise_name(parser.teams[side]["name"]) for side in ("home", "away")}
-    if any(expected_names.values()):
+    if exact_provider_identity:
+        if not expected_names["home"] or not expected_names["away"]:
+            corroboration_reasons.append("FIXTURE_LABEL_MISSING")
+        else:
+            same_scores = {
+                side: team_similarity(expected_names[side], observed_names[side])[0]
+                for side in ("home", "away")
+            }
+            reverse_scores = {
+                "home": team_similarity(expected_names["home"], observed_names["away"])[0],
+                "away": team_similarity(expected_names["away"], observed_names["home"])[0],
+            }
+            for side in ("home", "away"):
+                if same_scores[side] < 0.75:
+                    corroboration_reasons.append(f"{side.upper()}_TEAM_LABEL_MISMATCH")
+            if all(score >= 0.75 for score in reverse_scores.values()) and all(
+                score < 0.75 for score in same_scores.values()
+            ):
+                corroboration_reasons.append("TEAM_LABEL_ORIENTATION_MISMATCH")
+                identity_reasons.append("ORIENTATION_CONFLICT")
+    elif any(expected_names.values()):
         if not expected_names["home"] or not expected_names["away"]:
             identity_reasons.append("FIXTURE_ORIENTATION_MISSING")
         else:
@@ -265,6 +309,7 @@ def parse_nowscore_analysis_crests(
         "home": dict(parser.teams["home"]),
         "away": dict(parser.teams["away"]),
         "reasons": list(dict.fromkeys(reasons)),
+        "corroboration_reasons": list(dict.fromkeys(corroboration_reasons)),
     }
 
 
@@ -307,6 +352,108 @@ def _fixture_universe_row(fixture: Mapping[str, Any], index: Mapping[str, dict[s
     return {}
 
 
+def new_crest_diagnostics() -> dict[str, Any]:
+    return {
+        "schema_version": DIAGNOSTICS_SCHEMA,
+        "status": "COMPLETED",
+        "fixture_count": 0,
+        "total_team_slots": 0,
+        "resolved_real_crests": 0,
+        "unresolved_team_slots": 0,
+        "coverage_percent": 0.0,
+        "outcome_counts": {"RESOLVED": 0, "FALLBACK": 0},
+        "failure_reasons": {},
+        "fixtures": [],
+    }
+
+
+def _finalize_crest_diagnostics(diagnostics: dict[str, Any]) -> dict[str, Any]:
+    records = [item for item in diagnostics.get("fixtures") or [] if isinstance(item, dict)]
+    outcome_counts: dict[str, int] = {}
+    failure_reasons: dict[str, int] = {}
+    total_slots = 0
+    resolved = 0
+    for record in records:
+        slots = record.get("slots") if isinstance(record.get("slots"), dict) else {}
+        for slot in slots.values():
+            if not isinstance(slot, dict):
+                continue
+            total_slots += 1
+            outcome = str(slot.get("outcome") or "FALLBACK")
+            outcome_counts[outcome] = outcome_counts.get(outcome, 0) + 1
+            if outcome == "RESOLVED":
+                resolved += 1
+                continue
+            reasons = list(dict.fromkeys(str(reason) for reason in slot.get("reason_codes") or [] if reason))
+            for reason in reasons or ["UNRESOLVED"]:
+                failure_reasons[reason] = failure_reasons.get(reason, 0) + 1
+    diagnostics.update({
+        "fixture_count": len(records),
+        "total_team_slots": total_slots,
+        "resolved_real_crests": resolved,
+        "unresolved_team_slots": total_slots - resolved,
+        "coverage_percent": round((resolved / total_slots) * 100, 2) if total_slots else 0.0,
+        "outcome_counts": dict(sorted(outcome_counts.items())),
+        "failure_reasons": dict(sorted(failure_reasons.items())),
+        "fixtures": records,
+    })
+    return diagnostics
+
+
+def failed_crest_diagnostics(dashboard: Mapping[str, Any], reason: str) -> dict[str, Any]:
+    diagnostics = new_crest_diagnostics()
+    diagnostics["status"] = "FAILED"
+    for fixture in dashboard.get("fixtures") or []:
+        if not isinstance(fixture, Mapping):
+            continue
+        slots = {
+            side: {"outcome": "FALLBACK", "source": "NEUTRAL_FALLBACK", "reason_codes": [reason]}
+            for side in ("home", "away")
+        }
+        diagnostics["fixtures"].append({
+            "match_id": str(_fixture_value(fixture, "match_id", "matchId") or ""),
+            "nowscore_id": None,
+            "identity_mode": "UNAVAILABLE",
+            "identity_status": "UNVERIFIED",
+            "reason_codes": [reason],
+            "corroboration_reasons": [],
+            "slots": slots,
+        })
+    return _finalize_crest_diagnostics(diagnostics)
+
+
+def _provider_identity(
+    fixture: Mapping[str, Any],
+    universe_row: Mapping[str, Any],
+    nowscore_id: int,
+) -> tuple[bool, list[str], str]:
+    reasons: list[str] = []
+    fixture_id = _positive_int(
+        _fixture_value(fixture, "nowscore_id", "nowscoreId", "provider_match_id")
+    )
+    row_id = _positive_int(
+        _fixture_value(universe_row, "nowscore_id", "nowscoreId", "provider_match_id")
+    )
+    if universe_row:
+        if row_id is None:
+            reasons.append("NOWSCORE_ROW_ID_MISSING")
+        elif row_id != nowscore_id:
+            reasons.append("NOWSCORE_IDENTITY_ID_CONFLICT")
+        if fixture_id is not None and row_id is not None and fixture_id != row_id:
+            reasons.append("NOWSCORE_FIXTURE_ROW_ID_CONFLICT")
+        status_value = _fixture_value(universe_row, "nowscoreMatchStatus", "nowscore_match_status")
+        if status_value in (None, ""):
+            status_value = _fixture_value(fixture, "nowscoreMatchStatus", "nowscore_match_status")
+        identity_source = "UNIVERSE_EXACT_PROVIDER_ID"
+    else:
+        status_value = _fixture_value(fixture, "nowscoreMatchStatus", "nowscore_match_status")
+        identity_source = "FIXTURE_EXACT_PROVIDER_ID"
+    status = str(status_value or "").strip().upper()
+    if status not in EXACT_PROVIDER_STATUSES:
+        reasons.append("NOWSCORE_MATCH_NOT_EXACT" if status else "NOWSCORE_IDENTITY_UNPROVEN")
+    return not reasons, list(dict.fromkeys(reasons)), identity_source
+
+
 def _nowscore_id(fixture: Mapping[str, Any], universe_row: Mapping[str, Any]) -> int | None:
     return _positive_int(
         _fixture_value(
@@ -340,16 +487,21 @@ def _asset_reference(
     fetcher: Callable[[str, float], bytes],
     team_cache: dict[str, str | None],
     digest_cache: dict[str, str],
+    failure_codes: list[str] | None = None,
 ) -> str | None:
     if team_id in team_cache:
+        if team_cache[team_id] is None and failure_codes is not None:
+            failure_codes.append("IMAGE_UNAVAILABLE_CACHED")
         return team_cache[team_id]
     try:
         data = fetcher(source_url, 30)
-        if not isinstance(data, bytes) or not data or len(data) > MAX_IMAGE_BYTES:
-            raise ValueError("INVALID_CREST_IMAGE_BYTES")
+        if not isinstance(data, bytes) or not data:
+            raise ValueError("IMAGE_BYTES_INVALID")
+        if len(data) > MAX_IMAGE_BYTES:
+            raise ValueError("IMAGE_TOO_LARGE")
         extension = _image_format(data)
         if extension is None:
-            raise ValueError("INVALID_CREST_IMAGE_FORMAT")
+            raise ValueError("IMAGE_FORMAT_INVALID")
         digest = hashlib.sha256(data).hexdigest()
         filename = digest_cache.get(digest)
         if filename is None:
@@ -358,10 +510,49 @@ def _asset_reference(
             (asset_root / filename).write_bytes(data)
             digest_cache[digest] = filename
         reference = f"{asset_prefix.rstrip('/')}/{filename}"
+    except ValueError as error:
+        reference = None
+        if failure_codes is not None:
+            failure_codes.append(str(error))
     except Exception:
         reference = None
+        if failure_codes is not None:
+            failure_codes.append("IMAGE_FETCH_OR_WRITE_FAILED")
     team_cache[team_id] = reference
     return reference
+
+
+def _add_diagnostic_reason(record: dict[str, Any], side: str, reason: str) -> None:
+    slot = record["slots"][side]
+    if reason and reason not in slot["reason_codes"]:
+        slot["reason_codes"].append(reason)
+    if reason and reason not in record["reason_codes"]:
+        record["reason_codes"].append(reason)
+
+
+def _side_reasons(side: str, reasons: list[str]) -> list[str]:
+    prefix = f"{side.upper()}_"
+    global_reasons = {
+        "AMBIGUOUS_IDENTITY",
+        "AMBIGUOUS_TEAM_SECTIONS",
+        "DUPLICATE_TEAM_ID",
+        "ORIENTATION_CONFLICT",
+        "TEAM_SECTION_ORDER_CONFLICT",
+        "PAGE_NOWSCORE_ID_CONFLICT",
+        "PAGE_NOWSCORE_ID_MISSING",
+        "EXPECTED_NOWSCORE_ID_MISSING",
+        "ANALYSIS_PAGE_FETCH_FAILED",
+        "ANALYSIS_IDENTITY_UNVERIFIED",
+    }
+    return list(
+        dict.fromkeys(
+            reason
+            for reason in reasons
+            if reason.startswith(prefix)
+            or reason in global_reasons
+            or reason.startswith("PARSER_ERROR:")
+        )
+    )
 
 
 def enrich_dashboard_crests(
@@ -371,22 +562,68 @@ def enrich_dashboard_crests(
     asset_root: Path,
     fetcher: Callable[[str, float], bytes] | None = None,
     asset_prefix: str = ASSET_PREFIX,
+    diagnostics: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Return a copied dashboard with verified local crest asset references."""
+    """Return copied presentation data and optional build-only diagnostics."""
 
     enriched = copy.deepcopy(dict(dashboard))
     index = _universe_index(universe)
     team_cache: dict[str, str | None] = {}
     digest_cache: dict[str, str] = {}
     request = fetcher or _fetch_bytes
+    diagnostic_payload = new_crest_diagnostics()
     for fixture in enriched.get("fixtures") or []:
         if not isinstance(fixture, dict):
             continue
         universe_row = _fixture_universe_row(fixture, index)
+        fixture_id = str(_fixture_value(fixture, "match_id", "matchId") or "")
         nowscore_id = _nowscore_id(fixture, universe_row)
+        record = {
+            "match_id": fixture_id,
+            "nowscore_id": nowscore_id,
+            "identity_mode": "UNAVAILABLE",
+            "identity_status": "UNVERIFIED",
+            "provider_identity_reasons": [],
+            "corroboration_reasons": [],
+            "reason_codes": [],
+            "slots": {},
+        }
+        for side in ("home", "away"):
+            existing_source = _fixture_value(fixture, f"{side}_crest", f"{side}_logo")
+            if _has_renderable_source(existing_source):
+                record["slots"][side] = {
+                    "outcome": "RESOLVED",
+                    "source": "EXISTING_SOURCE",
+                    "reason_codes": [],
+                }
+            else:
+                record["slots"][side] = {
+                    "outcome": "FALLBACK",
+                    "source": "NEUTRAL_FALLBACK",
+                    "reason_codes": [],
+                }
+        diagnostic_payload["fixtures"].append(record)
         if nowscore_id is None:
+            record["reason_codes"].append("NOWSCORE_ID_MISSING")
+            for side in ("home", "away"):
+                if record["slots"][side]["outcome"] != "RESOLVED":
+                    _add_diagnostic_reason(record, side, "NOWSCORE_ID_MISSING")
             continue
         fixture["nowscore_id"] = nowscore_id
+        exact_identity, provider_reasons, identity_source = _provider_identity(
+            fixture,
+            universe_row,
+            nowscore_id,
+        )
+        record["identity_mode"] = identity_source if exact_identity else "STRICT_LABEL"
+        record["provider_identity_reasons"] = provider_reasons
+        record["reason_codes"].extend(provider_reasons)
+        if any(reason in {"NOWSCORE_ROW_ID_MISSING", "NOWSCORE_IDENTITY_ID_CONFLICT", "NOWSCORE_FIXTURE_ROW_ID_CONFLICT"} for reason in provider_reasons):
+            for side in ("home", "away"):
+                if record["slots"][side]["outcome"] != "RESOLVED":
+                    for reason in provider_reasons:
+                        _add_diagnostic_reason(record, side, reason)
+            continue
         home_name = _fixture_value(fixture, "home", "homeTeam", "home_team") or _fixture_value(
             universe_row, "homeTeam", "home_team", "home"
         )
@@ -400,20 +637,45 @@ def enrich_dashboard_crests(
                 expected_nowscore_id=nowscore_id,
                 expected_home=home_name,
                 expected_away=away_name,
+                exact_provider_identity=exact_identity,
             )
         except Exception:
-            parsed = {"status": "UNVERIFIED", "home": {}, "away": {}, "reasons": ["FETCH_FAILED"]}
-        if parsed.get("identity_status") != "VERIFIED":
+            parsed = {
+                "status": "UNVERIFIED",
+                "identity_status": "UNVERIFIED",
+                "home": {},
+                "away": {},
+                "reasons": ["ANALYSIS_PAGE_FETCH_FAILED"],
+                "corroboration_reasons": [],
+            }
+        record["identity_status"] = str(parsed.get("identity_status") or "UNVERIFIED")
+        parser_reasons = [str(reason) for reason in parsed.get("reasons") or [] if reason]
+        corroboration_reasons = [
+            str(reason) for reason in parsed.get("corroboration_reasons") or [] if reason
+        ]
+        record["corroboration_reasons"] = list(dict.fromkeys(corroboration_reasons))
+        record["reason_codes"].extend(parser_reasons)
+        if record["identity_status"] != "VERIFIED":
+            for side in ("home", "away"):
+                if record["slots"][side]["outcome"] == "RESOLVED":
+                    continue
+                _add_diagnostic_reason(record, side, "ANALYSIS_IDENTITY_UNVERIFIED")
+                for reason in _side_reasons(side, parser_reasons):
+                    _add_diagnostic_reason(record, side, reason)
             continue
         for side in ("home", "away"):
-            field = f"{side}_crest"
-            if _has_renderable_source(fixture.get(field)):
+            if record["slots"][side]["outcome"] == "RESOLVED":
                 continue
+            field = f"{side}_crest"
             team = parsed.get(side) if isinstance(parsed.get(side), Mapping) else {}
             team_id = str(team.get("team_id") or "").strip()
             source_url = _crest_url(team.get("crest_url"), team_id)
+            side_reasons = _side_reasons(side, parser_reasons)
             if not team_id or not source_url:
+                for reason in side_reasons or [f"{side.upper()}_CREST_URL_MISSING"]:
+                    _add_diagnostic_reason(record, side, reason)
                 continue
+            image_failures: list[str] = []
             reference = _asset_reference(
                 source_url,
                 team_id,
@@ -422,7 +684,20 @@ def enrich_dashboard_crests(
                 fetcher=request,
                 team_cache=team_cache,
                 digest_cache=digest_cache,
+                failure_codes=image_failures,
             )
             if reference:
                 fixture[field] = reference
+                record["slots"][side].update({
+                    "outcome": "RESOLVED",
+                    "source": "NOWSCORE_LOCAL",
+                    "reason_codes": [],
+                })
+            else:
+                for reason in image_failures or ["IMAGE_UNAVAILABLE"]:
+                    _add_diagnostic_reason(record, side, reason)
+    finalized = _finalize_crest_diagnostics(diagnostic_payload)
+    if diagnostics is not None:
+        diagnostics.clear()
+        diagnostics.update(copy.deepcopy(finalized))
     return enriched

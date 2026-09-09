@@ -33,9 +33,17 @@ except ImportError:  # pragma: no cover - direct script execution path.
     from change_awareness import build_prematch_change_awareness
 
 try:
-    from .team_crest_enrichment import enrich_dashboard_crests
+    from .team_crest_enrichment import (
+        enrich_dashboard_crests,
+        failed_crest_diagnostics,
+        new_crest_diagnostics,
+    )
 except ImportError:  # pragma: no cover - direct script execution path.
-    from team_crest_enrichment import enrich_dashboard_crests
+    from team_crest_enrichment import (
+        enrich_dashboard_crests,
+        failed_crest_diagnostics,
+        new_crest_diagnostics,
+    )
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -411,16 +419,28 @@ def build(output: Path, *, data_root: Path | None = None) -> Path:
                 universe = candidate
         except ValueError:
             universe = {}
+    crest_diagnostics = new_crest_diagnostics()
     try:
         dashboard = enrich_dashboard_crests(
             dashboard,
             universe=universe,
             asset_root=output / "assets" / "team-crests",
+            diagnostics=crest_diagnostics,
         )
-    except Exception:
+    except Exception as error:
         # Crest lookup is presentation-only; preserve the build if the optional
         # enrichment layer itself encounters an unexpected source failure.
-        pass
+        crest_diagnostics = failed_crest_diagnostics(
+            dashboard,
+            f"ENRICHMENT_EXCEPTION_{type(error).__name__}",
+        )
+
+    crest_diagnostics_path = output / "diagnostics" / "team-crest-enrichment.json"
+    crest_diagnostics_path.parent.mkdir(parents=True, exist_ok=True)
+    crest_diagnostics_path.write_text(
+        json.dumps(crest_diagnostics, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
 
     for relative in PUBLIC_ENTRYPOINTS:
         if relative.endswith(".json"):

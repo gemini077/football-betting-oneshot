@@ -271,6 +271,7 @@ def test_build_enriches_verified_crests_into_dashboard_and_detail_assets(tmp_pat
                 {
                     "matchId": "1001",
                     "nowscoreId": 9001,
+                    "nowscoreMatchStatus": "EXACT_MATCH",
                     "homeTeam": "Home FC",
                     "awayTeam": "Away FC",
                 }
@@ -299,9 +300,15 @@ def test_build_enriches_verified_crests_into_dashboard_and_detail_assets(tmp_pat
     dashboard_html = (tmp_path / "site" / "prediction_dashboard/latest.html").read_text(encoding="utf-8")
     detail_html = (tmp_path / "site" / "matches/1001/index.html").read_text(encoding="utf-8")
     published_json = json.loads((tmp_path / "site" / "prediction_dashboard/latest.json").read_text(encoding="utf-8"))
+    crest_diagnostics = json.loads(
+        (tmp_path / "site" / "diagnostics/team-crest-enrichment.json").read_text(encoding="utf-8")
+    )
     assert dashboard_html.count('data-crest-kind="existing"') == 2
     assert "../assets/team-crests/crest-" in dashboard_html
     assert detail_html.count('data-crest-kind="existing"') == 2
     assert "../../assets/team-crests/crest-" in detail_html
     assert published_json["fixtures"][0]["nowscore_id"] == 9001
+    assert crest_diagnostics["total_team_slots"] == 2
+    assert crest_diagnostics["resolved_real_crests"] == 2
+    assert crest_diagnostics["coverage_percent"] == 100.0
     assert dashboard_path.read_bytes() == before
