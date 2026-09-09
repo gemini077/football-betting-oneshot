@@ -528,4 +528,4 @@ def test_match_detail_marks_missing_change_history_without_replacing_current_pre
 
     assert 'data-change-awareness-status="UNAVAILABLE"' in document
     assert "\u6682\u65e0\u53ef\u6bd4\u7684\u8d5b\u524d\u8bb0\u5f55" in document
-    assert 'class="probability-section"' in document
+    assert 'class="probability-section' in document

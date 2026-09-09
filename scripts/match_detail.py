@@ -211,34 +211,30 @@ def _render_probability_cards(contract: dict[str, Any]) -> str:
     section_attrs = f'data-one-x-two-serving-state="{html.escape(lane_state, quote=True)}"'
     if any(value is None for _, _, value in values):
         return (
-            f'<section class="probability-section lane-unavailable" {section_attrs} aria-labelledby="probability-title">'
-            '<div class="section-kicker">\u7b2c\u4e00\u5c42\u5224\u65ad</div><h2 id="probability-title">\u80dc\u5e73\u8d1f\u6982\u7387</h2>'
-            f'{lane_note}<p>\u80dc\u5e73\u8d1f\u6982\u7387\u6682\u4e0d\u53ef\u7528\uff1b\u9875\u9762\u4e0d\u8865\u5199\u7f3a\u5931\u7684\u6982\u7387\u3002</p></section>'
+            f'<article class="probability-section panel probability-panel lane-unavailable" id="probability" {section_attrs} aria-labelledby="probability-title">'
+            '<h2 id="probability-title">1X2 \u6982\u7387 <i class="info-i">i</i></h2>'
+            f'{lane_note}<p>\u80dc\u5e73\u8d1f\u6982\u7387\u6682\u4e0d\u53ef\u7528\uff1b\u9875\u9762\u4e0d\u8865\u5199\u7f3a\u5931\u7684\u6982\u7387\u3002</p></article>'
         )
     numeric = [value for _, _, value in values if value is not None]
     total = sum(numeric)
     if total <= 0:
         return (
-            f'<section class="probability-section lane-unavailable" {section_attrs} aria-labelledby="probability-title">'
-            '<div class="section-kicker">\u7b2c\u4e00\u5c42\u5224\u65ad</div><h2 id="probability-title">\u80dc\u5e73\u8d1f\u6982\u7387</h2>'
-            f'{lane_note}<p>\u80dc\u5e73\u8d1f\u6982\u7387\u6682\u4e0d\u53ef\u7528\uff1b\u9875\u9762\u4e0d\u8865\u5199\u7f3a\u5931\u7684\u6982\u7387\u3002</p></section>'
+            f'<article class="probability-section panel probability-panel lane-unavailable" id="probability" {section_attrs} aria-labelledby="probability-title">'
+            '<h2 id="probability-title">1X2 \u6982\u7387 <i class="info-i">i</i></h2>'
+            f'{lane_note}<p>\u80dc\u5e73\u8d1f\u6982\u7387\u6682\u4e0d\u53ef\u7528\uff1b\u9875\u9762\u4e0d\u8865\u5199\u7f3a\u5931\u7684\u6982\u7387\u3002</p></article>'
         )
     leader = max(values, key=lambda item: item[2] or 0.0)[0]
     cards = []
-    legend = []
     segments = []
     aria_values = []
     for key, label, number in values:
         assert number is not None
         highest = " probability-highest" if key == leader else ""
+        leader_note = "\u76f8\u5bf9\u5360\u4f18" if key == leader else chr(160)
         cards.append(
             f'<div class="probability-card{highest}" data-probability="{number:.6f}">'
-            f'<span class="probability-label">{label}</span><strong>{_percent(number)}</strong></div>'
-        )
-        leader_copy = '<small>\u76f8\u5bf9\u5360\u4f18</small>' if key == leader else '<small>&nbsp;</small>'
-        legend.append(
-            f'<div class="probability-legend-item {key}{" is-leading" if key == leader else ""}">'
-            f'<span>{label}</span><strong>{_percent(number)}</strong>{leader_copy}</div>'
+            f'<span class="probability-label {key}-t">{label}</span><strong class="{key}-t">{_percent(number)}</strong>'
+            f'<small>{leader_note}</small></div>'
         )
         segments.append(
             f'<span class="probability-segment {key}" style="width:{number / total * 100:.3f}%" aria-hidden="true"></span>'
@@ -246,16 +242,13 @@ def _render_probability_cards(contract: dict[str, Any]) -> str:
         aria_values.append(f"{label} {_percent(number)}")
     aria_label = "\uFF1B".join(aria_values)
     return (
-        f'<section class="probability-section" {section_attrs} aria-labelledby="probability-title">'
-        '<div class="section-kicker">\u7b2c\u4e00\u5c42\u5224\u65ad</div><h2 id="probability-title">\u80dc\u5e73\u8d1f\u6982\u7387</h2>'
+        f'<article class="probability-section panel probability-panel" id="probability" {section_attrs} aria-labelledby="probability-title">'
+        '<h2 id="probability-title">1X2 \u6982\u7387 <i class="info-i">i</i></h2>'
         f'{lane_note}'
-        '<div class="hero-probabilities">' + "".join(cards) + '</div>'
-        '<div class="probability-strip-wrap">'
-        f'<div class="probability-strip" role="img" aria-label="\u80dc\u5e73\u8d1f\u6982\u7387\uff1a{aria_label}">'
+        '<div class="prob-cells">' + "".join(cards) + '</div>'
+        f'<div class="probbar probability-strip" role="img" aria-label="\u80dc\u5e73\u8d1f\u6982\u7387\uff1a{aria_label}">'
         + "".join(segments)
-        + '</div><div class="probability-legend">'
-        + "".join(legend)
-        + '</div></div></section>'
+        + '</div><div class="prob-caption">\u8d5b\u524d\u6a21\u578b\u6982\u7387 \u00b7 \u6700\u5927\u9879\u53ea\u662f\u76f8\u5bf9\u5360\u4f18</div></article>'
     )
 
 
@@ -336,31 +329,30 @@ def _total_goal_distribution(contract: dict[str, Any]) -> list[tuple[str, float]
 def _render_goals(contract: dict[str, Any]) -> str:
     rows = _total_goal_distribution(contract)
     source_copy = "\u7531\u5f53\u524d\u6bd4\u5206\u5206\u5e03\u6c47\u603b"
+    title_copy = "\u603b\u8fdb\u7403\u5206\u5e03"
     if not rows:
         return (
-            '<section class="detail-section goals-section supporting-section lane-unavailable" id="goals" '
-            'data-goals-source="exact-score">'
-            '<div class="section-heading"><div><div class="section-kicker">\u8f85\u52a9\u89c6\u56fe</div>'
-            '<h2>\u603b\u8fdb\u7403\u5206\u5e03</h2></div>'
-            f'<p>{source_copy}</p></div>'
-            '<p>\u5f53\u524d\u6ca1\u6709\u53ef\u6838\u9a8c\u7684 Exact \u6bd4\u5206\u5206\u5e03\uff0c\u4e0d\u8865\u5199\u603b\u8fdb\u7403\u6982\u7387\u3002</p></section>'
+            '<article class="panel supporting-panel goals-panel lane-unavailable" id="goals" '
+            f'data-goals-source="exact-score"><h2>{title_copy} <i class="info-i">i</i></h2>'
+            f'<p>{source_copy}</p><p>\u5f53\u524d\u6ca1\u6709\u53ef\u6838\u9a8c\u7684 Exact \u6bd4\u5206\u5206\u5e03\uff0c\u4e0d\u8865\u5199\u603b\u8fdb\u7403\u6982\u7387\u3002</p></article>'
         )
     top = max(rows, key=lambda item: item[1])
-    rendered = []
+    top_probability = top[1] or 0.0
+    bars = []
     for bucket, number in rows:
-        rendered.append(
-            f'<div class="goal-row" data-goals="{html.escape(bucket, quote=True)}">'
-            f'<span>{html.escape(bucket)}</span>'
-            f'<div class="goal-bar" aria-hidden="true"><span style="width:{number * 100:.1f}%"></span></div>'
-            f'<strong>{_percent(number)}</strong></div>'
+        height = number / top_probability * 100 if top_probability else 0.0
+        bars.append(
+            f'<div class="bar-item" data-goals="{html.escape(bucket, quote=True)}">'
+            f'<div class="bar-value">{_percent(number)}</div>'
+            f'<div class="bar-col"><span style="height:{height:.1f}%"></span></div>'
+            f'<div class="bar-label">{html.escape(bucket)}</div></div>'
         )
     return (
-        '<section class="detail-section goals-section supporting-section" id="goals" data-goals-source="exact-score">'
-        '<div class="section-heading"><div><div class="section-kicker">\u8f85\u52a9\u89c6\u56fe</div>'
-        f'<h2>\u603b\u8fdb\u7403\u5206\u5e03</h2></div><p>{source_copy}</p></div>'
-        f'<div class="goal-grid">{"".join(rendered)}</div>'
-        f'<p class="section-note">\u6570\u636e\u6765\u81ea Exact \u6bd4\u5206\u683c\u7684\u5408\u8ba1\uff1b\u5f53\u524d\u6700\u9ad8\u6bb5\uff1a{html.escape(top[0])} \u00b7 {_percent(top[1])}\u3002\u4e0d\u662f\u72ec\u7acb\u73a9\u6cd5\u3002</p>'
-        '</section>'
+        '<article class="panel supporting-panel goals-panel" id="goals" data-goals-source="exact-score">'
+        f'<h2>{title_copy} <i class="info-i">i</i></h2>'
+        f'<div class="bars">{"".join(bars)}</div>'
+        f'<div class="subtle-note">\u8f85\u52a9\u89c2\u5bdf \u00b7 {source_copy}\uff0c\u4e0d\u7b49\u540c\u4e8e\u72ec\u7acb\u6b63\u5f0f\u73a9\u6cd5\u3002</div>'
+        '</article>'
     )
 
 def _formal_markets(contract: dict[str, Any]) -> dict[str, Any]:
@@ -437,11 +429,10 @@ def _render_exact_formal_market(item: dict[str, Any], *, serving_state: str = "N
     status = _formal_status(item)
     if status != "AVAILABLE" or contract is None:
         return (
-            '<section class="detail-section exact-section lane-unavailable" id="score-distribution" '
+            '<article class="panel exact-panel lane-unavailable" id="score-distribution" '
             f'data-exact-state="UNAVAILABLE" data-exact-status="{html.escape(status, quote=True)}">'
-            '<div class="section-heading"><div><div class="section-kicker">\u6bd4\u5206\u5206\u5e03</div>'
-            '<h2>\u6bd4\u5206\u6982\u7387</h2></div><p>\u5f53\u524d\u6ca1\u6709\u53ef\u6838\u9a8c\u7684\u5b8c\u6574\u6bd4\u5206\u6982\u7387</p></div>'
-            '<p>\u6bd4\u5206\u6982\u7387\u6682\u4e0d\u53ef\u7528\uff1b\u672a\u8bb0\u5f55\u7684\u5206\u5e03\u4e0d\u8865\u5199\u3002</p></section>'
+            '<div class="score-title-row"><h2>\u6bd4\u5206\u6982\u7387</h2><small>\u5f53\u524d\u6ca1\u6709\u53ef\u6838\u9a8c\u7684\u5b8c\u6574\u6bd4\u5206\u6982\u7387</small></div>'
+            '<p>\u6bd4\u5206\u6982\u7387\u6682\u4e0d\u53ef\u7528\uff1b\u672a\u8bb0\u5f55\u7684\u5206\u5e03\u4e0d\u8865\u5199\u3002</p></article>'
         )
     cells = contract.get("cells") if isinstance(contract.get("cells"), list) else []
     by_score = {
@@ -450,6 +441,34 @@ def _render_exact_formal_market(item: dict[str, Any], *, serving_state: str = "N
         if isinstance(cell, dict)
     }
     max_goals = EXACT_DISTRIBUTION_MAX_GOALS
+
+    def bucket(value: Any) -> str:
+        try:
+            number = int(value)
+        except (TypeError, ValueError):
+            return ""
+        return str(number) if number < 4 else "4+"
+
+    signature_buckets = ("0", "1", "2", "3", "4+")
+    signature_values: dict[tuple[str, str], float] = {}
+    for cell in cells:
+        if not isinstance(cell, dict):
+            continue
+        home_bucket = bucket(cell.get("home_goals"))
+        away_bucket = bucket(cell.get("away_goals"))
+        probability = _percent_number(cell.get("probability"))
+        if home_bucket not in signature_buckets or away_bucket not in signature_buckets or probability is None:
+            continue
+        key = (home_bucket, away_bucket)
+        signature_values[key] = math.fsum((signature_values.get(key, 0.0), probability))
+    signature_max = max(signature_values.values(), default=0.0)
+    signature_rank = {
+        key: index
+        for index, (key, _value) in enumerate(
+            sorted(signature_values.items(), key=lambda entry: (-entry[1], entry[0]))
+        )
+    }
+
     max_probability = max(
         (_percent_number(cell.get("probability")) or 0.0 for cell in cells if isinstance(cell, dict)),
         default=0.0,
@@ -470,6 +489,7 @@ def _render_exact_formal_market(item: dict[str, Any], *, serving_state: str = "N
                 f'{cell_text}</td>'
             )
         rows.append(f'<tr><th scope="row">{home}</th>{"".join(cells_html)}</tr>')
+
     selected, _, _ = _exact_compact_projection(contract)
     primary = selected[0] if selected else None
     primary_summary = (
@@ -479,14 +499,51 @@ def _render_exact_formal_market(item: dict[str, Any], *, serving_state: str = "N
     )
     section_title = "\u6bd4\u5206\u6982\u7387\u5206\u5e03" if serving_state == "NORMAL" else "\u6bd4\u5206\u6982\u7387\u5206\u5e03\uff08\u4ec5\u4f9b\u89c2\u5bdf\uff09"
     quality_note = "" if serving_state == "NORMAL" else '<span>\u5f53\u524d\u4ec5\u4f9b\u89c2\u5bdf</span>'
+    signature_headers = "".join(f'<th scope="col">{html.escape(label)}</th>' for label in signature_buckets)
+    signature_rows = []
+    for home_bucket in signature_buckets:
+        signature_cells = []
+        for away_bucket in signature_buckets:
+            key = (home_bucket, away_bucket)
+            probability = signature_values.get(key)
+            if probability is None:
+                signature_cells.append('<td class="signature-cell">\u2014</td>')
+                continue
+            rank = signature_rank.get(key, 99)
+            highlight = f" hi{rank + 1}" if rank < 3 else ""
+            alpha = probability / signature_max if signature_max else 0.0
+            signature_cells.append(
+                f'<td class="signature-cell{highlight}" data-signature-cell-home="{html.escape(home_bucket, quote=True)}" '
+                f'data-signature-cell-away="{html.escape(away_bucket, quote=True)}" '
+                f'data-signature-probability="{probability:.6f}" style="--cell-alpha:{alpha:.3f}">{_percent(probability)}</td>'
+            )
+        signature_rows.append(f'<tr><th scope="row">{html.escape(home_bucket)}</th>{"".join(signature_cells)}</tr>')
+    signature_top = sorted(signature_values.items(), key=lambda entry: (-entry[1], entry[0]))[:3]
+    signature_top_text = " \u00b7 ".join(
+        f"{home}\u2013{away} {_percent(probability)}" for (home, away), probability in signature_top
+    )
+    signature_top_fallback = "\u2014"
+    signature_top_note = (
+        f'<div class="top3line"><strong>Top3\uff1a</strong> '
+        f'{html.escape(signature_top_text) if signature_top_text else signature_top_fallback}</div>'
+    )
     return (
-        f'<section class="detail-section exact-section" id="score-distribution" data-exact-state="{html.escape(serving_state, quote=True)}" data-exact-status="AVAILABLE">'
-        '<div class="section-heading"><div><div class="section-kicker">\u6bd4\u5206\u5206\u5e03</div>'
-        f'<h2>{section_title}</h2></div><p>\u6bcf\u4e00\u683c\u4e3a\u5bf9\u5e94\u6bd4\u5206\u7684\u7edd\u5bf9\u6982\u7387</p></div>'
-        f'<div class="exact-summary"><strong>\u6700\u9ad8\u6982\u7387\u6bd4\u5206\uff1a{html.escape(primary_summary)}</strong>{quality_note}</div>'
+        f'<article class="panel exact-panel" id="score-distribution" data-exact-state="{html.escape(serving_state, quote=True)}" data-exact-status="AVAILABLE">'
+        '<div class="score-title-row"><h2>\u6bd4\u5206\u6982\u7387</h2>'
+        f'<small>{html.escape(section_title)}{quality_note}</small></div>'
+        f'<div class="exact-summary"><strong>\u6700\u9ad8\u6982\u7387\uff1a{html.escape(primary_summary)}</strong>'
+        '<span>4+ \u4e3a\u6bd4\u5206\u5206\u5e03\u805a\u5408</span></div>'
+        '<table class="score-grid signature-grid" aria-label="\u6bd4\u5206\u6982\u7387\u7b7e\u540d\u77e9\u9635\uff1b\u4e3b\u961f\u8fdb\u7403\u4e3a H\uff0c\u5ba2\u961f\u8fdb\u7403\u4e3a A">'
+        '<caption class="sr-only">\u6bd4\u5206\u6982\u7387\u7b7e\u540d\u77e9\u9635\uff1a\u4e3b\u961f\u8fdb\u7403 H \u00d7 \u5ba2\u961f\u8fdb\u7403 A\uff0c4+ \u4e3a\u805a\u5408\u89c6\u56fe</caption>'
+        '<thead><tr><th scope="col">H\\A</th>'
+        + signature_headers
+        + '</tr></thead><tbody>'
+        + "".join(signature_rows)
+        + '</tbody></table>'
+        + signature_top_note
         + _render_exact_compact_projection(contract)
-        + '<details open class="exact-full-disclosure" data-exact-disclosure>'
-        '<summary>\u67e5\u770b\u5b8c\u6574 169 \u683c\u77e9\u9635</summary>'
+        + '<details class="exact-full-disclosure" data-exact-disclosure>'
+        '<summary aria-label="\u67e5\u770b\u5b8c\u6574 169 \u683c\u6bd4\u5206\u77e9\u9635">\u67e5\u770b\u5b8c\u6574 169 \u683c\u6bd4\u5206\u77e9\u9635</summary>'
         '<p class="exact-disclosure-cue">\u4e3b\u961f\u8fdb\u7403\u4e3a H\uff0c\u5ba2\u961f\u8fdb\u7403\u4e3a A\uff1b\u79fb\u52a8\u7aef\u5c55\u5f00\u540e\u5728\u77e9\u9635\u533a\u57df\u5185\u6a2a\u5411\u67e5\u770b\u3002</p>'
         '<div class="exact-grid-wrap" role="region" tabindex="0" aria-label="\u6bd4\u5206\u6982\u7387 169 \u683c\u77e9\u9635\uff1b\u4e3b\u961f\u8fdb\u7403 H\uff0c\u5ba2\u961f\u8fdb\u7403 A">'
         '<table class="exact-grid"><caption class="sr-only">\u6bd4\u5206\u6982\u7387 169 \u683c\uff1a\u4e3b\u961f\u8fdb\u7403 H \u00d7 \u5ba2\u961f\u8fdb\u7403 A</caption><thead><tr><th scope="col">H\\A</th>'
@@ -494,9 +551,9 @@ def _render_exact_formal_market(item: dict[str, Any], *, serving_state: str = "N
         + '</tr></thead><tbody>'
         + "".join(rows)
         + '</tbody></table></div></details>'
-        '<p class="exact-grid-caption">\u4ec5\u5c55\u793a\u5f53\u524d\u8bb0\u5f55\u4e2d\u7684 0\u201312 \u00d7 0\u201312 \u663e\u5f0f\u683c\uff1b\u5176\u4f59\u5df2\u8868\u793a\u6bd4\u5206\u5408\u8ba1\u89c1\u4e0a\u65b9\uff0c\u8303\u56f4\u5916\u4e0d\u63a8\u7b97\u3002</p>'
+        '<p class="exact-grid-caption">\u5b8c\u6574\u652f\u6301\u4fdd\u7559\u5728\u5c55\u5f00\u540e\uff1b\u9996\u5c4f\u4f7f\u7528 0\u20133 + 4+ \u7684\u7b7e\u540d\u77e9\u9635\u5feb\u901f\u9605\u8bfb\u3002</p>'
         '<script>(() => { const disclosures = document.querySelectorAll("[data-exact-disclosure]"); const isMobile = window.matchMedia("(max-width: 560px)").matches; disclosures.forEach((disclosure) => { if (isMobile) disclosure.open = false; }); })();</script>'
-        '</section>'
+        '</article>'
     )
 
 def _format_change_delta(value: Any) -> str:
@@ -721,7 +778,7 @@ def _render_role_block(role: str, title: str, texts: list[str]) -> str:
 
 def _render_key_takeaways(contract: dict[str, Any], *, exact_state: str = "UNVERIFIED") -> str:
     probabilities = _probabilities(contract)
-    takeaways: list[str] = []
+    takeaways: list[tuple[str, str, str, str, str]] = []
     outcomes = [
         ("\u4e3b\u80dc", _percent_number(probabilities.get("home"))),
         ("\u5e73", _percent_number(probabilities.get("draw"))),
@@ -730,27 +787,32 @@ def _render_key_takeaways(contract: dict[str, Any], *, exact_state: str = "UNVER
     outcomes = [(label, value) for label, value in outcomes if value is not None]
     if outcomes:
         label, number = max(outcomes, key=lambda item: item[1])
-        takeaways.append(f"{label}\u76f8\u5bf9\u5360\u4f18 \u00b7 {_percent(number)}")
+        takeaways.append(("H", "", f"{label}\u76f8\u5bf9\u5360\u4f18", "\u4e09\u79cd\u8d5b\u679c\u4e2d\u6700\u9ad8\uff0c\u4f46\u4ec5\u662f\u76f8\u5bf9\u5360\u4f18\u3002", _percent(number)))
     exact_contract = _exact_distribution_contract(contract)
     if isinstance(exact_contract, dict):
         selected, _, _ = _exact_compact_projection(exact_contract)
         if selected:
             primary = selected[0]
-            exact_copy = f"Exact \u6700\u9ad8\u6982\u7387\u6bd4\u5206\uff1a{int(primary['home_goals'])}-{int(primary['away_goals'])} \u00b7 {_percent(primary.get('probability'))}"
-            if exact_state != "NORMAL":
-                exact_copy += " \u00b7 \u4ec5\u4f9b\u89c2\u5bdf"
-            takeaways.append(exact_copy)
+            score = f'{int(primary["home_goals"])}-{int(primary["away_goals"])}'
+            takeaways.append(("\u25ce", "orange", "\u6700\u9ad8\u6982\u7387\u6bd4\u5206\u4ecd\u4e0d\u9ad8", f"{score} \u53ea\u662f\u5206\u5e03\u4e2d\u7684\u6700\u5927\u5355\u683c\u3002", _percent(primary.get("probability"))))
+    if exact_state != "NORMAL" and exact_contract:
+        takeaways.append(("!", "purple", "\u6bd4\u5206\u5c42\u6682\u4ec5\u4f9b\u89c2\u5bdf", "\u4e0d\u8981\u628a Top1 \u5f53\u6210\u786e\u5b9a\u7b54\u6848\u3002", "\u89c2\u5bdf"))
     if not takeaways:
         return ""
-    items = "".join(f'<div class="takeaway">{html.escape(value)}</div>' for value in takeaways[:3])
+    items = []
+    for icon, tone, title, detail, value in takeaways[:4]:
+        tone_class = f" {tone}" if tone else ""
+        items.append(
+            f'<div class="take-row"><span class="take-icon{tone_class}">{icon}</span>'
+            f'<div class="take-copy"><strong>{html.escape(title)}</strong><span>{html.escape(detail)}</span></div>'
+            f'<span class="take-val">{html.escape(value or DASH)}</span></div>'
+        )
     return (
-        '<section class="detail-section decision-context" id="decision-context">'
-        '<div class="section-heading"><div><div class="section-kicker">\u51b3\u7b56\u8bed\u5883</div>'
-        '<h2>\u8bfb\u61c2\u8fd9\u573a\u6bd4\u8d5b</h2></div>'
-        '<p>\u53ea\u7ffb\u8bd1\u5f53\u524d\u8bb0\u5f55\u91cc\u5df2\u5b58\u5728\u7684\u6982\u7387</p></div>'
-        f'<div class="takeaways">{items}</div></section>'
+        '<article class="panel takeaway-panel decision-context" id="decision-context">'
+        '<h2>\u5173\u952e\u7ed3\u8bba</h2>'
+        f'<div class="take-list">{"".join(items)}</div>'
+        '<div class="panel-link"><span>\u67e5\u770b\u5b8c\u6574\u5206\u6790</span><span>\u203a</span></div></article>'
     )
-
 
 def _render_key_evidence(contract: dict[str, Any]) -> str:
     evidence = contract.get("evidence") if isinstance(contract.get("evidence"), dict) else {}
@@ -794,11 +856,11 @@ def _render_key_evidence(contract: dict[str, Any]) -> str:
     if not blocks:
         return ""
     return (
-        '<section class="detail-section evidence-section" id="evidence">'
-        '<div class="section-heading"><div><div class="section-kicker">UNDERSTAND MATCH</div><h2>\u5173\u952e\u4f9d\u636e</h2></div>'
+        '<article class="panel evidence-panel evidence-section" id="evidence">'
+        '<div class="evidence-panel-heading"><div class="evidence-role">UNDERSTAND MATCH</div><h2>\u8d5b\u524d\u4f9d\u636e</h2>'
         '<p>\u53ea\u5c55\u793a\u5df2\u660e\u786e\u6807\u6ce8\u89d2\u8272\u7684\u8bc1\u636e</p></div><div class="evidence-grid">'
         + "".join(blocks)
-        + "</div></section>"
+        + "</div></article>"
     )
 
 def _market_comparison(contract: dict[str, Any]) -> dict[str, Any] | None:
@@ -839,24 +901,31 @@ def _render_market_comparison(contract: dict[str, Any]) -> str:
     if comparison is None:
         return ""
     market_label = "\u5e02\u573a\uff08\u53bb\u6c34\uff09" if comparison.get("devigged") else "\u5e02\u573a"
-    cells = []
-    deltas = []
-    for row in comparison["rows"]:
-        difference = row["model"] - row["market"]
-        sign = "+" if difference >= 0 else ""
-        cells.append(
-            f'<div><span>{row["label"]} \u00b7 \u6a21\u578b</span><strong>{_percent(row["model"])}</strong></div>'
-            f'<div><span>{row["label"]} \u00b7 {market_label}</span><strong>{_percent(row["market"])}</strong></div>'
-        )
-        deltas.append(f'{row["label"]} {sign}{difference * 100:.1f} \u4e2a\u767e\u5206\u70b9')
-    delta_text = "\uFF1B".join(deltas)
+    rows = comparison["rows"]
+    scale = max((max(row["model"], row["market"]) for row in rows), default=0.0) or 1.0
+    labels_html = "".join(f'<div>{html.escape(row["label"])}</div>' for row in rows)
+    bars_html = "".join(
+        f'<div class="mini-bars"><span class="m" style="height:{row["model"] / scale * 46:.1f}px"></span>'
+        f'<span class="k" style="height:{row["market"] / scale * 46:.1f}px"></span></div>'
+        for row in rows
+    )
+    delta_html = "".join(
+        f'<div class="delta {"pos" if row["model"] >= row["market"] else "neg"}">'
+        f'{"+" if row["model"] >= row["market"] else ""}{(row["model"] - row["market"]) * 100:.1f}pp</div>'
+        for row in rows
+    )
+    delta_text = "\uff1b".join(
+        f'{row["label"]} {"+" if row["model"] >= row["market"] else ""}{(row["model"] - row["market"]) * 100:.1f} \u4e2a\u767e\u5206\u70b9'
+        for row in rows
+    )
+    columns = f' style="grid-template-columns:66px repeat({len(rows)},minmax(0,1fr))"'
     return (
-        '<section class="detail-section market-section" id="market">'
-        '<div class="section-heading"><div><div class="section-kicker">\u771f\u5b9e\u5bf9\u7167</div><h2>\u5e02\u573a\u5bf9\u7167</h2></div>'
-        '<p>\u4ec5\u5728\u540c\u65f6\u5b58\u5728\u4e24\u4fa7\u6982\u7387\u65f6\u663e\u793a</p></div><div class="market-compare">'
-        + "".join(cells)
-        + f'<p>\u6a21\u578b\u76f8\u5bf9\u5e02\u573a\u7684\u5dee\u5f02\uff1a{delta_text}\u3002\u5dee\u5f02\u672c\u8eab\u4e0d\u8868\u793a\u597d\u574f\u3002</p>'
-        + '</div></section>'
+        '<article class="panel supporting-panel market-panel" id="market">'
+        '<h2>\u6a21\u578b vs \u5e02\u573a\uff081X2\uff09</h2>'
+        f'<div class="compare-head"><span>\u6a21\u578b</span><span>{market_label}</span></div>'
+        f'<div class="compare-grid"{columns}><div></div>{labels_html}<div></div>{bars_html}<div></div>{delta_html}</div>'
+        f'<div class="subtle-note">\u5dee\u5f02\u8868\u793a\u6a21\u578b\u76f8\u5bf9\u5e02\u573a\u7684\u504f\u79bb\uff1a{html.escape(delta_text)}\u3002\u4e0d\u4ee3\u8868\u597d\u574f\u3002</div>'
+        '</article>'
     )
 
 def _source_items(contract: dict[str, Any]) -> list[str]:
@@ -913,28 +982,30 @@ def _render_technical_details(contract: dict[str, Any]) -> str:
 
 def _render_trust(contract: dict[str, Any]) -> str:
     timestamps = contract.get("timestamps") or {}
-    status = _status_code(contract)
-    rows = []
     recorded_at = timestamps.get("prediction_frozen_at") or timestamps.get("freeze_created_at")
-    if recorded_at:
-        rows.append(
-            f'<div class="trust-lock"><strong>\u8d5b\u524d\u8bb0\u5f55\uff1a{_esc(_format_datetime(recorded_at, include_date=True))}</strong>'
-            '<span>\u8d5b\u540e\u4e0d\u4fee\u6539</span></div>'
-        )
-    elif status == "FROZEN":
-        rows.append('<div class="trust-lock"><strong>\u8d5b\u524d\u8bb0\u5f55\u5df2\u4fdd\u5b58</strong><span>\u8d5b\u540e\u4e0d\u4fee\u6539</span></div>')
+    recorded_text = _format_datetime(recorded_at, include_date=True) if recorded_at else "\u5df2\u4fdd\u5b58"
     references = _source_items(contract)
-    if references:
-        list_html = "".join(f"<li>{_esc(item)}</li>" for item in references[:5])
-        rows.append(f'<div class="trust-source"><span>\u53c2\u8003\u6765\u6e90</span><ul>{list_html}</ul></div>')
+    source_text = " \u00b7 ".join(references[:2]) if references else "\u5f53\u524d\u53ef\u7528\u7684\u8d5b\u524d\u8bb0\u5f55"
+    exact_state_code = _score_serving_context(contract).get("state") or "UNVERIFIED"
+    exact_state = {
+        "NORMAL": "\u53ef\u7528",
+        "CAUTION": "\u4ec5\u4f9b\u89c2\u5bdf",
+        "DEGRADED": "\u4ec5\u4f9b\u89c2\u5bdf",
+        "UNVERIFIED": "\u5f85\u786e\u8ba4",
+    }.get(exact_state_code, "\u5f85\u786e\u8ba4")
+    items = [
+        ("\u25f7", "\u8d5b\u524d\u8bb0\u5f55", f"{recorded_text} \u00b7 \u8d5b\u540e\u4e0d\u4fee\u6539"),
+        ("\u25a3", "\u6570\u636e\u6765\u6e90", source_text),
+        ("\u25f7", "\u6982\u7387\u53e3\u5f84", f"\u6bd4\u5206\u5c42{exact_state}"),
+        ("\u25a4", "\u65b9\u6cd5\u8bf4\u660e", "\u6280\u672f\u7ec6\u8282\u4e0b\u6c89"),
+        ("\u2713", "\u8d5b\u540e\u9a8c\u8bc1", "90\u5206\u949f + \u4f24\u505c\u8865\u65f6\u540c\u53e3\u5f84\u4fdd\u7559"),
+    ]
+    trust_items = "".join(
+        f'<div class="trust-item"><span class="trust-ico">{html.escape(icon)}</span><div><strong>{html.escape(title)}</strong><span>{html.escape(text)}</span></div></div>'
+        for icon, title, text in items
+    )
     technical = _render_technical_details(contract)
-    if technical:
-        rows.append(technical)
-    if not rows:
-        return ""
-    title = "\u53ef\u4fe1\u5ea6\u4e0e\u6765\u6e90" if references else "\u8d5b\u524d\u8bb0\u5f55"
-    kicker = "\u8bb0\u5f55\u4e0e\u65b9\u6cd5" if references else "\u8bb0\u5f55\u8bf4\u660e"
-    return f'<section class="trust-panel" id="sources"><div class="section-kicker">{kicker}</div><h2>{title}</h2>' + "".join(rows) + "</section>"
+    return f'<section class="trust-strip detail-trust" id="sources">{trust_items}</section>{technical}'
 
 def _result_score(result: dict[str, Any]) -> tuple[int, int] | None:
     text = str(result.get("score_90m") or "").strip()
@@ -1037,254 +1108,218 @@ def _render_status_panel(contract: dict[str, Any]) -> str:
     )
 
 
-DETAIL_CSS = """
-    .page { width:min(calc(100% - 48px),var(--max)); margin:0 auto; padding:28px 0 42px; }
-    .site-header { display:flex; align-items:center; justify-content:space-between; gap:20px; padding-bottom:17px; border-bottom:1px solid var(--line); }
-    .brand { display:flex; align-items:baseline; gap:12px; min-width:0; color:var(--ink); text-decoration:none; }
-    .brand-name { flex:0 0 auto; font-size:18px; font-weight:750; letter-spacing:-.05em; }
-    .brand-subtitle { color:var(--muted); font-size:10px; letter-spacing:.1em; text-transform:uppercase; }
-    .header-actions { display:flex; align-items:center; gap:14px; color:var(--muted); font-size:11px; }
-    .back { text-decoration:none; }
-    .back:hover { color:var(--accent); }
-    .eyebrow,.section-kicker { color:var(--quiet); font-size:10px; font-weight:700; letter-spacing:.14em; text-transform:uppercase; }
-    .detail-nav { display:flex; flex-wrap:wrap; gap:5px 15px; margin:15px 0 0; padding-bottom:2px; color:var(--muted); font-size:11px; }
-    .detail-nav a { padding:6px 0; text-decoration:none; }
-    .detail-nav a:hover { color:var(--accent); }
-    .detail-layout { display:block; }
-    .detail-main { min-width:0; }
-    .match-identity { padding:28px 0 23px; border-bottom:1px solid var(--line); }
-    .match-meta { color:var(--muted); font-size:12px; }
-    .match-identity h1 { max-width:100%; margin:11px 0 0; font-size:28px; line-height:1.18; letter-spacing:-.045em; overflow-wrap:anywhere; }
-    .match-identity h1 > span:not(.identity-team) { color:var(--muted); font-weight:450; }
-    .identity-team { display:inline-flex; align-items:center; gap:8px; color:var(--ink) !important; font-weight:750 !important; vertical-align:middle; }
-    .identity-team .team-badge { flex:0 0 30px; width:30px; height:30px; }
-    .quality-warning,.pilot-note { margin-top:15px; padding:11px 14px; border-left:3px solid var(--warning); background:var(--warning-soft); color:var(--warning); font-size:12px; }
-    .quality-warning strong { color:var(--ink); }
-    .quality-warning span { margin-left:8px; color:var(--muted); }
-    .pilot-note { border-left-color:var(--line); background:transparent; color:var(--muted); }
-    .detail-section,.result-panel,.status-panel { margin-top:30px; padding:20px 0 22px; border-top:2px solid var(--ink); border-bottom:1px solid var(--line); background:transparent; }
-    .section-heading { display:flex; align-items:baseline; justify-content:space-between; gap:18px; margin-bottom:16px; }
-    .section-heading h2 { margin:4px 0 0; font-size:17px; line-height:1.2; letter-spacing:-.025em; }
-    .section-heading p { max-width:45%; margin:0; color:var(--muted); font-size:11px; text-align:right; }
-    .forecast-section { padding:0; border:0; background:transparent; }
-    .probability-section { margin-top:30px; padding:20px 0 22px; border-top:2px solid var(--ink); border-bottom:1px solid var(--line); background:transparent; }
-    .probability-section h2 { margin:4px 0 16px; font-size:17px; letter-spacing:-.025em; }
-    .hero-probabilities { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:1px; border:1px solid var(--line); background:var(--line); }
-    .probability-card { min-width:0; padding:15px; background:var(--surface); }
-    .probability-card.probability-highest { background:var(--surface-subtle); }
-    .probability-label { display:block; color:var(--muted); font-size:12px; }
-    .probability-card strong { display:block; margin-top:4px; font-size:24px; line-height:1; font-variant-numeric:tabular-nums; }
-    .probability-card.probability-highest strong { font-weight:800; }
-    .probability-track { display:none; }
-    .probability-strip-wrap { margin-top:17px; }
-    .probability-strip { display:flex; width:100%; height:9px; overflow:hidden; border-radius:99px; background:var(--line); }
-    .probability-segment { display:block; min-width:2px; height:100%; }
-    .probability-segment.home { background:var(--home); }
-    .probability-segment.draw { background:var(--draw); }
-    .probability-segment.away { background:var(--away); }
-    .probability-legend { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; margin-top:11px; }
-    .probability-legend-item { display:flex; align-items:baseline; gap:7px; min-width:0; font-size:12px; }
-    .probability-legend-item::before { content:""; flex:0 0 8px; width:8px; height:8px; border-radius:50%; background:var(--draw); }
-    .probability-legend-item.home::before { background:var(--home); }
-    .probability-legend-item.away::before { background:var(--away); }
-    .probability-legend-item strong { font-size:14px; font-variant-numeric:tabular-nums; }
-    .probability-legend-item.is-leading strong { font-weight:800; }
-    .probability-legend-item small { color:var(--muted); font-size:10px; }
-    .lane-status-note { margin:-8px 0 14px; color:var(--warning); font-size:11px; }
-    .lane-unavailable { border-style:dashed; background:var(--surface-subtle); }
-    .lane-unavailable p { margin:7px 0 0; color:var(--muted); font-size:12px; }
-    .exact-section { margin-top:24px; }
-    .exact-summary { display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin:-4px 0 14px; }
-    .exact-summary strong { font-size:15px; font-variant-numeric:tabular-nums; }
-    .exact-summary span { color:var(--muted); font-size:11px; }
-    .exact-compact { display:none; }
-    .exact-full-disclosure { margin-top:4px; }
-    .exact-full-disclosure > summary { padding:4px 0 9px; cursor:pointer; font-size:12px; font-weight:700; }
-    .exact-disclosure-cue { margin:0 0 9px; color:var(--muted); font-size:11px; }
-    .exact-grid-wrap { max-width:100%; overflow-x:auto; overscroll-behavior-inline:contain; }
-    .exact-grid { width:100%; min-width:720px; border-collapse:collapse; table-layout:fixed; font-size:10px; font-variant-numeric:tabular-nums; }
-    .exact-grid th,.exact-grid td { width:7.14%; padding:6px 3px; border:1px solid var(--line); text-align:center; white-space:nowrap; }
-    .exact-grid th { background:var(--surface-subtle); color:var(--muted); font-weight:650; }
-    .exact-grid td { --cell-alpha:0; background:var(--matrix-low); color:var(--ink); }
-    @supports (background:color-mix(in srgb, white, black)) { .exact-grid td[data-probability] { background:color-mix(in srgb,var(--matrix-high) calc(12% + var(--cell-alpha) * 78%),var(--matrix-low)); } }
-    .exact-grid-caption { margin:9px 0 0; color:var(--muted); font-size:11px; }
-    .exact-full-disclosure:not([open]) > :not(summary) { display:none; }
-    .score-list { display:grid; gap:2px; }
-    .score-row { display:grid; grid-template-columns:90px minmax(0,1fr) 60px; gap:12px; align-items:center; min-height:33px; border-top:1px solid var(--line); font-size:12px; }
-    .score-row:first-child { border-top:0; }
-    .score-name { display:flex; align-items:baseline; gap:7px; }
-    .score-name strong { font-size:15px; font-variant-numeric:tabular-nums; }
-    .score-name span { color:var(--muted); font-size:10px; }
-    .score-bar { height:6px; overflow:hidden; background:var(--line); }
-    .score-bar > span { display:block; height:100%; background:var(--accent); }
-    .score-probability { text-align:right; font-size:12px; font-variant-numeric:tabular-nums; }
-    .section-note { margin:12px 0 0; color:var(--muted); font-size:11px; }
-    .goals-section { margin-top:24px; }
-    .goal-grid { display:grid; gap:3px; }
-    .goal-row { display:grid; grid-template-columns:44px minmax(0,1fr) 58px; gap:10px; align-items:center; min-height:29px; border-top:1px solid var(--line); font-size:12px; font-variant-numeric:tabular-nums; }
-    .goal-row:first-child { border-top:0; }
-    .goal-row > span { color:var(--muted); }
-    .goal-row > strong { text-align:right; }
-    .goal-bar { height:6px; overflow:hidden; background:var(--line); }
-    .goal-bar > span { display:block; height:100%; background:var(--accent); }
-    .supporting-section { border-top-width:1px; }
-    .decision-context { margin-top:24px; }
-    .takeaways { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; }
-    .takeaway { min-width:0; padding:13px 14px; border-left:3px solid var(--accent); background:var(--accent-soft); font-size:13px; font-weight:650; overflow-wrap:anywhere; }
-    .change-awareness-section { margin-top:24px; }
-    .change-lane-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
-    .change-lane { min-width:0; padding:13px; border:1px solid var(--line); background:var(--surface-subtle); }
-    .change-lane-wide { grid-column:1/-1; }
-    .change-lane h3 { margin:0 0 9px; font-size:13px; }
-    .change-rows { display:grid; }
-    .change-row { display:grid; grid-template-columns:82px minmax(100px,1fr) 92px; gap:9px; align-items:center; min-height:28px; border-top:1px solid var(--line); font-size:11px; font-variant-numeric:tabular-nums; }
-    .change-row:first-child { border-top:0; }
-    .change-label { min-width:0; overflow-wrap:anywhere; }
-    .change-before-now { display:flex; align-items:baseline; gap:7px; }
-    .change-before-now > span { color:var(--muted); }
-    .change-delta { color:var(--muted); text-align:right; }
-    .change-lane-note,.change-empty,.change-unavailable-copy { margin:9px 0 0; color:var(--muted); font-size:11px; }
-    .change-rank { display:block; color:var(--muted); font-size:10px; }
-    .deeper-details { margin-top:24px; }
-    .evidence-section { margin-top:0; }
-    .evidence-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
-    .evidence-block { min-width:0; padding:15px; border:1px solid var(--line); background:var(--surface); }
-    .evidence-role { margin-bottom:5px; color:var(--accent); font-size:10px; font-weight:750; letter-spacing:.12em; }
-    .evidence-block h3 { margin:0 0 10px; font-size:14px; }
-    .evidence-block p { margin:0; }
-    .evidence-fact { display:flex; justify-content:space-between; gap:10px; padding:8px 0; border-top:1px solid var(--line); font-size:12px; }
-    .evidence-fact:first-of-type { border-top:0; }
-    .evidence-fact span { color:var(--muted); }
-    .evidence-fact strong { text-align:right; font-weight:650; }
-    .evidence-subheading { margin-top:10px; color:var(--muted); font-size:11px; }
-    .support-list { margin:4px 0 0; padding-left:17px; }
-    .support-list li { margin:4px 0; }
-    .market-section { margin-top:8px; }
-    .market-compare { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
-    .market-compare > div { padding:14px; border:1px solid var(--line); background:var(--surface-subtle); }
-    .market-compare span { display:block; color:var(--muted); font-size:11px; }
-    .market-compare strong { display:block; margin-top:4px; font-size:22px; font-variant-numeric:tabular-nums; }
-    .market-compare p { grid-column:1/-1; margin:0; color:var(--muted); font-size:11px; }
-    .trust-panel { margin-top:24px; padding:18px 20px; border-top:1px solid var(--line); border-bottom:1px solid var(--line); background:transparent; }
-    .trust-panel h2 { margin:5px 0 14px; font-size:18px; letter-spacing:-.03em; }
-    .trust-lock { display:flex; flex-wrap:wrap; align-items:baseline; gap:8px; padding:10px 0 12px; border-top:2px solid var(--accent); border-bottom:1px solid var(--line); }
-    .trust-lock strong { font-size:13px; }
-    .trust-lock span { color:var(--muted); font-size:12px; }
-    .trust-source { padding:11px 0; border-bottom:1px solid var(--line); font-size:12px; }
-    .trust-source > span { color:var(--muted); }
-    .trust-source ul { display:flex; flex-wrap:wrap; gap:5px 18px; margin:6px 0 0; padding-left:17px; color:var(--muted); overflow-wrap:anywhere; }
-    .technical-details { margin-top:12px; }
-    .technical-details summary { padding:10px 0; cursor:pointer; color:var(--ink); font-size:12px; }
-    .technical-list { border-top:1px solid var(--line); }
-    .technical-row { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.3fr); gap:10px; padding:7px 0; border-bottom:1px solid var(--line); font-size:11px; }
-    .technical-row span { color:var(--muted); }
-    .technical-row code { overflow-wrap:anywhere; text-align:right; font:inherit; }
-    .result-panel { margin-top:24px; }
-    .actual-score { margin-top:7px; font-size:40px; font-weight:800; line-height:1; letter-spacing:-.06em; font-variant-numeric:tabular-nums; }
-    .actual-meta { display:flex; flex-wrap:wrap; gap:7px 12px; align-items:baseline; margin-top:9px; color:var(--muted); font-size:11px; }
-    .actual-meta strong { color:var(--verified); font-weight:700; }
-    .completed-facts { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:1px; margin-top:18px; border:1px solid var(--line); background:var(--line); }
-    .completed-facts > div { min-width:0; padding:11px; background:var(--surface); }
-    .completed-facts span,.completed-facts strong { display:block; }
-    .completed-facts span { color:var(--muted); font-size:11px; }
-    .completed-facts strong { margin-top:3px; font-size:13px; overflow-wrap:anywhere; }
-    .verification-section { margin-top:8px; }
-    .verification-list { display:grid; }
-    .verification-row { display:grid; grid-template-columns:82px minmax(70px,auto) minmax(0,1fr); gap:10px; align-items:baseline; padding:9px 0; border-top:1px solid var(--line); font-size:12px; }
-    .verification-row > span,.verification-row > em { color:var(--muted); }
-    .verification-row > em { font-style:normal; text-align:right; }
-    .status-panel { display:flex; gap:14px; align-items:flex-start; background:var(--surface); }
-    .status-mark { display:grid; place-items:center; flex:0 0 28px; width:28px; height:28px; border-radius:50%; background:var(--warning-soft); color:var(--warning); font-weight:800; }
-    .status-panel h2 { margin:4px 0 6px; font-size:17px; }
-    .status-panel p { margin:0; color:var(--muted); font-size:12px; }
-    .closed-beta { margin-top:30px; padding-top:13px; border-top:1px solid var(--line); color:var(--muted); font-size:11px; }
-    .closed-beta strong,.closed-beta span { display:block; margin-top:4px; }
-    .detail-footer { display:flex; justify-content:space-between; gap:12px; padding-top:18px; color:var(--muted); font-size:11px; }
-    .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
+DETAIL_CSS = r"""
+.detail-page .content { padding-top: 12px; }
+.detail-page .topbar { color: var(--ink); }
+.detail-page .crumbs .back { text-decoration: none; }
+.detail-page .crumbs strong { font-size: 11px; }
+.detail-page .utility strong { color: var(--ink); font-size: 10px; }
+.detail-page .hero { margin-top: 0; }
+.detail-page .team-copy { min-width: 0; }
+.detail-page .team h1 { overflow-wrap: anywhere; }
+.detail-page .team-meta:empty { display: none; }
+.detail-page .tabs { margin-bottom: 0; }
+.detail-page .quality-warning,
+.detail-page .pilot-note { margin: 10px 0 0; padding: 9px 12px; border-left: 2px solid var(--warning); background: var(--warning-soft); color: var(--warning); font-size: 10px; }
+.detail-page .quality-warning strong { color: var(--ink); }
+.detail-page .quality-warning span { margin-left: 7px; color: var(--muted); }
+.detail-page .pilot-note { border-left-color: var(--line-2); background: transparent; color: var(--muted); }
+.detail-page .primary-grid { margin-top: 10px; }
+.detail-page .supporting-grid { margin-top: 9px; }
+.detail-page .probability-section { overflow: hidden; }
+.detail-page .probability-section h2 { margin-bottom: 11px; }
+.detail-page .probability-section .prob-cells { border: 1px solid var(--line); border-radius: 8px; background: var(--line); gap: 1px; }
+.detail-page .probability-section .probability-card { min-width: 0; padding: 11px 9px 10px; background: var(--card); text-align: center; }
+.detail-page .probability-section .probability-card.probability-highest { background: #fffaf6; }
+.detail-page .probability-section .probability-label,
+.detail-page .probability-section .probability-card strong,
+.detail-page .probability-section .probability-card small { display: block; }
+.detail-page .probability-section .probability-label { font-size: 10px; }
+.detail-page .probability-section .probability-card strong { margin-top: 8px; font-size: 24px; line-height: 1; font-weight: 760; font-variant-numeric: tabular-nums; }
+.detail-page .probability-section .probability-card small { min-height: 14px; margin-top: 7px; color: var(--muted); font-size: 8px; }
+.detail-page .probability-strip { height: 8px; margin-top: 14px; }
+.detail-page .probability-strip span { display: block; min-width: 2px; height: 100%; }
+.detail-page .lane-status-note { margin: 0 0 9px; color: var(--warning); font-size: 9px; }
+.detail-page .lane-unavailable p { margin: 8px 0 0; color: var(--muted); font-size: 10px; }
+.detail-page .exact-panel { overflow: hidden; }
+.detail-page .exact-panel .score-title-row { margin-bottom: 8px; }
+.detail-page .exact-panel .score-title-row h2 { margin-bottom: 0; }
+.detail-page .exact-panel .score-title-row small { max-width: 48%; color: var(--muted); font-size: 8px; text-align: right; }
+.detail-page .exact-summary { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin: 0 0 8px; }
+.detail-page .exact-summary strong { min-width: 0; font-size: 10px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.detail-page .exact-summary span { color: var(--muted); font-size: 8px; text-align: right; }
+.detail-page .signature-grid { table-layout: fixed; border-spacing: 2px; font-size: 8px; }
+.detail-page .signature-grid th { padding: 2px; color: var(--muted); font-weight: 700; }
+.detail-page .signature-grid td { padding: 6px 2px; border-radius: 2px; background: #f1f6f0; font-variant-numeric: tabular-nums; }
+.detail-page .signature-grid td[data-signature-probability] { --cell-alpha: 0; }
+@supports (background: color-mix(in srgb, white, black)) {
+  .detail-page .signature-grid td[data-signature-probability] { background: color-mix(in srgb, #2f8d49 calc(12% + var(--cell-alpha) * 78%), #eef5ed); }
+}
+.detail-page .signature-grid td.hi1 { background: #92bc93; font-weight: 760; }
+.detail-page .signature-grid td.hi2 { background: #b7d0b7; }
+.detail-page .signature-grid td.hi3 { background: #d4e3d2; }
+.detail-page .exact-compact { display: none; }
+.detail-page .exact-full-disclosure { margin-top: 8px; border-top: 1px solid var(--line); }
+.detail-page .exact-full-disclosure > summary { min-height: 31px; padding: 9px 0 4px; cursor: pointer; color: var(--ink); font-size: 9px; font-weight: 700; }
+.detail-page .exact-full-disclosure:not([open]) > :not(summary) { display: none; }
+.detail-page .exact-disclosure-cue { margin: 0 0 8px; color: var(--muted); font-size: 8px; }
+.detail-page .exact-grid-wrap { max-width: 100%; overflow-x: auto; overscroll-behavior-inline: contain; }
+.detail-page .exact-grid { width: 100%; min-width: 720px; table-layout: fixed; border-collapse: collapse; font-size: 8px; font-variant-numeric: tabular-nums; }
+.detail-page .exact-grid th,
+.detail-page .exact-grid td { width: 7.14%; padding: 5px 2px; border: 1px solid var(--line); text-align: center; white-space: nowrap; }
+.detail-page .exact-grid th { background: var(--card-soft); color: var(--muted); font-weight: 650; }
+.detail-page .exact-grid td { --cell-alpha: 0; background: #f1f6f0; }
+@supports (background: color-mix(in srgb, white, black)) {
+  .detail-page .exact-grid td[data-probability] { background: color-mix(in srgb, #2f8d49 calc(12% + var(--cell-alpha) * 78%), #eef5ed); }
+}
+.detail-page .exact-grid-caption { margin: 8px 0 0; color: var(--muted); font-size: 8px; }
+.detail-page .top3line { margin-top: 8px; padding-top: 7px; font-size: 8px; }
+.detail-page .supporting-panel { min-height: 176px; }
+.detail-page .supporting-panel h2 { margin-bottom: 11px; }
+.detail-page .goals-panel .bars { height: 122px; }
+.detail-page .goals-panel .bar-col { height: 73px; }
+.detail-page .goals-panel .bar-col span { background: var(--blue); }
+.detail-page .goals-panel .subtle-note,
+.detail-page .market-panel .subtle-note { min-height: 22px; }
+.detail-page .market-panel .compare-head { margin-bottom: 6px; }
+.detail-page .market-panel .compare-grid { min-height: 85px; }
+.detail-page .evidence-panel { overflow: hidden; }
+.detail-page .evidence-panel-heading { margin-bottom: 7px; }
+.detail-page .evidence-panel-heading .evidence-role { margin-bottom: 3px; }
+.detail-page .evidence-panel-heading h2 { margin-bottom: 3px; }
+.detail-page .evidence-panel-heading p { margin: 0; color: var(--muted); font-size: 8px; }
+.detail-page .evidence-grid { display: grid; grid-template-columns: 1fr; gap: 0; }
+.detail-page .evidence-block { min-width: 0; padding: 8px 0; border: 0; border-top: 1px solid var(--line); background: transparent; }
+.detail-page .evidence-block:first-child { border-top: 0; }
+.detail-page .evidence-role { margin-bottom: 4px; color: var(--orange); font-size: 8px; font-weight: 750; letter-spacing: .08em; }
+.detail-page .evidence-block h3 { margin: 0 0 6px; font-size: 10px; }
+.detail-page .evidence-fact { padding: 5px 0; font-size: 9px; }
+.detail-page .evidence-fact strong { max-width: 70%; font-size: 9px; }
+.detail-page .source-line { margin: 5px 0 0; color: var(--muted); font-size: 8px; }
+.detail-page .support-list { margin: 3px 0 0; padding-left: 14px; font-size: 9px; }
+.detail-page .support-list li { margin: 3px 0; }
+.detail-page .detail-section,
+.detail-page .result-panel,
+.detail-page .status-panel { margin-top: 10px; padding: 13px 0 14px; border-top: 1px solid var(--line-2); border-bottom: 1px solid var(--line); background: transparent; }
+.detail-page .section-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+.detail-page .section-heading h2 { margin: 3px 0 0; font-size: 14px; letter-spacing: -.025em; }
+.detail-page .section-heading p { max-width: 48%; margin: 0; color: var(--muted); font-size: 9px; text-align: right; }
+.detail-page .section-kicker { color: var(--quiet); font-size: 8px; font-weight: 700; letter-spacing: .12em; }
+.detail-page .change-awareness-section { margin-top: 10px; }
+.detail-page .change-lane-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 8px; }
+.detail-page .change-lane { min-width: 0; padding: 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); }
+.detail-page .change-lane-wide { grid-column: 1 / -1; }
+.detail-page .change-lane h3 { margin: 0 0 7px; font-size: 10px; }
+.detail-page .change-rows { display: grid; }
+.detail-page .change-row { display: grid; grid-template-columns: 76px minmax(90px,1fr) 88px; gap: 8px; align-items: center; min-height: 26px; border-top: 1px solid var(--line); font-size: 9px; font-variant-numeric: tabular-nums; }
+.detail-page .change-row:first-child { border-top: 0; }
+.detail-page .change-before-now { display: flex; align-items: baseline; gap: 5px; }
+.detail-page .change-before-now > span { color: var(--muted); }
+.detail-page .change-delta { color: var(--muted); text-align: right; }
+.detail-page .change-lane-note,
+.detail-page .change-empty,
+.detail-page .change-unavailable-copy,
+.detail-page .section-note { margin: 8px 0 0; color: var(--muted); font-size: 8px; }
+.detail-page .deeper-details { margin-top: 10px; }
+.detail-page .result-panel { margin-top: 10px; }
+.detail-page .result-panel h2 { margin: 3px 0 0; font-size: 14px; }
+.detail-page .actual-score { margin-top: 6px; font-size: 34px; font-weight: 800; line-height: 1; letter-spacing: -.06em; font-variant-numeric: tabular-nums; }
+.detail-page .actual-meta { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: baseline; margin-top: 8px; color: var(--muted); font-size: 9px; }
+.detail-page .actual-meta strong { color: var(--verified); }
+.detail-page .completed-facts { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 1px; margin-top: 13px; border: 1px solid var(--line); background: var(--line); }
+.detail-page .completed-facts > div { min-width: 0; padding: 8px; background: var(--card); }
+.detail-page .completed-facts span,
+.detail-page .completed-facts strong { display: block; }
+.detail-page .completed-facts span { color: var(--muted); font-size: 8px; }
+.detail-page .completed-facts strong { margin-top: 3px; font-size: 10px; overflow-wrap: anywhere; }
+.detail-page .verification-section { margin-top: 8px; }
+.detail-page .verification-list { display: grid; }
+.detail-page .verification-row { display: grid; grid-template-columns: 74px minmax(64px,auto) minmax(0,1fr); gap: 9px; align-items: baseline; padding: 7px 0; border-top: 1px solid var(--line); font-size: 9px; }
+.detail-page .verification-row > span,
+.detail-page .verification-row > em { color: var(--muted); }
+.detail-page .verification-row > em { font-style: normal; text-align: right; }
+.detail-page .status-panel { display: flex; gap: 12px; align-items: flex-start; padding: 15px 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); }
+.detail-page .status-mark { display: grid; place-items: center; flex: 0 0 26px; width: 26px; height: 26px; border-radius: 50%; background: var(--warning-soft); color: var(--warning); font-weight: 800; }
+.detail-page .status-panel h2 { margin: 3px 0 5px; font-size: 14px; }
+.detail-page .status-panel p { margin: 0; color: var(--muted); font-size: 10px; }
+.detail-page .detail-trust { margin-top: 10px; }
+.detail-page .technical-details { margin-top: 8px; }
+.detail-page .technical-details summary { padding: 8px 0; cursor: pointer; color: var(--ink); font-size: 9px; }
+.detail-page .technical-list { border-top: 1px solid var(--line); }
+.detail-page .technical-row { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1.3fr); gap: 9px; padding: 6px 0; border-bottom: 1px solid var(--line); font-size: 8px; }
+.detail-page .technical-row span { color: var(--muted); }
+.detail-page .technical-row code { overflow-wrap: anywhere; text-align: right; font: inherit; }
+.detail-page .closed-beta-notice { margin: 10px 14px 0; }
+.detail-page .detail-footer { display: flex; justify-content: space-between; gap: 14px; margin: 0 14px; padding: 12px 0 14px; border-top: 1px solid var(--line); color: var(--muted); font-size: 8px; }
+.detail-page .detail-footer span { min-width: 0; }
+.detail-page .detail-principles { margin-left: 14px; margin-right: 14px; }
+.detail-page .detail-copyright { padding-left: 14px; padding-right: 14px; }
 
-    @media (max-width:820px) {
-      .page { width:calc(100% - 32px); padding-top:18px; }
-      .site-header { align-items:baseline; padding-bottom:14px; }
-      .detail-nav { gap:3px 13px; margin-top:11px; }
-      .match-identity { padding-top:22px; }
-      .match-identity h1 { font-size:23px; }
-    }
-    @media (max-width:560px) {
-      .page { width:calc(100% - 20px); padding-top:11px; }
-      .brand-subtitle,.eyebrow { display:none; }
-      .header-actions { gap:9px; }
-      .header-actions .eyebrow { display:none; }
-      .detail-nav { display:flex; max-width:100%; overflow:hidden; }
-      .detail-nav a { min-height:36px; padding:9px 0; }
-      .match-identity { padding-bottom:18px; }
-      .match-identity h1 { font-size:20px; line-height:1.22; }
-      .quality-warning { display:block; }
-      .quality-warning span { display:block; margin:5px 0 0; }
-      .detail-section,.result-panel,.status-panel,.probability-section { margin-top:20px; padding:15px 0 18px; border-radius:0; }
-      .section-heading { display:block; margin-bottom:12px; }
-      .section-heading p { max-width:none; margin-top:5px; text-align:left; }
-      .hero-probabilities { grid-template-columns:repeat(3,minmax(0,1fr)); }
-      .probability-card { padding:11px 9px; }
-      .probability-card strong { font-size:19px; }
-      .probability-label { font-size:11px; }
-      .probability-legend { gap:6px; }
-      .probability-legend-item { gap:5px; font-size:11px; }
-      .probability-legend-item strong { font-size:13px; }
-      .probability-legend-item small { display:block; font-size:10px; }
-      .takeaways { grid-template-columns:1fr; gap:5px; }
-      .change-lane-grid,.evidence-grid,.market-compare { grid-template-columns:1fr; }
-      .change-lane-wide { grid-column:auto; }
-      .change-row { grid-template-columns:64px minmax(90px,1fr) 78px; gap:6px; }
-      .change-before-now { gap:5px; }
-      .change-delta { font-size:10px; }
-      .exact-compact { display:block; }
-      .exact-compact-heading { display:flex; align-items:baseline; justify-content:space-between; gap:8px; margin-bottom:8px; }
-      .exact-compact-heading h3 { margin:0; font-size:13px; }
-      .exact-compact-heading span { color:var(--muted); font-size:11px; }
-      .exact-compact-list { display:grid; gap:2px; }
-      .exact-compact-row { display:grid; grid-template-columns:64px minmax(0,1fr) 58px; gap:8px; align-items:center; min-height:29px; border-top:1px solid var(--line); }
-      .exact-compact-row:first-child { border-top:0; }
-      .exact-compact-score { font-size:13px; font-variant-numeric:tabular-nums; white-space:nowrap; }
-      .exact-compact-score b { margin-right:5px; color:var(--muted); font-size:11px; font-weight:650; }
-      .exact-compact-bar { height:6px; overflow:hidden; background:var(--line); }
-      .exact-compact-bar > span { display:block; height:100%; background:var(--accent); }
-      .exact-compact-probability { text-align:right; font-size:13px; font-variant-numeric:tabular-nums; }
-      .exact-compact-remainder { display:flex; align-items:baseline; justify-content:space-between; gap:8px; margin-top:7px; padding-top:7px; border-top:1px solid var(--line); font-size:12px; }
-      .exact-compact-remainder strong { font-size:13px; font-variant-numeric:tabular-nums; }
-      .exact-compact-note { margin:7px 0 0; color:var(--muted); font-size:11px; }
-      .exact-full-disclosure { margin-top:10px; border-top:1px solid var(--line); }
-      .exact-full-disclosure > summary { min-height:36px; padding:10px 0 7px; }
-      .exact-grid-wrap { overflow-x:auto; }
-      .exact-grid { min-width:720px; font-size:10px; }
-      .exact-grid th,.exact-grid td { padding:6px 3px; }
-      .goal-grid { gap:2px; }
-      .goal-row { grid-template-columns:39px minmax(0,1fr) 54px; gap:8px; }
-      .completed-facts { grid-template-columns:repeat(2,minmax(0,1fr)); }
-      .completed-facts > div { padding:9px; }
-      .verification-row { grid-template-columns:68px minmax(65px,auto) minmax(0,1fr); gap:7px; }
-      .verification-row > em { text-align:right; }
-      .actual-score { font-size:35px; }
-      .trust-panel { margin-top:18px; padding:15px 0; }
-      .trust-source ul { display:block; }
-      .trust-source li { margin-top:4px; }
-      .detail-footer { display:block; }
-      .detail-footer span { display:block; margin-top:5px; }
-    }
-    @media (max-width:360px) {
-      .page { width:calc(100% - 16px); }
-      .site-header { gap:8px; }
-      .match-identity h1 { font-size:18px; }
-      .match-meta { font-size:11px; overflow-wrap:anywhere; }
-      .probability-card { padding-left:6px; padding-right:6px; }
-      .probability-card strong { font-size:17px; }
-      .probability-legend-item { gap:3px; font-size:10px; }
-      .probability-legend-item::before { flex-basis:6px; width:6px; height:6px; }
-      .probability-legend-item strong { font-size:12px; }
-      .exact-compact-row { grid-template-columns:56px minmax(0,1fr) 54px; gap:6px; }
-      .exact-compact-probability { font-size:12px; }
-      .change-row { grid-template-columns:54px minmax(80px,1fr) 72px; gap:5px; }
-      .verification-row { grid-template-columns:59px minmax(57px,auto) minmax(0,1fr); gap:5px; font-size:11px; }
-    }
+@media (max-width: 820px) {
+  .detail-page .content { padding: 0 14px 71px; }
+  .detail-page .quality-warning,
+  .detail-page .pilot-note { margin-top: 8px; }
+  .detail-page .primary-grid,
+  .detail-page .supporting-grid { margin-top: 0; }
+  .detail-page .panel { padding: 14px 0; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; box-shadow: none; }
+  .detail-page .probability-section .probability-card { padding: 7px 4px 8px; }
+  .detail-page .probability-section .probability-card strong { font-size: 17px; }
+  .detail-page .probability-section .probability-card small { display: none; }
+  .detail-page .probability-strip { height: 6px; margin-top: 11px; }
+  .detail-page .prob-caption { display: none; }
+  .detail-page .exact-panel .score-title-row small { display: none; }
+  .detail-page .signature-grid { font-size: 7px; border-spacing: 1px; }
+  .detail-page .signature-grid td { padding: 4px 1px; }
+  .detail-page .exact-compact { display: block; margin-top: 10px; }
+  .detail-page .exact-compact-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 7px; }
+  .detail-page .exact-compact-heading h3 { margin: 0; font-size: 11px; }
+  .detail-page .exact-compact-heading span { color: var(--muted); font-size: 8px; }
+  .detail-page .exact-compact-list { display: grid; gap: 1px; }
+  .detail-page .exact-compact-row { display: grid; grid-template-columns: 60px minmax(0,1fr) 53px; gap: 7px; align-items: center; min-height: 27px; border-top: 1px solid var(--line); }
+  .detail-page .exact-compact-row:first-child { border-top: 0; }
+  .detail-page .exact-compact-score { font-size: 11px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .detail-page .exact-compact-score b { margin-right: 4px; color: var(--muted); font-size: 9px; font-weight: 650; }
+  .detail-page .exact-compact-bar { height: 5px; overflow: hidden; background: var(--line); }
+  .detail-page .exact-compact-bar > span { display: block; height: 100%; background: var(--orange); }
+  .detail-page .exact-compact-probability { text-align: right; font-size: 12px; font-variant-numeric: tabular-nums; }
+  .detail-page .exact-compact-remainder { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--line); font-size: 9px; }
+  .detail-page .exact-compact-remainder strong { font-size: 12px; font-variant-numeric: tabular-nums; }
+  .detail-page .exact-compact-note { margin: 6px 0 0; color: var(--muted); font-size: 8px; }
+  .detail-page .exact-full-disclosure { margin-top: 8px; }
+  .detail-page .exact-full-disclosure > summary { min-height: 33px; padding: 9px 0 6px; }
+  .detail-page .exact-grid-wrap { overflow-x: auto; }
+  .detail-page .exact-grid { min-width: 720px; font-size: 8px; }
+  .detail-page .exact-grid th,
+  .detail-page .exact-grid td { padding: 5px 2px; }
+  .detail-page .supporting-panel { min-height: 0; }
+  .detail-page .bars { height: 100px; }
+  .detail-page .bar-col { height: 56px; }
+  .detail-page .change-lane-grid,
+  .detail-page .evidence-grid { grid-template-columns: 1fr; }
+  .detail-page .change-lane-wide { grid-column: auto; }
+  .detail-page .change-row { grid-template-columns: 62px minmax(80px,1fr) 74px; gap: 6px; }
+  .detail-page .section-heading { display: block; margin-bottom: 9px; }
+  .detail-page .section-heading p { max-width: none; margin-top: 4px; text-align: left; }
+  .detail-page .completed-facts { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .detail-page .verification-row { grid-template-columns: 64px minmax(59px,auto) minmax(0,1fr); gap: 7px; }
+  .detail-page .verification-row > em { text-align: right; }
+  .detail-page .actual-score { font-size: 32px; }
+  .detail-page .detail-trust,
+  .detail-page .detail-principles,
+  .detail-page .detail-copyright,
+  .detail-page .detail-footer { display: none; }
+  .detail-page .closed-beta-notice { margin: 8px 0 0; }
+}
+
+@media (max-width: 360px) {
+  .detail-page .content { padding-left: 12px; padding-right: 12px; }
+  .detail-page .hero { grid-template-columns: 1fr 70px 1fr; }
+  .detail-page .probability-section .probability-card strong { font-size: 16px; }
+  .detail-page .signature-grid { font-size: 6.5px; }
+  .detail-page .exact-compact-row { grid-template-columns: 55px minmax(0,1fr) 51px; gap: 5px; }
+  .detail-page .change-row { grid-template-columns: 55px minmax(70px,1fr) 68px; gap: 5px; }
+  .detail-page .verification-row { grid-template-columns: 58px minmax(55px,auto) minmax(0,1fr); gap: 5px; font-size: 8px; }
+}
 """
 
 
@@ -1309,7 +1344,6 @@ def render_match_detail(contract: dict[str, Any]) -> str:
         if serving and (contract.get("governance") or {}).get("pilot_excluded")
         else ""
     )
-    kickoff = _format_datetime(identity.get("kickoff_at"), include_date=True)
     home_value = identity.get("home") or "\u4e3b\u961f"
     away_value = identity.get("away") or "\u5ba2\u961f"
     home = _esc(home_value)
@@ -1318,16 +1352,27 @@ def render_match_detail(contract: dict[str, Any]) -> str:
         home_value,
         identity.get("home_crest") or identity.get("home_logo") or identity.get("home_badge"),
         side="home",
+        variant="crest",
     )
     away_badge = render_team_badge(
         away_value,
         identity.get("away_crest") or identity.get("away_logo") or identity.get("away_badge"),
         side="away",
+        variant="crest",
     )
-    meta = " \u00b7 ".join(
-        value for value in (_esc(identity.get("competition")), _esc(identity.get("match_num")), _esc(kickoff)) if value
-    )
-    title = f"{home} vs {away} \u00b7 \u6bd4\u8d5b\u8be6\u60c5"
+    kickoff_at = identity.get("kickoff_at") or identity.get("kickoff")
+    kickoff_date = _format_datetime(kickoff_at, include_date=True) or "\u65f6\u95f4\u5f85\u5b9a"
+    kickoff_time = _format_datetime(kickoff_at) or DASH
+    venue = _esc(identity.get("venue") or identity.get("stadium") or "\u8d5b\u524d\u8bb0\u5f55")
+    competition = _esc(identity.get("competition"), "\u6bd4\u8d5b")
+    match_number = _esc(identity.get("match_num"), "")
+    crumb_match = f'<span>{match_number}</span>' if match_number else f'<span>{html.escape(kickoff_date)}</span>'
+    home_meta_value = identity.get("home_rank") or identity.get("home_position") or identity.get("home_meta") or ""
+    away_meta_value = identity.get("away_rank") or identity.get("away_position") or identity.get("away_meta") or ""
+    home_meta = f'<div class="team-meta">{_esc(home_meta_value)}</div>' if home_meta_value else ""
+    away_meta = f'<div class="team-meta">{_esc(away_meta_value)}</div>' if away_meta_value else ""
+    status_label = _user_status_label(status)
+    status_line = "\u5df2\u5b8c\u6210" if status_code == "COMPLETED" else "\u8d5b\u524d\u5df2\u9501\u5b9a" if status_code == "FROZEN" else status_label
     result_html = _render_completed_result(contract) if result.get("score_90m") else ""
     verification_html = _render_verification(contract) if result.get("score_90m") else ""
     probability_html = _render_probability_cards(contract) if serving else ""
@@ -1345,68 +1390,57 @@ def render_match_detail(contract: dict[str, Any]) -> str:
     evidence_html = _render_key_evidence(contract) if serving else ""
     market_html = _render_market_comparison(contract) if serving else ""
     if serving:
-        forecast_html = (
-            '<div class="forecast-section" id="analysis">'
-            + probability_html
-            + exact_html
-            + goals_html
-            + '</div>'
-        )
-        decision_parts = [part for part in (takeaways_html, change_awareness_html, market_html) if part]
-        decision_html = "".join(decision_parts)
-        deeper_html = f'<div class="deeper-details">{evidence_html}</div>' if evidence_html else ""
+        primary_html = f'<section class="grid3 primary-grid">{probability_html}{exact_html}{takeaways_html}</section>'
+        supporting_html = f'<section class="grid3 second supporting-grid">{goals_html}{market_html}{evidence_html}</section>'
+        analysis_html = primary_html + supporting_html + change_awareness_html + (trust_html := _render_trust(contract))
     else:
-        forecast_html = _render_status_panel(contract)
-        decision_html = ""
-        deeper_html = ""
-    trust_html = _render_trust(contract) if serving else ""
-    nav_items = []
-    if serving:
-        nav_items.append('<a href="#analysis">\u6982\u7387\u6838\u5fc3</a>')
-        if takeaways_html:
-            nav_items.append('<a href="#decision-context">\u51b3\u7b56\u8bed\u5883</a>')
-        if verification_html:
-            nav_items.append('<a href="#verification">\u6838\u9a8c</a>')
-        if change_awareness_html:
-            nav_items.append('<a href="#change-awareness">\u8d5b\u524d\u53d8\u5316</a>')
-        if exact_html:
-            nav_items.append('<a href="#score-distribution">\u6bd4\u5206</a>')
-        if goals_html:
-            nav_items.append('<a href="#goals">\u603b\u8fdb\u7403</a>')
-        if evidence_html:
-            nav_items.append('<a href="#evidence">\u5173\u952e\u4f9d\u636e</a>')
-        if market_html:
-            nav_items.append('<a href="#market">\u5e02\u573a\u5bf9\u7167</a>')
-        if trust_html:
-            nav_items.append('<a href="#sources">\u8bb0\u5f55\u4e0e\u6765\u6e90</a>')
-    nav_html = f'<nav class="detail-nav" aria-label="\u9875\u9762\u5185\u5bfc">{"".join(nav_items)}</nav>' if nav_items else ""
+        trust_html = ""
+        analysis_html = _render_status_panel(contract)
+    utility_html = (
+        '<div class="utility">'
+        '<button class="icon-btn" type="button" aria-label="\u5e2e\u52a9"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><path d="M9.8 9a2.3 2.3 0 014.4.9c0 1.7-2.2 2-2.2 3.6M12 17h.01"/></svg></button>'
+        '<strong>\u600e\u4e48\u770b</strong>'
+        '<button class="icon-btn" type="button" aria-label="\u6536\u85cf"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M6 4h12v17l-6-4-6 4z"/></svg></button>'
+        '<button class="icon-btn" type="button" aria-label="\u901a\u77e5"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M18 8a6 6 0 10-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></svg></button>'
+        '<button class="icon-btn" type="button" aria-label="\u8d26\u6237"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="9" r="3"/><path d="M6.5 18c1.7-3 9.3-3 11 0"/></svg></button>'
+        '</div>'
+    )
     closed_beta = render_closed_beta_notice("closed-beta")
+    closed_beta_html = f'<div id="closed-beta">{closed_beta}</div>'
+    footer_html = (
+        '<section class="footer-principles detail-principles"><div class="principle-title">OneShot Principles</div>'
+        '<div class="principles">'
+        '<div class="principle"><span class="principle-icon">\u2606</span><div><strong>\u6e05\u6670\u4f18\u5148</strong><span>\u5148\u770b\u771f\u6b63\u6539\u53d8\u5224\u65ad\u7684\u5185\u5bb9\u3002</span></div></div>'
+        '<div class="principle"><span class="principle-icon">\u25c9</span><div><strong>\u6982\u7387\u8bda\u5b9e</strong><span>\u6700\u9ad8\u4e0d\u7b49\u4e8e\u786e\u5b9a\u3002</span></div></div>'
+        '<div class="principle"><span class="principle-icon">\u25c7</span><div><strong>\u72ec\u7acb\u5224\u65ad</strong><span>\u6a21\u578b\u4e0e\u5224\u65ad\u5e76\u5217\u6bd4\u8f83\u3002</span></div></div>'
+        '<div class="principle"><span class="principle-icon">\u2713</span><div><strong>\u4e00\u81f4\u9a8c\u8bc1</strong><span>\u8d5b\u524d\u8bb0\u5f55\u8d5b\u540e\u4e0d\u4fee\u6539\u3002</span></div></div>'
+        '<div class="principle"><span class="principle-icon">\u25a3</span><div><strong>\u6709\u4e0a\u4e0b\u6587\u7684\u6570\u636e</strong><span>\u6570\u5b57\u5fc5\u987b\u80fd\u89e3\u91ca\u3002</span></div></div>'
+        '</div></section>'
+        '<div class="copyright detail-copyright"><span>\u00a9 2026 OneShot</span><span>Closed Beta</span><span>\u4ec5\u4f9b\u6bd4\u8d5b\u5206\u6790\u4e0e\u7814\u7a76\u53c2\u8003</span></div>'
+    )
     content_html = f"""
-<div class="page">
-<header class="site-header">
-  <a class="brand" href="../../prediction_dashboard/latest.html"><span class="brand-name">FBOS</span><span class="brand-subtitle">Football Prediction Intelligence</span></a>
-  <div class="header-actions"><a class="back" href="../../prediction_dashboard/latest.html">\u2190 \u4eca\u65e5\u6bd4\u8d5b</a><span class="eyebrow">\u6bd4\u8d5b\u8be6\u60c5</span></div>
+<section class="page detail-page">
+<header class="topbar">
+  <div class="crumbs"><a class="back" href="../../prediction_dashboard/latest.html" aria-label="\u8fd4\u56de\u4eca\u65e5\u6bd4\u8d5b">\u2190</a><strong>{competition}</strong><span>\u00b7</span>{crumb_match}</div>
+  {utility_html}
 </header>
-{nav_html}
-<div class="detail-layout">
-  <div class="detail-main">
-    <section class="match-identity" id="conclusion">
-      <div class="match-meta"><span>{meta}</span></div>
-      <h1><span class="identity-team home">{home}{home_badge}</span> <span>vs</span> <span class="identity-team away">{away_badge}{away}</span></h1>
-      {quality_warning}
-      {pilot_note}
-    </section>
-    {result_html}
-    {verification_html}
-    {forecast_html}
-    {decision_html}
-    {deeper_html}
-    {trust_html}
-  </div>
+<div class="content">
+  <section class="hero" id="conclusion">
+    <div class="team">{home_badge}<div class="team-copy"><h1>{home}</h1>{home_meta}</div></div>
+    <div class="kick"><small>{html.escape(kickoff_date)}</small><strong>{html.escape(kickoff_time)}</strong><span>{venue} \u00b7 {html.escape(status_line)}</span></div>
+    <div class="team right"><div class="team-copy"><h1>{away}</h1>{away_meta}</div>{away_badge}<span class="fav" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 3l2.8 5.7L21 9.6l-4.5 4.4 1.1 6.2L12 17.3 6.4 20.2 7.5 14 3 9.6l6.2-.9z"/></svg></span></div>
+  </section>
+  <nav class="tabs" aria-label="\u6bd4\u8d5b\u8be6\u60c5\u5bfc\u822a"><a class="tab active" href="#conclusion">\u6982\u89c8</a><a class="tab" href="#analysis">\u6982\u7387</a><a class="tab" href="#market">\u5e02\u573a</a><a class="tab" href="#evidence">\u4f9d\u636e</a></nav>
+  {quality_warning}
+  {pilot_note}
+  {result_html}
+  {verification_html}
+  <div id="analysis" class="detail-analysis">{analysis_html}</div>
 </div>
-{closed_beta}
+{closed_beta_html}
+{footer_html}
 <footer class="detail-footer"><span>\u8d5b\u524d\u8bb0\u5f55\u4fdd\u6301\u4e0d\u53d8\uff1b\u8d5b\u540e\u7ed3\u679c\u5355\u72ec\u6838\u9a8c\u3002</span><span>\u9875\u9762\u6570\u636e\u6765\u81ea\u5f53\u524d\u53ef\u7528\u7684\u6bd4\u8d5b\u8bb0\u5f55\u3002</span></footer>
-</div>
+</section>
 """
     return render_public_document(
         title=f"{home_value} vs {away_value} \u00b7 \u6bd4\u8d5b\u8be6\u60c5",
@@ -1414,8 +1448,9 @@ def render_match_detail(contract: dict[str, Any]) -> str:
         content_html=content_html,
         dashboard_href="../../prediction_dashboard/latest.html",
         history_href="../../prediction_dashboard/latest.html#historical-results",
-        mobile_label="\u6bd4\u8d5b\u8be6\u60c5",
+        mobile_label=f"{home_value} vs {away_value}",
         body_class=f"detail-page status-{_status_class(contract)}",
+        mobile_variant="detail",
     )
 
 

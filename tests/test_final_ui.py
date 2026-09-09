@@ -67,6 +67,11 @@ def test_dashboard_uses_locked_probability_desk_surface():
 
     assert 'class="app-shell"' in html
     assert 'class="side-rail"' in html
+    assert 'class="league-group"' in html
+    assert 'class="fixture-row match-card' in html
+    assert 'class="table-header"' not in html
+    assert 'class="footer-principles"' in html
+    assert "OneShot" in html
     assert "1X2 \u6982\u7387" in html
     assert html.count('class="probability-segment ') == 3
     assert 'data-score-serving-state="NORMAL"' not in html
@@ -106,6 +111,12 @@ def test_detail_keeps_exact_score_as_separate_truthful_lane(tmp_path):
     assert 'data-exact-compact-source-cell-count="169"' in html
     assert 'data-exact-compact-remainder-count="163"' in html
     assert 'data-exact-disclosure' in html
+    assert 'class="hero"' in html
+    assert 'class="tabs"' in html
+    assert html.count('class="grid3') >= 2
+    assert 'score-grid signature-grid' in html
+    assert 'class="trust-strip detail-trust"' in html
+    assert '<details open class="exact-full-disclosure"' not in html
     assert html.count('class="probability-segment') == 3
     assert "JC" not in html
     assert "BTTS" not in html

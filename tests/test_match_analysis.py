@@ -269,8 +269,9 @@ def test_formal_markets_are_wired_to_detail_and_completed_verification(tmp_path)
     assert 'data-exact-compact-remainder-probability="0.964497041420"' in html
     assert html.count('data-exact-compact-score=') == 6
     assert 'data-exact-disclosure' in html
-    assert '<details open class="exact-full-disclosure"' in html
-    assert 'font-size:8px' not in html
+    assert '<details class="exact-full-disclosure"' in html
+    assert '<details open class="exact-full-disclosure"' not in html
+    assert 'score-grid signature-grid' in html
     assert "actual_probability" not in html
     assert 'id="verification"' in html
 
@@ -805,7 +806,7 @@ def test_detail_renderer_has_user_facing_layers_and_fails_closed_for_statuses(tm
     assert "\u80dc\u5e73\u8d1f\u6982\u7387" in html
     assert "\u6bd4\u5206\u6982\u7387\u6682\u4e0d\u53ef\u7528" in html
     assert "\u603b\u8fdb\u7403\u5206\u5e03" in html
-    assert "\u5173\u952e\u4f9d\u636e" in html
+    assert "\u8d5b\u524d\u4f9d\u636e" in html
     assert "\u9996\u63a8" not in html
     assert 'class="status-badge"' not in html
 
@@ -819,7 +820,7 @@ def test_detail_renderer_has_user_facing_layers_and_fails_closed_for_statuses(tm
     insufficient_html = render_match_detail(insufficient)
     assert "\u6570\u636e\u4e0d\u8db3\uff0c\u6682\u4e0d\u9884\u6d4b" in insufficient_html
     assert "\u80dc\u5e73\u8d1f\u6982\u7387" not in insufficient_html
-    assert 'id="analysis"' not in insufficient_html
+    assert 'id="analysis"' in insufficient_html
 
 
 def test_serving_detail_with_null_market_renders_safely(tmp_path):
@@ -831,7 +832,7 @@ def test_serving_detail_with_null_market_renders_safely(tmp_path):
 
     assert "\u6bd4\u5206\u6982\u7387\u6682\u4e0d\u53ef\u7528" in html
     assert 'data-exact-state="UNAVAILABLE"' in html
-    assert 'class="hero-probabilities"' in html
+    assert 'class="probability-section' in html
     assert "\u6700\u9ad8\u6982\u7387\u6bd4\u5206" not in html
     assert 'id="market"' not in html
     assert "模型与市场" not in html
@@ -949,8 +950,8 @@ def test_detail_renderer_uses_user_facing_terms_and_hides_internal_metadata(tmp_
         "\u80dc\u5e73\u8d1f\u6982\u7387",
         "\u6bd4\u5206\u6982\u7387",
         "\u8fdb\u7403\u5206\u5e03",
-        "\u5173\u952e\u4f9d\u636e",
-        "\u53ef\u4fe1\u5ea6\u4e0e\u6765\u6e90",
+        "\u8d5b\u524d\u4f9d\u636e",
+        "\u6570\u636e\u6765\u6e90",
         "\u6280\u672f\u8be6\u60c5",
         "\u8d5b\u524d\u8bb0\u5f55",
         "\u6982\u7387\u4ec5\u4f9b\u89c2\u5bdf",

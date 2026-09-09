@@ -541,163 +541,128 @@ def _esc(value: Any, fallback: str = "\u2014") -> str:
 
 
 MODERN_CSS = r"""
-.workspace-inner { width: min(calc(100% - 48px), 1220px); margin: 0 auto; padding: 28px 0 44px; }
-.workspace-header { display: flex; align-items: end; justify-content: space-between; gap: 24px; padding-bottom: 20px; border-bottom: 1px solid var(--line); }
-.workspace-kicker { color: var(--quiet); font-size: 10px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; }
-.workspace-title { margin: 8px 0 0; font-size: 24px; line-height: 1.15; letter-spacing: -.045em; }
-.workspace-title span { margin-left: 9px; color: var(--muted); font-size: 13px; font-weight: 500; letter-spacing: 0; }
-.header-note { color: var(--muted); font-size: 11px; text-align: right; white-space: nowrap; }
-.dashboard-heading { display: flex; align-items: end; justify-content: space-between; gap: 24px; padding: 22px 0 14px; }
-.dashboard-heading h1 { display: none; }
-.queue-kicker { color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
-.fixture-count { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
-.filters { display: flex; flex-wrap: wrap; gap: 7px; }
-.filter { min-height: 36px; padding: 6px 14px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface); color: var(--text); cursor: pointer; font-size: 12px; }
-.filter:hover, .filter[aria-pressed="true"] { border-color: #FFB27F; color: var(--accent); }
-.filter[aria-pressed="true"] { background: var(--accent-soft); }
-
-.quality-warning, .runtime-warning { display: flex; flex-wrap: wrap; align-items: baseline; gap: 5px 10px; margin: 0 0 14px; padding: 11px 14px; border-left: 3px solid var(--accent); background: var(--accent-soft); color: var(--muted); font-size: 12px; }
-.quality-warning strong, .runtime-warning strong { color: var(--text); font-weight: 700; }
+.dashboard-page { min-height: 100%; }
+.dashboard-page .content { min-width: 0; }
+.matches-head { display: flex; align-items: end; justify-content: space-between; gap: 18px; padding: 9px 2px 10px; }
+.matches-head h1 { margin: 0; font-size: 24px; letter-spacing: -.045em; }
+.matches-head p { margin: 5px 0 0; color: var(--muted); font-size: 9px; }
+.chips { display: flex; gap: 6px; }
+.chip, .filter { padding: 6px 12px; border: 1px solid var(--line); border-radius: 8px; background: #FFF; color: var(--ink); font-size: 9px; }
+.chip.active, .filter[aria-pressed="true"] { border-color: #FFAD7A; background: var(--orange-soft); color: var(--orange); }
+.filter { min-height: 36px; cursor: pointer; }
+.filter:hover { border-color: #FFAD7A; color: var(--orange); }
+.filters { display: flex; flex-wrap: wrap; gap: 6px; }
+.quality-warning, .runtime-warning, .data-warning { display: flex; flex-wrap: wrap; align-items: baseline; gap: 5px 10px; margin: 0 0 10px; padding: 10px 14px; border-left: 3px solid var(--orange); background: var(--orange-soft); color: var(--muted); font-size: 11px; }
+.quality-warning strong, .runtime-warning strong, .data-warning strong { color: var(--ink); font-weight: 700; }
 .runtime-warning { border-left-color: var(--danger); background: var(--danger-soft); }
 .runtime-warning strong { color: var(--danger); }
-.closed-beta-notice { margin-top: 12px; border-left-color: var(--line); background: transparent; color: var(--quiet); font-size: 11px; }
-.dashboard-trust { padding: 15px 0 0; border-top: 1px solid var(--line); }
-.dashboard-trust strong, .dashboard-trust span { display: block; margin-top: 3px; }
-
-.fixture-table { overflow: hidden; border-top: 2px solid var(--text); border-bottom: 1px solid var(--line); background: var(--surface); }
-.table-header, .fixture-row { display: grid; grid-template-columns: 112px 74px minmax(220px, 1.35fr) minmax(245px, 1.5fr) minmax(190px, 1.05fr); column-gap: 16px; padding-left: 16px; padding-right: 16px; }
-.table-header { min-height: 38px; align-items: center; border-bottom: 1px solid var(--line); background: var(--surface-subtle); color: var(--muted); font-size: 10px; font-weight: 650; }
-.fixture-row { position: relative; min-height: 104px; align-items: center; border-bottom: 1px solid var(--line); }
-.fixture-row:last-of-type { border-bottom: 0; }
-.fixture-row:hover { background: #FFFDFC; box-shadow: inset 3px 0 0 var(--accent); }
+.data-warning { border-left-color: var(--warning); background: var(--warning-soft); color: var(--warning); }
+.fixture-table { min-width: 0; }
+.league-group { margin-top: 10px; overflow: hidden; border: 1px solid var(--line); border-radius: 12px; background: #FFF; }
+.league-title { display: flex; align-items: center; justify-content: space-between; padding: 9px 14px; border-bottom: 1px solid var(--line); background: #FBFBFC; }
+.league-title strong { font-size: 10px; }
+.league-title span { color: var(--muted); font-size: 9px; }
+.fixture-row.match-card { position: relative; display: grid; grid-template-columns: 135px minmax(220px,1.2fr) minmax(230px,1.4fr) minmax(180px,.95fr); gap: 17px; align-items: center; min-height: 78px; padding: 11px 14px; border-bottom: 1px solid var(--line); }
+.fixture-row.match-card:last-child { border-bottom: 0; }
+.fixture-row.match-card:hover { background: #FFFDFC; box-shadow: inset 3px 0 0 var(--orange); }
 .fixture-row > * { min-width: 0; }
 .fixture-row > *:not(.fixture-row-target) { position: relative; z-index: 1; pointer-events: none; }
-.fixture-row-target { position: absolute; inset: 0; z-index: 0; border-radius: inherit; }
-.fixture-row-target:focus-visible { outline: 2px solid var(--accent); outline-offset: -3px; }
-.identity-cell { min-width: 0; }
-.cell-meta, .match-number, .kickoff, .identity-competition, .score-caption, .action-note { color: var(--muted); font-size: 11px; }
-.match-number { display: block; color: var(--text); font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.identity-competition { display: block; margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.kickoff { color: var(--text); font-variant-numeric: tabular-nums; }
-.teams-cell { min-width: 0; }
-.team-match { display: flex; align-items: center; gap: 7px; min-width: 0; font-weight: 700; letter-spacing: -.02em; }
-.team-match .team { min-width: 0; overflow-wrap: anywhere; }
-.team-match .home { text-align: right; }
-.team-match .away { text-align: left; }
-.team-match .team-badge { flex: 0 0 24px; width: 24px; height: 24px; }
-.versus { flex: 0 0 auto; color: var(--muted); font-size: 10px; font-weight: 500; }
-.result-inline { margin-top: 4px; color: var(--verified); font-size: 11px; font-weight: 650; }
-.row-action { display: flex; align-items: baseline; justify-content: flex-start; flex-wrap: wrap; gap: 5px 9px; margin-top: 6px; }
-.detail-link { color: var(--accent); font-size: 11px; font-weight: 650; text-decoration: none; white-space: nowrap; }
-.detail-link:hover { text-decoration: underline; }
-.exception-note { color: var(--warning); font-size: 11px; font-weight: 650; }
-.exception-note.failed, .exception-note.missed { color: var(--danger); }
-.completed-note { color: var(--verified); font-size: 11px; font-weight: 650; }
-.reason-detail { flex-basis: 100%; color: var(--muted); font-size: 10px; }
-.prediction-unavailable { padding: 8px 0; color: var(--muted); font-size: 12px; }
-
-.probability-cell-group { min-width: 0; }
-.probability-grid { display: grid; gap: 7px; }
-.probability-strip { display: flex; width: 100%; height: 7px; overflow: hidden; border-radius: 99px; background: var(--line); }
-.probability-segment { display: block; min-width: 2px; height: 100%; }
-.probability-segment.home { background: var(--home); }
-.probability-segment.draw { background: var(--draw); }
-.probability-segment.away { background: var(--away); }
-.probability-legend { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; }
-.probability-cell { display: grid; gap: 1px; min-width: 0; }
-.probability-cell > span:first-child { color: var(--muted); font-size: 10px; }
-.probability-cell strong { font-size: 13px; line-height: 1.1; font-variant-numeric: tabular-nums; }
-.probability-cell.is-leading strong { font-weight: 800; }
-.probability-lead { color: var(--muted); font-size: 10px; }
-.score-cell { min-width: 0; }
-.score-caption, .context-label { display: block; margin-bottom: 3px; }
-.score-primary { display: flex; align-items: baseline; gap: 6px; font-size: 15px; font-weight: 750; font-variant-numeric: tabular-nums; }
-.score-primary span { color: var(--muted); font-size: 11px; font-weight: 500; }
-.queue-score-list { display: grid; gap: 3px; }
-.queue-score-row { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; min-width: 0; font-size: 12px; font-variant-numeric: tabular-nums; }
-.queue-score-row strong { font-weight: 750; }
-.queue-score-row span { color: var(--muted); }
-.queue-score-row:first-child strong { font-size: 14px; }
-.score-serving-note { margin-top: 4px; color: var(--warning); font-size: 10px; font-weight: 650; }
-.score-unavailable { color: var(--muted); font-size: 12px; }
-.data-warning { margin: 14px 0; padding: 11px 14px; border-left: 3px solid var(--warning); background: var(--warning-soft); color: var(--warning); font-size: 12px; }
-.filter-empty { padding: 54px 20px; color: var(--muted); text-align: center; }
-
-.history { margin-top: 30px; padding-top: 1px; border-top: 1px solid var(--line); }
+.fixture-row-target { position: absolute; inset: 0; z-index: 2; border-radius: inherit; }
+.fixture-row-target:focus-visible { outline: 2px solid var(--orange); outline-offset: -3px; }
+.match-id strong, .match-id span { display: block; }
+.match-id strong { color: var(--ink); font-size: 10px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.match-id span { margin-top: 3px; overflow: hidden; color: var(--muted); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.teams-line { display: grid; grid-template-columns: 30px minmax(0,1fr) 30px; gap: 8px; align-items: center; }
+.teams-names { min-width: 0; }
+.teams-names strong, .teams-names span { display: block; overflow-wrap: anywhere; }
+.teams-names strong { font-size: 11px; font-weight: 720; }
+.teams-names span { margin-top: 2px; color: var(--muted); font-size: 8px; }
+.mini-crest { display: inline-grid; place-items: center; width: 28px; height: 28px; border: 1.5px solid var(--blue); border-radius: 50%; background: #EEF5FC; color: var(--blue); font-size: 7px; font-weight: 800; }
+.mini-crest.team-badge { flex-basis: 28px; }
+.mini-crest.team-badge-fallback { background: #EEF5FC; }
+.mini-crest img { object-fit: contain; }
+.compact-prob { display: grid; gap: 6px; min-width: 0; }
+.compact-prob-label { color: var(--muted); font-size: 8px; }
+.compact-prob-values { display: grid; grid-template-columns: repeat(3,1fr); font-size: 11px; font-weight: 760; font-variant-numeric: tabular-nums; }
+.compact-prob-values span:nth-child(1) { color: var(--blue); }
+.compact-prob-values span:nth-child(2) { color: var(--ink); text-align: center; }
+.compact-prob-values span:nth-child(3) { color: var(--red); text-align: right; }
+.compact-prob .probbar { margin: 0; height: 7px; }
+.probability-cell-group { display: grid; gap: 7px; min-width: 0; }
+.compact-score { min-width: 0; color: #3F464E; font-size: 8px; font-variant-numeric: tabular-nums; }
+.score-caption { display: block; margin-bottom: 3px; color: var(--muted); font-size: 8px; }
+.compact-score-lines { display: flex; flex-wrap: wrap; gap: 3px 8px; }
+.compact-score-item { white-space: nowrap; }
+.compact-score-item strong { color: var(--ink); font-weight: 760; }
+.score-serving-note { margin-top: 3px; color: var(--warning); font-size: 8px; }
+.context-mini { color: #606870; font-size: 8px; }
+.context-mini strong { display: block; color: #111820; font-size: 9px; }
+.context-mini .warn { margin-top: 3px; color: var(--warning); }
+.context-mini .exception-note { color: var(--warning); }
+.context-mini .exception-note.failed, .context-mini .exception-note.missed { color: var(--danger); }
+.reason-detail { display: block; margin-top: 3px; color: var(--muted); font-size: 8px; line-height: 1.35; }
+.prediction-unavailable, .score-unavailable { color: var(--muted); font-size: 11px; }
+.filter-empty { padding: 42px 20px; color: var(--muted); text-align: center; }
+.history { margin-top: 18px; padding-top: 1px; border-top: 1px solid var(--line); }
 .history-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 17px 0 10px; }
 .history-heading h2 { margin: 0; font-size: 16px; letter-spacing: -.02em; }
 .history-heading span { color: var(--muted); font-size: 11px; }
-.history-row { display: grid; grid-template-columns: 100px minmax(220px, 1fr) 116px minmax(170px, auto); gap: 16px; align-items: center; min-height: 60px; border-bottom: 1px solid var(--line); font-size: 12px; }
+.history-row { display: grid; grid-template-columns: 100px minmax(220px,1fr) 116px minmax(170px,auto); gap: 16px; align-items: center; min-height: 60px; border-bottom: 1px solid var(--line); font-size: 12px; }
 .history-meta { color: var(--muted); font-size: 11px; }
-.history-teams { min-width: 0; font-weight: 650; overflow-wrap: anywhere; }
+.history-teams { min-width: 0; overflow-wrap: anywhere; font-weight: 650; }
 .history-teams span { color: var(--muted); font-weight: 400; }
 .history-result span { display: block; color: var(--muted); font-size: 10px; }
 .history-score { display: block; margin-top: 2px; color: var(--verified); font-size: 17px; font-variant-numeric: tabular-nums; }
 .history-links { display: flex; flex-wrap: wrap; gap: 8px; color: var(--muted); font-size: 11px; }
 .history-links a { text-decoration: none; }
-.history-links a:hover { color: var(--accent); text-decoration: underline; }
-.page-footer { display: flex; justify-content: space-between; gap: 18px; margin-top: 22px; padding-top: 14px; border-top: 1px solid var(--line); color: var(--quiet); font-size: 10px; }
+.history-links a:hover { color: var(--orange); text-decoration: underline; }
+.dashboard-trust { padding: 8px 0 0; }
+.dashboard-trust strong, .dashboard-trust span { display: block; margin-top: 3px; }
+.page-footer { display: flex; justify-content: space-between; gap: 18px; margin-top: 10px; padding: 10px 14px 14px; border-top: 1px solid var(--line); color: var(--quiet); font-size: 9px; }
 .page-footer span:last-child { max-width: 52%; text-align: right; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
 
 @media (max-width: 980px) {
-  .table-header, .fixture-row { grid-template-columns: 100px 64px minmax(190px, 1.2fr) minmax(220px, 1.4fr) minmax(165px, 1fr); column-gap: 12px; padding-left: 12px; padding-right: 12px; }
+  .fixture-row.match-card { grid-template-columns: 108px minmax(180px,1.15fr) minmax(190px,1.35fr) minmax(150px,.9fr); gap: 12px; padding-left: 12px; padding-right: 12px; }
 }
 @media (max-width: 820px) {
-  .workspace-inner { width: calc(100% - 32px); padding: 18px 0 30px; }
-  .workspace-header { align-items: baseline; gap: 12px; padding-bottom: 15px; }
-  .workspace-title { font-size: 21px; }
-  .workspace-title span { display: block; margin: 5px 0 0; font-size: 12px; }
-  .header-note { font-size: 10px; white-space: normal; }
-  .dashboard-heading { align-items: center; gap: 12px; padding: 16px 0 12px; }
-  .dashboard-heading h1 { display: block; margin: 0; font-size: 15px; font-weight: 700; }
-  .fixture-count { display: block; margin-top: 3px; font-size: 11px; }
-  .queue-kicker { margin-top: 3px; font-size: 10px; }
+  .dashboard-page .content { padding-bottom: 71px; }
+  .matches-head { display: block; padding: 12px 0 7px; }
+  .matches-head h1 { font-size: 17px; }
+  .matches-head p { display: none; }
+  .chips { margin-top: 10px; }
+  .chip { flex: 1; padding: 6px 4px; text-align: center; font-size: 8px; }
   .filters { gap: 5px; }
   .filter { min-width: 58px; min-height: 44px; padding: 8px 10px; }
-  .table-header { display: none; }
-  .fixture-table { border-radius: 10px; }
-  .fixture-row { display: block; min-height: 0; padding: 16px 14px 15px; }
-  .fixture-row > * { margin-top: 11px; }
-  .fixture-row > .identity-cell { margin-top: 0; }
-  .identity-cell { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
-  .identity-competition { max-width: 68%; }
-  .kickoff { font-size: 12px; }
-  .team-match { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 8px; font-size: 19px; line-height: 1.2; }
-  .team-match .home, .team-match .away { text-align: left; }
-  .team-match .away { text-align: right; }
-  .versus { align-self: center; font-size: 11px; }
-  .row-action { justify-content: flex-start; margin-top: 7px; }
-  .probability-cell-group { margin-top: 12px; }
-  .probability-grid { gap: 8px; }
-  .probability-cell strong { font-size: 16px; }
-  .probability-lead { font-size: 10px; }
-  .queue-score { display: block; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
-  .queue-score-list { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
-  .queue-score-row { display: grid; justify-items: start; gap: 1px; padding: 7px 8px; background: var(--surface-subtle); }
-  .queue-score-row:first-child strong { font-size: 14px; }
-  .queue-score-row span { font-size: 11px; }
+  .fixture-table { margin: 0 -14px; }
+  .league-group { margin: 0; border: 0; border-radius: 0; }
+  .league-title { padding: 9px 14px; }
+  .fixture-row.match-card { display: block; min-height: 0; padding: 12px 14px; }
+  .fixture-row.match-card > * { margin-top: 9px; }
+  .fixture-row.match-card > .fixture-row-target { margin-top: 0; }
+  .match-id { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .match-id span { margin: 0; }
+  .teams-line { margin-top: 9px; }
+  .teams-names strong { font-size: 12px; }
+  .compact-prob { margin-top: 10px; }
+  .compact-prob-values { font-size: 11px; }
+  .compact-score { margin-top: 10px; padding-top: 9px; border-top: 1px solid var(--line); font-size: 8px; }
+  .compact-score-lines { gap: 3px 9px; }
+  .context-mini { display: block; margin-top: 8px; }
   .history { margin-top: 25px; }
-  .history-row { grid-template-columns: minmax(0, 1fr) auto; gap: 5px 12px; padding: 11px 0; }
+  .history-row { grid-template-columns: minmax(0,1fr) auto; gap: 5px 12px; padding: 11px 0; }
   .history-meta, .history-links { grid-column: 1 / -1; }
   .page-footer { display: block; }
   .page-footer span { display: block; }
   .page-footer span:last-child { max-width: none; margin-top: 6px; text-align: left; }
 }
 @media (max-width: 360px) {
-  .workspace-inner { width: calc(100% - 24px); }
-  .workspace-header { align-items: flex-start; }
-  .workspace-kicker { max-width: 190px; line-height: 1.35; }
-  .header-note { max-width: 94px; }
-  .dashboard-heading { align-items: flex-end; gap: 7px; }
-  .filters { flex: 1 1 auto; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .filter { min-width: 0; padding-left: 5px; padding-right: 5px; font-size: 11px; }
-  .fixture-row { padding-left: 10px; padding-right: 10px; }
-  .team-match { font-size: 17px; }
-  .probability-legend { gap: 5px; }
-  .probability-cell strong { font-size: 15px; }
-  .queue-score-list { gap: 4px; }
-  .queue-score-row { padding-left: 5px; padding-right: 5px; }
-  .queue-score-row:first-child strong { font-size: 13px; }
+  .dashboard-page .content { padding-left: 12px; padding-right: 12px; }
+  .fixture-table { margin-left: -12px; margin-right: -12px; }
+  .fixture-row.match-card { padding-left: 12px; padding-right: 12px; }
+  .teams-names strong { font-size: 11px; }
+  .compact-score-lines { gap: 3px 6px; }
+  .page-footer { padding-left: 12px; padding-right: 12px; }
 }
 """
 
@@ -886,32 +851,31 @@ def _one_x_two_html(prediction: dict[str, Any]) -> str:
         "draw": _number(probabilities.get("draw")),
         "away": _number(probabilities.get("away")),
     }
+    fallback = "\u2014"
+    unavailable = "\u80dc\u5e73\u8d1f\u6982\u7387\u6682\u4e0d\u53ef\u7528"
     if not all(value is not None and 0 <= value <= 1 for value in values.values()):
-        return '<div class="prediction-unavailable" role="status">胜平负概率暂不可用</div>'
+        return f'<div class="prediction-unavailable" role="status">{unavailable}</div>'
     total = sum(values.values())
     if total <= 0:
-        return '<div class="prediction-unavailable" role="status">胜平负概率暂不可用</div>'
-    leader = max(values, key=values.get)
-    labels = {"home": "主胜", "draw": "平", "away": "客胜"}
+        return f'<div class="prediction-unavailable" role="status">{unavailable}</div>'
+    labels = {"home": "\u4e3b\u80dc", "draw": "\u5e73", "away": "\u5ba2\u80dc"}
     segments = "".join(
         f'<span class="probability-segment {key}" style="width:{values[key] / total * 100:.3f}%" aria-hidden="true"></span>'
         for key in ("home", "draw", "away")
     )
-    cells = []
-    for key in ("home", "draw", "away"):
-        percent = _format_percent(values[key]) or "—"
-        leading = " is-leading" if key == leader else ""
-        lead = '<small class="probability-lead">相对占优</small>' if key == leader else '<small class="probability-lead">&nbsp;</small>'
-        cells.append(
-            f'<div class="probability-cell{leading}">'
-            f'<span>{labels[key]}</span><strong>{html.escape(percent)}</strong>{lead}</div>'
-        )
-    label = "；".join(f"{labels[key]} {_format_percent(values[key])}" for key in ("home", "draw", "away"))
-    return (
-        f'<div class="probability-grid" aria-label="胜平负概率：{html.escape(label, quote=True)}">'
-        f'<div class="probability-strip" role="img" aria-label="胜平负概率分布">{segments}</div>'
-        f'<div class="probability-legend">{"".join(cells)}</div></div>'
+    label = "\uff1b".join(f"{labels[key]} {_format_percent(values[key])}" for key in ("home", "draw", "away"))
+    value_html = "".join(
+        f'<span class="{key}-t" aria-label="{labels[key]} {_format_percent(values[key])}">'
+        f'{html.escape(_format_percent(values[key]) or fallback)}</span>'
+        for key in ("home", "draw", "away")
     )
+    return (
+        f'<div class="compact-prob" aria-label="1X2 \u6982\u7387\uff1a{html.escape(label, quote=True)}">'
+        '<div class="compact-prob-label">1X2 \u6982\u7387</div>'
+        f'<div class="compact-prob-values">{value_html}</div>'
+        f'<div class="probbar probability-strip" role="img" aria-label="\u80dc\u5e73\u8d1f\u6982\u7387\u5206\u5e03">{segments}</div></div>'
+    )
+
 
 
 def _prediction_exact_available(prediction: dict[str, Any]) -> bool:
@@ -967,21 +931,22 @@ def _score_summary_html(
         if not probability:
             continue
         rendered_rows.append(
-            f'<div class="queue-score-row" data-score-rank="{rank}">'
-            f'<strong>{html.escape(str(row["score"]))}</strong><span>{html.escape(probability)}</span></div>'
+            f'<span class="compact-score-item" data-score-rank="{rank}">'
+            f'<strong>{html.escape(str(row["score"]))}</strong> {html.escape(probability)}</span>'
         )
     if not rendered_rows:
         return ""
     local_context = ""
     if serving_state != "NORMAL":
         local_context = '<div class="score-serving-note">\u6bd4\u5206\u6982\u7387\u4ec5\u4f9b\u89c2\u5bdf</div>'
+    state_class = " score-unverified" if serving_state != "NORMAL" else ""
     return (
-        f'<div class="queue-score score-cell{" score-unverified" if serving_state != "NORMAL" else ""}" '
-        f'data-score-serving-state="{html.escape(serving_state, quote=True)}">'
+        f'<div class="queue-score score-cell{state_class}" data-score-serving-state="{html.escape(serving_state, quote=True)}">'
         '<div class="score-caption">Exact Top3</div>'
-        f'<div class="queue-score-list">{"".join(rendered_rows)}</div>'
+        f'<div class="compact-score-lines">{"".join(rendered_rows)}</div>'
         f'{local_context}</div>'
     )
+
 
 def _market_divergence_html(prediction: dict[str, Any]) -> str:
     market = prediction.get("market_summary")
@@ -1043,88 +1008,106 @@ def _modern_card_html(
     has_result = bool(result and result.get("score_90m"))
     prediction_kind = "pilot" if card.get("pilot_excluded") and prediction else "formal" if prediction else "none"
     status_class = html.escape(status.lower(), quote=True)
-    match_id_html = html.escape(match_id, quote=True)
-    detail_link = '<span class="detail-link" aria-hidden="true">\u67e5\u770b\u8be6\u60c5</span>' if match_id else ""
-    if has_result:
-        action_html = f'<span class="completed-note">{_card_status_copy(card)}</span>{detail_link}'
-    elif prediction:
-        pilot_html = (
-            '<span class="action-note">\u6982\u7387\u4ec5\u4f9b\u89c2\u5bdf</span>'
-            if card.get("pilot_excluded")
-            else ""
-        )
-        action_html = f"{pilot_html}{detail_link}"
-    else:
-        note_class = (
-            " failed"
-            if status == "PREDICTION_FAILED"
-            else " missed"
-            if status == "MISSED_PREMATCH_WINDOW"
-            else ""
-        )
-        reason_text = str(card.get("reason_text") or "").strip()
-        exact_copy = _card_status_copy(card)
-        reason_html = (
-            f'<span class="reason-detail">{html.escape(reason_text)}</span>'
-            if reason_text and reason_text != exact_copy
-            else ""
-        )
-        action_html = (
-            f'<span class="exception-note{note_class}">{html.escape(exact_copy)}</span>'
-            f'{reason_html}{detail_link}'
-        )
     home_value = card.get("home") or "\u4e3b\u961f\u5f85\u5b9a"
     away_value = card.get("away") or "\u5ba2\u961f\u5f85\u5b9a"
     home_text = html.escape(str(home_value))
     away_text = html.escape(str(away_value))
-    teams_html = (
-        '<div class="team-match">'
-        f'<span class="team home">{home_text}{render_team_badge(home_value, card.get("home_crest"), side="home")}</span>'
-        '<span class="versus">vs</span>'
-        f'<span class="team away">{render_team_badge(away_value, card.get("away_crest"), side="away")}{away_text}</span>'
-        '</div>'
-    )
+    status_line = _card_status_copy(card)
     if has_result:
-        teams_html += f'<div class="result-inline">90\u5206\u949f\u8d5b\u679c {html.escape(str(result.get("score_90m")))}</div>'
+        status_line = f'90\u5206\u949f\u8d5b\u679c {result.get("score_90m")}'
+    teams_html = (
+        f'{render_team_badge(home_value, card.get("home_crest"), side="home", variant="mini-crest")}'
+        f'<div class="teams-names"><strong>{home_text} <span class="versus">vs</span> {away_text}</strong>'
+        f'<span>{html.escape(status_line)}</span></div>'
+        f'{render_team_badge(away_value, card.get("away_crest"), side="away", variant="mini-crest")}'
+    )
     probability_html = _one_x_two_html(prediction) if prediction else '<div class="prediction-unavailable">\u2014</div>'
     score_html = (
         _score_summary_html(prediction, exact_score_serving=exact_score_serving)
         if prediction
         else '<div class="queue-score score-unavailable" data-score-serving-state="UNAVAILABLE"><span class="score-caption">\u6bd4\u5206\u6982\u7387</span><strong>\u6682\u4e0d\u53ef\u7528</strong></div>'
     )
+    if prediction:
+        direction = str(prediction.get("one_x_two_direction") or "").strip()
+        direction = direction.replace("\u503e\u5411", "\u76f8\u5bf9\u5360\u4f18") if direction else "\u80dc\u5e73\u8d1f\u6982\u7387"
+        warning = ""
+        serving_state = str((exact_score_serving or {}).get("state") or "UNVERIFIED")
+        if serving_state != "NORMAL":
+            warning = '<div class="warn">\u6bd4\u5206\u6982\u7387\u4ec5\u4f9b\u89c2\u5bdf</div>'
+        elif card.get("pilot_excluded"):
+            warning = '<div class="warn">\u5f53\u524d\u8bb0\u5f55\u4ec5\u4f9b\u89c2\u5bdf</div>'
+        context_html = f'<div class="context-mini"><strong>{html.escape(direction)}</strong>{warning}</div>'
+    else:
+        note_class = " failed" if status == "PREDICTION_FAILED" else " missed" if status == "MISSED_PREMATCH_WINDOW" else ""
+        reason_text = str(card.get("reason_text") or "").strip()
+        reason_html = (
+            f'<span class="reason-detail">{html.escape(reason_text)}</span>'
+            if reason_text and reason_text != status_line
+            else ""
+        )
+        context_html = (
+            f'<div class="context-mini"><strong class="exception-note{note_class}">{html.escape(status_line)}</strong>'
+            f'{reason_html}</div>'
+        )
     match_number_text = _esc(card.get("match_num"), "\u2014")
     competition_text = _esc(card.get("competition"), "\u8d5b\u4e8b\u5f85\u5b9a")
+    kickoff_text = html.escape(_format_kickoff(card.get("kickoff")))
     kickoff_timestamp = html.escape(str(card.get("kickoff_timestamp") or _kickoff_timestamp(card.get("kickoff")) or ""), quote=True)
     detail_target = ""
     if match_id:
+        match_id_html = html.escape(match_id, quote=True)
         detail_home = _text(card.get("home"), "\u4e3b\u961f\u5f85\u5b9a")
         detail_away = _text(card.get("away"), "\u5ba2\u961f\u5f85\u5b9a")
-        detail_label = html.escape(
-            f'{detail_home} vs {detail_away} \u00b7 \u67e5\u770b\u8be6\u60c5',
-            quote=True,
-        )
+        detail_label = html.escape(f'{detail_home} vs {detail_away} \u00b7 \u67e5\u770b\u8be6\u60c5', quote=True)
         detail_target = (
             f'<a class="fixture-row-target" href="../matches/{match_id_html}/" '
             f'aria-label="{detail_label}"></a>'
         )
     return (
-        f'<article class="fixture-row status-{status_class} prediction-{prediction_kind}" '
+        f'<article class="fixture-row match-card status-{status_class} prediction-{prediction_kind}" '
         f'data-status="{html.escape(status, quote=True)}" '
         f'data-result="{"yes" if has_result else "no"}" '
         f'data-kickoff="{kickoff_timestamp}" '
         f'data-prediction-kind="{prediction_kind}" '
         'data-one-x-two-serving-state="CAUTION">'
         f'{detail_target}'
-        '<div class="identity-cell">'
-        f'<span class="match-number">{match_number_text}</span>'
-        f'<span class="identity-competition">{competition_text}</span>'
+        '<div class="match-id">'
+        f'<strong class="match-number">{match_number_text}</strong>'
+        f'<span>{competition_text} \u00b7 {kickoff_text}</span>'
         '</div>'
-        f'<div class="kickoff">{html.escape(_format_kickoff(card.get("kickoff")))}</div>'
-        f'<div class="teams-cell">{teams_html}<div class="row-action">{action_html}</div></div>'
-        f'<div class="probability-cell-group">{probability_html}</div>'
-        f'{score_html}'
+        f'<div class="teams-line">{teams_html}</div>'
+        f'<div class="probability-cell-group">{probability_html}{score_html}</div>'
+        f'{context_html}'
         '</article>'
     )
+
+
+def _league_groups_html(
+    cards: list[dict[str, Any]],
+    *,
+    exact_score_serving: dict[str, str] | None = None,
+) -> str:
+    """Keep the R4 editorial league grouping while preserving fixture order."""
+
+    groups: dict[str, list[dict[str, Any]]] = {}
+    for card in cards:
+        if not isinstance(card, dict):
+            continue
+        label = _text(card.get("competition"), "\u8d5b\u4e8b\u5f85\u5b9a")
+        groups.setdefault(label, []).append(card)
+    sections = []
+    for competition, group in groups.items():
+        cards_html = "".join(
+            _modern_card_html(card, exact_score_serving=exact_score_serving)
+            for card in group
+        )
+        sections.append(
+            f'<section class="league-group" data-league="{html.escape(competition, quote=True)}">'
+            f'<div class="league-title"><strong>{html.escape(competition)}</strong>'
+            f'<span>{len(group)} \u573a \u203a</span></div>{cards_html}</section>'
+        )
+    return "".join(sections)
+
 
 def _historical_results_html(rows: list[dict[str, Any]]) -> str:
     if not rows:
@@ -1251,11 +1234,8 @@ def render_dashboard(payload: dict[str, Any]) -> str:
     fixture_count = int(summary.get("fixture_count") or len(payload.get("fixtures") or []))
     verified_results = int(summary.get("verified_results") or 0)
     exact_score_serving = exact_score_serving_presentation(quality_health)
-    cards_html = "".join(
-        _modern_card_html(card, exact_score_serving=exact_score_serving)
-        for card in payload.get("fixtures") or []
-        if isinstance(card, dict)
-    )
+    cards = [card for card in payload.get("fixtures") or [] if isinstance(card, dict)]
+    cards_html = _league_groups_html(cards, exact_score_serving=exact_score_serving)
     overall_empty_html = (
         '<div class="filter-empty" data-filter-empty="ALL">\u4eca\u5929\u6ca1\u6709\u53ef\u5c55\u793a\u7684\u6bd4\u8d5b\u3002</div>'
         if fixture_count == 0
@@ -1275,43 +1255,31 @@ def render_dashboard(payload: dict[str, Any]) -> str:
         data_warning = (
             '<div class="data-warning">\u90e8\u5206\u6bd4\u8d5b\u4fe1\u606f\u672a\u80fd\u5b8c\u6574\u5448\u73b0\uff0c\u9875\u9762\u53ea\u5c55\u793a\u5df2\u786e\u8ba4\u5185\u5bb9\u3002</div>'
         )
-    page_version = "|".join(
-        str(payload.get(key) or "") for key in ("business_date", "generated_at")
-    )
+    page_version = "|".join(str(payload.get(key) or "") for key in ("business_date", "generated_at"))
     content_html = f"""
-<div class="workspace-inner">
-<header class="workspace-header">
-  <div><div class="workspace-kicker">Football Prediction Intelligence</div><h1 class="workspace-title">\u4eca\u65e5\u6bd4\u8d5b<span>{html.escape(business_date_label)}</span></h1></div>
-  <div class="header-note">\u6d4b\u8bd5\u9636\u6bb5 \u00b7 \u4ec5\u4f9b\u8d5b\u524d\u5206\u6790</div>
+<section class="page dashboard-page">
+<header class="topbar">
+  <div class="crumbs"><strong>\u4eca\u65e5\u6bd4\u8d5b</strong><span>\u00b7</span><span>{html.escape(business_date_label)}</span></div>
+  <div class="utility"><button class="icon-btn" type="button" aria-label="\u600e\u4e48\u770b"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><path d="M9.8 9a2.3 2.3 0 014.4.9c0 1.7-2.2 2-2.2 3.6M12 17h.01"/></svg></button><strong>\u600e\u4e48\u770b</strong><button class="icon-btn" type="button" aria-label="\u641c\u7d22"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="11" cy="11" r="7"/><path d="M16 16l5 5"/></svg></button></div>
 </header>
-<section class="dashboard-heading">
-  <div><h1>\u4eca\u65e5\u6bd4\u8d5b<span class="fixture-count">{fixture_count} \u573a</span></h1><div class="queue-kicker">FT 1X2 + Exact Top3</div></div>
-  <div class="filters" aria-label="\u6bd4\u8d5b\u7b5b\u9009">
-    <button class="filter" type="button" data-filter="ALL" aria-pressed="true">\u5168\u90e8</button>
-    <button class="filter" type="button" data-filter="UPCOMING" aria-pressed="false">\u672a\u5f00\u8d5b</button>
-    <button class="filter" type="button" data-filter="RESULT" data-result-count="{verified_results}" aria-pressed="false">\u5df2\u7ed3\u675f</button>
-  </div>
-</section>
+<div class="content">
+<section class="matches-head"><div><h1>\u4eca\u65e5\u6bd4\u8d5b</h1><p>\u5148\u770b 1X2 \u4e0e\u6bd4\u5206\u7a7a\u95f4\uff1b\u5f02\u5e38\u53ea\u5728\u771f\u6b63\u6539\u53d8\u5224\u65ad\u65f6\u51fa\u73b0\u3002 \u6d4b\u8bd5\u9636\u6bb5 \u00b7 \u4ec5\u4f9b\u8d5b\u524d\u5206\u6790</p></div><div class="chips" aria-label="\u6bd4\u8d5b\u7b5b\u9009"><button class="chip filter" type="button" data-filter="ALL" aria-pressed="true">\u5168\u90e8</button><button class="chip filter" type="button" data-filter="UPCOMING" aria-pressed="false">\u672a\u5f00\u8d5b</button><button class="chip filter" type="button" data-filter="RESULT" data-result-count="{verified_results}" aria-pressed="false">\u5df2\u7ed3\u675f</button></div></section>
 {runtime_warning}{quality_warning}{data_warning}
 <section class="fixture-table" id="fixture-list" aria-label="\u7ade\u5f69\u65e5\u6bd4\u8d5b\u5217\u8868">
-  <div class="table-header" aria-hidden="true">
-    <span>\u6bd4\u8d5b / \u8d5b\u4e8b</span><span>\u5f00\u7403</span><span>\u5bf9\u9635 / \u8d5b\u679c</span>
-    <span>1X2 \u6982\u7387</span><span>Exact Top3</span>
-  </div>
   {cards_html}
   {filter_empty_html}
 </section>
 {historical_html}
+<section class="trust-strip dashboard-trust-strip" id="dashboard-trust"><div class="trust-item"><span class="trust-ico">\u26bd</span><div><strong>\u4eca\u65e5\u961f\u5217</strong><span>\u9ed8\u8ba4\u53ea\u7a81\u51fa 1X2 + \u6bd4\u5206\u6982\u7387\u3002</span></div></div><div class="trust-item"><span class="trust-ico">!</span><div><strong>\u5f02\u5e38\u63d0\u793a</strong><span>\u53ea\u6709\u771f\u6b63\u6539\u53d8\u5224\u65ad\u65f6\u624d\u51fa\u73b0\u3002</span></div></div><div class="trust-item"><span class="trust-ico">\u25c7</span><div><strong>\u8d5b\u524d\u8bb0\u5f55</strong><span>\u6bd4\u8d5b\u5f00\u59cb\u524d\u5f62\u6210\u5e76\u4fdd\u7559\u3002</span></div></div><div class="trust-item"><span class="trust-ico">\u2713</span><div><strong>\u5386\u53f2\u9a8c\u8bc1</strong><span>\u6210\u529f\u548c\u5931\u8d25\u540c\u53e3\u5f84\u8bb0\u5f55\u3002</span></div></div><div class="trust-item"><span class="trust-ico">i</span><div><strong>\u65b9\u6cd5\u8bf4\u660e</strong><span>\u6280\u672f\u7ec6\u8282\u4e0b\u6c89\uff0c\u4e0d\u62a2\u9996\u5c4f\u3002</span></div></div></section>
 {dashboard_trust}
-<footer class="page-footer">
-  <span>\u6b63\u5e38\u72b6\u6001\u4fdd\u6301\u5b89\u9759\uff1b\u53ea\u6709\u5f71\u54cd\u5224\u65ad\u7684\u5f02\u5e38\u624d\u4f1a\u663e\u793a\u3002</span>
-  <span>Closed Beta \u00b7 \u9884\u6d4b\u53ef\u80fd\u51fa\u9519\uff0c\u4ec5\u4f9b\u6bd4\u8d5b\u5206\u6790\u4e0e\u7814\u7a76\u53c2\u8003\uff1b\u7406\u6027\u53c2\u4e0e\uff0c\u672a\u6210\u5e74\u4eba\u9650\u5236\u3002</span>
-</footer>
 </div>
+<section class="footer-principles"><div class="principle-title">OneShot Principles</div><div class="principles"><div class="principle"><span class="principle-icon">\u2606</span><div><strong>\u6e05\u6670\u4f18\u5148</strong><span>\u5148\u770b\u771f\u6b63\u6539\u53d8\u5224\u65ad\u7684\u5185\u5bb9\u3002</span></div></div><div class="principle"><span class="principle-icon">\u25c9</span><div><strong>\u6982\u7387\u8bda\u5b9e</strong><span>\u201c\u6700\u9ad8\u201d\u4e0d\u7b49\u4e8e\u201c\u786e\u5b9a\u201d\u3002</span></div></div><div class="principle"><span class="principle-icon">\u25c7</span><div><strong>\u72ec\u7acb\u5224\u65ad</strong><span>\u6a21\u578b\u548c\u5e02\u573a\u5e76\u5217\u6bd4\u8f83\u3002</span></div></div><div class="principle"><span class="principle-icon">\u2713</span><div><strong>\u4e00\u81f4\u9a8c\u8bc1</strong><span>\u8d5b\u524d\u8bb0\u5f55\u8d5b\u540e\u4e0d\u4fee\u6539\u3002</span></div></div><div class="principle"><span class="principle-icon">\u25a3</span><div><strong>\u6709\u4e0a\u4e0b\u6587\u7684\u6570\u636e</strong><span>\u6570\u5b57\u5fc5\u987b\u80fd\u89e3\u91ca\u3002</span></div></div></div></section><div class="copyright"><span>\u00a9 2026 OneShot</span><span>Closed Beta</span><span>\u4ec5\u4f9b\u6bd4\u8d5b\u5206\u6790\u4e0e\u7814\u7a76\u53c2\u8003</span></div>
+</section>
 """
     interaction_script = """<script>
 const buttons = Array.from(document.querySelectorAll('[data-filter]'));
 const cards = Array.from(document.querySelectorAll('.fixture-row'));
+const leagueGroups = Array.from(document.querySelectorAll('.league-group'));
 const historicalResults = document.querySelector('#historical-results');
 const emptyStates = Array.from(document.querySelectorAll('[data-filter-empty]'));
 buttons.forEach(button => button.addEventListener('click', () => {
@@ -1324,6 +1292,9 @@ buttons.forEach(button => button.addEventListener('click', () => {
       || (filter === 'UPCOMING' && isUpcoming)
       || (filter === 'RESULT' && card.dataset.result === 'yes');
     card.hidden = !match;
+  });
+  leagueGroups.forEach(group => {
+    group.hidden = !Array.from(group.querySelectorAll('.fixture-row')).some(card => !card.hidden);
   });
   const visibleCount = cards.filter(card => !card.hidden).length;
   emptyStates.forEach(empty => {
@@ -1339,9 +1310,10 @@ buttons.forEach(button => button.addEventListener('click', () => {
         content_html=content_html,
         dashboard_href="./latest.html",
         history_href="#historical-results" if historical_html else None,
-        mobile_label="\u4eca\u65e5\u6bd4\u8d5b",
+        mobile_label="\u6bd4\u8d5b",
         body_suffix=body_suffix,
     )
+
 
 def build_dashboard(
     business_date: str,

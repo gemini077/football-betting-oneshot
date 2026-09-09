@@ -445,6 +445,7 @@ def _capture_page(
         compact = compact_metrics[0] if compact_metrics else {}
         disclosure = disclosure_metrics[0] if disclosure_metrics else {}
         wrapper = disclosure.get("wrapper") if isinstance(disclosure, dict) else None
+        signature_matrix_visible = _visible_count(page, ".signature-grid") > 0
         visible_forbidden = page.evaluate(
             """() => {
               const text = document.body.innerText || '';
@@ -473,6 +474,7 @@ def _capture_page(
             "exact_compact_remainder_count": int(compact.get("remainderCount") or 0),
             "exact_compact_remainder_probability": compact.get("remainderProbability"),
             "exact_compact_probability_font_size_min": compact.get("probabilityFontSizeMin"),
+            "exact_signature_matrix_visible": signature_matrix_visible,
             "exact_disclosure_count": len(disclosure_metrics),
             "exact_disclosure_open": bool(disclosure.get("open")),
             "exact_disclosure_summary_visible": bool(disclosure.get("summaryVisible")),
@@ -546,7 +548,7 @@ def _check_interactions(browser: Any, base_url: str) -> dict[str, str]:
         if not href:
             raise RuntimeError("dashboard has no real detail route")
         page.goto(urljoin(f"{base_url}/prediction_dashboard/", href), wait_until="networkidle", timeout=30_000)
-        if page.locator("h1").count() != 1:
+        if page.locator(".detail-page .hero h1").count() != 2:
             raise RuntimeError("dashboard detail route did not resolve")
 
         page.goto(f"{base_url}/visual-fixtures/dashboard-result-empty.html", wait_until="networkidle", timeout=30_000)
@@ -821,15 +823,16 @@ def main() -> int:
             or record["exact_disclosure_cue_present"] is not True
         )
     ]
-    desktop_exact_failures = [
+    desktop_signature_failures = [
         record
         for record in records
         if record["exact_cells"] == 169
         and record["viewport"] == "1440x1000"
         and (
             record["exact_disclosure_count"] != 1
-            or not record["exact_disclosure_open"]
-            or record["exact_disclosure_visible_cell_count"] != 169
+            or record["exact_disclosure_open"]
+            or record["exact_disclosure_visible_cell_count"] != 0
+            or not record["exact_signature_matrix_visible"]
         )
     ]
     change_awareness_failures = []
@@ -866,7 +869,7 @@ def main() -> int:
     forbidden_visible = [
         record for record in records if record["visible_forbidden_tokens"]
     ]
-    if browser_errors or overflow or exact_overflow or mobile_exact_failures or desktop_exact_failures or change_awareness_failures or forbidden_visible:
+    if browser_errors or overflow or exact_overflow or mobile_exact_failures or desktop_signature_failures or change_awareness_failures or forbidden_visible:
         raise SystemExit(
             json.dumps(
                 {
@@ -874,7 +877,7 @@ def main() -> int:
                     "horizontal_overflow": overflow,
                     "exact_horizontal_overflow": exact_overflow,
                     "exact_mobile_default_failures": mobile_exact_failures,
-                    "exact_desktop_full_matrix_failures": desktop_exact_failures,
+                    "exact_desktop_signature_matrix_failures": desktop_signature_failures,
                     "change_awareness_failures": change_awareness_failures,
                     "visible_forbidden_tokens": forbidden_visible,
                 },
@@ -927,9 +930,10 @@ def main() -> int:
                 if record["exact_cells"] == 169
                 and record["viewport"] in {"390x844", "320x800"}
             },
-            "exact_desktop_full_matrix": {
+            "exact_desktop_signature_matrix": {
                 record["name"]: {
-                    "open": record["exact_disclosure_open"],
+                    "signature_matrix_visible": record["exact_signature_matrix_visible"],
+                    "full_matrix_default_open": record["exact_disclosure_open"],
                     "visible_cell_count": record["exact_disclosure_visible_cell_count"],
                 }
                 for record in records

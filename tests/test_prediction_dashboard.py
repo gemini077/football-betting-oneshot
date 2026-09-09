@@ -741,7 +741,8 @@ def test_dashboard_hides_retained_recommendation_for_insufficient_current_job(tm
         html,
         re.S,
     ).group(0)
-    assert "probability-grid" in frozen_html
+    assert "compact-prob" in frozen_html
+    assert "probability-strip" in frozen_html
     assert 'data-score-serving-state="UNAVAILABLE"' in frozen_html
     assert payload["prediction_quality_health"]["current_job_count"] == 2
     assert payload["prediction_quality_health"]["current_frozen_job_count"] == 1
