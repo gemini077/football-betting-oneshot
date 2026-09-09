@@ -82,6 +82,9 @@ def test_dashboard_uses_locked_probability_desk_surface():
     assert 'data-score-serving-state="NORMAL"' not in html
     assert 'data-score-serving-state="DEGRADED"' in html
     assert html.count('data-score-rank=') == 3
+    assert html.count('class="score-value"') == 3
+    assert html.count('class="score-probability"') == 3
+    assert 'aria-label="比分 1比0，概率 14.7%"' in html
     assert "最可能比分（前3）" in html
     assert "首选方向" in html
     assert "主胜" in html

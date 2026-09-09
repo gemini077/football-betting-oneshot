@@ -247,6 +247,18 @@ _RECOMMENDATION_BLOCKED_STATES = {
     "UNAVAILABLE",
     "UNVERIFIED",
 }
+_RECOMMENDATION_BLOCKED_AUTHORITY = {
+    "ABSTAIN",
+    "DEGRADED",
+    "INELIGIBLE",
+    "OBSERVE",
+    "OBSERVE_ONLY",
+    "UNAVAILABLE",
+}
+_RECOMMENDATION_LANE_LABELS = {
+    "FT_1X2": "\u80dc / \u5e73 / \u8d1f\u6982\u7387",
+    "EXACT_SCORE": "\u6700\u53ef\u80fd\u6bd4\u5206",
+}
 
 
 def _normalise_probability_map(values: Any) -> dict[str, float] | None:
@@ -284,48 +296,6 @@ def _score_pair(value: Any) -> tuple[int, int] | None:
     return pair if min(pair) >= 0 else None
 
 
-def _direction_probabilities_from_cells(cells: Any) -> dict[str, float] | None:
-    if not isinstance(cells, list):
-        return None
-    totals = {"home": 0.0, "draw": 0.0, "away": 0.0}
-    total_probability = 0.0
-    for item in cells:
-        if not isinstance(item, dict):
-            continue
-        pair = _score_pair(item)
-        probability = _number(item.get("probability"))
-        if pair is None or probability is None or not 0 <= probability <= 1:
-            continue
-        direction = "home" if pair[0] > pair[1] else "draw" if pair[0] == pair[1] else "away"
-        totals[direction] += probability
-        total_probability += probability
-    if total_probability <= 0:
-        return None
-    return {
-        key: value / total_probability
-        for key, value in totals.items()
-    }
-
-
-def _exact_direction_probabilities(prediction: dict[str, Any]) -> dict[str, float] | None:
-    provided = _normalise_probability_map(prediction.get("exact_direction_probabilities"))
-    if provided is not None:
-        return provided
-    contract = prediction.get("exact_score_distribution")
-    if isinstance(contract, dict):
-        derived = _direction_probabilities_from_cells(contract.get("cells"))
-        if derived is not None:
-            return derived
-    formal = prediction.get("formal_markets")
-    markets = formal.get("markets") if isinstance(formal, dict) else None
-    exact = markets.get("exact_score") if isinstance(markets, dict) else None
-    if isinstance(exact, dict):
-        derived = _direction_probabilities_from_cells(exact.get("cells"))
-        if derived is not None:
-            return derived
-    return _direction_probabilities_from_cells(prediction.get("score_distribution"))
-
-
 def _recommendation_authority_eligible(prediction: dict[str, Any]) -> bool:
     if prediction.get("pilot_excluded") is True or prediction.get("prediction_kind") == "pilot":
         return False
@@ -347,40 +317,154 @@ def _formal_market_status(prediction: dict[str, Any], market_name: str) -> str:
     return str(market.get("status") or "").strip().upper() if isinstance(market, dict) else ""
 
 
-def _recommendation_empty() -> dict[str, Any]:
-    return {
-        "status": "ABSTAIN",
-        "direction": None,
-        "label": "\u6682\u65e0\u660e\u786e\u9996\u9009\u65b9\u5411",
-        "lane": None,
-        "probability": None,
-        "reason": "\u5f53\u524d\u6ca1\u6709\u53ef\u7528\u7684\u6b63\u5f0f\u9884\u6d4b\u65b9\u5411",
-        "eligible_lanes": [],
+def _normalise_recommendation_candidate(candidate: Any) -> dict[str, Any] | None:
+    if not isinstance(candidate, dict):
+        return None
+    lane = str(candidate.get("lane") or candidate.get("market") or "").strip()
+    market = str(candidate.get("market") or lane).strip()
+    selection = candidate.get("selection")
+    if isinstance(selection, str):
+        selection = {"kind": "generic", "key": selection, "label": selection}
+    elif isinstance(selection, dict):
+        selection = dict(selection)
+    else:
+        return None
+    key = selection.get("key")
+    if key in (None, ""):
+        key = selection.get("value")
+    if key in (None, ""):
+        return None
+    selection["key"] = str(key)
+    selection["kind"] = str(selection.get("kind") or "generic")
+    selection["label"] = str(selection.get("label") or selection["key"])
+    if not lane or not market:
+        return None
+    normalized = dict(candidate)
+    normalized["market"] = market
+    normalized["lane"] = lane
+    normalized["selection"] = selection
+    normalized["state"] = str(candidate.get("state") or "UNVERIFIED").strip().upper()
+    normalized["reason"] = str(candidate.get("reason") or selection["label"]).strip()
+    if "authority" not in normalized:
+        normalized["authority"] = {"eligible": False, "class": "UNDECLARED"}
+    return normalized
+
+
+def _recommendation_candidate_eligible(candidate: dict[str, Any]) -> bool:
+    state = str(candidate.get("state") or "UNVERIFIED").strip().upper()
+    if state in _RECOMMENDATION_BLOCKED_STATES:
+        return False
+    if candidate.get("eligible") is False or candidate.get("authority_eligible") is False:
+        return False
+    authority = candidate.get("authority")
+    if isinstance(authority, dict):
+        if authority.get("eligible") is False:
+            return False
+        authority_state = str(
+            authority.get("state")
+            or authority.get("status")
+            or authority.get("class")
+            or ""
+        ).strip().upper()
+        if authority_state in _RECOMMENDATION_BLOCKED_AUTHORITY:
+            return False
+    elif isinstance(authority, bool):
+        if not authority:
+            return False
+    elif str(authority or "").strip().upper() in _RECOMMENDATION_BLOCKED_AUTHORITY:
+        return False
+    selection = candidate.get("selection")
+    return (
+        isinstance(selection, dict)
+        and str(candidate.get("lane") or "").strip() != ""
+        and str(candidate.get("market") or "").strip() != ""
+        and str(selection.get("key") or "").strip() != ""
+    )
+
+
+def _recommendation_comparison_key(candidate: dict[str, Any]) -> str | None:
+    selection = candidate.get("selection")
+    if not isinstance(selection, dict):
+        return None
+    value = selection.get("comparison_key") or candidate.get("comparison_key")
+    return str(value).strip() if value not in (None, "") else None
+
+
+def _recommendation_lane_label(candidate: dict[str, Any]) -> str:
+    lane = str(candidate.get("lane") or "").strip()
+    return str(
+        candidate.get("lane_label")
+        or _RECOMMENDATION_LANE_LABELS.get(lane)
+        or candidate.get("market")
+        or lane
+    )
+
+
+def _score_probability(prediction: dict[str, Any], score: str) -> float | None:
+    rows = prediction.get("score_distribution")
+    if not isinstance(rows, list):
+        return None
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        row_score = _score_label(row.get("score") or row.get("value"))
+        probability = _number(row.get("probability"))
+        if row_score == score and probability is not None and 0 <= probability <= 1:
+            return probability
+    return None
+
+
+def _exact_selection(prediction: dict[str, Any]) -> dict[str, Any] | None:
+    raw_score = prediction.get("primary_score") or prediction.get("unique_score")
+    if raw_score in (None, ""):
+        top_scores = prediction.get("score_top3")
+        if isinstance(top_scores, list) and top_scores:
+            raw_score = top_scores[0].get("score") if isinstance(top_scores[0], dict) else top_scores[0]
+    score = _score_label(raw_score)
+    if not score:
+        return None
+    selection: dict[str, Any] = {
+        "kind": "exact_score",
+        "key": score,
+        "label": f"\u6bd4\u5206 {score}",
+        "score": score,
     }
+    pair = _score_pair(score)
+    if pair is not None:
+        direction = "home" if pair[0] > pair[1] else "draw" if pair[0] == pair[1] else "away"
+        selection["support_direction"] = direction
+        selection["comparison_key"] = f"result:{direction}"
+    return selection
 
 
-def select_primary_recommendation(
-    prediction: dict[str, Any] | None,
+def _implemented_recommendation_candidates(
+    prediction: dict[str, Any],
     *,
-    exact_score_serving: dict[str, Any] | None = None,
-    prediction_allowed: bool = True,
-) -> dict[str, Any]:
-    """Select one plain-language direction from current authority-eligible lanes."""
-
-    if not isinstance(prediction, dict) or not prediction_allowed or not _recommendation_authority_eligible(prediction):
-        return _recommendation_empty()
-
+    exact_score_serving: dict[str, Any] | str | None,
+) -> list[dict[str, Any]]:
     candidates: list[dict[str, Any]] = []
     one_x_two_state = str(prediction.get("one_x_two_serving_state") or "NORMAL").strip().upper()
     one_x_two = _normalise_probability_map(prediction.get("probabilities"))
     if one_x_two_state not in _RECOMMENDATION_BLOCKED_STATES and one_x_two is not None:
-        direction = max(one_x_two, key=lambda key: (one_x_two[key], {"home": 2, "draw": 1, "away": 0}[key]))
-        candidates.append({
-            "lane": "FT_1X2",
-            "direction": direction,
+        direction = max(
+            one_x_two,
+            key=lambda key: (one_x_two[key], {"home": 2, "draw": 1, "away": 0}[key]),
+        )
+        selection = {
+            "kind": "result",
+            "key": direction,
             "label": _RECOMMENDATION_DIRECTION_LABELS[direction],
-            "probability": one_x_two[direction],
+            "direction": direction,
+            "comparison_key": f"result:{direction}",
+        }
+        candidates.append({
+            "market": "FT_1X2",
+            "lane": "FT_1X2",
+            "selection": selection,
+            "authority": {"eligible": True, "class": "FORMAL"},
+            "state": one_x_two_state,
             "reason": f'{_RECOMMENDATION_DIRECTION_LABELS[direction]}\u6982\u7387\u6700\u9ad8\uff08{one_x_two[direction] * 100:.1f}%\uff09',
+            "evidence": {"probability": one_x_two[direction]},
         })
 
     serving_state = (
@@ -389,40 +473,141 @@ def select_primary_recommendation(
         else exact_score_serving
     ) or prediction.get("exact_score_serving_state")
     exact_state = str(serving_state or "UNVERIFIED").strip().upper()
-    exact_direction = _exact_direction_probabilities(prediction)
+    exact_selection = _exact_selection(prediction)
     if (
         _formal_market_status(prediction, "exact_score") == "AVAILABLE"
         and exact_state not in _RECOMMENDATION_BLOCKED_STATES
-        and exact_direction is not None
+        and exact_selection is not None
     ):
-        direction = max(exact_direction, key=lambda key: (exact_direction[key], {"home": 2, "draw": 1, "away": 0}[key]))
-        primary_score = _score_label(prediction.get("primary_score") or prediction.get("unique_score"))
-        score_reason = f'\uff0c\u6700\u53ef\u80fd\u6bd4\u5206 {primary_score}' if primary_score else ""
+        score = str(exact_selection["score"])
+        score_probability = _score_probability(prediction, score)
+        probability_note = (
+            f'\uff08{score_probability * 100:.1f}%\uff09'
+            if score_probability is not None
+            else ""
+        )
         candidates.append({
+            "market": "EXACT_SCORE",
             "lane": "EXACT_SCORE",
-            "direction": direction,
-            "label": _RECOMMENDATION_DIRECTION_LABELS[direction],
-            "probability": exact_direction[direction],
-            "reason": f'\u6bd4\u5206\u65b9\u5411\u504f\u5411{_RECOMMENDATION_DIRECTION_LABELS[direction]}\uff08{exact_direction[direction] * 100:.1f}%\uff09{score_reason}',
+            "selection": exact_selection,
+            "authority": {"eligible": True, "class": "FORMAL"},
+            "state": exact_state,
+            "reason": f'\u6700\u53ef\u80fd\u6bd4\u5206\u4e3a {score}{probability_note}',
+            **({"evidence": {"probability": score_probability}} if score_probability is not None else {}),
         })
+    return candidates
 
+
+def _recommendation_empty(
+    *,
+    basis: str = "NO_ELIGIBLE_LANE",
+    reason: str = "\u5f53\u524d\u6ca1\u6709\u53ef\u7528\u7684\u6b63\u5f0f\u9884\u6d4b\u65b9\u5411",
+    candidates: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    candidates = candidates or []
+    return {
+        "status": "ABSTAIN",
+        "basis": basis,
+        "market": None,
+        "lane": None,
+        "selection": None,
+        "authority": {"eligible": False, "class": "NONE"},
+        "state": "CONFLICT" if basis == "CONFLICT" else "ABSTAIN",
+        "label": "\u6682\u65e0\u660e\u786e\u9996\u9009\u65b9\u5411",
+        "reason": reason,
+        "candidates": candidates,
+        "eligible_lanes": [str(candidate["lane"]) for candidate in candidates],
+    }
+
+
+def select_primary_recommendation(
+    prediction: dict[str, Any] | None,
+    *,
+    exact_score_serving: dict[str, Any] | str | None = None,
+    prediction_allowed: bool = True,
+) -> dict[str, Any]:
+    """Return one generic recommendation or fail closed on lane disagreement."""
+
+    if not isinstance(prediction, dict) or not prediction_allowed or not _recommendation_authority_eligible(prediction):
+        return _recommendation_empty()
+
+    raw_candidates = prediction.get("recommendation_candidates")
+    candidates = (
+        [_normalise_recommendation_candidate(item) for item in raw_candidates]
+        if isinstance(raw_candidates, list)
+        else _implemented_recommendation_candidates(
+            prediction,
+            exact_score_serving=exact_score_serving,
+        )
+    )
+    candidates = [
+        candidate
+        for candidate in candidates
+        if candidate is not None and _recommendation_candidate_eligible(candidate)
+    ]
     if not candidates:
         return _recommendation_empty()
-    selected = max(
-        candidates,
-        key=lambda candidate: (
-            float(candidate["probability"]),
-            1 if candidate["lane"] == "FT_1X2" else 0,
-        ),
+    if len(candidates) == 1:
+        candidate = candidates[0]
+        selection = dict(candidate["selection"])
+        return {
+            "status": "SELECTED",
+            "basis": "SINGLE_LANE",
+            "market": candidate["market"],
+            "lane": candidate["lane"],
+            "selection": selection,
+            "authority": candidate["authority"],
+            "state": candidate["state"],
+            "label": selection["label"],
+            "reason": f'\u4ec5\u57fa\u4e8e{_recommendation_lane_label(candidate)}\uff1a{candidate["reason"]}',
+            "candidates": candidates,
+            "eligible_lanes": [str(candidate["lane"])],
+        }
+
+    comparison_keys = [_recommendation_comparison_key(candidate) for candidate in candidates]
+    if any(key is None for key in comparison_keys) or len(set(comparison_keys)) != 1:
+        return _recommendation_empty(
+            basis="CONFLICT",
+            reason="\u73a9\u6cd5\u7ed3\u8bba\u4e0d\u4e00\u81f4",
+            candidates=candidates,
+        )
+
+    comparison_key = comparison_keys[0]
+    direction = (
+        comparison_key.split(":", 1)[1]
+        if comparison_key and comparison_key.startswith("result:")
+        else None
+    )
+    label = _RECOMMENDATION_DIRECTION_LABELS.get(direction or "")
+    if not label:
+        label = str(candidates[0]["selection"]["label"])
+    supporting_selections = [dict(candidate["selection"]) for candidate in candidates]
+    selection = {
+        "kind": "agreement",
+        "key": comparison_key,
+        "label": label,
+        "comparison_key": comparison_key,
+        "supporting_selections": supporting_selections,
+        "supporting_lanes": [str(candidate["lane"]) for candidate in candidates],
+    }
+    if direction:
+        selection["direction"] = direction
+    lane_summary = "\uff1b".join(
+        f'{_recommendation_lane_label(candidate)}\uff08{candidate["selection"]["label"]}\uff09'
+        for candidate in candidates
     )
     return {
         "status": "SELECTED",
-        "direction": selected["direction"],
-        "label": selected["label"],
-        "lane": selected["lane"],
-        "probability": selected["probability"],
-        "reason": selected["reason"],
-        "eligible_lanes": [candidate["lane"] for candidate in candidates],
+        "basis": "AGREEMENT",
+        "market": "MULTI_LANE",
+        "lane": "AGREEMENT",
+        "selection": selection,
+        "authority": {"eligible": True, "class": "SYNTHESIZED"},
+        "state": "NORMAL",
+        "label": label,
+        "reason": f'\u53ef\u7528\u73a9\u6cd5\u4e00\u81f4\u652f\u6301{label}\uff1a{lane_summary}',
+        "candidates": candidates,
+        "eligible_lanes": [str(candidate["lane"]) for candidate in candidates],
     }
 
 
@@ -441,13 +626,7 @@ def _prediction_projection(
         prediction_output = record.get("prediction_output")
         if isinstance(prediction_output, dict):
             canonical_direction = prediction_output.get("one_x_two_direction")
-    formal_projection = project_frozen_formal_markets(record)
-    formal_markets = summarize_formal_markets(formal_projection)
-    exact_entry = (formal_projection.get("markets") or {}).get("exact_score")
-    exact_contract = exact_entry.get("contract") if isinstance(exact_entry, dict) else None
-    exact_direction_probabilities = _direction_probabilities_from_cells(
-        exact_contract.get("cells") if isinstance(exact_contract, dict) else None
-    )
+    formal_markets = summarize_formal_markets(project_frozen_formal_markets(record))
     return {
         "product_role": record.get("product_role"),
         "model_family": record.get("model_family"),
@@ -480,7 +659,6 @@ def _prediction_projection(
         # Dashboard receives only the compact status/probability summary.  The
         # 169-cell matrix remains a Match Detail concern.
         "formal_markets": formal_markets,
-        "exact_direction_probabilities": exact_direction_probabilities,
     }
 
 
@@ -789,9 +967,11 @@ MODERN_CSS = r"""
 .probability-cell-group { display: grid; gap: 9px; min-width: 0; }
 .compact-score { min-width: 0; color: #3F464E; font-size: 9px; font-variant-numeric: tabular-nums; }
 .score-caption { display: block; margin-bottom: 3px; color: var(--muted); font-size: 9px; }
-.compact-score-lines { display: flex; flex-wrap: wrap; gap: 3px 8px; }
-.compact-score-item { white-space: nowrap; }
-.compact-score-item strong { color: var(--ink); font-weight: 760; }
+.compact-score-lines { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 7px; }
+.compact-score-item { display: grid; min-width: 0; gap: 3px; white-space: normal; }
+.score-value { color: var(--ink); font-size: 14px; font-weight: 760; line-height: 1.1; }
+.score-probability { color: var(--muted); font-size: 10px; font-weight: 520; line-height: 1.1; }
+.compact-score-item:first-child .score-value { font-weight: 800; }
 .score-serving-note { margin-top: 3px; color: var(--warning); font-size: 8px; }
 .context-mini { color: #606870; font-size: 9px; }
 .context-mini strong { display: block; color: #111820; font-size: 11px; }
@@ -857,7 +1037,7 @@ MODERN_CSS = r"""
   .compact-prob-values { font-size: 13px; }
   .compact-score { margin-top: 12px; padding-top: 9px; border-top: 1px solid var(--line); font-size: 9px; }
   .score-caption { font-size: 9px; }
-  .compact-score-lines { gap: 3px 9px; }
+  .compact-score-lines { gap: 5px; }
   .context-mini { display: block; margin-top: 10px; }
   .recommendation-context strong { font-size: 12px; }
   .history { margin-top: 25px; }
@@ -874,7 +1054,7 @@ MODERN_CSS = r"""
   .matchup-name { font-size: 12px; }
   .mini-crest { flex-basis: 32px; width: 32px; height: 32px; }
   .mini-crest.team-badge { flex-basis: 32px; }
-  .compact-score-lines { gap: 3px 6px; }
+  .compact-score-lines { gap: 4px; }
   .page-footer { padding-left: 12px; padding-right: 12px; }
 }
 """
@@ -1055,6 +1235,14 @@ def _score_rows(prediction: dict[str, Any], limit: int = 5) -> list[dict[str, An
         rows.insert(0, {"score": primary, "probability": None})
     return rows[:limit]
 
+
+def _score_accessibility_label(score: str) -> str:
+    pair = _score_pair(score)
+    if pair is not None:
+        return f"\u6bd4\u5206 {pair[0]}\u6bd4{pair[1]}"
+    return f"\u6bd4\u5206 {score}"
+
+
 def _one_x_two_html(prediction: dict[str, Any]) -> str:
     probabilities = prediction.get("probabilities") or {}
     if not isinstance(probabilities, dict):
@@ -1143,9 +1331,13 @@ def _score_summary_html(
         probability = _format_percent(row.get("probability"))
         if not probability:
             continue
+        score = str(row["score"])
+        accessibility_label = f'{_score_accessibility_label(score)}\uff0c\u6982\u7387 {probability}'
         rendered_rows.append(
-            f'<span class="compact-score-item" data-score-rank="{rank}">'
-            f'<strong>{html.escape(str(row["score"]))}</strong> {html.escape(probability)}</span>'
+            f'<span class="compact-score-item" data-score-rank="{rank}" '
+            f'aria-label="{html.escape(accessibility_label, quote=True)}">'
+            f'<strong class="score-value">{html.escape(score)}</strong>'
+            f'<span class="score-probability">{html.escape(probability)}</span></span>'
         )
     if not rendered_rows:
         return ""
