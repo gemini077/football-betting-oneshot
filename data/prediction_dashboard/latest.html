@@ -3,492 +3,445 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>9月9日 · FBOS</title>
+<title>今日比赛 · FBOS</title>
 <style>
 :root {
-  --bg: #F7F5F1;
-  --surface: #FFFFFF;
-  --text: #111111;
-  --muted: #6B7280;
-  --quiet: #9CA3AF;
-  --line: #E5E7EB;
-  --accent: #FF6A00;
-  --accent-soft: #FFF1E8;
-  --warning: #B45309;
-  --warning-soft: #FFF7ED;
-  --danger: #B91C1C;
-  --danger-soft: #FEF2F2;
+  --shell: #05111C;
+  --shell-2: #0B1723;
+  --page: #F6F7F9;
+  --card: #FFFFFF;
+  --card-soft: #FBFCFD;
+  --surface: var(--card);
+  --surface-subtle: var(--card-soft);
+  --ink: #12161C;
+  --text: var(--ink);
+  --muted: #66707B;
+  --quiet: #98A0AA;
+  --line: #E7E9ED;
+  --line-2: #D9DDE3;
+  --orange: #FF6A00;
+  --accent: var(--orange);
+  --orange-soft: #FFF2E9;
+  --accent-soft: var(--orange-soft);
+  --blue: #104AA6;
+  --home: var(--blue);
+  --blue-2: #0D3F8F;
+  --draw: #B9BCC2;
+  --red: #F32232;
+  --away: var(--red);
+  --green: #0A8E43;
+  --green-2: #0B6F38;
+  --verified: #18794E;
+  --purple: #7A35B9;
+  --warning: #A85C00;
+  --warning-soft: #FFF4E8;
+  --danger: #B42318;
+  --danger-soft: #FFF1F0;
+  --radius: 14px;
+  --shadow: 0 18px 55px rgba(0,0,0,.17);
+  --card-shadow: 0 1px 0 rgba(0,0,0,.015);
+  --max: 1240px;
 }
 * { box-sizing: border-box; }
-html { background: var(--bg); }
-body {
-  min-width: 0;
-  margin: 0;
-  background: var(--bg);
-  color: var(--text);
-  font: 14px/1.45 "Inter", "Segoe UI", "Microsoft YaHei", sans-serif;
-  -webkit-font-smoothing: antialiased;
-}
+html, body { margin: 0; min-height: 100%; background: linear-gradient(180deg,#020D16,#07131D); color: var(--ink); }
+body { font: 14px/1.45 Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif; -webkit-font-smoothing: antialiased; }
 a { color: inherit; }
 button { font: inherit; }
 button, a { -webkit-tap-highlight-color: transparent; }
+button:focus-visible, a:focus-visible, summary:focus-visible { outline: 2px solid var(--orange); outline-offset: 3px; }
 [hidden] { display: none !important; }
 
-.site {
-  width: min(calc(100% - 68px), 1372px);
-  margin: 0 auto;
-  padding: 32px 0 44px;
-}
-.site-header {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 24px;
-  padding-bottom: 17px;
-  border-bottom: 1px solid var(--line);
-}
-.brand {
-  display: flex;
-  align-items: baseline;
-  gap: 14px;
-  min-width: 0;
-}
-.brand-name {
-  flex: 0 0 auto;
-  font-size: 25px;
-  font-weight: 750;
-  letter-spacing: -.055em;
-}
-.brand-subtitle {
-  color: var(--muted);
-  font-size: 10px;
-  letter-spacing: .18em;
-  text-transform: uppercase;
-  white-space: nowrap;
-}
-.header-note {
-  color: var(--muted);
-  font-size: 11px;
-  text-align: right;
-  white-space: nowrap;
-}
-.dashboard-heading {
-  display: flex;
-  align-items: end;
-  justify-content: space-between;
-  gap: 24px;
-  padding: 18px 0 12px;
-}
-.dashboard-heading h1 {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  flex: 0 1 auto;
-  min-width: 0;
-  margin: 0;
-  font-size: 22px;
-  line-height: 1.15;
-  letter-spacing: -.04em;
-  white-space: nowrap;
-}
-.dashboard-heading h1 .date-day { font-weight: 750; }
-.dashboard-heading h1 .today { color: var(--muted); font-weight: 500; }
-.fixture-count {
-  margin-left: 8px;
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 400;
-  letter-spacing: 0;
-}
-.filters {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(120px, 1fr));
-  gap: 7px;
-  width: min(100%, 660px);
-}
-.filter {
-  min-height: 26px;
-  padding: 3px 12px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: var(--surface);
-  color: var(--text);
-  cursor: pointer;
-  font-size: 11px;
-}
-.filter:hover,
-.filter[aria-pressed="true"] {
-  border-color: #FFB27F;
-  color: var(--accent);
-}
-.filter[aria-pressed="true"] { background: var(--accent-soft); }
+/* R4 shared shell: OneShot rail, warm rounded workspace, quiet editorial chrome. */
+.app-shell { display: grid; grid-template-columns: 178px minmax(0,1fr); min-height: 100vh; padding: 0 16px 16px 0; }
+.side-rail { min-height: 100vh; padding: 24px 12px 16px; color: #FFF; display: flex; flex-direction: column; }
+.rail-brand { display: block; padding: 2px 8px; color: #FFF; text-decoration: none; }
+.rail-brand-row { display: flex; align-items: center; gap: 10px; }
+.rail-logo { position: relative; width: 35px; height: 35px; flex: none; }
+.rail-logo .outer { position: absolute; inset: 3px; border: 3px solid var(--orange); border-radius: 50%; }
+.rail-logo .inner { position: absolute; inset: 11px; border: 3px solid #FFF; border-radius: 50%; }
+.rail-logo::before, .rail-logo::after { content: ""; position: absolute; background: var(--orange); border-radius: 2px; }
+.rail-logo::before { left: 16px; top: 0; width: 3px; height: 8px; box-shadow: 0 27px 0 var(--orange); }
+.rail-logo::after { left: 0; top: 16px; width: 8px; height: 3px; box-shadow: 27px 0 0 var(--orange); }
+.rail-mark { font-size: 20px; font-weight: 780; letter-spacing: -.045em; }
+.rail-caption { display: block; margin: 21px 8px 17px; color: #D7DCE1; font-size: 9px; line-height: 1.45; }
+.rail-nav { display: grid; gap: 4px; }
+.nav-item { position: relative; display: flex; align-items: center; gap: 10px; min-height: 49px; padding: 9px 10px 9px 13px; border-radius: 10px; color: #F4F6F8; font-size: 12px; text-decoration: none; }
+.nav-item:hover { background: rgba(255,255,255,.045); }
+.nav-item.active { background: #121E29; }
+.nav-item.active::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 2px; border-radius: 99px; background: var(--orange); }
+.nav-icon { width: 20px; height: 20px; flex: none; color: #F3F5F7; }
+.nav-item.active .nav-icon { color: var(--orange); }
+.nav-copy strong, .nav-copy span { display: block; }
+.nav-copy strong { font-size: 12px; font-weight: 680; }
+.nav-copy span { margin-top: 2px; color: #B8C0C8; font-size: 9px; }
+.rail-footer { margin-top: auto; }
+.rail-card { padding: 14px 13px; border: 1px solid rgba(255,255,255,.075); border-radius: 10px; background: linear-gradient(180deg,#111D28,#0D1924); color: #DFE4E8; }
+.rail-card strong { font-size: 10px; }
+.rail-card p { margin: 7px 0 0; font-size: 9px; line-height: 1.55; }
+.rail-mode { display: flex; align-items: center; justify-content: space-between; padding: 15px 8px 0; color: #F0F2F4; font-size: 9px; }
+.rail-toggle { position: relative; width: 32px; height: 18px; border-radius: 99px; background: var(--orange); }
+.rail-toggle::after { content: ""; position: absolute; right: 2px; top: 2px; width: 14px; height: 14px; border-radius: 50%; background: #FFF; }
+.workspace { min-width: 0; padding-top: 10px; }
+.page { min-height: calc(100vh - 26px); overflow: hidden; border-radius: 18px; background: var(--page); box-shadow: var(--shadow); }
+.topbar { display: flex; align-items: center; justify-content: space-between; min-height: 54px; padding: 0 19px; border-bottom: 1px solid var(--line); background: rgba(255,255,255,.45); }
+.crumbs, .utility { display: flex; align-items: center; }
+.crumbs { gap: 11px; font-size: 11px; }
+.crumbs .back { font-size: 21px; line-height: 1; }
+.utility { gap: 14px; font-size: 10px; }
+.icon-btn { display: grid; place-items: center; width: 26px; height: 26px; border: 0; padding: 0; background: transparent; }
+.icon-btn svg { width: 17px; height: 17px; }
+.content { padding: 12px 14px 16px; }
+.statusbar { display: none; }
+.mobile-topbar { display: none; }
 
-.quality-warning,
-.runtime-warning {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 5px 10px;
-  margin: 0 0 12px;
-  padding: 9px 12px;
-  border-left: 2px solid var(--accent);
-  background: var(--accent-soft);
-  color: var(--muted);
-  font-size: 12px;
+/* R4 match hero and signature data panels are shared by Dashboard and Detail. */
+.hero { display: grid; grid-template-columns: minmax(0,1fr) 205px minmax(0,1fr); align-items: center; min-height: 112px; padding: 16px 22px; border: 1px solid var(--line); border-radius: 12px; background: #FFF; box-shadow: var(--card-shadow); }
+.team { display: flex; align-items: center; gap: 16px; min-width: 0; }
+.team.right { justify-content: flex-end; text-align: left; }
+.team.right .team-copy { text-align: left; }
+.team h1 { margin: 0; font-size: 22px; font-weight: 760; letter-spacing: -.04em; overflow-wrap: anywhere; }
+.team-meta { margin-top: 5px; color: #30353B; font-size: 11px; }
+.kick { text-align: center; }
+.kick small, .kick span { display: block; }
+.kick small { color: #282D33; font-size: 10px; }
+.kick strong { display: block; margin: 4px 0 3px; font-size: 27px; line-height: 1; font-weight: 760; letter-spacing: -.03em; }
+.kick span { color: #34393E; font-size: 10px; }
+.fav { margin-left: 2px; color: #1D2329; }
+.fav svg { width: 20px; height: 20px; }
+.tabs { display: flex; gap: 36px; margin-top: 6px; padding: 0 20px; border-bottom: 1px solid var(--line); }
+.tab { position: relative; padding: 11px 0 10px; color: #242A30; font-size: 11px; text-decoration: none; }
+.tab.active { font-weight: 700; }
+.tab.active::after { content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; background: var(--orange); }
+.panel { min-width: 0; padding: 15px 16px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); box-shadow: var(--card-shadow); }
+.panel h2 { margin: 0 0 14px; font-size: 14px; font-weight: 720; letter-spacing: -.022em; }
+.info-i { display: inline-grid; place-items: center; width: 15px; height: 15px; margin-left: 4px; border: 1px solid #525A63; border-radius: 50%; font-size: 8px; font-style: normal; vertical-align: 1px; }
+.prob-cells { display: grid; grid-template-columns: repeat(3,1fr); }
+.prob-cell { padding: 11px 9px 12px; border-right: 1px solid var(--line); text-align: center; }
+.prob-cell:last-child { border-right: 0; }
+.prob-cell span, .prob-cell strong, .prob-cell em { display: block; }
+.prob-cell span { font-size: 10px; }
+.prob-cell strong { margin-top: 9px; font-size: 24px; line-height: 1; font-weight: 760; font-variant-numeric: tabular-nums; }
+.prob-cell em { width: max-content; margin: 8px auto 0; padding: 4px 12px; border-radius: 99px; background: #F1F2F4; color: #20252B; font-size: 10px; font-style: normal; }
+.home-t { color: var(--blue); }
+.away-t { color: var(--red); }
+.probbar { display: flex; height: 8px; margin: 15px 1px 0; overflow: hidden; border-radius: 99px; background: #EEE; }
+.probbar span { display: block; min-width: 2px; height: 100%; }
+.probbar span:nth-child(1) { background: var(--blue); }
+.probbar span:nth-child(2) { background: var(--draw); }
+.probbar span:nth-child(3) { background: var(--red); }
+.prob-caption { margin-top: 12px; color: #4C535B; font-size: 9px; text-align: center; }
+.score-title-row { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.score-title-row small { color: var(--muted); font-size: 8px; }
+.score-grid { width: 100%; border-collapse: separate; border-spacing: 2px; font-size: 8.5px; font-variant-numeric: tabular-nums; text-align: center; }
+.score-grid th { padding: 2px; font-weight: 700; }
+.score-grid td { padding: 6px 2px; background: #F1F6F0; }
+.score-grid td.hi1 { background: #92BC93; font-weight: 760; }
+.score-grid td.hi2 { background: #B7D0B7; }
+.score-grid td.hi3 { background: #D4E3D2; }
+.score-legend { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 10px; color: #5E666E; font-size: 8px; }
+.legend-grad { width: 104px; height: 7px; border-radius: 99px; background: linear-gradient(90deg,#EEF5ED,#8FBE8F,#2F8D49); }
+.top3line { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line); color: #454C53; font-size: 8.5px; }
+.take-list { display: grid; gap: 8px; }
+.take-row { display: grid; grid-template-columns: 24px minmax(0,1fr) auto; gap: 8px; align-items: start; }
+.take-icon { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--blue); color: #FFF; font-size: 9px; font-weight: 800; }
+.take-icon.green { background: var(--green); }
+.take-icon.orange { background: var(--orange); }
+.take-icon.purple { background: var(--purple); }
+.take-copy strong, .take-copy span { display: block; }
+.take-copy strong { font-size: 10px; }
+.take-copy span { margin-top: 2px; color: #56606A; font-size: 8px; line-height: 1.38; }
+.take-val { color: var(--green-2); font-size: 9px; font-weight: 760; }
+.panel-link { display: flex; align-items: center; justify-content: space-between; margin: 11px -16px -14px; padding: 10px 16px; border-top: 1px solid var(--line); font-size: 9px; }
+.grid3 { display: grid; grid-template-columns: 1.03fr 1.05fr .92fr; gap: 9px; margin-top: 10px; }
+.grid3.second { grid-template-columns: 1.03fr 1.05fr .92fr; }
+.bars { display: grid; grid-template-columns: repeat(5,1fr); gap: 10px; align-items: end; height: 129px; padding: 8px 6px 0; }
+.bar-item { text-align: center; }
+.bar-value { font-size: 8px; }
+.bar-col { display: flex; align-items: end; justify-content: center; height: 78px; margin: 4px auto 7px; }
+.bar-col span { width: 19px; border-radius: 3px 3px 0 0; background: var(--blue); }
+.bar-col.aux span { background: #83B8DF; }
+.bar-label { font-size: 10px; }
+.subtle-note { margin-top: 8px; color: #7B838C; font-size: 8px; }
+.compare-head { display: flex; gap: 18px; margin-bottom: 7px; color: #4B535A; font-size: 8px; }
+.compare-head span::before { content: ""; display: inline-block; width: 12px; height: 8px; margin-right: 5px; border-radius: 2px; background: var(--blue); vertical-align: -1px; }
+.compare-head span:last-child::before { background: #BFC2C6; }
+.compare-grid { display: grid; grid-template-columns: 66px repeat(3,1fr); gap: 6px 8px; align-items: end; font-size: 8px; }
+.mini-bars { display: flex; align-items: end; justify-content: center; gap: 7px; height: 53px; }
+.mini-bars span { width: 18px; border-radius: 3px 3px 0 0; }
+.mini-bars .m { background: var(--blue); }
+.mini-bars .k { background: #BFC2C6; }
+.delta { font-size: 9px; font-weight: 760; text-align: center; }
+.delta.pos { color: var(--green); }
+.delta.neg { color: var(--red); }
+.evidence-list { display: grid; }
+.evidence-row { display: grid; grid-template-columns: 25px minmax(0,1fr); gap: 8px; padding: 8px 0; border-top: 1px solid var(--line); }
+.evidence-row:first-child { border-top: 0; }
+.evidence-glyph { display: grid; place-items: center; width: 23px; height: 23px; border: 1px solid #27303A; border-radius: 50%; font-size: 8px; font-weight: 700; }
+.evidence-row strong, .evidence-row span { display: block; }
+.evidence-row strong { font-size: 9px; }
+.evidence-row span { margin-top: 2px; color: #5C646D; font-size: 8px; line-height: 1.38; }
+.trust-strip { display: grid; grid-template-columns: repeat(5,1fr); margin-top: 10px; border: 1px solid var(--line); border-radius: 12px; background: #FFF; }
+.trust-item { display: grid; grid-template-columns: 25px minmax(0,1fr); gap: 8px; padding: 11px 12px; border-right: 1px solid var(--line); }
+.trust-item:last-child { border-right: 0; }
+.trust-ico { display: grid; place-items: center; width: 22px; height: 22px; border: 1px solid #CDD2D7; border-radius: 50%; color: #222A31; font-size: 10px; }
+.trust-item strong, .trust-item span { display: block; }
+.trust-item strong { font-size: 9px; }
+.trust-item span { margin-top: 4px; color: #5F6870; font-size: 7.5px; line-height: 1.48; }
+.footer-principles { margin: 12px 14px 0; padding: 10px 16px 11px; border: 1px solid rgba(255,255,255,.13); border-radius: 11px; background: #07131E; color: #FFF; }
+.principle-title { color: var(--orange); font-size: 10px; font-weight: 760; }
+.principles { display: grid; grid-template-columns: repeat(5,1fr); margin-top: 8px; }
+.principle { display: grid; grid-template-columns: 28px minmax(0,1fr); gap: 9px; padding: 0 15px; border-right: 1px solid rgba(255,255,255,.13); }
+.principle:first-child { padding-left: 0; }
+.principle:last-child { border-right: 0; }
+.principle-icon { display: grid; place-items: center; width: 25px; height: 25px; border: 1px solid rgba(255,255,255,.5); border-radius: 50%; font-size: 10px; }
+.principle strong, .principle span { display: block; }
+.principle strong { font-size: 9px; }
+.principle span { margin-top: 2px; color: #C7CED5; font-size: 7.5px; }
+.copyright { display: flex; gap: 26px; padding: 10px 16px 12px; color: #7F8993; font-size: 7.5px; }
+.closed-beta-notice { margin-top: 12px; padding: 10px 14px; border-left: 2px solid var(--line); background: transparent; color: var(--quiet); font-size: 10px; }
+.closed-beta-notice strong, .closed-beta-notice span { display: block; margin-top: 3px; }
+.closed-beta-notice strong { color: var(--muted); font-size: 10px; }
+.dashboard-trust { border-top: 0; }
+.team-badge { display: inline-grid; flex: 0 0 28px; place-items: center; width: 28px; height: 28px; overflow: hidden; border: 1px solid var(--line); border-radius: 50%; background: var(--card-soft); color: var(--muted); font-size: 11px; font-weight: 800; line-height: 1; text-transform: uppercase; }
+.team-badge img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.team-badge-fallback { background: #F0F1EF; }
+.hero .team-badge { flex-basis: 68px; width: 68px; height: 68px; border-width: 2px; border-color: #B7C8DD; background: #F8FBFE; font-size: 17px; }
+.team.right .team-badge { order: 2; }
+.team.right .fav { order: 3; }
+
+@media (max-width: 980px) {
+  .app-shell { grid-template-columns: 156px minmax(0,1fr); }
+  .side-rail { padding-left: 14px; padding-right: 14px; }
 }
-.quality-warning strong,
-.runtime-warning strong { color: var(--text); font-weight: 700; }
+@media (max-width: 820px) {
+  body { background: #FFF; }
+  .app-shell { display: block; padding: 0; }
+  .side-rail { display: none; }
+  .workspace { padding: 0; }
+  .page { min-height: 100vh; border-radius: 0; box-shadow: none; background: #FFF; }
+  .topbar { display: none; }
+  .statusbar { display: flex; align-items: center; justify-content: space-between; height: 27px; padding: 0 13px; color: #090D12; font-size: 9px; font-weight: 650; }
+  .status-icons { display: flex; align-items: center; gap: 5px; }
+  .status-pill { width: 24px; height: 8px; border-radius: 99px; background: #080B0F; }
+  .mobile-topbar { display: flex; align-items: center; justify-content: space-between; min-height: 46px; padding: 0 13px; border-bottom: 1px solid var(--line); background: #FFF; color: var(--ink); }
+  .mobile-topbar strong { min-width: 0; overflow: hidden; font-size: 12px; letter-spacing: -.02em; text-overflow: ellipsis; white-space: nowrap; }
+  .mobile-topbar a { color: var(--ink); font-size: 20px; line-height: 1; text-decoration: none; }
+  .mobile-topbar span { color: var(--muted); font-size: 18px; line-height: 1; }
+  .content { padding: 0 14px 18px; }
+  .hero { grid-template-columns: 1fr 76px 1fr; min-height: 83px; padding: 10px 2px; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; box-shadow: none; }
+  .team { gap: 7px; }
+  .hero .team-badge { flex-basis: 40px; width: 40px; height: 40px; border-width: 1px; font-size: 11px; }
+  .team h1 { font-size: 9px; }
+  .team-meta { margin-top: 2px; font-size: 6px; }
+  .kick small { font-size: 6px; }
+  .kick strong { margin: 2px 0; font-size: 18px; }
+  .kick span { font-size: 6px; }
+  .fav { display: none; }
+  .tabs { gap: 22px; margin: 0; padding: 0 1px; overflow: auto; white-space: nowrap; }
+  .tab { padding: 10px 0 9px; font-size: 7.5px; }
+  .grid3 { display: block; margin-top: 0; }
+  .panel { padding: 14px 0; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; box-shadow: none; }
+  .panel h2 { margin-bottom: 11px; font-size: 11px; }
+  .prob-cell { padding: 7px 4px; }
+  .prob-cell span { font-size: 7.5px; }
+  .prob-cell strong { font-size: 17px; }
+  .prob-cell em { display: none; }
+  .probbar { height: 6px; margin-top: 11px; }
+  .prob-caption { display: none; }
+  .score-grid { font-size: 7px; border-spacing: 1px; }
+  .score-grid td { padding: 4px 1px; }
+  .score-legend { display: none; }
+  .top3line { font-size: 7px; }
+  .take-row { grid-template-columns: 20px minmax(0,1fr) auto; }
+  .take-icon { width: 19px; height: 19px; }
+  .take-copy strong { font-size: 8px; }
+  .take-copy span { font-size: 6.8px; }
+  .take-val { font-size: 8px; }
+  .grid3.second { display: block; }
+  .bars { height: 100px; }
+  .bar-col { height: 56px; }
+  .compare-grid { grid-template-columns: 56px repeat(3,1fr); }
+  .evidence-row strong { font-size: 8px; }
+  .evidence-row span { font-size: 7px; }
+  .trust-strip, .footer-principles, .copyright { display: none; }
+  .mobile-bottom { display: grid; grid-template-columns: repeat(5,1fr); position: fixed; z-index: 20; left: 0; right: 0; bottom: 0; min-height: 60px; padding: 7px 4px 5px; border-top: 1px solid var(--line); background: rgba(255,255,255,.985); backdrop-filter: blur(10px); }
+  .bottom-item { color: #171B20; font-size: 7px; text-align: center; }
+  .bottom-item svg { display: block; width: 17px; height: 17px; margin: 0 auto 3px; }
+  .bottom-item.active { color: var(--orange); }
+}
+@media (max-width: 360px) {
+  .content { padding-left: 12px; padding-right: 12px; }
+  .hero { grid-template-columns: 1fr 70px 1fr; }
+  .team h1 { font-size: 8.5px; }
+  .kick strong { font-size: 17px; }
+  .prob-cell strong { font-size: 16px; }
+  .score-grid { font-size: 6.5px; }
+}
+
+.dashboard-page { min-height: 100%; }
+.dashboard-page .content { min-width: 0; }
+.matches-head { display: flex; align-items: end; justify-content: space-between; gap: 18px; padding: 9px 2px 10px; }
+.matches-head h1 { margin: 0; font-size: 24px; letter-spacing: -.045em; }
+.matches-head p { margin: 5px 0 0; color: var(--muted); font-size: 9px; }
+.chips { display: flex; gap: 6px; }
+.chip, .filter { padding: 6px 12px; border: 1px solid var(--line); border-radius: 8px; background: #FFF; color: var(--ink); font-size: 9px; }
+.chip.active, .filter[aria-pressed="true"] { border-color: #FFAD7A; background: var(--orange-soft); color: var(--orange); }
+.filter { min-height: 36px; cursor: pointer; }
+.filter:hover { border-color: #FFAD7A; color: var(--orange); }
+.filters { display: flex; flex-wrap: wrap; gap: 6px; }
+.quality-warning, .runtime-warning, .data-warning { display: flex; flex-wrap: wrap; align-items: baseline; gap: 5px 10px; margin: 0 0 10px; padding: 10px 14px; border-left: 3px solid var(--orange); background: var(--orange-soft); color: var(--muted); font-size: 11px; }
+.quality-warning strong, .runtime-warning strong, .data-warning strong { color: var(--ink); font-weight: 700; }
 .runtime-warning { border-left-color: var(--danger); background: var(--danger-soft); }
 .runtime-warning strong { color: var(--danger); }
-.closed-beta-notice {
-  margin-top: 9px;
-  border-left-color: var(--line);
-  background: transparent;
-  color: var(--quiet);
-  font-size: 11px;
-}
-.dashboard-trust {
-  padding: 11px 0 0;
-  border-top: 1px solid var(--line);
-}
-.dashboard-trust strong,
-.dashboard-trust span {
-  display: block;
-  margin-top: 3px;
-}
-
-.fixture-table {
-  overflow: hidden;
-  border-top: 1px solid var(--line);
-  background: var(--surface);
-}
-.table-header,
-.fixture-row {
-  display: grid;
-  grid-template-columns: 150px 70px minmax(260px, 1.55fr) minmax(230px, 1.25fr) minmax(235px, 1.3fr) minmax(180px, 1fr);
-  column-gap: 16px;
-  padding-left: 9px;
-  padding-right: 9px;
-}
-.table-header {
-  min-height: 28px;
-  align-items: center;
-  color: var(--muted);
-  background: #FCFBF9;
-  font-size: 10px;
-}
-.fixture-row {
-  position: relative;
-  min-height: 56px;
-  align-items: center;
-  border-bottom: 1px solid var(--line);
-}
-.fixture-row:hover { background: #FFFCF9; }
+.data-warning { border-left-color: var(--warning); background: var(--warning-soft); color: var(--warning); }
+.fixture-table { min-width: 0; }
+.league-group { margin-top: 10px; overflow: hidden; border: 1px solid var(--line); border-radius: 12px; background: #FFF; }
+.league-title { display: flex; align-items: center; justify-content: space-between; padding: 9px 14px; border-bottom: 1px solid var(--line); background: #FBFBFC; }
+.league-title strong { font-size: 10px; }
+.league-title span { color: var(--muted); font-size: 9px; }
+.fixture-row.match-card { position: relative; display: grid; grid-template-columns: 135px minmax(220px,1.2fr) minmax(230px,1.4fr) minmax(180px,.95fr); gap: 17px; align-items: center; min-height: 78px; padding: 11px 14px; border-bottom: 1px solid var(--line); }
+.fixture-row.match-card:last-child { border-bottom: 0; }
+.fixture-row.match-card:hover { background: #FFFDFC; box-shadow: inset 3px 0 0 var(--orange); }
 .fixture-row > * { min-width: 0; }
 .fixture-row > *:not(.fixture-row-target) { position: relative; z-index: 1; pointer-events: none; }
-.fixture-row-target { position: absolute; inset: 0; z-index: 0; border-radius: inherit; }
-.fixture-row-target:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-.identity-cell { min-width: 0; }
-.cell-meta,
-.match-number,
-.kickoff,
-.identity-competition,
-.score-caption,
-.score-top3,
-.action-note {
-  color: var(--muted);
-  font-size: 11px;
-}
-.match-number { white-space: nowrap; }
-.competition {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.identity-competition {
-  display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.kickoff { color: var(--text); font-variant-numeric: tabular-nums; }
-.teams-cell { min-width: 0; }
-.team-match {
-  display: flex;
-  align-items: baseline;
-  gap: 7px;
-  min-width: 0;
-  font-weight: 650;
-  letter-spacing: -.015em;
-}
-.team-match .team {
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-.team-match .home { text-align: right; }
-.team-match .away { text-align: left; }
-.versus {
-  flex: 0 0 auto;
-  color: var(--muted);
-  font-size: 10px;
-  font-weight: 400;
-}
-.result-inline {
-  margin-top: 3px;
-  color: var(--accent);
-  font-size: 11px;
-  font-weight: 650;
-}
-.probability-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-}
-.probability-cell {
-  display: grid;
-  gap: 2px;
-  min-width: 0;
-}
-.probability-cell span {
-  color: var(--muted);
-  font-size: 10px;
-}
-.probability-cell strong {
-  font-variant-numeric: tabular-nums;
-  font-size: 13px;
-  line-height: 1;
-}
-.probability-cell.is-leading strong { color: var(--accent); }
-.score-cell { min-width: 0; }
-.score-caption { margin-bottom: 2px; }
-.score-primary {
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-  font-size: 13px;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-}
-.score-primary span {
-  color: var(--muted);
-  font-size: 10px;
-  font-weight: 400;
-}
-.score-top3 {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 3px 10px;
-  margin-top: 3px;
-  font-variant-numeric: tabular-nums;
-}
-.score-top3 span { white-space: nowrap; }
-.score-serving-note { margin-top: 4px; color: var(--warning); font-size: 10px; font-weight: 650; }
-.row-action {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  flex-wrap: wrap;
-  gap: 5px 9px;
-  text-align: right;
-}
-.prediction-unavailable { display: none; }
-.empty-score-cell { visibility: hidden; }
-.detail-link {
-  color: var(--muted);
-  font-size: 11px;
-  text-decoration: none;
-  white-space: nowrap;
-}
-.detail-link:hover { color: var(--accent); text-decoration: underline; }
-.exception-note {
-  color: var(--warning);
-  font-size: 11px;
-  font-weight: 650;
-}
-.exception-note.failed,
-.exception-note.missed { color: var(--danger); }
-.completed-note { color: var(--accent); font-size: 11px; font-weight: 650; }
-.reason-detail {
-  flex-basis: 100%;
-  color: var(--muted);
-  font-size: 10px;
-}
-.data-warning {
-  margin: 12px 0;
-  padding: 9px 12px;
-  border-left: 2px solid var(--warning);
-  background: var(--warning-soft);
-  color: var(--warning);
-  font-size: 11px;
-}
-.empty {
-  padding: 46px 20px;
-  color: var(--muted);
-  text-align: center;
-}
-.filter-empty {
-  padding: 46px 20px;
-  color: var(--muted);
-  text-align: center;
-}
-.history {
-  margin-top: 22px;
-  border-top: 1px solid var(--line);
-}
-.history-heading {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 14px 0 9px;
-}
-.history-heading h2 { margin: 0; font-size: 15px; letter-spacing: -.02em; }
+.fixture-row-target { position: absolute; inset: 0; z-index: 2; border-radius: inherit; }
+.fixture-row-target:focus-visible { outline: 2px solid var(--orange); outline-offset: -3px; }
+.match-id strong, .match-id span { display: block; }
+.match-id strong { color: var(--ink); font-size: 10px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.match-id span { margin-top: 3px; overflow: hidden; color: var(--muted); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.teams-line { display: grid; grid-template-columns: 30px minmax(0,1fr) 30px; gap: 8px; align-items: center; }
+.teams-names { min-width: 0; }
+.teams-names strong, .teams-names span { display: block; overflow-wrap: anywhere; }
+.teams-names strong { font-size: 11px; font-weight: 720; }
+.teams-names span { margin-top: 2px; color: var(--muted); font-size: 8px; }
+.mini-crest { display: inline-grid; place-items: center; width: 28px; height: 28px; border: 1.5px solid var(--blue); border-radius: 50%; background: #EEF5FC; color: var(--blue); font-size: 7px; font-weight: 800; }
+.mini-crest.team-badge { flex-basis: 28px; }
+.mini-crest.team-badge-fallback { background: #EEF5FC; }
+.mini-crest img { object-fit: contain; }
+.compact-prob { display: grid; gap: 6px; min-width: 0; }
+.compact-prob-label { color: var(--muted); font-size: 8px; }
+.compact-prob-values { display: grid; grid-template-columns: repeat(3,1fr); font-size: 11px; font-weight: 760; font-variant-numeric: tabular-nums; }
+.compact-prob-values span:nth-child(1) { color: var(--blue); }
+.compact-prob-values span:nth-child(2) { color: var(--ink); text-align: center; }
+.compact-prob-values span:nth-child(3) { color: var(--red); text-align: right; }
+.compact-prob .probbar { margin: 0; height: 7px; }
+.probability-cell-group { display: grid; gap: 7px; min-width: 0; }
+.compact-score { min-width: 0; color: #3F464E; font-size: 8px; font-variant-numeric: tabular-nums; }
+.score-caption { display: block; margin-bottom: 3px; color: var(--muted); font-size: 8px; }
+.compact-score-lines { display: flex; flex-wrap: wrap; gap: 3px 8px; }
+.compact-score-item { white-space: nowrap; }
+.compact-score-item strong { color: var(--ink); font-weight: 760; }
+.score-serving-note { margin-top: 3px; color: var(--warning); font-size: 8px; }
+.context-mini { color: #606870; font-size: 8px; }
+.context-mini strong { display: block; color: #111820; font-size: 9px; }
+.context-mini .warn { margin-top: 3px; color: var(--warning); }
+.context-mini .exception-note { color: var(--warning); }
+.context-mini .exception-note.failed, .context-mini .exception-note.missed { color: var(--danger); }
+.reason-detail { display: block; margin-top: 3px; color: var(--muted); font-size: 8px; line-height: 1.35; }
+.prediction-unavailable, .score-unavailable { color: var(--muted); font-size: 11px; }
+.filter-empty { padding: 42px 20px; color: var(--muted); text-align: center; }
+.history { margin-top: 18px; padding-top: 1px; border-top: 1px solid var(--line); }
+.history-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 17px 0 10px; }
+.history-heading h2 { margin: 0; font-size: 16px; letter-spacing: -.02em; }
 .history-heading span { color: var(--muted); font-size: 11px; }
-.history-row {
-  display: grid;
-  grid-template-columns: 92px minmax(230px, 1fr) 65px minmax(180px, auto);
-  gap: 14px;
-  align-items: center;
-  min-height: 47px;
-  border-bottom: 1px solid var(--line);
-  font-size: 12px;
-}
+.history-row { display: grid; grid-template-columns: 100px minmax(220px,1fr) 116px minmax(170px,auto); gap: 16px; align-items: center; min-height: 60px; border-bottom: 1px solid var(--line); font-size: 12px; }
 .history-meta { color: var(--muted); font-size: 11px; }
-.history-teams { font-weight: 650; }
+.history-teams { min-width: 0; overflow-wrap: anywhere; font-weight: 650; }
 .history-teams span { color: var(--muted); font-weight: 400; }
-.history-score { color: var(--accent); font-size: 16px; font-variant-numeric: tabular-nums; }
+.history-result span { display: block; color: var(--muted); font-size: 10px; }
+.history-score { display: block; margin-top: 2px; color: var(--verified); font-size: 17px; font-variant-numeric: tabular-nums; }
 .history-links { display: flex; flex-wrap: wrap; gap: 8px; color: var(--muted); font-size: 11px; }
-.page-footer {
-  display: flex;
-  justify-content: space-between;
-  gap: 18px;
-  margin-top: 19px;
-  padding-top: 12px;
-  border-top: 1px solid var(--line);
-  color: var(--quiet);
-  font-size: 10px;
+.history-links a { text-decoration: none; }
+.history-links a:hover { color: var(--orange); text-decoration: underline; }
+.dashboard-trust { padding: 8px 0 0; }
+.dashboard-trust strong, .dashboard-trust span { display: block; margin-top: 3px; }
+.page-footer { display: flex; justify-content: space-between; gap: 18px; margin-top: 10px; padding: 10px 14px 14px; border-top: 1px solid var(--line); color: var(--quiet); font-size: 9px; }
+.page-footer span:last-child { max-width: 52%; text-align: right; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+
+@media (max-width: 980px) {
+  .fixture-row.match-card { grid-template-columns: 108px minmax(180px,1.15fr) minmax(190px,1.35fr) minmax(150px,.9fr); gap: 12px; padding-left: 12px; padding-right: 12px; }
 }
-.page-footer span:last-child { text-align: right; }
-.page-footer a { text-decoration: none; }
-.page-footer a:hover { color: var(--accent); }
-
 @media (max-width: 820px) {
-  .site { width: calc(100% - 32px); padding: 16px 0 28px; }
-  .site-header { align-items: center; padding-bottom: 13px; }
-  .brand-subtitle { display: none; }
-  .header-note { font-size: 10px; }
-  .dashboard-heading { display: flex; align-items: end; padding: 15px 0 10px; }
-  .dashboard-heading h1 { font-size: 19px; }
-  .filters { width: auto; flex: 0 0 auto; margin-top: 0; grid-template-columns: repeat(3, auto); gap: 5px; }
-  .filter { min-height: 27px; }
-  .table-header { display: none; }
-  .fixture-row {
-    display: block;
-    padding: 12px 10px 11px;
-  }
-  .fixture-row-target:focus-visible { outline-offset: -2px; }
-  .fixture-row > * { margin-top: 9px; }
-  .fixture-row > .identity-cell { margin-top: 0; }
-  .identity-cell {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: 10px;
-  }
-  .fixture-row .competition { max-width: 70%; }
-  .teams-cell { margin-top: 7px; }
-  .team-match {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-    gap: 8px;
-    font-size: 18px;
-    line-height: 1.18;
-  }
-  .team-match .home,
-  .team-match .away { text-align: left; }
-  .team-match .away { text-align: right; }
-  .versus { align-self: center; font-size: 11px; }
-  .probability-grid { gap: 9px; margin-top: 11px; }
-  .probability-cell span { font-size: 10px; }
-  .probability-cell strong { font-size: 15px; }
-  .score-cell {
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr);
-    column-gap: 9px;
-    align-items: baseline;
-    padding-top: 9px;
-    border-top: 1px solid var(--line);
-  }
-  .score-caption { margin: 0; }
-  .score-primary { justify-self: end; }
-  .score-top3 {
-    grid-column: 1 / -1;
-    margin-top: 4px;
-    font-size: 10px;
-  }
-
-  .row-action {
-    justify-content: flex-start;
-    text-align: left;
-  }
-  .empty-score-cell { display: none; }
-  .goals-cell:empty { display: none; }
-  .reason-detail { flex-basis: auto; }
-  .history-row { grid-template-columns: 1fr auto; gap: 5px 12px; padding: 9px 0; }
+  .dashboard-page .content { padding-bottom: 71px; }
+  .matches-head { display: block; padding: 12px 0 7px; }
+  .matches-head h1 { font-size: 17px; }
+  .matches-head p { display: none; }
+  .chips { margin-top: 10px; }
+  .chip { flex: 1; padding: 6px 4px; text-align: center; font-size: 8px; }
+  .filters { gap: 5px; }
+  .filter { min-width: 58px; min-height: 44px; padding: 8px 10px; }
+  .fixture-table { margin: 0 -14px; }
+  .league-group { margin: 0; border: 0; border-radius: 0; }
+  .league-title { padding: 9px 14px; }
+  .fixture-row.match-card { display: block; min-height: 0; padding: 12px 14px; }
+  .fixture-row.match-card > * { margin-top: 9px; }
+  .fixture-row.match-card > .fixture-row-target { margin-top: 0; }
+  .match-id { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .match-id span { margin: 0; }
+  .teams-line { margin-top: 9px; }
+  .teams-names strong { font-size: 12px; }
+  .compact-prob { margin-top: 10px; }
+  .compact-prob-values { font-size: 11px; }
+  .compact-score { margin-top: 10px; padding-top: 9px; border-top: 1px solid var(--line); font-size: 8px; }
+  .compact-score-lines { gap: 3px 9px; }
+  .context-mini { display: block; margin-top: 8px; }
+  .history { margin-top: 25px; }
+  .history-row { grid-template-columns: minmax(0,1fr) auto; gap: 5px 12px; padding: 11px 0; }
   .history-meta, .history-links { grid-column: 1 / -1; }
   .page-footer { display: block; }
   .page-footer span { display: block; }
-  .page-footer span:last-child { margin-top: 5px; text-align: left; }
+  .page-footer span:last-child { max-width: none; margin-top: 6px; text-align: left; }
 }
 @media (max-width: 360px) {
-  .site { width: calc(100% - 24px); }
-  .brand-name { font-size: 23px; }
-  .header-note { max-width: 126px; white-space: normal; text-align: right; }
-  .dashboard-heading { gap: 7px; }
-  .dashboard-heading h1 { font-size: 16px; gap: 5px; }
-  .fixture-count { margin-left: 3px; font-size: 11px; }
-  .filter { padding-left: 6px; padding-right: 6px; font-size: 10px; }
-  .fixture-row { padding-left: 7px; padding-right: 7px; }
-  .team-match { font-size: 16px; }
-  .probability-grid { gap: 6px; }
-  .probability-cell strong { font-size: 14px; }
-
+  .dashboard-page .content { padding-left: 12px; padding-right: 12px; }
+  .fixture-table { margin-left: -12px; margin-right: -12px; }
+  .fixture-row.match-card { padding-left: 12px; padding-right: 12px; }
+  .teams-names strong { font-size: 11px; }
+  .compact-score-lines { gap: 3px 6px; }
+  .page-footer { padding-left: 12px; padding-right: 12px; }
 }
 </style>
 </head>
-<body>
-<main class="site">
-<header class="site-header">
-  <div class="brand"><span class="brand-name">FBOS</span><span class="brand-subtitle">Football betting · one shot</span></div>
-  <div class="header-note">测试阶段 · 仅供赛前分析</div>
+<body class="">
+<div class="app-shell">
+<aside class="side-rail">
+  <a class="rail-brand" href="./latest.html"><span class="rail-brand-row"><span class="rail-logo"><span class="outer"></span><span class="inner"></span></span><span class="rail-mark">OneShot</span></span><span class="rail-caption">Football Prediction Intelligence</span></a>
+  <nav class="rail-nav" aria-label="主导航">
+    <a class="nav-item active" href="./latest.html" aria-current="page"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="4" y="3" width="16" height="18" rx="3"/><path d="M8 8h8M8 12h8M8 16h5"/></svg><span class="nav-copy"><strong>比赛</strong><span>今日比赛</span></span></a><a class="nav-item" href="#analysis"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 19V8l8-5 8 5v11"/><path d="M9 19v-6h6v6"/></svg><span class="nav-copy"><strong>赛前分析</strong><span>概率与依据</span></span></a><a class="nav-item" href="#historical-results"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 19V5M9 19v-8M14 19V9M19 19V3"/></svg><span class="nav-copy"><strong>历史验证</strong><span>赛后记录</span></span></a><a class="nav-item" href="#dashboard-trust"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="9"/><path d="M12 10v6M12 7h.01"/></svg><span class="nav-copy"><strong>数据与方法</strong><span>模型与来源</span></span></a><a class="nav-item" href="#closed-beta"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 3l2.8 5.7L21 9.6l-4.5 4.4 1.1 6.2L12 17.3 6.4 20.2 7.5 14 3 9.6l6.2-.9z"/></svg><span class="nav-copy"><strong>怎么看</strong><span>概率说明</span></span></a>
+  </nav>
+  <div class="rail-footer"><div class="rail-card"><strong>OneShot Beta</strong><p>不卖确定答案。<br>把概率、比分空间与赛前依据放在一起看。</p></div><div class="rail-mode"><span>● Dark mode</span><span class="rail-toggle"></span></div></div>
+</aside>
+<main class="workspace">
+<div class="statusbar"><span>9:41</span><span class="status-icons"><span>▶•▶</span><span>⌕</span><span class="status-pill"></span></span></div>
+<div class="mobile-topbar"><strong>比赛</strong><span aria-hidden="true">⌕</span></div>
+
+<section class="page dashboard-page">
+<header class="topbar">
+  <div class="crumbs"><strong>今日比赛</strong><span>·</span><span>竞彩日 9月9日</span></div>
+  <div class="utility"><button class="icon-btn" type="button" aria-label="怎么看"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><path d="M9.8 9a2.3 2.3 0 014.4.9c0 1.7-2.2 2-2.2 3.6M12 17h.01"/></svg></button><strong>怎么看</strong><button class="icon-btn" type="button" aria-label="搜索"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="11" cy="11" r="7"/><path d="M16 16l5 5"/></svg></button></div>
 </header>
-<section class="dashboard-heading">
-  <h1><span class="date-day">竞彩日 9月9日</span><span class="fixture-count">11 场</span></h1>
-  <div class="filters" aria-label="比赛筛选">
-    <button class="filter" type="button" data-filter="ALL" aria-pressed="true">全部</button>
-    <button class="filter" type="button" data-filter="UPCOMING" aria-pressed="false">未开赛</button>
-  <button class="filter" type="button" data-filter="RESULT" data-result-count="0" aria-pressed="false">已结束</button>
-  </div>
+<div class="content">
+<section class="matches-head"><div><h1>今日比赛</h1><p>先看 1X2 与比分空间；异常只在真正改变判断时出现。 测试阶段 · 仅供赛前分析</p></div><div class="chips" aria-label="比赛筛选"><button class="chip filter" type="button" data-filter="ALL" aria-pressed="true">全部</button><button class="chip filter" type="button" data-filter="UPCOMING" aria-pressed="false">未开赛</button><button class="chip filter" type="button" data-filter="RESULT" data-result-count="0" aria-pressed="false">已结束</button></div></section>
+<div class="quality-warning" role="status"><strong>比分概率仅供观察</strong><span>保留原始比分概率，暂不展开解读。</span></div>
+<section class="fixture-table" id="fixture-list" aria-label="竞彩日比赛列表">
+  <section class="league-group" data-league="韩K联"><div class="league-title"><strong>韩K联</strong><span>1 场 ›</span></div><article class="fixture-row match-card status-frozen prediction-formal" data-status="FROZEN" data-result="no" data-kickoff="2026-09-09T10:30:00Z" data-prediction-kind="formal" data-one-x-two-serving-state="CAUTION"><a class="fixture-row-target" href="../matches/2929720/" aria-label="江原FC vs 全北现代 · 查看详情"></a><div class="match-id"><strong class="match-number">周三001</strong><span>韩K联 · 2026-09-09 18:30</span></div><div class="teams-line"><span class="team-badge mini-crest team-badge-fallback" data-crest-kind="fallback" aria-label="江原FC队徽暂未提供">江</span><div class="teams-names"><strong>江原FC <span class="versus">vs</span> 全北现代</strong><span>当前暂不预测</span></div><span class="team-badge mini-crest team-badge-fallback" data-crest-kind="fallback" aria-label="全北现代队徽暂未提供">全</span></div><div class="probability-cell-group"><div class="compact-prob" aria-label="1X2 概率：主胜 32.7%；平 29.2%；客胜 38.1%"><div class="compact-prob-label">1X2 概率</div><div class="compact-prob-values"><span class="home-t" aria-label="主胜 32.7%">32.7%</span><span class="draw-t" aria-label="平 29.2%">29.2%</span><span class="away-t" aria-label="客胜 38.1%">38.1%</span></div><div class="probbar probability-strip" role="img" aria-label="胜平负概率分布"><span class="probability-segment home" style="width:32.747%" aria-hidden="true"></span><span class="probability-segment draw" style="width:29.157%" aria-hidden="true"></span><span class="probability-segment away" style="width:38.097%" aria-hidden="true"></span></div></div><div class="queue-score score-cell score-unverified" data-score-serving-state="DEGRADED"><div class="score-caption">Exact Top3</div><div class="compact-score-lines"><span class="compact-score-item" data-score-rank="1"><strong>1-1</strong> 13.4%</span><span class="compact-score-item" data-score-rank="2"><strong>0-1</strong> 12.8%</span><span class="compact-score-item" data-score-rank="3"><strong>1-0</strong> 11.7%</span></div><div class="score-serving-note">比分概率仅供观察</div></div></div><div class="context-mini"><strong>客胜相对占优</strong><div class="warn">比分概率仅供观察</div></div></article></section><section class="league-group" data-league="沙特联"><div class="league-title"><strong>沙特联</strong><span>1 场 ›</span></div><article class="fixture-row match-card status-frozen prediction-formal" data-status="FROZEN" data-result="no" data-kickoff="2026-09-09T15:55:00Z" data-prediction-kind="formal" data-one-x-two-serving-state="CAUTION"><a class="fixture-row-target" href="../matches/3046982/" aria-label="拉斯永恒 vs 利雅青年 · 查看详情"></a><div class="match-id"><strong class="match-number">周三002</strong><span>沙特联 · 2026-09-09 23:55</span></div><div class="teams-line"><span class="team-badge mini-crest team-badge-fallback" data-crest-kind="fallback" aria-label="拉斯永恒队徽暂未提供">拉</span><div class="teams-names"><strong>拉斯永恒 <span class="versus">vs</span> 利雅青年</strong><span>当前暂不预测</span></div><span class="team-badge mini-crest team-badge-fallback" data-crest-kind="fallback" aria-label="利雅青年队徽暂未提供">利</span></div><div class="probability-cell-group"><div class="compact-prob" aria-label="1X2 概率：主胜 36.5%；平 26.6%；客胜 36.9%"><div class="compact-prob-label">1X2 概率</div><div class="compact-prob-values"><span class="home-t" aria-label="主胜 36.5%">36.5%</span><span class="draw-t" aria-label="平 26.6%">26.6%</span><span class="away-t" aria-label="客胜 36.9%">36.9%</span></div><div class="probbar probability-strip" role="img" aria-label="胜平负概率分布"><span class="probability-segment home" style="width:36.465%" aria-hidden="true"></span><span class="probability-segment draw" style="width:26.631%" aria-hidden="true"></span><span class="probability-segment away" style="width:36.904%" aria-hidden="true"></span></div></div><div class="queue-score score-cell score-unverified" data-score-serving-state="DEGRADED"><div class="score-caption">Exact Top3</div><div class="compact-score-lines"><span class="compact-score-item" data-score-rank="1"><strong>1-1</strong> 12.7%</span><span class="compact-score-item" data-score-rank="2"><strong>0-1</strong> 9.9%</span><span class="compact-score-item" data-score-rank="3"><strong>1-0</strong> 9.9%</span></div><div class="score-serving-note">比分概率仅供观察</div></div></div><div class="context-mini"><strong>客胜相对占优</strong><div class="warn">比分概率仅供观察</div></div></article></section><section class="league-group" data-league="欧冠杯"><div class="league-title"><strong>欧冠杯</strong><span>6 场 ›</span></div><article class="fixture-row match-card status-frozen prediction-formal" data-status="FROZEN" data-result="no" data-kickoff="2026-09-09T16:45:00Z" data-prediction-kind="formal" data-one-x-two-serving-state="CAUTION"><a class="fixture-row-target" href="../matches/3073100/" aria-label="巴萨 vs 费耶诺德 · 查看详情"></a><div class="match-id"><strong class="match-number">周三003</strong><span>欧冠杯 · 2026-09-10 00:45</span></div><div class="teams-line"><span class="team-badge mini-crest team-badge-fallback" data-crest-kind="fallback" aria-label="巴萨队徽暂未提供">巴</span><div class="teams-names"><strong>巴萨 <span class="versus">vs</span> 费耶诺德</strong><span>当前暂不预测</span></div><span class="team-badge mini-crest team-badge-fallback" data-crest-kind="fallback" aria-label="费耶诺德队徽暂未提供">费</span></div><div class="probability-cell-group"><div class="compact-prob" aria-label="1X2 概率：主胜 59.3%；平 18.8%；客胜 21.9%"><div class="compact-prob-label">1X2 概率</div><div class="compact-prob-values"><span class="home-t" aria-label="主胜 59.3%">59.3%</span><span class="draw-t" aria-label="平 18.8%">18.8%</span><span class="away-t" aria-label="客胜 21.9%">21.9%</span></div><div class="probbar probability-strip" role="img" aria-label="胜平负概率分布"><span class="probability-segment home" style="width:59.282%" aria-hidden="true"></span><span class="probability-segment draw" style="width:18.843%" aria-hidden="true"></span><span class="probability-segment away" style="width:21.875%" aria-hidden="true"></span></div></div><div class="queue-score score-cell score-unverified" data-score-serving-state="DEGRADED"><div class="score-caption">Exact Top3</div><div class="compact-score-lines"><span class="compact-score-item" data-score-rank="1"><strong>2-1</strong> 8.8%</span><span class="compact-score-item" data-score-rank="2"><strong>1-1</strong> 7.2%</span><span class="compact-score-item" data-score-rank="3"><strong>3-1</strong> 7.2%</span></div><div class="score-serving-note">比分概率仅供观察</div></div></div><div class="context-mini"><strong>主胜相对占优</strong><div class="warn">比分概率仅供观察</div></div></article><article class="fixture-row match-card status-frozen prediction-formal" data-status="FROZEN" data-result="no" data-kickoff="2026-09-09T16:45:00Z" data-prediction-kind="formal" data-one-x-two-serving-state="CAUTION"><a class="fixture-row-target" href="../matches/3073211/" aria-label="斯图加特 vs 维京 · 查看详情"></a><div class="match-id"><strong class="match-number">周三004</strong><span>欧冠杯 · 2026-09-10 00:45</span></div><div class="teams-line"><span class="team-badge mini-crest team-badge-fallback" data-crest-kind="fallback" aria-label="斯图加特队徽暂未提供">斯</span><div class="teams-names"><strong>斯图加特 <span class="versus">vs</span> 维京</strong><span>当前暂不预测</span></div><span class="team-badge mini-crest team-badge-fallback" data-crest-kind="fallback" aria-label="维京队徽暂未提供">维</span></div><div class="probability-cell-group"><div class="compact-prob" aria-label="1X2 概率：主胜 56.5%；平 20.3%；客胜 23.2%"><div class="compact-prob-label">1X2 概率</div><div class="compact-prob-values"><span class="home-t" aria-label="主胜 56.5%">56.5%</span><span class="draw-t" aria-label="平 20.3%">20.3%</span><span class="away-t" aria-label="客胜 23.2%">23.2%</span></div><div class="probbar probability-strip" role="img" aria-label="胜平负概率分布"><span class="probability-segment home" style="width:56.468%" aria-hidden="true"></span><span class="probability-segment draw" style="width:20.324%" aria-hidden="true"></span><span class="probability-segment away" style="width:23.207%" aria-hidden="true"></span></div></div><div class="queue-score score-cell score-unverified" data-score-serving-state="DEGRADED"><div class="score-caption">Exact Top3</div><div class="compact-score-lines"><span class="compact-score-item" data-score-rank="1"><strong>2-1</strong> 9.4%</span><span class="compact-score-item" data-score-rank="2"><strong>1-1</strong> 8.5%</span><span class="compact-score-item" data-score-rank="3"><strong>2-0</strong> 6.9%</span></div><div class="score-serving-note">比分概率仅供观察</div></div></div><div class="context-mini"><strong>主胜相对占优</strong><div class="warn">比分概率仅供观察</div></div></article><article class="fixture-row match-card status-frozen prediction-formal" data-status="FROZEN" data-result="no" data-kickoff="2026-09-09T19:00:00Z" data-prediction-kind="formal" data-one-x-two-serving-state="CAUTION"><a class="fixture-row-target" href="../matches/3073172/" aria-label="里斯本 vs 加拉塔萨 · 查看详情"></a><div class="match-id"><strong class="match-number">周三006</strong><span>欧冠杯 · 2026-09-10 03:00</span></div><div class="teams-line"><span class="team-badge mini-crest team-badge-fallback" data-crest-kind="fallback" aria-label="里斯本队徽暂未提供">里</span><div class="teams-names"><strong>里斯本 <span class="versus">vs</span> 加拉塔萨</strong><span>当前暂不预测</span></div><span class="team-badge mini-crest team-badge-fallback" data-crest-kind="fallback" aria-label="加拉塔萨队徽暂未提供">加</span></div><div class="probability-cell-group"><div class="compact-prob" aria-label="1X2 概率：主胜 58.7%；平 19.9%；客胜 21.4%"><div class="compact-prob-label">1X2 概率</div><div class="compact-prob-values"><span class="home-t" aria-label="主胜 58.7%">58.7%</span><span class="draw-t" aria-label="平 19.9%">19.9%</span><span class="away-t" aria-label="客胜 21.4%">21.4%</span></div><div class="probbar probability-strip" role="img" aria-label="胜平负概率分布"><span class="probability-segment home" style="width:58.692%" aria-hidden="true"></span><span class="probability-segment draw" style="width:19.918%" aria-hidden="true"></span><span class="probability-segment away" style="width:21.390%" aria-hidden="true"></span></div></div><div class="queue-score score-cell score-unverified" data-score-serving-state="DEGRADED"><div class="score-caption">Exact Top3</div><div class="compact-score-lines"><span class="compact-score-item" data-score-rank="1"><strong>2-1</strong> 9.5%</span><span class="compact-score-item" data-score-rank="2"><strong>1-1</strong> 8.5%</span><span class="compact-score-item" data-score-rank="3"><strong>2-0</strong> 7.3%</span></div><div class="score-serving-note">比分概率仅供观察</div></div></div><div class="context-mini"><strong>主胜相对占优</strong><div class="warn">比分概率仅供观察</div></div></article><article class="fixture-row match-card status-frozen prediction-formal" data-status="FROZEN" data-result="no" data-kickoff="2026-09-09T19:00:00Z" data-prediction-kind="formal" data-one-x-two-serving-state="CAUTION"><a class="fixture-row-target" href="../matches/3073127/" aria-label="那不勒斯 vs 阿森纳 · 查看详情"></a><div class="match-id"><strong class="match-number">周三007</strong><span>欧冠杯 · 2026-09-10 03:00</span></div><div class="teams-line"><span class="team-badge mini-crest team-badge-fallback" data-crest-kind="fallback" aria-label="那不勒斯队徽暂未提供">那</span><div class="teams-names"><strong>那不勒斯 <span class="versus">vs</span> 阿森纳</strong><span>当前暂不预测</span></div><span class="team-badge mini-crest team-badge-fallback" data-crest-kind="fallback" aria-label="阿森纳队徽暂未提供">阿</span></div><div class="probability-cell-group"><div class="compact-prob" aria-label="1X2 概率：主胜 30.6%；平 25.1%；客胜 44.4%"><div class="compact-prob-label">1X2 概率</div><div class="compact-prob-values"><span class="home-t" aria-label="主胜 30.6%">30.6%</span><span class="draw-t" aria-label="平 25.1%">25.1%</span><span class="away-t" aria-label="客胜 44.4%">44.4%</span></div><div class="probbar probability-strip" role="img" aria-label="胜平负概率分布"><span class="probability-segment home" style="width:30.569%" aria-hidden="true"></span><span class="probability-segment draw" style="width:25.051%" aria-hidden="true"></span><span class="probability-segment away" style="width:44.379%" aria-hidden="true"></span></div></div><div class="queue-score score-cell score-unverified" data-score-serving-state="DEGRADED"><div class="score-caption">Exact Top3</div><div class="compact-score-lines"><span class="compact-score-item" data-score-rank="1"><strong>1-1</strong> 11.8%</span><span class="compact-score-item" data-score-rank="2"><strong>0-1</strong> 9.6%</span><span class="compact-score-item" data-score-rank="3"><strong>1-2</strong> 9.1%</span></div><div class="score-serving-note">比分概率仅供观察</div></div></div><div class="context-mini"><strong>客胜相对占优</strong><div class="warn">比分概率仅供观察</div></div></article><article class="fixture-row match-card status-frozen prediction-formal" data-status="FROZEN" data-result="no" data-kickoff="2026-09-09T19:00:00Z" data-prediction-kind="formal" data-one-x-two-serving-state="CAUTION"><a class="fixture-row-target" href="../matches/3073079/" aria-label="利物浦 vs 马竞 · 查看详情"></a><div class="match-id"><strong class="match-number">周三008</strong><span>欧冠杯 · 2026-09-10 03:00</span></div><div class="teams-line"><span class="team-badge mini-crest team-badge-fallback" data-crest-kind="fallback" aria-label="利物浦队徽暂未提供">利</span><div class="teams-names"><strong>利物浦 <span class="versus">vs</span> 马竞</strong><span>当前暂不预测</span></div><span class="team-badge mini-crest team-badge-fallback" data-crest-kind="fallback" aria-label="马竞队徽暂未提供">马</span></div><div class="probability-cell-group"><div class="compact-prob" aria-label="1X2 概率：主胜 50.4%；平 22.6%；客胜 27.0%"><div class="compact-prob-label">1X2 概率</div><div class="compact-prob-values"><span class="home-t" aria-label="主胜 50.4%">50.4%</span><span class="draw-t" aria-label="平 22.6%">22.6%</span><span class="away-t" aria-label="客胜 27.0%">27.0%</span></div><div class="probbar probability-strip" role="img" aria-label="胜平负概率分布"><span class="probability-segment home" style="width:50.418%" aria-hidden="true"></span><span class="probability-segment draw" style="width:22.555%" aria-hidden="true"></span><span class="probability-segment away" style="width:27.026%" aria-hidden="true"></span></div></div><div class="queue-score score-cell score-unverified" data-score-serving-state="DEGRADED"><div class="score-caption">Exact Top3</div><div class="compact-score-lines"><span class="compact-score-item" data-score-rank="1"><strong>1-1</strong> 10.2%</span><span class="compact-score-item" data-score-rank="2"><strong>2-1</strong> 9.5%</span><span class="compact-score-item" data-score-rank="3"><strong>1-0</strong> 7.7%</span></div><div class="score-serving-note">比分概率仅供观察</div></div></div><div class="context-mini"><strong>主胜相对占优</strong><div class="warn">比分概率仅供观察</div></div></article><article class="fixture-row match-card status-frozen prediction-formal" data-status="FROZEN" data-result="no" data-kickoff="2026-09-09T19:00:00Z" data-prediction-kind="formal" data-one-x-two-serving-state="CAUTION"><a class="fixture-row-target" href="../matches/3073113/" aria-label="巴黎圣曼 vs 布拉迪斯 · 查看详情"></a><div class="match-id"><strong class="match-number">周三009</strong><span>欧冠杯 · 2026-09-10 03:00</span></div><div class="teams-line"><span class="team-badge mini-crest team-badge-fallback" data-crest-kind="fallback" aria-label="巴黎圣曼队徽暂未提供">巴</span><div class="teams-names"><strong>巴黎圣曼 <span class="versus">vs</span> 布拉迪斯</strong><span>当前暂不预测</span></div><span class="team-badge mini-crest team-badge-fallback" data-crest-kind="fallback" aria-label="布拉迪斯队徽暂未提供">布</span></div><div class="probability-cell-group"><div class="compact-prob" aria-label="1X2 概率：主胜 48.9%；平 21.2%；客胜 29.8%"><div class="compact-prob-label">1X2 概率</div><div class="compact-prob-values"><span class="home-t" aria-label="主胜 48.9%">48.9%</span><span class="draw-t" aria-label="平 21.2%">21.2%</span><span class="away-t" aria-label="客胜 29.8%">29.8%</span></div><div class="probbar probability-strip" role="img" aria-label="胜平负概率分布"><span class="probability-segment home" style="width:48.937%" aria-hidden="true"></span><span class="probability-segment draw" style="width:21.227%" aria-hidden="true"></span><span class="probability-segment away" style="width:29.837%" aria-hidden="true"></span></div></div><div class="queue-score score-cell score-unverified" data-score-serving-state="DEGRADED"><div class="score-caption">Exact Top3</div><div class="compact-score-lines"><span class="compact-score-item" data-score-rank="1"><strong>2-1</strong> 8.8%</span><span class="compact-score-item" data-score-rank="2"><strong>1-1</strong> 8.5%</span><span class="compact-score-item" data-score-rank="3"><strong>2-2</strong> 7.0%</span></div><div class="score-serving-note">比分概率仅供观察</div></div></div><div class="context-mini"><strong>主胜相对占优</strong><div class="warn">比分概率仅供观察</div></div></article></section><section class="league-group" data-league="荷甲"><div class="league-title"><strong>荷甲</strong><span>1 场 ›</span></div><article class="fixture-row match-card status-frozen prediction-formal" data-status="FROZEN" data-result="no" data-kickoff="2026-09-09T16:45:00Z" data-prediction-kind="formal" data-one-x-two-serving-state="CAUTION"><a class="fixture-row-target" href="../matches/2996123/" aria-label="特温特 vs 特尔斯达 · 查看详情"></a><div class="match-id"><strong class="match-number">周三005</strong><span>荷甲 · 2026-09-10 00:45</span></div><div class="teams-line"><span class="team-badge mini-crest team-badge-fallback" data-crest-kind="fallback" aria-label="特温特队徽暂未提供">特</span><div class="teams-names"><strong>特温特 <span class="versus">vs</span> 特尔斯达</strong><span>当前暂不预测</span></div><span class="team-badge mini-crest team-badge-fallback" data-crest-kind="fallback" aria-label="特尔斯达队徽暂未提供">特</span></div><div class="probability-cell-group"><div class="compact-prob" aria-label="1X2 概率：主胜 60.1%；平 19.5%；客胜 20.3%"><div class="compact-prob-label">1X2 概率</div><div class="compact-prob-values"><span class="home-t" aria-label="主胜 60.1%">60.1%</span><span class="draw-t" aria-label="平 19.5%">19.5%</span><span class="away-t" aria-label="客胜 20.3%">20.3%</span></div><div class="probbar probability-strip" role="img" aria-label="胜平负概率分布"><span class="probability-segment home" style="width:60.133%" aria-hidden="true"></span><span class="probability-segment draw" style="width:19.534%" aria-hidden="true"></span><span class="probability-segment away" style="width:20.333%" aria-hidden="true"></span></div></div><div class="queue-score score-cell score-unverified" data-score-serving-state="DEGRADED"><div class="score-caption">Exact Top3</div><div class="compact-score-lines"><span class="compact-score-item" data-score-rank="1"><strong>2-1</strong> 9.5%</span><span class="compact-score-item" data-score-rank="2"><strong>1-1</strong> 8.3%</span><span class="compact-score-item" data-score-rank="3"><strong>2-0</strong> 7.5%</span></div><div class="score-serving-note">比分概率仅供观察</div></div></div><div class="context-mini"><strong>主胜相对占优</strong><div class="warn">比分概率仅供观察</div></div></article></section><section class="league-group" data-league="英冠"><div class="league-title"><strong>英冠</strong><span>1 场 ›</span></div><article class="fixture-row match-card status-frozen prediction-formal" data-status="FROZEN" data-result="no" data-kickoff="2026-09-09T19:00:00Z" data-prediction-kind="formal" data-one-x-two-serving-state="CAUTION"><a class="fixture-row-target" href="../matches/3008220/" aria-label="查尔顿 vs 女王巡游 · 查看详情"></a><div class="match-id"><strong class="match-number">周三010</strong><span>英冠 · 2026-09-10 03:00</span></div><div class="teams-line"><span class="team-badge mini-crest team-badge-fallback" data-crest-kind="fallback" aria-label="查尔顿队徽暂未提供">查</span><div class="teams-names"><strong>查尔顿 <span class="versus">vs</span> 女王巡游</strong><span>当前暂不预测</span></div><span class="team-badge mini-crest team-badge-fallback" data-crest-kind="fallback" aria-label="女王巡游队徽暂未提供">女</span></div><div class="probability-cell-group"><div class="compact-prob" aria-label="1X2 概率：主胜 26.0%；平 25.0%；客胜 49.0%"><div class="compact-prob-label">1X2 概率</div><div class="compact-prob-values"><span class="home-t" aria-label="主胜 26.0%">26.0%</span><span class="draw-t" aria-label="平 25.0%">25.0%</span><span class="away-t" aria-label="客胜 49.0%">49.0%</span></div><div class="probbar probability-strip" role="img" aria-label="胜平负概率分布"><span class="probability-segment home" style="width:26.001%" aria-hidden="true"></span><span class="probability-segment draw" style="width:25.043%" aria-hidden="true"></span><span class="probability-segment away" style="width:48.956%" aria-hidden="true"></span></div></div><div class="queue-score score-cell score-unverified" data-score-serving-state="DEGRADED"><div class="score-caption">Exact Top3</div><div class="compact-score-lines"><span class="compact-score-item" data-score-rank="1"><strong>1-1</strong> 11.9%</span><span class="compact-score-item" data-score-rank="2"><strong>0-1</strong> 11.0%</span><span class="compact-score-item" data-score-rank="3"><strong>1-2</strong> 9.4%</span></div><div class="score-serving-note">比分概率仅供观察</div></div></div><div class="context-mini"><strong>客胜相对占优</strong><div class="warn">比分概率仅供观察</div></div></article></section><section class="league-group" data-league="英联杯"><div class="league-title"><strong>英联杯</strong><span>1 场 ›</span></div><article class="fixture-row match-card status-frozen prediction-formal" data-status="FROZEN" data-result="no" data-kickoff="2026-09-09T19:00:00Z" data-prediction-kind="formal" data-one-x-two-serving-state="CAUTION"><a class="fixture-row-target" href="../matches/3073628/" aria-label="切尔西 vs 利兹联 · 查看详情"></a><div class="match-id"><strong class="match-number">周三011</strong><span>英联杯 · 2026-09-10 03:00</span></div><div class="teams-line"><span class="team-badge mini-crest team-badge-fallback" data-crest-kind="fallback" aria-label="切尔西队徽暂未提供">切</span><div class="teams-names"><strong>切尔西 <span class="versus">vs</span> 利兹联</strong><span>当前暂不预测</span></div><span class="team-badge mini-crest team-badge-fallback" data-crest-kind="fallback" aria-label="利兹联队徽暂未提供">利</span></div><div class="probability-cell-group"><div class="compact-prob" aria-label="1X2 概率：主胜 45.5%；平 24.1%；客胜 30.5%"><div class="compact-prob-label">1X2 概率</div><div class="compact-prob-values"><span class="home-t" aria-label="主胜 45.5%">45.5%</span><span class="draw-t" aria-label="平 24.1%">24.1%</span><span class="away-t" aria-label="客胜 30.5%">30.5%</span></div><div class="probbar probability-strip" role="img" aria-label="胜平负概率分布"><span class="probability-segment home" style="width:45.457%" aria-hidden="true"></span><span class="probability-segment draw" style="width:24.057%" aria-hidden="true"></span><span class="probability-segment away" style="width:30.486%" aria-hidden="true"></span></div></div><div class="queue-score score-cell score-unverified" data-score-serving-state="DEGRADED"><div class="score-caption">Exact Top3</div><div class="compact-score-lines"><span class="compact-score-item" data-score-rank="1"><strong>1-1</strong> 11.2%</span><span class="compact-score-item" data-score-rank="2"><strong>2-1</strong> 9.2%</span><span class="compact-score-item" data-score-rank="3"><strong>1-0</strong> 8.5%</span></div><div class="score-serving-note">比分概率仅供观察</div></div></div><div class="context-mini"><strong>主胜相对占优</strong><div class="warn">比分概率仅供观察</div></div></article></section><section class="league-group" data-league="葡超"><div class="league-title"><strong>葡超</strong><span>1 场 ›</span></div><article class="fixture-row match-card status-frozen prediction-formal" data-status="FROZEN" data-result="no" data-kickoff="2026-09-09T19:45:00Z" data-prediction-kind="formal" data-one-x-two-serving-state="CAUTION"><a class="fixture-row-target" href="../matches/3023454/" aria-label="摩雷伦斯 vs 本菲卡 · 查看详情"></a><div class="match-id"><strong class="match-number">周三012</strong><span>葡超 · 2026-09-10 03:45</span></div><div class="teams-line"><span class="team-badge mini-crest team-badge-fallback" data-crest-kind="fallback" aria-label="摩雷伦斯队徽暂未提供">摩</span><div class="teams-names"><strong>摩雷伦斯 <span class="versus">vs</span> 本菲卡</strong><span>当前暂不预测</span></div><span class="team-badge mini-crest team-badge-fallback" data-crest-kind="fallback" aria-label="本菲卡队徽暂未提供">本</span></div><div class="probability-cell-group"><div class="compact-prob" aria-label="1X2 概率：主胜 13.8%；平 17.9%；客胜 68.3%"><div class="compact-prob-label">1X2 概率</div><div class="compact-prob-values"><span class="home-t" aria-label="主胜 13.8%">13.8%</span><span class="draw-t" aria-label="平 17.9%">17.9%</span><span class="away-t" aria-label="客胜 68.3%">68.3%</span></div><div class="probbar probability-strip" role="img" aria-label="胜平负概率分布"><span class="probability-segment home" style="width:13.806%" aria-hidden="true"></span><span class="probability-segment draw" style="width:17.890%" aria-hidden="true"></span><span class="probability-segment away" style="width:68.304%" aria-hidden="true"></span></div></div><div class="queue-score score-cell score-unverified" data-score-serving-state="DEGRADED"><div class="score-caption">Exact Top3</div><div class="compact-score-lines"><span class="compact-score-item" data-score-rank="1"><strong>0-2</strong> 10.1%</span><span class="compact-score-item" data-score-rank="2"><strong>1-2</strong> 9.7%</span><span class="compact-score-item" data-score-rank="3"><strong>0-1</strong> 8.6%</span></div><div class="score-serving-note">比分概率仅供观察</div></div></div><div class="context-mini"><strong>客胜相对占优</strong><div class="warn">比分概率仅供观察</div></div></article></section><section class="league-group" data-league="解放者杯"><div class="league-title"><strong>解放者杯</strong><span>2 场 ›</span></div><article class="fixture-row match-card status-frozen prediction-formal" data-status="FROZEN" data-result="no" data-kickoff="2026-09-09T22:00:00Z" data-prediction-kind="formal" data-one-x-two-serving-state="CAUTION"><a class="fixture-row-target" href="../matches/3069960/" aria-label="帕梅拉斯 vs 基多体大 · 查看详情"></a><div class="match-id"><strong class="match-number">周三013</strong><span>解放者杯 · 2026-09-10 06:00</span></div><div class="teams-line"><span class="team-badge mini-crest team-badge-fallback" data-crest-kind="fallback" aria-label="帕梅拉斯队徽暂未提供">帕</span><div class="teams-names"><strong>帕梅拉斯 <span class="versus">vs</span> 基多体大</strong><span>当前暂不预测</span></div><span class="team-badge mini-crest team-badge-fallback" data-crest-kind="fallback" aria-label="基多体大队徽暂未提供">基</span></div><div class="probability-cell-group"><div class="compact-prob" aria-label="1X2 概率：主胜 54.3%；平 26.1%；客胜 19.6%"><div class="compact-prob-label">1X2 概率</div><div class="compact-prob-values"><span class="home-t" aria-label="主胜 54.3%">54.3%</span><span class="draw-t" aria-label="平 26.1%">26.1%</span><span class="away-t" aria-label="客胜 19.6%">19.6%</span></div><div class="probbar probability-strip" role="img" aria-label="胜平负概率分布"><span class="probability-segment home" style="width:54.298%" aria-hidden="true"></span><span class="probability-segment draw" style="width:26.134%" aria-hidden="true"></span><span class="probability-segment away" style="width:19.569%" aria-hidden="true"></span></div></div><div class="queue-score score-cell score-unverified" data-score-serving-state="DEGRADED"><div class="score-caption">Exact Top3</div><div class="compact-score-lines"><span class="compact-score-item" data-score-rank="1"><strong>1-0</strong> 15.2%</span><span class="compact-score-item" data-score-rank="2"><strong>1-1</strong> 12.0%</span><span class="compact-score-item" data-score-rank="3"><strong>2-0</strong> 11.5%</span></div><div class="score-serving-note">比分概率仅供观察</div></div></div><div class="context-mini"><strong>主胜相对占优</strong><div class="warn">比分概率仅供观察</div></div></article><article class="fixture-row match-card status-frozen prediction-formal" data-status="FROZEN" data-result="no" data-kickoff="2026-09-10T00:30:00Z" data-prediction-kind="formal" data-one-x-two-serving-state="CAUTION"><a class="fixture-row-target" href="../matches/3069958/" aria-label="拉普大学 vs 科林蒂安 · 查看详情"></a><div class="match-id"><strong class="match-number">周三014</strong><span>解放者杯 · 2026-09-10 08:30</span></div><div class="teams-line"><span class="team-badge mini-crest team-badge-fallback" data-crest-kind="fallback" aria-label="拉普大学队徽暂未提供">拉</span><div class="teams-names"><strong>拉普大学 <span class="versus">vs</span> 科林蒂安</strong><span>当前暂不预测</span></div><span class="team-badge mini-crest team-badge-fallback" data-crest-kind="fallback" aria-label="科林蒂安队徽暂未提供">科</span></div><div class="probability-cell-group"><div class="compact-prob" aria-label="1X2 概率：主胜 45.6%；平 30.9%；客胜 23.6%"><div class="compact-prob-label">1X2 概率</div><div class="compact-prob-values"><span class="home-t" aria-label="主胜 45.6%">45.6%</span><span class="draw-t" aria-label="平 30.9%">30.9%</span><span class="away-t" aria-label="客胜 23.6%">23.6%</span></div><div class="probbar probability-strip" role="img" aria-label="胜平负概率分布"><span class="probability-segment home" style="width:45.586%" aria-hidden="true"></span><span class="probability-segment draw" style="width:30.850%" aria-hidden="true"></span><span class="probability-segment away" style="width:23.564%" aria-hidden="true"></span></div></div><div class="queue-score score-cell score-unverified" data-score-serving-state="DEGRADED"><div class="score-caption">Exact Top3</div><div class="compact-score-lines"><span class="compact-score-item" data-score-rank="1"><strong>1-0</strong> 17.3%</span><span class="compact-score-item" data-score-rank="2"><strong>0-0</strong> 15.0%</span><span class="compact-score-item" data-score-rank="3"><strong>1-1</strong> 12.9%</span></div><div class="score-serving-note">比分概率仅供观察</div></div></div><div class="context-mini"><strong>主胜相对占优</strong><div class="warn">比分概率仅供观察</div></div></article></section><section class="league-group" data-league="美职业"><div class="league-title"><strong>美职业</strong><span>1 场 ›</span></div><article class="fixture-row match-card status-frozen prediction-formal" data-status="FROZEN" data-result="no" data-kickoff="2026-09-10T00:30:00Z" data-prediction-kind="formal" data-one-x-two-serving-state="CAUTION"><a class="fixture-row-target" href="../matches/2908765/" aria-label="芝加哥 vs 迈国际 · 查看详情"></a><div class="match-id"><strong class="match-number">周三015</strong><span>美职业 · 2026-09-10 08:30</span></div><div class="teams-line"><span class="team-badge mini-crest team-badge-fallback" data-crest-kind="fallback" aria-label="芝加哥队徽暂未提供">芝</span><div class="teams-names"><strong>芝加哥 <span class="versus">vs</span> 迈国际</strong><span>当前暂不预测</span></div><span class="team-badge mini-crest team-badge-fallback" data-crest-kind="fallback" aria-label="迈国际队徽暂未提供">迈</span></div><div class="probability-cell-group"><div class="compact-prob" aria-label="1X2 概率：主胜 43.0%；平 22.0%；客胜 35.0%"><div class="compact-prob-label">1X2 概率</div><div class="compact-prob-values"><span class="home-t" aria-label="主胜 43.0%">43.0%</span><span class="draw-t" aria-label="平 22.0%">22.0%</span><span class="away-t" aria-label="客胜 35.0%">35.0%</span></div><div class="probbar probability-strip" role="img" aria-label="胜平负概率分布"><span class="probability-segment home" style="width:43.016%" aria-hidden="true"></span><span class="probability-segment draw" style="width:21.970%" aria-hidden="true"></span><span class="probability-segment away" style="width:35.015%" aria-hidden="true"></span></div></div><div class="queue-score score-cell score-unverified" data-score-serving-state="DEGRADED"><div class="score-caption">Exact Top3</div><div class="compact-score-lines"><span class="compact-score-item" data-score-rank="1"><strong>1-1</strong> 9.0%</span><span class="compact-score-item" data-score-rank="2"><strong>2-1</strong> 8.4%</span><span class="compact-score-item" data-score-rank="3"><strong>1-2</strong> 7.6%</span></div><div class="score-serving-note">比分概率仅供观察</div></div></div><div class="context-mini"><strong>主胜相对占优</strong><div class="warn">比分概率仅供观察</div></div></article></section>
+  <div class="filter-empty" data-filter-empty="UPCOMING" hidden>当前竞彩日暂无未开赛比赛</div><div class="filter-empty" data-filter-empty="RESULT" hidden>当前竞彩日暂无已结束并核验的比赛</div>
+</section>
+<section id="historical-results" class="history" aria-labelledby="history-title"><div class="history-heading"><h2 id="history-title">历史验证</h2><span>20 场独立记录 · 结果优先</span></div><article class="history-row" data-result="yes"><div class="history-meta">2026-09-09T03:00+08:00</div><div class="history-teams">多特蒙德<span> vs </span>比利亚雷</div><div class="history-result"><span>90分钟结果</span><strong class="history-score">3-2</strong></div><div class="history-links"><a href="../analysis_reports/current/2026-09-08_周二009_多特蒙德_vs_比利亚雷.html">赛前快照</a> · <a href="../postmatch_reports/FBOS-202609090300-0b8c814860.html">赛后复盘</a></div></article><article class="history-row" data-result="yes"><div class="history-meta">2026-09-09T03:00+08:00</div><div class="history-teams">里尔<span> vs </span>贝蒂斯</div><div class="history-result"><span>90分钟结果</span><strong class="history-score">2-3</strong></div><div class="history-links"><a href="../analysis_reports/current/2026-09-08_周二010_里尔_vs_贝蒂斯.html">赛前快照</a> · <a href="../postmatch_reports/FBOS-202609090300-688d6ee1d6.html">赛后复盘</a></div></article><article class="history-row" data-result="yes"><div class="history-meta">2026-09-09T00:45+08:00</div><div class="history-teams">雅典AEK<span> vs </span>LASK林茨</div><div class="history-result"><span>90分钟结果</span><strong class="history-score">1-0</strong></div><div class="history-links"><a href="../analysis_reports/current/2026-09-08_周二002_雅典AEK_vs_LASK林茨.html">赛前快照</a> · <a href="../postmatch_reports/FBOS-202609090045-87c7a0b449.html">赛后复盘</a></div></article><article class="history-row" data-result="yes"><div class="history-meta">2026-09-09T00:45+08:00</div><div class="history-teams">布鲁日<span> vs </span>维拉</div><div class="history-result"><span>90分钟结果</span><strong class="history-score">2-3</strong></div><div class="history-links"><a href="../analysis_reports/current/2026-09-08_周二003_布鲁日_vs_维拉.html">赛前快照</a> · <a href="../postmatch_reports/FBOS-202609090045-e1dab9b289.html">赛后复盘</a></div></article><article class="history-row" data-result="yes"><div class="history-meta">2026-09-08T07:00+08:00</div><div class="history-teams">维多利亚<span> vs </span>格雷米奥</div><div class="history-result"><span>90分钟结果</span><strong class="history-score">1-0</strong></div><div class="history-links"><a href="../analysis_reports/current/2026-09-07_周一009_维多利亚_vs_格雷米奥.html">赛前快照</a> · <a href="../postmatch_reports/FBOS-202609080700-c59e23be36.html">赛后复盘</a></div></article><article class="history-row" data-result="yes"><div class="history-meta">2026-09-08T03:30+08:00</div><div class="history-teams">埃尔切<span> vs </span>皇家社会</div><div class="history-result"><span>90分钟结果</span><strong class="history-score">2-3</strong></div><div class="history-links"><a href="../analysis_reports/current/2026-09-07_周一008_埃尔切_vs_皇家社会.html">赛前快照</a> · <a href="../postmatch_reports/FBOS-202609080330-30b9337ede.html">赛后复盘</a></div></article><article class="history-row" data-result="yes"><div class="history-meta">2026-09-08T02:45+08:00</div><div class="history-teams">乌迪内斯<span> vs </span>拉齐奥</div><div class="history-result"><span>90分钟结果</span><strong class="history-score">1-2</strong></div><div class="history-links"><a href="../analysis_reports/current/2026-09-07_周一006_乌迪内斯_vs_拉齐奥.html">赛前快照</a> · <a href="../postmatch_reports/FBOS-202609080245-9111874d32.html">赛后复盘</a></div></article><article class="history-row" data-result="yes"><div class="history-meta">2026-09-06T23:30+08:00</div><div class="history-teams">阿森纳<span> vs </span>切尔西</div><div class="history-result"><span>90分钟结果</span><strong class="history-score">2-1</strong></div><div class="history-links"><a href="../analysis_reports/current/2026-09-06_周日016_阿森纳_vs_切尔西.html">赛前快照</a> · <a href="../postmatch_reports/FBOS-202609062330-5be468dd05.html">赛后复盘</a></div></article><article class="history-row" data-result="yes"><div class="history-meta">2026-09-06T21:30+08:00</div><div class="history-teams">汉堡<span> vs </span>美因茨</div><div class="history-result"><span>90分钟结果</span><strong class="history-score">0-5</strong></div><div class="history-links"><a href="../analysis_reports/current/2026-09-06_周日012_汉堡_vs_美因茨.html">赛前快照</a> · <a href="../postmatch_reports/FBOS-202609062130-e8ae29d9a5.html">赛后复盘</a></div></article><article class="history-row" data-result="yes"><div class="history-meta">2026-09-05T03:00+08:00</div><div class="history-teams">伊普斯<span> vs </span>利物浦</div><div class="history-result"><span>90分钟结果</span><strong class="history-score">0-2</strong></div><div class="history-links"><a href="../analysis_reports/current/2026-09-04_周五010_伊普斯_vs_利物浦.html">赛前快照</a> · <a href="../postmatch_reports/FBOS-202609050300-51223cb0d7.html">赛后复盘</a></div></article><article class="history-row" data-result="yes"><div class="history-meta">2026-09-05T02:45+08:00</div><div class="history-teams">热那亚<span> vs </span>科莫</div><div class="history-result"><span>90分钟结果</span><strong class="history-score">1-4</strong></div><div class="history-links"><a href="../analysis_reports/current/2026-09-04_周五009_热那亚_vs_科莫.html">赛前快照</a> · <a href="../postmatch_reports/FBOS-202609050245-c82b563304.html">赛后复盘</a></div></article><article class="history-row" data-result="yes"><div class="history-meta">2026-09-03T06:30+08:00</div><div class="history-teams">弗拉门戈<span> vs </span>米拉索尔</div><div class="history-result"><span>90分钟结果</span><strong class="history-score">2-0</strong></div><div class="history-links"><a href="../analysis_reports/current/2026-09-02_周三012_弗拉门戈_vs_米拉索尔.html">赛前快照</a> · <a href="../postmatch_reports/FBOS-202609030630-b950ece651.html">赛后复盘</a></div></article><article class="history-row" data-result="yes"><div class="history-meta">2026-09-01T02:45:00+08:00</div><div class="history-teams">亚特兰大<span> vs </span>博洛尼亚</div><div class="history-result"><span>90分钟结果</span><strong class="history-score">1-0</strong></div><div class="history-links"><a href="../analysis_reports/current/2026-08-31_周一007_亚特兰大_vs_博洛尼亚.html">赛前快照</a> · <a href="../postmatch_reports/FBOS-202609010245-203b078189.html">赛后复盘</a></div></article><article class="history-row" data-result="yes"><div class="history-meta">2026-09-01T00:30:00+08:00</div><div class="history-teams">莱切<span> vs </span>罗马</div><div class="history-result"><span>90分钟结果</span><strong class="history-score">0-4</strong></div><div class="history-links"><a href="../analysis_reports/current/2026-08-31_周一003_莱切_vs_罗马.html">赛前快照</a> · <a href="../postmatch_reports/FBOS-202609010030-aa50d55edc.html">赛后复盘</a></div></article><article class="history-row" data-result="yes"><div class="history-meta">2026-08-30T23:30:00+08:00</div><div class="history-teams">曼彻斯特联<span> vs </span>伊普斯维奇</div><div class="history-result"><span>90分钟结果</span><strong class="history-score">5-2</strong></div><div class="history-links"><a href="../analysis_reports/current/2026-08-30_周日014_曼彻斯特联_vs_伊普斯维奇.html">赛前快照</a> · <a href="../postmatch_reports/FBOS-202608302330-3488780e79.html">赛后复盘</a></div></article><article class="history-row" data-result="yes"><div class="history-meta">2026-08-30T21:00:00+08:00</div><div class="history-teams">利兹联<span> vs </span>布伦特福德</div><div class="history-result"><span>90分钟结果</span><strong class="history-score">1-1</strong></div><div class="history-links"><a href="../analysis_reports/current/2026-08-30_周日009_利兹联_vs_布伦特福德.html">赛前快照</a> · <a href="../postmatch_reports/FBOS-202608302100-33647ada3d.html">赛后复盘</a></div></article><article class="history-row" data-result="yes"><div class="history-meta">2026-08-30T21:00:00+08:00</div><div class="history-teams">桑德兰<span> vs </span>富勒姆</div><div class="history-result"><span>90分钟结果</span><strong class="history-score">1-0</strong></div><div class="history-links"><a href="../analysis_reports/current/2026-08-30_周日008_桑德兰_vs_富勒姆.html">赛前快照</a> · <a href="../postmatch_reports/FBOS-202608302100-4bbe7e7593.html">赛后复盘</a></div></article><article class="history-row" data-result="yes"><div class="history-meta">2026-08-30T21:00:00+08:00</div><div class="history-teams">巴黎FC<span> vs </span>尼斯</div><div class="history-result"><span>90分钟结果</span><strong class="history-score">3-0</strong></div><div class="history-links"><a href="../analysis_reports/current/2026-08-30_周日010_巴黎FC_vs_尼斯.html">赛前快照</a> · <a href="../postmatch_reports/FBOS-202608302100-9045b65c0e.html">赛后复盘</a></div></article><article class="history-row" data-result="yes"><div class="history-meta">2026-08-29T21:30:00+08:00</div><div class="history-teams">柏林联合<span> vs </span>法兰克福</div><div class="history-result"><span>90分钟结果</span><strong class="history-score">3-3</strong></div><div class="history-links"><a href="../analysis_reports/current/2026-08-29_周六011_柏林联合_vs_法兰克福.html">赛前快照</a> · <a href="../postmatch_reports/FBOS-202608292130-2e1f7626b7.html">赛后复盘</a></div></article><article class="history-row" data-result="yes"><div class="history-meta">2026-08-29T21:30:00+08:00</div><div class="history-teams">科隆<span> vs </span>霍芬海姆</div><div class="history-result"><span>90分钟结果</span><strong class="history-score">3-2</strong></div><div class="history-links"><a href="../analysis_reports/current/2026-08-29_周六012_科隆_vs_霍芬海姆.html">赛前快照</a> · <a href="../postmatch_reports/FBOS-202608292130-c460378ee5.html">赛后复盘</a></div></article></section>
+<section class="trust-strip dashboard-trust-strip" id="dashboard-trust"><div class="trust-item"><span class="trust-ico">⚽</span><div><strong>今日队列</strong><span>默认只突出 1X2 + 比分概率。</span></div></div><div class="trust-item"><span class="trust-ico">!</span><div><strong>异常提示</strong><span>只有真正改变判断时才出现。</span></div></div><div class="trust-item"><span class="trust-ico">◇</span><div><strong>赛前记录</strong><span>比赛开始前形成并保留。</span></div></div><div class="trust-item"><span class="trust-ico">✓</span><div><strong>历史验证</strong><span>成功和失败同口径记录。</span></div></div><div class="trust-item"><span class="trust-ico">i</span><div><strong>方法说明</strong><span>技术细节下沉，不抢首屏。</span></div></div></section>
+<aside class="dashboard-trust closed-beta-notice" aria-label="Closed Beta / 测试阶段"><strong>Closed Beta / 测试阶段</strong><span>预测仅供比赛分析与研究参考，可能出错。</span><span>本产品不提供购彩、代购、收款、下注或出票服务。也不提供支付服务。</span><span>如参与合法彩票购买，请通过合法正规渠道并理性参与；未成年人不得购买彩票。</span></aside>
+</div>
+<section class="footer-principles"><div class="principle-title">OneShot Principles</div><div class="principles"><div class="principle"><span class="principle-icon">☆</span><div><strong>清晰优先</strong><span>先看真正改变判断的内容。</span></div></div><div class="principle"><span class="principle-icon">◉</span><div><strong>概率诚实</strong><span>“最高”不等于“确定”。</span></div></div><div class="principle"><span class="principle-icon">◇</span><div><strong>独立判断</strong><span>模型和市场并列比较。</span></div></div><div class="principle"><span class="principle-icon">✓</span><div><strong>一致验证</strong><span>赛前记录赛后不修改。</span></div></div><div class="principle"><span class="principle-icon">▣</span><div><strong>有上下文的数据</strong><span>数字必须能解释。</span></div></div></div></section><div class="copyright"><span>© 2026 OneShot</span><span>Closed Beta</span><span>仅供比赛分析与研究参考</span></div>
 </section>
 
-<section class="fixture-table" id="fixture-list" aria-label="竞彩日比赛列表">
-  <div class="table-header" aria-hidden="true">
-    <span>竞彩编号 / 赛事</span><span>开球</span><span>对阵 / 赛果</span>
-    <span>1X2 概率</span><span>比分概率 Top3</span><span>进球信号</span>
-   </div>
-   <article class="fixture-row status-frozen prediction-formal" data-status="FROZEN" data-result="no" data-kickoff="2026-09-09T10:30:00Z" data-prediction-kind="formal"><a class="fixture-row-target" href="../matches/2929720/" aria-label="江原FC vs 全北现代 · 查看详情"></a><div class="identity-cell"><span class="match-number">周三001</span><span class="identity-competition">韩K联</span></div><div class="kickoff">2026-09-09 18:30</div><div class="teams-cell"><div class="team-match"><span class="team home">江原FC</span><span class="versus">vs</span><span class="team away">全北现代</span></div><div class="row-action"><span class="detail-link" aria-hidden="true">查看详情</span></div></div><div class="probability-cell-group"><div class="probability-grid"><div class="probability-cell"><span>主胜</span><strong>32.9%</strong></div><div class="probability-cell"><span>平</span><strong>29.2%</strong></div><div class="probability-cell is-leading"><span>客胜</span><strong>38.0%</strong></div></div></div><div class="score-cell" data-score-serving-state="NORMAL"><div class="score-caption">最高概率比分</div><div class="score-primary"><strong>1-1</strong><span>13.4%</span></div><div class="score-top3"><span>1-1 13.4%</span><span>0-1 12.8%</span><span>1-0 11.7%</span></div></div><div class="goals-cell"></div></article><article class="fixture-row status-frozen prediction-formal" data-status="FROZEN" data-result="no" data-kickoff="2026-09-09T16:45:00Z" data-prediction-kind="formal"><a class="fixture-row-target" href="../matches/3073100/" aria-label="巴萨 vs 费耶诺德 · 查看详情"></a><div class="identity-cell"><span class="match-number">周三003</span><span class="identity-competition">欧冠杯</span></div><div class="kickoff">2026-09-10 00:45</div><div class="teams-cell"><div class="team-match"><span class="team home">巴萨</span><span class="versus">vs</span><span class="team away">费耶诺德</span></div><div class="row-action"><span class="detail-link" aria-hidden="true">查看详情</span></div></div><div class="probability-cell-group"><div class="probability-grid"><div class="probability-cell is-leading"><span>主胜</span><strong>59.2%</strong></div><div class="probability-cell"><span>平</span><strong>18.9%</strong></div><div class="probability-cell"><span>客胜</span><strong>21.9%</strong></div></div></div><div class="score-cell" data-score-serving-state="NORMAL"><div class="score-caption">最高概率比分</div><div class="score-primary"><strong>2-1</strong><span>8.8%</span></div><div class="score-top3"><span>2-1 8.8%</span><span>1-1 7.2%</span><span>3-1 7.2%</span></div></div><div class="goals-cell"></div></article><article class="fixture-row status-frozen prediction-formal" data-status="FROZEN" data-result="no" data-kickoff="2026-09-09T16:45:00Z" data-prediction-kind="formal"><a class="fixture-row-target" href="../matches/3073211/" aria-label="斯图加特 vs 维京 · 查看详情"></a><div class="identity-cell"><span class="match-number">周三004</span><span class="identity-competition">欧冠杯</span></div><div class="kickoff">2026-09-10 00:45</div><div class="teams-cell"><div class="team-match"><span class="team home">斯图加特</span><span class="versus">vs</span><span class="team away">维京</span></div><div class="row-action"><span class="detail-link" aria-hidden="true">查看详情</span></div></div><div class="probability-cell-group"><div class="probability-grid"><div class="probability-cell is-leading"><span>主胜</span><strong>56.5%</strong></div><div class="probability-cell"><span>平</span><strong>20.3%</strong></div><div class="probability-cell"><span>客胜</span><strong>23.2%</strong></div></div></div><div class="score-cell" data-score-serving-state="NORMAL"><div class="score-caption">最高概率比分</div><div class="score-primary"><strong>2-1</strong><span>9.4%</span></div><div class="score-top3"><span>2-1 9.4%</span><span>1-1 8.5%</span><span>2-0 6.9%</span></div></div><div class="goals-cell"></div></article><article class="fixture-row status-frozen prediction-formal" data-status="FROZEN" data-result="no" data-kickoff="2026-09-09T16:45:00Z" data-prediction-kind="formal"><a class="fixture-row-target" href="../matches/2996123/" aria-label="特温特 vs 特尔斯达 · 查看详情"></a><div class="identity-cell"><span class="match-number">周三005</span><span class="identity-competition">荷甲</span></div><div class="kickoff">2026-09-10 00:45</div><div class="teams-cell"><div class="team-match"><span class="team home">特温特</span><span class="versus">vs</span><span class="team away">特尔斯达</span></div><div class="row-action"><span class="detail-link" aria-hidden="true">查看详情</span></div></div><div class="probability-cell-group"><div class="probability-grid"><div class="probability-cell is-leading"><span>主胜</span><strong>60.1%</strong></div><div class="probability-cell"><span>平</span><strong>19.5%</strong></div><div class="probability-cell"><span>客胜</span><strong>20.3%</strong></div></div></div><div class="score-cell" data-score-serving-state="NORMAL"><div class="score-caption">最高概率比分</div><div class="score-primary"><strong>2-1</strong><span>9.5%</span></div><div class="score-top3"><span>2-1 9.5%</span><span>1-1 8.3%</span><span>2-0 7.5%</span></div></div><div class="goals-cell"></div></article><article class="fixture-row status-frozen prediction-formal" data-status="FROZEN" data-result="no" data-kickoff="2026-09-09T19:00:00Z" data-prediction-kind="formal"><a class="fixture-row-target" href="../matches/3073172/" aria-label="里斯本 vs 加拉塔萨 · 查看详情"></a><div class="identity-cell"><span class="match-number">周三006</span><span class="identity-competition">欧冠杯</span></div><div class="kickoff">2026-09-10 03:00</div><div class="teams-cell"><div class="team-match"><span class="team home">里斯本</span><span class="versus">vs</span><span class="team away">加拉塔萨</span></div><div class="row-action"><span class="detail-link" aria-hidden="true">查看详情</span></div></div><div class="probability-cell-group"><div class="probability-grid"><div class="probability-cell is-leading"><span>主胜</span><strong>58.6%</strong></div><div class="probability-cell"><span>平</span><strong>19.9%</strong></div><div class="probability-cell"><span>客胜</span><strong>21.4%</strong></div></div></div><div class="score-cell" data-score-serving-state="NORMAL"><div class="score-caption">最高概率比分</div><div class="score-primary"><strong>2-1</strong><span>9.5%</span></div><div class="score-top3"><span>2-1 9.5%</span><span>1-1 8.5%</span><span>2-0 7.3%</span></div></div><div class="goals-cell"></div></article><article class="fixture-row status-frozen prediction-formal" data-status="FROZEN" data-result="no" data-kickoff="2026-09-09T19:00:00Z" data-prediction-kind="formal"><a class="fixture-row-target" href="../matches/3073127/" aria-label="那不勒斯 vs 阿森纳 · 查看详情"></a><div class="identity-cell"><span class="match-number">周三007</span><span class="identity-competition">欧冠杯</span></div><div class="kickoff">2026-09-10 03:00</div><div class="teams-cell"><div class="team-match"><span class="team home">那不勒斯</span><span class="versus">vs</span><span class="team away">阿森纳</span></div><div class="row-action"><span class="detail-link" aria-hidden="true">查看详情</span></div></div><div class="probability-cell-group"><div class="probability-grid"><div class="probability-cell"><span>主胜</span><strong>30.7%</strong></div><div class="probability-cell"><span>平</span><strong>25.1%</strong></div><div class="probability-cell is-leading"><span>客胜</span><strong>44.2%</strong></div></div></div><div class="score-cell" data-score-serving-state="NORMAL"><div class="score-caption">最高概率比分</div><div class="score-primary"><strong>1-1</strong><span>11.8%</span></div><div class="score-top3"><span>1-1 11.8%</span><span>0-1 9.6%</span><span>1-2 9.1%</span></div></div><div class="goals-cell"></div></article><article class="fixture-row status-frozen prediction-formal" data-status="FROZEN" data-result="no" data-kickoff="2026-09-09T19:00:00Z" data-prediction-kind="formal"><a class="fixture-row-target" href="../matches/3073079/" aria-label="利物浦 vs 马竞 · 查看详情"></a><div class="identity-cell"><span class="match-number">周三008</span><span class="identity-competition">欧冠杯</span></div><div class="kickoff">2026-09-10 03:00</div><div class="teams-cell"><div class="team-match"><span class="team home">利物浦</span><span class="versus">vs</span><span class="team away">马竞</span></div><div class="row-action"><span class="detail-link" aria-hidden="true">查看详情</span></div></div><div class="probability-cell-group"><div class="probability-grid"><div class="probability-cell is-leading"><span>主胜</span><strong>50.4%</strong></div><div class="probability-cell"><span>平</span><strong>22.6%</strong></div><div class="probability-cell"><span>客胜</span><strong>27.0%</strong></div></div></div><div class="score-cell" data-score-serving-state="NORMAL"><div class="score-caption">最高概率比分</div><div class="score-primary"><strong>1-1</strong><span>10.2%</span></div><div class="score-top3"><span>1-1 10.2%</span><span>2-1 9.5%</span><span>1-0 7.7%</span></div></div><div class="goals-cell"></div></article><article class="fixture-row status-frozen prediction-formal" data-status="FROZEN" data-result="no" data-kickoff="2026-09-09T19:00:00Z" data-prediction-kind="formal"><a class="fixture-row-target" href="../matches/3073113/" aria-label="巴黎圣曼 vs 布拉迪斯 · 查看详情"></a><div class="identity-cell"><span class="match-number">周三009</span><span class="identity-competition">欧冠杯</span></div><div class="kickoff">2026-09-10 03:00</div><div class="teams-cell"><div class="team-match"><span class="team home">巴黎圣曼</span><span class="versus">vs</span><span class="team away">布拉迪斯</span></div><div class="row-action"><span class="detail-link" aria-hidden="true">查看详情</span></div></div><div class="probability-cell-group"><div class="probability-grid"><div class="probability-cell is-leading"><span>主胜</span><strong>48.9%</strong></div><div class="probability-cell"><span>平</span><strong>21.2%</strong></div><div class="probability-cell"><span>客胜</span><strong>29.8%</strong></div></div></div><div class="score-cell" data-score-serving-state="NORMAL"><div class="score-caption">最高概率比分</div><div class="score-primary"><strong>2-1</strong><span>8.8%</span></div><div class="score-top3"><span>2-1 8.8%</span><span>1-1 8.5%</span><span>2-2 7.0%</span></div></div><div class="goals-cell"></div></article><article class="fixture-row status-frozen prediction-formal" data-status="FROZEN" data-result="no" data-kickoff="2026-09-09T19:00:00Z" data-prediction-kind="formal"><a class="fixture-row-target" href="../matches/3073628/" aria-label="切尔西 vs 利兹联 · 查看详情"></a><div class="identity-cell"><span class="match-number">周三011</span><span class="identity-competition">英联杯</span></div><div class="kickoff">2026-09-10 03:00</div><div class="teams-cell"><div class="team-match"><span class="team home">切尔西</span><span class="versus">vs</span><span class="team away">利兹联</span></div><div class="row-action"><span class="detail-link" aria-hidden="true">查看详情</span></div></div><div class="probability-cell-group"><div class="probability-grid"><div class="probability-cell is-leading"><span>主胜</span><strong>45.3%</strong></div><div class="probability-cell"><span>平</span><strong>25.0%</strong></div><div class="probability-cell"><span>客胜</span><strong>29.7%</strong></div></div></div><div class="score-cell" data-score-serving-state="NORMAL"><div class="score-caption">最高概率比分</div><div class="score-primary"><strong>1-1</strong><span>11.8%</span></div><div class="score-top3"><span>1-1 11.8%</span><span>1-0 9.8%</span><span>2-1 9.2%</span></div></div><div class="goals-cell"></div></article><article class="fixture-row status-frozen prediction-formal" data-status="FROZEN" data-result="no" data-kickoff="2026-09-09T22:00:00Z" data-prediction-kind="formal"><a class="fixture-row-target" href="../matches/3069960/" aria-label="帕梅拉斯 vs 基多体大 · 查看详情"></a><div class="identity-cell"><span class="match-number">周三013</span><span class="identity-competition">解放者杯</span></div><div class="kickoff">2026-09-10 06:00</div><div class="teams-cell"><div class="team-match"><span class="team home">帕梅拉斯</span><span class="versus">vs</span><span class="team away">基多体大</span></div><div class="row-action"><span class="detail-link" aria-hidden="true">查看详情</span></div></div><div class="probability-cell-group"><div class="probability-grid"><div class="probability-cell is-leading"><span>主胜</span><strong>54.5%</strong></div><div class="probability-cell"><span>平</span><strong>26.1%</strong></div><div class="probability-cell"><span>客胜</span><strong>19.4%</strong></div></div></div><div class="score-cell" data-score-serving-state="NORMAL"><div class="score-caption">最高概率比分</div><div class="score-primary"><strong>1-0</strong><span>15.3%</span></div><div class="score-top3"><span>1-0 15.3%</span><span>1-1 11.9%</span><span>2-0 11.5%</span></div></div><div class="goals-cell"></div></article><article class="fixture-row status-frozen prediction-formal" data-status="FROZEN" data-result="no" data-kickoff="2026-09-10T00:30:00Z" data-prediction-kind="formal"><a class="fixture-row-target" href="../matches/3069958/" aria-label="拉普大学 vs 科林蒂安 · 查看详情"></a><div class="identity-cell"><span class="match-number">周三014</span><span class="identity-competition">解放者杯</span></div><div class="kickoff">2026-09-10 08:30</div><div class="teams-cell"><div class="team-match"><span class="team home">拉普大学</span><span class="versus">vs</span><span class="team away">科林蒂安</span></div><div class="row-action"><span class="detail-link" aria-hidden="true">查看详情</span></div></div><div class="probability-cell-group"><div class="probability-grid"><div class="probability-cell is-leading"><span>主胜</span><strong>45.3%</strong></div><div class="probability-cell"><span>平</span><strong>30.9%</strong></div><div class="probability-cell"><span>客胜</span><strong>23.8%</strong></div></div></div><div class="score-cell" data-score-serving-state="NORMAL"><div class="score-caption">最高概率比分</div><div class="score-primary"><strong>1-0</strong><span>17.2%</span></div><div class="score-top3"><span>1-0 17.2%</span><span>0-0 15.0%</span><span>1-1 12.9%</span></div></div><div class="goals-cell"></div></article>
-   <div class="filter-empty" data-filter-empty="UPCOMING" hidden>当前竞彩日暂无未开赛比赛</div><div class="filter-empty" data-filter-empty="RESULT" hidden>当前竞彩日暂无已结束并核验的比赛</div>
- </section>
-<section id="historical-results" class="history"><div class="history-heading"><h2>历史验证</h2><span>20 场独立记录，不参与当前筛选</span></div><article class="history-row" data-result="yes"><div class="history-meta">2026-09-09T03:00+08:00</div><div class="history-teams">多特蒙德<span> vs </span>比利亚雷</div><strong class="history-score">3-2</strong><div class="history-links"><a href="../analysis_reports/current/2026-09-08_周二009_多特蒙德_vs_比利亚雷.html">赛前快照</a> · <a href="../postmatch_reports/FBOS-202609090300-0b8c814860.html">赛后复盘</a></div></article><article class="history-row" data-result="yes"><div class="history-meta">2026-09-09T03:00+08:00</div><div class="history-teams">里尔<span> vs </span>贝蒂斯</div><strong class="history-score">2-3</strong><div class="history-links"><a href="../analysis_reports/current/2026-09-08_周二010_里尔_vs_贝蒂斯.html">赛前快照</a> · <a href="../postmatch_reports/FBOS-202609090300-688d6ee1d6.html">赛后复盘</a></div></article><article class="history-row" data-result="yes"><div class="history-meta">2026-09-09T00:45+08:00</div><div class="history-teams">雅典AEK<span> vs </span>LASK林茨</div><strong class="history-score">1-0</strong><div class="history-links"><a href="../analysis_reports/current/2026-09-08_周二002_雅典AEK_vs_LASK林茨.html">赛前快照</a> · <a href="../postmatch_reports/FBOS-202609090045-87c7a0b449.html">赛后复盘</a></div></article><article class="history-row" data-result="yes"><div class="history-meta">2026-09-09T00:45+08:00</div><div class="history-teams">布鲁日<span> vs </span>维拉</div><strong class="history-score">2-3</strong><div class="history-links"><a href="../analysis_reports/current/2026-09-08_周二003_布鲁日_vs_维拉.html">赛前快照</a> · <a href="../postmatch_reports/FBOS-202609090045-e1dab9b289.html">赛后复盘</a></div></article><article class="history-row" data-result="yes"><div class="history-meta">2026-09-08T07:00+08:00</div><div class="history-teams">维多利亚<span> vs </span>格雷米奥</div><strong class="history-score">1-0</strong><div class="history-links"><a href="../analysis_reports/current/2026-09-07_周一009_维多利亚_vs_格雷米奥.html">赛前快照</a> · <a href="../postmatch_reports/FBOS-202609080700-c59e23be36.html">赛后复盘</a></div></article><article class="history-row" data-result="yes"><div class="history-meta">2026-09-08T03:30+08:00</div><div class="history-teams">埃尔切<span> vs </span>皇家社会</div><strong class="history-score">2-3</strong><div class="history-links"><a href="../analysis_reports/current/2026-09-07_周一008_埃尔切_vs_皇家社会.html">赛前快照</a> · <a href="../postmatch_reports/FBOS-202609080330-30b9337ede.html">赛后复盘</a></div></article><article class="history-row" data-result="yes"><div class="history-meta">2026-09-08T02:45+08:00</div><div class="history-teams">乌迪内斯<span> vs </span>拉齐奥</div><strong class="history-score">1-2</strong><div class="history-links"><a href="../analysis_reports/current/2026-09-07_周一006_乌迪内斯_vs_拉齐奥.html">赛前快照</a> · <a href="../postmatch_reports/FBOS-202609080245-9111874d32.html">赛后复盘</a></div></article><article class="history-row" data-result="yes"><div class="history-meta">2026-09-06T23:30+08:00</div><div class="history-teams">阿森纳<span> vs </span>切尔西</div><strong class="history-score">2-1</strong><div class="history-links"><a href="../analysis_reports/current/2026-09-06_周日016_阿森纳_vs_切尔西.html">赛前快照</a> · <a href="../postmatch_reports/FBOS-202609062330-5be468dd05.html">赛后复盘</a></div></article><article class="history-row" data-result="yes"><div class="history-meta">2026-09-06T21:30+08:00</div><div class="history-teams">汉堡<span> vs </span>美因茨</div><strong class="history-score">0-5</strong><div class="history-links"><a href="../analysis_reports/current/2026-09-06_周日012_汉堡_vs_美因茨.html">赛前快照</a> · <a href="../postmatch_reports/FBOS-202609062130-e8ae29d9a5.html">赛后复盘</a></div></article><article class="history-row" data-result="yes"><div class="history-meta">2026-09-05T03:00+08:00</div><div class="history-teams">伊普斯<span> vs </span>利物浦</div><strong class="history-score">0-2</strong><div class="history-links"><a href="../analysis_reports/current/2026-09-04_周五010_伊普斯_vs_利物浦.html">赛前快照</a> · <a href="../postmatch_reports/FBOS-202609050300-51223cb0d7.html">赛后复盘</a></div></article><article class="history-row" data-result="yes"><div class="history-meta">2026-09-05T02:45+08:00</div><div class="history-teams">热那亚<span> vs </span>科莫</div><strong class="history-score">1-4</strong><div class="history-links"><a href="../analysis_reports/current/2026-09-04_周五009_热那亚_vs_科莫.html">赛前快照</a> · <a href="../postmatch_reports/FBOS-202609050245-c82b563304.html">赛后复盘</a></div></article><article class="history-row" data-result="yes"><div class="history-meta">2026-09-03T06:30+08:00</div><div class="history-teams">弗拉门戈<span> vs </span>米拉索尔</div><strong class="history-score">2-0</strong><div class="history-links"><a href="../analysis_reports/current/2026-09-02_周三012_弗拉门戈_vs_米拉索尔.html">赛前快照</a> · <a href="../postmatch_reports/FBOS-202609030630-b950ece651.html">赛后复盘</a></div></article><article class="history-row" data-result="yes"><div class="history-meta">2026-09-01T02:45:00+08:00</div><div class="history-teams">亚特兰大<span> vs </span>博洛尼亚</div><strong class="history-score">1-0</strong><div class="history-links"><a href="../analysis_reports/current/2026-08-31_周一007_亚特兰大_vs_博洛尼亚.html">赛前快照</a> · <a href="../postmatch_reports/FBOS-202609010245-203b078189.html">赛后复盘</a></div></article><article class="history-row" data-result="yes"><div class="history-meta">2026-09-01T00:30:00+08:00</div><div class="history-teams">莱切<span> vs </span>罗马</div><strong class="history-score">0-4</strong><div class="history-links"><a href="../analysis_reports/current/2026-08-31_周一003_莱切_vs_罗马.html">赛前快照</a> · <a href="../postmatch_reports/FBOS-202609010030-aa50d55edc.html">赛后复盘</a></div></article><article class="history-row" data-result="yes"><div class="history-meta">2026-08-30T23:30:00+08:00</div><div class="history-teams">曼彻斯特联<span> vs </span>伊普斯维奇</div><strong class="history-score">5-2</strong><div class="history-links"><a href="../analysis_reports/current/2026-08-30_周日014_曼彻斯特联_vs_伊普斯维奇.html">赛前快照</a> · <a href="../postmatch_reports/FBOS-202608302330-3488780e79.html">赛后复盘</a></div></article><article class="history-row" data-result="yes"><div class="history-meta">2026-08-30T21:00:00+08:00</div><div class="history-teams">利兹联<span> vs </span>布伦特福德</div><strong class="history-score">1-1</strong><div class="history-links"><a href="../analysis_reports/current/2026-08-30_周日009_利兹联_vs_布伦特福德.html">赛前快照</a> · <a href="../postmatch_reports/FBOS-202608302100-33647ada3d.html">赛后复盘</a></div></article><article class="history-row" data-result="yes"><div class="history-meta">2026-08-30T21:00:00+08:00</div><div class="history-teams">桑德兰<span> vs </span>富勒姆</div><strong class="history-score">1-0</strong><div class="history-links"><a href="../analysis_reports/current/2026-08-30_周日008_桑德兰_vs_富勒姆.html">赛前快照</a> · <a href="../postmatch_reports/FBOS-202608302100-4bbe7e7593.html">赛后复盘</a></div></article><article class="history-row" data-result="yes"><div class="history-meta">2026-08-30T21:00:00+08:00</div><div class="history-teams">巴黎FC<span> vs </span>尼斯</div><strong class="history-score">3-0</strong><div class="history-links"><a href="../analysis_reports/current/2026-08-30_周日010_巴黎FC_vs_尼斯.html">赛前快照</a> · <a href="../postmatch_reports/FBOS-202608302100-9045b65c0e.html">赛后复盘</a></div></article><article class="history-row" data-result="yes"><div class="history-meta">2026-08-29T21:30:00+08:00</div><div class="history-teams">柏林联合<span> vs </span>法兰克福</div><strong class="history-score">3-3</strong><div class="history-links"><a href="../analysis_reports/current/2026-08-29_周六011_柏林联合_vs_法兰克福.html">赛前快照</a> · <a href="../postmatch_reports/FBOS-202608292130-2e1f7626b7.html">赛后复盘</a></div></article><article class="history-row" data-result="yes"><div class="history-meta">2026-08-29T21:30:00+08:00</div><div class="history-teams">科隆<span> vs </span>霍芬海姆</div><strong class="history-score">3-2</strong><div class="history-links"><a href="../analysis_reports/current/2026-08-29_周六012_科隆_vs_霍芬海姆.html">赛前快照</a> · <a href="../postmatch_reports/FBOS-202608292130-c460378ee5.html">赛后复盘</a></div></article></section>
-<aside class="dashboard-trust closed-beta-notice" aria-label="Closed Beta / 测试阶段"><strong>Closed Beta / 测试阶段</strong><span>预测仅供比赛分析与研究参考，可能出错。</span><span>本产品不提供购彩、代购、收款、下注或出票服务。也不提供支付服务。</span><span>如参与合法彩票购买，请通过合法正规渠道并理性参与；未成年人不得购买彩票。</span></aside>
-<footer class="page-footer">
-  <span>正常状态保持安静；只有影响判断的异常才会显示。</span>
-  <span>Closed Beta · 预测可能出错，仅供比赛分析与研究参考；理性参与，未成年人限制。</span>
-</footer>
 </main>
+</div>
+<nav class="mobile-bottom" aria-label="移动端主导航"><a class="bottom-item active" href="./latest.html">比赛</a><a class="bottom-item" href="#analysis">分析</a><a class="bottom-item" href="#historical-results">历史</a><a class="bottom-item" href="#dashboard-trust">数据</a><a class="bottom-item" href="#closed-beta">更多</a></nav>
 <script>
 const buttons = Array.from(document.querySelectorAll('[data-filter]'));
 const cards = Array.from(document.querySelectorAll('.fixture-row'));
+const leagueGroups = Array.from(document.querySelectorAll('.league-group'));
 const historicalResults = document.querySelector('#historical-results');
 const emptyStates = Array.from(document.querySelectorAll('[data-filter-empty]'));
 buttons.forEach(button => button.addEventListener('click', () => {
@@ -500,19 +453,21 @@ buttons.forEach(button => button.addEventListener('click', () => {
     const match = filter === 'ALL'
       || (filter === 'UPCOMING' && isUpcoming)
       || (filter === 'RESULT' && card.dataset.result === 'yes');
-     card.hidden = !match;
-   });
-   const visibleCount = cards.filter(card => !card.hidden).length;
-   emptyStates.forEach(empty => {
-     empty.hidden = empty.dataset.filterEmpty !== filter || visibleCount !== 0;
-   });
-   if (historicalResults) historicalResults.hidden = filter !== 'ALL';
+    card.hidden = !match;
+  });
+  leagueGroups.forEach(group => {
+    group.hidden = !Array.from(group.querySelectorAll('.fixture-row')).some(card => !card.hidden);
+  });
+  const visibleCount = cards.filter(card => !card.hidden).length;
+  emptyStates.forEach(empty => {
+    empty.hidden = empty.dataset.filterEmpty !== filter || visibleCount !== 0;
+  });
+  if (historicalResults) historicalResults.hidden = filter !== 'ALL';
 }));
-</script>
-<script>
+</script><script>
 (() => {
   const latestJson = "./latest.json";
-  const pageVersion = "2026-09-09|2026-09-09T09:17:47.014724+08:00";
+  const pageVersion = "2026-09-09|2026-09-09T11:46:05.932404+08:00";
   let currentVersion = pageVersion;
   const versionOf = payload => `${payload?.business_date || payload?.target_date || ""}|${payload?.generated_at || ""}`;
   async function checkForUpdate() {
