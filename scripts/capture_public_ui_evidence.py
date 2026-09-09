@@ -31,6 +31,7 @@ from scripts.build_public_site import (  # noqa: E402
 )
 from scripts.match_detail import render_match_detail  # noqa: E402
 from scripts.prediction_dashboard import build_dashboard, render_dashboard  # noqa: E402
+from scripts.team_crest_enrichment import enrich_dashboard_crests  # noqa: E402
 
 
 class _QuietHandler(SimpleHTTPRequestHandler):
@@ -219,7 +220,7 @@ def _regenerate_dashboard(site_root: Path) -> dict[str, Any]:
     if not business_date:
         raise SystemExit("visual evidence requires a dashboard business_date")
     data_root = ROOT / "data"
-    return build_dashboard(
+    payload = build_dashboard(
         business_date,
         universe_root=data_root / "prediction_universe",
         jobs_root=data_root / "base_prediction_jobs",
@@ -232,6 +233,25 @@ def _regenerate_dashboard(site_root: Path) -> dict[str, Any]:
         workspace_path=data_root / "match_workspace" / "latest.json",
         output_root=site_root / "prediction_dashboard",
     )
+    universe_path = data_root / "prediction_universe" / f"{business_date}.json"
+    universe = _read_json(universe_path) if universe_path.is_file() else {}
+    try:
+        payload = enrich_dashboard_crests(
+            payload,
+            universe=universe,
+            asset_root=site_root / "assets" / "team-crests",
+        )
+    except Exception:
+        # Crest enrichment is optional presentation data and never blocks
+        # dashboard regeneration or the existing evidence capture.
+        pass
+    dashboard_root = site_root / "prediction_dashboard"
+    (dashboard_root / "latest.json").write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    (dashboard_root / "latest.html").write_text(render_dashboard(payload), encoding="utf-8")
+    return payload
 
 
 def _write_fixture_pages(site_root: Path, payload: dict[str, Any], current: dict[str, Any]) -> None:
@@ -446,6 +466,7 @@ def _capture_page(
         disclosure = disclosure_metrics[0] if disclosure_metrics else {}
         wrapper = disclosure.get("wrapper") if isinstance(disclosure, dict) else None
         signature_matrix_visible = _visible_count(page, ".signature-grid") > 0
+        existing_crest_count = _visible_count(page, '[data-crest-kind="existing"]')
         visible_forbidden = page.evaluate(
             """() => {
               const text = document.body.innerText || '';
@@ -475,6 +496,7 @@ def _capture_page(
             "exact_compact_remainder_probability": compact.get("remainderProbability"),
             "exact_compact_probability_font_size_min": compact.get("probabilityFontSizeMin"),
             "exact_signature_matrix_visible": signature_matrix_visible,
+            "existing_crest_count": existing_crest_count,
             "exact_disclosure_count": len(disclosure_metrics),
             "exact_disclosure_open": bool(disclosure.get("open")),
             "exact_disclosure_summary_visible": bool(disclosure.get("summaryVisible")),
@@ -891,6 +913,11 @@ def main() -> int:
     production_health_count = sum(
         record["normal_health_badge_count"] for record in records if record["status"] == "PRODUCTION_TRUTH"
     )
+    production_crest_counts = {
+        record["name"]: record["existing_crest_count"]
+        for record in records
+        if record["status"] == "PRODUCTION_TRUTH"
+    }
     manifest = {
         "schema_version": "public_ui_visual_evidence.v1",
         "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -942,6 +969,7 @@ def main() -> int:
             "dashboard_regenerated_with_pr_renderer": "YES",
             "normal_frozen_badge_count": production_frozen_count,
             "normal_health_badge_count": production_health_count,
+            "real_crest_counts": production_crest_counts,
             "fake_data_graphics": 0,
             "fake_affordances": 0,
             "interaction_checks": interaction_checks,

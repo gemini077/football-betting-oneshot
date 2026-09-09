@@ -9,6 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
 import build_public_site  # noqa: E402
+import team_crest_enrichment  # noqa: E402
 from test_formal_market_projection import formal_record  # noqa: E402
 
 
@@ -257,3 +258,50 @@ def test_build_propagates_current_prediction_quality_warning_to_linked_detail(tm
     assert "\u6bd4\u5206\u6982\u7387\u4ec5\u4f9b\u89c2\u5bdf" in detail
     assert "\u63a8\u8350" not in detail
     assert "首推比分" not in detail
+def test_build_enriches_verified_crests_into_dashboard_and_detail_assets(tmp_path, monkeypatch):
+    make_source_tree(tmp_path)
+    dashboard_path = tmp_path / "data" / "prediction_dashboard" / "latest.json"
+    dashboard = json.loads(dashboard_path.read_text(encoding="utf-8"))
+    dashboard["fixtures"][0]["nowscore_id"] = 9001
+    write_json(dashboard_path, dashboard)
+    write_json(
+        tmp_path / "data" / "prediction_universe" / "2026-08-25.json",
+        {
+            "fixtures": [
+                {
+                    "matchId": "1001",
+                    "nowscoreId": 9001,
+                    "homeTeam": "Home FC",
+                    "awayTeam": "Away FC",
+                }
+            ]
+        },
+    )
+    page_html = """
+    <input type="hidden" id="hide_scheduleId" value="9001" />
+    <div id="home"><a class="name" href="//info.nowscore.com/cn/team/Summary.aspx?teamid=11">Home FC(主)</a>
+      <div><img src="//info.nowscore.com/Image/team/images/11/home.png" /></div></div>
+    <div id="guest"><div><img src="//info.nowscore.com/Image/team/images/22/away.png" /></div>
+      <a class="name" href="//info.nowscore.com/cn/team/Summary.aspx?teamid=22">Away FC</a></div>
+    """
+
+    def fetch(url: str, timeout: float = 30) -> bytes:
+        if "/analysis/9001cn.html" in url:
+            return page_html.encode("utf-8")
+        return b"\x89PNG\r\n\x1a\n" + url.encode("ascii")
+
+    monkeypatch.setattr(team_crest_enrichment, "_fetch_bytes", fetch)
+    monkeypatch.setattr(build_public_site, "ROOT", tmp_path)
+    before = dashboard_path.read_bytes()
+
+    build_public_site.build(tmp_path / "site")
+
+    dashboard_html = (tmp_path / "site" / "prediction_dashboard/latest.html").read_text(encoding="utf-8")
+    detail_html = (tmp_path / "site" / "matches/1001/index.html").read_text(encoding="utf-8")
+    published_json = json.loads((tmp_path / "site" / "prediction_dashboard/latest.json").read_text(encoding="utf-8"))
+    assert dashboard_html.count('data-crest-kind="existing"') == 2
+    assert "../assets/team-crests/crest-" in dashboard_html
+    assert detail_html.count('data-crest-kind="existing"') == 2
+    assert "../../assets/team-crests/crest-" in detail_html
+    assert published_json["fixtures"][0]["nowscore_id"] == 9001
+    assert dashboard_path.read_bytes() == before

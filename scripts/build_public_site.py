@@ -32,6 +32,11 @@ try:
 except ImportError:  # pragma: no cover - direct script execution path.
     from change_awareness import build_prematch_change_awareness
 
+try:
+    from .team_crest_enrichment import enrich_dashboard_crests
+except ImportError:  # pragma: no cover - direct script execution path.
+    from team_crest_enrichment import enrich_dashboard_crests
+
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_OUTPUT = ROOT / "site"
@@ -112,7 +117,12 @@ def _page_references(page: Path, data_root: Path) -> tuple[set[Path], set[str]]:
     return linked_pages, match_ids
 
 
-def _copy_linked_public_pages(data_root: Path, output: Path) -> set[str]:
+def _copy_linked_public_pages(
+    data_root: Path,
+    output: Path,
+    *,
+    dashboard: dict[str, Any] | None = None,
+) -> set[str]:
     queue = [data_root / relative for relative in PUBLIC_ENTRYPOINTS if relative.endswith(".html")]
     copied: set[Path] = set()
     match_ids: set[str] = set()
@@ -125,7 +135,7 @@ def _copy_linked_public_pages(data_root: Path, output: Path) -> set[str]:
             raise FileNotFoundError(f"required linked public page is missing: {relative}")
         target = output / source.relative_to(data_root)
         if source == data_root / "prediction_dashboard" / "latest.html":
-            dashboard_payload = _read_json(data_root / "prediction_dashboard" / "latest.json")
+            dashboard_payload = dashboard or _read_json(data_root / "prediction_dashboard" / "latest.json")
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_text(render_dashboard(dashboard_payload), encoding="utf-8")
         else:
@@ -135,6 +145,26 @@ def _copy_linked_public_pages(data_root: Path, output: Path) -> set[str]:
         match_ids.update(page_match_ids)
         queue.extend(linked_pages - copied)
     return match_ids
+
+
+def _detail_asset_source(source: Any) -> str | None:
+    value = str(source or "").strip()
+    if not value:
+        return None
+    if value.startswith("../assets/"):
+        return f"../../{value[3:]}"
+    if value.startswith("assets/"):
+        return f"../../{value}"
+    return value
+
+
+def _overlay_fixture_crests(payload: dict[str, Any], fixture: dict[str, Any]) -> dict[str, Any]:
+    identity = dict(payload.get("identity") or {})
+    for side in ("home", "away"):
+        source = fixture.get(f"{side}_crest") or fixture.get(f"{side}_logo")
+        if source:
+            identity[f"{side}_crest"] = _detail_asset_source(source)
+    return {**payload, "identity": identity}
 
 
 def _linked_frozen_formal_markets(data_root: Path, fixture: dict[str, Any]) -> dict[str, Any] | None:
@@ -267,6 +297,8 @@ def _fixture_contract(
             "home": fixture.get("home"),
             "away": fixture.get("away"),
             "kickoff_at": fixture.get("kickoff"),
+            "home_crest": _detail_asset_source(fixture.get("home_crest")),
+            "away_crest": _detail_asset_source(fixture.get("away_crest")),
         },
         "status": {
             "code": fixture.get("status") or "PENDING",
@@ -327,6 +359,7 @@ def _match_contracts(data_root: Path, dashboard: dict[str, Any], match_ids: set[
                             records=prediction_records,
                         ),
                     }
+                    payload = _overlay_fixture_crests(payload, fixture)
                 contracts[match_id] = payload
                 break
     for match_id in sorted(match_ids - contracts.keys()):
@@ -368,11 +401,33 @@ def build(output: Path, *, data_root: Path | None = None) -> Path:
         shutil.rmtree(output)
     output.mkdir(parents=True)
 
+    dashboard = _read_json(data_root / "prediction_dashboard" / "latest.json")
+    universe: dict[str, Any] = {}
+    universe_path = data_root / "prediction_universe" / f"{dashboard.get('business_date') or ''}.json"
+    if universe_path.is_file():
+        try:
+            candidate = _read_json(universe_path)
+            if isinstance(candidate, dict):
+                universe = candidate
+        except ValueError:
+            universe = {}
+    try:
+        dashboard = enrich_dashboard_crests(
+            dashboard,
+            universe=universe,
+            asset_root=output / "assets" / "team-crests",
+        )
+    except Exception:
+        # Crest lookup is presentation-only; preserve the build if the optional
+        # enrichment layer itself encounters an unexpected source failure.
+        pass
+
     for relative in PUBLIC_ENTRYPOINTS:
         if relative.endswith(".json"):
             _copy_file(data_root / relative, output / relative)
-    dashboard = _read_json(data_root / "prediction_dashboard" / "latest.json")
-    match_ids = _copy_linked_public_pages(data_root, output)
+    dashboard_json = output / "prediction_dashboard" / "latest.json"
+    dashboard_json.write_text(json.dumps(dashboard, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    match_ids = _copy_linked_public_pages(data_root, output, dashboard=dashboard)
     _build_match_pages(data_root, output, match_ids, dashboard)
 
     downloads = output / "downloads"
