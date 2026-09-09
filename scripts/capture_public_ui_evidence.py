@@ -416,7 +416,7 @@ def _shell_metrics(page: Any) -> dict[str, Any]:
               ? Number.parseFloat(window.getComputedStyle(element).fontSize)
               : null;
           };
-          const targets = [...document.querySelectorAll('.tab, .bottom-item, .filter')]
+          const targets = [...document.querySelectorAll('.tab, .bottom-item, .filter, .mobile-topbar a')]
             .filter(visible)
             .map(element => ({
               selector: element.className,
@@ -425,6 +425,7 @@ def _shell_metrics(page: Any) -> dict[str, Any]:
             }));
           const fakeSelectors = [
             '.icon-btn',
+            '.fav',
             '[aria-label="\u641c\u7d22"]',
             '[aria-label="\u6536\u85cf"]',
             '[aria-label="\u901a\u77e5"]',
@@ -440,6 +441,7 @@ def _shell_metrics(page: Any) -> dict[str, Any]:
           return {
             missingFragmentTargets,
             fakeControls,
+            favoriteControls: [...document.querySelectorAll('.fav')].filter(visible).length,
             forbiddenShellText: ['Dark mode', '9:41', '\u6536\u85cf', '\u901a\u77e5', '\u8d26\u6237'].filter(token => text.includes(token)),
             firstLayerJargon: ['1X2', 'Top3', 'Top-3', 'H\\A', 'H/A'].filter(token => text.includes(token)),
             dashboardAnalysisLinks: [...document.querySelectorAll('a[href="#analysis"]')].filter(visible).length,
@@ -459,6 +461,12 @@ def _shell_metrics(page: Any) -> dict[str, Any]:
               matrix: sizes('.signature-grid'),
             },
             mobileTargets: targets,
+            mobileTopbarTargets: [...document.querySelectorAll('.mobile-topbar a')]
+              .filter(visible)
+              .map(element => ({
+                height: element.getBoundingClientRect().height,
+                width: element.getBoundingClientRect().width,
+              })),
           };
         }"""
     )
@@ -713,6 +721,8 @@ def _check_public_shell_and_responsive(browser: Any, base_url: str) -> dict[str,
             raise RuntimeError(f"{label} has missing visible fragment targets: {metrics['missingFragmentTargets']}")
         if metrics.get("fakeControls"):
             raise RuntimeError(f"{label} still exposes fake utility controls")
+        if metrics.get("favoriteControls"):
+            raise RuntimeError(f"{label} still exposes a fake favorite affordance")
         if metrics.get("forbiddenShellText"):
             raise RuntimeError(f"{label} still exposes fake shell text: {metrics['forbiddenShellText']}")
         if metrics.get("firstLayerJargon"):
@@ -729,12 +739,17 @@ def _check_public_shell_and_responsive(browser: Any, base_url: str) -> dict[str,
             raise RuntimeError(f"{label} does not expose the mobile data destination")
         if mobile and any(float(item.get("height") or 0) < 44 for item in metrics.get("mobileTargets") or []):
             raise RuntimeError(f"{label} has a sub-44px mobile interaction target")
+        if mobile and any(
+            float(item.get("height") or 0) < 44 or float(item.get("width") or 0) < 44
+            for item in metrics.get("mobileTopbarTargets") or []
+        ):
+            raise RuntimeError(f"{label} has a sub-44px mobile back target")
         typography = metrics.get("typography") or {}
         required_sizes = [typography.get("body"), typography.get("support"), typography.get("section")]
         if any(size is not None and float(size) < 11 for size in required_sizes):
             raise RuntimeError(f"{label} has unreadable core typography: {typography}")
         matrix_size = typography.get("matrix")
-        if matrix_size is not None and float(matrix_size) < 9:
+        if matrix_size is not None and float(matrix_size) < 10:
             raise RuntimeError(f"{label} has an unreadable score matrix: {matrix_size}")
 
     def assert_scaled(page: Any, path_label: str, selectors: list[str]) -> None:
@@ -1156,10 +1171,19 @@ def main() -> int:
         for record in records
         if (record.get("shell_metrics") or {}).get("missingFragmentTargets")
         or (record.get("shell_metrics") or {}).get("fakeControls")
+        or (record.get("shell_metrics") or {}).get("favoriteControls")
         or (record.get("shell_metrics") or {}).get("forbiddenShellText")
         or (record.get("shell_metrics") or {}).get("firstLayerJargon")
         or (record.get("shell_metrics") or {}).get("missingConditionalTabTargets")
         or record.get("frozen_not_predicting_count")
+        or any(
+            float(item.get("height") or 0) < 44 or float(item.get("width") or 0) < 44
+            for item in (record.get("shell_metrics") or {}).get("mobileTopbarTargets") or []
+        )
+        or (
+            (record.get("shell_metrics") or {}).get("typography", {}).get("matrix") is not None
+            and float((record.get("shell_metrics") or {}).get("typography", {}).get("matrix")) < 10
+        )
     ]
     if browser_errors or overflow or exact_overflow or mobile_exact_failures or desktop_signature_failures or change_awareness_failures or forbidden_visible or shell_failures:
         raise SystemExit(

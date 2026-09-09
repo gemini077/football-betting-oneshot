@@ -146,6 +146,9 @@ def test_detail_keeps_exact_score_as_separate_truthful_lane(tmp_path):
     assert 'class="tabs"' in html
     assert html.count('class="grid3') >= 2
     assert 'score-grid signature-grid' in html
+    assert 'class="fav"' not in html
+    assert '.detail-page .signature-grid { font-size: calc(10px * var(--ui-text-scale));' in html
+    assert html.count('class="quality-warning exact-quality-warning"') == 1
     assert 'class="trust-strip detail-trust"' in html
     assert '<details open class="exact-full-disclosure"' not in html
     assert html.count('class="probability-segment') == 3

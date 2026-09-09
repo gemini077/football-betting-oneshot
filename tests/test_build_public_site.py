@@ -255,7 +255,8 @@ def test_build_keeps_current_prediction_quality_warning_local_to_affected_lanes(
     build_public_site.build(tmp_path / "site")
 
     detail = (tmp_path / "site" / "matches/1001/index.html").read_text(encoding="utf-8")
-    assert 'class="quality-warning"' not in detail
+    assert detail.count('class="quality-warning exact-quality-warning"') == 1
+    assert detail.count("\u6bd4\u5206\u6982\u7387\u4ec5\u4f9b\u89c2\u5bdf") == 1
     assert 'data-exact-state="UNAVAILABLE"' in detail
     assert "\u63a8\u8350" not in detail
     assert "首推比分" not in detail

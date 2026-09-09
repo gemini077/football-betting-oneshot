@@ -258,6 +258,21 @@ def _score_serving_context(contract: dict[str, Any]) -> dict[str, str]:
         return exact_score_serving_presentation(quality)
     return exact_score_serving_presentation(None)
 
+
+def _exact_quality_warning(serving_state: str) -> str:
+    if serving_state == "NORMAL":
+        return ""
+    message = (
+        "\u6bd4\u5206\u6982\u7387\u8d28\u91cf\u5f85\u786e\u8ba4"
+        if serving_state == "UNVERIFIED"
+        else "\u6bd4\u5206\u6982\u7387\u4ec5\u4f9b\u89c2\u5bdf"
+    )
+    return (
+        f'<p class="quality-warning exact-quality-warning" '
+        f'data-exact-warning-state="{html.escape(serving_state, quote=True)}">{message}</p>'
+    )
+
+
 def _render_score_distribution(contract: dict[str, Any]) -> str:
     rows = _score_rows(contract)
     if not rows:
@@ -432,7 +447,8 @@ def _render_exact_formal_market(item: dict[str, Any], *, serving_state: str = "N
             '<article class="panel exact-panel lane-unavailable" id="score-distribution" '
             f'data-exact-state="UNAVAILABLE" data-exact-status="{html.escape(status, quote=True)}">'
             '<div class="score-title-row"><h2>\u6bd4\u5206\u6982\u7387</h2><small>\u5f53\u524d\u6ca1\u6709\u53ef\u6838\u9a8c\u7684\u5b8c\u6574\u6bd4\u5206\u6982\u7387</small></div>'
-            '<p>\u6bd4\u5206\u6982\u7387\u6682\u4e0d\u53ef\u7528\uff1b\u672a\u8bb0\u5f55\u7684\u5206\u5e03\u4e0d\u8865\u5199\u3002</p></article>'
+            + _exact_quality_warning(serving_state)
+            + '<p>\u6bd4\u5206\u6982\u7387\u6682\u4e0d\u53ef\u7528\uff1b\u672a\u8bb0\u5f55\u7684\u5206\u5e03\u4e0d\u8865\u5199\u3002</p></article>'
         )
     cells = contract.get("cells") if isinstance(contract.get("cells"), list) else []
     by_score = {
@@ -490,8 +506,7 @@ def _render_exact_formal_market(item: dict[str, Any], *, serving_state: str = "N
             )
         rows.append(f'<tr><th scope="row">{home}</th>{"".join(cells_html)}</tr>')
 
-    section_title = "\u6bd4\u5206\u6982\u7387\u5206\u5e03" if serving_state == "NORMAL" else "\u6bd4\u5206\u6982\u7387\u5206\u5e03\uff08\u4ec5\u4f9b\u89c2\u5bdf\uff09"
-    quality_note = "" if serving_state == "NORMAL" else '<span>\u5f53\u524d\u4ec5\u4f9b\u89c2\u5bdf</span>'
+    exact_quality_warning = _exact_quality_warning(serving_state)
     signature_headers = "".join(f'<th scope="col">{html.escape(label)}</th>' for label in signature_buckets)
     signature_rows = []
     for home_bucket in signature_buckets:
@@ -514,8 +529,9 @@ def _render_exact_formal_market(item: dict[str, Any], *, serving_state: str = "N
     return (
         f'<article class="panel exact-panel" id="score-distribution" data-exact-state="{html.escape(serving_state, quote=True)}" data-exact-status="AVAILABLE">'
         '<div class="score-title-row"><h2>\u6bd4\u5206\u6982\u7387</h2>'
-        f'<small>{html.escape(section_title)}{quality_note}</small></div>'
-        '<table class="score-grid signature-grid" aria-label="\u6bd4\u5206\u6982\u7387\u7b7e\u540d\u77e9\u9635\uff1b\u884c\u4e3a\u4e3b\u961f\u8fdb\u7403\uff0c\u5217\u4e3a\u5ba2\u961f\u8fdb\u7403">'
+        '<small>\u6bd4\u5206\u6982\u7387\u5206\u5e03</small></div>'
+        + exact_quality_warning
+        + '<table class="score-grid signature-grid" aria-label="\u6bd4\u5206\u6982\u7387\u7b7e\u540d\u77e9\u9635\uff1b\u884c\u4e3a\u4e3b\u961f\u8fdb\u7403\uff0c\u5217\u4e3a\u5ba2\u961f\u8fdb\u7403">'
         '<caption class="sr-only">\u6bd4\u5206\u6982\u7387\u7b7e\u540d\u77e9\u9635\uff1a\u884c\u4e3a\u4e3b\u961f\u8fdb\u7403 \u00d7 \u5217\u4e3a\u5ba2\u961f\u8fdb\u7403\uff0c4+ \u4e3a\u805a\u5408\u89c6\u56fe</caption>'
         '<thead><tr><th scope="col">\u4e3b\u961f/\u5ba2\u961f</th>'
         + signature_headers
@@ -1284,7 +1300,7 @@ DETAIL_CSS = r"""
   .detail-page .probability-strip { height: 6px; margin-top: 11px; }
   .detail-page .prob-caption { display: none; }
   .detail-page .exact-panel .score-title-row small { display: none; }
-  .detail-page .signature-grid { font-size: calc(9px * var(--ui-text-scale)); border-spacing: 1px; }
+  .detail-page .signature-grid { font-size: calc(10px * var(--ui-text-scale)); border-spacing: 1px; }
   .detail-page .signature-grid td { padding: 4px 1px; }
   .detail-page .exact-compact { display: block; margin-top: 10px; }
   .detail-page .exact-compact-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 7px; }
@@ -1338,7 +1354,7 @@ DETAIL_CSS = r"""
   .detail-page .hero .team h1 { font-size: var(--type-body); }
   .detail-page .kick strong { font-size: calc(16px * var(--ui-text-scale)); }
   .detail-page .probability-section .probability-card strong { font-size: calc(18px * var(--ui-text-scale)); }
-  .detail-page .signature-grid { font-size: calc(9px * var(--ui-text-scale)); }
+  .detail-page .signature-grid { font-size: calc(10px * var(--ui-text-scale)); }
   .detail-page .exact-compact-row { grid-template-columns: 55px minmax(0,1fr) 51px; gap: 5px; }
   .detail-page .change-row { grid-template-columns: 55px minmax(70px,1fr) 68px; gap: 5px; }
   .detail-page .verification-row { grid-template-columns: 58px minmax(55px,auto) minmax(0,1fr); gap: 5px; font-size: var(--type-support); }
@@ -1446,7 +1462,7 @@ def render_match_detail(contract: dict[str, Any]) -> str:
   <section class="hero" id="conclusion" data-matchup="true" aria-label="{home} VS {away}">
     <div class="team matchup-side matchup-home">{home_badge}<div class="team-copy"><h1>{home}</h1>{home_meta}</div></div>
     <div class="kick"><span class="matchup-vs hero-vs" aria-hidden="true">VS</span><small>{html.escape(kickoff_date)}</small><strong>{html.escape(kickoff_time)}</strong><span>{venue} \u00b7 {html.escape(status_line)}</span></div>
-    <div class="team right matchup-side matchup-away"><div class="team-copy"><h1>{away}</h1>{away_meta}</div>{away_badge}<span class="fav" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 3l2.8 5.7L21 9.6l-4.5 4.4 1.1 6.2L12 17.3 6.4 20.2 7.5 14 3 9.6l6.2-.9z"/></svg></span></div>
+    <div class="team right matchup-side matchup-away"><div class="team-copy"><h1>{away}</h1>{away_meta}</div>{away_badge}</div>
   </section>
   {tabs_html}
   {quality_warning}

@@ -110,8 +110,6 @@ button:focus-visible, a:focus-visible, summary:focus-visible { outline: 2px soli
 .kick small { color: #282D33; font-size: var(--type-meta); }
 .kick strong { display: block; margin: 4px 0 3px; font-size: 27px; line-height: 1; font-weight: 760; letter-spacing: -.03em; }
 .kick span { color: #34393E; font-size: var(--type-meta); }
-.fav { margin-left: 2px; color: #1D2329; }
-.fav svg { width: 20px; height: 20px; }
 .tabs { display: flex; gap: 36px; margin-top: 6px; padding: 0 20px; border-bottom: 1px solid var(--line); }
 .tab { position: relative; display: inline-flex; align-items: center; min-height: 44px; padding: 8px 0; color: #242A30; font-size: var(--type-support); text-decoration: none; }
 .tab.active { font-weight: 700; }
@@ -215,7 +213,6 @@ button:focus-visible, a:focus-visible, summary:focus-visible { outline: 2px soli
 .hero .team-badge { flex-basis: 68px; width: 68px; height: 68px; border: 0; border-radius: 0; background: transparent; font-size: 17px; }
 .hero .team-badge[data-crest-kind="fallback"] { border: 1px solid var(--line-2); border-radius: 10px; background: #F0F1EF; }
 .team.right .team-badge { order: 2; }
-.team.right .fav { order: 3; }
 .beginner-help { margin-top: 12px; }
 .beginner-help-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
 .beginner-help-heading h2 { margin-bottom: 0; }
@@ -241,7 +238,7 @@ button:focus-visible, a:focus-visible, summary:focus-visible { outline: 2px soli
   .topbar { display: none; }
   .mobile-topbar { display: flex; align-items: center; justify-content: space-between; min-height: 46px; padding: 0 13px; border-bottom: 1px solid var(--line); background: #FFF; color: var(--ink); }
   .mobile-topbar strong { min-width: 0; overflow: hidden; font-size: var(--type-support); letter-spacing: -.02em; text-overflow: ellipsis; white-space: nowrap; }
-  .mobile-topbar a { color: var(--ink); font-size: 20px; line-height: 1; text-decoration: none; }
+  .mobile-topbar a { display: inline-grid; place-items: center; flex: 0 0 44px; width: 44px; min-width: 44px; height: 44px; min-height: 44px; color: var(--ink); font-size: 20px; line-height: 1; text-decoration: none; }
   .mobile-topbar span { color: var(--muted); font-size: 18px; line-height: 1; }
   .content { padding: 0 14px 18px; }
   .hero { grid-template-columns: 1fr 76px 1fr; min-height: 83px; padding: 10px 2px; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; box-shadow: none; }
@@ -252,7 +249,6 @@ button:focus-visible, a:focus-visible, summary:focus-visible { outline: 2px soli
   .kick small { font-size: var(--type-meta); }
   .kick strong { margin: 2px 0; font-size: var(--type-display); }
   .kick span { font-size: var(--type-meta); }
-  .fav { display: none; }
   .tabs { gap: 22px; margin: 0; padding: 0 1px; overflow: auto; white-space: nowrap; }
   .tab { padding: 8px 0; font-size: var(--type-support); }
   .grid3 { display: block; margin-top: 0; }
