@@ -1114,7 +1114,15 @@ DETAIL_CSS = r"""
 .detail-page .crumbs .back { text-decoration: none; }
 .detail-page .crumbs strong { font-size: 11px; }
 .detail-page .utility strong { color: var(--ink); font-size: 10px; }
-.detail-page .hero { margin-top: 0; }
+.detail-page .hero { grid-template-columns: minmax(0,1fr) 150px minmax(0,1fr); min-height: 122px; column-gap: 18px; margin-top: 0; padding: 17px 24px; }
+.detail-page .hero > .team { justify-content: flex-end; gap: 12px; }
+.detail-page .hero > .team.right { justify-content: flex-start; }
+.detail-page .hero .team-badge { flex-basis: 62px; width: 62px; height: 62px; }
+.detail-page .hero .team-badge[data-crest-kind="fallback"] { border-radius: 10px; }
+.detail-page .hero .team h1 { font-size: 22px; }
+.detail-page .kick { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.detail-page .hero-vs { color: var(--orange); font-size: 9px; letter-spacing: .16em; }
+.detail-page .kick strong { font-size: 24px; }
 .detail-page .team-copy { min-width: 0; }
 .detail-page .team h1 { overflow-wrap: anywhere; }
 .detail-page .team-meta:empty { display: none; }
@@ -1124,8 +1132,14 @@ DETAIL_CSS = r"""
 .detail-page .quality-warning strong { color: var(--ink); }
 .detail-page .quality-warning span { margin-left: 7px; color: var(--muted); }
 .detail-page .pilot-note { border-left-color: var(--line-2); background: transparent; color: var(--muted); }
-.detail-page .primary-grid { margin-top: 10px; }
-.detail-page .supporting-grid { margin-top: 9px; }
+.detail-page .primary-grid { grid-template-columns: minmax(230px,.88fr) minmax(360px,1.3fr) minmax(245px,.9fr); align-items: start; gap: 10px; margin-top: 10px; }
+.detail-page .supporting-grid { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 10px; margin-top: 9px; }
+.detail-page .supporting-grid > .panel { flex: 1 1 320px; min-height: 0; }
+.detail-page .supporting-grid > .panel:only-child { flex: 1 1 100%; width: 100%; display: grid; grid-template-columns: minmax(130px,.7fr) minmax(260px,1.2fr) minmax(160px,.8fr); align-items: center; gap: 14px; }
+.detail-page .supporting-grid > .panel:only-child .bars { width: min(100%, 520px); justify-self: center; }
+.detail-page .primary-grid > .panel { min-height: 0; }
+.detail-page .exact-panel { border-top: 2px solid #6FA879; }
+.detail-page .takeaway-panel { border-top: 2px solid var(--line-2); }
 .detail-page .probability-section { overflow: hidden; }
 .detail-page .probability-section h2 { margin-bottom: 11px; }
 .detail-page .probability-section .prob-cells { border: 1px solid var(--line); border-radius: 8px; background: var(--line); gap: 1px; }
@@ -1174,12 +1188,12 @@ DETAIL_CSS = r"""
 }
 .detail-page .exact-grid-caption { margin: 8px 0 0; color: var(--muted); font-size: 8px; }
 .detail-page .top3line { margin-top: 8px; padding-top: 7px; font-size: 8px; }
-.detail-page .supporting-panel { min-height: 176px; }
+.detail-page .supporting-panel { min-height: 0; }
 .detail-page .supporting-panel h2 { margin-bottom: 11px; }
-.detail-page .goals-panel .bars { height: 122px; }
-.detail-page .goals-panel .bar-col { height: 73px; }
+.detail-page .goals-panel .bars { height: 86px; }
+.detail-page .goals-panel .bar-col { height: 50px; }
 .detail-page .goals-panel .bar-col span { background: var(--blue); }
-.detail-page .goals-panel .subtle-note,
+.detail-page .goals-panel .subtle-note { min-height: 0; margin-top: 4px; }
 .detail-page .market-panel .subtle-note { min-height: 22px; }
 .detail-page .market-panel .compare-head { margin-bottom: 6px; }
 .detail-page .market-panel .compare-grid { min-height: 85px; }
@@ -1257,10 +1271,21 @@ DETAIL_CSS = r"""
 
 @media (max-width: 820px) {
   .detail-page .content { padding: 0 14px 71px; }
+  .detail-page .hero { grid-template-columns: minmax(0,1fr) 72px minmax(0,1fr); min-height: 100px; column-gap: 5px; padding: 10px 0; }
+  .detail-page .hero > .team { gap: 6px; }
+  .detail-page .hero .team-badge { flex-basis: 42px; width: 42px; height: 42px; }
+  .detail-page .hero .team h1 { font-size: 13px; font-weight: 800; line-height: 1.15; }
+  .detail-page .hero-vs { font-size: 7px; }
+  .detail-page .kick { gap: 1px; }
+  .detail-page .kick small { font-size: 5.5px; }
+  .detail-page .kick strong { font-size: 14px; font-weight: 700; }
+  .detail-page .kick span { max-width: 72px; font-size: 5.5px; line-height: 1.2; text-align: center; }
   .detail-page .quality-warning,
   .detail-page .pilot-note { margin-top: 8px; }
-  .detail-page .primary-grid,
-  .detail-page .supporting-grid { margin-top: 0; }
+  .detail-page .primary-grid { margin-top: 0; }
+  .detail-page .supporting-grid { display: block; margin-top: 0; }
+  .detail-page .supporting-grid > .panel,
+  .detail-page .supporting-grid > .panel:only-child { width: auto; flex: none; display: block; }
   .detail-page .panel { padding: 14px 0; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; box-shadow: none; }
   .detail-page .probability-section .probability-card { padding: 7px 4px 8px; }
   .detail-page .probability-section .probability-card strong { font-size: 17px; }
@@ -1313,7 +1338,10 @@ DETAIL_CSS = r"""
 
 @media (max-width: 360px) {
   .detail-page .content { padding-left: 12px; padding-right: 12px; }
-  .detail-page .hero { grid-template-columns: 1fr 70px 1fr; }
+  .detail-page .hero { grid-template-columns: minmax(0,1fr) 64px minmax(0,1fr); min-height: 96px; }
+  .detail-page .hero .team-badge { flex-basis: 38px; width: 38px; height: 38px; }
+  .detail-page .hero .team h1 { font-size: 12px; }
+  .detail-page .kick strong { font-size: 13px; }
   .detail-page .probability-section .probability-card strong { font-size: 16px; }
   .detail-page .signature-grid { font-size: 6.5px; }
   .detail-page .exact-compact-row { grid-template-columns: 55px minmax(0,1fr) 51px; gap: 5px; }
@@ -1425,10 +1453,10 @@ def render_match_detail(contract: dict[str, Any]) -> str:
   {utility_html}
 </header>
 <div class="content">
-  <section class="hero" id="conclusion">
-    <div class="team">{home_badge}<div class="team-copy"><h1>{home}</h1>{home_meta}</div></div>
-    <div class="kick"><small>{html.escape(kickoff_date)}</small><strong>{html.escape(kickoff_time)}</strong><span>{venue} \u00b7 {html.escape(status_line)}</span></div>
-    <div class="team right"><div class="team-copy"><h1>{away}</h1>{away_meta}</div>{away_badge}<span class="fav" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 3l2.8 5.7L21 9.6l-4.5 4.4 1.1 6.2L12 17.3 6.4 20.2 7.5 14 3 9.6l6.2-.9z"/></svg></span></div>
+  <section class="hero" id="conclusion" data-matchup="true" aria-label="{home} VS {away}">
+    <div class="team matchup-side matchup-home">{home_badge}<div class="team-copy"><h1>{home}</h1>{home_meta}</div></div>
+    <div class="kick"><span class="matchup-vs hero-vs" aria-hidden="true">VS</span><small>{html.escape(kickoff_date)}</small><strong>{html.escape(kickoff_time)}</strong><span>{venue} \u00b7 {html.escape(status_line)}</span></div>
+    <div class="team right matchup-side matchup-away"><div class="team-copy"><h1>{away}</h1>{away_meta}</div>{away_badge}<span class="fav" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 3l2.8 5.7L21 9.6l-4.5 4.4 1.1 6.2L12 17.3 6.4 20.2 7.5 14 3 9.6l6.2-.9z"/></svg></span></div>
   </section>
   <nav class="tabs" aria-label="\u6bd4\u8d5b\u8be6\u60c5\u5bfc\u822a"><a class="tab active" href="#conclusion">\u6982\u89c8</a><a class="tab" href="#analysis">\u6982\u7387</a><a class="tab" href="#market">\u5e02\u573a</a><a class="tab" href="#evidence">\u4f9d\u636e</a></nav>
   {quality_warning}

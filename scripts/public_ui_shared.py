@@ -204,10 +204,14 @@ button:focus-visible, a:focus-visible, summary:focus-visible { outline: 2px soli
 .closed-beta-notice strong, .closed-beta-notice span { display: block; margin-top: 3px; }
 .closed-beta-notice strong { color: var(--muted); font-size: 10px; }
 .dashboard-trust { border-top: 0; }
-.team-badge { display: inline-grid; flex: 0 0 28px; place-items: center; width: 28px; height: 28px; overflow: hidden; border: 1px solid var(--line); border-radius: 50%; background: var(--card-soft); color: var(--muted); font-size: 11px; font-weight: 800; line-height: 1; text-transform: uppercase; }
+.matchup-side { min-width: 0; }
+.matchup-name { min-width: 0; overflow-wrap: anywhere; }
+.matchup-vs { color: var(--quiet); font-size: 8px; font-weight: 800; letter-spacing: .14em; text-align: center; text-transform: uppercase; }
+.team-badge { display: inline-grid; flex: 0 0 28px; place-items: center; width: 28px; height: 28px; overflow: hidden; border: 0; border-radius: 0; background: transparent; color: var(--muted); font-size: 11px; font-weight: 800; line-height: 1; text-transform: uppercase; }
 .team-badge img { display: block; width: 100%; height: 100%; object-fit: contain; }
-.team-badge-fallback { background: #F0F1EF; }
-.hero .team-badge { flex-basis: 68px; width: 68px; height: 68px; border-width: 2px; border-color: #B7C8DD; background: #F8FBFE; font-size: 17px; }
+.team-badge[data-crest-kind="fallback"], .team-badge-fallback { border: 1px solid var(--line-2); border-radius: 8px; background: #F0F1EF; }
+.hero .team-badge { flex-basis: 68px; width: 68px; height: 68px; border: 0; border-radius: 0; background: transparent; font-size: 17px; }
+.hero .team-badge[data-crest-kind="fallback"] { border: 1px solid var(--line-2); border-radius: 10px; background: #F0F1EF; }
 .team.right .team-badge { order: 2; }
 .team.right .fav { order: 3; }
 
