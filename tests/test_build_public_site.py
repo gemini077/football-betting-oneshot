@@ -237,7 +237,7 @@ def test_build_fails_loudly_when_linked_public_report_is_missing(tmp_path, monke
         build_public_site.build(tmp_path / "site")
 
 
-def test_build_propagates_current_prediction_quality_warning_to_linked_detail(tmp_path, monkeypatch):
+def test_build_keeps_current_prediction_quality_warning_local_to_affected_lanes(tmp_path, monkeypatch):
     make_source_tree(tmp_path)
     dashboard_path = tmp_path / "data" / "prediction_dashboard" / "latest.json"
     dashboard = json.loads(dashboard_path.read_text(encoding="utf-8"))
@@ -255,7 +255,8 @@ def test_build_propagates_current_prediction_quality_warning_to_linked_detail(tm
     build_public_site.build(tmp_path / "site")
 
     detail = (tmp_path / "site" / "matches/1001/index.html").read_text(encoding="utf-8")
-    assert "\u6bd4\u5206\u6982\u7387\u4ec5\u4f9b\u89c2\u5bdf" in detail
+    assert 'class="quality-warning"' not in detail
+    assert 'data-exact-state="UNAVAILABLE"' in detail
     assert "\u63a8\u8350" not in detail
     assert "首推比分" not in detail
 def test_build_enriches_verified_crests_into_dashboard_and_detail_assets(tmp_path, monkeypatch):

@@ -295,6 +295,17 @@ def _write_fixture_pages(site_root: Path, payload: dict[str, Any], current: dict
             "UPCOMING=0",
         ),
     }
+    for status in (
+        "PENDING",
+        "INSUFFICIENT_DATA",
+        "PREDICTION_FAILED",
+        "MISSED_PREMATCH_WINDOW",
+        "CURRENT_JOB_STATE_CONFLICT",
+    ):
+        pages[f"dashboard-{status.lower()}.html"] = _mark_test_fixture(
+            render_dashboard(_fixture_with_status(payload, status)),
+            status,
+        )
 
     business_date = str(payload.get("business_date") or "")
     data_root = ROOT / "data"
@@ -379,6 +390,77 @@ def _visible_count(page: Any, selector: str) -> int:
                 && rect.width > 0 && rect.height > 0;
             }).length"""
         )
+    )
+
+
+def _shell_metrics(page: Any) -> dict[str, Any]:
+    return page.evaluate(
+        """() => {
+          const visible = element => {
+            if (!element) return false;
+            const style = window.getComputedStyle(element);
+            const rect = element.getBoundingClientRect();
+            return style.display !== 'none' && style.visibility !== 'hidden'
+              && rect.width > 0 && rect.height > 0;
+          };
+          const fragmentLinks = [...document.querySelectorAll('a[href^="#"]')]
+            .filter(visible)
+            .map(link => link.getAttribute('href').slice(1))
+            .filter(Boolean);
+          const missingFragmentTargets = [...new Set(fragmentLinks)]
+            .filter(id => !visible(document.getElementById(id)));
+          const text = document.body.innerText || '';
+          const sizes = selector => {
+            const element = document.querySelector(selector);
+            return element && visible(element)
+              ? Number.parseFloat(window.getComputedStyle(element).fontSize)
+              : null;
+          };
+          const targets = [...document.querySelectorAll('.tab, .bottom-item, .filter')]
+            .filter(visible)
+            .map(element => ({
+              selector: element.className,
+              height: element.getBoundingClientRect().height,
+              width: element.getBoundingClientRect().width,
+            }));
+          const fakeSelectors = [
+            '.icon-btn',
+            '[aria-label="\u641c\u7d22"]',
+            '[aria-label="\u6536\u85cf"]',
+            '[aria-label="\u901a\u77e5"]',
+            '[aria-label="\u8d26\u6237"]',
+          ];
+          const fakeControls = fakeSelectors.reduce(
+            (count, selector) => count + [...document.querySelectorAll(selector)].filter(visible).length,
+            0,
+          );
+          const tabTargets = [...document.querySelectorAll('.tab[href^="#market"], .tab[href^="#evidence"]')]
+            .filter(visible)
+            .map(tab => tab.getAttribute('href').slice(1));
+          return {
+            missingFragmentTargets,
+            fakeControls,
+            forbiddenShellText: ['Dark mode', '9:41', '\u6536\u85cf', '\u901a\u77e5', '\u8d26\u6237'].filter(token => text.includes(token)),
+            firstLayerJargon: ['1X2', 'Top3', 'Top-3', 'H\\A', 'H/A'].filter(token => text.includes(token)),
+            dashboardAnalysisLinks: [...document.querySelectorAll('a[href="#analysis"]')].filter(visible).length,
+            closedBetaLinks: [...document.querySelectorAll('a[href="#closed-beta"]')].filter(visible).length,
+            mobileDataLinks: [...document.querySelectorAll('.mobile-bottom a[href="#data-method"]')].filter(visible).length,
+            tabTargets,
+            missingConditionalTabTargets: tabTargets.filter(id => !visible(document.getElementById(id))),
+            frozenNotPredicting: [...document.querySelectorAll('.match-card[data-status="FROZEN"] .teams-status')]
+              .filter(visible)
+              .filter(element => element.textContent.includes('\u5f53\u524d\u6682\u4e0d\u9884\u6d4b')).length,
+            typography: {
+              body: sizes('body'),
+              matchup: sizes('.matchup-name'),
+              support: sizes('.compact-prob-label, .recommendation-reason, .evidence-block'),
+              section: sizes('.matches-head h1, .section-heading h2, .panel h2'),
+              probability: sizes('.probability-card strong, .compact-prob-values'),
+              matrix: sizes('.signature-grid'),
+            },
+            mobileTargets: targets,
+          };
+        }"""
     )
 
 
@@ -489,6 +571,7 @@ def _capture_page(
                 .filter(token => text.includes(token));
             }"""
         )
+        shell_metrics = _shell_metrics(page)
         output_path.parent.mkdir(parents=True, exist_ok=True)
         page.screenshot(path=str(output_path), full_page=False)
         visible_status_badges = _visible_count(page, ".status-badge")
@@ -533,6 +616,8 @@ def _capture_page(
             "normal_frozen_badge_count": visible_status_badges,
             "normal_health_badge_count": visible_health_badges,
             "visible_forbidden_tokens": list(visible_forbidden or []),
+            "shell_metrics": shell_metrics,
+            "frozen_not_predicting_count": int(shell_metrics.get("frozenNotPredicting") or 0),
             "change_awareness_visible": _visible_count(page, "[data-change-awareness]") > 0,
             "change_awareness_status": str(
                 page.locator("[data-change-awareness]").first.get_attribute("data-change-awareness-status") or ""
@@ -620,6 +705,142 @@ def _check_interactions(browser: Any, base_url: str) -> dict[str, str]:
         context.close()
 
 
+def _check_public_shell_and_responsive(browser: Any, base_url: str) -> dict[str, str]:
+    checks: dict[str, str] = {}
+
+    def assert_shell(metrics: dict[str, Any], label: str, *, mobile: bool = False, dashboard: bool = False) -> None:
+        if metrics.get("missingFragmentTargets"):
+            raise RuntimeError(f"{label} has missing visible fragment targets: {metrics['missingFragmentTargets']}")
+        if metrics.get("fakeControls"):
+            raise RuntimeError(f"{label} still exposes fake utility controls")
+        if metrics.get("forbiddenShellText"):
+            raise RuntimeError(f"{label} still exposes fake shell text: {metrics['forbiddenShellText']}")
+        if metrics.get("firstLayerJargon"):
+            raise RuntimeError(f"{label} exposes first-layer jargon: {metrics['firstLayerJargon']}")
+        if dashboard and metrics.get("dashboardAnalysisLinks"):
+            raise RuntimeError(f"{label} exposes a missing dashboard analysis route")
+        if metrics.get("closedBetaLinks"):
+            raise RuntimeError(f"{label} points the beginner guide at closed beta")
+        if metrics.get("missingConditionalTabTargets"):
+            raise RuntimeError(f"{label} exposes a tab without a target")
+        if metrics.get("frozenNotPredicting"):
+            raise RuntimeError(f"{label} shows a stale not-predicting line on a frozen card")
+        if mobile and int(metrics.get("mobileDataLinks") or 0) != 1:
+            raise RuntimeError(f"{label} does not expose the mobile data destination")
+        if mobile and any(float(item.get("height") or 0) < 44 for item in metrics.get("mobileTargets") or []):
+            raise RuntimeError(f"{label} has a sub-44px mobile interaction target")
+        typography = metrics.get("typography") or {}
+        required_sizes = [typography.get("body"), typography.get("support"), typography.get("section")]
+        if any(size is not None and float(size) < 11 for size in required_sizes):
+            raise RuntimeError(f"{label} has unreadable core typography: {typography}")
+        matrix_size = typography.get("matrix")
+        if matrix_size is not None and float(matrix_size) < 9:
+            raise RuntimeError(f"{label} has an unreadable score matrix: {matrix_size}")
+
+    def assert_scaled(page: Any, path_label: str, selectors: list[str]) -> None:
+        page.evaluate("() => document.documentElement.style.setProperty('--ui-text-scale', '2')")
+        page.wait_for_timeout(50)
+        scaled = page.evaluate(
+            """selectors => {
+              const visible = element => {
+                if (!element) return false;
+                const style = window.getComputedStyle(element);
+                const rect = element.getBoundingClientRect();
+                return style.display !== 'none' && style.visibility !== 'hidden'
+                  && rect.width > 0 && rect.height > 0;
+              };
+              const missing = selectors.filter(selector => !visible(document.querySelector(selector)));
+              const clipped = selectors.filter(selector => {
+                const element = document.querySelector(selector);
+                if (!visible(element)) return false;
+                const rect = element.getBoundingClientRect();
+                return rect.left < -1 || rect.right > document.documentElement.clientWidth + 1;
+              });
+              return {
+                overflow: Math.max(0, document.documentElement.scrollWidth - document.documentElement.clientWidth),
+                missing,
+                clipped,
+              };
+            }""",
+            selectors,
+        )
+        if scaled["overflow"] or scaled["missing"] or scaled["clipped"]:
+            raise RuntimeError(f"{path_label} failed 200% text scaling: {scaled}")
+
+    context = browser.new_context(viewport={"width": 1440, "height": 1000}, locale="zh-CN")
+    page = context.new_page()
+    try:
+        page.goto(f"{base_url}/prediction_dashboard/latest.html", wait_until="networkidle", timeout=30_000)
+        dashboard_metrics = _shell_metrics(page)
+        assert_shell(dashboard_metrics, "dashboard desktop", dashboard=True)
+        checks["dashboard_shell_desktop"] = "VERIFIED"
+        if _visible_count(page, "#historical-results") != 1 or _visible_count(page, "#beginner-help") != 1:
+            raise RuntimeError("dashboard does not expose stable history and beginner-help destinations")
+        checks["dashboard_history_and_help_targets"] = "VERIFIED"
+
+        page.goto(f"{base_url}/visual-fixtures/detail-current-frozen.html", wait_until="networkidle", timeout=30_000)
+        detail_metrics = _shell_metrics(page)
+        assert_shell(detail_metrics, "detail desktop")
+        if len(detail_metrics.get("tabTargets") or []) not in {0, 2}:
+            raise RuntimeError("detail exposed only one of the conditional market/evidence tabs")
+        checks["detail_shell_desktop"] = "VERIFIED"
+        checks["detail_conditional_tabs"] = "VERIFIED"
+    finally:
+        context.close()
+
+    mobile_context = browser.new_context(viewport={"width": 390, "height": 844}, locale="zh-CN")
+    mobile_page = mobile_context.new_page()
+    try:
+        mobile_page.goto(f"{base_url}/prediction_dashboard/latest.html", wait_until="networkidle", timeout=30_000)
+        assert_shell(_shell_metrics(mobile_page), "dashboard mobile", mobile=True, dashboard=True)
+        checks["dashboard_mobile_targets"] = "VERIFIED"
+        assert_scaled(
+            mobile_page,
+            "dashboard mobile",
+            [".matches-head h1", ".matchup-name", ".compact-prob-values", ".recommendation-context"],
+        )
+        checks["dashboard_mobile_200_percent_text"] = "VERIFIED"
+
+        mobile_page.goto(f"{base_url}/visual-fixtures/detail-current-frozen.html", wait_until="networkidle", timeout=30_000)
+        assert_shell(_shell_metrics(mobile_page), "detail mobile", mobile=True)
+        checks["detail_mobile_targets"] = "VERIFIED"
+        assert_scaled(
+            mobile_page,
+            "detail mobile",
+            [".hero h1", ".probability-card strong", ".exact-compact-probability", ".section-heading h2"],
+        )
+        checks["detail_mobile_200_percent_text"] = "VERIFIED"
+
+        mobile_page.goto(f"{base_url}/visual-fixtures/dashboard-result-empty.html#historical-results", wait_until="networkidle", timeout=30_000)
+        if _visible_count(mobile_page, "#historical-results") != 1 or _visible_count(mobile_page, ".history-empty") != 1:
+            raise RuntimeError("history zero state is not stable or visible")
+        checks["history_zero_state"] = "VERIFIED"
+    finally:
+        mobile_context.close()
+
+    status_context = browser.new_context(viewport={"width": 390, "height": 844}, locale="zh-CN")
+    status_page = status_context.new_page()
+    try:
+        for status in (
+            "pending",
+            "insufficient_data",
+            "prediction_failed",
+            "missed_prematch_window",
+            "current_job_state_conflict",
+        ):
+            status_page.goto(
+                f"{base_url}/visual-fixtures/dashboard-{status}.html",
+                wait_until="networkidle",
+                timeout=30_000,
+            )
+            if _visible_count(status_page, f'.match-card[data-status="{status.upper()}"]') == 0:
+                raise RuntimeError(f"status fixture missing: {status}")
+        checks["dashboard_status_states"] = "VERIFIED"
+    finally:
+        status_context.close()
+    return checks
+
+
 def _check_exact_mobile_interactions(browser: Any, base_url: str) -> dict[str, str]:
     checks: dict[str, str] = {}
     for width, height in ((390, 844), (320, 800)):
@@ -660,9 +881,9 @@ def _check_exact_mobile_interactions(browser: Any, base_url: str) -> dict[str, s
             )
             if compact_metrics["sourceCellCount"] != 169:
                 raise RuntimeError(f"{label}px compact projection lost frozen cells")
-            if compact_metrics["topCount"] != 6 or compact_metrics["scoreCount"] != 6:
-                raise RuntimeError(f"{label}px compact projection does not expose deterministic Top 6")
-            if compact_metrics["remainderCount"] != 163:
+            if compact_metrics["topCount"] != 3 or compact_metrics["scoreCount"] != 3:
+                raise RuntimeError(f"{label}px compact projection does not expose deterministic Top 3")
+            if compact_metrics["remainderCount"] != 166:
                 raise RuntimeError(f"{label}px compact projection has an incorrect represented remainder")
             if compact_metrics["probabilityFontSizeMin"] < 12:
                 raise RuntimeError(f"{label}px compact probability text is below 12px")
@@ -751,9 +972,11 @@ def _capture_all(
     base_url = f"http://127.0.0.1:{server.server_port}"
     specs = [
         ("dashboard-1440x1000.png", "prediction_dashboard/latest.html", (1440, 1000), "production-current", "PRODUCTION_TRUTH"),
+        ("dashboard-1920x1080.png", "prediction_dashboard/latest.html", (1920, 1080), "production-current", "PRODUCTION_TRUTH"),
         ("dashboard-390x844.png", "prediction_dashboard/latest.html", (390, 844), "production-current", "PRODUCTION_TRUTH"),
         ("dashboard-320x800.png", "prediction_dashboard/latest.html", (320, 800), "production-current", "PRODUCTION_TRUTH"),
         ("detail-current-frozen-1440x1000.png", "visual-fixtures/detail-current-frozen.html", (1440, 1000), str(current.get("match_id") or "current-frozen"), "PRODUCTION_TRUTH"),
+        ("detail-current-frozen-1920x1080.png", "visual-fixtures/detail-current-frozen.html", (1920, 1080), str(current.get("match_id") or "current-frozen"), "PRODUCTION_TRUTH"),
         ("detail-current-frozen-390x844.png", "visual-fixtures/detail-current-frozen.html", (390, 844), str(current.get("match_id") or "current-frozen"), "PRODUCTION_TRUTH"),
         ("detail-current-frozen-320x800.png", "visual-fixtures/detail-current-frozen.html", (320, 800), str(current.get("match_id") or "current-frozen"), "PRODUCTION_TRUTH"),
         ("detail-exact-unavailable-1440x1000.png", "visual-fixtures/detail-exact-unavailable.html#score-distribution", (1440, 1000), "exact-unavailable", "TEST_FIXTURE"),
@@ -768,8 +991,16 @@ def _capture_all(
         ("insufficient-evidence-390x844.png", "visual-fixtures/dashboard-insufficient.html", (390, 844), "INSUFFICIENT_SAMPLE", "TEST_FIXTURE"),
         ("degraded-evidence-1440x1000.png", "visual-fixtures/dashboard-degraded.html", (1440, 1000), "DEGRADED", "TEST_FIXTURE"),
         ("unverified-evidence-390x844.png", "visual-fixtures/dashboard-unverified.html", (390, 844), "UNVERIFIED", "TEST_FIXTURE"),
-        ("result-empty-evidence-390x844.png", "visual-fixtures/dashboard-result-empty.html", (390, 844), "RESULT=0", "TEST_FIXTURE"),
+        ("result-empty-evidence-390x844.png", "visual-fixtures/dashboard-result-empty.html#historical-results", (390, 844), "RESULT=0", "TEST_FIXTURE"),
         ("upcoming-empty-evidence-390x844.png", "visual-fixtures/dashboard-upcoming-empty.html", (390, 844), "UPCOMING=0", "TEST_FIXTURE"),
+        ("history-1920x1080.png", "prediction_dashboard/latest.html#historical-results", (1920, 1080), "history-production", "PRODUCTION_TRUTH"),
+        ("history-390x844.png", "prediction_dashboard/latest.html#historical-results", (390, 844), "history-production", "PRODUCTION_TRUTH"),
+        ("history-320x800.png", "prediction_dashboard/latest.html#historical-results", (320, 800), "history-production", "PRODUCTION_TRUTH"),
+        ("dashboard-pending-390x844.png", "visual-fixtures/dashboard-pending.html", (390, 844), "PENDING", "TEST_FIXTURE"),
+        ("dashboard-insufficient-data-390x844.png", "visual-fixtures/dashboard-insufficient_data.html", (390, 844), "INSUFFICIENT_DATA", "TEST_FIXTURE"),
+        ("dashboard-prediction-failed-390x844.png", "visual-fixtures/dashboard-prediction_failed.html", (390, 844), "PREDICTION_FAILED", "TEST_FIXTURE"),
+        ("dashboard-missed-prematch-window-390x844.png", "visual-fixtures/dashboard-missed_prematch_window.html", (390, 844), "MISSED_PREMATCH_WINDOW", "TEST_FIXTURE"),
+        ("dashboard-current-job-state-conflict-390x844.png", "visual-fixtures/dashboard-current_job_state_conflict.html", (390, 844), "CURRENT_JOB_STATE_CONFLICT", "TEST_FIXTURE"),
         ("completed-evidence-1440x1000.png", "visual-fixtures/detail-completed-verified.html", (1440, 1000), "completed-verified", "TEST_FIXTURE"),
         ("completed-evidence-390x844.png", "visual-fixtures/detail-completed-verified.html", (390, 844), "completed-verified", "TEST_FIXTURE"),
         ("completed-evidence-320x800.png", "visual-fixtures/detail-completed-verified.html", (320, 800), "completed-verified", "TEST_FIXTURE"),
@@ -783,6 +1014,7 @@ def _capture_all(
             try:
                 interaction_checks = {
                     **_check_interactions(browser, base_url),
+                    **_check_public_shell_and_responsive(browser, base_url),
                     **_check_exact_mobile_interactions(browser, base_url),
                 }
                 for name, path, viewport, fixture_id, status in specs:
@@ -859,9 +1091,9 @@ def main() -> int:
         and (
             not record["exact_compact_visible"]
             or record["exact_compact_source_cell_count"] != 169
-            or record["exact_compact_top_count"] != 6
-            or record["exact_compact_score_count"] != 6
-            or record["exact_compact_remainder_count"] != 163
+            or record["exact_compact_top_count"] != 3
+            or record["exact_compact_score_count"] != 3
+            or record["exact_compact_remainder_count"] != 166
             or (record["exact_compact_probability_font_size_min"] or 0) < 12
             or record["exact_disclosure_count"] != 1
             or record["exact_disclosure_open"]
@@ -874,7 +1106,7 @@ def main() -> int:
         record
         for record in records
         if record["exact_cells"] == 169
-        and record["viewport"] == "1440x1000"
+        and record["viewport"] in {"1440x1000", "1920x1080"}
         and (
             record["exact_disclosure_count"] != 1
             or record["exact_disclosure_open"]
@@ -916,7 +1148,20 @@ def main() -> int:
     forbidden_visible = [
         record for record in records if record["visible_forbidden_tokens"]
     ]
-    if browser_errors or overflow or exact_overflow or mobile_exact_failures or desktop_signature_failures or change_awareness_failures or forbidden_visible:
+    shell_failures = [
+        {
+            "name": record["name"],
+            "shell_metrics": record.get("shell_metrics") or {},
+        }
+        for record in records
+        if (record.get("shell_metrics") or {}).get("missingFragmentTargets")
+        or (record.get("shell_metrics") or {}).get("fakeControls")
+        or (record.get("shell_metrics") or {}).get("forbiddenShellText")
+        or (record.get("shell_metrics") or {}).get("firstLayerJargon")
+        or (record.get("shell_metrics") or {}).get("missingConditionalTabTargets")
+        or record.get("frozen_not_predicting_count")
+    ]
+    if browser_errors or overflow or exact_overflow or mobile_exact_failures or desktop_signature_failures or change_awareness_failures or forbidden_visible or shell_failures:
         raise SystemExit(
             json.dumps(
                 {
@@ -927,6 +1172,7 @@ def main() -> int:
                     "exact_desktop_signature_matrix_failures": desktop_signature_failures,
                     "change_awareness_failures": change_awareness_failures,
                     "visible_forbidden_tokens": forbidden_visible,
+                    "public_shell_failures": shell_failures,
                 },
                 ensure_ascii=False,
             )
@@ -989,7 +1235,7 @@ def main() -> int:
                     "visible_cell_count": record["exact_disclosure_visible_cell_count"],
                 }
                 for record in records
-                if record["exact_cells"] == 169 and record["viewport"] == "1440x1000"
+                if record["exact_cells"] == 169 and record["viewport"] in {"1440x1000", "1920x1080"}
             },
             "dashboard_regenerated_with_pr_renderer": "YES",
             "normal_frozen_badge_count": production_frozen_count,
