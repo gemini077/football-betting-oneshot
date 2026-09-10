@@ -1,0 +1,426 @@
+{
+  "overlapping_main_write_namespaces": {
+    "data/analysis_inputs": [
+      ".github/workflows/deploy-pages.yml",
+      ".github/workflows/prematch-market-monitor.yml"
+    ],
+    "data/analysis_reports": [
+      ".github/workflows/analyze-selected.yml",
+      ".github/workflows/deploy-pages.yml",
+      ".github/workflows/prematch-market-monitor.yml"
+    ],
+    "data/analysis_reports/current": [
+      ".github/workflows/analyze-selected.yml",
+      ".github/workflows/core-auto-analysis.yml",
+      ".github/workflows/deploy-pages.yml"
+    ],
+    "data/fetch_runs": [
+      ".github/workflows/analyze-selected.yml",
+      ".github/workflows/deploy-pages.yml",
+      ".github/workflows/prematch-market-monitor.yml"
+    ],
+    "data/live_ev_profiles": [
+      ".github/workflows/analyze-selected.yml",
+      ".github/workflows/deploy-pages.yml"
+    ],
+    "data/market_history": [
+      ".github/workflows/analyze-selected.yml",
+      ".github/workflows/deploy-pages.yml",
+      ".github/workflows/prematch-market-monitor.yml"
+    ],
+    "data/match_archive": [
+      ".github/workflows/analyze-selected.yml",
+      ".github/workflows/deploy-pages.yml"
+    ],
+    "data/match_workspace": [
+      ".github/workflows/analyze-selected.yml",
+      ".github/workflows/deploy-pages.yml",
+      ".github/workflows/postmatch-once.yml",
+      ".github/workflows/prematch-market-monitor.yml",
+      ".github/workflows/record-real-bet.yml"
+    ],
+    "data/paper_ledger": [
+      ".github/workflows/analyze-selected.yml",
+      ".github/workflows/deploy-pages.yml",
+      ".github/workflows/postmatch-once.yml"
+    ],
+    "data/postmatch_automation": [
+      ".github/workflows/analyze-selected.yml",
+      ".github/workflows/deploy-pages.yml",
+      ".github/workflows/postmatch-once.yml"
+    ],
+    "data/postmatch_dashboard": [
+      ".github/workflows/analyze-selected.yml",
+      ".github/workflows/deploy-pages.yml",
+      ".github/workflows/postmatch-once.yml"
+    ],
+    "data/postmatch_reports": [
+      ".github/workflows/deploy-pages.yml",
+      ".github/workflows/postmatch-once.yml"
+    ],
+    "data/postmatch_reviews": [
+      ".github/workflows/analyze-selected.yml",
+      ".github/workflows/deploy-pages.yml",
+      ".github/workflows/postmatch-once.yml"
+    ],
+    "data/provider_match_crosswalk.json": [
+      ".github/workflows/analyze-selected.yml",
+      ".github/workflows/deploy-pages.yml"
+    ]
+  },
+  "workflow_count": 18,
+  "workflows": [
+    {
+      "can_write_main": true,
+      "classification": "durable production workflow",
+      "classification_reason": "production trigger/deploy or durable contents-write path",
+      "concurrency_declared": true,
+      "contents_write_permission": true,
+      "file": ".github/workflows/analyze-selected.yml",
+      "git_write_commands_present": true,
+      "name": "Analyze selected match",
+      "triggers": [
+        "issues",
+        "workflow_dispatch"
+      ],
+      "write_namespaces": [
+        "data/analysis_inputs/automated",
+        "data/analysis_jobs/diagnostics",
+        "data/analysis_reports",
+        "data/analysis_reports/current",
+        "data/fetch_runs",
+        "data/live_ev_profiles",
+        "data/market_history",
+        "data/match_archive",
+        "data/match_workspace",
+        "data/paper_ledger",
+        "data/postmatch_automation",
+        "data/postmatch_dashboard",
+        "data/postmatch_reviews",
+        "data/provider_match_crosswalk.json"
+      ]
+    },
+    {
+      "can_write_main": false,
+      "classification": "durable architecture/contract gate",
+      "classification_reason": "read-only architecture evidence gate",
+      "concurrency_declared": false,
+      "contents_write_permission": false,
+      "file": ".github/workflows/architecture-audit.yml",
+      "git_write_commands_present": false,
+      "name": "WHOLE-CODE architecture ownership audit",
+      "triggers": [
+        "pull_request",
+        "workflow_dispatch"
+      ],
+      "write_namespaces": []
+    },
+    {
+      "can_write_main": false,
+      "classification": "active research/probe",
+      "classification_reason": "research/probe or challenger-specific trigger/path",
+      "concurrency_declared": false,
+      "contents_write_permission": false,
+      "file": ".github/workflows/challenger-c-normalized-result-linkage-fix-1.yml",
+      "git_write_commands_present": false,
+      "name": "Challenger C normalized result linkage fix 1",
+      "triggers": [
+        "pull_request",
+        "workflow_dispatch"
+      ],
+      "write_namespaces": [
+        "data/postmatch_automation/results",
+        "data/prediction_quality/market_side_shadow_1/pairs"
+      ]
+    },
+    {
+      "can_write_main": true,
+      "classification": "durable production workflow",
+      "classification_reason": "production trigger/deploy or durable contents-write path",
+      "concurrency_declared": true,
+      "contents_write_permission": true,
+      "file": ".github/workflows/core-auto-analysis.yml",
+      "git_write_commands_present": true,
+      "name": "Core event automatic reports",
+      "triggers": [
+        "schedule",
+        "workflow_dispatch"
+      ],
+      "write_namespaces": [
+        "data/analysis_reports/current"
+      ]
+    },
+    {
+      "can_write_main": false,
+      "classification": "active research/probe",
+      "classification_reason": "research/probe or challenger-specific trigger/path",
+      "concurrency_declared": false,
+      "contents_write_permission": false,
+      "file": ".github/workflows/current-universe-rollover-probe.yml",
+      "git_write_commands_present": false,
+      "name": "Current universe rollover probe",
+      "triggers": [
+        "pull_request",
+        "workflow_dispatch"
+      ],
+      "write_namespaces": []
+    },
+    {
+      "can_write_main": false,
+      "classification": "durable architecture/contract gate",
+      "classification_reason": "focused contract/readiness validation path",
+      "concurrency_declared": false,
+      "contents_write_permission": false,
+      "file": ".github/workflows/data-plane-2-clean-runner-smoke.yml",
+      "git_write_commands_present": false,
+      "name": "DATA-PLANE-2 clean runner smoke",
+      "triggers": [
+        "pull_request",
+        "workflow_dispatch"
+      ],
+      "write_namespaces": [
+        "data/football_data/runtime_snapshot_manifest.json"
+      ]
+    },
+    {
+      "can_write_main": false,
+      "classification": "durable production workflow",
+      "classification_reason": "production trigger/deploy or durable contents-write path",
+      "concurrency_declared": false,
+      "contents_write_permission": false,
+      "file": ".github/workflows/deploy-checkpoint-scheduler.yml",
+      "git_write_commands_present": false,
+      "name": "Deploy minute checkpoint scheduler",
+      "triggers": [
+        "workflow_dispatch"
+      ],
+      "write_namespaces": []
+    },
+    {
+      "can_write_main": true,
+      "classification": "durable production workflow",
+      "classification_reason": "production trigger/deploy or durable contents-write path",
+      "concurrency_declared": true,
+      "contents_write_permission": true,
+      "file": ".github/workflows/deploy-pages.yml",
+      "git_write_commands_present": true,
+      "name": "Refresh data and deploy Pages",
+      "triggers": [
+        "issues",
+        "push",
+        "schedule",
+        "workflow_dispatch"
+      ],
+      "write_namespaces": [
+        "data/analysis_inputs",
+        "data/analysis_jobs",
+        "data/analysis_reports",
+        "data/analysis_reports/current",
+        "data/base_prediction_jobs",
+        "data/fetch_runs",
+        "data/live_ev_profiles",
+        "data/market_history",
+        "data/match_archive",
+        "data/match_workspace",
+        "data/model_benchmarks/predictions",
+        "data/model_benchmarks/settlements",
+        "data/model_governance/input_snapshots",
+        "data/model_governance/prediction_exclusions",
+        "data/model_governance/predictions",
+        "data/paper_ledger",
+        "data/postmatch_automation",
+        "data/postmatch_dashboard",
+        "data/postmatch_reports",
+        "data/postmatch_reviews",
+        "data/prediction_dashboard",
+        "data/prediction_quality/market_side_shadow_1",
+        "data/prediction_universe",
+        "data/product_runtime",
+        "data/product_runtime/latest_cycle.json",
+        "data/prospective",
+        "data/provider_match_crosswalk.json",
+        "data/schedule_updates"
+      ]
+    },
+    {
+      "can_write_main": false,
+      "classification": "durable architecture/contract gate",
+      "classification_reason": "focused contract/readiness validation path",
+      "concurrency_declared": false,
+      "contents_write_permission": false,
+      "file": ".github/workflows/exact-distribution-freeze.yml",
+      "git_write_commands_present": false,
+      "name": "Exact distribution freeze contract",
+      "triggers": [
+        "pull_request",
+        "workflow_dispatch"
+      ],
+      "write_namespaces": []
+    },
+    {
+      "can_write_main": false,
+      "classification": "durable architecture/contract gate",
+      "classification_reason": "focused contract/readiness validation path",
+      "concurrency_declared": false,
+      "contents_write_permission": false,
+      "file": ".github/workflows/football-state-memory.yml",
+      "git_write_commands_present": false,
+      "name": "FOOTBALL State Memory contract",
+      "triggers": [
+        "pull_request",
+        "workflow_dispatch"
+      ],
+      "write_namespaces": []
+    },
+    {
+      "can_write_main": false,
+      "classification": "durable architecture/contract gate",
+      "classification_reason": "focused contract/readiness validation path",
+      "concurrency_declared": false,
+      "contents_write_permission": false,
+      "file": ".github/workflows/jc-handicap-nowscore.yml",
+      "git_write_commands_present": false,
+      "name": "JC handicap Nowscore formal truth",
+      "triggers": [
+        "pull_request",
+        "workflow_dispatch"
+      ],
+      "write_namespaces": [
+        "data/UI",
+        "data/base_prediction_jobs",
+        "data/market_history",
+        "data/model_governance/input_snapshots",
+        "data/model_governance/predictions",
+        "data/postmatch_results",
+        "data/postmatch_reviews",
+        "data/prediction_universe",
+        "data/prospective"
+      ]
+    },
+    {
+      "can_write_main": true,
+      "classification": "durable production workflow",
+      "classification_reason": "production trigger/deploy or durable contents-write path",
+      "concurrency_declared": true,
+      "contents_write_permission": true,
+      "file": ".github/workflows/postmatch-once.yml",
+      "git_write_commands_present": true,
+      "name": "One-shot post-match verification",
+      "triggers": [
+        "repository_dispatch",
+        "schedule",
+        "workflow_dispatch"
+      ],
+      "write_namespaces": [
+        "data/match_workspace",
+        "data/paper_ledger",
+        "data/postmatch_automation",
+        "data/postmatch_dashboard",
+        "data/postmatch_reports",
+        "data/postmatch_reviews"
+      ]
+    },
+    {
+      "can_write_main": true,
+      "classification": "durable production workflow",
+      "classification_reason": "production trigger/deploy or durable contents-write path",
+      "concurrency_declared": true,
+      "contents_write_permission": true,
+      "file": ".github/workflows/prematch-market-monitor.yml",
+      "git_write_commands_present": true,
+      "name": "Refresh analyzed pre-match markets",
+      "triggers": [
+        "repository_dispatch",
+        "workflow_dispatch"
+      ],
+      "write_namespaces": [
+        "data/analysis_inputs",
+        "data/analysis_reports",
+        "data/fetch_runs",
+        "data/market_history",
+        "data/match_workspace"
+      ]
+    },
+    {
+      "can_write_main": false,
+      "classification": "durable architecture/contract gate",
+      "classification_reason": "focused contract/readiness validation path",
+      "concurrency_declared": false,
+      "contents_write_permission": false,
+      "file": ".github/workflows/production-base-prediction-timeout-closure.yml",
+      "git_write_commands_present": false,
+      "name": "Production BASE prediction timeout closure",
+      "triggers": [
+        "pull_request"
+      ],
+      "write_namespaces": []
+    },
+    {
+      "can_write_main": false,
+      "classification": "historical milestone workflow still resident",
+      "classification_reason": "milestone-specific visual evidence gate remains in main",
+      "concurrency_declared": false,
+      "contents_write_permission": false,
+      "file": ".github/workflows/public-ui-visual-evidence.yml",
+      "git_write_commands_present": false,
+      "name": "Public UI visual evidence",
+      "triggers": [
+        "pull_request",
+        "workflow_dispatch"
+      ],
+      "write_namespaces": []
+    },
+    {
+      "can_write_main": true,
+      "classification": "durable production workflow",
+      "classification_reason": "production trigger/deploy or durable contents-write path",
+      "concurrency_declared": true,
+      "contents_write_permission": true,
+      "file": ".github/workflows/pure-market-exact-prospective.yml",
+      "git_write_commands_present": true,
+      "name": "Pure Market Exact prospective authority",
+      "triggers": [
+        "pull_request",
+        "schedule",
+        "workflow_dispatch"
+      ],
+      "write_namespaces": [
+        "data/prediction_quality/pure_market_exact_prospective_1"
+      ]
+    },
+    {
+      "can_write_main": true,
+      "classification": "durable production workflow",
+      "classification_reason": "production trigger/deploy or durable contents-write path",
+      "concurrency_declared": false,
+      "contents_write_permission": true,
+      "file": ".github/workflows/record-real-bet.yml",
+      "git_write_commands_present": true,
+      "name": "Record confirmed real bet",
+      "triggers": [
+        "issues"
+      ],
+      "write_namespaces": [
+        "data/match_workspace",
+        "data/public_site",
+        "data/real_bets"
+      ]
+    },
+    {
+      "can_write_main": false,
+      "classification": "durable architecture/contract gate",
+      "classification_reason": "reusable runtime/bootstrap contract",
+      "concurrency_declared": false,
+      "contents_write_permission": false,
+      "file": ".github/actions/bootstrap-football-data/action.yml",
+      "git_write_commands_present": false,
+      "name": "Bootstrap verified football data",
+      "triggers": [],
+      "write_namespaces": [
+        "data/football_data/runtime_snapshot_manifest.json",
+        "data/runtime",
+        "data/runtime_snapshot_health.json"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,1699 @@
+{
+  "namespaces": [
+    {
+      "canonical_or_derived": "legacy/compatibility",
+      "classification": "legacy root runtime state",
+      "code_readers": [],
+      "code_writers": [],
+      "concurrency_write_risk": "HIGH: root file is a mutable operational surface outside data/product_runtime",
+      "namespace": "05_RUNTIME_STATE.json",
+      "ownership_boundary": "legacy runtime consumers remain reachable; no single current-state owner is established",
+      "readers": [],
+      "referencing_modules": [
+        "scripts.fetch_football_data",
+        "scripts.generate_analysis_report",
+        "scripts.live_odds_bridge",
+        "scripts.match_workspace",
+        "scripts.postmatch_dashboard",
+        "scripts.postmatch_queue"
+      ],
+      "tracked_file_count": 0,
+      "unclassified_code_references": [
+        "scripts.fetch_football_data",
+        "scripts.generate_analysis_report",
+        "scripts.live_odds_bridge",
+        "scripts.match_workspace",
+        "scripts.postmatch_dashboard",
+        "scripts.postmatch_queue"
+      ],
+      "workflow_references": [],
+      "workflow_writers": [],
+      "writers": []
+    },
+    {
+      "canonical_or_derived": "derived/current",
+      "classification": "current product runtime projection",
+      "code_readers": [],
+      "code_writers": [],
+      "concurrency_write_risk": "HIGH: durable workflows stage and write the namespace",
+      "namespace": "data/product_runtime",
+      "ownership_boundary": "automation_cycle and production_health_watch produce/read current-cycle health; dashboard/build projection consumes it",
+      "readers": [],
+      "referencing_modules": [
+        "scripts.automation_cycle",
+        "scripts.capture_public_ui_evidence",
+        "scripts.prediction_dashboard",
+        "scripts.prediction_trust_audit",
+        "scripts.production_health_watch",
+        "scripts.recent_form_cache",
+        "tests.test_automation_cycle",
+        "tests.test_github_production_workflow",
+        "tests.test_production_health_watch",
+        "tests.test_refresh_durability_gate",
+        "tests.test_workspace_auto_update"
+      ],
+      "tracked_file_count": 3,
+      "unclassified_code_references": [
+        "scripts.automation_cycle",
+        "scripts.capture_public_ui_evidence",
+        "scripts.prediction_dashboard",
+        "scripts.prediction_trust_audit",
+        "scripts.production_health_watch",
+        "scripts.recent_form_cache",
+        "tests.test_automation_cycle",
+        "tests.test_github_production_workflow",
+        "tests.test_production_health_watch",
+        "tests.test_refresh_durability_gate",
+        "tests.test_workspace_auto_update"
+      ],
+      "workflow_references": [
+        ".github/workflows/deploy-pages.yml"
+      ],
+      "workflow_writers": [
+        ".github/workflows/deploy-pages.yml"
+      ],
+      "writers": [
+        ".github/workflows/deploy-pages.yml"
+      ]
+    },
+    {
+      "canonical_or_derived": "canonical input snapshot",
+      "classification": "legal current/future fixture input",
+      "code_readers": [],
+      "code_writers": [],
+      "concurrency_write_risk": "HIGH: current and next publication state must remain chronology-safe",
+      "namespace": "data/prediction_universe",
+      "ownership_boundary": "prediction_universe and schedule intake define the accepted fixture surface",
+      "readers": [],
+      "referencing_modules": [
+        "scripts.automation_cycle",
+        "scripts.base_prediction_jobs",
+        "scripts.base_prediction_runner",
+        "scripts.build_public_site",
+        "scripts.capture_public_ui_evidence",
+        "scripts.challenger_c_promotion_review",
+        "scripts.daily_schedule_workspace",
+        "scripts.fetch_football_data",
+        "scripts.football_data.build_coverage_registry",
+        "scripts.football_data.run_id_auto_1",
+        "scripts.match_analysis",
+        "scripts.match_workspace",
+        "scripts.official_jc_handicap_live_audit",
+        "scripts.prediction_dashboard",
+        "scripts.prediction_trust_audit",
+        "scripts.prediction_universe",
+        "scripts.production_health_watch",
+        "scripts.prospective_settlement",
+        "scripts.refresh_durability_gate",
+        "tests.test_automation_cycle",
+        "tests.test_base_prediction_jobs",
+        "tests.test_base_prediction_runner",
+        "tests.test_build_public_site",
+        "tests.test_github_production_workflow",
+        "tests.test_hc_auto_1_daily_integration",
+        "tests.test_match_analysis",
+        "tests.test_nowscore_markets",
+        "tests.test_official_jc_handicap",
+        "tests.test_prediction_universe",
+        "tests.test_production_health_watch",
+        "tests.test_refresh_durability_gate",
+        "tests.test_workspace_auto_update"
+      ],
+      "tracked_file_count": 32,
+      "unclassified_code_references": [
+        "scripts.automation_cycle",
+        "scripts.base_prediction_jobs",
+        "scripts.base_prediction_runner",
+        "scripts.build_public_site",
+        "scripts.capture_public_ui_evidence",
+        "scripts.challenger_c_promotion_review",
+        "scripts.daily_schedule_workspace",
+        "scripts.fetch_football_data",
+        "scripts.football_data.build_coverage_registry",
+        "scripts.football_data.run_id_auto_1",
+        "scripts.match_analysis",
+        "scripts.match_workspace",
+        "scripts.official_jc_handicap_live_audit",
+        "scripts.prediction_dashboard",
+        "scripts.prediction_trust_audit",
+        "scripts.prediction_universe",
+        "scripts.production_health_watch",
+        "scripts.prospective_settlement",
+        "scripts.refresh_durability_gate",
+        "tests.test_automation_cycle",
+        "tests.test_base_prediction_jobs",
+        "tests.test_base_prediction_runner",
+        "tests.test_build_public_site",
+        "tests.test_github_production_workflow",
+        "tests.test_hc_auto_1_daily_integration",
+        "tests.test_match_analysis",
+        "tests.test_nowscore_markets",
+        "tests.test_official_jc_handicap",
+        "tests.test_prediction_universe",
+        "tests.test_production_health_watch",
+        "tests.test_refresh_durability_gate",
+        "tests.test_workspace_auto_update"
+      ],
+      "workflow_references": [
+        ".github/workflows/deploy-pages.yml",
+        ".github/workflows/jc-handicap-nowscore.yml"
+      ],
+      "workflow_writers": [
+        ".github/workflows/deploy-pages.yml"
+      ],
+      "writers": [
+        ".github/workflows/deploy-pages.yml"
+      ]
+    },
+    {
+      "canonical_or_derived": "derived operational ledger",
+      "classification": "base prediction job ledger",
+      "code_readers": [],
+      "code_writers": [],
+      "concurrency_write_risk": "MEDIUM: repeat sync and workflow serialization are required",
+      "namespace": "data/base_prediction_jobs",
+      "ownership_boundary": "base_prediction_jobs synchronizes jobs from the accepted prediction universe",
+      "readers": [],
+      "referencing_modules": [
+        "scripts.automation_cycle",
+        "scripts.base_prediction_jobs",
+        "scripts.base_prediction_runner",
+        "scripts.capture_public_ui_evidence",
+        "scripts.daily_schedule_workspace",
+        "scripts.match_analysis",
+        "scripts.prediction_dashboard",
+        "scripts.prediction_trust_audit",
+        "scripts.production_health_watch",
+        "scripts.refresh_durability_gate",
+        "tests.test_automation_cycle",
+        "tests.test_base_prediction_jobs",
+        "tests.test_base_prediction_runner",
+        "tests.test_daily_schedule_workspace",
+        "tests.test_github_production_workflow",
+        "tests.test_hc_auto_1_daily_integration",
+        "tests.test_production_health_watch",
+        "tests.test_refresh_durability_gate"
+      ],
+      "tracked_file_count": 31,
+      "unclassified_code_references": [
+        "scripts.automation_cycle",
+        "scripts.base_prediction_jobs",
+        "scripts.base_prediction_runner",
+        "scripts.capture_public_ui_evidence",
+        "scripts.daily_schedule_workspace",
+        "scripts.match_analysis",
+        "scripts.prediction_dashboard",
+        "scripts.prediction_trust_audit",
+        "scripts.production_health_watch",
+        "scripts.refresh_durability_gate",
+        "tests.test_automation_cycle",
+        "tests.test_base_prediction_jobs",
+        "tests.test_base_prediction_runner",
+        "tests.test_daily_schedule_workspace",
+        "tests.test_github_production_workflow",
+        "tests.test_hc_auto_1_daily_integration",
+        "tests.test_production_health_watch",
+        "tests.test_refresh_durability_gate"
+      ],
+      "workflow_references": [
+        ".github/workflows/deploy-pages.yml",
+        ".github/workflows/jc-handicap-nowscore.yml"
+      ],
+      "workflow_writers": [
+        ".github/workflows/deploy-pages.yml"
+      ],
+      "writers": [
+        ".github/workflows/deploy-pages.yml"
+      ]
+    },
+    {
+      "canonical_or_derived": "immutable/generated truth",
+      "classification": "governed prediction records",
+      "code_readers": [],
+      "code_writers": [],
+      "concurrency_write_risk": "HIGH: frozen records must not be rewritten or backfilled",
+      "namespace": "data/model_governance/predictions",
+      "ownership_boundary": "model_governance and base_prediction_runner own freeze and governance writes",
+      "readers": [],
+      "referencing_modules": [
+        "scripts.baseline_production",
+        "scripts.exact_distribution_freeze_readiness_audit",
+        "scripts.football_state_memory_readiness_audit",
+        "scripts.match_analysis",
+        "scripts.prospective_settlement",
+        "tests.test_github_production_workflow",
+        "tests.test_production_health_watch"
+      ],
+      "tracked_file_count": 2426,
+      "unclassified_code_references": [
+        "scripts.baseline_production",
+        "scripts.exact_distribution_freeze_readiness_audit",
+        "scripts.football_state_memory_readiness_audit",
+        "scripts.match_analysis",
+        "scripts.prospective_settlement",
+        "tests.test_github_production_workflow",
+        "tests.test_production_health_watch"
+      ],
+      "workflow_references": [
+        ".github/workflows/deploy-pages.yml",
+        ".github/workflows/jc-handicap-nowscore.yml"
+      ],
+      "workflow_writers": [
+        ".github/workflows/deploy-pages.yml"
+      ],
+      "writers": [
+        ".github/workflows/deploy-pages.yml"
+      ]
+    },
+    {
+      "canonical_or_derived": "immutable evidence",
+      "classification": "prediction-time input snapshots",
+      "code_readers": [],
+      "code_writers": [],
+      "concurrency_write_risk": "HIGH: source cutoff and content identity must remain immutable",
+      "namespace": "data/model_governance/input_snapshots",
+      "ownership_boundary": "model_governance/base runner freeze boundary owns point-in-time inputs",
+      "readers": [],
+      "referencing_modules": [
+        "scripts.exact_distribution_freeze_readiness_audit",
+        "scripts.model_governance",
+        "tests.test_github_production_workflow",
+        "tests.test_prediction_dashboard",
+        "tests.test_production_health_watch",
+        "tests.test_prospective_settlement"
+      ],
+      "tracked_file_count": 2426,
+      "unclassified_code_references": [
+        "scripts.exact_distribution_freeze_readiness_audit",
+        "scripts.model_governance",
+        "tests.test_github_production_workflow",
+        "tests.test_prediction_dashboard",
+        "tests.test_production_health_watch",
+        "tests.test_prospective_settlement"
+      ],
+      "workflow_references": [
+        ".github/workflows/deploy-pages.yml",
+        ".github/workflows/jc-handicap-nowscore.yml"
+      ],
+      "workflow_writers": [
+        ".github/workflows/deploy-pages.yml"
+      ],
+      "writers": [
+        ".github/workflows/deploy-pages.yml"
+      ]
+    },
+    {
+      "canonical_or_derived": "derived governance state",
+      "classification": "governance exclusion ledger",
+      "code_readers": [],
+      "code_writers": [],
+      "concurrency_write_risk": "MEDIUM: exclusion updates can alter downstream coverage",
+      "namespace": "data/model_governance/prediction_exclusions",
+      "ownership_boundary": "model governance exclusion paths",
+      "readers": [],
+      "referencing_modules": [
+        "tests.test_github_production_workflow",
+        "tests.test_production_health_watch"
+      ],
+      "tracked_file_count": 1,
+      "unclassified_code_references": [
+        "tests.test_github_production_workflow",
+        "tests.test_production_health_watch"
+      ],
+      "workflow_references": [
+        ".github/workflows/deploy-pages.yml"
+      ],
+      "workflow_writers": [
+        ".github/workflows/deploy-pages.yml"
+      ],
+      "writers": [
+        ".github/workflows/deploy-pages.yml"
+      ]
+    },
+    {
+      "canonical_or_derived": "derived/current and historical projection",
+      "classification": "match workspace projection",
+      "code_readers": [],
+      "code_writers": [],
+      "concurrency_write_risk": "HIGH: workspace joins runtime state, reports, reviews, and identity fallbacks",
+      "namespace": "data/match_workspace",
+      "ownership_boundary": "match_workspace owns workspace/report attachment and rendering compatibility",
+      "readers": [],
+      "referencing_modules": [
+        "scripts.build_public_site",
+        "scripts.capture_public_ui_evidence",
+        "scripts.core_auto_reports",
+        "scripts.core_match_selector",
+        "scripts.daily_schedule_workspace",
+        "scripts.deepseek_auto_analysis",
+        "scripts.fetch_football_data",
+        "scripts.football_data.competition_demand",
+        "scripts.football_data.recover_competition_demand",
+        "scripts.live_odds_bridge",
+        "scripts.match_analysis",
+        "scripts.match_workspace",
+        "scripts.postmatch_result",
+        "scripts.prediction_dashboard",
+        "scripts.prematch_market_monitor",
+        "scripts.prematch_task_registry",
+        "scripts.production_health_watch",
+        "scripts.sync_postmatch_workflow",
+        "tests.test_build_public_site",
+        "tests.test_match_analysis",
+        "tests.test_prediction_product_surface",
+        "tests.test_production_health_watch",
+        "tests.test_workspace_auto_update"
+      ],
+      "tracked_file_count": 4836,
+      "unclassified_code_references": [
+        "scripts.build_public_site",
+        "scripts.capture_public_ui_evidence",
+        "scripts.core_auto_reports",
+        "scripts.core_match_selector",
+        "scripts.daily_schedule_workspace",
+        "scripts.deepseek_auto_analysis",
+        "scripts.fetch_football_data",
+        "scripts.football_data.competition_demand",
+        "scripts.football_data.recover_competition_demand",
+        "scripts.live_odds_bridge",
+        "scripts.match_analysis",
+        "scripts.match_workspace",
+        "scripts.postmatch_result",
+        "scripts.prediction_dashboard",
+        "scripts.prematch_market_monitor",
+        "scripts.prematch_task_registry",
+        "scripts.production_health_watch",
+        "scripts.sync_postmatch_workflow",
+        "tests.test_build_public_site",
+        "tests.test_match_analysis",
+        "tests.test_prediction_product_surface",
+        "tests.test_production_health_watch",
+        "tests.test_workspace_auto_update"
+      ],
+      "workflow_references": [
+        ".github/workflows/analyze-selected.yml",
+        ".github/workflows/deploy-pages.yml",
+        ".github/workflows/postmatch-once.yml",
+        ".github/workflows/prematch-market-monitor.yml",
+        ".github/workflows/record-real-bet.yml"
+      ],
+      "workflow_writers": [
+        ".github/workflows/analyze-selected.yml",
+        ".github/workflows/deploy-pages.yml",
+        ".github/workflows/postmatch-once.yml",
+        ".github/workflows/prematch-market-monitor.yml",
+        ".github/workflows/record-real-bet.yml"
+      ],
+      "writers": [
+        ".github/workflows/analyze-selected.yml",
+        ".github/workflows/deploy-pages.yml",
+        ".github/workflows/postmatch-once.yml",
+        ".github/workflows/prematch-market-monitor.yml",
+        ".github/workflows/record-real-bet.yml"
+      ]
+    },
+    {
+      "canonical_or_derived": "derived report input/output",
+      "classification": "match analysis artifacts",
+      "code_readers": [],
+      "code_writers": [],
+      "concurrency_write_risk": "MEDIUM: report identity and current/latest selection are coupled",
+      "namespace": "data/match_analysis",
+      "ownership_boundary": "match_analysis and report generation paths",
+      "readers": [],
+      "referencing_modules": [
+        "scripts.build_public_site",
+        "scripts.match_analysis",
+        "tests.test_build_public_site",
+        "tests.test_match_analysis"
+      ],
+      "tracked_file_count": 7306,
+      "unclassified_code_references": [
+        "scripts.build_public_site",
+        "scripts.match_analysis",
+        "tests.test_build_public_site",
+        "tests.test_match_analysis"
+      ],
+      "workflow_references": [],
+      "workflow_writers": [],
+      "writers": []
+    },
+    {
+      "canonical_or_derived": "historical/derived archive",
+      "classification": "archived match artifacts",
+      "code_readers": [],
+      "code_writers": [],
+      "concurrency_write_risk": "MEDIUM: archive identity must not be confused with current serving state",
+      "namespace": "data/match_archive",
+      "ownership_boundary": "archive and compatibility readers",
+      "readers": [],
+      "referencing_modules": [
+        "scripts.decision_evolution"
+      ],
+      "tracked_file_count": 156,
+      "unclassified_code_references": [
+        "scripts.decision_evolution"
+      ],
+      "workflow_references": [
+        ".github/workflows/analyze-selected.yml",
+        ".github/workflows/deploy-pages.yml"
+      ],
+      "workflow_writers": [
+        ".github/workflows/analyze-selected.yml",
+        ".github/workflows/deploy-pages.yml"
+      ],
+      "writers": [
+        ".github/workflows/analyze-selected.yml",
+        ".github/workflows/deploy-pages.yml"
+      ]
+    },
+    {
+      "canonical_or_derived": "derived historical/report output",
+      "classification": "analysis report artifacts",
+      "code_readers": [],
+      "code_writers": [
+        "tests.test_sync_result_schedules"
+      ],
+      "concurrency_write_risk": "MEDIUM: report generation and workspace projections share joins",
+      "namespace": "data/analysis_reports",
+      "ownership_boundary": "generate_analysis_report and analysis workflow paths",
+      "readers": [],
+      "referencing_modules": [
+        "scripts.build_public_site",
+        "scripts.generate_analysis_report",
+        "scripts.legacy_analysis_mapper",
+        "scripts.live_odds_bridge",
+        "scripts.match_analysis",
+        "scripts.match_workspace",
+        "scripts.model_governance",
+        "scripts.postmatch_queue",
+        "scripts.prematch_task_registry",
+        "scripts.refresh_report_html",
+        "scripts.repair_report_consistency",
+        "tests.test_build_public_site",
+        "tests.test_legacy_analysis_mapper",
+        "tests.test_live_odds_bridge",
+        "tests.test_match_analysis",
+        "tests.test_sync_result_schedules",
+        "tests.test_workspace_auto_update"
+      ],
+      "tracked_file_count": 2088,
+      "unclassified_code_references": [
+        "scripts.build_public_site",
+        "scripts.generate_analysis_report",
+        "scripts.legacy_analysis_mapper",
+        "scripts.live_odds_bridge",
+        "scripts.match_analysis",
+        "scripts.match_workspace",
+        "scripts.model_governance",
+        "scripts.postmatch_queue",
+        "scripts.prematch_task_registry",
+        "scripts.refresh_report_html",
+        "scripts.repair_report_consistency",
+        "tests.test_build_public_site",
+        "tests.test_legacy_analysis_mapper",
+        "tests.test_live_odds_bridge",
+        "tests.test_match_analysis",
+        "tests.test_workspace_auto_update"
+      ],
+      "workflow_references": [
+        ".github/workflows/analyze-selected.yml",
+        ".github/workflows/deploy-pages.yml",
+        ".github/workflows/prematch-market-monitor.yml"
+      ],
+      "workflow_writers": [
+        ".github/workflows/analyze-selected.yml",
+        ".github/workflows/deploy-pages.yml",
+        ".github/workflows/prematch-market-monitor.yml"
+      ],
+      "writers": [
+        ".github/workflows/analyze-selected.yml",
+        ".github/workflows/deploy-pages.yml",
+        ".github/workflows/prematch-market-monitor.yml",
+        "tests.test_sync_result_schedules"
+      ]
+    },
+    {
+      "canonical_or_derived": "derived/acquisition input",
+      "classification": "analysis inputs",
+      "code_readers": [],
+      "code_writers": [],
+      "concurrency_write_risk": "MEDIUM: input freshness and report identity are not one owner",
+      "namespace": "data/analysis_inputs",
+      "ownership_boundary": "analysis acquisition and selected-match workflow paths",
+      "readers": [],
+      "referencing_modules": [
+        "scripts.base_prediction_runner",
+        "scripts.deepseek_auto_analysis",
+        "scripts.prematch_market_monitor",
+        "tests.test_base_prediction_runner"
+      ],
+      "tracked_file_count": 875,
+      "unclassified_code_references": [
+        "scripts.base_prediction_runner",
+        "scripts.deepseek_auto_analysis",
+        "scripts.prematch_market_monitor",
+        "tests.test_base_prediction_runner"
+      ],
+      "workflow_references": [
+        ".github/workflows/deploy-pages.yml",
+        ".github/workflows/prematch-market-monitor.yml"
+      ],
+      "workflow_writers": [
+        ".github/workflows/deploy-pages.yml",
+        ".github/workflows/prematch-market-monitor.yml"
+      ],
+      "writers": [
+        ".github/workflows/deploy-pages.yml",
+        ".github/workflows/prematch-market-monitor.yml"
+      ]
+    },
+    {
+      "canonical_or_derived": "acquisition evidence/operational ledger",
+      "classification": "provider fetch run manifests",
+      "code_readers": [],
+      "code_writers": [],
+      "concurrency_write_risk": "HIGH: run provenance and source cutoff must remain append-safe",
+      "namespace": "data/fetch_runs",
+      "ownership_boundary": "fetch and parser run bookkeeping",
+      "readers": [],
+      "referencing_modules": [
+        "scripts.fetch_football_data",
+        "scripts.football_data.populate_p0_p1_coverage",
+        "scripts.football_data.run_id_auto_1",
+        "scripts.live_odds_bridge",
+        "scripts.market_history",
+        "scripts.match_workspace",
+        "scripts.postmatch_result",
+        "scripts.prematch_market_monitor",
+        "scripts.run_baseline_synthetic_smoke",
+        "scripts.sync_result_schedules",
+        "tests.test_baseline_production_integration",
+        "tests.test_exact_translation_identity_resolution",
+        "tests.test_live_ev_profile",
+        "tests.test_live_odds_bridge",
+        "tests.test_model_governance",
+        "tests.test_prediction_universe",
+        "tests.test_report_nowscore_fallback"
+      ],
+      "tracked_file_count": 4174,
+      "unclassified_code_references": [
+        "scripts.fetch_football_data",
+        "scripts.football_data.populate_p0_p1_coverage",
+        "scripts.football_data.run_id_auto_1",
+        "scripts.live_odds_bridge",
+        "scripts.market_history",
+        "scripts.match_workspace",
+        "scripts.postmatch_result",
+        "scripts.prematch_market_monitor",
+        "scripts.run_baseline_synthetic_smoke",
+        "scripts.sync_result_schedules",
+        "tests.test_baseline_production_integration",
+        "tests.test_exact_translation_identity_resolution",
+        "tests.test_live_ev_profile",
+        "tests.test_live_odds_bridge",
+        "tests.test_model_governance",
+        "tests.test_prediction_universe",
+        "tests.test_report_nowscore_fallback"
+      ],
+      "workflow_references": [
+        ".github/workflows/analyze-selected.yml",
+        ".github/workflows/deploy-pages.yml",
+        ".github/workflows/prematch-market-monitor.yml"
+      ],
+      "workflow_writers": [
+        ".github/workflows/analyze-selected.yml",
+        ".github/workflows/deploy-pages.yml",
+        ".github/workflows/prematch-market-monitor.yml"
+      ],
+      "writers": [
+        ".github/workflows/analyze-selected.yml",
+        ".github/workflows/deploy-pages.yml",
+        ".github/workflows/prematch-market-monitor.yml"
+      ]
+    },
+    {
+      "canonical_or_derived": "derived operational state",
+      "classification": "analysis job state",
+      "code_readers": [],
+      "code_writers": [],
+      "concurrency_write_risk": "HIGH: scheduled and manual workflows can touch adjacent job state",
+      "namespace": "data/analysis_jobs",
+      "ownership_boundary": "core automatic analysis orchestration",
+      "readers": [],
+      "referencing_modules": [
+        "scripts.core_auto_reports",
+        "scripts.core_match_selector",
+        "scripts.deepseek_auto_analysis",
+        "scripts.football_data.competition_demand",
+        "scripts.football_data.recover_competition_demand",
+        "scripts.live_odds_bridge"
+      ],
+      "tracked_file_count": 170,
+      "unclassified_code_references": [
+        "scripts.core_auto_reports",
+        "scripts.core_match_selector",
+        "scripts.deepseek_auto_analysis",
+        "scripts.football_data.competition_demand",
+        "scripts.football_data.recover_competition_demand",
+        "scripts.live_odds_bridge"
+      ],
+      "workflow_references": [
+        ".github/workflows/deploy-pages.yml"
+      ],
+      "workflow_writers": [
+        ".github/workflows/deploy-pages.yml"
+      ],
+      "writers": [
+        ".github/workflows/deploy-pages.yml"
+      ]
+    },
+    {
+      "canonical_or_derived": "derived operational state",
+      "classification": "postmatch queue/result automation",
+      "code_readers": [],
+      "code_writers": [],
+      "concurrency_write_risk": "HIGH: result lifecycle and legacy runtime state are coupled",
+      "namespace": "data/postmatch_automation",
+      "ownership_boundary": "postmatch queue, schedule, and one-shot workflow paths",
+      "readers": [],
+      "referencing_modules": [
+        "scripts.automatic_postmatch_review",
+        "scripts.capture_public_ui_evidence",
+        "scripts.challenger_c_promotion_review",
+        "scripts.football_data.competition_demand",
+        "scripts.football_data.recover_competition_demand",
+        "scripts.generate_analysis_report",
+        "scripts.market_side_shadow_refresh",
+        "scripts.match_analysis",
+        "scripts.match_workspace",
+        "scripts.migrate_automation_identity",
+        "scripts.postmatch_dashboard",
+        "scripts.postmatch_queue",
+        "scripts.postmatch_result",
+        "scripts.postmatch_schedule",
+        "scripts.prediction_dashboard",
+        "scripts.prediction_trust_audit",
+        "scripts.production_health_watch",
+        "scripts.pure_market_exact_prospective",
+        "scripts.sync_postmatch_workflow",
+        "scripts.sync_result_schedules",
+        "tests.test_challenger_c_promotion_review",
+        "tests.test_generated_state_architecture_guard",
+        "tests.test_market_side_shadow_refresh",
+        "tests.test_production_health_watch"
+      ],
+      "tracked_file_count": 1084,
+      "unclassified_code_references": [
+        "scripts.automatic_postmatch_review",
+        "scripts.capture_public_ui_evidence",
+        "scripts.challenger_c_promotion_review",
+        "scripts.football_data.competition_demand",
+        "scripts.football_data.recover_competition_demand",
+        "scripts.generate_analysis_report",
+        "scripts.market_side_shadow_refresh",
+        "scripts.match_analysis",
+        "scripts.match_workspace",
+        "scripts.migrate_automation_identity",
+        "scripts.postmatch_dashboard",
+        "scripts.postmatch_queue",
+        "scripts.postmatch_result",
+        "scripts.postmatch_schedule",
+        "scripts.prediction_dashboard",
+        "scripts.prediction_trust_audit",
+        "scripts.production_health_watch",
+        "scripts.pure_market_exact_prospective",
+        "scripts.sync_postmatch_workflow",
+        "scripts.sync_result_schedules",
+        "tests.test_challenger_c_promotion_review",
+        "tests.test_generated_state_architecture_guard",
+        "tests.test_market_side_shadow_refresh",
+        "tests.test_production_health_watch"
+      ],
+      "workflow_references": [
+        ".github/workflows/analyze-selected.yml",
+        ".github/workflows/deploy-pages.yml",
+        ".github/workflows/postmatch-once.yml"
+      ],
+      "workflow_writers": [
+        ".github/workflows/analyze-selected.yml",
+        ".github/workflows/deploy-pages.yml",
+        ".github/workflows/postmatch-once.yml"
+      ],
+      "writers": [
+        ".github/workflows/analyze-selected.yml",
+        ".github/workflows/deploy-pages.yml",
+        ".github/workflows/postmatch-once.yml"
+      ]
+    },
+    {
+      "canonical_or_derived": "derived/public projection",
+      "classification": "postmatch dashboard projection",
+      "code_readers": [],
+      "code_writers": [],
+      "concurrency_write_risk": "MEDIUM: projection refresh must not mutate review truth",
+      "namespace": "data/postmatch_dashboard",
+      "ownership_boundary": "postmatch dashboard builder and public projection readers",
+      "readers": [],
+      "referencing_modules": [
+        "scripts.build_public_site",
+        "scripts.match_workspace",
+        "scripts.postmatch_dashboard",
+        "scripts.sync_postmatch_workflow",
+        "tests.test_build_public_site"
+      ],
+      "tracked_file_count": 1849,
+      "unclassified_code_references": [
+        "scripts.build_public_site",
+        "scripts.match_workspace",
+        "scripts.postmatch_dashboard",
+        "scripts.sync_postmatch_workflow",
+        "tests.test_build_public_site"
+      ],
+      "workflow_references": [
+        ".github/workflows/analyze-selected.yml",
+        ".github/workflows/deploy-pages.yml",
+        ".github/workflows/postmatch-once.yml"
+      ],
+      "workflow_writers": [
+        ".github/workflows/analyze-selected.yml",
+        ".github/workflows/deploy-pages.yml",
+        ".github/workflows/postmatch-once.yml"
+      ],
+      "writers": [
+        ".github/workflows/analyze-selected.yml",
+        ".github/workflows/deploy-pages.yml",
+        ".github/workflows/postmatch-once.yml"
+      ]
+    },
+    {
+      "canonical_or_derived": "verified result input",
+      "classification": "postmatch result truth",
+      "code_readers": [],
+      "code_writers": [],
+      "concurrency_write_risk": "HIGH: regulation-90m and identity joins must remain immutable",
+      "namespace": "data/postmatch_results",
+      "ownership_boundary": "postmatch result/evaluation paths",
+      "readers": [],
+      "referencing_modules": [],
+      "tracked_file_count": 0,
+      "unclassified_code_references": [],
+      "workflow_references": [
+        ".github/workflows/jc-handicap-nowscore.yml"
+      ],
+      "workflow_writers": [],
+      "writers": []
+    },
+    {
+      "canonical_or_derived": "derived evaluation output",
+      "classification": "postmatch review/evaluation artifacts",
+      "code_readers": [],
+      "code_writers": [],
+      "concurrency_write_risk": "HIGH: evaluation must consume frozen prematch truth only",
+      "namespace": "data/postmatch_reviews",
+      "ownership_boundary": "automatic_postmatch_review and settlement consumers",
+      "readers": [],
+      "referencing_modules": [
+        "scripts.automatic_postmatch_review",
+        "scripts.build_model_calibration",
+        "scripts.match_workspace",
+        "scripts.model_governance",
+        "scripts.postmatch_dashboard",
+        "scripts.review_metrics",
+        "scripts.sync_postmatch_workflow",
+        "tests.test_postmatch_once"
+      ],
+      "tracked_file_count": 170,
+      "unclassified_code_references": [
+        "scripts.automatic_postmatch_review",
+        "scripts.build_model_calibration",
+        "scripts.match_workspace",
+        "scripts.model_governance",
+        "scripts.postmatch_dashboard",
+        "scripts.review_metrics",
+        "scripts.sync_postmatch_workflow",
+        "tests.test_postmatch_once"
+      ],
+      "workflow_references": [
+        ".github/workflows/analyze-selected.yml",
+        ".github/workflows/deploy-pages.yml",
+        ".github/workflows/jc-handicap-nowscore.yml",
+        ".github/workflows/postmatch-once.yml"
+      ],
+      "workflow_writers": [
+        ".github/workflows/analyze-selected.yml",
+        ".github/workflows/deploy-pages.yml",
+        ".github/workflows/postmatch-once.yml"
+      ],
+      "writers": [
+        ".github/workflows/analyze-selected.yml",
+        ".github/workflows/deploy-pages.yml",
+        ".github/workflows/postmatch-once.yml"
+      ]
+    },
+    {
+      "canonical_or_derived": "derived public/report output",
+      "classification": "postmatch report projection",
+      "code_readers": [],
+      "code_writers": [],
+      "concurrency_write_risk": "MEDIUM: report rendering and evaluation data are coupled",
+      "namespace": "data/postmatch_reports",
+      "ownership_boundary": "postmatch report and dashboard projection paths",
+      "readers": [],
+      "referencing_modules": [
+        "scripts.build_public_site",
+        "scripts.legacy_analysis_mapper",
+        "scripts.match_analysis",
+        "scripts.match_workspace",
+        "scripts.postmatch_dashboard",
+        "scripts.sync_postmatch_workflow",
+        "tests.test_build_public_site",
+        "tests.test_match_analysis",
+        "tests.test_workspace_auto_update"
+      ],
+      "tracked_file_count": 180,
+      "unclassified_code_references": [
+        "scripts.build_public_site",
+        "scripts.legacy_analysis_mapper",
+        "scripts.match_analysis",
+        "scripts.match_workspace",
+        "scripts.postmatch_dashboard",
+        "scripts.sync_postmatch_workflow",
+        "tests.test_build_public_site",
+        "tests.test_match_analysis",
+        "tests.test_workspace_auto_update"
+      ],
+      "workflow_references": [
+        ".github/workflows/deploy-pages.yml",
+        ".github/workflows/postmatch-once.yml"
+      ],
+      "workflow_writers": [
+        ".github/workflows/deploy-pages.yml",
+        ".github/workflows/postmatch-once.yml"
+      ],
+      "writers": [
+        ".github/workflows/deploy-pages.yml",
+        ".github/workflows/postmatch-once.yml"
+      ]
+    },
+    {
+      "canonical_or_derived": "evidence/history",
+      "classification": "market timeline/history",
+      "code_readers": [],
+      "code_writers": [],
+      "concurrency_write_risk": "HIGH: point-in-time ordering and append/write serialization matter",
+      "namespace": "data/market_history",
+      "ownership_boundary": "market history capture and report/postmatch readers",
+      "readers": [],
+      "referencing_modules": [
+        "scripts.automatic_postmatch_review",
+        "scripts.checkpoint_features",
+        "scripts.football_data.competition_demand",
+        "scripts.football_data.recover_competition_demand",
+        "scripts.generate_analysis_report",
+        "scripts.market_history",
+        "scripts.match_workspace",
+        "scripts.migrate_automation_identity",
+        "scripts.prediction_quality",
+        "scripts.prematch_market_monitor",
+        "scripts.prematch_task_registry",
+        "tests.test_checkpoint_features",
+        "tests.test_prematch_market_monitor"
+      ],
+      "tracked_file_count": 870,
+      "unclassified_code_references": [
+        "scripts.automatic_postmatch_review",
+        "scripts.checkpoint_features",
+        "scripts.football_data.competition_demand",
+        "scripts.football_data.recover_competition_demand",
+        "scripts.generate_analysis_report",
+        "scripts.market_history",
+        "scripts.match_workspace",
+        "scripts.migrate_automation_identity",
+        "scripts.prediction_quality",
+        "scripts.prematch_market_monitor",
+        "scripts.prematch_task_registry",
+        "tests.test_checkpoint_features",
+        "tests.test_prematch_market_monitor"
+      ],
+      "workflow_references": [
+        ".github/workflows/analyze-selected.yml",
+        ".github/workflows/deploy-pages.yml",
+        ".github/workflows/jc-handicap-nowscore.yml",
+        ".github/workflows/prematch-market-monitor.yml"
+      ],
+      "workflow_writers": [
+        ".github/workflows/analyze-selected.yml",
+        ".github/workflows/deploy-pages.yml",
+        ".github/workflows/prematch-market-monitor.yml"
+      ],
+      "writers": [
+        ".github/workflows/analyze-selected.yml",
+        ".github/workflows/deploy-pages.yml",
+        ".github/workflows/prematch-market-monitor.yml"
+      ]
+    },
+    {
+      "canonical_or_derived": "research evidence plus derived current index",
+      "classification": "Market-Side immutable pairs and compact index",
+      "code_readers": [],
+      "code_writers": [],
+      "concurrency_write_risk": "HIGH: pair files are immutable; compact view is derived",
+      "namespace": "data/prediction_quality/market_side_shadow_1",
+      "ownership_boundary": "market_side_shadow persistence/index and Challenger review consumers",
+      "readers": [],
+      "referencing_modules": [
+        "tests.test_github_production_workflow"
+      ],
+      "tracked_file_count": 1786,
+      "unclassified_code_references": [
+        "tests.test_github_production_workflow"
+      ],
+      "workflow_references": [
+        ".github/workflows/deploy-pages.yml"
+      ],
+      "workflow_writers": [
+        ".github/workflows/deploy-pages.yml"
+      ],
+      "writers": [
+        ".github/workflows/deploy-pages.yml"
+      ]
+    },
+    {
+      "canonical_or_derived": "prospective evidence",
+      "classification": "prospective football evidence",
+      "code_readers": [],
+      "code_writers": [],
+      "concurrency_write_risk": "HIGH: frozen/prematch chronology and one-match observation rules",
+      "namespace": "data/prospective/football_evidence",
+      "ownership_boundary": "base runner/evidence sidecar and prospective readers",
+      "readers": [],
+      "referencing_modules": [
+        "scripts.football_state_memory_readiness_audit"
+      ],
+      "tracked_file_count": 1961,
+      "unclassified_code_references": [
+        "scripts.football_state_memory_readiness_audit"
+      ],
+      "workflow_references": [],
+      "workflow_writers": [],
+      "writers": []
+    },
+    {
+      "canonical_or_derived": "derived/prospective evaluation",
+      "classification": "prospective ledgers and summaries",
+      "code_readers": [],
+      "code_writers": [],
+      "concurrency_write_risk": "HIGH: prospective truth must remain separate from pilot/legacy evidence",
+      "namespace": "data/prospective",
+      "ownership_boundary": "prospective evidence, settlement ledger, and summary projections",
+      "readers": [],
+      "referencing_modules": [
+        "scripts.automation_cycle",
+        "scripts.base_prediction_runner",
+        "scripts.baseline_production",
+        "scripts.baseline_settlement",
+        "scripts.baseline_shadow_runner",
+        "scripts.benchmark_health",
+        "scripts.capture_public_ui_evidence",
+        "scripts.exact_distribution_freeze_readiness_audit",
+        "scripts.football_state_memory",
+        "scripts.football_state_memory_readiness_audit",
+        "scripts.generate_analysis_report",
+        "scripts.match_analysis",
+        "scripts.official_jc_handicap",
+        "scripts.prediction_dashboard",
+        "scripts.prediction_trust_audit",
+        "scripts.production_health_watch",
+        "scripts.prospective_settlement",
+        "scripts.run_baseline_synthetic_smoke",
+        "tests.test_automation_cycle",
+        "tests.test_base_prediction_runner",
+        "tests.test_baseline_production_integration",
+        "tests.test_baseline_settlement",
+        "tests.test_baseline_shadow_runner",
+        "tests.test_benchmark_health",
+        "tests.test_github_production_workflow",
+        "tests.test_market_direction_shadow",
+        "tests.test_prediction_dashboard",
+        "tests.test_production_health_watch",
+        "tests.test_prospective_settlement"
+      ],
+      "tracked_file_count": 2,
+      "unclassified_code_references": [
+        "scripts.automation_cycle",
+        "scripts.base_prediction_runner",
+        "scripts.baseline_production",
+        "scripts.baseline_settlement",
+        "scripts.baseline_shadow_runner",
+        "scripts.benchmark_health",
+        "scripts.capture_public_ui_evidence",
+        "scripts.exact_distribution_freeze_readiness_audit",
+        "scripts.football_state_memory",
+        "scripts.football_state_memory_readiness_audit",
+        "scripts.generate_analysis_report",
+        "scripts.match_analysis",
+        "scripts.official_jc_handicap",
+        "scripts.prediction_dashboard",
+        "scripts.prediction_trust_audit",
+        "scripts.production_health_watch",
+        "scripts.prospective_settlement",
+        "scripts.run_baseline_synthetic_smoke",
+        "tests.test_automation_cycle",
+        "tests.test_base_prediction_runner",
+        "tests.test_baseline_production_integration",
+        "tests.test_baseline_settlement",
+        "tests.test_baseline_shadow_runner",
+        "tests.test_benchmark_health",
+        "tests.test_github_production_workflow",
+        "tests.test_market_direction_shadow",
+        "tests.test_prediction_dashboard",
+        "tests.test_production_health_watch",
+        "tests.test_prospective_settlement"
+      ],
+      "workflow_references": [
+        ".github/workflows/deploy-pages.yml",
+        ".github/workflows/jc-handicap-nowscore.yml"
+      ],
+      "workflow_writers": [
+        ".github/workflows/deploy-pages.yml"
+      ],
+      "writers": [
+        ".github/workflows/deploy-pages.yml"
+      ]
+    },
+    {
+      "canonical_or_derived": "mixed canonical runtime/legacy research",
+      "classification": "football data runtime and catalogs",
+      "code_readers": [
+        "tests.test_phase2c1_handoff_contains_test_support"
+      ],
+      "code_writers": [],
+      "concurrency_write_risk": "HIGH: isolated runtime home versus tracked catalogs/cache compatibility",
+      "namespace": "data/football_data",
+      "ownership_boundary": "football_data package contracts, storage, providers, and migration paths",
+      "readers": [
+        "tests.test_phase2c1_handoff_contains_test_support"
+      ],
+      "referencing_modules": [
+        "scripts.football_data.bootstrap_runtime_data",
+        "scripts.football_data.build_coverage_registry",
+        "scripts.football_data.build_football_data_uk_pilot",
+        "scripts.football_data.build_openfootball_pilot",
+        "scripts.football_data.competition_demand",
+        "scripts.football_data.competition_resolution",
+        "scripts.football_data.coverage_gate",
+        "scripts.football_data.coverage_registry",
+        "scripts.football_data.data_home",
+        "scripts.football_data.entity_resolution",
+        "scripts.football_data.fe_se_hist1",
+        "scripts.football_data.identity_artifacts",
+        "scripts.football_data.identity_registry",
+        "scripts.football_data.migrate_data_home",
+        "scripts.football_data.phase2c1_experiment",
+        "scripts.football_data.phase2c2_experiment",
+        "scripts.football_data.player_identity",
+        "scripts.football_data.populate_p0_p1_coverage",
+        "scripts.football_data.populate_phase2b_final",
+        "scripts.football_data.populate_phase2c_preflight",
+        "scripts.football_data.populate_team_strength_coverage",
+        "scripts.football_data.publish_runtime_snapshot",
+        "scripts.football_data.rebuild_historical_store",
+        "scripts.football_data.recover_competition_demand",
+        "scripts.football_data.run_id_auto_1",
+        "scripts.football_data.verify_data_home",
+        "scripts.recent_form_cache",
+        "tests.test_bulk_data_not_git_tracked",
+        "tests.test_champion_data_foundation_isolation",
+        "tests.test_competition_entity_resolution",
+        "tests.test_fixture_identity_isolation",
+        "tests.test_football_data_contracts",
+        "tests.test_football_data_org_no_token_not_season_verified",
+        "tests.test_id_auto_1_audit_artifact",
+        "tests.test_identity_candidates_not_git_tracked",
+        "tests.test_openfootball_historical_adapter",
+        "tests.test_phase2b_final_source_decisions",
+        "tests.test_phase2c1_handoff_contains_test_support",
+        "tests.test_player_identity",
+        "tests.test_portugal_real_data_sanity_regression",
+        "tests.test_provider_quality_consistency",
+        "tests.test_recent_form_identity_coverage",
+        "tests.test_recent_form_south_america",
+        "tests.test_research_compact_manifest",
+        "tests.test_reviewed_alias_group_propagation",
+        "tests.test_source_discovery_does_not_fake_live_check",
+        "tests.test_source_evidence_time_not_report_time",
+        "tests.test_statsbomb_official_shape_adapter",
+        "tests.test_statsbomb_open_adapter",
+        "tests.test_team_entity_resolution",
+        "tests.test_verified_identity_crosswalk_survives_candidate_cleanup"
+      ],
+      "tracked_file_count": 313,
+      "unclassified_code_references": [
+        "scripts.football_data.bootstrap_runtime_data",
+        "scripts.football_data.build_coverage_registry",
+        "scripts.football_data.build_football_data_uk_pilot",
+        "scripts.football_data.build_openfootball_pilot",
+        "scripts.football_data.competition_demand",
+        "scripts.football_data.competition_resolution",
+        "scripts.football_data.coverage_gate",
+        "scripts.football_data.coverage_registry",
+        "scripts.football_data.data_home",
+        "scripts.football_data.entity_resolution",
+        "scripts.football_data.fe_se_hist1",
+        "scripts.football_data.identity_artifacts",
+        "scripts.football_data.identity_registry",
+        "scripts.football_data.migrate_data_home",
+        "scripts.football_data.phase2c1_experiment",
+        "scripts.football_data.phase2c2_experiment",
+        "scripts.football_data.player_identity",
+        "scripts.football_data.populate_p0_p1_coverage",
+        "scripts.football_data.populate_phase2b_final",
+        "scripts.football_data.populate_phase2c_preflight",
+        "scripts.football_data.populate_team_strength_coverage",
+        "scripts.football_data.publish_runtime_snapshot",
+        "scripts.football_data.rebuild_historical_store",
+        "scripts.football_data.recover_competition_demand",
+        "scripts.football_data.run_id_auto_1",
+        "scripts.football_data.verify_data_home",
+        "scripts.recent_form_cache",
+        "tests.test_bulk_data_not_git_tracked",
+        "tests.test_champion_data_foundation_isolation",
+        "tests.test_competition_entity_resolution",
+        "tests.test_fixture_identity_isolation",
+        "tests.test_football_data_contracts",
+        "tests.test_football_data_org_no_token_not_season_verified",
+        "tests.test_id_auto_1_audit_artifact",
+        "tests.test_identity_candidates_not_git_tracked",
+        "tests.test_openfootball_historical_adapter",
+        "tests.test_phase2b_final_source_decisions",
+        "tests.test_player_identity",
+        "tests.test_portugal_real_data_sanity_regression",
+        "tests.test_provider_quality_consistency",
+        "tests.test_recent_form_identity_coverage",
+        "tests.test_recent_form_south_america",
+        "tests.test_research_compact_manifest",
+        "tests.test_reviewed_alias_group_propagation",
+        "tests.test_source_discovery_does_not_fake_live_check",
+        "tests.test_source_evidence_time_not_report_time",
+        "tests.test_statsbomb_official_shape_adapter",
+        "tests.test_statsbomb_open_adapter",
+        "tests.test_team_entity_resolution",
+        "tests.test_verified_identity_crosswalk_survives_candidate_cleanup"
+      ],
+      "workflow_references": [],
+      "workflow_writers": [],
+      "writers": []
+    },
+    {
+      "canonical_or_derived": "identity evidence",
+      "classification": "provider match crosswalk",
+      "code_readers": [],
+      "code_writers": [],
+      "concurrency_write_risk": "HIGH: verified identity must not be overwritten by fuzzy suggestions",
+      "namespace": "data/provider_match_crosswalk.json",
+      "ownership_boundary": "provider identity/crosswalk paths",
+      "readers": [],
+      "referencing_modules": [
+        "scripts.football_data.identity_registry",
+        "scripts.provider_match_registry"
+      ],
+      "tracked_file_count": 1,
+      "unclassified_code_references": [
+        "scripts.football_data.identity_registry",
+        "scripts.provider_match_registry"
+      ],
+      "workflow_references": [
+        ".github/workflows/analyze-selected.yml",
+        ".github/workflows/deploy-pages.yml"
+      ],
+      "workflow_writers": [
+        ".github/workflows/analyze-selected.yml",
+        ".github/workflows/deploy-pages.yml"
+      ],
+      "writers": [
+        ".github/workflows/analyze-selected.yml",
+        ".github/workflows/deploy-pages.yml"
+      ]
+    },
+    {
+      "canonical_or_derived": "identity compatibility evidence",
+      "classification": "team alias registry",
+      "code_readers": [],
+      "code_writers": [],
+      "concurrency_write_risk": "HIGH: alias propagation can change cross-provider identity joins",
+      "namespace": "data/team_aliases.json",
+      "ownership_boundary": "team identity and reviewed alias consumers",
+      "readers": [],
+      "referencing_modules": [
+        "scripts.football_data.identity_registry",
+        "scripts.football_data.populate_p0_p1_coverage",
+        "scripts.live_ev_profile",
+        "scripts.paper_channel_prices",
+        "scripts.team_identity",
+        "tests.test_live_ev_profile",
+        "tests.test_reviewed_alias_group_propagation"
+      ],
+      "tracked_file_count": 1,
+      "unclassified_code_references": [
+        "scripts.football_data.identity_registry",
+        "scripts.football_data.populate_p0_p1_coverage",
+        "scripts.live_ev_profile",
+        "scripts.paper_channel_prices",
+        "scripts.team_identity",
+        "tests.test_live_ev_profile",
+        "tests.test_reviewed_alias_group_propagation"
+      ],
+      "workflow_references": [],
+      "workflow_writers": [],
+      "writers": []
+    },
+    {
+      "canonical_or_derived": "derived/research or legacy",
+      "classification": "live EV profile artifacts",
+      "code_readers": [],
+      "code_writers": [],
+      "concurrency_write_risk": "MEDIUM: runtime state and profile joins remain compatibility-coupled",
+      "namespace": "data/live_ev_profiles",
+      "ownership_boundary": "live odds bridge/profile paths",
+      "readers": [],
+      "referencing_modules": [
+        "scripts.automatic_model_core",
+        "scripts.deepseek_auto_analysis",
+        "scripts.generate_analysis_report",
+        "scripts.live_ev_profile",
+        "scripts.live_odds_bridge",
+        "tests.test_automatic_model_core",
+        "tests.test_exact_distribution_freeze",
+        "tests.test_live_ev_profile"
+      ],
+      "tracked_file_count": 74,
+      "unclassified_code_references": [
+        "scripts.automatic_model_core",
+        "scripts.deepseek_auto_analysis",
+        "scripts.generate_analysis_report",
+        "scripts.live_ev_profile",
+        "scripts.live_odds_bridge",
+        "tests.test_automatic_model_core",
+        "tests.test_exact_distribution_freeze",
+        "tests.test_live_ev_profile"
+      ],
+      "workflow_references": [
+        ".github/workflows/analyze-selected.yml",
+        ".github/workflows/deploy-pages.yml"
+      ],
+      "workflow_writers": [
+        ".github/workflows/analyze-selected.yml",
+        ".github/workflows/deploy-pages.yml"
+      ],
+      "writers": [
+        ".github/workflows/analyze-selected.yml",
+        ".github/workflows/deploy-pages.yml"
+      ]
+    },
+    {
+      "canonical_or_derived": "acquisition evidence",
+      "classification": "schedule acquisition updates",
+      "code_readers": [],
+      "code_writers": [],
+      "concurrency_write_risk": "HIGH: current/future publication and source chronology",
+      "namespace": "data/schedule_updates",
+      "ownership_boundary": "schedule and current-universe intake paths",
+      "readers": [],
+      "referencing_modules": [
+        "scripts.daily_schedule_workspace",
+        "scripts.football_data.run_id_auto_1",
+        "scripts.match_workspace",
+        "scripts.postmatch_result",
+        "scripts.sync_result_schedules",
+        "tests.test_daily_schedule_workspace",
+        "tests.test_postmatch_once"
+      ],
+      "tracked_file_count": 2176,
+      "unclassified_code_references": [
+        "scripts.daily_schedule_workspace",
+        "scripts.football_data.run_id_auto_1",
+        "scripts.match_workspace",
+        "scripts.postmatch_result",
+        "scripts.sync_result_schedules",
+        "tests.test_daily_schedule_workspace",
+        "tests.test_postmatch_once"
+      ],
+      "workflow_references": [
+        ".github/workflows/deploy-pages.yml"
+      ],
+      "workflow_writers": [
+        ".github/workflows/deploy-pages.yml"
+      ],
+      "writers": [
+        ".github/workflows/deploy-pages.yml"
+      ]
+    },
+    {
+      "canonical_or_derived": "derived/live compatibility",
+      "classification": "live odds bridge artifacts",
+      "code_readers": [],
+      "code_writers": [],
+      "concurrency_write_risk": "MEDIUM: live quote snapshots must remain separated from prematch truth",
+      "namespace": "data/live_odds_bridge",
+      "ownership_boundary": "live_odds_bridge capture and profile consumers",
+      "readers": [],
+      "referencing_modules": [
+        "scripts.live_odds_bridge",
+        "scripts.paper_channel_prices",
+        "tests.test_live_odds_bridge"
+      ],
+      "tracked_file_count": 1,
+      "unclassified_code_references": [
+        "scripts.live_odds_bridge",
+        "scripts.paper_channel_prices",
+        "tests.test_live_odds_bridge"
+      ],
+      "workflow_references": [],
+      "workflow_writers": [],
+      "writers": []
+    },
+    {
+      "canonical_or_derived": "derived/audit evidence",
+      "classification": "market audit artifacts",
+      "code_readers": [],
+      "code_writers": [],
+      "concurrency_write_risk": "MEDIUM: audit output must not become a market source of truth",
+      "namespace": "data/market_audits",
+      "ownership_boundary": "market audit scripts and historical review paths",
+      "readers": [],
+      "referencing_modules": [],
+      "tracked_file_count": 6,
+      "unclassified_code_references": [],
+      "workflow_references": [],
+      "workflow_writers": [],
+      "writers": []
+    },
+    {
+      "canonical_or_derived": "research/benchmark evidence",
+      "classification": "model benchmark artifacts",
+      "code_readers": [],
+      "code_writers": [],
+      "concurrency_write_risk": "MEDIUM: benchmark output must remain outside Champion promotion state",
+      "namespace": "data/model_benchmarks",
+      "ownership_boundary": "benchmark, replay, and settlement comparison paths",
+      "readers": [],
+      "referencing_modules": [
+        "scripts.base_prediction_runner",
+        "scripts.baseline_production",
+        "scripts.baseline_settlement",
+        "scripts.baseline_shadow_runner",
+        "scripts.benchmark_health",
+        "scripts.prospective_settlement",
+        "tests.test_market_direction_shadow"
+      ],
+      "tracked_file_count": 3802,
+      "unclassified_code_references": [
+        "scripts.base_prediction_runner",
+        "scripts.baseline_production",
+        "scripts.baseline_settlement",
+        "scripts.baseline_shadow_runner",
+        "scripts.benchmark_health",
+        "scripts.prospective_settlement",
+        "tests.test_market_direction_shadow"
+      ],
+      "workflow_references": [],
+      "workflow_writers": [],
+      "writers": []
+    },
+    {
+      "canonical_or_derived": "governed calibration evidence",
+      "classification": "model calibration artifacts",
+      "code_readers": [],
+      "code_writers": [],
+      "concurrency_write_risk": "HIGH: calibration changes must not rewrite frozen predictions",
+      "namespace": "data/model_calibration",
+      "ownership_boundary": "calibration build and model input consumers",
+      "readers": [],
+      "referencing_modules": [
+        "scripts.automatic_model_core",
+        "scripts.build_model_calibration",
+        "scripts.deepseek_auto_analysis",
+        "scripts.match_workspace",
+        "scripts.model_governance",
+        "scripts.run_baseline_synthetic_smoke",
+        "tests.test_automatic_model_core",
+        "tests.test_baseline_production_integration",
+        "tests.test_exact_distribution_freeze",
+        "tests.test_model_governance"
+      ],
+      "tracked_file_count": 2,
+      "unclassified_code_references": [
+        "scripts.automatic_model_core",
+        "scripts.build_model_calibration",
+        "scripts.deepseek_auto_analysis",
+        "scripts.match_workspace",
+        "scripts.model_governance",
+        "scripts.run_baseline_synthetic_smoke",
+        "tests.test_automatic_model_core",
+        "tests.test_baseline_production_integration",
+        "tests.test_exact_distribution_freeze",
+        "tests.test_model_governance"
+      ],
+      "workflow_references": [],
+      "workflow_writers": [],
+      "writers": []
+    },
+    {
+      "canonical_or_derived": "derived/operational ledger",
+      "classification": "paper ledger artifacts",
+      "code_readers": [],
+      "code_writers": [],
+      "concurrency_write_risk": "HIGH: ledger append and settlement joins require serialization",
+      "namespace": "data/paper_ledger",
+      "ownership_boundary": "paper/real-bet recording and postmatch review paths",
+      "readers": [],
+      "referencing_modules": [
+        "scripts.automatic_postmatch_review",
+        "scripts.match_workspace",
+        "scripts.paper_channel_prices",
+        "scripts.postmatch_dashboard",
+        "scripts.sync_postmatch_workflow",
+        "tests.test_match_workspace",
+        "tests.test_workspace_auto_update"
+      ],
+      "tracked_file_count": 3,
+      "unclassified_code_references": [
+        "scripts.automatic_postmatch_review",
+        "scripts.match_workspace",
+        "scripts.paper_channel_prices",
+        "scripts.postmatch_dashboard",
+        "scripts.sync_postmatch_workflow",
+        "tests.test_match_workspace",
+        "tests.test_workspace_auto_update"
+      ],
+      "workflow_references": [
+        ".github/workflows/analyze-selected.yml",
+        ".github/workflows/deploy-pages.yml",
+        ".github/workflows/postmatch-once.yml"
+      ],
+      "workflow_writers": [
+        ".github/workflows/analyze-selected.yml",
+        ".github/workflows/deploy-pages.yml",
+        ".github/workflows/postmatch-once.yml"
+      ],
+      "writers": [
+        ".github/workflows/analyze-selected.yml",
+        ".github/workflows/deploy-pages.yml",
+        ".github/workflows/postmatch-once.yml"
+      ]
+    },
+    {
+      "canonical_or_derived": "derived/public projection",
+      "classification": "prediction dashboard projection",
+      "code_readers": [],
+      "code_writers": [
+        "scripts.build_public_site"
+      ],
+      "concurrency_write_risk": "MEDIUM: projection refresh must not mutate prediction truth",
+      "namespace": "data/prediction_dashboard",
+      "ownership_boundary": "prediction dashboard builder and public projection readers",
+      "readers": [],
+      "referencing_modules": [
+        "scripts.build_public_site",
+        "scripts.capture_public_ui_evidence",
+        "scripts.prediction_dashboard",
+        "scripts.refresh_durability_gate",
+        "tests.test_automation_cycle",
+        "tests.test_build_public_site",
+        "tests.test_github_production_workflow",
+        "tests.test_prediction_dashboard",
+        "tests.test_prediction_product_surface",
+        "tests.test_refresh_durability_gate",
+        "tests.test_workspace_auto_update"
+      ],
+      "tracked_file_count": 2,
+      "unclassified_code_references": [
+        "scripts.capture_public_ui_evidence",
+        "scripts.prediction_dashboard",
+        "scripts.refresh_durability_gate",
+        "tests.test_automation_cycle",
+        "tests.test_build_public_site",
+        "tests.test_github_production_workflow",
+        "tests.test_prediction_dashboard",
+        "tests.test_prediction_product_surface",
+        "tests.test_refresh_durability_gate",
+        "tests.test_workspace_auto_update"
+      ],
+      "workflow_references": [
+        ".github/workflows/deploy-pages.yml"
+      ],
+      "workflow_writers": [
+        ".github/workflows/deploy-pages.yml"
+      ],
+      "writers": [
+        ".github/workflows/deploy-pages.yml",
+        "scripts.build_public_site"
+      ]
+    },
+    {
+      "canonical_or_derived": "derived/evaluation and research evidence",
+      "classification": "prediction quality and shadow evidence",
+      "code_readers": [],
+      "code_writers": [],
+      "concurrency_write_risk": "HIGH: immutable pairs and derived indexes need separate write contracts",
+      "namespace": "data/prediction_quality",
+      "ownership_boundary": "quality audits, Market-Side shadow, and challenger review paths",
+      "readers": [],
+      "referencing_modules": [
+        "scripts.base_prediction_runner",
+        "scripts.challenger_c_promotion_review",
+        "scripts.market_side_shadow",
+        "scripts.market_side_shadow_refresh",
+        "scripts.prediction_trust_2_replay",
+        "scripts.prediction_trust_3_replay",
+        "scripts.prediction_trust_audit",
+        "scripts.pure_market_exact_prospective",
+        "tests.test_challenger_c_promotion_review",
+        "tests.test_generated_state_architecture_guard",
+        "tests.test_github_production_workflow",
+        "tests.test_market_side_shadow_refresh"
+      ],
+      "tracked_file_count": 242,
+      "unclassified_code_references": [
+        "scripts.base_prediction_runner",
+        "scripts.challenger_c_promotion_review",
+        "scripts.market_side_shadow",
+        "scripts.market_side_shadow_refresh",
+        "scripts.prediction_trust_2_replay",
+        "scripts.prediction_trust_3_replay",
+        "scripts.prediction_trust_audit",
+        "scripts.pure_market_exact_prospective",
+        "tests.test_challenger_c_promotion_review",
+        "tests.test_generated_state_architecture_guard",
+        "tests.test_github_production_workflow",
+        "tests.test_market_side_shadow_refresh"
+      ],
+      "workflow_references": [],
+      "workflow_writers": [],
+      "writers": []
+    },
+    {
+      "canonical_or_derived": "derived/audit evidence",
+      "classification": "risk audit artifacts",
+      "code_readers": [],
+      "code_writers": [],
+      "concurrency_write_risk": "MEDIUM: risk evidence must remain distinguishable from settlement truth",
+      "namespace": "data/risk_audits",
+      "ownership_boundary": "risk_engine and risk audit/report paths",
+      "readers": [],
+      "referencing_modules": [],
+      "tracked_file_count": 3,
+      "unclassified_code_references": [],
+      "workflow_references": [],
+      "workflow_writers": [],
+      "writers": []
+    },
+    {
+      "canonical_or_derived": "acquisition cache/legacy",
+      "classification": "provider/source cache",
+      "code_readers": [],
+      "code_writers": [],
+      "concurrency_write_risk": "HIGH: cache freshness and raw-source retention must not enter formal evidence without provenance",
+      "namespace": "data/source_cache",
+      "ownership_boundary": "fetch/parser cache compatibility paths",
+      "readers": [],
+      "referencing_modules": [
+        "scripts.base_prediction_runner",
+        "scripts.deepseek_auto_analysis",
+        "scripts.fetch_and_parse",
+        "scripts.fetch_sporttery",
+        "scripts.fetch_trade_matches",
+        "scripts.football_state_memory_readiness_audit",
+        "scripts.liansai_api",
+        "scripts.live_odds_bridge",
+        "scripts.nowscore_markets",
+        "scripts.parser",
+        "tests.test_checkpoint_features",
+        "tests.test_deepseek_auto_analysis",
+        "tests.test_football_state_memory",
+        "tests.test_match_analysis"
+      ],
+      "tracked_file_count": 3,
+      "unclassified_code_references": [
+        "scripts.base_prediction_runner",
+        "scripts.deepseek_auto_analysis",
+        "scripts.fetch_and_parse",
+        "scripts.fetch_sporttery",
+        "scripts.fetch_trade_matches",
+        "scripts.football_state_memory_readiness_audit",
+        "scripts.liansai_api",
+        "scripts.live_odds_bridge",
+        "scripts.nowscore_markets",
+        "scripts.parser",
+        "tests.test_checkpoint_features",
+        "tests.test_deepseek_auto_analysis",
+        "tests.test_football_state_memory",
+        "tests.test_match_analysis"
+      ],
+      "workflow_references": [],
+      "workflow_writers": [],
+      "writers": []
+    }
+  ],
+  "scan_policy": "paths_only_no_data_contents",
+  "tracked_data_file_count": 39055,
+  "tracked_data_namespace_counts": {
+    "data/analysis_inputs": 875,
+    "data/analysis_jobs": 170,
+    "data/analysis_reports": 2088,
+    "data/base_prediction_jobs": 31,
+    "data/fetch_runs": 4174,
+    "data/football_data": 313,
+    "data/live_ev_profiles": 74,
+    "data/live_odds_bridge": 1,
+    "data/market_audits": 6,
+    "data/market_history": 870,
+    "data/match_analysis": 7306,
+    "data/match_archive": 156,
+    "data/match_workspace": 4836,
+    "data/model_benchmarks": 3802,
+    "data/model_calibration": 2,
+    "data/model_governance/input_snapshots": 2426,
+    "data/model_governance/prediction_exclusions": 1,
+    "data/model_governance/predictions": 2426,
+    "data/paper_ledger": 3,
+    "data/postmatch_automation": 1084,
+    "data/postmatch_dashboard": 1849,
+    "data/postmatch_reports": 180,
+    "data/postmatch_reviews": 170,
+    "data/prediction_dashboard": 2,
+    "data/prediction_quality": 242,
+    "data/prediction_quality/market_side_shadow_1": 1786,
+    "data/prediction_universe": 32,
+    "data/product_runtime": 3,
+    "data/prospective": 2,
+    "data/prospective/football_evidence": 1961,
+    "data/provider_match_crosswalk.json": 1,
+    "data/risk_audits": 3,
+    "data/schedule_updates": 2176,
+    "data/source_cache": 3,
+    "data/team_aliases.json": 1
+  },
+  "workflow_writer_evidence_is_limited_to_explicit_git_write_paths": true
+}

@@ -1,0 +1,35 @@
+# FBOS whole-code domain ownership map — Issue #268 R1
+
+This is a read-only audit of the exact repository head used for this PR. It records current owners and evidenced collisions; it does not authorize refactors or data changes.
+
+- Decision: `ARCHITECTURE_CONSOLIDATION_REQUIRED`
+- Python modules inventoried: `397`; scripts: `157`; tests: `240`.
+- JSON schema/config files parsed: `31`; parse errors: `0`.
+- Local import edges: `772`; cycles: `1`; sys.path mutations: `82`; dual import fallbacks: `43`.
+- Workflows/actions classified: `18`; overlapping main-write namespaces: `14`.
+- Data policy: tracked data paths were counted for namespace ownership only; historical data contents were not parsed or hashed.
+
+| Domain | Current owner(s) | Callers / boundary | Proven duplication or collision | Ownership status |
+| --- | --- | --- | --- | --- |
+| match/team/provider identity | scripts/match_identity.py; scripts/team_identity.py; scripts/football_data/entity_resolution.py; provider-specific parsers | prediction_universe.py, base_prediction_jobs.py, postmatch_queue.py, match_workspace.py, provider registries, State Memory | canonical_match_id, provider-ID precedence, local fallbacks, reviewed aliases, and SequenceMatcher workspace joins coexist; differences are not all equivalent | MIXED / consolidation candidate |
+| kickoff/timezone/chronology | match_identity.parse_kickoff; current_serving_state._parse_timestamp; postmatch_queue.parse_datetime; match_workspace.parse_kickoff_local; prematch_versioning._parse_timestamp; football_data runtime parsers | serving, job sync, workspace, postmatch, provenance and snapshot paths | naive timestamps are interpreted as UTC, Shanghai, or rejected by different live consumers | P0 MULTIPLE SEMANTIC AUTHORITIES |
+| provider HTTP/retry/cache/parsing | scripts/nowscore_markets.py; scripts/fetch_and_parse.py; scripts/fetch_sporttery.py; scripts/football_data/providers/*; scripts/live_odds_bridge.py | prematch monitor, prediction runner, selected analysis, State Memory, provider adapters and probes | Nowscore transport, cache, market/analysis parsing and identity are combined; football_data has a separate provider protocol and runtime transport | MIXED / high coupling |
+| competition/season resolution | scripts/football_data/competition_resolution.py; competition_demand.py; coverage_registry.py; parser-local labels | football_data catalogs, prediction universe, recent-form and coverage paths | canonical football_data resolution exists alongside provider/page label handling and legacy report labels | BOUNDED WITH COMPATIBILITY EDGES |
+| evidence provenance / point-in-time safety | scripts/model_governance.py; prematch_versioning.py; base_prediction_runner.py; football_data contracts/runtime snapshot; football_state_memory.py | freeze, serving, reports, prospective evaluation and production health | several timestamp/provenance envelopes and sidecars are composed by orchestration modules rather than one evidence boundary | MIXED / high regression risk |
+| prediction-universe/base-job/current-serving state | prediction_universe.py; base_prediction_jobs.py; current_serving_state.py; automation_cycle.py | production workflows, dashboard, prediction runner, postmatch and health | current/future publication, job ledger and current serving each select/normalize identity separately | MIXED / ownership map incomplete |
+| model input + model governance/freeze | automatic_model_core.py; model_governance.py; base_prediction_runner.py; exact_distribution.py | production base cycle, report generation, benchmark/replay and settlement | healthy freeze/kernel boundaries exist, but runner/report orchestration still spans acquisition, model input, freeze and side effects | HEALTHY CORE / ORCHESTRATION COUPLING |
+| market math / score math / contract settlement | market_engine.py; score_engine.py; market_contracts.py; evaluation_kernel.py | automatic model, baseline, settlement, report and prospective paths | accepted owner map and guards show these core semantics are consolidated; compatibility re-exports remain intentional | HEALTHY CONTROL ZONE |
+| evaluation/settlement | evaluation_kernel.py; baseline_settlement.py; prospective_settlement.py; automatic_postmatch_review.py | postmatch review, baseline, Market-Side and production reports | kernel owns shared formulas; wager/market-specific and report shaping remain separate as intended | HEALTHY CORE / BOUNDED COMPATIBILITY |
+| postmatch lifecycle | postmatch_queue.py; postmatch_schedule.py; postmatch_result.py; automatic_postmatch_review.py; sync_result_schedules.py | postmatch workflow, workspace, result schedule and evaluation | queue/report/runtime identity fallbacks and evaluation inputs cross lifecycle boundaries | MIXED / lifecycle consolidation candidate |
+| runtime/health state | automation_cycle.py; production_health_watch.py; current_serving_state.py; root 05_RUNTIME_STATE consumers | deploy pages, dashboard, UI evidence, workspace, live bridge, postmatch and health gates | data/product_runtime and root 05_RUNTIME_STATE are both reachable current-like state surfaces | P0 MULTIPLE STATE AUTHORITIES |
+| immutable/generated data persistence | durable_main_write.py; runtime_snapshot.py; market_side_shadow.py; model_governance.py; workflow staging blocks | deploy, research review, production health, dashboard and postmatch | repository durable data is operationally written by several scheduled/manual workflows with overlapping namespaces | MIXED / write ownership needs explicit map |
+| public product projection / Match Detail / Dashboard / workspace | build_public_site.py; prediction_dashboard.py; match_detail.py; match_workspace.py; capture_public_ui_evidence.py | Pages deployment, visual evidence and workspace refresh | workspace joins and renders data/runtime/report state while public builder has a selective read-only projection contract | MIXED / projection boundary needs characterization |
+| legacy compatibility | legacy_analysis_mapper.py; migration scripts; root runtime/report fallbacks; model_baselines/risk_engine re-exports | current report, workspace, postmatch and benchmark paths plus historical fixtures | compatibility is intentional in selected kernel APIs, but root runtime and legacy report joins remain reachable from current paths | MIXED / deprecation ownership incomplete |
+
+## Healthy comparison controls
+
+The accepted owner map and architecture guards establish healthy control zones for `scripts/market_engine.py`, `scripts/score_engine.py`, `scripts/market_contracts.py`, `scripts/evaluation_kernel.py`, `scripts/exact_distribution.py`, Market-Side generated-state ownership, and `scripts/football_data/providers/base.py` plus adapters. Their compatibility re-exports are recorded as intentional boundaries, not duplicate math.
+
+## Scope boundary
+
+PR #267 remains held and unmerged. This audit does not inspect it as a change set, repair its identity behavior, change identity mappings, modify model/Champion/Serving/UI, alter production workflows, migrate data, or change dependencies.

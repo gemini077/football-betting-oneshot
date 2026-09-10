@@ -1,0 +1,104 @@
+name: WHOLE-CODE architecture ownership audit
+
+on:
+  pull_request:
+    paths:
+      - "scripts/architecture_audit.py"
+      - "tests/test_architecture_audit.py"
+      - "docs/architecture-audit/issue-268-r1/**"
+      - ".github/workflows/architecture-audit.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  architecture-audit:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out exact PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Assert exact PR head and bounded file scope
+        if: ${{ github.event_name == 'pull_request' }}
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$HEAD_SHA"
+          while IFS= read -r path; do
+            case "$path" in
+              scripts/architecture_audit.py|tests/test_architecture_audit.py|.github/workflows/architecture-audit.yml|docs/architecture-audit/issue-268-r1/*) ;;
+              *) echo "out-of-scope file: $path"; exit 1 ;;
+            esac
+          done < <(git diff --name-only "$BASE_SHA...$HEAD_SHA")
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install pinned dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run audit focused tests
+        run: python -m pytest -q tests/test_architecture_audit.py
+
+      - name: Compile audit paths
+        run: python -m py_compile scripts/architecture_audit.py tests/test_architecture_audit.py
+
+      - name: Generate exact-head audit evidence
+        run: python scripts/architecture_audit.py --repo-root . --output-dir docs/architecture-audit/issue-268-r1 --collect-tests
+
+      - name: Validate compact JSON evidence and fail-closed baseline
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          root = Path("docs/architecture-audit/issue-268-r1")
+          names = [
+              "architecture_inventory.json",
+              "data_write_read_map.json",
+              "workflow_map.json",
+              "dependency_summary.json",
+          ]
+          payloads = {name: json.loads((root / name).read_text(encoding="utf-8")) for name in names}
+          inventory = payloads["architecture_inventory.json"]
+          assert inventory["decision"] in {
+              "ARCHITECTURE_CONSOLIDATION_REQUIRED",
+              "BOUNDED_DEBT_ONLY",
+              "FAIL_CLOSED",
+          }
+          assert inventory["data_scan_policy"] == "paths_only_no_data_contents"
+          assert inventory["python_parse_errors"] == []
+          assert inventory["json_contracts"]["json_parse_errors"] == []
+          assert inventory["json_contracts"]["json_file_count"] >= 1
+          collection = inventory["test_collection"]
+          assert collection["status"] == "FAILED_DURING_COLLECTION"
+          assert "tests/test_live_ev_profile.py" in collection["error_files"]
+          assert any("PUBLIC_DATA_DIRS" in item for item in collection["import_errors"])
+          assert payloads["data_write_read_map.json"]["scan_policy"] == "paths_only_no_data_contents"
+          assert payloads["workflow_map.json"]["workflow_count"] >= 1
+          assert payloads["dependency_summary.json"]["local_module_count"] >= 100
+          for path in root.iterdir():
+              if path.is_file():
+                  text = path.read_text(encoding="utf-8")
+                  assert "<html>" not in text.lower()
+                  assert "raw_body" not in text.lower()
+          PY
+
+      - name: Check generated evidence whitespace
+        run: git diff --check
+
+      - name: Upload exact-head audit evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: whole-code-architecture-audit
+          path: docs/architecture-audit/issue-268-r1/
