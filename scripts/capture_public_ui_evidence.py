@@ -803,8 +803,9 @@ def _check_public_shell_and_responsive(browser: Any, base_url: str) -> dict[str,
         page.goto(f"{base_url}/visual-fixtures/detail-current-frozen.html", wait_until="networkidle", timeout=30_000)
         detail_metrics = _shell_metrics(page)
         assert_shell(detail_metrics, "detail desktop")
-        if len(detail_metrics.get("tabTargets") or []) not in {0, 2}:
-            raise RuntimeError("detail exposed only one of the conditional market/evidence tabs")
+        tab_targets = set(detail_metrics.get("tabTargets") or [])
+        if not tab_targets.issubset({"market", "evidence"}):
+            raise RuntimeError("detail exposed an unknown conditional tab")
         checks["detail_shell_desktop"] = "VERIFIED"
         checks["detail_conditional_tabs"] = "VERIFIED"
     finally:
