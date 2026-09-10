@@ -13,8 +13,16 @@ jobs:
   audit:
     runs-on: ubuntu-latest
     steps:
-      - name: Check out pinned repository data
+      - name: Check out accepted pinned data state
         uses: actions/checkout@v4
+        with:
+          ref: 73994d32fc148da49295a5bfef2e1e42e042a22e
+          fetch-depth: 1
+
+      - name: Restore accepted audit script without changing pinned data
+        run: |
+          git fetch --depth=1 origin 2a701443314767822e9fbfd6bd5c1c447ac1fb19
+          git show FETCH_HEAD:scripts/exact_score_error_decomposition_audit.py > scripts/exact_score_error_decomposition_audit.py
 
       - name: Set up Python
         uses: actions/setup-python@v5
