@@ -1,0 +1,134 @@
+name: Prematch football evidence substrate audit
+
+on:
+  pull_request:
+    paths:
+      - "scripts/prematch_football_evidence_audit.py"
+      - "tests/test_prematch_football_evidence_audit.py"
+      - ".github/workflows/prematch-football-evidence.yml"
+  workflow_dispatch:
+    inputs:
+      cohort_path:
+        description: "Existing FBOS prediction-universe snapshot"
+        required: false
+        default: "data/prediction_universe/2026-09-10.json"
+
+permissions:
+  contents: read
+
+jobs:
+  focused-validation:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out exact source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Enforce research-only file scope
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || 'HEAD^' }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          while IFS= read -r path; do
+            case "$path" in
+              scripts/prematch_football_evidence_audit.py|tests/test_prematch_football_evidence_audit.py|.github/workflows/prematch-football-evidence.yml) ;;
+              *) echo "out-of-scope file: $path"; exit 1 ;;
+            esac
+          done < <(git diff --name-only "$BASE_SHA...$HEAD_SHA")
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt
+
+      - name: Run focused tests
+        run: python -m pytest -q tests/test_prematch_football_evidence_audit.py
+
+      - name: Compile touched Python paths
+        run: >-
+          python -m py_compile
+          scripts/prematch_football_evidence_audit.py
+          tests/test_prematch_football_evidence_audit.py
+
+      - name: Check patch whitespace
+        run: git diff --check "${{ github.event.pull_request.base.sha || 'HEAD^' }}...${{ github.event.pull_request.head.sha || github.sha }}"
+
+  live-audit:
+    if: ${{ github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
+      COHORT_PATH: ${{ inputs.cohort_path || 'data/prediction_universe/2026-09-10.json' }}
+    steps:
+      - name: Check out requested ref
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+          fetch-depth: 1
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt
+
+      - name: Run one bounded live audit
+        run: >-
+          python scripts/prematch_football_evidence_audit.py
+          --cohort-path "$COHORT_PATH"
+          --max-matches 12
+          --output "$RUNNER_TEMP/prematch-football-evidence-audit.json"
+
+      - name: Validate compact decision artifact
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          path = Path(os.environ["RUNNER_TEMP"]) / "prematch-football-evidence-audit.json"
+          text = path.read_text(encoding="utf-8")
+          summary = json.loads(text)
+          allowed = {
+              "EVIDENCE_SUBSTRATE_PROBE_READY",
+              "COVERAGE_TOO_THIN",
+              "IDENTITY_NOT_READY",
+              "PRIVATE_SNAPSHOT_AUTHORITY_REQUIRED",
+              "FAIL_CLOSED",
+              "FOUNDER_SECRET_REQUIRED",
+          }
+          if summary.get("decision") not in allowed:
+              raise SystemExit(f"unexpected decision: {summary.get('decision')}")
+          if summary.get("api_key_persisted") is not False:
+              raise SystemExit("secret persistence flag is not false")
+          if summary.get("raw_provider_responses_written") is not False:
+              raise SystemExit("raw response persistence flag is not false")
+          key = os.environ.get("API_FOOTBALL_KEY", "")
+          if key and key in text:
+              raise SystemExit("API key appeared in the summary artifact")
+          if int(summary.get("requests", {}).get("used", 0)) > 80:
+              raise SystemExit("request budget exceeded")
+          print(f"decision={summary['decision']}")
+          print(f"requests_used={summary['requests']['used']}")
+          PY
+
+      - name: Upload compact audit artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: prematch-football-evidence-audit-${{ github.run_id }}
+          path: ${{ runner.temp }}/prematch-football-evidence-audit.json
+          if-no-files-found: error
+          retention-days: 14
