@@ -1,0 +1,110 @@
+name: Nowscore prematch evidence
+
+on:
+  pull_request:
+    paths:
+      - "scripts/nowscore_prematch_evidence.py"
+      - "scripts/nowscore_prematch_adapters.py"
+      - "scripts/nowscore_markets.py"
+      - "scripts/base_prediction_runner.py"
+      - "scripts/football_state_memory.py"
+      - "schemas/nowscore_prematch_evidence.schema.json"
+      - "tests/test_nowscore_prematch_evidence.py"
+      - "tests/fixtures/nowscore_prematch_evidence/**"
+      - "docs/football-state-memory.md"
+      - ".github/workflows/nowscore-prematch-evidence.yml"
+  workflow_dispatch:
+    inputs:
+      business_date:
+        description: "READY prediction-universe business date; blank selects the latest READY cohort"
+        required: false
+        default: ""
+      max_matches:
+        description: "Maximum future fixtures to fetch"
+        required: false
+        default: "12"
+  schedule:
+    - cron: "17 3 * * *"
+
+permissions:
+  contents: read
+
+jobs:
+  focused-contract:
+    if: ${{ github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' || github.event_name == 'schedule' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run focused Nowscore evidence tests
+        run: python -m pytest -q tests/test_nowscore_prematch_evidence.py
+
+      - name: Compile touched production paths
+        run: >-
+          python -m py_compile
+          scripts/nowscore_prematch_evidence.py
+          scripts/nowscore_prematch_adapters.py
+          scripts/nowscore_markets.py
+          scripts/base_prediction_runner.py
+          scripts/football_state_memory.py
+
+      - name: Check diff whitespace
+        if: ${{ github.event_name == 'pull_request' }}
+        run: git diff --check "${{ github.event.pull_request.base.sha }}...${{ github.sha }}"
+
+      - name: Prove protected model and serving paths are unchanged
+        if: ${{ github.event_name == 'pull_request' }}
+        run: |
+          if git diff --name-only "${{ github.event.pull_request.base.sha }}...${{ github.sha }}" | grep -E '^(scripts/(automatic_model_core|model_governance)\.py|serving/|ui/|web/)' ; then
+            echo "protected model/serving/UI path changed"
+            exit 1
+          fi
+
+  live-natural-cohort:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event_name == 'schedule' }}
+    needs: focused-contract
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Crawl current natural Nowscore cohort
+        env:
+          BUSINESS_DATE: ${{ inputs.business_date || '' }}
+          MAX_MATCHES: ${{ inputs.max_matches || '12' }}
+        run: |
+          args=(--max-matches "$MAX_MATCHES" --output nowscore-prematch-evidence.json)
+          if [[ -n "$BUSINESS_DATE" ]]; then
+            args+=(--business-date "$BUSINESS_DATE")
+          fi
+          python scripts/nowscore_prematch_evidence.py "${args[@]}"
+
+      - name: Upload structured evidence and parser health
+        uses: actions/upload-artifact@v4
+        with:
+          name: nowscore-prematch-evidence-${{ github.run_id }}
+          path: nowscore-prematch-evidence.json
+          if-no-files-found: error

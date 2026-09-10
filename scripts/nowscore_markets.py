@@ -2435,18 +2435,14 @@ def _trusted_jc_page_verification(
     }
 
 
-def _fetch_cached_page(url: str, cache_path: Path, no_cache: bool, maximum_age: int = 3600) -> bytes:
-    if not no_cache and cache_path.exists() and time.time() - cache_path.stat().st_mtime < maximum_age:
-        return cache_path.read_bytes()
-    raw = _fetch_bytes(url)
-    cache_path.parent.mkdir(parents=True, exist_ok=True)
-    cache_path.write_bytes(raw)
-    return raw
+def _fetch_cached_page(url: str, cache_path: Path | None, no_cache: bool, maximum_age: int = 3600) -> bytes:
+    """Fetch a public page without creating a raw HTML/JS cache artifact."""
+    del cache_path, no_cache, maximum_age
+    return _fetch_bytes(url)
 
 
 def fetch_context_bundle(match_id: int, kickoff: object, parsed_markets: dict, no_cache: bool = False) -> dict:
     """Fetch optional same-match context; individual failures never discard core odds."""
-    raw_root = CACHE_ROOT / "raw"
     source_urls = {
         "coach": COACH_URL.format(match_id=match_id),
         "referee": REFEREE_URL.format(match_id=match_id),
@@ -2456,7 +2452,7 @@ def fetch_context_bundle(match_id: int, kickoff: object, parsed_markets: dict, n
     context: dict[str, object] = {"source_urls": source_urls, "errors": {}}
     for key, url in source_urls.items():
         try:
-            raw = _fetch_cached_page(url, raw_root / f"{match_id}_{key}.html", no_cache)
+            raw = _fetch_cached_page(url, None, no_cache)
             context[key] = parsers[key](_decode(raw))
         except Exception as error:
             context[key] = {}
@@ -2472,7 +2468,7 @@ def fetch_context_bundle(match_id: int, kickoff: object, parsed_markets: dict, n
     def fetch_company(company_id: int) -> tuple[int, dict | None, str | None]:
         url = COMPANY_TREND_URL.format(company_id=company_id, match_id=match_id)
         try:
-            raw = _fetch_cached_page(url, raw_root / f"{match_id}_company_{company_id}.html", no_cache, maximum_age=900)
+            raw = _fetch_cached_page(url, None, no_cache, maximum_age=900)
             trend = parse_company_trend(_decode(raw), company_id, kickoff, company_names.get(company_id))
             trend["source_url"] = url
             return company_id, trend, None
@@ -2568,20 +2564,13 @@ def fetch_match_markets(
         }
 
     match_id = int(resolved["nowscore_id"])
-    cache_path = CACHE_ROOT / "raw" / f"{match_id}_3in1.html"
-    raw = None
-    if not no_cache and cache_path.exists() and time.time() - cache_path.stat().st_mtime < 3600:
-        raw = cache_path.read_bytes()
-    if raw is None:
-        try:
-            raw = _fetch_bytes(MARKET_URL.format(match_id=match_id))
-        except (urllib.error.URLError, TimeoutError, OSError) as error:
-            return {
-                "source": "nowscore_public_3in1", "status": "FETCH_ERROR", "fetched_at": fetched_at,
-                "nowscore_id": match_id, "resolution": resolved, "error": f"{type(error).__name__}: {error}",
-            }
-        cache_path.parent.mkdir(parents=True, exist_ok=True)
-        cache_path.write_bytes(raw)
+    try:
+        raw = _fetch_bytes(MARKET_URL.format(match_id=match_id))
+    except (urllib.error.URLError, TimeoutError, OSError) as error:
+        return {
+            "source": "nowscore_public_3in1", "status": "FETCH_ERROR", "fetched_at": fetched_at,
+            "nowscore_id": match_id, "resolution": resolved, "error": f"{type(error).__name__}: {error}",
+        }
     parsed = parse_three_in_one(_decode(raw))
     target = {"home": home, "away": away, "kickoff": kickoff}
     page_provider_id = _page_provider_id_details(parsed["identity"])
@@ -2663,17 +2652,11 @@ def fetch_match_markets(
     )
     analysis_error = None
     shuju = {}
-    analysis_cache = CACHE_ROOT / "raw" / f"{match_id}_analysis.js"
     analysis_raw = None
-    if not no_cache and analysis_cache.exists() and time.time() - analysis_cache.stat().st_mtime < 3600:
-        analysis_raw = analysis_cache.read_bytes()
-    if analysis_raw is None:
-        try:
-            analysis_raw = _fetch_bytes(ANALYSIS_DATA_URL.format(match_id=match_id))
-            analysis_cache.parent.mkdir(parents=True, exist_ok=True)
-            analysis_cache.write_bytes(analysis_raw)
-        except (urllib.error.URLError, TimeoutError, OSError) as error:
-            analysis_error = f"{type(error).__name__}: {error}"
+    try:
+        analysis_raw = _fetch_bytes(ANALYSIS_DATA_URL.format(match_id=match_id))
+    except (urllib.error.URLError, TimeoutError, OSError) as error:
+        analysis_error = f"{type(error).__name__}: {error}"
     if analysis_raw is not None:
         shuju = parse_analysis_data(_decode(analysis_raw))
         if not shuju:

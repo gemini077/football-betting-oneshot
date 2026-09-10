@@ -293,6 +293,101 @@ def _legacy_matches(snapshot: dict[str, Any]) -> dict[str, list[dict[str, Any]]]
     return result
 
 
+_PREMATCH_EVIDENCE_KEYS = (
+    "contract_version",
+    "source",
+    "target_fixture",
+    "fields",
+    "observations",
+    "coverage",
+    "parser_health",
+    "rights",
+)
+_PREMATCH_EVIDENCE_FIELD_KEYS = (
+    "state",
+    "value",
+    "reason_code",
+    "record_count",
+    "semantic_state",
+    "surface",
+    "source_surfaces",
+    "surface_states",
+    "observed_at",
+    "source_update_at",
+    "prematch_eligible",
+)
+_UNPERSISTABLE_EVIDENCE_KEYS = frozenset({
+    "body",
+    "raw_body",
+    "raw_html",
+    "raw_js",
+    "html_body",
+    "javascript_body",
+})
+
+
+def _copy_prematch_value(value: Any, key: str = "") -> Any:
+    if key.casefold() in _UNPERSISTABLE_EVIDENCE_KEYS:
+        return None
+    if isinstance(value, dict):
+        return {
+            str(child_key): _copy_prematch_value(child, str(child_key))
+            for child_key, child in value.items()
+            if str(child_key).casefold() not in _UNPERSISTABLE_EVIDENCE_KEYS
+        }
+    if isinstance(value, list):
+        return [_copy_prematch_value(child, key) for child in value]
+    return copy.deepcopy(value)
+
+
+def _prematch_evidence(snapshot: dict[str, Any]) -> dict[str, Any] | None:
+    """Project the structured Nowscore bundle without accepting page bodies."""
+    candidate = snapshot.get("prematch_evidence") or snapshot.get("nowscore_prematch_evidence")
+    if not isinstance(candidate, dict) or not candidate.get("contract_version"):
+        return None
+    projected: dict[str, Any] = {
+        key: _copy_prematch_value(candidate[key], key)
+        for key in _PREMATCH_EVIDENCE_KEYS
+        if key in candidate
+    }
+    fields = candidate.get("fields")
+    if isinstance(fields, dict):
+        projected["fields"] = {
+            str(name): {
+                key: _copy_prematch_value(item[key], key)
+                for key in _PREMATCH_EVIDENCE_FIELD_KEYS
+                if key in item
+            }
+            for name, item in fields.items()
+            if isinstance(item, dict)
+        }
+    observations = candidate.get("observations")
+    if isinstance(observations, list):
+        observation_keys = (
+            "surface",
+            "url",
+            "observed_at",
+            "request_started_at",
+            "source_update_at",
+            "source_update_basis",
+            "http_status",
+            "content_sha256",
+            "content_length",
+            "error_code",
+            "error_detail",
+        )
+        projected["observations"] = [
+            {
+                key: _copy_prematch_value(item[key], key)
+                for key in observation_keys
+                if key in item
+            }
+            for item in observations
+            if isinstance(item, dict)
+        ]
+    return projected
+
+
 def _history_matches(snapshot: dict[str, Any]) -> dict[str, list[dict[str, Any]]] | None:
     shuju = snapshot.get("shuju")
     value = None
@@ -713,8 +808,11 @@ def build_football_evidence_audit(source_snapshots: Any) -> dict[str, Any] | Non
     if snapshot is None:
         return None
     recent_matches = _legacy_matches(snapshot)
-    if recent_matches is None:
+    prematch_evidence = _prematch_evidence(snapshot)
+    if recent_matches is None and prematch_evidence is None:
         return None
+    if recent_matches is None:
+        recent_matches = {"home_team": [], "away_team": []}
     evidence: dict[str, Any] = {
         "source_provider": "nowscore",
         "recent_matches": recent_matches,
@@ -725,6 +823,8 @@ def build_football_evidence_audit(source_snapshots: Any) -> dict[str, Any] | Non
     captured_at = _timestamp(_first(snapshot, "fetched_at", "captured_at", "source_timestamp", "source_time"))
     if captured_at:
         evidence["evidence_captured_at"] = captured_at
+    if prematch_evidence is not None:
+        evidence["prematch_evidence"] = prematch_evidence
     state_memory = build_state_memory({}, source_snapshots)
     if state_memory is not None:
         evidence["state_memory"] = state_memory
@@ -755,6 +855,8 @@ def build_football_evidence_sidecar(
         "evidence_captured_at": evidence.get("evidence_captured_at"),
         "recent_matches": evidence["recent_matches"],
     }
+    if evidence.get("prematch_evidence") is not None:
+        sidecar["prematch_evidence"] = evidence["prematch_evidence"]
     match_key = record.get("match_key") or identity.get("match_key")
     if match_key not in (None, ""):
         sidecar["match_key"] = match_key
