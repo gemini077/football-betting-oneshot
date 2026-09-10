@@ -392,6 +392,9 @@ def test_detail_renders_trusted_prematch_form_and_context_without_internal_field
     evidence_html = html[evidence_start:evidence_end]
 
     assert 'data-public-evidence="recent-form"' in evidence_html
+    assert 'data-evidence-role="MODEL_INPUT"' not in evidence_html
+    assert "模型输入" not in evidence_html
+    assert "赛前证据" in evidence_html
     assert "Coach Home" in evidence_html
     assert "Coach Away" in evidence_html
     assert "Referee One" in evidence_html

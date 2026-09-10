@@ -728,8 +728,8 @@ def _render_public_form(public_evidence: dict[str, Any], identity: dict[str, Any
     if not rows:
         return ""
     return (
-        '<article class="evidence-block evidence-primary" data-evidence-role="MODEL_INPUT" data-public-evidence="recent-form">'
-        '<div class="evidence-role">模型输入</div><h3>近期表现</h3>'
+        '<article class="evidence-block evidence-primary" data-evidence-role="CONTEXT_ONLY" data-public-evidence="recent-form">'
+        '<div class="evidence-role">赛前证据</div><h3>近期表现</h3>'
         '<div class="form-compare" role="table" aria-label="双方近期主客场表现">'
         '<div class="form-compare-row form-compare-head" role="row">'
         '<span role="columnheader">队伍</span><span role="columnheader">范围</span>'
