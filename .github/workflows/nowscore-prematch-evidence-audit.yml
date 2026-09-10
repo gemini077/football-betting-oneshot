@@ -1,0 +1,165 @@
+name: Nowscore same-ID prematch evidence audit
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - "scripts/nowscore_prematch_evidence_audit.py"
+      - "tests/test_nowscore_prematch_evidence_audit.py"
+      - ".github/workflows/nowscore-prematch-evidence-audit.yml"
+  workflow_dispatch:
+    inputs:
+      cohort_path:
+        description: "Optional repository-relative prediction-universe JSON; empty uses the natural current cohort"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  focused-validation:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out exact PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install project dependencies
+        run: python -m pip install -r requirements.txt
+
+      - name: Run focused same-source audit tests
+        run: python -m pytest -q tests/test_nowscore_prematch_evidence_audit.py
+
+      - name: Compile touched Python paths
+        run: >-
+          python -m py_compile
+          scripts/nowscore_prematch_evidence_audit.py
+          tests/test_nowscore_prematch_evidence_audit.py
+
+      - name: Validate natural cohort JSON contract
+        run: |
+          python - <<'PY'
+          import json
+          from scripts.nowscore_prematch_evidence_audit import discover_cohort_path
+
+          path = discover_cohort_path()
+          payload = json.loads(path.read_text(encoding="utf-8"))
+          rows = payload.get("fixtures", payload.get("matches"))
+          assert payload.get("status") == "READY"
+          assert isinstance(rows, list) and rows
+          print(f"natural_cohort={path.as_posix()} source_rows={len(rows)}")
+          PY
+
+      - name: Check changed-file scope and whitespace
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || 'HEAD^' }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          allowed=(
+            "scripts/nowscore_prematch_evidence_audit.py"
+            "tests/test_nowscore_prematch_evidence_audit.py"
+            ".github/workflows/nowscore-prematch-evidence-audit.yml"
+          )
+          while IFS= read -r path; do
+            case " ${allowed[*]} " in
+              *" $path "*) ;;
+              *) echo "out-of-scope changed path: $path" >&2; exit 1 ;;
+            esac
+          done < <(git diff --name-only "$BASE_SHA...$HEAD_SHA")
+          git diff --check "$BASE_SHA...$HEAD_SHA"
+
+  live-audit:
+    if: ${{ github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out dispatched exact head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install project dependencies
+        run: python -m pip install -r requirements.txt
+
+      - name: Run one bounded unauthenticated same-ID audit
+        shell: bash
+        env:
+          COHORT_PATH: ${{ inputs.cohort_path }}
+        run: |
+          set -euo pipefail
+          output="$RUNNER_TEMP/nowscore-same-id-prematch-evidence-audit.json"
+          args=()
+          if [[ -n "$COHORT_PATH" ]]; then
+            args+=(--cohort-path "$COHORT_PATH")
+          fi
+          python scripts/nowscore_prematch_evidence_audit.py --output "$output" "${args[@]}"
+          test -s "$output"
+          python - "$output" <<'PY'
+          import json
+          import sys
+          from scripts.nowscore_prematch_evidence_audit import ALLOWED_DECISIONS, ALLOWED_STATES, FIELD_NAMES, MAX_REQUESTS
+
+          payload = json.loads(open(sys.argv[1], encoding="utf-8").read())
+          assert payload["decision"] in ALLOWED_DECISIONS
+          assert payload["source_is_production"] is False
+          assert payload["production_source_selected"] is False
+          assert payload["model_change_allowed"] is False
+          assert payload["champion_change_allowed"] is False
+          assert payload["serving_change_allowed"] is False
+          assert payload["ui_change_allowed"] is False
+          assert payload["public_raw_content_persisted"] is False
+          assert payload["source_prose_or_names_persisted"] is False
+          assert payload["public_summary_only"] is True
+          assert payload["requests"]["used"] <= MAX_REQUESTS
+          assert payload["requests"]["within_budget"] is True
+          assert set(FIELD_NAMES) == set(payload["field_aggregate"])
+          cohort = payload["cohort"]
+          assert cohort is not None
+          assert cohort["natural_cohort"] is True
+          assert cohort["future_only"] is True
+          assert cohort["one_match_one_observation"] is True
+          assert payload["requests"]["used"] >= cohort["declared_match_count"]
+
+          for match in payload["matches"]:
+              assert match["identity"].get("state") in ALLOWED_STATES
+              for surface in match["surfaces"].values():
+                  assert surface["publication"]["state"] in ALLOWED_STATES
+                  assert surface["chronology"]["source_update_basis"] != "OBSERVED_AT"
+                  for field in surface["fields"].values():
+                      assert field["state"] in ALLOWED_STATES
+
+          serialized = json.dumps(payload, ensure_ascii=False).casefold()
+          for forbidden in ("<html", "<script", "raw_page_body", "raw_source", "player_name"):
+              assert forbidden not in serialized
+          print(f"decision={payload['decision']}")
+          print(f"reason={payload['reason']}")
+          print(f"cohort_count={cohort['declared_match_count']}")
+          print(f"requests_used={payload['requests']['used']}")
+          PY
+
+      - name: Upload compact audit summary only
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: nowscore-same-id-prematch-evidence-audit
+          path: ${{ runner.temp }}/nowscore-same-id-prematch-evidence-audit.json
+          if-no-files-found: error
+          retention-days: 14
