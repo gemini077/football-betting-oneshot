@@ -1,0 +1,325 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://football-betting-oneshot.local/schemas/nowscore_prematch_evidence.v1.schema.json",
+  "title": "Nowscore Prematch Evidence v1",
+  "description": "Structured same-ID Nowscore observations. Page bodies are transient and are never part of this contract.",
+  "type": "object",
+  "required": [
+    "contract_version",
+    "source",
+    "target_fixture",
+    "fields",
+    "observations",
+    "coverage",
+    "parser_health",
+    "rights"
+  ],
+  "properties": {
+    "contract_version": {
+      "const": "nowscore_prematch_evidence.v1"
+    },
+    "source": {
+      "$ref": "#/$defs/source"
+    },
+    "target_fixture": {
+      "$ref": "#/$defs/targetFixture"
+    },
+    "fields": {
+      "type": "object",
+      "required": [
+        "competition_standings_stage",
+        "recent_form",
+        "h2h",
+        "future_schedule_rest",
+        "injuries",
+        "suspensions",
+        "lineup_state",
+        "coach",
+        "referee",
+        "panlu",
+        "technical_stats",
+        "market_context"
+      ],
+      "additionalProperties": {
+        "$ref": "#/$defs/field"
+      }
+    },
+    "observations": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/observation"
+      }
+    },
+    "coverage": {
+      "type": "object"
+    },
+    "parser_health": {
+      "$ref": "#/$defs/parserHealth"
+    },
+    "rights": {
+      "$ref": "#/$defs/rights"
+    }
+  },
+  "$defs": {
+    "source": {
+      "type": "object",
+      "required": [
+        "provider",
+        "role",
+        "provider_match_id",
+        "observed_at",
+        "source_update_at",
+        "prematch_verified",
+        "prematch_status",
+        "source_references"
+      ],
+      "properties": {
+        "provider": {
+          "const": "nowscore"
+        },
+        "role": {
+          "const": "same_id_prematch_evidence"
+        },
+        "provider_match_id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "observed_at": {
+          "type": ["string", "null"]
+        },
+        "source_update_at": {
+          "type": ["string", "null"]
+        },
+        "prematch_verified": {
+          "type": "boolean"
+        },
+        "prematch_status": {
+          "enum": ["VERIFIED", "UNVERIFIED", "UNKNOWN"]
+        },
+        "source_references": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uri"
+          }
+        }
+      }
+    },
+    "targetFixture": {
+      "type": "object",
+      "required": [
+        "provider_match_id",
+        "source_fixture_id",
+        "home_team",
+        "away_team",
+        "kickoff_at",
+        "source_record_ref"
+      ],
+      "properties": {
+        "provider_match_id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "source_fixture_id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "home_team": {
+          "type": "string"
+        },
+        "away_team": {
+          "type": "string"
+        },
+        "home_team_id": {
+          "type": ["integer", "null"]
+        },
+        "away_team_id": {
+          "type": ["integer", "null"]
+        },
+        "kickoff_at": {
+          "type": ["string", "null"]
+        },
+        "source_record_ref": {
+          "type": "string",
+          "format": "uri"
+        }
+      }
+    },
+    "field": {
+      "type": "object",
+      "required": [
+        "state",
+        "value",
+        "reason_code",
+        "record_count",
+        "source_surfaces",
+        "observed_at",
+        "source_update_at",
+        "prematch_eligible"
+      ],
+      "properties": {
+        "state": {
+          "enum": [
+            "PRESENT",
+            "SECTION_PRESENT_EMPTY",
+            "ABSENT",
+            "ACCESS_GATED",
+            "PARSE_UNCERTAIN",
+            "CONFLICT"
+          ]
+        },
+        "value": {},
+        "reason_code": {
+          "type": "string"
+        },
+        "record_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "semantic_state": {
+          "type": ["string", "null"]
+        },
+        "surface": {
+          "type": ["string", "null"]
+        },
+        "source_surfaces": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "surface_states": {
+          "type": "object",
+          "additionalProperties": {
+            "enum": [
+              "PRESENT",
+              "SECTION_PRESENT_EMPTY",
+              "ABSENT",
+              "ACCESS_GATED",
+              "PARSE_UNCERTAIN",
+              "CONFLICT"
+            ]
+          }
+        },
+        "observed_at": {
+          "type": ["string", "null"]
+        },
+        "source_update_at": {
+          "type": ["string", "null"]
+        },
+        "prematch_eligible": {
+          "type": ["boolean", "null"]
+        }
+      }
+    },
+    "observation": {
+      "type": "object",
+      "required": [
+        "surface",
+        "url",
+        "observed_at",
+        "source_update_at",
+        "http_status",
+        "content_sha256",
+        "content_length",
+        "error_code"
+      ],
+      "properties": {
+        "surface": {
+          "enum": [
+            "market_context",
+            "analysis_data",
+            "analysis_page",
+            "time_page",
+            "coach",
+            "referee",
+            "panlu"
+          ]
+        },
+        "url": {
+          "type": "string",
+          "format": "uri"
+        },
+        "observed_at": {
+          "type": ["string", "null"]
+        },
+        "request_started_at": {
+          "type": ["string", "null"]
+        },
+        "source_update_at": {
+          "type": ["string", "null"]
+        },
+        "source_update_basis": {
+          "type": ["string", "null"]
+        },
+        "http_status": {
+          "type": ["integer", "null"]
+        },
+        "content_sha256": {
+          "type": ["string", "null"]
+        },
+        "content_length": {
+          "type": ["integer", "null"],
+          "minimum": 0
+        },
+        "error_code": {
+          "type": ["string", "null"]
+        },
+        "error_detail": {
+          "type": ["string", "null"]
+        }
+      }
+    },
+    "parserHealth": {
+      "type": "object",
+      "required": [
+        "contract_version",
+        "overall_status",
+        "surface_health",
+        "drift_signal_count",
+        "drift_signals"
+      ],
+      "properties": {
+        "contract_version": {
+          "const": "nowscore_parser_health.v1"
+        },
+        "overall_status": {
+          "enum": ["HEALTHY", "DEGRADED", "DRIFT_SUSPECTED", "BLOCKED"]
+        },
+        "surface_health": {
+          "type": "array"
+        },
+        "drift_signal_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "drift_signals": {
+          "type": "array"
+        }
+      }
+    },
+    "rights": {
+      "type": "object",
+      "required": [
+        "raw_bodies_persisted",
+        "raw_html_js_persisted",
+        "player_name_lists_persisted",
+        "auth_or_bypass_used"
+      ],
+      "properties": {
+        "raw_bodies_persisted": {
+          "const": false
+        },
+        "raw_html_js_persisted": {
+          "const": false
+        },
+        "player_name_lists_persisted": {
+          "const": false
+        },
+        "auth_or_bypass_used": {
+          "const": false
+        }
+      }
+    }
+  }
+}

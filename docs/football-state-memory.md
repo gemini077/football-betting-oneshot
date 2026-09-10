@@ -6,8 +6,8 @@ The current BASE path is:
 
 ```text
 prediction_universe -> base_prediction_runner._assemble_context
-  -> _nowscore_source -> nowscore_markets.fetch_match_markets
-     -> parse_three_in_one / parse_analysis_data / fetch_context_bundle
+  -> _nowscore_source -> nowscore_prematch_evidence.fetch_nowscore_prematch_evidence
+     -> thin Nowscore adapters -> structured prematch_evidence
   -> context.source_snapshots
   -> model_governance.build_deterministic_model_input_snapshot
   -> freeze_prediction
@@ -22,6 +22,17 @@ dropped.  The governance projection retains `recent_form` and the existing
 `panlu` context, but intentionally drops raw recent-match rows, Nowscore page
 identity, and `shuju.team_ids`.  The legacy sidecar therefore has no
 historical fixture ID, competition label, kickoff, or subject perspective.
+
+Issue #272 adds `schemas/nowscore_prematch_evidence.schema.json` and the
+same-ID `nowscore_prematch_evidence.v1` bundle beside that legacy sidecar.
+The adapter covers the public Nowscore market, analysis, time, coach, referee,
+and panlu surfaces.  Every requested field has an explicit state:
+`PRESENT`, `SECTION_PRESENT_EMPTY`, `ABSENT`, `ACCESS_GATED`,
+`PARSE_UNCERTAIN`, or `CONFLICT`.  `observed_at` and an optional HTTP
+`source_update_at` remain separate, and data observed after kickoff is not
+prematch-eligible.  Response bodies are transient; only structured facts,
+content hashes, timestamps, URLs, and parser-health metadata are retained.
+The deterministic model projection intentionally drops `prematch_evidence`.
 
 The existing 500.com fallback (`fetch_and_parse.parse_shuju`) supplies
 aggregate recent-form summaries only.  It does not expose per-fixture rows,
@@ -56,7 +67,7 @@ prediction path; unchanged frozen jobs do not create a second sidecar.
 ## Source truth and readiness artifacts
 
 The bounded audit reads current tracked sidecars, frozen records, embedded
-input snapshots, and the existing local Nowscore raw source pair when present.
+input snapshots, and the existing local Nowscore source pair when present.
 GitHub Actions uses the committed immutable representative fixture at
 `tests/fixtures/nowscore_state_memory/current_source_sample.json` when the
 local cache is absent.  It makes no network calls and writes only the
@@ -89,3 +100,13 @@ the full per-fixture State Memory contract.  These checks compute exactly one
 of `PROSPECTIVE_STATE_MEMORY_READY`, `PROSPECTIVE_STATE_MEMORY_PARTIAL`, or
 `FAIL_CLOSED`; no conclusion is preset.  Existing historical/frozen artifacts
 are audit inputs only.
+
+The Issue #272 live natural-cohort run is intentionally Actions-only:
+
+```text
+GitHub Actions -> latest READY prediction_universe -> same-ID Nowscore pages
+  -> nowscore-prematch-evidence.json artifact (structured facts and health only)
+```
+
+It does not use Tipsme, API-Football, or Feijing, and it does not bypass
+authentication, CAPTCHA, paywalls, or rate limits.

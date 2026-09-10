@@ -45,7 +45,10 @@ from model_governance import (  # noqa: E402
     load_frozen_prediction,
     prediction_content_hash,
 )
-from nowscore_markets import fetch_match_markets  # noqa: E402
+from nowscore_prematch_evidence import (  # noqa: E402
+    fetch_nowscore_prematch_evidence,
+    nowscore_source_urls,
+)
 from official_jc_handicap import (  # noqa: E402
     abstain_nowscore_jc_handicap_capture,
     capture_nowscore_jc_handicap,
@@ -62,6 +65,27 @@ from football_state_memory import (  # noqa: E402
     build_football_evidence_sidecar as _state_memory_build_football_evidence_sidecar,
     write_football_evidence_sidecar as _state_memory_write_football_evidence_sidecar,
 )
+
+
+def fetch_match_markets(
+    home: str,
+    away: str,
+    kickoff: object,
+    explicit_id: int | None = None,
+    no_cache: bool = False,
+    *,
+    fixture: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Compatibility seam for the runner's existing focused test doubles."""
+
+    return fetch_nowscore_prematch_evidence(
+        home,
+        away,
+        kickoff,
+        explicit_id=explicit_id,
+        no_cache=no_cache,
+        fixture=fixture,
+    )
 
 
 JOBS_ROOT = PROJECT_ROOT / "data" / "base_prediction_jobs"
@@ -774,10 +798,7 @@ def _nowscore_source(
             status="INVALID_PROVIDER_ID",
             detail="nowscore fixture ID is not an integer",
         ), []
-    refs = [
-        _relative_ref(PROJECT_ROOT / "data" / "source_cache" / "nowscore" / "raw" / f"{nowscore_numeric_id}_3in1.html"),
-        _relative_ref(PROJECT_ROOT / "data" / "source_cache" / "nowscore" / "raw" / f"{nowscore_numeric_id}_analysis.js"),
-    ]
+    refs = list(nowscore_source_urls(nowscore_numeric_id).values())
     try:
         result = fetch_match_markets(
             str(job.get("home") or ""),
