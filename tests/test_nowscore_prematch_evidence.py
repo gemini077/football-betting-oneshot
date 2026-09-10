@@ -8,6 +8,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
 import nowscore_prematch_evidence as evidence  # noqa: E402
+import nowscore_prematch_adapters as adapters  # noqa: E402
 import nowscore_markets  # noqa: E402
 from football_state_memory import build_football_evidence_audit, build_football_evidence_sidecar  # noqa: E402
 from model_governance import build_deterministic_model_input_projection  # noqa: E402
@@ -145,7 +146,7 @@ def test_verified_same_id_bundle_covers_all_fields_without_raw_bodies():
     assert bundle["fields"]["recent_form"]["state"] == "PRESENT"
     assert bundle["fields"]["h2h"]["state"] == "PRESENT"
     assert bundle["fields"]["future_schedule_rest"]["state"] == "PRESENT"
-    assert bundle["fields"]["injuries"]["state"] == "CONFLICT"
+    assert bundle["fields"]["injuries"]["state"] == "SECTION_PRESENT_EMPTY"
     assert bundle["fields"]["suspensions"]["state"] == "SECTION_PRESENT_EMPTY"
     assert bundle["fields"]["lineup_state"]["semantic_state"] == "PREDICTED"
     assert bundle["fields"]["technical_stats"]["state"] == "PRESENT"
@@ -293,6 +294,92 @@ def test_football_technical_labels_are_required_for_present_stats():
     assert field["state"] == "PRESENT"
     assert field["record_count"] == 2
     assert [item["label"] for item in field["value"]["stats"]] == ["Possession", "Shots on target"]
+
+
+def test_availability_keywords_and_generic_rows_are_not_present():
+    payload = evidence.SurfacePayload(
+        "time_page",
+        "https://example.invalid/time",
+        "<h2>Injuries</h2><p>injury information</p><table><tr><th>Status</th><th>Count</th></tr><tr><td>Out</td><td>3</td></tr></table>"
+        "<h2>Suspensions</h2><p>suspension information</p><table><tr><th>Status</th><th>Count</th></tr><tr><td>Suspended</td><td>3</td></tr></table>",
+        {"observed_at": "2098-12-31T12:00:00+08:00", "source_update_at": None, "http_status": 200},
+    )
+    parsed = evidence._markup_adapter(payload, {})
+    assert parsed["fields"]["injuries"]["state"] == "PARSE_UNCERTAIN"
+    assert parsed["fields"]["suspensions"]["state"] == "PARSE_UNCERTAIN"
+
+
+def test_competition_row_count_without_rank_points_or_stage_is_uncertain():
+    payload = evidence.SurfacePayload(
+        "analysis_page",
+        "https://example.invalid/analysis",
+        "<h2>Standings</h2><table><tr><th>Home</th><th>Away</th></tr><tr><td>Alpha</td><td>Beta</td></tr></table>",
+        {"observed_at": "2098-12-31T12:00:00+08:00", "source_update_at": None, "http_status": 200},
+    )
+    parsed = evidence._markup_adapter(payload, {})
+    field = parsed["fields"]["competition_standings_stage"]
+    assert field["state"] == "PARSE_UNCERTAIN"
+    assert field["record_count"] == 0
+
+
+def test_competition_rank_and_points_facts_are_present():
+    payload = evidence.SurfacePayload(
+        "analysis_page",
+        "https://example.invalid/analysis",
+        "<h2>Standings</h2><table><tr><th>Rank</th><th>Points</th><th>Team</th></tr><tr><td>1</td><td>10</td><td>Alpha</td></tr></table>",
+        {"observed_at": "2098-12-31T12:00:00+08:00", "source_update_at": None, "http_status": 200},
+    )
+    parsed = evidence._markup_adapter(payload, {})
+    field = parsed["fields"]["competition_standings_stage"]
+    assert field["state"] == "PRESENT"
+    assert field["value"]["rank_fact_count"] == 1
+    assert field["value"]["points_fact_count"] == 1
+
+
+def test_empty_coach_profiles_are_not_present(monkeypatch):
+    monkeypatch.setattr(
+        adapters,
+        "parse_coach_page",
+        lambda _body: {
+            "home": {"name": None, "coach_records": [], "team_records": []},
+            "away": {"name": "", "coach_records": [], "team_records": []},
+        },
+    )
+    payload = evidence.SurfacePayload(
+        "coach",
+        "https://example.invalid/coach",
+        "<h1>coach</h1>",
+        {"observed_at": "2098-12-31T12:00:00+08:00", "source_update_at": None, "http_status": 200},
+    )
+    parsed = adapters._adapter("coach", payload, {})
+    field = parsed["fields"]["coach"]
+    assert field["state"] == "PARSE_UNCERTAIN"
+    assert field["reason_code"] == "COACH_SECTION_UNCERTAIN"
+    assert parsed["health"]["status"] == "DRIFT_SUSPECTED"
+
+
+def test_present_invariant_requires_domain_specific_facts_for_every_present_field():
+    result = crawl()
+    present_fields = {
+        field: item
+        for field, item in result["prematch_evidence"]["fields"].items()
+        if item["state"] == "PRESENT"
+    }
+    assert present_fields
+    assert all(adapters._has_domain_fact(field, item) for field, item in present_fields.items())
+
+    generic_coach = {
+        "fields": {
+            "coach": {
+                "state": "PRESENT",
+                "value": {"home": {}, "away": {}},
+                "record_count": 0,
+            }
+        }
+    }
+    adapters._enforce_present_invariant(generic_coach)
+    assert generic_coach["fields"]["coach"]["state"] == "PARSE_UNCERTAIN"
+    assert generic_coach["fields"]["coach"]["reason_code"] == "PRESENT_INVARIANT_NO_DOMAIN_FACT"
 
 
 def test_state_memory_sidecar_keeps_evidence_beside_model_projection():

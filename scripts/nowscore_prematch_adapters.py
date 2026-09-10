@@ -464,11 +464,36 @@ SECTION_ALIASES: dict[str, tuple[str, ...]] = {
 
 def _competition_builder(sections: list[dict[str, Any]], combined: str) -> tuple[Any, int, bool]:
     rows = [row for section in sections for row in section.get("rows") or [] if any(row)]
+    rank_labels = ("rank", "ranking", "position", "standing", "place", "排名", "名次")
+    points_labels = ("points", "point", "pts", "积分", "积分数")
+    rank_fact_count = 0
+    points_fact_count = 0
+    for section in sections:
+        section_rows = [row for row in section.get("rows") or [] if any(row)]
+        if not section_rows:
+            continue
+        header = " ".join(section_rows[0])
+        numeric_data_rows = [row for row in section_rows[1:] if _numeric_values(row)]
+        if _contains(header, rank_labels):
+            rank_fact_count += len(numeric_data_rows)
+        if _contains(header, points_labels):
+            points_fact_count += len(numeric_data_rows)
+        for row in section_rows:
+            numeric_cells = _numeric_values(row[1:])
+            if numeric_cells and _contains(str(row[0] if row else ""), rank_labels):
+                rank_fact_count += 1
+            if numeric_cells and _contains(str(row[0] if row else ""), points_labels):
+                points_fact_count += 1
     stage_match = re.search(r"(?:stage|round|阶段|轮次)\s*[:：]?\s*([A-Za-z0-9一二三四五六七八九十-]{1,30})", combined, re.I)
-    value: dict[str, Any] = {"standings_row_count": len(rows)}
+    value: dict[str, Any] = {
+        "standings_row_count": len(rows),
+        "rank_fact_count": rank_fact_count,
+        "points_fact_count": points_fact_count,
+    }
     if stage_match:
         value["stage_or_round"] = _safe_text(stage_match.group(1), 40)
-    return value, len(rows), bool(rows) or bool(stage_match)
+    fact_count = rank_fact_count + points_fact_count + (1 if stage_match else 0)
+    return value, fact_count, bool(fact_count)
 
 
 def _h2h_builder(sections: list[dict[str, Any]], combined: str) -> tuple[Any, int, bool]:
@@ -504,19 +529,58 @@ def _future_builder(sections: list[dict[str, Any]], combined: str) -> tuple[Any,
         value["explicit_schedule_tokens"] = [_safe_text(item, 40) for item in dates[:20]]
     if rest:
         value["rest_hours_source"] = float(rest.group(1))
-    return value, max(len(rows), len(dates)), bool(rows or dates or rest)
+    return value, len(dates) + (1 if rest else 0), bool(dates or rest)
+
+
+def _availability_status_match(text: str, words: tuple[str, ...]) -> bool:
+    lowered = str(text or "").casefold()
+    return any(
+        bool(re.search(rf"\b{re.escape(word.casefold())}\b", lowered))
+        if word.isascii()
+        else word.casefold() in lowered
+        for word in words
+    )
+
+
+def _availability_structured_rows(rows: list[list[str]], kind: str) -> list[dict[str, Any]]:
+    status_words = {
+        "injuries": ("injured", "sidelined", "out", "doubtful", "questionable", "unfit", "illness", "伤", "伤病", "缺阵"),
+        "suspensions": ("suspended", "suspension", "ban", "red card", "停赛", "禁赛", "红牌"),
+    }[kind]
+    generic_cells = {
+        "status", "count", "player", "name", "type", "reason", "date", "injury", "injuries", "suspension", "suspensions",
+    }
+    structured_rows = []
+    for row in rows:
+        cells = [_safe_text(cell, 120) for cell in row if _safe_text(cell, 120)]
+        if len(cells) < 2:
+            continue
+        status_cells = [cell for cell in cells if _availability_status_match(cell, status_words)]
+        if not status_cells:
+            continue
+        subject_cells = []
+        for cell in cells:
+            normalized = re.sub(r"\s+", " ", cell.casefold()).strip()
+            if normalized in generic_cells or _numeric_values([cell]):
+                continue
+            if _availability_status_match(normalized, status_words):
+                continue
+            subject_cells.append(cell)
+        if subject_cells:
+            structured_rows.append({"structured": True, "status": status_cells[0]})
+    return structured_rows
 
 
 def _availability_builder(kind: str) -> Callable[[list[dict[str, Any]], str], tuple[Any, int, bool]]:
     def builder(sections: list[dict[str, Any]], combined: str) -> tuple[Any, int, bool]:
         rows = [row for section in sections for row in section.get("rows") or [] if any(row)]
-        content = " ".join(str(section.get("text") or "") for section in sections)
-        item_words = {
-            "injuries": ("player", "injury", "out", "疑似", "缺阵"),
-            "suspensions": ("player", "suspension", "suspended", "停赛", "禁赛"),
-        }[kind]
-        item_found = bool(rows) or _contains(content, item_words)
-        return {"record_count": len(rows), "source_semantics": kind}, len(rows), item_found
+        structured_rows = _availability_structured_rows(rows, kind)
+        count = len(structured_rows)
+        return {
+            "structured_record_count": count,
+            "status_values": [row["status"] for row in structured_rows[:20]],
+            "source_semantics": kind,
+        }, count, bool(structured_rows)
     return builder
 
 
@@ -638,6 +702,79 @@ def _technical_builder(sections: list[dict[str, Any]], combined: str) -> tuple[A
     return {"stat_count": len(stats), "stats": stats}, len(stats), bool(stats)
 
 
+def _positive_count(value: Any) -> int:
+    try:
+        return max(0, int(value or 0))
+    except (TypeError, ValueError):
+        return 0
+
+
+def _has_domain_fact(field: str, item: Mapping[str, Any]) -> bool:
+    value = item.get("value")
+    if not isinstance(value, dict):
+        return False
+    if field == "market_context":
+        return any(_positive_count(value.get(key)) > 0 for key in ("bookmaker_count", "asian_count", "total_count"))
+    if field == "recent_form":
+        return bool(value.get("summary")) and _positive_count(value.get("recent_match_count")) > 0
+    if field == "competition_standings_stage":
+        return any(_positive_count(value.get(key)) > 0 for key in ("rank_fact_count", "points_fact_count")) or bool(value.get("stage_or_round"))
+    if field == "h2h":
+        records = value.get("records")
+        return isinstance(records, list) and any(
+            isinstance(record, dict) and bool(record.get("date") or record.get("score"))
+            for record in records
+        )
+    if field == "future_schedule_rest":
+        return bool(value.get("explicit_schedule_tokens")) or value.get("rest_hours_source") is not None
+    if field in {"injuries", "suspensions"}:
+        return _positive_count(value.get("structured_record_count")) > 0 and bool(value.get("status_values"))
+    if field == "lineup_state":
+        return item.get("semantic_state") in {"CONFIRMED", "PREDICTED"}
+    if field == "technical_stats":
+        stats = value.get("stats")
+        return isinstance(stats, list) and bool(stats) and all(
+            isinstance(stat, dict)
+            and _is_technical_stat_label(str(stat.get("label") or ""))
+            and len(stat.get("values") or []) >= 2
+            for stat in stats
+        )
+    if field == "coach":
+        return any(
+            isinstance(value.get(side), dict)
+            and (
+                bool(_safe_text(value[side].get("name"), 80))
+                or _positive_count(value[side].get("coach_record_count")) > 0
+                or _positive_count(value[side].get("team_record_count")) > 0
+            )
+            for side in ("home", "away")
+        )
+    if field == "referee":
+        return bool(_safe_text(value.get("name"), 80)) or any(
+            _positive_count(value.get(key)) > 0
+            for key in ("summary_count", "home_team_history_count", "away_team_history_count")
+        )
+    if field == "panlu":
+        matches = value.get("matches")
+        return _positive_count(value.get("match_count")) > 0 and isinstance(matches, list) and bool(matches)
+    return False
+
+
+def _enforce_present_invariant(result: dict[str, Any]) -> dict[str, Any]:
+    fields = result.get("fields")
+    if not isinstance(fields, dict):
+        return result
+    for field, item in fields.items():
+        if not isinstance(item, dict) or item.get("state") != "PRESENT" or _has_domain_fact(field, item):
+            continue
+        item["state"] = "PARSE_UNCERTAIN"
+        item["value"] = None
+        item["reason_code"] = "PRESENT_INVARIANT_NO_DOMAIN_FACT"
+        item["record_count"] = 0
+        item["semantic_state"] = None
+    return result
+
+
 def _markup_adapter(payload: SurfacePayload, target: Mapping[str, Any]) -> dict[str, Any]:
     body = payload.body or ""
     document = _document(body)
@@ -720,12 +857,18 @@ def _coach_adapter(payload: SurfacePayload) -> dict[str, Any]:
             "team_record_count": len(away_profile.get("team_records") or []),
         },
     }
+    coach_fact = any(
+        bool(profile.get("name"))
+        or _positive_count(profile.get("coach_record_count")) > 0
+        or _positive_count(profile.get("team_record_count")) > 0
+        for profile in (value["home"], value["away"])
+    )
     fields = {
         "coach": _field(
-            "PRESENT" if count or any(parsed.get(side) for side in ("home", "away")) else ("PARSE_UNCERTAIN" if body else "ABSENT"),
+            "PRESENT" if coach_fact else ("PARSE_UNCERTAIN" if body else "ABSENT"),
             value=value,
             surface=payload.surface,
-            reason_code="COACH_STRUCTURED_RECORDS_PARSED" if count else "COACH_SECTION_UNCERTAIN",
+            reason_code="COACH_STRUCTURED_FACT_PARSED" if coach_fact else "COACH_SECTION_UNCERTAIN",
             record_count=count,
         )
     }
@@ -799,7 +942,7 @@ def _panlu_adapter(payload: SurfacePayload) -> dict[str, Any]:
     return {"fields": fields, "legacy": parsed, "health": health}
 
 
-def _adapter(surface: str, payload: SurfacePayload, target: Mapping[str, Any]) -> dict[str, Any]:
+def _raw_adapter(surface: str, payload: SurfacePayload, target: Mapping[str, Any]) -> dict[str, Any]:
     error_code = payload.observation.get("error_code")
     if error_code or payload.body is None or int(payload.observation.get("http_status") or 200) >= 400:
         fields = _failed_fields(surface, error_code)
@@ -828,3 +971,7 @@ def _adapter(surface: str, payload: SurfacePayload, target: Mapping[str, Any]) -
     if surface == "panlu":
         return _panlu_adapter(payload)
     return {"fields": {}, "legacy": {}, "health": {"surface": surface, "status": "UNAVAILABLE", "drift_reasons": ["UNKNOWN_SURFACE"]}}
+
+
+def _adapter(surface: str, payload: SurfacePayload, target: Mapping[str, Any]) -> dict[str, Any]:
+    return _enforce_present_invariant(_raw_adapter(surface, payload, target))
