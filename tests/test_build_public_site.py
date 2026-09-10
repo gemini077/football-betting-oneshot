@@ -158,6 +158,79 @@ def test_build_renders_missing_contract_from_current_dashboard_fixture_without_w
     assert not (tmp_path / "data" / "match_analysis").exists()
 
 
+def test_build_projects_linked_prematch_sidecar_into_current_match_detail(tmp_path, monkeypatch):
+    make_source_tree(tmp_path, include_contract=False)
+    dashboard_path = tmp_path / "data" / "prediction_dashboard" / "latest.json"
+    dashboard = json.loads(dashboard_path.read_text(encoding="utf-8"))
+    dashboard["fixtures"][0]["selected_prediction_id"] = "FORMAL-PROJECTION-1"
+    write_json(dashboard_path, dashboard)
+    write_json(
+        tmp_path / "data" / "prospective" / "football_evidence" / "FORMAL-PROJECTION-1.json",
+        {
+            "prediction_id": "FORMAL-PROJECTION-1",
+            "match_id": "1001",
+            "business_date": "2026-08-25",
+            "source_provider": "nowscore",
+            "nowscore_id": 9001,
+            "prematch_evidence": {
+                "fields": {
+                    "recent_form": {
+                        "state": "PRESENT",
+                        "prematch_eligible": True,
+                        "value": {
+                            "summary": {
+                                "home_home": {
+                                    "matches": 5,
+                                    "wins": 4,
+                                    "draws": 1,
+                                    "losses": 0,
+                                    "goals_for": 12,
+                                    "goals_against": 3,
+                                },
+                                "away_away": {
+                                    "matches": 5,
+                                    "wins": 1,
+                                    "draws": 2,
+                                    "losses": 2,
+                                    "goals_for": 5,
+                                    "goals_against": 8,
+                                },
+                            }
+                        },
+                    },
+                    "coach": {
+                        "state": "PRESENT",
+                        "prematch_eligible": True,
+                        "value": {
+                            "home": {"name": "Coach Home"},
+                            "away": {"name": "Coach Away"},
+                        },
+                    },
+                    "referee": {
+                        "state": "PRESENT",
+                        "prematch_eligible": True,
+                        "value": {"name": "Referee One"},
+                    },
+                }
+            },
+        },
+    )
+    monkeypatch.setattr(build_public_site, "ROOT", tmp_path)
+
+    build_public_site.build(tmp_path / "site")
+
+    detail = (tmp_path / "site" / "matches/1001/index.html").read_text(encoding="utf-8")
+    assert 'data-public-evidence="recent-form"' in detail
+    assert "Home FC" in detail
+    assert "Away FC" in detail
+    assert "4-1-0" in detail
+    assert "Coach Home" in detail
+    assert "Coach Away" in detail
+    assert "Referee One" in detail
+    for forbidden in ("PRESENT", "nowscore_id", "9001", "parser_health", "h2h"):
+        assert forbidden not in detail[detail.index('<article class="panel evidence-panel'):detail.index("</article>", detail.index('<article class="panel evidence-panel'))]
+
+
 def test_fallback_detail_reads_linked_immutable_formal_contract_without_backfill(tmp_path, monkeypatch):
     make_source_tree(tmp_path, include_contract=False)
     dashboard_path = tmp_path / "data" / "prediction_dashboard" / "latest.json"

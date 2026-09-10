@@ -24,6 +24,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from scripts.build_public_site import (  # noqa: E402
+    _attach_fixture_prematch_evidence,
     _change_awareness_for_fixture,
     _fixture_contract,
     _linked_frozen_formal_markets,
@@ -323,6 +324,12 @@ def _write_fixture_pages(site_root: Path, payload: dict[str, Any], current: dict
         formal_markets=current_formal_markets,
     )
     current_contract["change_awareness"] = current_change_awareness
+    current_contract = _attach_fixture_prematch_evidence(
+        data_root,
+        current_contract,
+        current,
+        business_date,
+    )
     current_contract["prediction_quality_health"] = payload.get("prediction_quality_health") or {}
     pages["detail-current-frozen.html"] = render_match_detail(current_contract)
 

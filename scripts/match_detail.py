@@ -697,7 +697,79 @@ def _normalise_evidence_role(value: Any) -> str | None:
     return role if role in _EVIDENCE_ROLE_LABELS else None
 
 
-def _render_form(evidence: dict[str, Any]) -> str:
+def _render_public_form(public_evidence: dict[str, Any], identity: dict[str, Any]) -> str:
+    recent_form = public_evidence.get("recent_form")
+    if not isinstance(recent_form, dict):
+        return ""
+    rows = []
+    labels = {
+        "home": (identity.get("home") or "主队", "主场"),
+        "away": (identity.get("away") or "客队", "客场"),
+    }
+    for side in ("home", "away"):
+        values = recent_form.get(side)
+        if not isinstance(values, dict):
+            continue
+        fields = ("matches", "wins", "draws", "losses", "goals_for", "goals_against")
+        if any(isinstance(values.get(field), bool) or not isinstance(values.get(field), int) for field in fields):
+            continue
+        if values["matches"] <= 0 or values["wins"] + values["draws"] + values["losses"] != values["matches"]:
+            continue
+        team, venue = labels[side]
+        rows.append(
+            '<div class="form-compare-row" role="row">'
+            f'<span role="cell"><strong>{_esc(team)}</strong></span>'
+            f'<span role="cell">{_esc(venue)} {values["matches"]}场</span>'
+            f'<span role="cell" class="form-record">{values["wins"]}-{values["draws"]}-{values["losses"]}</span>'
+            f'<span role="cell">{values["goals_for"]}</span>'
+            f'<span role="cell">{values["goals_against"]}</span>'
+            '</div>'
+        )
+    if not rows:
+        return ""
+    return (
+        '<article class="evidence-block evidence-primary" data-evidence-role="MODEL_INPUT" data-public-evidence="recent-form">'
+        '<div class="evidence-role">模型输入</div><h3>近期表现</h3>'
+        '<div class="form-compare" role="table" aria-label="双方近期主客场表现">'
+        '<div class="form-compare-row form-compare-head" role="row">'
+        '<span role="columnheader">队伍</span><span role="columnheader">范围</span>'
+        '<span role="columnheader">胜-平-负</span><span role="columnheader">进球</span><span role="columnheader">失球</span>'
+        '</div>'
+        + "".join(rows)
+        + '</div><p class="source-line">已有主客场近况记录</p></article>'
+    )
+
+
+def _render_public_context(public_evidence: dict[str, Any], identity: dict[str, Any]) -> str:
+    context_rows = []
+    coach = public_evidence.get("coach")
+    if isinstance(coach, dict):
+        coach_names = []
+        for side in ("home", "away"):
+            name = coach.get(side)
+            if name not in (None, ""):
+                coach_names.append(f'{_esc(identity.get(side) or ("主队" if side == "home" else "客队"))}：{_esc(name)}')
+        if coach_names:
+            context_rows.append(
+                f'<div class="evidence-fact"><span>教练</span><strong>{" · ".join(coach_names)}</strong></div>'
+            )
+    referee = public_evidence.get("referee")
+    if referee not in (None, ""):
+        context_rows.append(f'<div class="evidence-fact"><span>裁判</span><strong>{_esc(referee)}</strong></div>')
+    if not context_rows:
+        return ""
+    return (
+        '<article class="evidence-block" data-evidence-role="CONTEXT_ONLY" data-public-evidence="context">'
+        '<div class="evidence-role">背景信息</div><h3>教练与裁判</h3>'
+        + "".join(context_rows)
+        + '</article>'
+    )
+
+
+def _render_form(evidence: dict[str, Any], identity: dict[str, Any] | None = None) -> str:
+    identity = identity if isinstance(identity, dict) else {}
+    if isinstance(evidence.get("prematch_evidence"), dict):
+        return _render_public_form(evidence["prematch_evidence"], identity)
     fundamentals = evidence.get("fundamentals") if isinstance(evidence.get("fundamentals"), dict) else {}
     form = fundamentals.get("recent_form") if isinstance(fundamentals.get("recent_form"), dict) else {}
     rows = []
@@ -811,10 +883,16 @@ def _render_key_takeaways(contract: dict[str, Any], *, exact_state: str = "UNVER
 
 def _render_key_evidence(contract: dict[str, Any]) -> str:
     evidence = contract.get("evidence") if isinstance(contract.get("evidence"), dict) else {}
+    identity = contract.get("identity") if isinstance(contract.get("identity"), dict) else {}
     blocks = []
-    form_html = _render_form(evidence)
+    form_html = _render_form(evidence, identity)
     if form_html:
         blocks.append(form_html)
+    public_evidence = evidence.get("prematch_evidence")
+    if isinstance(public_evidence, dict):
+        context_html = _render_public_context(public_evidence, identity)
+        if context_html:
+            blocks.append(context_html)
 
     role_sources = (
         ("MARKET_REACTION", ("market_reaction", "market_changes"), "MARKET_REACTION"),
@@ -1216,6 +1294,13 @@ DETAIL_CSS = r"""
 .detail-page .evidence-block h3 { margin: 0 0 6px; font-size: var(--type-support); }
 .detail-page .evidence-fact { padding: 5px 0; font-size: var(--type-support); }
 .detail-page .evidence-fact strong { max-width: 70%; font-size: var(--type-support); }
+.detail-page .form-compare { display: grid; margin-top: 4px; border: 1px solid var(--line); font-size: var(--type-meta); font-variant-numeric: tabular-nums; }
+.detail-page .form-compare-row { display: grid; grid-template-columns: minmax(82px,1.15fr) minmax(54px,.8fr) minmax(64px,.9fr) minmax(46px,.65fr) minmax(46px,.65fr); gap: 6px; align-items: center; min-width: 0; padding: 7px 8px; border-top: 1px solid var(--line); }
+.detail-page .form-compare-row:first-child { border-top: 0; }
+.detail-page .form-compare-row > span { min-width: 0; overflow-wrap: anywhere; }
+.detail-page .form-compare-head { color: var(--muted); background: var(--card-soft); font-size: var(--type-meta); }
+.detail-page .form-compare-row:not(.form-compare-head) strong { color: var(--ink); font-size: var(--type-support); }
+.detail-page .form-record { font-weight: 750; }
 .detail-page .source-line { margin: 5px 0 0; color: var(--muted); font-size: var(--type-meta); }
 .detail-page .support-list { margin: 3px 0 0; padding-left: 14px; font-size: var(--type-support); }
 .detail-page .support-list li { margin: 3px 0; }
@@ -1328,6 +1413,7 @@ DETAIL_CSS = r"""
   .detail-page .bar-col { height: 56px; }
   .detail-page .change-lane-grid,
   .detail-page .evidence-grid { grid-template-columns: 1fr; }
+  .detail-page .form-compare-row { grid-template-columns: minmax(60px,1.05fr) minmax(44px,.7fr) minmax(54px,.85fr) repeat(2,minmax(40px,.6fr)); gap: 4px; padding: 7px 5px; }
   .detail-page .change-lane-wide { grid-column: auto; }
   .detail-page .change-row { grid-template-columns: 62px minmax(80px,1fr) 74px; gap: 6px; min-height: 40px; }
   .detail-page .section-heading { display: block; margin-bottom: 9px; }
@@ -1424,8 +1510,8 @@ def render_match_detail(contract: dict[str, Any]) -> str:
     market_html = _render_market_comparison(contract) if serving else ""
     if serving:
         primary_html = f'<section class="grid3 primary-grid">{probability_html}{exact_html}{takeaways_html}</section>'
-        supporting_html = f'<section class="grid3 second supporting-grid">{goals_html}{market_html}{evidence_html}</section>'
-        analysis_html = primary_html + supporting_html + change_awareness_html + (trust_html := _render_trust(contract))
+        supporting_html = f'<section class="grid3 second supporting-grid">{goals_html}{market_html}</section>'
+        analysis_html = evidence_html + primary_html + supporting_html + change_awareness_html + (trust_html := _render_trust(contract))
     else:
         trust_html = ""
         analysis_html = _render_status_panel(contract)
