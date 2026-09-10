@@ -13,8 +13,10 @@ from urllib.parse import unquote, urlsplit
 from typing import Any
 
 try:
+    from .match_analysis import attach_public_prematch_evidence
     from .match_detail import render_match_detail
 except ImportError:  # pragma: no cover - direct script execution path.
+    from match_analysis import attach_public_prematch_evidence
     from match_detail import render_match_detail
 
 try:
@@ -268,6 +270,32 @@ def _formal_markets_for_fixture(data_root: Path, fixture: dict[str, Any]) -> dic
     return None
 
 
+def _attach_fixture_prematch_evidence(
+    data_root: Path,
+    contract: dict[str, Any],
+    fixture: dict[str, Any],
+    business_date: str,
+) -> dict[str, Any]:
+    identity = contract.get("identity") if isinstance(contract.get("identity"), dict) else {}
+    governance = contract.get("governance") if isinstance(contract.get("governance"), dict) else {}
+    prediction = fixture.get("prediction") if isinstance(fixture.get("prediction"), dict) else {}
+    prediction_id = (
+        fixture.get("selected_prediction_id")
+        or fixture.get("prediction_id")
+        or prediction.get("prediction_id")
+        or governance.get("prediction_id")
+    )
+    match_id = identity.get("match_id") or fixture.get("match_id")
+    date = identity.get("business_date") or fixture.get("business_date") or business_date
+    return attach_public_prematch_evidence(
+        contract,
+        prospective_root=data_root / "prospective",
+        prediction_id=prediction_id,
+        match_id=match_id,
+        business_date=date,
+    )
+
+
 def _fixture_contract(
     fixture: dict[str, Any],
     business_date: str,
@@ -368,6 +396,7 @@ def _match_contracts(data_root: Path, dashboard: dict[str, Any], match_ids: set[
                         ),
                     }
                     payload = _overlay_fixture_crests(payload, fixture)
+                    payload = _attach_fixture_prematch_evidence(data_root, payload, fixture, business_date)
                 contracts[match_id] = payload
                 break
     for match_id in sorted(match_ids - contracts.keys()):
@@ -383,6 +412,12 @@ def _match_contracts(data_root: Path, dashboard: dict[str, Any], match_ids: set[
                 data_root,
                 fixture,
                 records=prediction_records,
+            )
+            contracts[match_id] = _attach_fixture_prematch_evidence(
+                data_root,
+                contracts[match_id],
+                fixture,
+                business_date,
             )
     return contracts
 

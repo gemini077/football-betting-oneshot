@@ -190,6 +190,7 @@ def roots(
     prediction_root = tmp_path / "predictions"
     snapshot_root = tmp_path / "snapshots"
     exclusion_root = tmp_path / "exclusions"
+    prospective_root = tmp_path / "prospective"
     output_root = tmp_path / "analysis"
     match_id = "2040820"
     prediction_id = "FBOS-PRED-test" if with_prediction else None
@@ -216,6 +217,7 @@ def roots(
         "prediction_root": prediction_root,
         "snapshot_root": snapshot_root,
         "exclusion_root": exclusion_root,
+        "prospective_root": prospective_root,
         "output_root": output_root,
         "analysis_reports_root": legacy_root or (tmp_path / "analysis_reports"),
         "workspace_root": tmp_path / "match_workspace",
@@ -227,6 +229,88 @@ def assemble(roots_payload):
     return assemble_match_analysis(DATE, "2040820", **roots_payload)
 
 
+def prematch_sidecar(*, prediction_id: str = "FBOS-PRED-test", state: str = "PRESENT") -> dict:
+    return {
+        "prediction_id": prediction_id,
+        "match_id": "2040820",
+        "business_date": DATE,
+        "source_provider": "nowscore",
+        "nowscore_id": 2991818,
+        "parser_health": {"drift_signals": ["fixture-only-test-value"]},
+        "prematch_evidence": {
+            "fields": {
+                "recent_form": {
+                    "state": state,
+                    "prematch_eligible": True,
+                    "value": {
+                        "summary": {
+                            "home_overall": {
+                                "matches": 10,
+                                "wins": 6,
+                                "draws": 2,
+                                "losses": 2,
+                                "goals_for": 18,
+                                "goals_against": 7,
+                            },
+                            "home_home": {
+                                "matches": 5,
+                                "wins": 4,
+                                "draws": 1,
+                                "losses": 0,
+                                "goals_for": 12,
+                                "goals_against": 3,
+                            },
+                            "away_overall": {
+                                "matches": 10,
+                                "wins": 3,
+                                "draws": 3,
+                                "losses": 4,
+                                "goals_for": 11,
+                                "goals_against": 13,
+                            },
+                            "away_away": {
+                                "matches": 5,
+                                "wins": 1,
+                                "draws": 2,
+                                "losses": 2,
+                                "goals_for": 5,
+                                "goals_against": 8,
+                            },
+                        },
+                        "team_ids": {"home": 11, "away": 22},
+                    },
+                },
+                "coach": {
+                    "state": "PRESENT",
+                    "prematch_eligible": True,
+                    "value": {
+                        "home": {"name": "Coach Home", "coach_record_count": 1},
+                        "away": {"name": "Coach Away", "coach_record_count": 1},
+                    },
+                },
+                "referee": {
+                    "state": "PRESENT",
+                    "prematch_eligible": True,
+                    "value": {"name": "Referee One", "referee_profile_present": True},
+                },
+                "h2h": {
+                    "state": "PRESENT",
+                    "prematch_eligible": True,
+                    "value": {"records": [{"home_goals": 9, "away_goals": 0}]},
+                },
+            },
+        },
+    }
+
+
+def write_prematch_sidecar(roots_payload, payload=None):
+    sidecar = payload or prematch_sidecar()
+    write_json(
+        roots_payload["prospective_root"] / "football_evidence" / f"{sidecar['prediction_id']}.json",
+        sidecar,
+    )
+
+
 def test_analysis_contract_has_stable_identity_and_version(tmp_path):
     contract = assemble(roots(tmp_path))
 
@@ -236,6 +320,106 @@ def test_analysis_contract_has_stable_identity_and_version(tmp_path):
     assert match_url("2040820") == "/matches/2040820/"
     assert contract["hero"]["primary_score"] == "1-0"
     assert [item["score"] for item in contract["candidate_scores"]] == ["1-0", "2-0", "1-1"]
+
+
+def test_analysis_contract_projects_only_trusted_public_prematch_facts(tmp_path):
+    payload = roots(tmp_path)
+    write_prematch_sidecar(payload)
+
+    contract = assemble(payload)
+
+    assert contract["evidence"]["prematch_evidence"] == {
+        "recent_form": {
+            "home": {
+                "matches": 5,
+                "wins": 4,
+                "draws": 1,
+                "losses": 0,
+                "goals_for": 12,
+                "goals_against": 3,
+                "venue": "home",
+            },
+            "away": {
+                "matches": 5,
+                "wins": 1,
+                "draws": 2,
+                "losses": 2,
+                "goals_for": 5,
+                "goals_against": 8,
+                "venue": "away",
+            },
+        },
+        "coach": {"home": "Coach Home", "away": "Coach Away"},
+        "referee": "Referee One",
+    }
+
+    public_json = json.dumps(contract["evidence"]["prematch_evidence"], ensure_ascii=False)
+    for forbidden in ("PRESENT", "team_ids", "nowscore_id", "parser_health", "h2h", "records"):
+        assert forbidden not in public_json
+
+
+def test_analysis_contract_omits_untrusted_or_non_substantive_prematch_facts(tmp_path):
+    payload = roots(tmp_path)
+    sidecar = prematch_sidecar(state="PARSE_UNCERTAIN")
+    fields = sidecar["prematch_evidence"]["fields"]
+    fields["coach"] = {
+        "state": "PRESENT",
+        "prematch_eligible": True,
+        "value": {
+            "home": {"name": "", "coach_record_count": 0},
+            "away": {"name": None, "coach_record_count": 0},
+        },
+    }
+    fields["referee"] = {
+        "state": "PRESENT",
+        "prematch_eligible": True,
+        "value": {"name": "-", "referee_profile_present": False},
+    }
+    write_prematch_sidecar(payload, sidecar)
+
+    contract = assemble(payload)
+
+    assert contract["evidence"]["prematch_evidence"] == {}
+
+
+def test_detail_renders_trusted_prematch_form_and_context_without_internal_fields(tmp_path):
+    payload = roots(tmp_path)
+    write_prematch_sidecar(payload)
+
+    html = render_match_detail(assemble(payload))
+    evidence_start = html.index('<article class="panel evidence-panel')
+    evidence_end = html.index("</div></article>", evidence_start) + len("</div></article>")
+    evidence_html = html[evidence_start:evidence_end]
+
+    assert 'data-public-evidence="recent-form"' in evidence_html
+    assert 'data-evidence-role="MODEL_INPUT"' not in evidence_html
+    assert "模型输入" not in evidence_html
+    assert "赛前证据" in evidence_html
+    assert "Coach Home" in evidence_html
+    assert "Coach Away" in evidence_html
+    assert "Referee One" in evidence_html
+    assert "4-1-0" in evidence_html
+    assert "进球" in evidence_html
+    assert "12" in evidence_html
+    assert "失球" in evidence_html
+    for forbidden in ("PRESENT", "nowscore_id", "2991818", "parser_health", "h2h", "records", "9"):
+        assert forbidden not in evidence_html
+
+
+def test_detail_omits_empty_prematch_context(tmp_path):
+    payload = roots(tmp_path)
+    sidecar = prematch_sidecar()
+    fields = sidecar["prematch_evidence"]["fields"]
+    fields["coach"]["value"] = {
+        "home": {"name": None, "coach_record_count": 0},
+        "away": {"name": "", "coach_record_count": 0},
+    }
+    fields["referee"]["value"] = {"name": None, "referee_profile_present": False}
+    write_prematch_sidecar(payload, sidecar)
+
+    html = render_match_detail(assemble(payload))
+
+    assert 'data-public-evidence="context"' not in html
 
 
 def test_formal_markets_are_wired_to_detail_and_completed_verification(tmp_path):

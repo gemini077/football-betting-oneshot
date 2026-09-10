@@ -394,6 +394,158 @@ def _recent_form(snapshot_input: dict[str, Any]) -> tuple[dict[str, Any], str | 
     return (copy.deepcopy(recent) if isinstance(recent, dict) else {}, _iso(captured), _string(source) or None)
 
 
+_PUBLIC_EVIDENCE_ID_RE = re.compile(r"[A-Za-z0-9._~-]+")
+_PUBLIC_EVIDENCE_FORM_FIELDS = (
+    "matches",
+    "wins",
+    "draws",
+    "losses",
+    "goals_for",
+    "goals_against",
+)
+_PUBLIC_EVIDENCE_UNKNOWN_NAMES = {
+    "",
+    "-",
+    "--",
+    "n/a",
+    "na",
+    "none",
+    "null",
+    "unknown",
+    "n.a.",
+    "暂无",
+    "未知",
+}
+
+
+def _public_evidence_field_is_present(field: Any) -> bool:
+    return isinstance(field, dict) and str(field.get("state") or "").strip().upper() == "PRESENT" and field.get("prematch_eligible") is True
+
+
+def _public_evidence_integer(value: Any) -> int | None:
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        return None
+    return value
+
+
+def _public_evidence_form(summary: Any, key: str, venue: str) -> dict[str, Any] | None:
+    values = summary.get(key) if isinstance(summary, dict) else None
+    if not isinstance(values, dict):
+        return None
+    facts = {
+        field: _public_evidence_integer(values.get(field))
+        for field in _PUBLIC_EVIDENCE_FORM_FIELDS
+    }
+    if any(value is None for value in facts.values()) or facts["matches"] <= 0:
+        return None
+    if facts["wins"] + facts["draws"] + facts["losses"] != facts["matches"]:
+        return None
+    return {**facts, "venue": venue}
+
+
+def _public_evidence_name(value: Any) -> str | None:
+    if value is None:
+        return None
+    name = str(value).strip()
+    if name.casefold() in _PUBLIC_EVIDENCE_UNKNOWN_NAMES:
+        return None
+    return name
+
+
+def project_public_prematch_evidence(sidecar: dict[str, Any] | None) -> dict[str, Any]:
+    """Project only substantive, user-safe facts from one accepted sidecar."""
+
+    if not isinstance(sidecar, dict):
+        return {}
+    bundle = sidecar.get("prematch_evidence")
+    fields = bundle.get("fields") if isinstance(bundle, dict) else None
+    if not isinstance(fields, dict):
+        return {}
+
+    public: dict[str, Any] = {}
+    recent_field = fields.get("recent_form")
+    if _public_evidence_field_is_present(recent_field):
+        value = recent_field.get("value")
+        summary = value.get("summary") if isinstance(value, dict) else None
+        home = _public_evidence_form(summary, "home_home", "home")
+        away = _public_evidence_form(summary, "away_away", "away")
+        if home is not None and away is not None:
+            public["recent_form"] = {"home": home, "away": away}
+
+    coach_field = fields.get("coach")
+    if _public_evidence_field_is_present(coach_field):
+        value = coach_field.get("value")
+        if isinstance(value, dict):
+            coach: dict[str, str] = {}
+            for side in ("home", "away"):
+                item = value.get(side)
+                item = item if isinstance(item, dict) else {}
+                name = _public_evidence_name(item.get("name"))
+                if name:
+                    coach[side] = name
+            if coach:
+                public["coach"] = coach
+
+    referee_field = fields.get("referee")
+    if _public_evidence_field_is_present(referee_field):
+        value = referee_field.get("value")
+        name = _public_evidence_name(value.get("name") if isinstance(value, dict) else None)
+        if name:
+            public["referee"] = name
+    return public
+
+
+def load_football_evidence_sidecar(
+    prospective_root: Path,
+    prediction_id: Any,
+    *,
+    match_id: Any,
+    business_date: Any,
+) -> dict[str, Any] | None:
+    """Load one exact linked evidence sidecar; never discover by fuzzy identity."""
+
+    prediction_key = _string(prediction_id).strip()
+    if not prediction_key or not _PUBLIC_EVIDENCE_ID_RE.fullmatch(prediction_key):
+        return None
+    sidecar = _read_json(Path(prospective_root) / "football_evidence" / f"{prediction_key}.json")
+    if not isinstance(sidecar, dict):
+        return None
+    if _string(sidecar.get("prediction_id")).strip() != prediction_key:
+        return None
+    if _string(sidecar.get("match_id")).strip() != _string(match_id).strip():
+        return None
+    if _string(sidecar.get("business_date")).strip() != _string(business_date).strip():
+        return None
+    return sidecar
+
+
+def attach_public_prematch_evidence(
+    contract: dict[str, Any],
+    *,
+    prospective_root: Path,
+    prediction_id: Any,
+    match_id: Any,
+    business_date: Any,
+) -> dict[str, Any]:
+    """Attach a sanitized sidecar projection without mutating the source contract."""
+
+    payload = copy.deepcopy(contract)
+    evidence = payload.get("evidence") if isinstance(payload.get("evidence"), dict) else {}
+    evidence = copy.deepcopy(evidence)
+    evidence.pop("prematch_evidence", None)
+    sidecar = load_football_evidence_sidecar(
+        Path(prospective_root),
+        prediction_id,
+        match_id=match_id,
+        business_date=business_date,
+    )
+    public = project_public_prematch_evidence(sidecar)
+    if isinstance(sidecar, dict) and isinstance(sidecar.get("prematch_evidence"), dict):
+        evidence["prematch_evidence"] = public
+    payload["evidence"] = evidence
+    return payload
+
+
 def _market_facts(snapshot_input: dict[str, Any], prediction: dict[str, Any]) -> dict[str, Any]:
     source_snapshot = _latest_source_snapshot(snapshot_input)
     ouzhi = source_snapshot.get("ouzhi") or {}
@@ -1030,7 +1182,6 @@ def assemble_match_analysis(
     postmatch_reports_root: Path = LEGACY_POSTMATCH_ROOT,
     **_: Any,
 ) -> dict[str, Any]:
-    del prospective_root
     universe_payload, fixtures = _load_universe(Path(universe_root), business_date)
     fixture = next((item for item in fixtures if item["match_id"] == _string(match_id)), None)
     if fixture is None:
@@ -1271,6 +1422,14 @@ def assemble_match_analysis(
         },
         "universe_status": universe_payload.get("status"),
     }
+    if serving_prediction and prediction_id:
+        contract = attach_public_prematch_evidence(
+            contract,
+            prospective_root=Path(prospective_root),
+            prediction_id=prediction_id,
+            match_id=fixture.get("match_id"),
+            business_date=business_date,
+        )
     return contract
 
 

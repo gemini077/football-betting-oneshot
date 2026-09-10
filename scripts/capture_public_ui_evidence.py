@@ -24,6 +24,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from scripts.build_public_site import (  # noqa: E402
+    _attach_fixture_prematch_evidence,
     _change_awareness_for_fixture,
     _fixture_contract,
     _linked_frozen_formal_markets,
@@ -323,6 +324,12 @@ def _write_fixture_pages(site_root: Path, payload: dict[str, Any], current: dict
         formal_markets=current_formal_markets,
     )
     current_contract["change_awareness"] = current_change_awareness
+    current_contract = _attach_fixture_prematch_evidence(
+        data_root,
+        current_contract,
+        current,
+        business_date,
+    )
     current_contract["prediction_quality_health"] = payload.get("prediction_quality_health") or {}
     pages["detail-current-frozen.html"] = render_match_detail(current_contract)
 
@@ -796,8 +803,9 @@ def _check_public_shell_and_responsive(browser: Any, base_url: str) -> dict[str,
         page.goto(f"{base_url}/visual-fixtures/detail-current-frozen.html", wait_until="networkidle", timeout=30_000)
         detail_metrics = _shell_metrics(page)
         assert_shell(detail_metrics, "detail desktop")
-        if len(detail_metrics.get("tabTargets") or []) not in {0, 2}:
-            raise RuntimeError("detail exposed only one of the conditional market/evidence tabs")
+        tab_targets = set(detail_metrics.get("tabTargets") or [])
+        if not tab_targets.issubset({"market", "evidence"}):
+            raise RuntimeError("detail exposed an unknown conditional tab")
         checks["detail_shell_desktop"] = "VERIFIED"
         checks["detail_conditional_tabs"] = "VERIFIED"
     finally:
