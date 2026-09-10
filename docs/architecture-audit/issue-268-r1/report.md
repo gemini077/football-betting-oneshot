@@ -19,14 +19,26 @@
 - sys.path mutations: `82`; direct/package fallback sites: `43`; cross-layer local edges: `119`.
 - Tracked data files counted by catalog: `39055`; namespace rows: `37`.
 - Workflows/actions: `18`; main-write overlap rows: `14`.
+- Critical namespace ownership gaps: `0`; unresolved I/O sites retained as evidence: `1685`.
+
+## Independent-acceptance blocker closure evidence
+
+- `05_RUNTIME_STATE.json`: readers `scripts.fetch_football_data, scripts.live_odds_bridge, scripts.match_workspace, scripts.postmatch_dashboard, scripts.postmatch_queue`; writers `none observed`; writer status `NO_CODE_WRITER_OBSERVED`; symbol-line evidence rows `7`.
+- `data/match_workspace`: readers `scripts.core_auto_reports, scripts.deepseek_auto_analysis, scripts.fetch_football_data, scripts.live_odds_bridge, scripts.prematch_market_monitor, scripts.prematch_task_registry`; writers `scripts.live_odds_bridge, scripts.match_workspace, tests.test_build_public_site, tests.test_prediction_product_surface, tests.test_production_health_watch`; writer status `OBSERVED`; symbol-line evidence rows `26`.
+- `data/model_governance/predictions`: readers `scripts.exact_distribution_freeze_readiness_audit, scripts.football_state_memory_readiness_audit, scripts.model_governance, scripts.prediction_trust_audit, scripts.prospective_settlement, scripts.pure_market_exact_prospective`; writers `scripts.model_governance, tests.test_build_public_site, tests.test_production_health_watch`; writer status `OBSERVED`; symbol-line evidence rows `24`.
+- `data/prediction_universe`: readers `scripts.automation_cycle, scripts.build_public_site, scripts.capture_public_ui_evidence, scripts.match_workspace, scripts.official_jc_handicap_live_audit, scripts.prediction_universe, tests.test_nowscore_markets, tests.test_production_health_watch`; writers `scripts.prediction_universe, tests.test_build_public_site, tests.test_prediction_universe, tests.test_production_health_watch, tests.test_refresh_durability_gate`; writer status `OBSERVED`; symbol-line evidence rows `20`.
+- `data/product_runtime`: readers `scripts.production_health_watch, scripts.recent_form_cache, tests.test_production_health_watch`; writers `scripts.automation_cycle, scripts.production_health_watch, scripts.recent_form_cache, tests.test_production_health_watch`; writer status `OBSERVED`; symbol-line evidence rows `19`.
+- `05_RUNTIME_STATE.json` has no observed code writer in the bounded source scope; the audit records that negative ownership result explicitly instead of inventing a writer.
+- Concrete semantic primitive classes: `8`; classes with PASS inventory: `8`.
+- Each primitive record includes source-defined symbol/line, semantics, classification (`intentional domain policy`, `compatibility`, or `accidental duplication`), and a characterization reference; timestamp and identity references are executable tests.
 
 ## Test-system evidence
 
 - Command: `python -m pytest --collect-only -q`
 - Status: `FAILED_DURING_COLLECTION`
-- Collected before failure: `1269`
+- Collected before failure: `1271`
 - Error files: `tests/test_live_ev_profile.py`
-- Import errors: `ImportError: cannot import name 'PUBLIC_DATA_DIRS' from 'build_public_site' (<repo>\scripts\build_public_site.py)`
+- Import errors: `ImportError: cannot import name 'PUBLIC_DATA_DIRS' from 'build_public_site' (<repo>/scripts/build_public_site.py)`
 - Per Issue #268, collection failure is recorded as baseline evidence and was not patched. Existing architecture/ownership and bounded characterization tests were run separately.
 
 ## Ranked findings

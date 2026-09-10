@@ -26,6 +26,18 @@ This is a read-only audit of the exact repository head used for this PR. It reco
 | public product projection / Match Detail / Dashboard / workspace | build_public_site.py; prediction_dashboard.py; match_detail.py; match_workspace.py; capture_public_ui_evidence.py | Pages deployment, visual evidence and workspace refresh | workspace joins and renders data/runtime/report state while public builder has a selective read-only projection contract | MIXED / projection boundary needs characterization |
 | legacy compatibility | legacy_analysis_mapper.py; migration scripts; root runtime/report fallbacks; model_baselines/risk_engine re-exports | current report, workspace, postmatch and benchmark paths plus historical fixtures | compatibility is intentional in selected kernel APIs, but root runtime and legacy report joins remain reachable from current paths | MIXED / deprecation ownership incomplete |
 
+## Critical namespace code ownership evidence
+
+The following rows are derived from symbol/line-level AST I/O evidence. `05_RUNTIME_STATE.json` is explicitly reader-only in this bounded scope; its empty writer set is an observed legacy fact, not an inferred owner.
+
+| Namespace | Code readers | Code writers | Writer status | Unclassified I/O references |
+| --- | --- | --- | --- | --- |
+| `05_RUNTIME_STATE.json` | `scripts.fetch_football_data, scripts.live_odds_bridge, scripts.match_workspace, scripts.postmatch_dashboard, scripts.postmatch_queue` | `none observed` | `NO_CODE_WRITER_OBSERVED` | `none` |
+| `data/match_workspace` | `scripts.core_auto_reports, scripts.deepseek_auto_analysis, scripts.fetch_football_data, scripts.live_odds_bridge, scripts.prematch_market_monitor, scripts.prematch_task_registry` | `scripts.live_odds_bridge, scripts.match_workspace, tests.test_build_public_site, tests.test_prediction_product_surface, tests.test_production_health_watch` | `OBSERVED` | `none` |
+| `data/model_governance/predictions` | `scripts.exact_distribution_freeze_readiness_audit, scripts.football_state_memory_readiness_audit, scripts.model_governance, scripts.prediction_trust_audit, scripts.prospective_settlement, scripts.pure_market_exact_prospective` | `scripts.model_governance, tests.test_build_public_site, tests.test_production_health_watch` | `OBSERVED` | `none` |
+| `data/prediction_universe` | `scripts.automation_cycle, scripts.build_public_site, scripts.capture_public_ui_evidence, scripts.match_workspace, scripts.official_jc_handicap_live_audit, scripts.prediction_universe, tests.test_nowscore_markets, tests.test_production_health_watch` | `scripts.prediction_universe, tests.test_build_public_site, tests.test_prediction_universe, tests.test_production_health_watch, tests.test_refresh_durability_gate` | `OBSERVED` | `none` |
+| `data/product_runtime` | `scripts.production_health_watch, scripts.recent_form_cache, tests.test_production_health_watch` | `scripts.automation_cycle, scripts.production_health_watch, scripts.recent_form_cache, tests.test_production_health_watch` | `OBSERVED` | `none` |
+
 ## Healthy comparison controls
 
 The accepted owner map and architecture guards establish healthy control zones for `scripts/market_engine.py`, `scripts/score_engine.py`, `scripts/market_contracts.py`, `scripts/evaluation_kernel.py`, `scripts/exact_distribution.py`, Market-Side generated-state ownership, and `scripts/football_data/providers/base.py` plus adapters. Their compatibility re-exports are recorded as intentional boundaries, not duplicate math.
