@@ -11,6 +11,7 @@ from scripts.nowscore_prematch_evidence_audit import (
     FIELD_NAMES,
     NowscorePublicClient,
     ObservationMetadata,
+    SURFACE_NAMES,
     declare_cohort,
     run_bounded_audit,
     summarize_surface,
@@ -25,19 +26,27 @@ AS_OF = datetime(2026, 9, 10, 12, 0, tzinfo=SHANGHAI)
 KICKOFF = datetime(2026, 9, 11, 0, 45, tzinfo=SHANGHAI)
 
 
-def _source_row(*, nowscore_id: int = 3073166, kickoff: datetime = KICKOFF) -> dict:
+def _source_row(
+    *,
+    nowscore_id: int = 3073166,
+    kickoff: datetime = KICKOFF,
+    home_team: str = "主队 Alpha",
+    away_team: str = "客队 Beta",
+    home_team_id: int | None = None,
+    away_team_id: int | None = None,
+) -> dict:
     source_url = "https://fixture.test/nowscore-jc"
     business_date = "2026-09-10"
     match_number = "周四001"
-    return {
+    row = {
         "matchId": str(nowscore_id),
         "nowscoreId": nowscore_id,
         "nowscore_id": nowscore_id,
         "matchDate": kickoff.astimezone(SHANGHAI).date().isoformat(),
         "matchTime": kickoff.astimezone(SHANGHAI).strftime("%H:%M"),
         "league": "测试联赛",
-        "homeTeam": "主队 Alpha",
-        "awayTeam": "客队 Beta",
+        "homeTeam": home_team,
+        "awayTeam": away_team,
         "businessDate": business_date,
         "nowscoreMatchStatus": "EXACT_MATCH",
         "nowscoreMatchConfidence": 1.0,
@@ -71,6 +80,11 @@ def _source_row(*, nowscore_id: int = 3073166, kickoff: datetime = KICKOFF) -> d
             "sales_window": TRUSTED_NOWSCORE_JC_SALES_WINDOW,
         },
     }
+    if home_team_id is not None:
+        row["home_team_id"] = home_team_id
+    if away_team_id is not None:
+        row["away_team_id"] = away_team_id
+    return row
 
 
 def _write_cohort(tmp_path: Path, *rows: dict) -> Path:
@@ -79,8 +93,8 @@ def _write_cohort(tmp_path: Path, *rows: dict) -> Path:
     return path
 
 
-def _target(tmp_path: Path):
-    return declare_cohort(_write_cohort(tmp_path, _source_row()), as_of=AS_OF).matches[0]
+def _target(tmp_path: Path, row: dict | None = None):
+    return declare_cohort(_write_cohort(tmp_path, row or _source_row()), as_of=AS_OF).matches[0]
 
 
 def _market_html(
@@ -182,6 +196,101 @@ def test_wrong_nowscore_id_or_kickoff_is_a_conflict(tmp_path: Path):
     )
     assert result["decision"] == "FAIL_CLOSED"
     assert [surface for surface, _url in result["matches"][0]["surfaces"].items()] == ["market_context"]
+
+
+def test_same_provider_name_variants_are_diagnostics_not_conflicts(tmp_path: Path):
+    target = _target(tmp_path, _source_row(home_team="拜仁", away_team="曼联"))
+    result = validate_same_id_identity(
+        target,
+        {
+            "nowscore_id": target.nowscore_id,
+            "page_provider_id": target.nowscore_id,
+            "kickoff_local": "2026-09-11 00:45",
+            "home_team": "拜仁慕尼黑",
+            "away_team": "曼彻斯特联",
+        },
+    )
+
+    assert result["state"] == "PRESENT"
+    assert "HOME_TEAM_MISMATCH" not in result["reason_codes"]
+    assert "AWAY_TEAM_MISMATCH" not in result["reason_codes"]
+
+
+def test_name_variant_identity_reaches_richer_surfaces(tmp_path: Path):
+    cohort = _write_cohort(tmp_path, _source_row(home_team="拜仁", away_team="曼联"))
+    client = FakeClient(
+        {
+            "market_context": _market_html(home="拜仁慕尼黑", away="曼彻斯特联"),
+        }
+    )
+
+    result = run_bounded_audit(cohort, as_of=AS_OF, client=client)
+
+    assert result["matches"][0]["identity"]["state"] == "PRESENT"
+    assert [surface for surface, _url in client.calls] == list(SURFACE_NAMES)
+
+
+def test_reversed_same_provider_sides_still_fail_closed(tmp_path: Path):
+    target = _target(tmp_path)
+    result = validate_same_id_identity(
+        target,
+        {
+            "nowscore_id": target.nowscore_id,
+            "page_provider_id": target.nowscore_id,
+            "kickoff_local": "2026-09-11 00:45",
+            "home_team": target.away_team,
+            "away_team": target.home_team,
+        },
+    )
+
+    assert result["state"] == "CONFLICT"
+    assert "ORIENTATION_CONFLICT" in result["reason_codes"]
+
+
+def test_page_provider_id_disagreement_fails_closed(tmp_path: Path):
+    target = _target(tmp_path)
+    result = validate_same_id_identity(
+        target,
+        {
+            "nowscore_id": target.nowscore_id,
+            "page_provider_id": target.nowscore_id + 1,
+            "kickoff_local": "2026-09-11 00:45",
+            "home_team": target.home_team,
+            "away_team": target.away_team,
+        },
+    )
+
+    assert result["state"] == "CONFLICT"
+    assert "PAGE_ID_MISMATCH" in result["reason_codes"]
+    assert "PAGE_PROVIDER_ID_MISMATCH" in result["reason_codes"]
+
+
+def test_existing_provider_team_ids_fail_closed_for_unrelated_page_identity(tmp_path: Path):
+    target = _target(
+        tmp_path,
+        _source_row(
+            home_team="Known Home",
+            away_team="Known Away",
+            home_team_id=10,
+            away_team_id=20,
+        ),
+    )
+    result = validate_same_id_identity(
+        target,
+        {
+            "nowscore_id": target.nowscore_id,
+            "page_provider_id": target.nowscore_id,
+            "kickoff_local": "2026-09-11 00:45",
+            "home_team": "Unrelated Home",
+            "away_team": "Unrelated Away",
+            "home_team_id": 99,
+            "away_team_id": 100,
+        },
+    )
+
+    assert result["state"] == "CONFLICT"
+    assert "HOME_TEAM_ID_MISMATCH" in result["reason_codes"]
+    assert "AWAY_TEAM_ID_MISMATCH" in result["reason_codes"]
 
 
 def test_post_kickoff_observation_cannot_be_used_as_prematch_evidence(tmp_path: Path):

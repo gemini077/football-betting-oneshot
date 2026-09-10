@@ -43,6 +43,7 @@ try:
         parse_panlu_page,
         parse_referee_page,
         parse_three_in_one,
+        _trusted_jc_page_verification,
     )
     from prediction_universe import trusted_nowscore_jc_fixture
 except ImportError:  # package-style imports used by focused tests/tools
@@ -59,6 +60,7 @@ except ImportError:  # package-style imports used by focused tests/tools
         parse_panlu_page,
         parse_referee_page,
         parse_three_in_one,
+        _trusted_jc_page_verification,
     )
     from scripts.prediction_universe import trusted_nowscore_jc_fixture
 
@@ -247,8 +249,13 @@ def _numeric_id(value: Any) -> int | None:
     return parsed if parsed > 0 else None
 
 
-def _name_key(value: Any) -> str:
-    return "".join(_text(value).casefold().split())
+def _target_team_id(row: Mapping[str, Any], side: str) -> int | None:
+    keys = (
+        ("home_team_id", "homeTeamId", "nowscore_home_team_id", "nowscoreHomeTeamId")
+        if side == "home"
+        else ("away_team_id", "awayTeamId", "nowscore_away_team_id", "nowscoreAwayTeamId")
+    )
+    return _numeric_id(_first(row, *keys))
 
 
 def _sha256(value: bytes | str) -> str:
@@ -281,6 +288,8 @@ class TargetFixture:
     away_team: str
     kickoff_at: datetime
     source_row_index: int
+    home_team_id: int | None = None
+    away_team_id: int | None = None
 
     def public(self) -> dict[str, Any]:
         return {
@@ -355,6 +364,8 @@ def _build_target(row: Mapping[str, Any], row_index: int, as_of: datetime) -> Ta
         away_team=away,
         kickoff_at=kickoff,
         source_row_index=row_index,
+        home_team_id=_target_team_id(row, "home"),
+        away_team_id=_target_team_id(row, "away"),
     )
 
 
@@ -768,34 +779,78 @@ def _publication(metadata: ObservationMetadata, text: str) -> dict[str, Any]:
 
 
 def validate_same_id_identity(target: TargetFixture, page_identity: Mapping[str, Any]) -> dict[str, Any]:
+    """Project the accepted Nowscore identity owner into the audit contract.
+
+    Provider ID, page provider ID, exact kickoff, and native orientation are
+    hard checks. Page display labels are diagnostics only: the accepted
+    same-provider JC path already permits abbreviation and translation
+    differences without creating another alias owner.
+    """
+
     reasons: list[str] = []
-    page_id = _numeric_id(_first(page_identity, "nowscore_id", "page_provider_id"))
-    if page_id is None:
+    page_nowscore_id = _numeric_id(page_identity.get("nowscore_id"))
+    page_provider_id = _numeric_id(page_identity.get("page_provider_id"))
+    page_ids = [value for value in (page_nowscore_id, page_provider_id) if value is not None]
+    page_id = page_nowscore_id or page_provider_id
+    if not page_ids:
         reasons.append("PAGE_ID_MISSING")
-    elif page_id != target.nowscore_id:
-        reasons.append("PAGE_ID_MISMATCH")
+    else:
+        if any(value != target.nowscore_id for value in page_ids):
+            reasons.append("PAGE_ID_MISMATCH")
+        if len(set(page_ids)) > 1:
+            reasons.append("PAGE_PROVIDER_ID_MISMATCH")
+
     page_kickoff = _parse_datetime(page_identity.get("kickoff_local"))
     if page_kickoff is None:
         reasons.append("KICKOFF_MISSING")
     elif page_kickoff != target.kickoff_at:
         reasons.append("KICKOFF_MISMATCH")
+
     page_home = _text(page_identity.get("home_team"))
     page_away = _text(page_identity.get("away_team"))
     if not page_home or not page_away:
         reasons.append("TEAM_NAME_MISSING")
-    else:
-        if _name_key(page_home) != _name_key(target.home_team):
-            reasons.append("HOME_TEAM_MISMATCH")
-        if _name_key(page_away) != _name_key(target.away_team):
-            reasons.append("AWAY_TEAM_MISMATCH")
-        if _name_key(page_home) == _name_key(target.away_team) and _name_key(page_away) == _name_key(target.home_team):
-            reasons.append("ORIENTATION_CONFLICT")
-    conflict_reasons = {"PAGE_ID_MISMATCH", "KICKOFF_MISMATCH", "HOME_TEAM_MISMATCH", "AWAY_TEAM_MISMATCH", "ORIENTATION_CONFLICT"}
+
+    accepted_fixture = {
+        "homeTeam": target.home_team,
+        "awayTeam": target.away_team,
+        "kickoff": target.kickoff_at.isoformat(),
+        "home_team_id": target.home_team_id,
+        "away_team_id": target.away_team_id,
+    }
+    accepted_identity = _trusted_jc_page_verification(
+        {
+            "home": target.home_team,
+            "away": target.away_team,
+            "kickoff": target.kickoff_at.isoformat(),
+        },
+        page_identity,
+        accepted_fixture,
+        target.nowscore_id,
+        maximum_minutes=0,
+    )
+    reasons.extend(accepted_identity.get("reasons") or [])
+
+    conflict_reasons = {
+        "PAGE_ID_MISMATCH",
+        "PAGE_PROVIDER_ID_MISMATCH",
+        "PROVIDER_ID_MISMATCH",
+        "KICKOFF_MISMATCH",
+        "ORIENTATION_CONFLICT",
+        "AMBIGUOUS_IDENTITY",
+        "TARGET_FIXTURE_IDENTITY_CONFLICT",
+        "HOME_TEAM_ID_MISMATCH",
+        "AWAY_TEAM_ID_MISMATCH",
+    }
+    conflict_reasons.update(
+        reason for reason in reasons if reason.endswith("_TEAM_ID_MISMATCH")
+    )
     state = "CONFLICT" if any(reason in conflict_reasons for reason in reasons) else "PARSE_UNCERTAIN" if reasons else "PRESENT"
     return {
         "state": state,
         "reason_codes": list(dict.fromkeys(reasons)),
         "page_id_present": page_id is not None,
+        "page_provider_id_present": page_provider_id is not None,
         "kickoff_present": page_kickoff is not None,
         "kickoff_consistent": page_kickoff == target.kickoff_at if page_kickoff else False,
         "team_names_present": bool(page_home and page_away),
