@@ -85,6 +85,46 @@ jobs:
           assert "tests/test_live_ev_profile.py" in collection["error_files"]
           assert any("PUBLIC_DATA_DIRS" in item for item in collection["import_errors"])
           assert payloads["data_write_read_map.json"]["scan_policy"] == "paths_only_no_data_contents"
+          ownership = {
+              item["namespace"]: item
+              for item in payloads["data_write_read_map.json"]["namespaces"]
+          }
+          critical = {
+              "05_RUNTIME_STATE.json",
+              "data/product_runtime",
+              "data/prediction_universe",
+              "data/model_governance/predictions",
+              "data/match_workspace",
+          }
+          assert payloads["data_write_read_map.json"]["critical_namespace_gaps"] == []
+          for namespace in critical:
+              row = ownership[namespace]
+              assert row["code_reader_status"] == "OBSERVED"
+              assert row["code_readers"] and row["code_reader_evidence"]
+              assert row["unclassified_code_references"] == []
+              if namespace == "05_RUNTIME_STATE.json":
+                  assert row["code_writer_status"] == "NO_CODE_WRITER_OBSERVED"
+                  assert row["code_writer_evidence"] == []
+              else:
+                  assert row["code_writer_status"] == "OBSERVED"
+                  assert row["code_writers"] and row["code_writer_evidence"]
+          primitives = inventory["shared_semantic_primitives"]
+          assert len(primitives) == 8
+          for primitive in primitives.values():
+              assert primitive["required"] is True
+              assert primitive["status"] == "PASS"
+              assert primitive["tag_only"] is False
+              assert primitive["implementations"]
+              assert primitive["implementation_count"] == primitive["required_implementation_count"]
+              assert primitive["characterization_examples"]
+              for implementation in primitive["implementations"]:
+                  assert implementation["semantics"]
+                  assert implementation["classification"] in {
+                      "intentional domain policy",
+                      "compatibility",
+                      "accidental duplication",
+                  }
+                  assert isinstance(implementation["line"], int) and implementation["line"] > 0
           assert payloads["workflow_map.json"]["workflow_count"] >= 1
           assert payloads["dependency_summary.json"]["local_module_count"] >= 100
           for path in root.iterdir():

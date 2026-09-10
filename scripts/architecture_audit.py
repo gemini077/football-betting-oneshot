@@ -293,6 +293,531 @@ DATA_CATALOG: tuple[dict[str, Any], ...] = (
 )
 
 
+CRITICAL_DATA_NAMESPACES = frozenset(
+    {
+        "05_RUNTIME_STATE.json",
+        "data/product_runtime",
+        "data/prediction_universe",
+        "data/model_governance/predictions",
+        "data/match_workspace",
+    }
+)
+
+PRIMITIVE_CLASSIFICATIONS = frozenset(
+    {"intentional domain policy", "compatibility", "accidental duplication"}
+)
+
+
+SEMANTIC_PRIMITIVE_SPECS: dict[str, dict[str, Any]] = {
+    "datetime_timestamp_parsing": {
+        "note": "Concrete timestamp parsers and their naive-input semantics.",
+        "implementations": [
+            {
+                "module": "scripts.match_identity",
+                "symbol": "parse_kickoff",
+                "semantics": "datetime.fromisoformat; preserves a naive kickoff as naive",
+                "classification": "intentional domain policy",
+                "classification_reason": "identity parser preserves the supplied kickoff representation",
+                "characterization_test": "tests/test_architecture_audit.py::test_timestamp_semantics_are_characterized",
+            },
+            {
+                "module": "scripts.current_serving_state",
+                "symbol": "_parse_timestamp",
+                "semantics": "datetime.fromisoformat; interprets a naive serving timestamp as UTC",
+                "classification": "intentional domain policy",
+                "classification_reason": "serving-state ordering uses an explicit UTC operating boundary",
+                "characterization_test": "tests/test_architecture_audit.py::test_timestamp_semantics_are_characterized",
+            },
+            {
+                "module": "scripts.postmatch_queue",
+                "symbol": "parse_datetime",
+                "semantics": "datetime.fromisoformat/strptime; interprets a naive postmatch time as Asia/Shanghai",
+                "classification": "intentional domain policy",
+                "classification_reason": "postmatch queue scheduling is expressed in the product business timezone",
+                "characterization_test": "tests/test_architecture_audit.py::test_timestamp_semantics_are_characterized",
+            },
+            {
+                "module": "scripts.match_workspace",
+                "symbol": "parse_kickoff_local",
+                "semantics": "datetime.fromisoformat/strptime; interprets a naive workspace kickoff as Asia/Shanghai",
+                "classification": "compatibility",
+                "classification_reason": "workspace rendering retains the legacy local kickoff contract",
+                "characterization_test": "tests/test_architecture_audit.py::test_timestamp_semantics_are_characterized",
+            },
+            {
+                "module": "scripts.prematch_versioning",
+                "symbol": "_parse_timestamp",
+                "semantics": "datetime.fromisoformat; rejects a naive timestamp and normalizes aware input to UTC",
+                "classification": "intentional domain policy",
+                "classification_reason": "prematch legality requires an unambiguous aware source timestamp",
+                "characterization_test": "tests/test_architecture_audit.py::test_timestamp_semantics_are_characterized",
+            },
+            {
+                "module": "scripts.base_prediction_runner",
+                "symbol": "_parse_timestamp",
+                "semantics": "datetime.fromisoformat; interprets a naive source timestamp as the local prediction timezone",
+                "classification": "accidental duplication",
+                "classification_reason": "runner-local parsing overlaps the prematch and serving timestamp authorities",
+                "characterization_test": "tests/test_architecture_audit.py::test_timestamp_semantics_are_characterized",
+            },
+            {
+                "module": "scripts.football_data.runtime_snapshot",
+                "symbol": "_parse_timestamp",
+                "semantics": "datetime.fromisoformat; accepts only aware runtime snapshot timestamps",
+                "classification": "intentional domain policy",
+                "classification_reason": "data-plane snapshot metadata must be timezone explicit",
+                "characterization_test": "tests/test_architecture_audit.py::test_timestamp_semantics_are_characterized",
+            },
+            {
+                "module": "scripts.football_data.quality",
+                "symbol": "_parse_timestamp",
+                "semantics": "datetime.fromisoformat; parses quality/freshness timestamp fields for policy evaluation",
+                "classification": "accidental duplication",
+                "classification_reason": "quality freshness parsing is a separate implementation of the shared timestamp primitive",
+                "characterization_test": "tests/test_architecture_audit.py::test_timestamp_semantics_are_characterized",
+            },
+            {
+                "module": "scripts.production_health_watch",
+                "symbol": "_parse_at",
+                "semantics": "datetime.fromisoformat; interprets a naive health observation time as Asia/Shanghai",
+                "classification": "accidental duplication",
+                "classification_reason": "health-watch chronology has a second local-time parser outside the serving boundary",
+                "characterization_test": "tests/test_architecture_audit.py::test_timestamp_semantics_are_characterized",
+            },
+        ],
+        "characterization_examples": [
+            {
+                "id": "timestamp_naive_input",
+                "test": "tests/test_architecture_audit.py::test_timestamp_semantics_are_characterized",
+                "asserts": "UTC, Asia/Shanghai, preserved-naive, and rejected-naive behaviors are executable and distinct",
+            }
+        ],
+    },
+    "identity_extraction_matching_canonical_key": {
+        "note": "Concrete deterministic, provider, compatibility, and presentation identity implementations.",
+        "implementations": [
+            {
+                "module": "scripts.match_identity",
+                "symbol": "canonical_match_id",
+                "semantics": "canonical teams plus kickoff-minute identity hashed into an FBOS match key",
+                "classification": "intentional domain policy",
+                "classification_reason": "formal cross-stage match identity authority",
+                "characterization_test": "tests/test_architecture_audit.py::test_identity_semantics_are_characterized",
+            },
+            {
+                "module": "scripts.match_identity",
+                "symbol": "identity_aliases",
+                "semantics": "returns canonical and presentation/provider identity aliases for a fixture",
+                "classification": "compatibility",
+                "classification_reason": "aliases preserve provider/display joins without replacing the canonical key",
+                "characterization_test": "tests/test_architecture_audit.py::test_identity_semantics_are_characterized",
+            },
+            {
+                "module": "scripts.current_serving_state",
+                "symbol": "current_job_identity",
+                "semantics": "extracts current-job identity fields with deterministic field precedence",
+                "classification": "compatibility",
+                "classification_reason": "serving records must read historical job field variants",
+                "characterization_test": "tests/test_architecture_audit.py::test_identity_semantics_are_characterized",
+            },
+            {
+                "module": "scripts.current_serving_state",
+                "symbol": "current_match_key",
+                "semantics": "selects match_id, then match_key, then a UTC/home/away fallback token",
+                "classification": "compatibility",
+                "classification_reason": "current-state records retain an explicit legacy fallback order",
+                "characterization_test": "tests/test_architecture_audit.py::test_identity_semantics_are_characterized",
+            },
+            {
+                "module": "scripts.postmatch_queue",
+                "symbol": "report_key",
+                "semantics": "uses shuju_id when present and otherwise a normalized fixture key",
+                "classification": "compatibility",
+                "classification_reason": "postmatch report files have provider-era key variants",
+                "characterization_test": "tests/test_architecture_audit.py::test_identity_semantics_are_characterized",
+            },
+            {
+                "module": "scripts.match_workspace",
+                "symbol": "find_review",
+                "semantics": "matches exact normalized presentation names before a bounded SequenceMatcher fallback",
+                "classification": "compatibility",
+                "classification_reason": "presentation-only review attachment is not formal identity selection",
+                "characterization_test": "tests/test_architecture_audit.py::test_identity_semantics_are_characterized",
+            },
+            {
+                "module": "scripts.nowscore_markets",
+                "symbol": "_resolve_match_identity_fallback",
+                "semantics": "resolves provider match identity only after strict provider/date/team checks fail",
+                "classification": "compatibility",
+                "classification_reason": "provider-specific identity fallback is bounded and diagnostic",
+                "characterization_test": "tests/test_architecture_audit.py::test_identity_semantics_are_characterized",
+            },
+            {
+                "module": "scripts.nowscore_markets",
+                "symbol": "resolve_match",
+                "semantics": "orchestrates strict and provider fallback match resolution with diagnostic status",
+                "classification": "intentional domain policy",
+                "classification_reason": "Nowscore ingestion requires provider identity/orientation safety",
+                "characterization_test": "tests/test_architecture_audit.py::test_identity_semantics_are_characterized",
+            },
+            {
+                "module": "scripts.production_health_watch",
+                "symbol": "_identity",
+                "semantics": "builds a health-watch identity token from explicit record identity fields",
+                "classification": "accidental duplication",
+                "classification_reason": "health integrity checks implement a second identity extraction boundary",
+                "characterization_test": "tests/test_architecture_audit.py::test_identity_semantics_are_characterized",
+            },
+        ],
+        "characterization_examples": [
+            {
+                "id": "identity_precedence_and_canonical_key",
+                "test": "tests/test_architecture_audit.py::test_identity_semantics_are_characterized",
+                "asserts": "canonical identity is deterministic and serving fallback precedence is explicit",
+            }
+        ],
+    },
+    "json_jsonl_io_atomic_write": {
+        "note": "Concrete JSON/JSONL readers, writers, and atomic persistence boundaries.",
+        "implementations": [
+            {
+                "module": "scripts.football_data.runtime_snapshot",
+                "symbol": "atomic_write_json",
+                "semantics": "writes JSON through a temporary file and atomic replacement",
+                "classification": "intentional domain policy",
+                "classification_reason": "data-plane durable snapshot publication boundary",
+            },
+            {
+                "module": "scripts.football_data.runtime_snapshot",
+                "symbol": "read_json_object",
+                "semantics": "reads and validates a JSON object from a path",
+                "classification": "intentional domain policy",
+                "classification_reason": "data-plane contract reader",
+            },
+            {
+                "module": "scripts.automation_cycle",
+                "symbol": "_write_runtime",
+                "semantics": "serializes current cycle runtime state directly to product_runtime",
+                "classification": "accidental duplication",
+                "classification_reason": "operational runtime writer is separate from the data-plane atomic writer",
+            },
+            {
+                "module": "scripts.prediction_universe",
+                "symbol": "_write",
+                "semantics": "serializes an accepted daily Universe snapshot to its date path",
+                "classification": "intentional domain policy",
+                "classification_reason": "Universe publication is the canonical schedule-intake boundary",
+            },
+            {
+                "module": "scripts.model_governance",
+                "symbol": "write_json",
+                "semantics": "serializes governance documents through a parent-directory writer",
+                "classification": "intentional domain policy",
+                "classification_reason": "governance artifacts have a separate persistence contract",
+            },
+            {
+                "module": "scripts.model_governance",
+                "symbol": "freeze_prediction",
+                "semantics": "creates immutable frozen prediction and input-snapshot records",
+                "classification": "intentional domain policy",
+                "classification_reason": "frozen prediction truth must not be rewritten",
+            },
+            {
+                "module": "scripts.market_side_shadow",
+                "symbol": "_persist_json",
+                "semantics": "persists one shadow document with immutable-pair conflict checks",
+                "classification": "intentional domain policy",
+                "classification_reason": "research shadow evidence has its own immutability contract",
+            },
+            {
+                "module": "scripts.base_prediction_runner",
+                "symbol": "_write_json",
+                "semantics": "writes runner ledgers and evidence sidecars to injected roots",
+                "classification": "accidental duplication",
+                "classification_reason": "runner-local JSON writer overlaps governance and Universe persistence helpers",
+            },
+            {
+                "module": "scripts.prospective_settlement",
+                "symbol": "_append_jsonl",
+                "semantics": "appends one normalized prospective settlement record as JSONL",
+                "classification": "intentional domain policy",
+                "classification_reason": "prospective settlement is an append-only ledger boundary",
+            },
+        ],
+        "characterization_examples": [
+            {
+                "id": "audit_io_evidence_schema",
+                "test": "tests/test_architecture_audit.py::test_real_repository_has_concrete_ownership_and_primitive_evidence",
+                "asserts": "each implementation has a symbol, semantics, classification, and source line",
+            }
+        ],
+    },
+    "provider_request_retry_cache_envelope": {
+        "note": "Concrete provider transport, retry/cache, parser, and provenance envelope implementations.",
+        "implementations": [
+            {
+                "module": "scripts.nowscore_markets",
+                "symbol": "_fetch_bytes",
+                "semantics": "performs bounded provider HTTP transport and returns response bytes",
+                "classification": "intentional domain policy",
+                "classification_reason": "Nowscore provider transport boundary",
+            },
+            {
+                "module": "scripts.nowscore_markets",
+                "symbol": "_fetch_cached_page",
+                "semantics": "serves a bounded-age cached provider page or fetches a fresh page",
+                "classification": "compatibility",
+                "classification_reason": "provider cache is a source-specific compatibility envelope",
+            },
+            {
+                "module": "scripts.nowscore_markets",
+                "symbol": "fetch_schedule_bundle",
+                "semantics": "fetches and combines the bounded Nowscore schedule surfaces",
+                "classification": "intentional domain policy",
+                "classification_reason": "schedule acquisition contract retains source/date diagnostics",
+            },
+            {
+                "module": "scripts.fetch_and_parse",
+                "symbol": "fetch_page",
+                "semantics": "fetches one provider page for legacy market parsers",
+                "classification": "compatibility",
+                "classification_reason": "legacy market surface remains a separate provider adapter",
+            },
+            {
+                "module": "scripts.fetch_sporttery",
+                "symbol": "fetch_json",
+                "semantics": "retrieves Sporttery JSON with bounded retries",
+                "classification": "intentional domain policy",
+                "classification_reason": "provider-specific request/retry contract",
+            },
+            {
+                "module": "scripts.football_data.providers.base",
+                "symbol": "provenance",
+                "semantics": "builds the provider observation provenance envelope",
+                "classification": "intentional domain policy",
+                "classification_reason": "football_data adapters share a provenance contract",
+            },
+            {
+                "module": "scripts.football_data.providers.base",
+                "symbol": "common_record",
+                "semantics": "normalizes provider observations into the common record envelope",
+                "classification": "intentional domain policy",
+                "classification_reason": "provider adapters share a normalized record boundary",
+            },
+            {
+                "module": "scripts.football_data.providers.openfootball",
+                "symbol": "parse_football_txt_rows",
+                "semantics": "parses OpenFootball historical rows into provider records",
+                "classification": "compatibility",
+                "classification_reason": "historical adapter-specific parser",
+            },
+        ],
+        "characterization_examples": [
+            {
+                "id": "provider_symbols_are_concrete",
+                "test": "tests/test_architecture_audit.py::test_real_repository_has_concrete_ownership_and_primitive_evidence",
+                "asserts": "provider transport/cache/provenance entries resolve to defined source symbols",
+            }
+        ],
+    },
+    "status_reason_normalization": {
+        "note": "Concrete status, reason, failure-stage, and quality normalization implementations.",
+        "implementations": [
+            {
+                "module": "scripts.base_prediction_runner",
+                "symbol": "_normalized_signal",
+                "semantics": "normalizes a provider/model signal with source and diagnostic references",
+                "classification": "intentional domain policy",
+                "classification_reason": "prediction failure/provenance reasons must remain machine-readable",
+            },
+            {
+                "module": "scripts.base_prediction_runner",
+                "symbol": "_failure_result",
+                "semantics": "constructs a fail-closed prediction result with failure stage and diagnostics",
+                "classification": "intentional domain policy",
+                "classification_reason": "insufficient evidence must abstain rather than synthesize output",
+            },
+            {
+                "module": "scripts.base_prediction_runner",
+                "symbol": "_select_failure_stage",
+                "semantics": "selects a deterministic dominant failure stage from diagnostics",
+                "classification": "intentional domain policy",
+                "classification_reason": "failure reason precedence is part of the runner contract",
+            },
+            {
+                "module": "scripts.production_health_watch",
+                "symbol": "_reason_once",
+                "semantics": "deduplicates health reasons while preserving first-seen order",
+                "classification": "intentional domain policy",
+                "classification_reason": "health output must be concise and deterministic",
+            },
+            {
+                "module": "scripts.production_health_watch",
+                "symbol": "evaluate_health",
+                "semantics": "aggregates artifact, freshness, identity, and integrity status into health state",
+                "classification": "intentional domain policy",
+                "classification_reason": "production health is a bounded fail-closed gate",
+            },
+            {
+                "module": "scripts.football_data.quality",
+                "symbol": "assess_quality",
+                "semantics": "maps material quality flags to a quality status",
+                "classification": "compatibility",
+                "classification_reason": "provider quality flags are adapted into the data-plane vocabulary",
+            },
+            {
+                "module": "scripts.prediction_dashboard",
+                "symbol": "_status_reason",
+                "semantics": "maps internal job/record status to a public status and reason pair",
+                "classification": "compatibility",
+                "classification_reason": "public projection preserves an internal-to-product label boundary",
+            },
+        ],
+        "characterization_examples": [
+            {
+                "id": "status_inventory_schema",
+                "test": "tests/test_architecture_audit.py::test_real_repository_has_concrete_ownership_and_primitive_evidence",
+                "asserts": "status/reason entries expose concrete symbols rather than responsibility tags only",
+            }
+        ],
+    },
+    "data_root_path_resolution": {
+        "note": "Concrete data-root and namespace path resolution helpers.",
+        "implementations": [
+            {
+                "module": "scripts.football_data.data_home",
+                "symbol": "resolve_football_data_home",
+                "semantics": "resolves the isolated football_data runtime home from environment/configuration",
+                "classification": "intentional domain policy",
+                "classification_reason": "data-plane runtime storage boundary",
+            },
+            {
+                "module": "scripts.football_data.data_home",
+                "symbol": "historical_results_path",
+                "semantics": "resolves the authoritative historical-results object path below the data home",
+                "classification": "intentional domain policy",
+                "classification_reason": "canonical data-plane path helper",
+            },
+            {
+                "module": "scripts.football_data.data_home",
+                "symbol": "team_strength_snapshots_path",
+                "semantics": "resolves the team-strength snapshot path below the data home",
+                "classification": "intentional domain policy",
+                "classification_reason": "canonical data-plane path helper",
+            },
+            {
+                "module": "scripts.football_data.data_home",
+                "symbol": "identity_detail_path",
+                "semantics": "resolves the identity detail catalog path below the data home",
+                "classification": "intentional domain policy",
+                "classification_reason": "canonical data-plane path helper",
+            },
+            {
+                "module": "scripts.prediction_universe",
+                "symbol": "universe_path",
+                "semantics": "resolves a date-keyed prediction Universe path below the configured root",
+                "classification": "compatibility",
+                "classification_reason": "schedule intake retains an injected-root path helper",
+            },
+            {
+                "module": "scripts.model_governance",
+                "symbol": "_snapshot_path",
+                "semantics": "resolves an immutable input-snapshot path from a prediction record and root",
+                "classification": "intentional domain policy",
+                "classification_reason": "governance snapshot identity controls durable path selection",
+            },
+        ],
+        "characterization_examples": [
+            {
+                "id": "path_symbol_inventory",
+                "test": "tests/test_architecture_audit.py::test_real_repository_has_concrete_ownership_and_primitive_evidence",
+                "asserts": "path primitive entries point to defined path/date symbols",
+            }
+        ],
+    },
+    "result_normalization": {
+        "note": "Concrete regulation-time result and outcome normalization implementations.",
+        "implementations": [
+            {
+                "module": "scripts.evaluation_kernel",
+                "symbol": "normalize_verified_result",
+                "semantics": "normalizes a verified regulation-90m-plus-stoppage result and rejects live/unverified input",
+                "classification": "intentional domain policy",
+                "classification_reason": "shared settlement kernel owns formal result normalization",
+            },
+            {
+                "module": "scripts.evaluation_kernel",
+                "symbol": "outcome_for_score",
+                "semantics": "maps a regulation score pair to home/draw/away outcome",
+                "classification": "intentional domain policy",
+                "classification_reason": "shared settlement kernel owns outcome semantics",
+            },
+            {
+                "module": "scripts.prospective_settlement",
+                "symbol": "normalize_result",
+                "semantics": "adapts a fetched result into the prospective settlement record shape",
+                "classification": "compatibility",
+                "classification_reason": "prospective ledger adapts external result fields before kernel evaluation",
+            },
+            {
+                "module": "scripts.prospective_settlement",
+                "symbol": "evaluate_prediction",
+                "semantics": "evaluates a frozen prediction against normalized actual result fields",
+                "classification": "intentional domain policy",
+                "classification_reason": "prospective settlement consumes frozen prematch truth",
+            },
+        ],
+        "characterization_examples": [
+            {
+                "id": "kernel_result_inventory",
+                "test": "tests/test_architecture_audit.py::test_real_repository_has_concrete_ownership_and_primitive_evidence",
+                "asserts": "kernel and prospective result symbols are separately recorded",
+            }
+        ],
+    },
+    "current_latest_legal_version_selection": {
+        "note": "Concrete current/latest/legal selection implementations and compatibility selectors.",
+        "implementations": [
+            {
+                "module": "scripts.prematch_versioning",
+                "symbol": "select_latest_legal_prematch",
+                "semantics": "selects the latest associated prematch record while rejecting postmatch contamination",
+                "classification": "intentional domain policy",
+                "classification_reason": "formal prematch legality/version boundary",
+            },
+            {
+                "module": "scripts.current_serving_state",
+                "symbol": "resolve_current_job_for_match",
+                "semantics": "resolves the current serving job using deterministic identity and chronology rules",
+                "classification": "intentional domain policy",
+                "classification_reason": "current serving selection is a production state authority",
+            },
+            {
+                "module": "scripts.production_health_watch",
+                "symbol": "select_current_serving_predictions",
+                "semantics": "selects health-visible current predictions after identity, chronology, and integrity checks",
+                "classification": "compatibility",
+                "classification_reason": "health projection consumes and validates the serving selection contract",
+            },
+            {
+                "module": "scripts.prediction_universe",
+                "symbol": "is_full_daily_schedule",
+                "semantics": "accepts only a full legal daily schedule payload for Universe publication",
+                "classification": "intentional domain policy",
+                "classification_reason": "Universe input legality gate prevents filtered/partial schedule publication",
+            },
+        ],
+        "characterization_examples": [
+            {
+                "id": "legal_selection_inventory",
+                "test": "tests/test_architecture_audit.py::test_real_repository_has_concrete_ownership_and_primitive_evidence",
+                "asserts": "latest/current/legal selectors are concrete symbol records, not tag-only module lists",
+            }
+        ],
+    },
+}
+
+
 DOMAIN_ROWS = (
     {
         "domain": "match/team/provider identity",
@@ -552,33 +1077,337 @@ def _call_name(node: ast.Call) -> str:
     return ""
 
 
+def _join_path_values(left: Iterable[str], right: Iterable[str]) -> set[str]:
+    values: set[str] = set()
+    left_values = set(left) or {""}
+    right_values = set(right) or {""}
+    for left_value in left_values:
+        for right_value in right_values:
+            left_text = str(left_value).replace("\\", "/")
+            right_text = str(right_value).replace("\\", "/")
+            if not left_text or left_text.startswith("$") and left_text == "$unknown":
+                values.add(right_text)
+            elif not right_text:
+                values.add(left_text)
+            else:
+                values.add(f"{left_text.rstrip('/')}/{right_text.lstrip('/')}")
+    return values
+
+
+def _path_expression_values(node: ast.AST | None, bindings: Mapping[str, set[str]]) -> set[str]:
+    """Resolve bounded symbolic path fragments without touching data files.
+
+    The resolver intentionally returns symbolic values for unknown names.  It
+    is a single AST expression pass, not a repository-wide fixed-point pass;
+    this keeps the audit bounded while resolving constants, injected roots,
+    helper arguments, and common pathlib expressions used by the codebase.
+    """
+    if node is None:
+        return set()
+    if isinstance(node, ast.Constant):
+        return {node.value} if isinstance(node.value, str) else set()
+    if isinstance(node, ast.Name):
+        return set(bindings.get(node.id, {f"${node.id}"}))
+    if isinstance(node, ast.Attribute):
+        return _path_expression_values(node.value, bindings)
+    if isinstance(node, ast.BinOp):
+        left = _path_expression_values(node.left, bindings)
+        right = _path_expression_values(node.right, bindings)
+        if isinstance(node.op, ast.Div):
+            return _join_path_values(left, right)
+        if isinstance(node.op, ast.Add):
+            return {f"{left_value}{right_value}" for left_value in left for right_value in right}
+        return left | right
+    if isinstance(node, ast.Subscript):
+        return _path_expression_values(node.value, bindings) | _path_expression_values(node.slice, bindings)
+    if isinstance(node, (ast.List, ast.Tuple, ast.Set)):
+        return {value for element in node.elts for value in _path_expression_values(element, bindings)}
+    if isinstance(node, ast.Dict):
+        return set()
+    if isinstance(node, ast.IfExp):
+        return _path_expression_values(node.body, bindings) | _path_expression_values(node.orelse, bindings)
+    if isinstance(node, ast.JoinedStr):
+        return {
+            value
+            for element in node.values
+            for value in _path_expression_values(element, bindings)
+        }
+    if isinstance(node, ast.FormattedValue):
+        return _path_expression_values(node.value, bindings)
+    if isinstance(node, ast.Starred):
+        return _path_expression_values(node.value, bindings)
+    if isinstance(node, ast.Call):
+        function_name = _call_name(node)
+        path_helper = (
+            function_name in {"Path", "PurePath", "join", "resolve", "absolute", "expanduser", "str", "as_posix"}
+            or function_name.endswith("_path")
+            or function_name == "universe_path"
+        )
+        if function_name == "join":
+            values: set[str] = {""}
+            for argument in node.args:
+                values = _join_path_values(values, _path_expression_values(argument, bindings))
+            return values
+        if not path_helper:
+            return set()
+        values = {
+            value
+            for argument in node.args[:3]
+            for value in _path_expression_values(argument, bindings)
+        }
+        values.update(
+            value
+            for keyword in node.keywords[:3]
+            for value in _path_expression_values(keyword.value, bindings)
+        )
+        return values
+    return set()
+
+
+def _target_names(node: ast.AST) -> list[str]:
+    if isinstance(node, ast.Name):
+        return [node.id]
+    if isinstance(node, (ast.Tuple, ast.List)):
+        return [name for element in node.elts for name in _target_names(element)]
+    return []
+
+
+def _io_path_nodes(node: ast.Call, name: str) -> list[ast.AST]:
+    if isinstance(node.func, ast.Attribute):
+        receiver = [node.func.value]
+    else:
+        receiver = []
+    if name == "open":
+        return [node.args[0]] if node.args else receiver
+    if name == "dump":
+        return [node.args[1]] if len(node.args) > 1 else receiver
+    if name in {"load", "load_json", "_load_json", "read_json_object", "write_json", "_write_json", "_write", "_write_runtime", "_persist_json", "save_json"}:
+        return [node.args[0]] if node.args else receiver
+    if name in {"persist_pair"}:
+        return [node.args[1]] if len(node.args) > 1 else list(node.args)
+    return [*receiver, *node.args]
+
+
+def _io_operation(node: ast.Call, name: str) -> str | None:
+    if name == "open":
+        mode = "r"
+        if len(node.args) > 1 and isinstance(node.args[1], ast.Constant):
+            mode = str(node.args[1].value)
+        return "write" if any(flag in mode for flag in ("w", "a", "x", "+")) else "read"
+    if name in _DataAccessVisitor.WRITE_CALLS:
+        return "write"
+    if name in _DataAccessVisitor.READ_CALLS:
+        return "read"
+    return None
+
+
+def _function_parameters(node: ast.FunctionDef | ast.AsyncFunctionDef) -> list[str]:
+    arguments = [*node.args.posonlyargs, *node.args.args, *node.args.kwonlyargs]
+    if node.args.vararg:
+        arguments.append(node.args.vararg)
+    if node.args.kwarg:
+        arguments.append(node.args.kwarg)
+    return [argument.arg for argument in arguments]
+
+
+def _function_contracts(tree: ast.AST) -> dict[str, list[dict[str, Any]]]:
+    """Find path parameters consumed by local read/write helpers."""
+    contracts: defaultdict[str, list[dict[str, Any]]] = defaultdict(list)
+    functions = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+    ]
+    for function in functions:
+        parameters = _function_parameters(function)
+        modes: defaultdict[str, set[str]] = defaultdict(set)
+        anchors: defaultdict[str, list[int]] = defaultdict(list)
+        for node in ast.walk(function):
+            if not isinstance(node, ast.Call):
+                continue
+            name = _call_name(node)
+            operation = _io_operation(node, name)
+            if operation is None:
+                continue
+            for path_node in _io_path_nodes(node, name):
+                referenced = {
+                    child.id
+                    for child in ast.walk(path_node)
+                    if isinstance(child, ast.Name) and child.id in parameters
+                }
+                for parameter in referenced:
+                    modes[parameter].add(operation)
+                    anchors[parameter].append(node.lineno)
+        if not modes:
+            continue
+        contracts[function.name].append(
+            {
+                "symbol": function.name,
+                "parameters": parameters,
+                "param_modes": {name: sorted(values) for name, values in sorted(modes.items())},
+                "param_lines": {name: min(lines) for name, lines in sorted(anchors.items())},
+            }
+        )
+    return dict(contracts)
+
+
 class _DataAccessVisitor(ast.NodeVisitor):
     WRITE_CALLS = {"write_text", "write_bytes", "dump", "atomic_write", "atomic_write_json", "replace", "rename", "unlink", "mkdir"}
     READ_CALLS = {"read_text", "read_bytes", "load", "exists", "is_file", "glob", "rglob", "iterdir"}
+    WRITE_HELPERS = {"write_json", "_write_json", "_write", "_write_runtime", "_persist_json", "persist_pair", "save_json"}
+    READ_HELPERS = {"load_json", "_load_json", "read_json_object"}
 
-    def __init__(self) -> None:
+    def __init__(self, module: str = "", contracts: Mapping[str, Sequence[Mapping[str, Any]]] | None = None) -> None:
+        self.module = module
+        self.contracts = contracts or {}
         self.reads: set[str] = set()
         self.writes: set[str] = set()
+        self.evidence: list[dict[str, Any]] = []
+        self.unresolved_io_sites: list[dict[str, Any]] = []
+        self._bindings: dict[str, set[str]] = {}
+        self._scope_stack: list[str] = []
+        self._class_stack: list[str] = []
 
-    def _strings(self, node: ast.AST) -> list[str]:
-        return _constant_strings(node)
+    def _symbol(self) -> str:
+        return ".".join([*self._class_stack, *self._scope_stack]) or "<module>"
+
+    def _record(
+        self,
+        node: ast.Call,
+        name: str,
+        operation: str,
+        namespaces: Iterable[str],
+        *,
+        evidence_kind: str = "ast_path_binding",
+        helper_io_line: int | None = None,
+    ) -> None:
+        resolved = sorted(set(namespaces))
+        if resolved:
+            if operation == "read":
+                self.reads.update(resolved)
+            else:
+                self.writes.update(resolved)
+        record = {
+            "module": self.module,
+            "symbol": self._symbol(),
+            "line": node.lineno,
+            "operation": operation,
+            "call": name,
+            "namespaces": resolved,
+            "evidence_kind": evidence_kind,
+        }
+        if helper_io_line is not None:
+            record["helper_io_line"] = helper_io_line
+        if resolved:
+            self.evidence.append(record)
+        else:
+            self.unresolved_io_sites.append(record)
+
+    def _bind_assignment(self, node: ast.Assign | ast.AnnAssign) -> None:
+        value = _path_expression_values(node.value, self._bindings)
+        targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+        for target in targets:
+            for name in _target_names(target):
+                self._bindings[name] = set(value)
+
+    def _helper_evidence(self, node: ast.Call, name: str) -> None:
+        for contract in self.contracts.get(name, ()):
+            parameters = list(contract.get("parameters") or [])
+            positional = list(node.args)
+            arguments: dict[str, ast.AST] = {
+                parameter: positional[index]
+                for index, parameter in enumerate(parameters[: len(positional)])
+            }
+            arguments.update(
+                {
+                    keyword.arg: keyword.value
+                    for keyword in node.keywords
+                    if keyword.arg is not None
+                }
+            )
+            for parameter, modes in (contract.get("param_modes") or {}).items():
+                argument = arguments.get(parameter)
+                if argument is None:
+                    continue
+                namespaces = _path_namespace_matches(
+                    _path_expression_values(argument, self._bindings)
+                )
+                for operation in modes:
+                    self._record(
+                        node,
+                        name,
+                        operation,
+                        namespaces,
+                        evidence_kind="helper_call_binding",
+                        helper_io_line=(contract.get("param_lines") or {}).get(parameter),
+                    )
+
+    def visit_Assign(self, node: ast.Assign) -> None:  # noqa: N802
+        self._bind_assignment(node)
+        self.generic_visit(node)
+
+    def visit_AnnAssign(self, node: ast.AnnAssign) -> None:  # noqa: N802
+        self._bind_assignment(node)
+        self.generic_visit(node)
+
+    def visit_NamedExpr(self, node: ast.NamedExpr) -> None:  # noqa: N802
+        self._bindings[node.target.id] = _path_expression_values(node.value, self._bindings)
+        self.generic_visit(node)
+
+    def visit_FunctionDef(self, node: ast.FunctionDef) -> None:  # noqa: N802
+        self._visit_function(node)
+
+    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:  # noqa: N802
+        self._visit_function(node)
+
+    def _visit_function(self, node: ast.FunctionDef | ast.AsyncFunctionDef) -> None:
+        outer = dict(self._bindings)
+        local = dict(outer)
+        positional = [*node.args.posonlyargs, *node.args.args]
+        defaults = [None] * (len(positional) - len(node.args.defaults)) + list(node.args.defaults)
+        for argument, default in zip(positional, defaults):
+            local[argument.arg] = (
+                _path_expression_values(default, outer)
+                if default is not None
+                else {f"${argument.arg}"}
+            )
+        for argument, default in zip(node.args.kwonlyargs, node.args.kw_defaults):
+            local[argument.arg] = (
+                _path_expression_values(default, outer)
+                if default is not None
+                else {f"${argument.arg}"}
+            )
+        if node.args.vararg:
+            local[node.args.vararg.arg] = {f"${node.args.vararg.arg}"}
+        if node.args.kwarg:
+            local[node.args.kwarg.arg] = {f"${node.args.kwarg.arg}"}
+        self._bindings = local
+        self._scope_stack.append(node.name)
+        for statement in node.body:
+            self.visit(statement)
+        self._scope_stack.pop()
+        self._bindings = outer
+
+    def visit_ClassDef(self, node: ast.ClassDef) -> None:  # noqa: N802
+        outer = dict(self._bindings)
+        self._class_stack.append(node.name)
+        for statement in node.body:
+            self.visit(statement)
+        self._class_stack.pop()
+        self._bindings = outer
 
     def visit_Call(self, node: ast.Call) -> None:  # noqa: N802
         name = _call_name(node)
-        values = self._strings(node)
-        namespaces = _path_namespace_matches(values)
-        if name in self.WRITE_CALLS:
-            self.writes.update(namespaces)
-        if name in self.READ_CALLS:
-            self.reads.update(namespaces)
-        if name == "open":
-            mode = "r"
-            if len(node.args) > 1 and isinstance(node.args[1], ast.Constant):
-                mode = str(node.args[1].value)
-            if any(flag in mode for flag in ("w", "a", "x", "+")):
-                self.writes.update(namespaces)
-            else:
-                self.reads.update(namespaces)
+        operation = _io_operation(node, name)
+        if operation is not None:
+            values = {
+                value
+                for path_node in _io_path_nodes(node, name)
+                for value in _path_expression_values(path_node, self._bindings)
+            }
+            self._record(node, name, operation, _path_namespace_matches(values))
+        if name in self.WRITE_HELPERS or name in self.READ_HELPERS:
+            self._helper_evidence(node, name)
         self.generic_visit(node)
 
 
@@ -760,6 +1589,30 @@ def _tarjan_cycles(graph: Mapping[str, set[str]]) -> list[list[str]]:
     return sorted(components)
 
 
+def _defined_symbol_records(tree: ast.AST) -> list[dict[str, Any]]:
+    """Return source-defined symbols without including source text."""
+    records: list[dict[str, Any]] = []
+
+    def visit_body(body: Iterable[ast.AST], prefix: str = "") -> None:
+        for node in body:
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                name = f"{prefix}.{node.name}" if prefix else node.name
+                records.append({"name": name, "kind": "function", "line": node.lineno})
+                visit_body(node.body, name)
+            elif isinstance(node, ast.ClassDef):
+                name = f"{prefix}.{node.name}" if prefix else node.name
+                records.append({"name": name, "kind": "class", "line": node.lineno})
+                visit_body(node.body, name)
+            elif not prefix and isinstance(node, (ast.Assign, ast.AnnAssign, ast.NamedExpr)):
+                targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+                for target in targets:
+                    for target_name in _target_names(target):
+                        records.append({"name": target_name, "kind": "module_symbol", "line": node.lineno})
+
+    visit_body(getattr(tree, "body", ()))
+    return sorted(records, key=lambda item: (int(item["line"]), str(item["name"]), str(item["kind"])))
+
+
 def _parse_python_modules(root: Path, paths: Sequence[Path]) -> tuple[list[dict[str, Any]], dict[str, set[str]], dict[str, str | None], list[str], list[dict[str, Any]]]:
     aliases: dict[str, str | None] = {}
     parsed: dict[str, tuple[Path, ast.AST, str]] = {}
@@ -793,7 +1646,7 @@ def _parse_python_modules(root: Path, paths: Sequence[Path]) -> tuple[list[dict[
         local_dependencies.discard(module)
         graph[module].update(local_dependencies)  # type: ignore[arg-type]
         external_dependencies = sorted({str(record["module"]) for record in imports if not _resolve_import(module, record, aliases) and record.get("module")})
-        data_access = _DataAccessVisitor()
+        data_access = _DataAccessVisitor(module, _function_contracts(tree))
         data_access.visit(tree)
         constants = _constant_strings(tree)
         referenced_namespaces = _path_namespace_matches([*constants, text])
@@ -818,11 +1671,25 @@ def _parse_python_modules(root: Path, paths: Sequence[Path]) -> tuple[list[dict[
                 "loc": len(text.splitlines()),
                 "function_count": functions,
                 "class_count": classes,
+                "defined_symbols": _defined_symbol_records(tree),
                 "local_dependencies": sorted(local_dependencies),
                 "external_dependencies": external_dependencies[:40],
                 "referenced_data_namespaces": sorted(referenced_namespaces),
                 "direct_data_read_namespaces": sorted(data_access.reads),
                 "direct_data_write_namespaces": sorted(data_access.writes),
+                "data_access_evidence": sorted(
+                    data_access.evidence,
+                    key=lambda item: (
+                        int(item["line"]),
+                        str(item["operation"]),
+                        str(item["call"]),
+                        str(item["symbol"]),
+                    ),
+                ),
+                "unresolved_data_access_sites": sorted(
+                    data_access.unresolved_io_sites,
+                    key=lambda item: (int(item["line"]), str(item["operation"]), str(item["call"])),
+                ),
                 "responsibility_tags": tags,
                 "role": _role(module, tags),
                 "consolidation_risk": _consolidation_risk(tags, len(local_dependencies), len(data_access.writes)),
@@ -832,20 +1699,72 @@ def _parse_python_modules(root: Path, paths: Sequence[Path]) -> tuple[list[dict[
 
 
 def _semantic_primitive_inventory(module_rows: Sequence[Mapping[str, Any]]) -> dict[str, dict[str, Any]]:
-    primitive_rules = {
-        "datetime_timestamp_parsing": ("time/chronology", "Separate datetime/fromisoformat/strptime/naive-time implementations"),
-        "identity_extraction_matching_canonical_key": ("identity", "Canonical, provider, alias, and fuzzy/presentation identity consumers"),
-        "json_jsonl_io_atomic_write": ("io/persistence", "JSON/JSONL load/dump/write/atomic persistence paths"),
-        "provider_request_retry_cache_envelope": ("acquisition/parsing", "HTTP/request/retry/cache/provider envelope implementations"),
-        "status_reason_normalization": ("governance/provenance", "Status/reason/failure-stage normalization consumers"),
-        "data_root_path_resolution": ("io/persistence", "ROOT/PROJECT_ROOT/DATA_ROOT/path construction"),
-        "result_normalization": ("evaluation/postmatch", "Result/outcome normalization and regulation-time mapping"),
-        "current_latest_legal_version_selection": ("governance/provenance", "Current/latest/version/legal selection symbols"),
+    symbols_by_module = {
+        str(row["module"]): {
+            str(symbol.get("name")): symbol
+            for symbol in row.get("defined_symbols", [])
+            if isinstance(symbol, Mapping)
+        }
+        for row in module_rows
     }
     result: dict[str, dict[str, Any]] = {}
-    for name, (tag, note) in primitive_rules.items():
-        modules = [row["module"] for row in module_rows if tag in row.get("responsibility_tags", [])]
-        result[name] = {"modules": sorted(modules), "module_count": len(modules), "note": note}
+    primitive_tags = {
+        "datetime_timestamp_parsing": "time/chronology",
+        "identity_extraction_matching_canonical_key": "identity",
+        "json_jsonl_io_atomic_write": "io/persistence",
+        "provider_request_retry_cache_envelope": "acquisition/parsing",
+        "status_reason_normalization": "governance/provenance",
+        "data_root_path_resolution": "io/persistence",
+        "result_normalization": "evaluation/postmatch",
+        "current_latest_legal_version_selection": "governance/provenance",
+    }
+    for name, specification in SEMANTIC_PRIMITIVE_SPECS.items():
+        implementations: list[dict[str, Any]] = []
+        missing: list[dict[str, str]] = []
+        invalid: list[str] = []
+        for implementation in specification["implementations"]:
+            module = str(implementation["module"])
+            symbol_name = str(implementation["symbol"])
+            symbol = symbols_by_module.get(module, {}).get(symbol_name)
+            if symbol is None:
+                missing.append({"module": module, "symbol": symbol_name})
+                continue
+            if implementation.get("classification") not in PRIMITIVE_CLASSIFICATIONS:
+                invalid.append(f"{module}:{symbol_name}:classification")
+            if not str(implementation.get("semantics") or "").strip():
+                invalid.append(f"{module}:{symbol_name}:semantics")
+            record = dict(implementation)
+            record.update(
+                {
+                    "kind": symbol.get("kind"),
+                    "line": symbol.get("line"),
+                    "evidence_kind": "static_symbol_inventory",
+                }
+            )
+            implementations.append(record)
+        tag_modules = sorted(
+            row["module"]
+            for row in module_rows
+            if primitive_tags.get(name) in row.get("responsibility_tags", [])
+        )
+        status = "PASS" if not missing and not invalid and implementations else "MISSING_OR_INVALID"
+        result[name] = {
+            "required": True,
+            "status": status,
+            "implementation_count": len(implementations),
+            "required_implementation_count": len(specification["implementations"]),
+            "implementations": implementations,
+            "missing_implementations": missing,
+            "invalid_implementations": invalid,
+            "modules": sorted({item["module"] for item in implementations}),
+            "module_count": len({item["module"] for item in implementations}),
+            "classifications_present": sorted({item["classification"] for item in implementations}),
+            "characterization_examples": list(specification.get("characterization_examples", [])),
+            "tag_modules": tag_modules,
+            "tag_module_count": len(tag_modules),
+            "tag_only": False,
+            "note": specification["note"],
+        }
     return result
 
 
@@ -904,10 +1823,47 @@ def _data_write_read_map(
     counts = _data_file_counts(tracked)
     workflow_rows = (workflows or {}).get("workflows", [])
     namespaces: list[dict[str, Any]] = []
+    unclassified_io_sites = [
+        {
+            key: value
+            for key, value in site.items()
+            if key in {"module", "symbol", "line", "operation", "call", "evidence_kind"}
+        }
+        for row in module_rows
+        for site in row.get("unresolved_data_access_sites", [])
+    ]
     for entry in DATA_CATALOG:
         namespace = entry["namespace"]
-        code_readers = sorted({row["module"] for row in module_rows if namespace in row.get("direct_data_read_namespaces", [])})
-        code_writers = sorted({row["module"] for row in module_rows if namespace in row.get("direct_data_write_namespaces", [])})
+        reader_evidence = sorted(
+            [
+                dict(evidence)
+                for row in module_rows
+                for evidence in row.get("data_access_evidence", [])
+                if evidence.get("operation") == "read" and namespace in evidence.get("namespaces", [])
+            ],
+            key=lambda item: (
+                str(item.get("module")),
+                int(item.get("line") or 0),
+                str(item.get("symbol")),
+                str(item.get("call")),
+            ),
+        )
+        writer_evidence = sorted(
+            [
+                dict(evidence)
+                for row in module_rows
+                for evidence in row.get("data_access_evidence", [])
+                if evidence.get("operation") == "write" and namespace in evidence.get("namespaces", [])
+            ],
+            key=lambda item: (
+                str(item.get("module")),
+                int(item.get("line") or 0),
+                str(item.get("symbol")),
+                str(item.get("call")),
+            ),
+        )
+        code_readers = sorted({str(item["module"]) for item in reader_evidence})
+        code_writers = sorted({str(item["module"]) for item in writer_evidence})
         references = sorted({row["module"] for row in module_rows if namespace in row.get("referenced_data_namespaces", [])})
         workflow_references = sorted({row["file"] for row in workflow_rows if namespace in row.get("write_namespaces", [])})
         workflow_writers = sorted(
@@ -925,17 +1881,65 @@ def _data_write_read_map(
                 "writers": sorted(set(code_writers).union(workflow_writers)),
                 "code_readers": code_readers,
                 "code_writers": code_writers,
+                "code_reader_status": "OBSERVED" if code_readers else "NO_CODE_READER_OBSERVED",
+                "code_writer_status": "OBSERVED" if code_writers else "NO_CODE_WRITER_OBSERVED",
+                "code_writer_status_reason": (
+                    "No source-level write call targeting this legacy root was observed in the bounded scan scope"
+                    if not code_writers and namespace == "05_RUNTIME_STATE.json"
+                    else "At least one source-level write call was observed"
+                    if code_writers
+                    else "No source-level write call was observed"
+                ),
+                "code_reader_evidence": reader_evidence,
+                "code_writer_evidence": writer_evidence,
                 "workflow_references": workflow_references,
                 "workflow_writers": workflow_writers,
                 "referencing_modules": references,
-                "unclassified_code_references": sorted(set(references).difference(code_readers, code_writers)),
+                "unclassified_code_references": sorted(
+                    {
+                        str(site["module"])
+                        for site in unclassified_io_sites
+                        if namespace in site.get("namespaces", [])
+                    }
+                ),
             }
         )
+    critical_namespace_gaps = [
+        {
+            "namespace": row["namespace"],
+            "missing": [
+                field
+                for field in ("code_readers", "code_writers", "code_reader_evidence", "code_writer_evidence")
+                if not row.get(field)
+            ],
+        }
+        for row in namespaces
+        if row["namespace"] in CRITICAL_DATA_NAMESPACES
+        and (
+            not row.get("code_readers")
+            or not row.get("code_reader_evidence")
+            or (
+                row["namespace"] != "05_RUNTIME_STATE.json"
+                and (not row.get("code_writers") or not row.get("code_writer_evidence"))
+            )
+            or (
+                row["namespace"] == "05_RUNTIME_STATE.json"
+                and row.get("code_writer_status") != "NO_CODE_WRITER_OBSERVED"
+            )
+            or row.get("unclassified_code_references")
+        )
+    ]
     return {
         "scan_policy": "paths_only_no_data_contents",
         "tracked_data_file_count": sum(counts.values()),
         "tracked_data_namespace_counts": dict(sorted(counts.items())),
         "workflow_writer_evidence_is_limited_to_explicit_git_write_paths": True,
+        "code_reader_writer_evidence_is_symbol_line_level": True,
+        "unclassified_io_sites": sorted(
+            unclassified_io_sites,
+            key=lambda item: (str(item.get("module")), int(item.get("line") or 0), str(item.get("call"))),
+        ),
+        "critical_namespace_gaps": critical_namespace_gaps,
         "namespaces": namespaces,
     }
 
@@ -1073,6 +2077,14 @@ def _test_collection_evidence(root: Path) -> dict[str, Any]:
 def _decision(inventory: Mapping[str, Any], dependencies: Mapping[str, Any], data_map: Mapping[str, Any], workflows: Mapping[str, Any]) -> str:
     if inventory.get("python_parse_errors") or inventory.get("json_contracts", {}).get("json_parse_errors"):
         return "FAIL_CLOSED"
+    if data_map.get("critical_namespace_gaps"):
+        return "FAIL_CLOSED"
+    if any(
+        primitive.get("status") != "PASS"
+        for primitive in inventory.get("shared_semantic_primitives", {}).values()
+        if isinstance(primitive, Mapping) and primitive.get("required")
+    ):
+        return "FAIL_CLOSED"
     if inventory.get("test_collection", {}).get("status") == "NOT_OBTAINED":
         return "FAIL_CLOSED"
     if any(item.get("namespace") == "05_RUNTIME_STATE.json" and item.get("referencing_modules") for item in data_map.get("namespaces", [])):
@@ -1097,6 +2109,7 @@ def audit_repository(root: Path, *, collect_tests: bool = False) -> dict[str, An
     data_map = _data_write_read_map(python_rows, tracked, workflows)
     json_contracts = _json_contract_inventory(root, [*schema_paths, *config_paths])
     collection = _test_collection_evidence(root) if collect_tests else {"command": "python -m pytest --collect-only -q", "status": "NOT_RUN_BY_SCANNER"}
+    shared_semantic_primitives = _semantic_primitive_inventory(python_rows)
     inventory = {
         "contract_version": CONTRACT_VERSION,
         "scope": {
@@ -1118,7 +2131,7 @@ def audit_repository(root: Path, *, collect_tests: bool = False) -> dict[str, An
         "json_contracts": json_contracts,
         "data_scan_policy": "paths_only_no_data_contents",
         "test_collection": collection,
-        "shared_semantic_primitives": _semantic_primitive_inventory(python_rows),
+        "shared_semantic_primitives": shared_semantic_primitives,
         "modules": python_rows,
     }
     decision = _decision(inventory, dependencies, data_map, workflows)
@@ -1143,6 +2156,27 @@ def render_domain_owner_map(result: Mapping[str, Any]) -> str:
     inventory = result["architecture_inventory"]
     dependencies = result["dependency_summary"]
     workflows = result["workflow_map"]
+    data_map = result["data_write_read_map"]
+    ownership = {row["namespace"]: row for row in data_map["namespaces"]}
+    ownership_lines = [
+        "## Critical namespace code ownership evidence",
+        "",
+        "The following rows are derived from symbol/line-level AST I/O evidence. `05_RUNTIME_STATE.json` is explicitly reader-only in this bounded scope; its empty writer set is an observed legacy fact, not an inferred owner.",
+        "",
+        "| Namespace | Code readers | Code writers | Writer status | Unclassified I/O references |",
+        "| --- | --- | --- | --- | --- |",
+    ]
+    for namespace in sorted(CRITICAL_DATA_NAMESPACES):
+        row = ownership[namespace]
+        ownership_lines.append(
+            "| `{namespace}` | `{readers}` | `{writers}` | `{status}` | `{unclassified}` |".format(
+                namespace=namespace,
+                readers=", ".join(row["code_readers"]) or "none",
+                writers=", ".join(row["code_writers"]) or "none observed",
+                status=row["code_writer_status"],
+                unclassified=", ".join(row["unclassified_code_references"]) or "none",
+            )
+        )
     return "\n".join(
         [
             "# FBOS whole-code domain ownership map — Issue #268 R1",
@@ -1157,6 +2191,8 @@ def render_domain_owner_map(result: Mapping[str, Any]) -> str:
             "- Data policy: tracked data paths were counted for namespace ownership only; historical data contents were not parsed or hashed.",
             "",
             _markdown_table(DOMAIN_ROWS),
+            "",
+            *ownership_lines,
             "",
             "## Healthy comparison controls",
             "",
@@ -1176,6 +2212,12 @@ def render_report(result: Mapping[str, Any]) -> str:
     data_map = result["data_write_read_map"]
     workflows = result["workflow_map"]
     collection = inventory["test_collection"]
+    ownership = {
+        row["namespace"]: row
+        for row in data_map["namespaces"]
+        if row["namespace"] in CRITICAL_DATA_NAMESPACES
+    }
+    primitive_summary = inventory["shared_semantic_primitives"]
     finding_lines: list[str] = []
     for finding in FINDING_TEMPLATES:
         finding_lines.extend(
@@ -1211,6 +2253,17 @@ def render_report(result: Mapping[str, Any]) -> str:
             f"- sys.path mutations: `{len(dependencies['sys_path_mutations'])}`; direct/package fallback sites: `{len(dependencies['dual_import_fallbacks'])}`; cross-layer local edges: `{len(dependencies['cross_layer_edges'])}`.",
             f"- Tracked data files counted by catalog: `{data_map['tracked_data_file_count']}`; namespace rows: `{len(data_map['namespaces'])}`.",
             f"- Workflows/actions: `{workflows['workflow_count']}`; main-write overlap rows: `{len(workflows['overlapping_main_write_namespaces'])}`.",
+            f"- Critical namespace ownership gaps: `{len(data_map['critical_namespace_gaps'])}`; unresolved I/O sites retained as evidence: `{len(data_map['unclassified_io_sites'])}`.",
+            "",
+            "## Independent-acceptance blocker closure evidence",
+            "",
+            *[
+                f"- `{namespace}`: readers `{', '.join(row['code_readers']) or 'none'}`; writers `{', '.join(row['code_writers']) or 'none observed'}`; writer status `{row['code_writer_status']}`; symbol-line evidence rows `{len(row['code_reader_evidence']) + len(row['code_writer_evidence'])}`."
+                for namespace, row in sorted(ownership.items())
+            ],
+            "- `05_RUNTIME_STATE.json` has no observed code writer in the bounded source scope; the audit records that negative ownership result explicitly instead of inventing a writer.",
+            f"- Concrete semantic primitive classes: `{len(primitive_summary)}`; classes with PASS inventory: `{sum(value.get('status') == 'PASS' for value in primitive_summary.values())}`.",
+            "- Each primitive record includes source-defined symbol/line, semantics, classification (`intentional domain policy`, `compatibility`, or `accidental duplication`), and a characterization reference; timestamp and identity references are executable tests.",
             "",
             "## Test-system evidence",
             "",
