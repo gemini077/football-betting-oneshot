@@ -239,6 +239,62 @@ def test_unlabelled_lineup_is_uncertain_not_a_factual_starting_eleven():
     assert parsed["fields"]["lineup_state"]["semantic_state"] == "UNLABELLED"
 
 
+def test_h2h_without_real_meeting_records_is_not_present():
+    payload = evidence.SurfacePayload(
+        "analysis_page",
+        "https://example.invalid/analysis",
+        "<h2>Head to head</h2><table><tr><th>Home</th><th>Away</th><th>Result</th></tr><tr><td>Alpha</td><td>Beta</td><td>--</td></tr></table>",
+        {"observed_at": "2098-12-31T12:00:00+08:00", "source_update_at": None, "http_status": 200},
+    )
+    parsed = evidence._markup_adapter(payload, {})
+    field = parsed["fields"]["h2h"]
+    assert field["state"] == "PARSE_UNCERTAIN"
+    assert field["state"] != "PRESENT"
+    assert field["record_count"] == 0
+
+
+def test_h2h_with_a_real_date_and_score_record_is_present():
+    payload = evidence.SurfacePayload(
+        "analysis_page",
+        "https://example.invalid/analysis",
+        "<h2>Head to head</h2><table><tr><th>Date</th><th>Score</th></tr><tr><td>2098-12-20</td><td>2-1</td></tr></table>",
+        {"observed_at": "2098-12-31T12:00:00+08:00", "source_update_at": None, "http_status": 200},
+    )
+    parsed = evidence._markup_adapter(payload, {})
+    field = parsed["fields"]["h2h"]
+    assert field["state"] == "PRESENT"
+    assert field["record_count"] == 1
+    assert field["value"]["records"] == [{"date": "2098-12-20", "score": "2-1"}]
+
+
+def test_market_line_rows_cannot_be_technical_stats():
+    payload = evidence.SurfacePayload(
+        "time_page",
+        "https://example.invalid/time",
+        "<h2>Technical statistics</h2><table><tr><th>Type</th><th>Home</th><th>Line</th><th>Away</th></tr><tr><td>初</td><td>0.95</td><td>-2.5</td><td>0.85</td></tr><tr><td>盘口</td><td>0.95</td><td>-2.0</td><td>0.85</td></tr></table>",
+        {"observed_at": "2098-12-31T12:00:00+08:00", "source_update_at": None, "http_status": 200},
+    )
+    parsed = evidence._markup_adapter(payload, {})
+    field = parsed["fields"]["technical_stats"]
+    assert field["state"] == "PARSE_UNCERTAIN"
+    assert field["state"] != "PRESENT"
+    assert field["record_count"] == 0
+
+
+def test_football_technical_labels_are_required_for_present_stats():
+    payload = evidence.SurfacePayload(
+        "time_page",
+        "https://example.invalid/time",
+        "<h2>Technical statistics</h2><table><tr><th>Metric</th><th>Home</th><th>Away</th></tr><tr><td>Possession</td><td>55%</td><td>45%</td></tr><tr><td>Shots on target</td><td>6</td><td>3</td></tr></table>",
+        {"observed_at": "2098-12-31T12:00:00+08:00", "source_update_at": None, "http_status": 200},
+    )
+    parsed = evidence._markup_adapter(payload, {})
+    field = parsed["fields"]["technical_stats"]
+    assert field["state"] == "PRESENT"
+    assert field["record_count"] == 2
+    assert [item["label"] for item in field["value"]["stats"]] == ["Possession", "Shots on target"]
+
+
 def test_state_memory_sidecar_keeps_evidence_beside_model_projection():
     result = crawl()
     snapshot = {

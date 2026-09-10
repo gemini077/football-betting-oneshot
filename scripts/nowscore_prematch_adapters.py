@@ -492,7 +492,7 @@ def _h2h_builder(sections: list[dict[str, Any]], combined: str) -> tuple[Any, in
         "score_count": len(scores),
         "date_count": len(dates),
         "records": records,
-    }, count, bool(rows or scores or dates)
+    }, count, bool(records)
 
 
 def _future_builder(sections: list[dict[str, Any]], combined: str) -> tuple[Any, int, bool]:
@@ -534,6 +534,94 @@ def _lineup_builder(sections: list[dict[str, Any]], combined: str) -> tuple[Any,
     return {"record_count": len(rows), "source_semantics": "lineup", "semantic_state": semantic}, len(rows), item_found
 
 
+_TECHNICAL_STAT_LABELS = (
+    "possession",
+    "shot",
+    "xg",
+    "expected goal",
+    "corner",
+    "foul",
+    "offside",
+    "yellow card",
+    "red card",
+    "attack",
+    "dangerous attack",
+    "save",
+    "goal kick",
+    "free kick",
+    "throw-in",
+    "pass",
+    "tackle",
+    "interception",
+    "clearance",
+    "cross",
+    "big chance",
+    "dribble",
+    "duel",
+    "控球",
+    "射门",
+    "射正",
+    "角球",
+    "犯规",
+    "越位",
+    "黄牌",
+    "红牌",
+    "进攻",
+    "危险进攻",
+    "扑救",
+    "球门球",
+    "任意球",
+    "界外球",
+    "传球",
+    "抢断",
+    "拦截",
+    "解围",
+    "传中",
+    "控球率",
+)
+
+_MARKET_STAT_LABELS = (
+    "opening",
+    "closing",
+    "current odds",
+    "handicap",
+    "asian",
+    "moneyline",
+    "over/under",
+    "over under",
+    "odds",
+    "water",
+    "market",
+    "price",
+    "spread",
+    "line",
+    "1x2",
+    "total",
+    "over",
+    "under",
+    "initial",
+    "初",
+    "即",
+    "盘口",
+    "水位",
+    "赔率",
+    "让球",
+    "大小球",
+    "欧赔",
+    "亚盘",
+    "胜平负",
+)
+
+
+def _is_technical_stat_label(label: str) -> bool:
+    normalized = re.sub(r"[\s:_/\\-]+", " ", str(label or "").casefold()).strip()
+    if not normalized:
+        return False
+    if any(token.casefold() in normalized for token in _MARKET_STAT_LABELS):
+        return False
+    return any(token.casefold() in normalized for token in _TECHNICAL_STAT_LABELS)
+
+
 def _technical_builder(sections: list[dict[str, Any]], combined: str) -> tuple[Any, int, bool]:
     stats: list[dict[str, Any]] = []
     for section in sections:
@@ -542,7 +630,7 @@ def _technical_builder(sections: list[dict[str, Any]], combined: str) -> tuple[A
             if len(values) < 2:
                 continue
             label = _safe_text(row[0] if row else "", 80)
-            if not label:
+            if not _is_technical_stat_label(label):
                 continue
             stats.append({"label": label, "values": values[:6]})
             if len(stats) >= 50:
