@@ -14,7 +14,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 
 from live_ev_profile import enrich_profile_match_aliases, publish_live_ev_profiles  # noqa: E402
 from generate_analysis_report import main as generate_report_main  # noqa: E402
-from build_public_site import PUBLIC_DATA_DIRS  # noqa: E402
+from build_public_site import DATA_PUBLIC_ROOTS  # noqa: E402
 
 
 def payload_with_candidate(*, conservative=0.53, confirmed=True):
@@ -63,8 +63,12 @@ def payload_with_candidate(*, conservative=0.53, confirmed=True):
 
 
 class LiveEvProfileTests(unittest.TestCase):
-    def test_public_site_includes_live_ev_profiles(self):
-        self.assertIn("live_ev_profiles", PUBLIC_DATA_DIRS)
+    def test_public_site_uses_current_projection_roots_only(self):
+        self.assertEqual(
+            {"analysis_reports", "postmatch_reports", "postmatch_dashboard", "match_workspace"},
+            DATA_PUBLIC_ROOTS,
+        )
+        self.assertNotIn("live_ev_profiles", DATA_PUBLIC_ROOTS)
 
     def test_confirmed_provider_aliases_are_embedded_without_fuzzy_matching(self):
         profile = {"match": {
