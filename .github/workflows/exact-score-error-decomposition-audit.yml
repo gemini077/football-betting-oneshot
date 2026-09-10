@@ -1,4 +1,4 @@
-name: Exact-score error decomposition audit
+name: Competition-aware exact failure ladder audit
 
 on:
   workflow_dispatch:
@@ -13,31 +13,212 @@ jobs:
   audit:
     runs-on: ubuntu-latest
     steps:
-      - name: Check out PRED-TRUST-2 pinned repository state
+      - name: Check out pinned current evidence state
         uses: actions/checkout@v4
         with:
-          ref: 5a1c50210ade07b5f69855e2d7d54e8ee260c338
+          ref: 933ee98ea4505c4539648af3af370aad8c52ae92
           fetch-depth: 1
 
-      - name: Restore accepted audit script without changing pinned data
+      - name: Restore accepted competition classifier
         run: |
           git fetch --depth=1 origin 2a701443314767822e9fbfd6bd5c1c447ac1fb19
-          git show FETCH_HEAD:scripts/exact_score_error_decomposition_audit.py > scripts/exact_score_error_decomposition_audit.py
+          git show FETCH_HEAD:scripts/exact_score_error_decomposition_audit.py > /tmp/exact_decomp.py
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.10"
+      - name: Build competition-aware L1-L6 audit from accepted PRED-TRUST-1 rows
+        shell: bash
+        run: |
+          python - <<'PY'
+          import importlib.util
+          import json
+          import math
+          from collections import Counter, defaultdict
+          from pathlib import Path
 
-      - name: Generate audit artifact
-        run: python scripts/exact_score_error_decomposition_audit.py --output-dir audit-artifact
+          ROOT = Path('.')
+          spec = importlib.util.spec_from_file_location('exact_decomp', '/tmp/exact_decomp.py')
+          old = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(old)
 
-      - name: Upload summary and report
+          audit_path = ROOT / 'data/prediction_quality/pred_trust_1/audit_2026-08-30.json'
+          audit = json.loads(audit_path.read_text(encoding='utf-8'))
+          rows = list((audit.get('prospective_evaluation') or {}).get('evaluated_rows') or [])
+          if len(rows) != 181:
+              raise SystemExit(f'expected 181 accepted evaluated rows, got {len(rows)}')
+
+          match_ids = {str(row['match_id']) for row in rows}
+          metadata = old._load_competition_metadata(ROOT / 'data/base_prediction_jobs', match_ids)
+          if set(metadata) != match_ids:
+              raise SystemExit('competition metadata coverage mismatch')
+
+          def score_pair(text):
+              a, b = str(text).split('-', 1)
+              return int(a), int(b)
+
+          def outcome(pair):
+              return 'home' if pair[0] > pair[1] else 'draw' if pair[0] == pair[1] else 'away'
+
+          def btts(pair):
+              return pair[0] > 0 and pair[1] > 0
+
+          def over25(pair):
+              return pair[0] + pair[1] > 2
+
+          def poisson_tail(lam, threshold):
+              return 1.0 - sum(math.exp(-lam) * lam**k / math.factorial(k) for k in range(threshold))
+
+          enriched = []
+          missing_predictions = []
+          for row in rows:
+              mid = str(row['match_id'])
+              meta = metadata[mid]
+              competition = meta.get('competition')
+              universe = old.classify_competition(competition)
+              actual = score_pair(row['actual_score'])
+              top1 = score_pair(row['exact_top1'])
+              top3 = [score_pair(x) for x in row.get('exact_top3') or []]
+              if len(top3) != 3:
+                  raise SystemExit(f'expected Top3 for {row["prediction_id"]}')
+
+              predicted_outcome = str(row['predicted_outcome'])
+              actual_outcome = str(row['actual_outcome'])
+              pred_over = float(row['over_2_5_probability']) >= 0.5
+              actual_over = bool(row['over_2_5_actual'])
+              pred_btts = float(row['btts_probability']) >= 0.5
+              actual_btts = bool(row['btts_actual'])
+
+              if top1 == actual:
+                  failure = 'HIT_TOP1'
+              elif predicted_outcome != actual_outcome:
+                  failure = 'L1_RESULT_BRANCH'
+              elif pred_over != actual_over:
+                  failure = 'L2_GOAL_ENVIRONMENT'
+              elif pred_btts != actual_btts:
+                  failure = 'L3_BTTS_CLEAN_SHEET'
+              elif actual in top3:
+                  failure = 'L6_TOP1_SELECTOR'
+              else:
+                  structurally_compatible = any(
+                      outcome(candidate) == actual_outcome
+                      and over25(candidate) == actual_over
+                      and btts(candidate) == actual_btts
+                      for candidate in top3
+                  )
+                  failure = 'L4_MARGIN_TAIL' if structurally_compatible else 'L5_CANDIDATE_SET'
+
+              pred_path = ROOT / 'data/model_governance/predictions' / f'{row["prediction_id"]}.json'
+              if not pred_path.is_file():
+                  missing_predictions.append(str(row['prediction_id']))
+                  lam_h = lam_a = None
+              else:
+                  pred = json.loads(pred_path.read_text(encoding='utf-8'))
+                  if str(pred.get('prediction_id')) != str(row['prediction_id']) or str(pred.get('match_key')) != str(row['match_key']):
+                      raise SystemExit(f'prediction identity mismatch for {row["prediction_id"]}')
+                  lam_h = float(pred['lambda_home'])
+                  lam_a = float(pred['lambda_away'])
+
+              enriched.append({
+                  'prediction_id': str(row['prediction_id']),
+                  'match_id': mid,
+                  'match_key': str(row['match_key']),
+                  'competition': competition,
+                  'universe': universe,
+                  'actual_score': row['actual_score'],
+                  'top1': row['exact_top1'],
+                  'top3': row['exact_top3'],
+                  'failure': failure,
+                  'one_x_two_correct': predicted_outcome == actual_outcome,
+                  'ou25_correct': pred_over == actual_over,
+                  'btts_correct': pred_btts == actual_btts,
+                  'top1_hit': top1 == actual,
+                  'top3_hit': actual in top3,
+                  'actual_total': actual[0] + actual[1],
+                  'lambda_home': lam_h,
+                  'lambda_away': lam_a,
+              })
+
+          if missing_predictions:
+              raise SystemExit(f'missing immutable prediction files: {missing_predictions[:5]} count={len(missing_predictions)}')
+
+          def summarize(group):
+              n = len(group)
+              failure_counts = Counter(r['failure'] for r in group)
+              return {
+                  'n': n,
+                  'top1_hit_rate': sum(r['top1_hit'] for r in group) / n,
+                  'top3_hit_rate': sum(r['top3_hit'] for r in group) / n,
+                  'one_x_two_accuracy': sum(r['one_x_two_correct'] for r in group) / n,
+                  'ou25_accuracy': sum(r['ou25_correct'] for r in group) / n,
+                  'btts_accuracy': sum(r['btts_correct'] for r in group) / n,
+                  'actual_mean_goals': sum(r['actual_total'] for r in group) / n,
+                  'predicted_mean_goals': sum(r['lambda_home'] + r['lambda_away'] for r in group) / n,
+                  'mean_goal_bias_predicted_minus_actual': (
+                      sum((r['lambda_home'] + r['lambda_away']) - r['actual_total'] for r in group) / n
+                  ),
+                  'actual_ge4_rate': sum(r['actual_total'] >= 4 for r in group) / n,
+                  'predicted_ge4_mean_probability': sum(poisson_tail(r['lambda_home'] + r['lambda_away'], 4) for r in group) / n,
+                  'actual_ge5_rate': sum(r['actual_total'] >= 5 for r in group) / n,
+                  'predicted_ge5_mean_probability': sum(poisson_tail(r['lambda_home'] + r['lambda_away'], 5) for r in group) / n,
+                  'actual_ge6_rate': sum(r['actual_total'] >= 6 for r in group) / n,
+                  'predicted_ge6_mean_probability': sum(poisson_tail(r['lambda_home'] + r['lambda_away'], 6) for r in group) / n,
+                  'failure_counts': dict(sorted(failure_counts.items())),
+                  'failure_rates': {k: v / n for k, v in sorted(failure_counts.items())},
+                  'top1_score_counts': dict(sorted(Counter(r['top1'] for r in group).items())),
+                  'actual_score_counts_top10': Counter(r['actual_score'] for r in group).most_common(10),
+              }
+
+          by_universe = defaultdict(list)
+          by_competition = defaultdict(list)
+          for row in enriched:
+              by_universe[row['universe']].append(row)
+              by_competition[str(row['competition'] or 'UNKNOWN')].append(row)
+
+          output = {
+              'schema_version': 'competition_exact_failure_ladder_r6.v1',
+              'source': {
+                  'repo_pin': '933ee98ea4505c4539648af3af370aad8c52ae92',
+                  'accepted_evaluation': str(audit_path),
+                  'accepted_evaluation_generated_at': audit.get('generated_at'),
+                  'competition_classifier_source_commit': '2a701443314767822e9fbfd6bd5c1c447ac1fb19',
+                  'result_scope': 'regulation_90m_plus_stoppage',
+              },
+              'limits': {
+                  'L0': 'not retrospectively identifiable from broad competition labels alone',
+                  'L7': 'not retrospectively identifiable without a predeclared abstention rule',
+                  'L2': 'proxied by the predeclared O/U 2.5 branch; not a full goal-environment taxonomy',
+                  'L4': 'diagnostic: aggregate result/O-U/BTTS branches correct, actual not Top3, but a Top3 candidate shares actual result/O-U/BTTS structure',
+                  'L5': 'diagnostic: aggregate result/O-U/BTTS branches correct, actual not Top3, and no Top3 candidate shares all three structural branches',
+                  'no_parameter_tuning': True,
+              },
+              'global': summarize(enriched),
+              'by_universe': {k: summarize(v) for k, v in sorted(by_universe.items())},
+              'by_competition_n_ge_5': {k: summarize(v) for k, v in sorted(by_competition.items()) if len(v) >= 5},
+              'coverage': {k: len(v) for k, v in sorted(by_universe.items())},
+              'rows': enriched,
+          }
+
+          out = Path('audit-artifact-r6')
+          out.mkdir(exist_ok=True)
+          (out / 'summary.json').write_text(json.dumps(output, ensure_ascii=False, indent=2, sort_keys=True) + '\n', encoding='utf-8')
+
+          lines = ['# FBOS Exact Failure Ladder by Competition — R6', '']
+          lines.append(f"Global n={output['global']['n']} | Top1={output['global']['top1_hit_rate']:.1%} | Top3={output['global']['top3_hit_rate']:.1%}")
+          lines += ['', '## By universe', '', '| universe | n | Top1 | Top3 | 1X2 | O/U2.5 | BTTS | pred goals | actual goals | L1 | L2 | L3 | L4 | L5 | L6 |', '|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|']
+          for name, s in output['by_universe'].items():
+              rates = s['failure_rates']
+              lines.append('| {} | {} | {:.1%} | {:.1%} | {:.1%} | {:.1%} | {:.1%} | {:.2f} | {:.2f} | {:.1%} | {:.1%} | {:.1%} | {:.1%} | {:.1%} | {:.1%} |'.format(
+                  name, s['n'], s['top1_hit_rate'], s['top3_hit_rate'], s['one_x_two_accuracy'], s['ou25_accuracy'], s['btts_accuracy'], s['predicted_mean_goals'], s['actual_mean_goals'],
+                  rates.get('L1_RESULT_BRANCH', 0), rates.get('L2_GOAL_ENVIRONMENT', 0), rates.get('L3_BTTS_CLEAN_SHEET', 0), rates.get('L4_MARGIN_TAIL', 0), rates.get('L5_CANDIDATE_SET', 0), rates.get('L6_TOP1_SELECTOR', 0)))
+          lines += ['', '## Limits', '', '- L0 and L7 are intentionally not backfilled from post-match outcomes.', '- L2 is an O/U2.5 proxy, not a full goal-environment model.', '- L4/L5 are structural diagnostics, not causal proof.', '- No Champion or production state was changed.']
+          (out / 'report.md').write_text('\n'.join(lines) + '\n', encoding='utf-8')
+          print(json.dumps({'global': output['global'], 'by_universe': output['by_universe'], 'coverage': output['coverage']}, ensure_ascii=False, sort_keys=True))
+          PY
+
+      - name: Upload research artifact
         uses: actions/upload-artifact@v4
         with:
-          name: exact-score-error-decomposition-audit
+          name: competition-exact-failure-ladder-r6
           path: |
-            audit-artifact/summary.json
-            audit-artifact/report.md
+            audit-artifact-r6/summary.json
+            audit-artifact-r6/report.md
 
-# Isolated research rerun only; never merge this trigger change.
+# Isolated research-only workflow. Never merge this branch change.
