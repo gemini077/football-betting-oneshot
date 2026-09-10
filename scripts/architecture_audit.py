@@ -1266,10 +1266,9 @@ class _DataAccessVisitor(ast.NodeVisitor):
         self.unresolved_io_sites: list[dict[str, Any]] = []
         self._bindings: dict[str, set[str]] = {}
         self._scope_stack: list[str] = []
-        self._class_stack: list[str] = []
 
     def _symbol(self) -> str:
-        return ".".join([*self._class_stack, *self._scope_stack]) or "<module>"
+        return ".".join(self._scope_stack) or "<module>"
 
     def _record(
         self,
@@ -1390,10 +1389,10 @@ class _DataAccessVisitor(ast.NodeVisitor):
 
     def visit_ClassDef(self, node: ast.ClassDef) -> None:  # noqa: N802
         outer = dict(self._bindings)
-        self._class_stack.append(node.name)
+        self._scope_stack.append(node.name)
         for statement in node.body:
             self.visit(statement)
-        self._class_stack.pop()
+        self._scope_stack.pop()
         self._bindings = outer
 
     def visit_Call(self, node: ast.Call) -> None:  # noqa: N802
