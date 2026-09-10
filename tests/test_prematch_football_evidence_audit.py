@@ -9,6 +9,7 @@ import pytest
 
 from scripts.prematch_football_evidence_audit import (
     MAX_REQUESTS,
+    API_BASE_URL,
     ApiFootballClient,
     ProviderResponse,
     RequestBudget,
@@ -174,6 +175,23 @@ def test_exact_identity_success_and_ambiguous_identity_fail_closed(tmp_path: Pat
     assert exact["kickoff_delta_minutes"] == 0.0
     assert ambiguous["status"] == "AMBIGUOUS_MATCH"
     assert "candidate" not in ambiguous
+
+
+def test_production_api_host_is_the_current_api_football_host():
+    assert API_BASE_URL == "https://v3.football.api-sports.io"
+    assert ApiFootballClient("HEADER_ONLY_SECRET").base_url == API_BASE_URL
+
+
+def test_fixture_resolution_uses_utc_date_at_shanghai_midnight_boundary(tmp_path: Path):
+    cohort = _write_cohort(tmp_path, _source_row())
+    client = RecordingClient({"/fixtures": {"response": []}})
+
+    result = run_bounded_audit(cohort, api_key="SECRET", as_of=AS_OF, client=client)
+    fixture_calls = [(path, params) for path, params in client.calls if path == "/fixtures"]
+
+    assert KICKOFF.astimezone(timezone(timedelta(hours=8))).date().isoformat() == "2026-09-11"
+    assert fixture_calls == [("/fixtures", {"date": "2026-09-10"})]
+    assert result["decision"] == "IDENTITY_NOT_READY"
 
 
 def test_matching_does_not_use_fuzzy_or_result_aware_fields(tmp_path: Path):

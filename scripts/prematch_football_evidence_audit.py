@@ -39,7 +39,7 @@ except ImportError:  # package imports used by focused tests
 CONTRACT_VERSION = "prematch_football_evidence_shadow_audit.r1"
 EXISTING_STATE_MEMORY_CONTRACT = "football_state_memory.v1"
 PROVIDER_NAME = "API-Football"
-API_BASE_URL = "https://v3.football.api-sports.com"
+API_BASE_URL = "https://v3.football.api-sports.io"
 API_KEY_ENV = "API_FOOTBALL_KEY"
 MAX_REQUESTS = 80
 MAX_REQUESTS_PER_MINUTE = 10
@@ -604,7 +604,7 @@ class AuditRunner:
     def resolve(self) -> dict[str, dict[str, Any]]:
         by_date: dict[date, list[CanonicalFixture]] = {}
         for target in self.declaration.matches:
-            by_date.setdefault(target.kickoff_at.astimezone(SHANGHAI).date(), []).append(target)
+            by_date.setdefault(target.kickoff_at.astimezone(UTC).date(), []).append(target)
         output = {}
         for calendar_date, targets in sorted(by_date.items()):
             response = self.request("fixture_resolution", "/fixtures", {"date": calendar_date.isoformat()})
