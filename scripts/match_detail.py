@@ -935,13 +935,12 @@ def _render_prematch_analysis(contract: dict[str, Any]) -> str:
     for block in article.get("blocks") or []:
         if not isinstance(block, dict):
             continue
-        title = str(block.get("title") or "").strip()
         claims = [
             item
             for item in block.get("claims") or []
             if isinstance(item, dict) and str(item.get("text") or "").strip()
         ]
-        if not title or not claims:
+        if not claims:
             continue
         claim_html = "".join(
             f'<p class="article-claim" data-article-claim="{_esc(item.get("id"))}">{_esc(item.get("text"))}</p>'
@@ -949,7 +948,7 @@ def _render_prematch_analysis(contract: dict[str, Any]) -> str:
         )
         blocks.append(
             f'<section class="article-block" data-article-block="{_esc(block.get("id"))}">'
-            f"<h3>{_esc(title)}</h3>{claim_html}</section>"
+            f"{claim_html}</section>"
         )
     if not blocks:
         return ""
@@ -1314,10 +1313,10 @@ DETAIL_CSS = r"""
 .detail-page .prematch-analysis-heading { margin-bottom: 3px; }
 .detail-page .prematch-analysis-heading h2 { margin: 3px 0 0; font-size: var(--type-section); letter-spacing: -.025em; }
 .detail-page .prematch-analysis-note { margin: 4px 0 0; color: var(--muted); font-size: var(--type-meta); }
-.detail-page .article-blocks { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 0 18px; }
-.detail-page .article-block { min-width: 0; padding: 10px 0; border-top: 1px solid var(--line); }
-.detail-page .article-block h3 { margin: 0 0 4px; font-size: var(--type-support); }
-.detail-page .article-claim { margin: 0; color: var(--ink); font-size: var(--type-support); line-height: 1.62; overflow-wrap: anywhere; }
+.detail-page .article-blocks { display: block; }
+.detail-page .article-block { min-width: 0; padding: 8px 0; border-top: 1px solid var(--line); }
+.detail-page .article-block:first-child { padding-top: 4px; border-top: 0; }
+.detail-page .article-claim { margin: 0; color: var(--ink); font-size: var(--type-support); line-height: 1.72; overflow-wrap: anywhere; }
 .detail-page .detail-section,
 .detail-page .result-panel,
 .detail-page .status-panel { margin-top: 10px; padding: 13px 0 14px; border-top: 1px solid var(--line-2); border-bottom: 1px solid var(--line); background: transparent; }

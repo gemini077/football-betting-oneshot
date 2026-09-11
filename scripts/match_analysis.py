@@ -32,6 +32,11 @@ try:
 except ImportError:  # pragma: no cover - exercised by the direct CLI path.
     from current_serving_state import resolve_current_job_for_match
 
+try:
+    from .exact_score_serving_policy import exact_score_serving_presentation, exact_score_serving_state
+except ImportError:  # pragma: no cover - exercised by the direct CLI path.
+    from exact_score_serving_policy import exact_score_serving_presentation, exact_score_serving_state
+
 
 ROOT = Path(__file__).resolve().parents[1]
 DATA_ROOT = ROOT / "data"
@@ -590,7 +595,7 @@ def _article_source_ref(contract: dict[str, Any], kind: str) -> str:
     if kind == "market":
         return "official_market_baseline"
     if kind == "serving":
-        return _string(canonical.get("prediction_record")).strip() or "formal_market_projection"
+        return _string(canonical.get("prediction_quality_health")).strip() or "data/prediction_dashboard/latest.json"
     return "current_prematch_authority"
 
 
@@ -702,11 +707,28 @@ def _article_model(contract: dict[str, Any]) -> dict[str, Any]:
 
 
 def _article_exact_state(contract: dict[str, Any]) -> str | None:
-    formal = contract.get("formal_markets") if isinstance(contract.get("formal_markets"), dict) else {}
-    markets = formal.get("markets") if isinstance(formal.get("markets"), dict) else {}
-    exact = markets.get("exact_score") if isinstance(markets.get("exact_score"), dict) else {}
-    state = _string(exact.get("status")).strip().upper()
-    return state or None
+    quality = contract.get("prediction_quality_health")
+    if not isinstance(quality, dict) or not quality:
+        return None
+    return exact_score_serving_state(quality)
+
+
+def _article_exact_provenance(contract: dict[str, Any]) -> list[dict[str, Any]]:
+    quality = contract.get("prediction_quality_health")
+    if not isinstance(quality, dict):
+        return []
+    fields = ("status", "scope", "available", "provenance_status", "lane_serving_authority")
+    return [
+        _article_provenance(
+            contract,
+            kind="serving",
+            field=f"prediction_quality_health.{field}",
+            role="SERVING_STATE",
+            value=quality[field],
+        )
+        for field in fields
+        if field in quality
+    ]
 
 
 def compile_prematch_analysis(contract: dict[str, Any]) -> dict[str, Any]:
@@ -742,9 +764,9 @@ def compile_prematch_analysis(contract: dict[str, Any]) -> dict[str, Any]:
         core_claim = _article_claim(
             "core-1x2-branch",
             (
-                f"当前胜平负最高概率分支为{_ARTICLE_OUTCOME_LABELS[primary_key]}"
+                f"胜平负分布把{_ARTICLE_OUTCOME_LABELS[primary_key]}列为当前最高概率分支"
                 f"（{primary_probability * 100:.1f}%），{comparison}；"
-                "这表示相对占优，不等于确定结果。"
+                "因此当前可下的判断只是相对排序，不是确定结果。"
             ),
             evidence_role="MODEL_OUTPUT",
             provenance=[
@@ -771,7 +793,8 @@ def compile_prematch_analysis(contract: dict[str, Any]) -> dict[str, Any]:
         omitted["core_judgement"] = "INSUFFICIENT_1X2_PROBABILITIES"
 
     form_values = _article_recent_form(payload)
-    form_claims: list[dict[str, Any]] = []
+    form_parts: list[str] = []
+    form_provenance: list[dict[str, Any]] = []
     home_name = _string(identity.get("home")).strip() or "主队"
     away_name = _string(identity.get("away")).strip() or "客队"
     for side, label, venue in (("home", home_name, "主场"), ("away", away_name, "客场")):
@@ -779,26 +802,28 @@ def compile_prematch_analysis(contract: dict[str, Any]) -> dict[str, Any]:
         if entry is None:
             continue
         values, source_kind, field_prefix = entry
-        form_claim = _article_claim(
-            f"recent-form-{side}",
-            (
-                f"{label}{venue}近{values['matches']}场为{values['wins']}胜{values['draws']}平{values['losses']}负，"
-                f"进{values['goals_for']}球、失{values['goals_against']}球。"
-            ),
-            evidence_role="PREMATCH_EVIDENCE",
-            provenance=[
-                _article_provenance(
-                    payload,
-                    kind=source_kind,
-                    field=field_prefix,
-                    role="PREMATCH_EVIDENCE",
-                    value=values,
-                )
-            ],
+        form_parts.append(
+            f"{label}{venue}近{values['matches']}场为{values['wins']}胜{values['draws']}平{values['losses']}负，"
+            f"进{values['goals_for']}球、失{values['goals_against']}球"
         )
-        if form_claim:
-            form_claims.append(form_claim)
-    form_block = _article_block("recent_form", form_claims)
+        form_provenance.append(
+            _article_provenance(
+                payload,
+                kind=source_kind,
+                field=field_prefix,
+                role="PREMATCH_EVIDENCE",
+                value=values,
+            )
+        )
+    form_claim = _article_claim(
+        "recent-form-context",
+        "先看已经记录的两队主客场近况：" + "；".join(form_parts) + "。这些是赛前背景，不单独推出比赛结果。"
+        if form_parts
+        else "",
+        evidence_role="PREMATCH_EVIDENCE",
+        provenance=form_provenance,
+    )
+    form_block = _article_block("recent_form", [form_claim] if form_claim else [])
     if form_block:
         blocks.append(form_block)
     else:
@@ -835,7 +860,7 @@ def compile_prematch_analysis(contract: dict[str, Any]) -> dict[str, Any]:
             )
         btts_claim = _article_claim(
             "goal-environment-btts",
-            "，".join(btts_parts) + "；这里只描述当前分布。",
+            "进球环境的模型分布显示" + "；".join(btts_parts) + "；这里只描述当前分布，不把它解释成确定的比赛进程。",
             evidence_role="MODEL_OUTPUT",
             provenance=btts_refs,
         )
@@ -856,7 +881,7 @@ def compile_prematch_analysis(contract: dict[str, Any]) -> dict[str, Any]:
         goals, probability, source_index = ranked_totals[0]
         total_claim = _article_claim(
             "goal-environment-total",
-            f"总进球分布中最高档为{goals}球（{probability * 100:.1f}%）。",
+            f"同一分布中总进球最集中的档位是{goals}球（{probability * 100:.1f}%），它为后面的比分收敛提供范围参考。",
             evidence_role="MODEL_OUTPUT",
             provenance=[
                 _article_provenance(
@@ -904,9 +929,9 @@ def compile_prematch_analysis(contract: dict[str, Any]) -> dict[str, Any]:
         market_claim = _article_claim(
             "market-alignment-same-time",
             (
-                f"同一时间点市场基线与模型分布可对照：{_ARTICLE_OUTCOME_LABELS[key]}"
+                f"若同一时间市场基线可核验，它与模型分布可以并排看：{_ARTICLE_OUTCOME_LABELS[key]}"
                 f"模型为{model_value * 100:.1f}%，市场为{market_value * 100:.1f}%；"
-                "差异仅表示两种分布不同，不作额外投注判断。"
+                "差异只构成不确定性的一部分，不作额外投注判断。"
             ),
             evidence_role="MARKET_COMPARISON",
             provenance=[
@@ -956,7 +981,7 @@ def compile_prematch_analysis(contract: dict[str, Any]) -> dict[str, Any]:
     if score_items:
         lead_score, lead_probability, lead_index = score_items[0]
         score_parts = [
-            f"当前最高比分候选为{lead_score}"
+            f"把上述相对排序和进球分布合在一起看，比分最集中的候选是{lead_score}"
             + (f"（{lead_probability * 100:.1f}%）" if lead_probability is not None else "")
         ]
         if len(score_items) > 1:
@@ -964,8 +989,8 @@ def compile_prematch_analysis(contract: dict[str, Any]) -> dict[str, Any]:
         scored_items = [item for item in score_items if item[1] is not None]
         if scored_items:
             cumulative = sum(float(item[1]) for item in scored_items)
-            score_parts.append(f"已列前{len(scored_items)}个比分累计{cumulative * 100:.1f}%")
-        score_parts.append("单个比分只代表分布中的一个候选，不等于确定结果")
+            score_parts.append(f"已列前{len(scored_items)}个比分累计覆盖{cumulative * 100:.1f}%")
+        score_parts.append("单个比分只代表分布中的一个候选，最终仍应保留其他结果分支")
         score_provenance = [
             _article_provenance(
                 payload,
@@ -977,22 +1002,10 @@ def compile_prematch_analysis(contract: dict[str, Any]) -> dict[str, Any]:
             for score, probability, index in score_items
         ]
         exact_state = _article_exact_state(payload)
-        exact_labels = {
-            "AVAILABLE": "当前可展示",
-            "DEGRADED": "当前降级",
-            "UNAVAILABLE": "当前不可展示",
-        }
-        if exact_state in exact_labels:
-            score_parts.append(f"精确比分服务{exact_labels[exact_state]}。")
-            score_provenance.append(
-                _article_provenance(
-                    payload,
-                    kind="serving",
-                    field="formal_markets.markets.exact_score.status",
-                    role="SERVING_STATE",
-                    value=exact_state,
-                )
-            )
+        if exact_state:
+            exact_presentation = exact_score_serving_presentation(payload.get("prediction_quality_health"))
+            score_parts.append(f"{exact_presentation['label']}。{exact_presentation['note']}".strip("。"))
+            score_provenance.extend(_article_exact_provenance(payload))
         score_claim = _article_claim(
             "score-convergence-top-near",
             "；".join(score_parts) + "。",
@@ -1013,9 +1026,9 @@ def compile_prematch_analysis(contract: dict[str, Any]) -> dict[str, Any]:
         uncertainty_claim = _article_claim(
             "uncertainty-counterexample",
             (
-                f"需要保留的对立分支是{_ARTICLE_OUTCOME_LABELS[runner_key]}（{runner_probability * 100:.1f}%），"
-                f"与最高分支相差{(primary_probability - runner_probability) * 100:.1f}个百分点；"
-                "因此只保留相对排序，不作确定性结论。"
+                f"不过，反例仍然存在：{_ARTICLE_OUTCOME_LABELS[runner_key]}仍有{runner_probability * 100:.1f}%的分布，"
+                f"与最高分支只相差{(primary_probability - runner_probability) * 100:.1f}个百分点；"
+                "所以这份赛前判断需要保留不确定性，不作确定性结论。"
             ),
             evidence_role="UNCERTAINTY",
             provenance=[
@@ -1064,7 +1077,7 @@ def compile_prematch_analysis(contract: dict[str, Any]) -> dict[str, Any]:
     if coach_parts:
         coach_claim = _article_claim(
             "context-coach",
-            "；".join(coach_parts) + "；仅作为赛前背景记录，不推导比赛因果。",
+            "另外，赛前背景记录显示" + "；".join(coach_parts) + "；这些信息仅作背景，不推导比赛因果。",
             evidence_role="CONTEXT_ONLY",
             provenance=coach_refs,
         )
@@ -1074,7 +1087,7 @@ def compile_prematch_analysis(contract: dict[str, Any]) -> dict[str, Any]:
     if referee:
         referee_claim = _article_claim(
             "context-referee",
-            f"裁判记录为{referee}；仅作为赛前背景记录，不推导比赛因果。",
+            f"同时，裁判记录为{referee}；这些信息仅作背景，不推导比赛因果。",
             evidence_role="CONTEXT_ONLY",
             provenance=[
                 _article_provenance(
@@ -1093,6 +1106,17 @@ def compile_prematch_analysis(contract: dict[str, Any]) -> dict[str, Any]:
         blocks.append(context_block)
     else:
         omitted["context"] = "COACH_OR_REFEREE_UNAVAILABLE"
+
+    narrative_order = {
+        "recent_form": 0,
+        "context": 1,
+        "goal_environment": 2,
+        "core_judgement": 3,
+        "market_alignment": 4,
+        "uncertainty": 5,
+        "score_convergence": 6,
+    }
+    blocks.sort(key=lambda item: narrative_order.get(item.get("id"), len(narrative_order)))
 
     available_ids = [block["id"] for block in blocks]
     coverage = {

@@ -331,8 +331,8 @@ def _write_fixture_pages(site_root: Path, payload: dict[str, Any], current: dict
         current,
         business_date,
     )
-    current_contract["analysis_article"] = compile_prematch_analysis(current_contract)
     current_contract["prediction_quality_health"] = payload.get("prediction_quality_health") or {}
+    current_contract["analysis_article"] = compile_prematch_analysis(current_contract)
     pages["detail-current-frozen.html"] = render_match_detail(current_contract)
 
     no_previous_contract = copy.deepcopy(current_contract)

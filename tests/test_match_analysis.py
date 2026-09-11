@@ -1222,10 +1222,11 @@ def test_prematch_article_is_deterministic_auditable_and_omits_unsupported_field
         second["analysis_article"], ensure_ascii=False, sort_keys=True
     )
     assert article["status"] == "DEGRADED"
-    assert article["coverage"]["available_blocks"][:3] == [
-        "core_judgement",
+    assert article["coverage"]["available_blocks"][:4] == [
         "recent_form",
+        "context",
         "goal_environment",
+        "core_judgement",
     ]
     assert "market_alignment" in article["coverage"]["omitted_blocks"]
     for block in article["blocks"]:
@@ -1247,6 +1248,13 @@ def test_prematch_article_is_deterministic_auditable_and_omits_unsupported_field
     probability_position = html.index('class="probability-section')
     assert analysis_position < article_position < probability_position
     assert "\u8d5b\u524d\u5206\u6790" in html
+    article_html = html[article_position:probability_position]
+    article_end = article_html.index('id="evidence"')
+    article_html = article_html[:article_end]
+    assert "\u5148\u770b\u5df2\u7ecf\u8bb0\u5f55\u7684\u4e24\u961f\u4e3b\u5ba2\u573a\u8fd1\u51b5" in article_html
+    assert "\u4e0d\u8fc7\uff0c\u53cd\u4f8b\u4ecd\u7136\u5b58\u5728" in article_html
+    assert "\u628a\u4e0a\u8ff0\u76f8\u5bf9\u6392\u5e8f\u548c\u8fdb\u7403\u5206\u5e03\u5408\u5728\u4e00\u8d77\u770b" in article_html
+    assert "<h3" not in article_html
 
 
 def test_prematch_article_market_disagreement_is_neutral_and_exact_state_is_explicit(tmp_path):
@@ -1256,8 +1264,12 @@ def test_prematch_article_market_disagreement_is_neutral_and_exact_state_is_expl
         "model_probabilities": {"home": 0.60, "draw": 0.20, "away": 0.20},
         "market_probabilities": {"home": 0.40, "draw": 0.30, "away": 0.30},
     }
-    contract["formal_markets"] = {
-        "markets": {"exact_score": {"status": "DEGRADED"}}
+    contract["formal_markets"] = {"markets": {"exact_score": {"status": "AVAILABLE"}}}
+    contract["prediction_quality_health"] = {
+        "status": "HEALTHY",
+        "scope": "current_serving",
+        "available": True,
+        "provenance_status": "MATCHED",
     }
 
     article = compile_prematch_analysis(contract)
@@ -1267,8 +1279,36 @@ def test_prematch_article_market_disagreement_is_neutral_and_exact_state_is_expl
     assert "\u4f18\u52bf" not in market_text
     score_block = next(item for item in article["blocks"] if item["id"] == "score_convergence")
     score_text = json.dumps(score_block, ensure_ascii=False)
-    assert "\u5f53\u524d\u964d\u7ea7" in score_text
-    assert "\u4e0d\u7b49\u4e8e\u786e\u5b9a\u7ed3\u679c" in score_text
+    assert "\u8d28\u91cf\u964d\u7ea7" in score_text
+    assert "\u4ec5\u4f9b\u89c2\u5bdf" in score_text
+    assert "formal_markets.markets.exact_score.status" not in score_text
+    assert "prediction_quality_health.status" in score_text
+    assert "\u6700\u7ec8\u4ecd\u5e94\u4fdd\u7559\u5176\u4ed6\u7ed3\u679c\u5206\u652f" in score_text
+
+
+def test_prematch_article_uses_current_production_exact_serving_quality(tmp_path):
+    production_dashboard = json.loads(
+        (ROOT / "data" / "prediction_dashboard" / "latest.json").read_text(encoding="utf-8")
+    )
+    quality = production_dashboard["prediction_quality_health"]
+    assert quality["status"] == "HEALTHY"
+    assert quality["scope"] == "current_serving"
+    assert quality["available"] is True
+    assert quality["provenance_status"] == "MATCHED"
+    assert "lane_serving_authority" not in quality
+
+    contract = assemble(roots(tmp_path))
+    contract["prediction_quality_health"] = quality
+    contract["formal_markets"] = {"markets": {"exact_score": {"status": "AVAILABLE"}}}
+
+    article = compile_prematch_analysis(contract)
+    score_block = next(item for item in article["blocks"] if item["id"] == "score_convergence")
+    score_text = json.dumps(score_block, ensure_ascii=False)
+
+    assert "\u8d28\u91cf\u964d\u7ea7" in score_text
+    assert "\u4ec5\u4f9b\u89c2\u5bdf" in score_text
+    assert "prediction_quality_health.status" in score_text
+    assert "formal_markets.markets.exact_score.status" not in score_text
 
 
 def test_prematch_article_never_reuses_legacy_postmatch_prose(tmp_path):

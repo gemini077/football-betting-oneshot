@@ -167,6 +167,12 @@ def test_build_renders_compiled_prematch_article_before_probability_lane(tmp_pat
         "unique_score": "1-0",
         "top_scores": [{"score": "1-0", "probability": 0.2}],
     }
+    dashboard["prediction_quality_health"] = {
+        "status": "HEALTHY",
+        "scope": "current_serving",
+        "available": True,
+        "provenance_status": "MATCHED",
+    }
     write_json(dashboard_path, dashboard)
     monkeypatch.setattr(build_public_site, "ROOT", tmp_path)
 
@@ -177,6 +183,8 @@ def test_build_renders_compiled_prematch_article_before_probability_lane(tmp_pat
     probability_position = detail_html.index('class="probability-section')
     assert article_position < probability_position
     assert "\u8d5b\u524d\u5206\u6790" in detail_html
+    assert "\u8d28\u91cf\u964d\u7ea7" in detail_html
+    assert "\u4ec5\u4f9b\u89c2\u5bdf" in detail_html
     assert "source_ref" not in detail_html
     assert "prediction_record" not in detail_html
 

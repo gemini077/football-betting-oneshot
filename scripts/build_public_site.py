@@ -440,6 +440,7 @@ def _build_match_pages(data_root: Path, output: Path, match_ids: set[str], dashb
             **contract,
             "prediction_quality_health": dashboard.get("prediction_quality_health"),
         }
+        contract["analysis_article"] = compile_prematch_analysis(contract)
         target = output / "matches" / match_id / "index.html"
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(render_match_detail(contract), encoding="utf-8")
