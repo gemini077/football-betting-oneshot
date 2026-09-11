@@ -992,9 +992,16 @@ def _metric_summary(values: Iterable[Any]) -> dict[str, Any]:
     return {"n": len(numbers), "mean": fmean(numbers) if numbers else None}
 
 
-def aggregate_settlements(
-    settlements: Iterable[Mapping[str, Any]], *, generated_at: datetime | None = None
+def select_unique_settlements(
+    settlements: Iterable[Mapping[str, Any]],
 ) -> dict[str, Any]:
+    """Select one settled Market version per match using the existing order.
+
+    This is the row-producing form of ``aggregate_settlements``.  It keeps the
+    unique-match rule in one place so read-only review paths cannot invent a
+    second version-selection policy.
+    """
+
     groups: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for settlement in settlements:
         if isinstance(settlement, Mapping):
@@ -1023,6 +1030,18 @@ def aggregate_settlements(
             ),
             reverse=True,
         )[0])
+    return {
+        "records_seen": sum(len(rows) for rows in groups.values()),
+        "unique_settlements": unique,
+        "duplicate_match_conflicts": conflicts,
+    }
+
+
+def aggregate_settlements(
+    settlements: Iterable[Mapping[str, Any]], *, generated_at: datetime | None = None
+) -> dict[str, Any]:
+    selection = select_unique_settlements(settlements)
+    unique = selection["unique_settlements"]
     metrics = {
         name: _metric_summary((row.get("metrics") or {}).get(name) for row in unique)
         for name in SUMMARY_METRICS
@@ -1033,9 +1052,9 @@ def aggregate_settlements(
         "prediction_namespace": PURE_MARKET_EXACT_VERSION,
         "result_scope": RESULT_SCOPE,
         "observation_unit": "one football match = one unique match_key",
-        "records_seen": sum(len(rows) for rows in groups.values()),
+        "records_seen": selection["records_seen"],
         "unique_match_count": len(unique),
-        "duplicate_match_conflicts": conflicts,
+        "duplicate_match_conflicts": selection["duplicate_match_conflicts"],
         "metrics": metrics,
         "generated_at": (generated_at or datetime.now(timezone.utc)).isoformat(),
     }
