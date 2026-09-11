@@ -1024,33 +1024,9 @@ def _source_items(contract: dict[str, Any]) -> list[str]:
 
 
 def _render_technical_details(contract: dict[str, Any]) -> str:
-    model = _model(contract)
-    governance = contract.get("governance") or {}
-    status = contract.get("status") or {}
-    source_quality = contract.get("source_quality") or (contract.get("evidence") or {}).get("source_quality") or {}
-    timestamps = contract.get("timestamps") or {}
-    pairs = [
-        ("model_family", model.get("model_family") or governance.get("model_family")),
-        ("release_version", model.get("release_version") or governance.get("release_version")),
-        ("provider", source_quality.get("provider")),
-        ("data_grade", source_quality.get("data_grade") or governance.get("data_grade") or model.get("data_grade")),
-        ("base_input_quality", source_quality.get("base_input_quality") or governance.get("base_input_quality") or model.get("base_input_quality")),
-        ("prediction_id", governance.get("prediction_id") or governance.get("prediction_record_ref")),
-        ("job_id", contract.get("job_id") or governance.get("job_id")),
-        ("selected_prediction_id", contract.get("selected_prediction_id") or governance.get("selected_prediction_id")),
-        ("prediction_frozen_at", timestamps.get("prediction_frozen_at")),
-        ("source_cutoff_at", timestamps.get("source_cutoff_at")),
-        ("input_snapshot_ref", source_quality.get("input_snapshot_ref") or governance.get("input_snapshot_ref")),
-        ("status_code", status.get("code")),
-    ]
-    rows = []
-    for key, value in pairs:
-        if value is None or value == "":
-            continue
-        rows.append(f'<div class="technical-row"><span>{_esc(key)}</span><code>{_esc(value)}</code></div>')
-    if not rows:
-        return ""
-    return '<details class="technical-details"><summary>\u6280\u672f\u8be6\u60c5</summary><div class="technical-list">' + "".join(rows) + "</div></details>"
+    """Keep engineering and governance metadata out of public Match Detail HTML."""
+    del contract
+    return ""
 
 
 def _render_trust(contract: dict[str, Any]) -> str:

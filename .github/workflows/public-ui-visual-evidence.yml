@@ -73,6 +73,50 @@ jobs:
       - name: Build temporary public site
         run: python scripts/build_public_site.py --output site
 
+      - name: Scan generated Match Detail HTML for #274 leakage
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          pages = sorted(Path("site/matches").glob("*/index.html"))
+          forbidden = (
+              "model_family",
+              "release_version",
+              "data_grade",
+              "base_input_quality",
+              "status_code",
+              "FROZEN",
+              "PRESENT",
+              "PARSE_UNCERTAIN",
+              "prediction_id",
+              "selected_prediction_id",
+              "job_id",
+              "input_snapshot_ref",
+              '<details class="technical-details">',
+          )
+          leaks = {}
+          for page in pages:
+              html = page.read_text(encoding="utf-8")
+              found = [token for token in forbidden if token in html]
+              if found:
+                  leaks[str(page)] = found
+          report = {
+              "status": "PASS" if len(pages) == 12 and not leaks else "FAIL",
+              "page_count": len(pages),
+              "scanned_pages": [str(page) for page in pages],
+              "forbidden_tokens": list(forbidden),
+              "leaks": leaks,
+          }
+          output = Path("visual-evidence/match-detail-html-leakage-scan.json")
+          output.parent.mkdir(parents=True, exist_ok=True)
+          output.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+          if report["status"] != "PASS":
+              print(json.dumps(report, ensure_ascii=False, indent=2))
+              raise SystemExit("Generated Match Detail HTML leakage scan failed")
+          print("12/12 Match Detail HTML leakage scan: PASS")
+          PY
+
       - name: Capture Chromium evidence
         run: python scripts/capture_public_ui_evidence.py --site-root site --output-dir visual-evidence
 

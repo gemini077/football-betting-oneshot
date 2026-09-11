@@ -1105,9 +1105,6 @@ def test_trust_title_changes_when_only_freeze_and_cutoff_are_visible(tmp_path):
 def test_detail_renderer_uses_user_facing_terms_and_hides_internal_metadata(tmp_path):
     html = render_match_detail(assemble(roots(tmp_path, pilot=True)))
 
-    technical_start = html.index('<details class="technical-details">')
-    primary_html = html[:technical_start]
-    technical_html = html[technical_start:]
     for forbidden in (
         "Analysis Contract",
         "analysis_contract_version",
@@ -1121,14 +1118,15 @@ def test_detail_renderer_uses_user_facing_terms_and_hides_internal_metadata(tmp_
         "Layer 1",
         "Layer 2",
         "Layer 3",
-    ):
-        assert forbidden not in primary_html
-    for technical_value in (
-        "recent_form_market_calibrated_poisson_v2",
-        "prediction_id",
+        "model_family",
+        "release_version",
+        "data_grade",
+        "base_input_quality",
         "status_code",
+        "FROZEN",
+        '<details class="technical-details">',
     ):
-        assert technical_value in technical_html
+        assert forbidden not in html
 
     for required in (
         "\u80dc\u5e73\u8d1f\u6982\u7387",
@@ -1136,11 +1134,48 @@ def test_detail_renderer_uses_user_facing_terms_and_hides_internal_metadata(tmp_
         "\u8fdb\u7403\u5206\u5e03",
         "\u8d5b\u524d\u4f9d\u636e",
         "\u6570\u636e\u6765\u6e90",
-        "\u6280\u672f\u8be6\u60c5",
         "\u8d5b\u524d\u8bb0\u5f55",
         "\u6982\u7387\u4ec5\u4f9b\u89c2\u5bdf",
     ):
         assert required in html
+    assert 'id="data-method"' in html
+
+
+def test_generated_match_detail_html_does_not_expose_issue_274_internal_fields(tmp_path):
+    contract = assemble(roots(tmp_path, include_formal_markets=True))
+    contract["market"]["model_comparison"] = {
+        "model_probabilities": {"home": 0.59, "draw": 0.245, "away": 0.165},
+        "market_probabilities": {"home": 0.60, "draw": 0.24, "away": 0.16},
+    }
+    html = render_match_detail(contract)
+
+    for forbidden in (
+        "model_family",
+        "release_version",
+        "data_grade",
+        "base_input_quality",
+        "status_code",
+        "FROZEN",
+        "PRESENT",
+        "PARSE_UNCERTAIN",
+        "prediction_id",
+        "selected_prediction_id",
+        "job_id",
+        "input_snapshot_ref",
+        '<details class="technical-details">',
+    ):
+        assert forbidden not in html
+
+    for preserved in (
+        "\u80dc\u5e73\u8d1f\u6982\u7387",
+        "\u6bd4\u5206\u6982\u7387",
+        "\u8fdb\u7403\u5206\u5e03",
+        "\u8d5b\u524d\u4f9d\u636e",
+        'id="score-distribution"',
+        'id="market"',
+        'id="data-method"',
+    ):
+        assert preserved in html
 
 
 def test_technical_details_are_closed_and_user_safe_when_legacy_source_exists(tmp_path):
@@ -1148,9 +1183,20 @@ def test_technical_details_are_closed_and_user_safe_when_legacy_source_exists(tm
     write_json(legacy_root / "legacy.json", legacy_report())
     html = render_match_detail(assemble(roots(tmp_path, legacy_root=legacy_root)))
 
-    assert '<details class="technical-details"><summary>技术详情</summary>' in html
-    assert '<details open class="technical-details">' not in html
-    for forbidden in ("legacy_mapper.v1", "LEGACY_STRUCTURED_ANALYSIS", "mapping_status", "source_artifact"):
+    assert '<details class="technical-details">' not in html
+    assert 'id="data-method"' in html
+    for forbidden in (
+        "legacy_mapper.v1",
+        "LEGACY_STRUCTURED_ANALYSIS",
+        "mapping_status",
+        "source_artifact",
+        "model_family",
+        "release_version",
+        "data_grade",
+        "base_input_quality",
+        "status_code",
+        "FROZEN",
+    ):
         assert forbidden not in html
 
 
