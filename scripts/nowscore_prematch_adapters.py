@@ -23,6 +23,21 @@ from nowscore_prematch_evidence import (
 )
 
 
+_SOURCE_CONTEXT_ATTRIBUTES = {
+    "data-competition": "source_competition",
+    "data-season": "source_season",
+}
+
+
+def _source_context_attributes(attrs: list[tuple[str, str | None]]) -> dict[str, str]:
+    return {
+        field: _safe_text(value, 120)
+        for name, value in attrs
+        if (field := _SOURCE_CONTEXT_ATTRIBUTES.get(name.casefold()))
+        and _safe_text(value, 120)
+    }
+
+
 class _DocumentParser(HTMLParser):
     """Extract headings, table rows, and visible text without retaining HTML."""
 
@@ -69,6 +84,7 @@ class _DocumentParser(HTMLParser):
                     "tag": tag,
                     "depth": len(self.tag_stack),
                     "parts": [],
+                    "source_context": _source_context_attributes(attrs),
                 })
                 break
         if re.fullmatch(r"h[1-6]", tag):
@@ -79,6 +95,7 @@ class _DocumentParser(HTMLParser):
         elif tag == "table":
             self.table = []
             self.table_context = dict(self.last_markers)
+            self.table_context.update(_source_context_attributes(attrs))
         elif tag == "tr" and self.table is not None:
             self.row = []
         elif tag in ("td", "th") and self.row is not None:
@@ -100,6 +117,7 @@ class _DocumentParser(HTMLParser):
             kind = str(marker.get("kind") or "")
             if kind == "fenxibar":
                 self.last_markers = {"fenxibar": value}
+                self.last_markers.update(marker.get("source_context") or {})
             elif kind in {"resultbar", "subbar"}:
                 self.last_markers[kind] = value
         if re.fullmatch(r"h[1-6]", tag) and self.heading_parts is not None:
@@ -963,6 +981,7 @@ def _strict_parse_future_table(record: Mapping[str, Any], target: Mapping[str, A
     team_keys = _strict_target_team_keys(target)
     if not team_keys["home"] or not team_keys["away"] or team_keys["home"] == team_keys["away"]:
         return table_side, [], "FUTURE_TARGET_SIDE_BINDING_AMBIGUOUS", False
+    owner_key = team_keys[table_side]
     fixtures: list[dict[str, Any]] = []
     for row in rows[1:]:
         if not any(_safe_text(cell, 160) for cell in row):
@@ -980,14 +999,14 @@ def _strict_parse_future_table(record: Mapping[str, Any], target: Mapping[str, A
         delta = (when - kickoff).days
         if delta <= 0:
             return table_side, [], "FUTURE_DATE_NOT_AFTER_KICKOFF", False
-        orientations = []
-        if _strict_team_key(home) in team_keys.values():
-            orientations.append("home")
-        if _strict_team_key(away) in team_keys.values():
-            orientations.append("away")
-        if len(orientations) != 1:
-            return table_side, [], "FUTURE_TARGET_ORIENTATION_AMBIGUOUS", False
-        target_orientation = orientations[0]
+        owner_orientations = [
+            orientation
+            for orientation, team in (("home", home), ("away", away))
+            if _strict_team_key(team) == owner_key
+        ]
+        if len(owner_orientations) != 1:
+            return table_side, [], "FUTURE_ROW_TARGET_OWNER_MISMATCH", False
+        target_orientation = owner_orientations[0]
         explicit_interval = None
         if "interval" in indices:
             raw_interval = _safe_text(row[indices["interval"]], 40)
@@ -1161,6 +1180,20 @@ def _strict_standings_field(document: Mapping[str, Any], target: Mapping[str, An
     competition = _safe_text(target.get("competition") or target.get("league"), 120)
     if not competition:
         return "PARSE_UNCERTAIN", None, "STANDINGS_COMPETITION_CONTEXT_MISSING", 0, None
+    season = _safe_text(target.get("season"), 80)
+    if not season:
+        return "PARSE_UNCERTAIN", None, "STANDINGS_SEASON_CONTEXT_MISSING", 0, None
+    expected_context = (_strict_normalize(competition), _strict_normalize(season))
+    for record in records:
+        context = record.get("context") if isinstance(record.get("context"), Mapping) else {}
+        source_context = (
+            _strict_normalize(context.get("source_competition")),
+            _strict_normalize(context.get("source_season")),
+        )
+        if not all(source_context):
+            return "PARSE_UNCERTAIN", None, "STANDINGS_SOURCE_COMPETITION_SEASON_UNPROVEN", 0, None
+        if source_context != expected_context:
+            return "PARSE_UNCERTAIN", None, "STANDINGS_SOURCE_COMPETITION_SEASON_MISMATCH", 0, None
     bound: dict[str, dict[str, Any]] = {}
     empty_sides: set[str] = set()
     for record in records:
@@ -1185,11 +1218,11 @@ def _strict_standings_field(document: Mapping[str, Any], target: Mapping[str, An
         return "PARSE_UNCERTAIN", None, "STANDINGS_TARGET_SIDES_INCOMPLETE", 0, None
     value = {
         "competition": competition,
-        "season": _safe_text(target.get("season"), 80) or None,
-        "competition_binding": "trusted_current_fixture",
-        "season_binding": "same_id_analysis_page_current_context",
+        "season": season,
+        "competition_binding": "analysis_page_source_context_matches_fixture",
+        "season_binding": "analysis_page_source_context_matches_fixture",
         "teams": bound,
-        "source_semantics": "EXPLICIT_STANDINGS_TABLE",
+        "source_semantics": "EXPLICIT_STANDINGS_TABLE_WITH_COMPETITION_SEASON_CONTEXT",
     }
     return "PRESENT", value, "STANDINGS_STRUCTURED_TABLES_PARSED", sum(len(item["splits"]) for item in bound.values()), "EXPLICIT_STANDINGS_TABLE_SIDE_BOUND"
 

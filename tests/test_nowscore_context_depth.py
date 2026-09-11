@@ -19,7 +19,10 @@ TARGET = {
     "identity_away": "AWAY_TEAM",
     "kickoff": "2099-01-02T12:00:00+08:00",
     "competition": "LEAGUE_A",
+    "season": "2028",
 }
+
+STANDINGS_MARKER = '<div class="fenxiBar" data-competition="LEAGUE_A" data-season="2028">\u79ef\u5206\u6392\u540d</div>'
 
 
 def _payload(body):
@@ -77,7 +80,7 @@ def _availability_table(team, kind, rows):
 
 def _valid_analysis_page():
     return (
-        '<div class="fenxiBar">\u79ef\u5206\u6392\u540d</div>'
+        STANDINGS_MARKER
         + _standings_table("HOME_TEAM", 3)
         + _standings_table("AWAY_TEAM", 4)
         + '<div class="fenxiBar">\u672a\u6765\u4e09\u573a</div>'
@@ -110,6 +113,7 @@ def test_field_specific_analysis_page_projection_parses_all_three_targets():
     assert standings["state"] == "PRESENT"
     assert standings["semantic_state"] == "EXPLICIT_STANDINGS_TABLE_SIDE_BOUND"
     assert set(standings["value"]["teams"]) == {"home", "away"}
+    assert standings["value"]["season"] == "2028"
     assert standings["value"]["teams"]["home"]["splits"]["total"]["points"] == 11
     assert standings["value"]["teams"]["away"]["splits"]["total"]["rank"] == 4
 
@@ -162,8 +166,8 @@ def test_standings_wrong_team_abbreviation_duplicate_and_stale_markers_fail_clos
     assert wrong_field["reason_code"] == "STANDINGS_WRONG_TEAM_BINDING"
 
     duplicate = _valid_analysis_page().replace(
-        '<div class="fenxiBar">\u79ef\u5206\u6392\u540d</div>',
-        '<div class="fenxiBar">\u79ef\u5206\u6392\u540d</div>' + _standings_table("HOME_TEAM", 9),
+        STANDINGS_MARKER,
+        STANDINGS_MARKER + _standings_table("HOME_TEAM", 9),
         1,
     )
     duplicate_field = _fields(duplicate)["standings_context"]
@@ -171,11 +175,31 @@ def test_standings_wrong_team_abbreviation_duplicate_and_stale_markers_fail_clos
     assert duplicate_field["reason_code"] == "STANDINGS_DUPLICATE_SIDE_TABLE"
 
     stale = _valid_analysis_page().replace(
-        '<div class="fenxiBar">\u79ef\u5206\u6392\u540d</div>',
-        '<div class="fenxiBar">\u79ef\u5206\u6392\u540d-\u4e0a\u4e00\u8d5b\u5b63</div>',
+        STANDINGS_MARKER,
+        '<div class="fenxiBar" data-competition="LEAGUE_A" data-season="2028">\u79ef\u5206\u6392\u540d-\u4e0a\u4e00\u8d5b\u5b63</div>',
         1,
     )
     assert _fields(stale)["standings_context"]["state"] == "ABSENT"
+
+
+def test_standings_requires_source_backed_competition_and_season_context():
+    unproven = _valid_analysis_page().replace(
+        STANDINGS_MARKER,
+        '<div class="fenxiBar">\u79ef\u5206\u6392\u540d</div>',
+        1,
+    )
+    field = _fields(unproven)["standings_context"]
+    assert field["state"] == "PARSE_UNCERTAIN"
+    assert field["reason_code"] == "STANDINGS_SOURCE_COMPETITION_SEASON_UNPROVEN"
+
+    cup_target = dict(TARGET, competition="CUP_A")
+    domestic_table = _fields(_valid_analysis_page(), cup_target)["standings_context"]
+    assert domestic_table["state"] == "PARSE_UNCERTAIN"
+    assert domestic_table["reason_code"] == "STANDINGS_SOURCE_COMPETITION_SEASON_MISMATCH"
+
+    stale_season = _fields(_valid_analysis_page(), dict(TARGET, season="2027"))["standings_context"]
+    assert stale_season["state"] == "PARSE_UNCERTAIN"
+    assert stale_season["reason_code"] == "STANDINGS_SOURCE_COMPETITION_SEASON_MISMATCH"
 
 
 def test_future_orientation_and_interval_validation_fail_closed():
@@ -200,6 +224,15 @@ def test_future_orientation_and_interval_validation_fail_closed():
     field = _fields(malformed_row)["future_schedule_rest"]
     assert field["state"] == "PARSE_UNCERTAIN"
     assert field["reason_code"] == "FUTURE_ROW_MALFORMED"
+
+    home_table_owned_by_away = _valid_analysis_page().replace(
+        _future_table("HOME_TEAM", "HOME_TEAM", "OPPONENT_A", "3\u5929", "2099-01-05"),
+        _future_table("HOME_TEAM", "OPPONENT_B", "AWAY_TEAM", "3\u5929", "2099-01-05"),
+        1,
+    )
+    field = _fields(home_table_owned_by_away)["future_schedule_rest"]
+    assert field["state"] == "PARSE_UNCERTAIN"
+    assert field["reason_code"] == "FUTURE_ROW_TARGET_OWNER_MISMATCH"
 
     wrong_side = _valid_analysis_page().replace(
         '<div class="resultBar">AWAY_TEAM</div>',
@@ -264,10 +297,11 @@ def test_field_specific_parser_is_deterministic_and_uses_verified_identity_conte
             "home_team_id": 1,
             "away_team_id": 2,
         },
-        {"league": "LEAGUE_A"},
+        {"league": "LEAGUE_A", "season": "2028"},
     )
     assert parser_target["identity_home"] == "HOME_TEAM"
     assert parser_target["competition"] == "LEAGUE_A"
+    assert parser_target["season"] == "2028"
     assert _fields(body, parser_target)["standings_context"]["state"] == "PRESENT"
 
 
