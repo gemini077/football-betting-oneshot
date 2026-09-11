@@ -14,6 +14,7 @@ import html
 import json
 import os
 import re
+import subprocess
 import unicodedata
 import urllib.error
 import urllib.parse
@@ -36,9 +37,11 @@ ALLOWED_ENDPOINTS = (
     "/coachs",
     "/coaches",
     "/fixtures/lineups",
-    "/fixtures/statistics",
+    "/teams/statistics",
+    "/sidelined",
 )
-FIELD_NAMES = ("standings", "injuries", "suspensions", "coach", "lineup", "stats")
+FIELD_NAMES = ("standings", "injuries", "suspensions", "sidelined", "coach", "lineup", "stats")
+MAX_SIDELINED_PLAYERS = 8
 
 
 def _text(value: Any) -> str:
@@ -72,6 +75,13 @@ def _unique(values: Iterable[Any]) -> list[str]:
 
 def _now() -> str:
     return dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
+
+
+def _exact_head() -> str:
+    try:
+        return subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+    except (OSError, subprocess.SubprocessError):
+        return "UNKNOWN"
 
 
 def _timestamp(value: Any) -> dt.datetime | None:
@@ -595,6 +605,7 @@ def bind_fixture_identity(
     api_rows: list[Mapping[str, Any]],
     *,
     registry: EntityRegistry,
+    allow_bootstrap: bool = False,
 ) -> dict[str, Any]:
     """Resolve a fixture without accepting a name-only candidate."""
 
@@ -631,6 +642,7 @@ def bind_fixture_identity(
     away_aliases = {_name_key(value) for value in (alias_values.get("away") or ()) if _name_key(value)} if isinstance(alias_values, Mapping) else set()
     source_home_id = _source_id(source, "home")
     source_away_id = _source_id(source, "away")
+    source_competition_id = _source_competition_id(source)
     home_mapping = registry.lookup_team(source_home_id) if source_home_id else None
     away_mapping = registry.lookup_team(source_away_id) if source_away_id else None
     oriented: list[tuple[dict[str, Any], dict[str, Any]]] = []
@@ -660,8 +672,27 @@ def bind_fixture_identity(
                     "competition": False,
                     "country": False,
                     "roster": False,
+                    "counterpart_pair": False,
+                    "competition_context": False,
+                    "country_context": False,
+                    "roster_context": False,
                     "name_candidate": bool(name_home and name_away),
                 }
+                identity = facts.get("identity_evidence") or facts.get("source_identity") or {}
+                if allow_bootstrap:
+                    evidence["counterpart_pair"] = bool(
+                        source_home_id and source_away_id
+                        and facts["home_team_id"] and facts["away_team_id"]
+                        and name_home and name_away
+                    )
+                    evidence["competition_context"] = bool(
+                        source_competition_id and facts["league_id"] and facts["season"]
+                    )
+                    evidence["country_context"] = bool(facts.get("country"))
+                if isinstance(identity, Mapping):
+                    for key in ("counterpart_pair", "competition_context", "country_context", "roster_context"):
+                        if identity.get(key) is True:
+                            evidence[key] = True
                 oriented.append((facts, evidence))
         if same_kickoff and (reverse_name or reverse_id):
             reverse_oriented += 1
@@ -681,7 +712,7 @@ def bind_fixture_identity(
     source_season = _source_season(source)
     if source_season is not None and facts["season"] != source_season:
         return {"status": "UNBOUND", "reason_code": "SEASON_MISMATCH", "candidate_count": 1}
-    competition_id = _source_competition_id(source)
+    competition_id = source_competition_id
     competition_mapping = registry.lookup_competition(competition_id, facts["season"]) if competition_id and facts["season"] else None
     if competition_mapping and _positive_int(competition_mapping.get("api_league_id")) == facts["league_id"]:
         evidence["competition"] = True
@@ -701,9 +732,17 @@ def bind_fixture_identity(
             _text(source_identity.get("home_team_id")) == _text(source_home_id)
             and _text(source_identity.get("away_team_id")) == _text(source_away_id)
         )
-    # ponytail: require stable team IDs, or all three independent competition
-    # signals; name and kickoff alone remain candidates forever.
-    independently_verified = evidence["team_ids"] or all(evidence[key] for key in ("competition", "country", "roster"))
+    bootstrap_verified = allow_bootstrap and all(
+        evidence[key] for key in ("counterpart_pair", "competition_context", "country_context")
+    )
+    if bootstrap_verified:
+        evidence["competition"] = True
+        evidence["bootstrap_proof"] = "unique_fixture_counterpart_and_competition_country_context"
+    # ponytail: require stable team IDs, or an explicit first-mapping proof;
+    # name and kickoff alone remain candidates forever.
+    independently_verified = evidence["team_ids"] or bootstrap_verified or all(
+        evidence[key] for key in ("competition", "country", "roster")
+    )
     if not independently_verified:
         return {
             "status": "UNBOUND",
@@ -711,7 +750,15 @@ def bind_fixture_identity(
             "candidate_count": 1,
             "evidence": evidence,
         }
-    return _bound_result(facts, evidence, reason="UNIQUE_ORIENTED_FIXTURE_WITH_VERIFIED_EVIDENCE")
+    return _bound_result(
+        facts,
+        evidence,
+        reason=(
+            "UNIQUE_ORIENTED_FIXTURE_WITH_BOOTSTRAP_EVIDENCE"
+            if bootstrap_verified and not evidence["team_ids"]
+            else "UNIQUE_ORIENTED_FIXTURE_WITH_VERIFIED_EVIDENCE"
+        ),
+    )
 
 
 def _field_unavailable(reason: str, *, endpoint: str | None = None, params: Mapping[str, Any] | None = None) -> dict[str, Any]:
@@ -787,12 +834,24 @@ def _project_standings(rows: list[Mapping[str, Any]]) -> list[dict[str, Any]]:
 def _project_injuries(rows: list[Mapping[str, Any]]) -> dict[str, Any]:
     injury_count = 0
     suspension_count = 0
+    players = []
     teams: dict[str, dict[str, Any]] = {}
     for row in rows:
         team = _team_value(row.get("team"))
         key = _text(team.get("team_id")) or "unknown"
         item = teams.setdefault(key, {**team, "injury_count": 0, "suspension_count": 0})
         kind = f"{_text(row.get('type'))} {_text(row.get('reason'))}".casefold()
+        player = row.get("player") if isinstance(row.get("player"), Mapping) else {}
+        fixture = row.get("fixture") if isinstance(row.get("fixture"), Mapping) else {}
+        players.append({
+            "player_id": _positive_int(player.get("id")),
+            "player_name": _clean_name(player.get("name")) or None,
+            "position": _clean_name(player.get("position") or player.get("pos")) or None,
+            **team,
+            "type": _clean_name(row.get("type")) or None,
+            "reason": _clean_name(row.get("reason")) or None,
+            "fixture_id": _positive_int(fixture.get("id")),
+        })
         if "suspend" in kind or "red card" in kind:
             suspension_count += 1
             item["suspension_count"] += 1
@@ -802,6 +861,7 @@ def _project_injuries(rows: list[Mapping[str, Any]]) -> dict[str, Any]:
     return {
         "injury_count": injury_count,
         "suspension_count": suspension_count,
+        "players": sorted(players, key=lambda item: (_text(item.get("player_id")), _text(item.get("player_name")))),
         "teams": sorted(teams.values(), key=lambda item: _text(item.get("team_id"))),
     }
 
@@ -845,19 +905,35 @@ def _project_lineups(rows: list[Mapping[str, Any]]) -> dict[str, Any]:
     return {"published": bool(teams), "team_count": len(teams), "teams": teams}
 
 
+def _project_stat_value(value: Any, depth: int = 0) -> Any:
+    if depth > 4:
+        return None
+    if isinstance(value, Mapping):
+        return {
+            _text(key): _project_stat_value(item, depth + 1)
+            for key, item in value.items()
+            if _text(key) and not _text(key).casefold().endswith(("logo", "url"))
+        }
+    if isinstance(value, list):
+        return [_project_stat_value(item, depth + 1) for item in value[:50]]
+    return value if isinstance(value, (str, int, float, bool)) or value is None else None
+
+
 def _project_stats(rows: list[Mapping[str, Any]]) -> list[dict[str, Any]]:
     projected = []
     for row in rows:
         team = _team_value(row.get("team"))
-        stats = row.get("statistics") if isinstance(row.get("statistics"), list) else []
-        projected.append({
+        result = {
             **team,
-            "statistics": [
-                {"type": _clean_name(item.get("type")) or None, "value": item.get("value") if isinstance(item.get("value"), (str, int, float, bool)) or item.get("value") is None else None}
-                for item in stats
-                if isinstance(item, Mapping)
-            ],
-        })
+            "league_id": _positive_int(row.get("league", {}).get("id")) if isinstance(row.get("league"), Mapping) else None,
+            "season": _positive_int(row.get("league", {}).get("season")) if isinstance(row.get("league"), Mapping) else None,
+        }
+        for key in ("fixtures", "goals", "biggest", "clean_sheet", "failed_to_score", "penalty", "lineups", "form"):
+            if key in row:
+                result[key] = _project_stat_value(row.get(key))
+        if isinstance(row.get("statistics"), list):
+            result["statistics"] = _project_stat_value(row.get("statistics"))
+        projected.append(result)
     return projected
 
 
@@ -883,12 +959,113 @@ def _coverage_projected_field(
     return _projected_field(client.get(endpoint, params), endpoint, params, projector)
 
 
+def _project_sidelined(rows: list[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    projected = []
+    for row in rows:
+        player = row.get("player") if isinstance(row.get("player"), Mapping) else {}
+        history = row.get("sidelined") if isinstance(row.get("sidelined"), list) else []
+        for item in history:
+            if not isinstance(item, Mapping):
+                continue
+            projected.append({
+                "player_id": _positive_int(player.get("id")),
+                "player_name": _clean_name(player.get("name")) or None,
+                "type": _clean_name(item.get("type")) or None,
+                "reason": _clean_name(item.get("reason")) or None,
+                "start": _text(item.get("start")) or None,
+                "end": _text(item.get("end")) or None,
+            })
+    return projected
+
+
+def _sidelined_field(
+    client: ApiFootballSharedClient,
+    injuries: Mapping[str, Any],
+) -> dict[str, Any]:
+    if injuries.get("state") == "UNSUPPORTED":
+        return {"state": "UNSUPPORTED", "reason_code": "INJURY_COVERAGE_FLAG_FALSE", "value": None, "provenance": {"source": "injuries_coverage"}}
+    if injuries.get("state") == "UNAVAILABLE":
+        return _field_unavailable(_text(injuries.get("reason_code")) or "INJURY_COVERAGE_UNAVAILABLE")
+    players = injuries.get("value", {}).get("players", []) if isinstance(injuries.get("value"), Mapping) else []
+    player_ids = sorted({_positive_int(player.get("player_id")) for player in players if isinstance(player, Mapping)} - {None})
+    if not player_ids:
+        return {"state": "EMPTY", "reason_code": "NO_PLAYER_IDS_FOR_SIDELINED", "value": None, "provenance": {"endpoint": "/sidelined", "requested_player_count": 0}}
+    requested = player_ids[:MAX_SIDELINED_PLAYERS]
+    rows: list[Mapping[str, Any]] = []
+    errors = []
+    for player_id in requested:
+        result = client.get("/sidelined", {"player": player_id})
+        response_rows, error = _response_rows(result)
+        rows.extend(response_rows)
+        if error:
+            errors.append(error)
+    value = _project_sidelined(rows)
+    provenance = {
+        "endpoint": "/sidelined",
+        "requested_player_ids": requested,
+        "requested_player_count": len(requested),
+        "skipped_player_count": max(0, len(player_ids) - len(requested)),
+        "cache_hits": client.cache_hits,
+        "errors": sorted(set(errors)),
+    }
+    if value:
+        return {"state": "PRESENT", "reason_code": "PROJECTED_FROM_PROVIDER_RESPONSE", "value": value, "provenance": provenance}
+    if errors and not rows:
+        return {"state": "UNAVAILABLE", "reason_code": errors[0], "value": None, "provenance": provenance}
+    return {"state": "EMPTY", "reason_code": "NO_SIDELINED_HISTORY", "value": None, "provenance": provenance}
+
+
+def _team_stats_field(
+    client: ApiFootballSharedClient,
+    coverage: Mapping[str, Any],
+    *,
+    league_id: int | None,
+    season: int | None,
+    team_ids: Iterable[int | None],
+    source_kickoff: dt.datetime | None,
+    as_of: dt.datetime | None,
+) -> dict[str, Any]:
+    flag = _coverage_field(coverage, "statistics")
+    base_params = {"league": league_id, "season": season}
+    if flag is False:
+        return {"state": "UNSUPPORTED", "reason_code": "API_COVERAGE_FLAG_FALSE", "value": None, "provenance": {"endpoint": "/leagues", "params": base_params}}
+    if flag is None:
+        return _field_unavailable("API_COVERAGE_FLAG_UNKNOWN", endpoint="/leagues", params=base_params)
+    if as_of is not None and source_kickoff is not None and as_of >= source_kickoff:
+        return _field_unavailable("PREMATCH_CUTOFF_AFTER_KICKOFF", endpoint="/teams/statistics", params=base_params)
+    rows: list[Mapping[str, Any]] = []
+    errors = []
+    requested = sorted({_positive_int(team_id) for team_id in team_ids} - {None})
+    for team_id in requested:
+        params = {"league": league_id, "season": season, "team": team_id}
+        result = client.get("/teams/statistics", params)
+        response_rows, error = _response_rows(result)
+        rows.extend(response_rows)
+        if error:
+            errors.append(error)
+    provenance = {
+        "endpoint": "/teams/statistics",
+        "league": league_id,
+        "season": season,
+        "team_ids": requested,
+        "prematch_cutoff": as_of.isoformat() if as_of else None,
+        "cache_hits": client.cache_hits,
+        "errors": sorted(set(errors)),
+    }
+    if rows:
+        return {"state": "PRESENT", "reason_code": "PROJECTED_FROM_PROVIDER_RESPONSE", "value": _project_stats(rows), "provenance": provenance}
+    if errors:
+        return {"state": "UNAVAILABLE", "reason_code": errors[0], "value": None, "provenance": provenance}
+    return {"state": "EMPTY", "reason_code": "NO_TEAM_STATISTICS", "value": None, "provenance": provenance}
+
+
 def build_enrichment_snapshot(
     source: Mapping[str, Any],
     binding: Mapping[str, Any],
     client: ApiFootballSharedClient,
     *,
     coverage: Mapping[str, Any],
+    as_of: dt.datetime | str | None = None,
 ) -> dict[str, Any]:
     """Return one sanitized, field-level-provenance snapshot per bound fixture."""
 
@@ -896,6 +1073,8 @@ def build_enrichment_snapshot(
     fixture_id = _positive_int(binding.get("api_fixture_id"))
     league_id = _positive_int(binding.get("api_league_id"))
     season = _positive_int(binding.get("season"))
+    cutoff = as_of if isinstance(as_of, dt.datetime) else _timestamp(as_of)
+    source_kickoff = _timestamp(source.get("kickoff") or source.get("match_kickoff"))
     identity = {
         "nowscore_fixture_id": source_id,
         "api_fixture_id": fixture_id,
@@ -927,10 +1106,20 @@ def build_enrichment_snapshot(
     fields["standings"] = _coverage_projected_field(client, coverage, "standings", "/standings", standings_params, _project_standings)
     injuries = _coverage_projected_field(client, coverage, "injuries", "/injuries", fixture_params, _project_injuries)
     fields["injuries"] = injuries
+    fields["sidelined"] = _sidelined_field(client, injuries)
+    injury_value = injuries.get("value") if isinstance(injuries.get("value"), Mapping) else {}
+    suspension_players = [
+        player for player in injury_value.get("players", [])
+        if isinstance(player, Mapping)
+        and (
+            "suspend" in f"{_text(player.get('type'))} {_text(player.get('reason'))}".casefold()
+            or "red card" in f"{_text(player.get('type'))} {_text(player.get('reason'))}".casefold()
+        )
+    ]
     fields["suspensions"] = {
         "state": injuries["state"],
         "reason_code": injuries["reason_code"],
-        "value": ({"suspension_count": injuries["value"]["suspension_count"]} if injuries.get("value") else None),
+        "value": ({"suspension_count": injury_value.get("suspension_count", 0), "players": suspension_players} if injury_value else None),
         "provenance": dict(injuries["provenance"]),
     }
 
@@ -947,7 +1136,15 @@ def build_enrichment_snapshot(
         fields["coach"] = {"state": "PRESENT", "reason_code": "PROJECTED_FROM_PROVIDER_RESPONSE", "value": _project_coaches(coach_rows), "provenance": {"endpoint": "/coachs", "team_count": len(coach_results), "cache_hits": sum(bool(result.get("cache_hit")) for _, result in coach_results)}}
 
     fields["lineup"] = _coverage_projected_field(client, coverage, "lineups", "/fixtures/lineups", fixture_params, _project_lineups)
-    fields["stats"] = _coverage_projected_field(client, coverage, "statistics", "/fixtures/statistics", fixture_params, _project_stats)
+    fields["stats"] = _team_stats_field(
+        client,
+        coverage,
+        league_id=league_id,
+        season=season,
+        team_ids=(identity.get("api_home_team_id"), identity.get("api_away_team_id")),
+        source_kickoff=source_kickoff,
+        as_of=cutoff,
+    )
     return {
         "snapshot_version": "api_football_fixture_evidence.v1",
         "identity": identity,
@@ -1012,9 +1209,10 @@ def _read_cohort(path: Path) -> dict[str, Any]:
 
 def run_enrichment_cohort(
     *,
-    cohort_path: str | Path,
+    cohort_path: str | Path | None = None,
     api_key: str | None = None,
     as_of: str | dt.datetime | None = None,
+    business_date: str | None = None,
     max_matches: int = 12,
     registry_path: str | Path = DEFAULT_REGISTRY_PATH,
     api_client: ApiFootballSharedClient | None = None,
@@ -1027,16 +1225,25 @@ def run_enrichment_cohort(
         _future_fixture,
         _parse_timestamp,
         build_nowscore_alias_index,
+        discover_natural_cohort,
         extract_nowscore_competition_bridge,
         nowscore_alias_evidence,
     )
     from scripts.nowscore_prematch_evidence import ANALYSIS_PAGE_URL, NowscorePublicClient
 
-    path = Path(cohort_path)
-    cohort = _read_cohort(path)
     cutoff = _parse_timestamp(as_of) if as_of else dt.datetime.now(dt.timezone.utc)
     if cutoff is None:
         raise ValueError(f"invalid as-of timestamp: {as_of}")
+    if cohort_path is None:
+        cohort, selected_path = discover_natural_cohort(
+            cohort_path=None,
+            business_date=business_date,
+            as_of=as_of,
+        )
+        path = Path(selected_path)
+    else:
+        path = Path(cohort_path)
+        cohort = _read_cohort(path)
     selected = [fixture for fixture in cohort["fixtures"] if isinstance(fixture, Mapping) and _future_fixture(fixture, cutoff)][: max(0, min(int(max_matches), 20))]
     if alias_rows is None:
         alias_rows, alias_error = _fetch_nowscore_alias_rows() if selected else ([], None)
@@ -1074,7 +1281,13 @@ def run_enrichment_cohort(
         if source_date in date_errors:
             record["binding"] = {"status": "UNBOUND", "reason_code": date_errors[source_date]}
         else:
-            record["binding"] = bind_fixture_identity(source, alias, date_rows[source_date], registry=registry)
+            record["binding"] = bind_fixture_identity(
+                source,
+                alias,
+                date_rows[source_date],
+                registry=registry,
+                allow_bootstrap=True,
+            )
         records.append(record)
 
     coverage_cache: dict[tuple[int, int], dict[str, Any]] = {}
@@ -1093,17 +1306,25 @@ def run_enrichment_cohort(
                 league_id=league_id or 0,
                 season=season or 0,
             )
-        snapshots.append(build_enrichment_snapshot(record["source"], binding, client, coverage=coverage_cache[pair]))
+        snapshots.append(
+            build_enrichment_snapshot(
+                record["source"],
+                binding,
+                client,
+                coverage=coverage_cache[pair],
+                as_of=cutoff,
+            )
+        )
         source = record["source"]
         evidence = binding.get("evidence") if isinstance(binding.get("evidence"), Mapping) else {}
-        if evidence.get("team_ids"):
+        if evidence.get("team_ids") or evidence.get("counterpart_pair"):
             home_id = _source_id(source, "home")
             away_id = _source_id(source, "away")
             if home_id and away_id:
                 registry.accept_team(home_id, binding["api_home_team_id"], aliases=(binding.get("api_home_name"),), evidence=("unique_oriented_fixture",))
                 registry.accept_team(away_id, binding["api_away_team_id"], aliases=(binding.get("api_away_name"),), evidence=("unique_oriented_fixture",))
         competition_id = _source_competition_id(source)
-        if competition_id and evidence.get("competition"):
+        if competition_id and (evidence.get("competition") or evidence.get("competition_context")):
             registry.accept_competition(competition_id, binding["api_league_id"], binding["season"], country=binding.get("country"), evidence=("unique_oriented_fixture",))
         registry.accept_fixture(
             source.get("nowscore_id"),
@@ -1128,6 +1349,7 @@ def run_enrichment_cohort(
     report: dict[str, Any] = {
         "contract_version": "multi_source_evidence_spine.v1",
         "run": {
+            "exact_head": _exact_head(),
             "cohort_source_path": _relative(path),
             "business_date": cohort.get("business_date"),
             "as_of": cutoff.isoformat(timespec="seconds"),
@@ -1150,6 +1372,7 @@ def run_enrichment_cohort(
             "binding_reason_counts": dict(sorted(reason_counts.items())),
             "field_state_counts": {name: dict(sorted(counts.items())) for name, counts in field_states.items()},
             "league_season_coverage": list(coverage_cache.values()),
+            "sidelined_player_cap": MAX_SIDELINED_PLAYERS,
         },
         "snapshots": snapshots,
         "boundary_proof": {
@@ -1178,7 +1401,8 @@ def run_enrichment_cohort(
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--cohort-path", default=str(ROOT / "data" / "prediction_universe" / f"{dt.datetime.now().date().isoformat()}.json"))
+    parser.add_argument("--cohort-path")
+    parser.add_argument("--business-date")
     parser.add_argument("--as-of")
     parser.add_argument("--max-matches", type=int, default=12)
     parser.add_argument("--registry", default=str(DEFAULT_REGISTRY_PATH))
@@ -1189,6 +1413,7 @@ def main(argv: list[str] | None = None) -> int:
             cohort_path=args.cohort_path,
             api_key=os.environ.get("API_FOOTBALL_KEY", ""),
             as_of=args.as_of,
+            business_date=args.business_date,
             max_matches=args.max_matches,
             registry_path=args.registry,
         )
@@ -1221,6 +1446,7 @@ __all__ = [
     "DEFAULT_REGISTRY_PATH",
     "EntityRegistry",
     "MAX_API_FOOTBALL_REQUESTS",
+    "MAX_SIDELINED_PLAYERS",
     "bind_fixture_identity",
     "build_enrichment_snapshot",
     "read_league_coverage",

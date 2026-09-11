@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
@@ -92,6 +93,55 @@ def test_orientation_and_season_mismatch_fail_closed():
     result = bind_fixture_identity(SOURCE, ALIASES, [wrong_season], registry=registry)
     assert result["status"] == "UNBOUND"
     assert result["reason_code"] == "SEASON_MISMATCH"
+
+
+def test_empty_registry_bootstrap_requires_counterpart_and_competition_context():
+    registry = EntityRegistry()
+    name_only = bind_fixture_identity(SOURCE, ALIASES, [_api_row()], registry=registry)
+    assert name_only["reason_code"] == "NAME_CANDIDATE_ONLY"
+
+    bound = bind_fixture_identity(
+        SOURCE,
+        ALIASES,
+        [_api_row()],
+        registry=registry,
+        allow_bootstrap=True,
+    )
+    assert bound["status"] == "BOUND"
+    assert bound["evidence"]["counterpart_pair"] is True
+    assert bound["evidence"]["competition_context"] is True
+    assert bound["evidence"]["country_context"] is True
+
+    registry.accept_team("NS-H", bound["api_home_team_id"], aliases=("Home FC",), evidence=("bootstrap",))
+    registry.accept_team("NS-A", bound["api_away_team_id"], aliases=("Away FC",), evidence=("bootstrap",))
+    registry.accept_competition(25, bound["api_league_id"], bound["season"], country="England", evidence=("bootstrap",))
+    registry.accept_fixture(
+        123,
+        bound["api_fixture_id"],
+        nowscore_home_team_id="NS-H",
+        nowscore_away_team_id="NS-A",
+        api_home_team_id=bound["api_home_team_id"],
+        api_away_team_id=bound["api_away_team_id"],
+        nowscore_sclass_id=25,
+        api_league_id=bound["api_league_id"],
+        season=bound["season"],
+        kickoff=bound["kickoff"],
+        evidence=("bootstrap",),
+    )
+    reused = bind_fixture_identity(SOURCE, {}, [_api_row()], registry=registry)
+    assert reused["reason_code"] == "PERSISTED_ACCEPTED_MAPPING"
+
+    weak_row = _api_row()
+    weak_row["league"].pop("country")
+    weak = bind_fixture_identity(
+        SOURCE,
+        ALIASES,
+        [weak_row],
+        registry=EntityRegistry(),
+        allow_bootstrap=True,
+    )
+    assert weak["status"] == "UNBOUND"
+    assert weak["reason_code"] == "NAME_CANDIDATE_ONLY"
 
 
 class _Response:
@@ -242,7 +292,83 @@ def test_snapshot_has_field_provenance_without_raw_provider_body():
     assert snapshot["fields"]["coach"]["state"] == "PRESENT"
     assert snapshot["fields"]["lineup"]["state"] == "PRESENT"
     assert snapshot["fields"]["stats"]["state"] == "PRESENT"
+    assert snapshot["fields"]["injuries"]["value"]["players"][0]["player_name"] == "Player Secret"
     serialized = json.dumps(snapshot, ensure_ascii=False)
-    assert "Player Secret" not in serialized
+    assert "Player Secret" in serialized
     assert "SECRET_TOKEN" not in serialized
     assert "<html" not in serialized.casefold()
+
+
+def test_prematch_stats_use_team_history_and_sidelined_keeps_player_evidence():
+    paths = []
+
+    def opener(request, timeout):
+        parsed = urlparse(request.full_url)
+        paths.append(parsed.path)
+        query = parse_qs(parsed.query)
+        if parsed.path == "/standings":
+            payload = {"errors": [], "response": []}
+        elif parsed.path == "/injuries":
+            payload = {"errors": [], "response": [
+                {"player": {"id": 11, "name": "Player A", "position": "F"}, "team": {"id": 1, "name": "Home FC"}, "fixture": {"id": 456}, "type": "Missing", "reason": "Hamstring"},
+                {"player": {"id": 12, "name": "Player B", "position": "D"}, "team": {"id": 2, "name": "Away FC"}, "fixture": {"id": 456}, "type": "Suspension", "reason": "Red card"},
+            ]}
+        elif parsed.path == "/sidelined":
+            player_id = int(query["player"][0])
+            payload = {"errors": [], "response": [{
+                "player": {"id": player_id, "name": "Player A" if player_id == 11 else "Player B"},
+                "sidelined": [{"type": "Injury", "reason": "Hamstring", "start": "2026-08-01", "end": "2026-08-10"}],
+            }]}
+        elif parsed.path == "/coachs":
+            payload = {"errors": [], "response": [{"coach": {"id": 7, "name": "Coach A", "career": []}}]}
+        elif parsed.path == "/fixtures/lineups":
+            payload = {"errors": [], "response": []}
+        elif parsed.path == "/teams/statistics":
+            payload = {"errors": [], "response": [{
+                "team": {"id": int(query["team"][0]), "name": "Home FC"},
+                "league": {"id": 39, "season": 2026},
+                "fixtures": {"played": {"total": 4}, "wins": {"total": 3}},
+                "goals": {"for": {"total": 8}, "against": {"total": 2}},
+            }]}
+        else:
+            raise AssertionError(f"unexpected endpoint: {parsed.path}")
+        return _Response(payload)
+
+    client = ApiFootballSharedClient("SECRET_TOKEN", opener=opener)
+    binding = {
+        "status": "BOUND",
+        "api_fixture_id": 456,
+        "api_home_team_id": 1,
+        "api_away_team_id": 2,
+        "api_league_id": 39,
+        "season": 2026,
+    }
+    coverage = {
+        "status": "READ",
+        "coverage": {"standings": True, "injuries": True, "lineups": True, "statistics": True},
+    }
+    snapshot = build_enrichment_snapshot(
+        SOURCE,
+        binding,
+        client,
+        coverage=coverage,
+        as_of=datetime.fromisoformat("2026-09-11T08:00:00+08:00"),
+    )
+
+    assert "/fixtures/statistics" not in paths
+    assert paths.count("/teams/statistics") == 2
+    assert snapshot["fields"]["stats"]["state"] == "PRESENT"
+    assert snapshot["fields"]["stats"]["value"][0]["fixtures"]["played"]["total"] == 4
+    assert snapshot["fields"]["injuries"]["value"]["players"][0] == {
+        "player_id": 11,
+        "player_name": "Player A",
+        "position": "F",
+        "team_id": 1,
+        "team_name": "Home FC",
+        "type": "Missing",
+        "reason": "Hamstring",
+        "fixture_id": 456,
+    }
+    assert snapshot["fields"]["suspensions"]["value"]["players"][0]["player_id"] == 12
+    assert snapshot["fields"]["sidelined"]["state"] == "PRESENT"
+    assert snapshot["fields"]["sidelined"]["value"][0]["player_id"] == 11

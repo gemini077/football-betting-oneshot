@@ -1,11 +1,14 @@
-name: Football Context Identity Feasibility
+name: Multi-Source Evidence Spine
 
 on:
   pull_request:
     types: [opened, synchronize, reopened]
     paths:
       - "scripts/football_context_identity_feasibility_audit.py"
+      - "scripts/football_data/multi_source_evidence_spine.py"
       - "tests/test_football_context_identity_feasibility.py"
+      - "tests/test_multi_source_evidence_spine.py"
+      - "artifacts/issue-293-multi-source-evidence-spine.json"
       - ".github/workflows/football-context-identity-feasibility.yml"
   workflow_dispatch:
     inputs:
@@ -26,7 +29,7 @@ permissions:
   contents: read
 
 jobs:
-  exact-head-identity-audit:
+  exact-head-multi-source-spine:
     if: ${{ github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -50,7 +53,7 @@ jobs:
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             while IFS= read -r path; do
               case "$path" in
-                scripts/football_context_identity_feasibility_audit.py|tests/test_football_context_identity_feasibility.py|.github/workflows/football-context-identity-feasibility.yml) ;;
+                scripts/football_context_identity_feasibility_audit.py|scripts/football_data/multi_source_evidence_spine.py|tests/test_football_context_identity_feasibility.py|tests/test_multi_source_evidence_spine.py|artifacts/issue-293-multi-source-evidence-spine.json|.github/workflows/football-context-identity-feasibility.yml) ;;
                 *) echo "out-of-scope file: $path"; exit 1 ;;
               esac
             done < <(git diff --name-only "$BASE_SHA...$EXPECTED_HEAD")
@@ -66,7 +69,7 @@ jobs:
         run: python -m pip install -r requirements.txt
 
       - name: Run focused identity feasibility tests
-        run: python -m pytest -q tests/test_football_context_identity_feasibility.py
+        run: python -m pytest -q tests/test_football_context_identity_feasibility.py tests/test_multi_source_evidence_spine.py
 
       - name: Run accepted Nowscore regression tests
         run: python -m pytest -q tests/test_nowscore_context_depth.py tests/test_nowscore_prematch_evidence.py
@@ -75,65 +78,67 @@ jobs:
         run: |
           python -m py_compile \
             scripts/football_context_identity_feasibility_audit.py \
-            tests/test_football_context_identity_feasibility.py
+            scripts/football_data/multi_source_evidence_spine.py \
+            tests/test_football_context_identity_feasibility.py \
+            tests/test_multi_source_evidence_spine.py
 
-      - name: Run exact-head live natural-cohort audit
+      - name: Run exact-head live natural-cohort shared spine
         shell: bash
         env:
           BUSINESS_DATE: ${{ inputs.business_date || '' }}
           AS_OF: ${{ inputs.as_of || '' }}
           MAX_MATCHES: ${{ inputs.max_matches || '12' }}
         run: |
-          args=(--max-matches "$MAX_MATCHES" --output football-context-identity-feasibility-audit.json)
+          args=(--max-matches "$MAX_MATCHES" --output artifacts/issue-293-multi-source-evidence-spine.json --registry data/provider_entity_registry.json)
           if [[ -n "$BUSINESS_DATE" ]]; then
             args+=(--business-date "$BUSINESS_DATE")
           fi
           if [[ -n "$AS_OF" ]]; then
             args+=(--as-of "$AS_OF")
           fi
-          python scripts/football_context_identity_feasibility_audit.py "${args[@]}" | tee football-context-identity-feasibility-audit.log
+          python -m scripts.football_data.multi_source_evidence_spine "${args[@]}" | tee multi-source-evidence-spine.log
           python - <<'PY'
           import json
           import subprocess
           from pathlib import Path
 
-          report = json.loads(Path("football-context-identity-feasibility-audit.json").read_text(encoding="utf-8"))
+          report = json.loads(Path("artifacts/issue-293-multi-source-evidence-spine.json").read_text(encoding="utf-8"))
           head = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
           if report["run"]["exact_head"] != head:
-              raise SystemExit("audit exact_head does not match checked-out HEAD")
+              raise SystemExit("spine exact_head does not match checked-out HEAD")
           if report["run"]["natural_cohort_count"] <= 0:
               raise SystemExit("natural cohort is empty")
           api = report["api_football"]
-          if api["request_count"] > api["request_cap"] or api["request_cap"] != 25:
+          if api["credential_state"] != "PRESENT":
+              raise SystemExit("API-Football secret was not exercised")
+          if api["request_count"] > api["request_cap"] or api["request_cap"] != 100:
               raise SystemExit("API-Football request cap failed")
-          if set(api["endpoint_counts"]) != {"/fixtures", "/leagues"}:
-              raise SystemExit("unexpected API-Football endpoint")
-          if any(api["forbidden_endpoint_counts"].values()):
-              raise SystemExit("standings/injuries endpoint was called")
-          nowscore = report["nowscore"]["direct_competition_bridge"]
-          api_bridge = api["fixture_bridge"]
-          if sum(nowscore["status_counts"].values()) != report["run"]["natural_cohort_count"]:
-              raise SystemExit("Nowscore bridge counts do not cover the cohort")
-          if sum(api_bridge["status_counts"].values()) != report["run"]["natural_cohort_count"]:
-              raise SystemExit("API fixture bridge counts do not cover the cohort")
+          if "/fixtures/statistics" in api["endpoint_counts"]:
+              raise SystemExit("future fixture statistics endpoint was called")
+          before = report["identity_registry"]["summary_before"]
+          after = report["identity_registry"]["summary_after"]
+          if sum(before.values()) == 0 and sum(after.values()) == 0:
+              raise SystemExit("empty registry bootstrap produced no accepted mapping")
+          if sum(api["binding_counts"].values()) != report["run"]["natural_cohort_count"]:
+              raise SystemExit("binding counts do not cover the cohort")
+          for field in ("standings", "injuries", "suspensions", "sidelined", "coach", "lineup", "stats"):
+              if sum(api["field_state_counts"].get(field, {}).values()) != report["run"]["natural_cohort_count"]:
+                  raise SystemExit(f"field states do not cover cohort: {field}")
           proof = report["boundary_proof"]
           for key in (
               "raw_body_persistence_count",
               "raw_body_output_marker_count",
               "secret_leakage_count",
-              "orientation_swap_attempt_count",
-              "date_only_binding_count",
-              "kickoff_only_binding_count",
-              "standings_endpoint_call_count",
-              "injuries_endpoint_call_count",
+              "name_similarity_acceptance_count",
+              "ambiguous_mapping_acceptance_count",
+              "orientation_swap_acceptance_count",
           ):
               if proof[key] != 0:
                   raise SystemExit(f"boundary proof failed: {key}={proof[key]}")
           for key in (
               "fuzzy_matching_used",
-              "manual_mapping_used",
+              "api_prediction_used",
               "production_enrichment_written",
-              "production_mapping_file_created",
               "article_changed",
               "ui_changed",
               "model_changed",
@@ -144,11 +149,12 @@ jobs:
                   raise SystemExit(f"boundary proof failed: {key}={proof[key]}")
           print(json.dumps({
               "natural_cohort_count": report["run"]["natural_cohort_count"],
-              "nowscore_direct_competition_bridge": nowscore,
-              "api_fixture_bridge": api_bridge,
+              "identity_registry": report["identity_registry"],
+              "binding_counts": api["binding_counts"],
+              "field_state_counts": api["field_state_counts"],
               "api_request_count": api["request_count"],
+              "api_cache_hits": api["cache_hits"],
               "api_endpoint_counts": api["endpoint_counts"],
-              "league_season_coverage_pairs": api["league_season_coverage_pairs"],
               "boundary_proof": proof,
           }, ensure_ascii=False))
           PY
@@ -158,11 +164,11 @@ jobs:
         shell: bash
         run: |
           {
-            echo "## FOOTBALL-CONTEXT-IDENTITY-FEASIBILITY-R1"
+            echo "## MULTI-SOURCE-EVIDENCE-SPINE-R1"
             echo
-            cat football-context-identity-feasibility-audit.log 2>/dev/null || true
+            cat multi-source-evidence-spine.log 2>/dev/null || true
             echo
-            cat football-context-identity-feasibility-audit.json 2>/dev/null || true
+            cat artifacts/issue-293-multi-source-evidence-spine.json 2>/dev/null || true
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Check patch whitespace
@@ -182,9 +188,9 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: football-context-identity-feasibility-${{ github.event.pull_request.number || github.run_id }}
+          name: multi-source-evidence-spine-${{ github.event.pull_request.number || github.run_id }}
           path: |
-            football-context-identity-feasibility-audit.json
-            football-context-identity-feasibility-audit.log
+            artifacts/issue-293-multi-source-evidence-spine.json
+            multi-source-evidence-spine.log
           if-no-files-found: error
           retention-days: 14
