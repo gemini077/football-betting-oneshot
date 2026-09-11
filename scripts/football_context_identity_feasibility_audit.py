@@ -2,8 +2,10 @@
 """Read-only Issue #286 identity feasibility audit.
 
 The audit keeps Nowscore responses transient, extracts only explicit
-competition identifiers from the same ``analysis_page``, and uses API-
-Football only for exact fixture identity plus ``/leagues`` coverage metadata.
+competition identifiers from the same ``analysis_page``, and keeps the
+API-Football compatibility path limited to fixture identity plus
+``/leagues`` coverage metadata.  Issue #293's shared spine is the strict
+runtime path for durable cross-provider mappings.
 """
 
 from __future__ import annotations
@@ -214,6 +216,8 @@ def build_nowscore_alias_index(rows: list[Mapping[str, Any]]) -> dict[int, list[
         }
         index[match_id].append({
             "aliases": aliases,
+            "nowscore_home_team_id": _positive_int(row.get("home_team_id")),
+            "nowscore_away_team_id": _positive_int(row.get("away_team_id")),
             "source_surface": "nowscore_schedule_bf1",
             "evidence_location": "bf1.js:exact_nowscore_id_row",
         })
@@ -255,6 +259,11 @@ def nowscore_alias_evidence(
             "aliases": {"home": (), "away": ()},
         }
     aliases = rows[0].get("aliases") if isinstance(rows[0].get("aliases"), Mapping) else {}
+    source_ids = {
+        key: rows[0].get(key)
+        for key in ("nowscore_home_team_id", "nowscore_away_team_id")
+        if _positive_int(rows[0].get(key)) is not None
+    }
     home = tuple(str(value) for value in aliases.get("home") or () if _clean_text(value))
     away = tuple(str(value) for value in aliases.get("away") or () if _clean_text(value))
     presence = {
@@ -270,6 +279,7 @@ def nowscore_alias_evidence(
             "field_presence": presence,
             "alias_field_count": int(bool(home)) + int(bool(away)),
             "aliases": {"home": home, "away": away},
+            **source_ids,
         }
     return {
         "status": "BOUND",
@@ -279,6 +289,7 @@ def nowscore_alias_evidence(
         "field_presence": presence,
         "alias_field_count": 2,
         "aliases": {"home": home, "away": away},
+        **source_ids,
     }
 
 
@@ -305,6 +316,7 @@ def _api_fixture_facts(row: Mapping[str, Any]) -> dict[str, Any] | None:
         "league_name": _clean_text(league.get("name")) or None,
         "league_type": _clean_text(league.get("type")) or None,
         "season": season,
+        "identity_evidence": row.get("identity_evidence") if isinstance(row.get("identity_evidence"), Mapping) else {},
     }
 
 
@@ -363,6 +375,16 @@ def bind_api_fixture_strict(
             return {
                 "status": "UNBOUND",
                 "reason_code": "API_FIXTURE_LEAGUE_SEASON_MISSING",
+                "candidate_count": 1,
+            }
+        identity = candidate.get("identity_evidence") if isinstance(candidate.get("identity_evidence"), Mapping) else {}
+        independently_verified = bool(identity.get("team_ids") or identity.get("team")) or all(
+            identity.get(key) is True for key in ("competition", "country", "roster")
+        )
+        if not independently_verified:
+            return {
+                "status": "UNBOUND",
+                "reason_code": "TEAM_IDENTITY_UNPROVEN",
                 "candidate_count": 1,
             }
         return {
@@ -453,8 +475,30 @@ class ApiFootballClient:
         if not isinstance(payload, Mapping):
             return {"ok": False, "reason_code": "API_RESPONSE_INVALID"}
         if payload.get("errors"):
-            return {"ok": False, "reason_code": "API_RESPONSE_ERROR"}
-        return {"ok": True, "payload": dict(payload)}
+            errors = payload.get("errors")
+            if isinstance(errors, Mapping):
+                error_keys = sorted(str(key) for key in errors if str(key).strip())
+            elif isinstance(errors, list):
+                error_keys = sorted(
+                    str(item.get("code") or item.get("type"))
+                    for item in errors
+                    if isinstance(item, Mapping) and str(item.get("code") or item.get("type")).strip()
+                )
+            else:
+                error_keys = ["provider_error"]
+            return {
+                "ok": False,
+                "reason_code": "API_PROVIDER_ERROR",
+                "response_state": "PROVIDER_ERROR",
+                "provider_error_keys": error_keys,
+            }
+        if not isinstance(payload.get("response"), list):
+            return {
+                "ok": False,
+                "reason_code": "API_RESPONSE_ENVELOPE_INVALID",
+                "response_state": "INVALID_ENVELOPE",
+            }
+        return {"ok": True, "response_state": "OK", "payload": dict(payload)}
 
 
 def _response_rows(result: Mapping[str, Any]) -> tuple[list[Mapping[str, Any]], str | None]:
@@ -465,6 +509,31 @@ def _response_rows(result: Mapping[str, Any]) -> tuple[list[Mapping[str, Any]], 
     if not isinstance(response, list):
         return [], "API_RESPONSE_MISSING_LIST"
     return [row for row in response if isinstance(row, Mapping)], None
+
+
+def _api_league_season_entries(row: Mapping[str, Any]) -> list[dict[str, Any]]:
+    league = row.get("league") if isinstance(row.get("league"), Mapping) else {}
+    entries: list[dict[str, Any]] = []
+    if _positive_int(league.get("season")) is not None or isinstance(league.get("coverage"), Mapping):
+        entries.append({
+            "id": league.get("id"),
+            "name": league.get("name"),
+            "type": league.get("type"),
+            "season": league.get("season"),
+            "coverage": league.get("coverage"),
+        })
+    seasons = row.get("seasons") if isinstance(row.get("seasons"), list) else league.get("seasons")
+    if isinstance(seasons, list):
+        for season_row in seasons:
+            if isinstance(season_row, Mapping):
+                entries.append({
+                    "id": league.get("id"),
+                    "name": league.get("name"),
+                    "type": league.get("type"),
+                    "season": season_row.get("year") or season_row.get("season"),
+                    "coverage": season_row.get("coverage"),
+                })
+    return entries
 
 
 def read_api_league_coverage(
@@ -485,14 +554,24 @@ def read_api_league_coverage(
             "coverage": {"standings": None, "injuries": None},
         }
     exact = []
+    season_mismatch = False
     for row in rows:
-        league = row.get("league") if isinstance(row.get("league"), Mapping) else {}
-        if _positive_int(league.get("id")) == league_id:
+        for league in _api_league_season_entries(row):
+            if _positive_int(league.get("id")) != league_id:
+                continue
+            row_season = _positive_int(league.get("season"))
+            if row_season is not None and row_season != season:
+                season_mismatch = True
+                continue
             exact.append(league)
     if len(exact) != 1:
         return {
             "status": "AMBIGUOUS" if len(exact) > 1 else "UNAVAILABLE",
-            "reason_code": "API_LEAGUE_SEASON_RESPONSE_AMBIGUOUS" if len(exact) > 1 else "API_LEAGUE_SEASON_NOT_FOUND",
+            "reason_code": (
+                "API_LEAGUE_SEASON_RESPONSE_AMBIGUOUS"
+                if len(exact) > 1
+                else "API_LEAGUE_SEASON_MISMATCH" if season_mismatch else "API_LEAGUE_SEASON_NO_COVERAGE"
+            ),
             "league_id": league_id,
             "season": season,
             "coverage": {"standings": None, "injuries": None},

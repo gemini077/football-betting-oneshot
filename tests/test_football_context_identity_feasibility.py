@@ -41,6 +41,7 @@ def _api_row(
             "type": "League",
             "season": season,
         },
+        "identity_evidence": {"team_ids": True},
     }
 
 
