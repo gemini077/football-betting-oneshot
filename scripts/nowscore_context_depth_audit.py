@@ -371,6 +371,14 @@ def build_audit_report(natural: Mapping[str, Any], *, exact_head: str) -> dict[s
             "selected_fixture_count": len(matches),
             "fields": field_reports,
         },
+        "selected_fixtures": [
+            {
+                "nowscore_id": match.get("nowscore_id"),
+                "status": match.get("status"),
+                "identity_trusted": _identity_eligible(match),
+            }
+            for match in matches
+        ],
         "sanitized_records": _sanitized_records(matches),
         "sanitized_recent_process_records": _sanitized_recent_process_records(matches),
         "request_count": _request_count_proof(matches),

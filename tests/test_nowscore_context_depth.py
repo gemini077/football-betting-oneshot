@@ -482,6 +482,11 @@ def test_recent_process_audit_reports_metric_completeness_and_request_parity():
     }
     report = build_audit_report(natural, exact_head="EXACT_HEAD")
     recent = report["coverage"]["fields"]["recent_process_context"]
+    assert report["selected_fixtures"] == [{
+        "nowscore_id": 123,
+        "status": "OK",
+        "identity_trusted": True,
+    }]
     assert recent["present_count"] == 1
     assert all(item["present_count"] == 1 for item in recent["metric_completeness"].values())
     assert report["request_count"]["actual_request_count"] == len(evidence.SURFACES)
