@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import re
 from collections import Counter
+from datetime import date
 from html.parser import HTMLParser
 from typing import Any, Callable, Mapping
 
@@ -22,6 +23,21 @@ from nowscore_prematch_evidence import (
 )
 
 
+_SOURCE_CONTEXT_ATTRIBUTES = {
+    "data-competition": "source_competition",
+    "data-season": "source_season",
+}
+
+
+def _source_context_attributes(attrs: list[tuple[str, str | None]]) -> dict[str, str]:
+    return {
+        field: _safe_text(value, 120)
+        for name, value in attrs
+        if (field := _SOURCE_CONTEXT_ATTRIBUTES.get(name.casefold()))
+        and _safe_text(value, 120)
+    }
+
+
 class _DocumentParser(HTMLParser):
     """Extract headings, table rows, and visible text without retaining HTML."""
 
@@ -30,13 +46,18 @@ class _DocumentParser(HTMLParser):
         self.text_parts: list[str] = []
         self.headings: list[str] = []
         self.tables: list[list[list[str]]] = []
+        self.table_records: list[dict[str, Any]] = []
         self.sections: list[dict[str, Any]] = []
         self.section: dict[str, Any] | None = None
         self.heading_parts: list[str] | None = None
         self.table: list[list[str]] | None = None
+        self.table_context: dict[str, str] = {}
         self.row: list[str] | None = None
         self.cell_parts: list[str] | None = None
         self.ignore_depth = 0
+        self.tag_stack: list[str] = []
+        self.marker_stack: list[dict[str, Any]] = []
+        self.last_markers: dict[str, str] = {}
 
     def _boundary(self) -> None:
         self.text_parts.append("\n")
@@ -50,6 +71,22 @@ class _DocumentParser(HTMLParser):
             return
         if self.ignore_depth:
             return
+        self.tag_stack.append(tag)
+        class_tokens = {
+            str(value or "").casefold()
+            for key, value in attrs
+            if key.casefold() == "class"
+        }
+        for marker in ("fenxibar", "resultbar", "subbar"):
+            if marker in class_tokens:
+                self.marker_stack.append({
+                    "kind": marker,
+                    "tag": tag,
+                    "depth": len(self.tag_stack),
+                    "parts": [],
+                    "source_context": _source_context_attributes(attrs),
+                })
+                break
         if re.fullmatch(r"h[1-6]", tag):
             self._boundary()
             self.section = {"heading": "", "parts": [], "rows": []}
@@ -57,6 +94,8 @@ class _DocumentParser(HTMLParser):
             self.heading_parts = []
         elif tag == "table":
             self.table = []
+            self.table_context = dict(self.last_markers)
+            self.table_context.update(_source_context_attributes(attrs))
         elif tag == "tr" and self.table is not None:
             self.row = []
         elif tag in ("td", "th") and self.row is not None:
@@ -71,6 +110,16 @@ class _DocumentParser(HTMLParser):
             return
         if self.ignore_depth:
             return
+        depth = len(self.tag_stack)
+        if self.marker_stack and self.marker_stack[-1].get("depth") == depth and self.marker_stack[-1].get("tag") == tag:
+            marker = self.marker_stack.pop()
+            value = _safe_text(" ".join(marker.get("parts") or []), 240)
+            kind = str(marker.get("kind") or "")
+            if kind == "fenxibar":
+                self.last_markers = {"fenxibar": value}
+                self.last_markers.update(marker.get("source_context") or {})
+            elif kind in {"resultbar", "subbar"}:
+                self.last_markers[kind] = value
         if re.fullmatch(r"h[1-6]", tag) and self.heading_parts is not None:
             heading = _safe_text(" ".join(self.heading_parts))
             self.headings.append(heading)
@@ -89,18 +138,31 @@ class _DocumentParser(HTMLParser):
                 self.tables.append(self.table)
                 if self.section is not None:
                     self.section.setdefault("rows", []).extend(self.table)
+            self.table_records.append({
+                "rows": [list(row) for row in self.table],
+                "context": dict(self.table_context),
+            })
             self.table = None
+            self.table_context = {}
+        if self.tag_stack:
+            self.tag_stack.pop()
 
     def handle_data(self, data: str) -> None:
         if self.ignore_depth or not data.strip():
             return
         self.text_parts.append(data)
+        if self.marker_stack:
+            self.marker_stack[-1].setdefault("parts", []).append(data)
         if self.heading_parts is not None:
             self.heading_parts.append(data)
         elif self.cell_parts is not None:
             self.cell_parts.append(data)
         elif self.section is not None:
             self.section.setdefault("parts", []).append(data)
+
+    def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        self.handle_starttag(tag, attrs)
+        self.handle_endtag(tag)
 
 
 def _document(text: str) -> dict[str, Any]:
@@ -127,6 +189,7 @@ def _document(text: str) -> dict[str, Any]:
         "text": _safe_text(" ".join(parser.text_parts), 12000),
         "headings": [_safe_text(value) for value in parser.headings],
         "tables": parser.tables,
+        "table_records": parser.table_records,
         "sections": sections,
     }
 
@@ -454,7 +517,6 @@ def _analysis_data_adapter(payload: SurfacePayload) -> dict[str, Any]:
 SECTION_ALIASES: dict[str, tuple[str, ...]] = {
     "competition_standings_stage": ("standing", "table", "stage", "round", "积分榜", "排名", "阶段", "轮次"),
     "h2h": ("h2h", "head to head", "history meeting", "历史交锋", "交锋", "对赛"),
-    "future_schedule_rest": ("future schedule", "upcoming", "next match", "future", "未来赛程", "下一场", "休息", "rest"),
     "injuries": ("injur", "伤停", "伤病"),
     "suspensions": ("suspension", "suspended", "停赛"),
     "lineup_state": ("lineup", "starting eleven", "starting", "首发", "阵容"),
@@ -518,18 +580,6 @@ def _h2h_builder(sections: list[dict[str, Any]], combined: str) -> tuple[Any, in
         "date_count": len(dates),
         "records": records,
     }, count, bool(records)
-
-
-def _future_builder(sections: list[dict[str, Any]], combined: str) -> tuple[Any, int, bool]:
-    rows = [row for section in sections for row in section.get("rows") or [] if any(row)]
-    dates = [cell for row in rows for cell in row if _date_hits(cell)]
-    rest = re.search(r"(?:rest|休息)\s*(?:hours?|time|时长|时间)?\s*[:：]?\s*(\d+(?:\.\d+)?)", combined, re.I)
-    value: dict[str, Any] = {"future_fixture_count": len(dates)}
-    if dates:
-        value["explicit_schedule_tokens"] = [_safe_text(item, 40) for item in dates[:20]]
-    if rest:
-        value["rest_hours_source"] = float(rest.group(1))
-    return value, len(dates) + (1 if rest else 0), bool(dates or rest)
 
 
 def _availability_status_match(text: str, words: tuple[str, ...]) -> bool:
@@ -702,6 +752,509 @@ def _technical_builder(sections: list[dict[str, Any]], combined: str) -> tuple[A
     return {"stat_count": len(stats), "stats": stats}, len(stats), bool(stats)
 
 
+# Issue #284 deliberately does not use SECTION_ALIASES or the document-text
+# fallback.  These markers and table shapes are the only promotion path for
+# the three same-ID analysis_page fields below.
+_STRICT_STANDINGS_MARKERS = ("\u79ef\u5206\u6392\u540d", "standings")
+_STRICT_FUTURE_MARKERS = ("\u672a\u6765\u4e09\u573a", "future schedule")
+_STRICT_AVAILABILITY_MARKERS = ("\u4f24\u505c\u60c5\u51b5", "injury status")
+_STRICT_STANDINGS_SPLITS = {
+    "total": frozenset(("\u603b", "\u5168\u573a", "total", "overall")),
+    "home": frozenset(("\u4e3b", "\u4e3b\u573a", "home")),
+    "away": frozenset(("\u5ba2", "\u5ba2\u573a", "away")),
+    "recent": frozenset(("\u8fd1", "\u8fd1\u51b5", "recent", "last")),
+}
+_STRICT_STANDINGS_COLUMNS = {
+    "matches": frozenset(("\u8d5b", "\u573a", "mp", "matches")),
+    "wins": frozenset(("\u80dc", "w", "wins")),
+    "draws": frozenset(("\u5e73", "d", "draws")),
+    "losses": frozenset(("\u8d1f", "l", "losses")),
+    "goals_for": frozenset(("\u5f97", "\u8fdb", "gf", "goalsfor")),
+    "goals_against": frozenset(("\u5931", "ga", "goalsagainst")),
+    "goal_difference": frozenset(("\u51c0", "gd", "goaldifference")),
+    "points": frozenset(("\u79ef\u5206", "\u79ef\u5206\u6570", "pts", "points")),
+    "rank": frozenset(("\u6392\u540d", "rank", "ranking", "position")),
+}
+_STRICT_FUTURE_COLUMNS = {
+    "date": frozenset(("\u65f6\u95f4", "date", "time")),
+    "competition": frozenset(("\u8d5b\u4e8b", "competition", "league")),
+    "home": frozenset(("\u4e3b\u961f", "home")),
+    "away": frozenset(("\u5ba2\u961f", "away")),
+    "interval": frozenset(("\u95f4\u9694", "interval", "rest")),
+}
+_STRICT_AVAILABILITY_KINDS = {
+    "injury": frozenset(("\u4f24\u5458", "\u4f24\u75c5", "\u4f24\u505c", "injury", "injuries")),
+    "suspension": frozenset(("\u505c\u8d5b", "suspension", "suspended")),
+}
+_STRICT_EMPTY_MARKERS = frozenset((
+    "no data",
+    "no record",
+    "none",
+    "unavailable",
+    "\u6682\u65e0",
+    "\u6682\u65e0\u6570\u636e",
+    "\u6ca1\u6709\u6570\u636e",
+    "\u65e0\u8bb0\u5f55",
+))
+
+
+def _strict_normalize(value: Any) -> str:
+    return re.sub(r"[\s\u3000]+", "", _safe_text(value, 240)).casefold()
+
+
+def _strict_marker_matches(value: Any, aliases: tuple[str, ...]) -> bool:
+    normalized = _strict_normalize(value)
+    return bool(normalized) and normalized in {_strict_normalize(alias) for alias in aliases}
+
+
+def _strict_team_key(value: Any) -> str:
+    text = _safe_text(value, 160)
+    text = re.sub(
+        r"\s*[\(\uff08]\s*(?:home|away|\u4e3b|\u5ba2)\s*[\)\uff09]\s*$",
+        "",
+        text,
+        flags=re.IGNORECASE,
+    )
+    return re.sub(r"\s+", " ", text).strip().casefold()
+
+
+def _strict_target_team_keys(target: Mapping[str, Any]) -> dict[str, str]:
+    return {
+        "home": _strict_team_key(target.get("identity_home") or target.get("home")),
+        "away": _strict_team_key(target.get("identity_away") or target.get("away")),
+    }
+
+
+def _strict_bound_side(value: Any, target: Mapping[str, Any]) -> tuple[str | None, str | None]:
+    raw = _safe_text(value, 160)
+    if not raw:
+        return None, "SIDE_BINDING_MISSING"
+    keys = _strict_target_team_keys(target)
+    if not keys["home"] or not keys["away"] or keys["home"] == keys["away"]:
+        return None, "TARGET_SIDE_BINDING_AMBIGUOUS"
+    matches = [side for side in ("home", "away") if _strict_team_key(raw) == keys[side]]
+    if len(matches) == 1:
+        return matches[0], None
+    return None, "WRONG_TEAM_BINDING"
+
+
+def _strict_table_records(document: Mapping[str, Any], markers: tuple[str, ...]) -> list[dict[str, Any]]:
+    records = []
+    for record in document.get("table_records") or []:
+        if not isinstance(record, Mapping):
+            continue
+        context = record.get("context") if isinstance(record.get("context"), Mapping) else {}
+        if _strict_marker_matches(context.get("fenxibar"), markers):
+            records.append({
+                "rows": [list(row) for row in record.get("rows") or [] if isinstance(row, list)],
+                "context": dict(context),
+            })
+    return records
+
+
+def _strict_explicit_empty(rows: list[list[str]]) -> bool:
+    markers = {_strict_normalize(marker) for marker in _STRICT_EMPTY_MARKERS}
+    for row in rows:
+        text = _strict_normalize(" ".join(str(cell or "") for cell in row))
+        if any(marker and marker in text for marker in markers):
+            return True
+    return False
+
+
+def _strict_header_indices(row: list[str], columns: Mapping[str, frozenset[str]]) -> dict[str, int] | None:
+    indices: dict[str, int] = {}
+    normalized = [_strict_normalize(cell) for cell in row]
+    for name, aliases in columns.items():
+        matches = [index for index, cell in enumerate(normalized) if cell in aliases]
+        if len(matches) != 1:
+            if name == "interval":
+                continue
+            return None
+        indices[name] = matches[0]
+    return indices
+
+
+def _strict_integer(value: Any) -> int | None:
+    text = _safe_text(value, 40)
+    if not re.fullmatch(r"[-+]?\d+", text):
+        return None
+    try:
+        return int(text)
+    except ValueError:
+        return None
+
+
+def _strict_parse_standings_table(record: Mapping[str, Any], target: Mapping[str, Any]) -> tuple[str | None, dict[str, Any] | None, str | None, bool]:
+    context = record.get("context") if isinstance(record.get("context"), Mapping) else {}
+    side, side_reason = _strict_bound_side(context.get("resultbar"), target)
+    if side_reason:
+        return side, None, "STANDINGS_" + side_reason, False
+    rows = record.get("rows") or []
+    if rows and _strict_explicit_empty(rows) and (
+        len(rows) == 1
+        or all(not any(_safe_text(cell, 160) for cell in row) or _strict_explicit_empty([row]) for row in rows[1:])
+    ):
+        return side, None, None, True
+    if not rows:
+        return side, None, "STANDINGS_TABLE_ROWS_MISSING", False
+    indices = _strict_header_indices(rows[0], _STRICT_STANDINGS_COLUMNS)
+    if indices is None:
+        return side, None, "STANDINGS_HEADER_INCOMPLETE", False
+    split_rows: dict[str, dict[str, int]] = {}
+    recognized = 0
+    for row in rows[1:]:
+        label = _strict_normalize(row[0] if row else "")
+        if not label or _strict_explicit_empty([row]):
+            continue
+        split = next((name for name, aliases in _STRICT_STANDINGS_SPLITS.items() if label in aliases), None)
+        if split is None:
+            continue
+        recognized += 1
+        if split in split_rows or len(row) <= max(indices.values()):
+            return side, None, "STANDINGS_ROW_AMBIGUOUS", False
+        values: dict[str, int] = {}
+        for name, index in indices.items():
+            parsed = _strict_integer(row[index])
+            if parsed is None:
+                return side, None, "STANDINGS_ROW_MALFORMED", False
+            if name != "goal_difference" and parsed < 0:
+                return side, None, "STANDINGS_ROW_NEGATIVE_METRIC", False
+            values[name] = parsed
+        split_rows[split] = values
+    if not recognized or "total" not in split_rows:
+        return side, None, "STANDINGS_SPLIT_ROWS_INCOMPLETE", False
+    return side, {"splits": split_rows}, None, False
+
+
+def _strict_kickoff_date(value: Any) -> date | None:
+    text = _safe_text(value, 80).replace("Z", "+00:00")
+    match = re.match(r"^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})", text)
+    if not match:
+        return None
+    try:
+        return date(int(match.group(1)), int(match.group(2)), int(match.group(3)))
+    except ValueError:
+        return None
+
+
+def _strict_future_date(value: Any) -> date | None:
+    text = _safe_text(value, 80).replace(".", "-").replace("/", "-")
+    match = re.fullmatch(r"(20\d{2}|\d{2})-(\d{1,2})-(\d{1,2})(?:\s+\d{1,2}:\d{2}(?::\d{2})?)?", text)
+    if not match:
+        return None
+    year = int(match.group(1))
+    if year < 100:
+        year += 2000
+    try:
+        return date(year, int(match.group(2)), int(match.group(3)))
+    except ValueError:
+        return None
+
+
+def _strict_interval_days(value: Any) -> int | None:
+    text = _safe_text(value, 40).casefold()
+    match = re.fullmatch(r"(\d+)\s*(?:\u5929|days?|d)", text)
+    if not match:
+        return None
+    return int(match.group(1))
+
+
+def _strict_parse_future_table(record: Mapping[str, Any], target: Mapping[str, Any]) -> tuple[str | None, list[dict[str, Any]], str | None, bool]:
+    context = record.get("context") if isinstance(record.get("context"), Mapping) else {}
+    table_side, side_reason = _strict_bound_side(context.get("resultbar"), target)
+    if side_reason:
+        return table_side, [], "FUTURE_" + side_reason, False
+    rows = record.get("rows") or []
+    if not rows:
+        return table_side, [], "FUTURE_TABLE_ROWS_MISSING", False
+    if rows and _strict_explicit_empty(rows) and (
+        len(rows) == 1
+        or all(not any(_safe_text(cell, 160) for cell in row) or _strict_explicit_empty([row]) for row in rows[1:])
+    ):
+        return table_side, [], None, True
+    indices = _strict_header_indices(rows[0], _STRICT_FUTURE_COLUMNS)
+    if indices is None:
+        return table_side, [], "FUTURE_HEADER_INCOMPLETE", False
+    kickoff = _strict_kickoff_date(target.get("kickoff"))
+    if kickoff is None:
+        return table_side, [], "FUTURE_KICKOFF_CONTEXT_MISSING", False
+    team_keys = _strict_target_team_keys(target)
+    if not team_keys["home"] or not team_keys["away"] or team_keys["home"] == team_keys["away"]:
+        return table_side, [], "FUTURE_TARGET_SIDE_BINDING_AMBIGUOUS", False
+    owner_key = team_keys[table_side]
+    fixtures: list[dict[str, Any]] = []
+    for row in rows[1:]:
+        if not any(_safe_text(cell, 160) for cell in row):
+            continue
+        if _strict_explicit_empty([row]):
+            continue
+        if len(row) <= max(indices.values()):
+            return table_side, [], "FUTURE_ROW_MALFORMED", False
+        when = _strict_future_date(row[indices["date"]])
+        competition = _safe_text(row[indices["competition"]], 120)
+        home = _safe_text(row[indices["home"]], 160)
+        away = _safe_text(row[indices["away"]], 160)
+        if when is None or not competition or not home or not away:
+            return table_side, [], "FUTURE_ROW_MALFORMED", False
+        delta = (when - kickoff).days
+        if delta <= 0:
+            return table_side, [], "FUTURE_DATE_NOT_AFTER_KICKOFF", False
+        owner_orientations = [
+            orientation
+            for orientation, team in (("home", home), ("away", away))
+            if _strict_team_key(team) == owner_key
+        ]
+        if len(owner_orientations) != 1:
+            return table_side, [], "FUTURE_ROW_TARGET_OWNER_MISMATCH", False
+        target_orientation = owner_orientations[0]
+        explicit_interval = None
+        if "interval" in indices:
+            raw_interval = _safe_text(row[indices["interval"]], 40)
+            if raw_interval not in {"", "-", "--"}:
+                explicit_interval = _strict_interval_days(raw_interval)
+                if explicit_interval is None:
+                    return table_side, [], "FUTURE_INTERVAL_MALFORMED", False
+        interval_days = explicit_interval if explicit_interval is not None else delta
+        fixtures.append({
+            "date": when.isoformat(),
+            "competition": competition,
+            "home_team": home,
+            "away_team": away,
+            "target_orientation": target_orientation,
+            "interval_days": interval_days,
+            "interval_source": "source_interval" if explicit_interval is not None else "deterministic_date_interval",
+            "date_delta_days": delta,
+            "interval_consistency": (
+                "source_matches_date_delta"
+                if explicit_interval is not None and explicit_interval == delta
+                else "source_interval_authoritative"
+                if explicit_interval is not None
+                else "deterministic_from_dates"
+            ),
+        })
+    if not fixtures:
+        return table_side, [], "FUTURE_ROWS_MISSING", False
+    return table_side, fixtures, None, False
+
+
+def _strict_availability_kind(value: Any) -> str | None:
+    normalized = _strict_normalize(value)
+    for kind, aliases in _STRICT_AVAILABILITY_KINDS.items():
+        if normalized in aliases:
+            return kind
+    return None
+
+
+def _strict_availability_position(cells: list[str]) -> str | None:
+    text = " ".join(_safe_text(cell, 120) for cell in cells)
+    normalized = text.casefold()
+    if re.search(r"[\(\uff08]\s*(?:\u5b88\u95e8\u5458|\u95e8\u5c06)\s*[\)\uff09]", text):
+        return "goalkeeper"
+    if re.search(r"[\(\uff08]\s*(?:\u540e\u536b|\u4e2d\u536b|\u8fb9\u540e\u536b|\u5de6\u540e\u536b|\u53f3\u540e\u536b)\s*[\)\uff09]", text):
+        return "defender"
+    if re.search(r"[\(\uff08]\s*(?:\u4e2d\u573a|\u540e\u8170|\u524d\u8170|\u8fb9\u524d\u536b)\s*[\)\uff09]", text):
+        return "midfielder"
+    if re.search(r"[\(\uff08]\s*(?:\u524d\u950b|\u4e2d\u950b|\u8fb9\u950b)\s*[\)\uff09]", text):
+        return "forward"
+    if re.search(r"\b(?:goalkeeper|keeper|gk)\b", normalized):
+        return "goalkeeper"
+    if re.search(r"\b(?:defender|back|cb|lb|rb)\b", normalized):
+        return "defender"
+    if re.search(r"\b(?:midfielder|midfield|dm|cm|am)\b", normalized):
+        return "midfielder"
+    if re.search(r"\b(?:forward|striker|fw|cf|ss)\b", normalized):
+        return "forward"
+    return None
+
+
+_STRICT_AVAILABILITY_GENERIC = frozenset((
+    "side", "team", "position", "player", "name", "status", "type", "reason", "date", "count",
+    "\u961f", "\u7403\u5458", "\u4f4d\u7f6e", "\u72b6\u6001", "\u539f\u56e0", "\u4eba\u6570", "\u6570\u91cf",
+))
+
+
+def _strict_availability_side_column(rows: list[list[str]]) -> int | None:
+    if not rows:
+        return None
+    for index, cell in enumerate(rows[0]):
+        if _strict_normalize(cell) in {"side", "team", "\u961f", "\u7403\u961f"}:
+            return index
+    return None
+
+
+def _strict_row_side(row: list[str], side_index: int | None, target: Mapping[str, Any]) -> str | None:
+    if side_index is None or side_index >= len(row):
+        return None
+    raw = _safe_text(row[side_index], 160)
+    normalized = _strict_normalize(raw)
+    if normalized in {"home", "\u4e3b", "\u4e3b\u961f"}:
+        return "home"
+    if normalized in {"away", "\u5ba2", "\u5ba2\u961f"}:
+        return "away"
+    side, _reason = _strict_bound_side(raw, target)
+    return side
+
+
+def _strict_availability_row_fact(row: list[str], header: bool = False) -> tuple[bool, str | None, int]:
+    cells = [_safe_text(cell, 160) for cell in row if _safe_text(cell, 160)]
+    if not cells or _strict_explicit_empty([row]):
+        return False, None, 0
+    normalized = [_strict_normalize(cell) for cell in cells]
+    if header and all(cell in _STRICT_AVAILABILITY_GENERIC for cell in normalized):
+        return False, None, 0
+    meaningful = [cell for cell in normalized if cell not in _STRICT_AVAILABILITY_GENERIC and _strict_integer(cell) is None]
+    if not meaningful:
+        return False, None, 0
+    count = 1
+    position = _strict_availability_position(cells)
+    return True, position, count
+
+
+def _strict_availability_field(document: Mapping[str, Any], target: Mapping[str, Any]) -> tuple[str, Any, str, int, str | None]:
+    records = _strict_table_records(document, _STRICT_AVAILABILITY_MARKERS)
+    if not records:
+        return "ABSENT", None, "AVAILABILITY_SECTION_NOT_FOUND", 0, None
+    counts: dict[str, dict[str, int | None]] = {"home": {}, "away": {}}
+    position_counts: dict[str, dict[str, dict[str, int]]] = {"home": {}, "away": {}}
+    observed_kinds: set[str] = set()
+    bound_sections = 0
+    facts = 0
+    explicit_empty_sections = 0
+    for record in records:
+        context = record.get("context") if isinstance(record.get("context"), Mapping) else {}
+        kind = _strict_availability_kind(context.get("subbar"))
+        if kind is None:
+            return "PARSE_UNCERTAIN", None, "AVAILABILITY_KIND_MARKER_MISSING", 0, None
+        observed_kinds.add(kind)
+        table_side, side_reason = _strict_bound_side(context.get("resultbar"), target)
+        rows = record.get("rows") or []
+        side_index = _strict_availability_side_column(rows)
+        if side_reason and side_index is None:
+            return "PARSE_UNCERTAIN", None, "AVAILABILITY_SIDE_BINDING_AMBIGUOUS", 0, None
+        row_facts = 0
+        section_sides: set[str] = set()
+        for row_index, row in enumerate(rows):
+            side = table_side or _strict_row_side(row, side_index, target)
+            is_fact, position, row_count = _strict_availability_row_fact(row, header=row_index == 0 and side_index is not None)
+            if not is_fact:
+                if _strict_explicit_empty([row]) and side:
+                    counts[side][kind] = 0
+                    section_sides.add(side)
+                    explicit_empty_sections += 1
+                continue
+            if side is None:
+                return "PARSE_UNCERTAIN", None, "AVAILABILITY_SIDE_BINDING_AMBIGUOUS", 0, None
+            section_sides.add(side)
+            counts[side][kind] = int(counts[side].get(kind) or 0) + row_count
+            if position:
+                buckets = position_counts[side].setdefault(kind, {})
+                buckets[position] = buckets.get(position, 0) + row_count
+            row_facts += row_count
+        if not section_sides:
+            if _strict_explicit_empty(rows) and table_side:
+                counts[table_side][kind] = 0
+                section_sides.add(table_side)
+                explicit_empty_sections += 1
+            else:
+                return "PARSE_UNCERTAIN", None, "AVAILABILITY_ROWS_UNCERTAIN", 0, None
+        bound_sections += len(section_sides)
+        facts += row_facts
+    if not facts:
+        if explicit_empty_sections == len(records) and bound_sections:
+            return "SECTION_PRESENT_EMPTY", None, "AVAILABILITY_EXPLICIT_EMPTY", 0, None
+        return "PARSE_UNCERTAIN", None, "AVAILABILITY_NO_STRUCTURED_ROWS", 0, None
+    value = {
+        "counts": counts,
+        "position_category_counts": position_counts,
+        "observed_sections": sorted(observed_kinds),
+        "source_semantics": "EXPLICIT_AVAILABILITY_SECTION",
+        "side_binding": "EXPLICIT_RESULT_BAR_OR_SIDE_COLUMN",
+    }
+    return "PRESENT", value, "AVAILABILITY_STRUCTURED_COUNTS_PARSED", facts, "EXPLICIT_AVAILABILITY_SECTION_SIDE_BOUND"
+
+
+def _strict_standings_field(document: Mapping[str, Any], target: Mapping[str, Any]) -> tuple[str, Any, str, int, str | None]:
+    records = _strict_table_records(document, _STRICT_STANDINGS_MARKERS)
+    if not records:
+        return "ABSENT", None, "STANDINGS_SECTION_NOT_FOUND", 0, None
+    competition = _safe_text(target.get("competition") or target.get("league"), 120)
+    if not competition:
+        return "PARSE_UNCERTAIN", None, "STANDINGS_COMPETITION_CONTEXT_MISSING", 0, None
+    season = _safe_text(target.get("season"), 80)
+    if not season:
+        return "PARSE_UNCERTAIN", None, "STANDINGS_SEASON_CONTEXT_MISSING", 0, None
+    expected_context = (_strict_normalize(competition), _strict_normalize(season))
+    for record in records:
+        context = record.get("context") if isinstance(record.get("context"), Mapping) else {}
+        source_context = (
+            _strict_normalize(context.get("source_competition")),
+            _strict_normalize(context.get("source_season")),
+        )
+        if not all(source_context):
+            return "PARSE_UNCERTAIN", None, "STANDINGS_SOURCE_COMPETITION_SEASON_UNPROVEN", 0, None
+        if source_context != expected_context:
+            return "PARSE_UNCERTAIN", None, "STANDINGS_SOURCE_COMPETITION_SEASON_MISMATCH", 0, None
+    bound: dict[str, dict[str, Any]] = {}
+    empty_sides: set[str] = set()
+    for record in records:
+        side, parsed, reason, empty = _strict_parse_standings_table(record, target)
+        if reason:
+            return "PARSE_UNCERTAIN", None, reason, 0, None
+        if side is None:
+            return "PARSE_UNCERTAIN", None, "STANDINGS_SIDE_BINDING_MISSING", 0, None
+        if empty:
+            empty_sides.add(side)
+            continue
+        if side in bound or side in empty_sides:
+            return "PARSE_UNCERTAIN", None, "STANDINGS_DUPLICATE_SIDE_TABLE", 0, None
+        if parsed is None:
+            return "PARSE_UNCERTAIN", None, "STANDINGS_TABLE_UNCERTAIN", 0, None
+        bound[side] = parsed
+    if not bound:
+        if len(empty_sides) == 2:
+            return "SECTION_PRESENT_EMPTY", None, "STANDINGS_EXPLICIT_EMPTY", 0, None
+        return "PARSE_UNCERTAIN", None, "STANDINGS_ROWS_MISSING", 0, None
+    if set(bound) != {"home", "away"}:
+        return "PARSE_UNCERTAIN", None, "STANDINGS_TARGET_SIDES_INCOMPLETE", 0, None
+    value = {
+        "competition": competition,
+        "season": season,
+        "competition_binding": "analysis_page_source_context_matches_fixture",
+        "season_binding": "analysis_page_source_context_matches_fixture",
+        "teams": bound,
+        "source_semantics": "EXPLICIT_STANDINGS_TABLE_WITH_COMPETITION_SEASON_CONTEXT",
+    }
+    return "PRESENT", value, "STANDINGS_STRUCTURED_TABLES_PARSED", sum(len(item["splits"]) for item in bound.values()), "EXPLICIT_STANDINGS_TABLE_SIDE_BOUND"
+
+
+def _strict_future_field(document: Mapping[str, Any], target: Mapping[str, Any]) -> tuple[str, Any, str, int, str | None]:
+    records = _strict_table_records(document, _STRICT_FUTURE_MARKERS)
+    if not records:
+        return "ABSENT", None, "FUTURE_SECTION_NOT_FOUND", 0, None
+    fixtures: list[dict[str, Any]] = []
+    seen_sides: set[str] = set()
+    for record in records:
+        side, parsed, reason, empty = _strict_parse_future_table(record, target)
+        if reason:
+            return "PARSE_UNCERTAIN", None, reason, 0, None
+        if side is None:
+            return "PARSE_UNCERTAIN", None, "FUTURE_SIDE_BINDING_MISSING", 0, None
+        if side in seen_sides:
+            return "PARSE_UNCERTAIN", None, "FUTURE_DUPLICATE_SIDE_TABLE", 0, None
+        seen_sides.add(side)
+        if empty:
+            continue
+        for item in parsed:
+            fixtures.append(dict(item))
+    if not fixtures:
+        return "SECTION_PRESENT_EMPTY", None, "FUTURE_EXPLICIT_EMPTY", 0, None
+    return "PRESENT", {
+        "future_fixture_count": len(fixtures),
+        "fixtures": fixtures,
+        "source_semantics": "EXPLICIT_FUTURE_SCHEDULE_TABLE",
+    }, "FUTURE_STRUCTURED_SCHEDULE_PARSED", len(fixtures), "EXPLICIT_FUTURE_SCHEDULE_SIDE_BOUND"
+
+
 def _positive_count(value: Any) -> int:
     try:
         return max(0, int(value or 0))
@@ -717,6 +1270,15 @@ def _has_domain_fact(field: str, item: Mapping[str, Any]) -> bool:
         return any(_positive_count(value.get(key)) > 0 for key in ("bookmaker_count", "asian_count", "total_count"))
     if field == "recent_form":
         return bool(value.get("summary")) and _positive_count(value.get("recent_match_count")) > 0
+    if field == "standings_context":
+        teams = value.get("teams")
+        if not isinstance(teams, dict) or set(teams) != {"home", "away"}:
+            return False
+        for side in ("home", "away"):
+            team = teams.get(side)
+            if not isinstance(team, dict) or not isinstance(team.get("splits"), dict) or not team["splits"]:
+                return False
+        return True
     if field == "competition_standings_stage":
         return any(_positive_count(value.get(key)) > 0 for key in ("rank_fact_count", "points_fact_count")) or bool(value.get("stage_or_round"))
     if field == "h2h":
@@ -726,9 +1288,16 @@ def _has_domain_fact(field: str, item: Mapping[str, Any]) -> bool:
             for record in records
         )
     if field == "future_schedule_rest":
-        return bool(value.get("explicit_schedule_tokens")) or value.get("rest_hours_source") is not None
+        return _positive_count(value.get("future_fixture_count")) > 0 and isinstance(value.get("fixtures"), list) and bool(value["fixtures"])
     if field in {"injuries", "suspensions"}:
         return _positive_count(value.get("structured_record_count")) > 0 and bool(value.get("status_values"))
+    if field == "availability_summary":
+        counts = value.get("counts")
+        return isinstance(counts, dict) and any(
+            _positive_count((counts.get(side) or {}).get(kind)) > 0
+            for side in ("home", "away")
+            for kind in ("injury", "suspension")
+        )
     if field == "lineup_state":
         return item.get("semantic_state") in {"CONFIRMED", "PREDICTED"}
     if field == "technical_stats":
@@ -782,7 +1351,6 @@ def _markup_adapter(payload: SurfacePayload, target: Mapping[str, Any]) -> dict[
     builders: dict[str, Callable[[list[dict[str, Any]], str], tuple[Any, int, bool]] | None] = {
         "competition_standings_stage": _competition_builder,
         "h2h": _h2h_builder,
-        "future_schedule_rest": _future_builder,
         "injuries": _availability_builder("injuries"),
         "suspensions": _availability_builder("suspensions"),
         "lineup_state": _lineup_builder,
@@ -791,6 +1359,32 @@ def _markup_adapter(payload: SurfacePayload, target: Mapping[str, Any]) -> dict[
     expected: list[str] = []
     found: list[str] = []
     parsed_count = 0
+    if payload.surface == "analysis_page":
+        strict_specs = (
+            ("standings_context", _strict_standings_field, _STRICT_STANDINGS_MARKERS),
+            ("future_schedule_rest", _strict_future_field, _STRICT_FUTURE_MARKERS),
+            ("availability_summary", _strict_availability_field, _STRICT_AVAILABILITY_MARKERS),
+        )
+        table_records = document.get("table_records") or []
+        for field, parser, markers in strict_specs:
+            expected.extend(markers)
+            if any(
+                isinstance(record, Mapping)
+                and isinstance(record.get("context"), Mapping)
+                and _strict_marker_matches(record["context"].get("fenxibar"), markers)
+                for record in table_records
+            ):
+                found.append(markers[0])
+            state, value, reason, count, semantic = parser(document, target)
+            fields[field] = _field(
+                state,
+                value=value,
+                surface=payload.surface,
+                reason_code=reason,
+                record_count=count,
+                semantic_state=semantic,
+            )
+            parsed_count += count
     for field, builder in builders.items():
         if payload.surface not in FIELD_SURFACES[field]:
             continue

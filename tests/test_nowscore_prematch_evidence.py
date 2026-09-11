@@ -145,7 +145,9 @@ def test_verified_same_id_bundle_covers_all_fields_without_raw_bodies():
     assert bundle["fields"]["market_context"]["state"] == "PRESENT"
     assert bundle["fields"]["recent_form"]["state"] == "PRESENT"
     assert bundle["fields"]["h2h"]["state"] == "PRESENT"
-    assert bundle["fields"]["future_schedule_rest"]["state"] == "PRESENT"
+    # The legacy fixture has only a prose heading and a date/opponent table;
+    # Issue #284 requires the field-specific future schedule shape.
+    assert bundle["fields"]["future_schedule_rest"]["state"] == "ABSENT"
     assert bundle["fields"]["injuries"]["state"] == "SECTION_PRESENT_EMPTY"
     assert bundle["fields"]["suspensions"]["state"] == "SECTION_PRESENT_EMPTY"
     assert bundle["fields"]["lineup_state"]["semantic_state"] == "PREDICTED"

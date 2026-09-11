@@ -86,11 +86,13 @@ PARSER_VERSION = "nowscore_thin_adapter.v1"
 
 FIELD_NAMES = (
     "competition_standings_stage",
+    "standings_context",
     "recent_form",
     "h2h",
     "future_schedule_rest",
     "injuries",
     "suspensions",
+    "availability_summary",
     "lineup_state",
     "coach",
     "referee",
@@ -101,11 +103,13 @@ FIELD_NAMES = (
 FIELD_SET = frozenset(FIELD_NAMES)
 FIELD_SURFACES = {
     "competition_standings_stage": ("market_context", "analysis_page"),
+    "standings_context": ("analysis_page",),
     "recent_form": ("analysis_data", "analysis_page"),
     "h2h": ("analysis_page",),
     "future_schedule_rest": ("analysis_page",),
     "injuries": ("analysis_page", "time_page"),
     "suspensions": ("analysis_page", "time_page"),
+    "availability_summary": ("analysis_page",),
     "lineup_state": ("analysis_page", "time_page"),
     "coach": ("coach",),
     "referee": ("referee",),
@@ -519,6 +523,30 @@ def _fixture_team_id(fixture: Mapping[str, Any] | None, side: str) -> int | None
     return None
 
 
+def _analysis_page_target(
+    target: Mapping[str, Any],
+    identity: Mapping[str, Any],
+    fixture: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    """Pass only verified identity/context into field-specific page parsers."""
+
+    enriched = dict(target)
+    enriched["identity_home"] = _safe_text(identity.get("home_team") or target.get("home"), 160)
+    enriched["identity_away"] = _safe_text(identity.get("away_team") or target.get("away"), 160)
+    enriched["identity_home_id"] = identity.get("home_team_id") or _fixture_team_id(fixture, "home")
+    enriched["identity_away_id"] = identity.get("away_team_id") or _fixture_team_id(fixture, "away")
+    for key in ("competition", "league", "competition_name", "league_name"):
+        if _present((fixture or {}).get(key)):
+            enriched["competition"] = _safe_text((fixture or {}).get(key), 120)
+            break
+    for key in ("season", "season_name"):
+        if _present((fixture or {}).get(key)):
+            enriched["season"] = _safe_text((fixture or {}).get(key), 80)
+            break
+    enriched["identity_source"] = "verified_market_context"
+    return enriched
+
+
 def _numeric_id(value: Any) -> int | None:
     if value is None or isinstance(value, bool):
         return None
@@ -915,9 +943,10 @@ def fetch_nowscore_prematch_evidence(
             **_page_provider_id_details(identity),
         }
 
+    parser_target = _analysis_page_target(target, identity, fixture)
     for surface in SURFACES[1:]:
         payload = _fetch_payload(http_client, surface, urls[surface])
-        parsed = _adapter(surface, payload, target)
+        parsed = _adapter(surface, payload, parser_target)
         observations.append(dict(payload.observation))
         health.append(parsed.get("health") or {})
         for field, item in (parsed.get("fields") or {}).items():
