@@ -1,0 +1,136 @@
+name: Match Analysis Evidence Projection
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - "scripts/match_analysis_evidence_projection.py"
+      - "scripts/match_analysis_evidence_audit.py"
+      - "tests/test_match_analysis_evidence_projection.py"
+      - ".github/workflows/match-analysis-evidence-projection.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  exact-head-validation:
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out exact PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Assert exact head and bounded file scope
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            test "$(git rev-parse HEAD)" = "$HEAD_SHA"
+            while IFS= read -r path; do
+              case "$path" in
+                scripts/match_analysis_evidence_projection.py|scripts/match_analysis_evidence_audit.py|tests/test_match_analysis_evidence_projection.py|.github/workflows/match-analysis-evidence-projection.yml) ;;
+                *) echo "out-of-scope file: $path"; exit 1 ;;
+              esac
+            done < <(git diff --name-only "$BASE_SHA...$HEAD_SHA")
+          else
+            test -n "$(git rev-parse HEAD)"
+          fi
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install pinned dependencies
+        run: python -m pip install -r requirements.txt
+
+      - name: Run focused projection tests
+        run: python -m pytest -q tests/test_match_analysis_evidence_projection.py
+
+      - name: Compile projection paths
+        run: |
+          python -m py_compile \
+            scripts/match_analysis_evidence_projection.py \
+            scripts/match_analysis_evidence_audit.py \
+            tests/test_match_analysis_evidence_projection.py
+
+      - name: Run exact-head natural-cohort audit
+        run: |
+          python scripts/match_analysis_evidence_audit.py \
+            --output match-analysis-evidence-audit.json | tee match-analysis-evidence-audit.log
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          report = json.loads(Path("match-analysis-evidence-audit.json").read_text(encoding="utf-8"))
+          if report["run"]["exact_head"] != __import__("subprocess").check_output(
+              ["git", "rev-parse", "HEAD"], text=True
+          ).strip():
+              raise SystemExit("audit exact_head does not match checked-out HEAD")
+          if report["cohort"]["actual_fixture_count"] <= 0:
+              raise SystemExit("natural cohort is empty")
+          coverage = report["coverage"]
+          print(json.dumps({
+              "exact_head": report["run"]["exact_head"],
+              "cohort_count": report["cohort"]["actual_fixture_count"],
+              "projection_success_count": coverage["projection_success_count"],
+              "projection_reject_count": coverage["projection_reject_count"],
+              "opponent_name_resolved_count": coverage["opponent_names"]["resolved_count"],
+              "opponent_name_reject_count": coverage["opponent_names"]["rejected_count"],
+              "valid_market_book_count": coverage["market_1x2"]["valid_book_count"],
+              "model_market_alignment_available_count": coverage["model_market_alignment"]["available_count"],
+          }, ensure_ascii=False))
+          PY
+
+      - name: Publish natural-cohort summary
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "## MATCH-ANALYSIS-EVIDENCE-PROJECTION-R1"
+            echo
+            cat match-analysis-evidence-audit.log 2>/dev/null || true
+            echo
+            python - <<'PY'
+          import json
+          from pathlib import Path
+
+          path = Path("match-analysis-evidence-audit.json")
+          if path.is_file():
+              report = json.loads(path.read_text(encoding="utf-8"))
+              print(json.dumps({
+                  "exact_head": report["run"]["exact_head"],
+                  "cohort": report["cohort"],
+                  "coverage": report["coverage"],
+              }, ensure_ascii=False, indent=2))
+          PY
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Check patch whitespace
+        if: always()
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            git diff --check "${{ github.event.pull_request.base.sha }}...${{ github.event.pull_request.head.sha }}"
+          else
+            git diff --check
+          fi
+
+      - name: Upload exact-head audit evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: match-analysis-evidence-${{ github.event.pull_request.number || github.run_id }}
+          path: |
+            match-analysis-evidence-audit.json
+            match-analysis-evidence-audit.log
+          if-no-files-found: error
+          retention-days: 14
