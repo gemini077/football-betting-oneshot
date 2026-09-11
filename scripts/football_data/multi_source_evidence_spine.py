@@ -1187,14 +1187,66 @@ def _fixture_id(fixture: Mapping[str, Any]) -> str | None:
     return _text(value) or None
 
 
-def _fixture_source(fixture: Mapping[str, Any], alias: Mapping[str, Any], bridge: Mapping[str, Any]) -> dict[str, Any]:
+def _fixture_source(
+    fixture: Mapping[str, Any],
+    alias: Mapping[str, Any],
+    bridge: Mapping[str, Any],
+    page_identity: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
     source = dict(fixture)
     source["nowscore_id"] = _fixture_id(fixture)
     source["kickoff"] = fixture.get("kickoff") or f"{_text(fixture.get('matchDate'))}T{_text(fixture.get('matchTime'))}:00+08:00"
-    source["aliases"] = alias.get("aliases") if isinstance(alias.get("aliases"), Mapping) else {"home": (), "away": ()}
+    alias_values = alias.get("aliases") if isinstance(alias.get("aliases"), Mapping) else {}
+    page_identity = page_identity if isinstance(page_identity, Mapping) else {}
+    source_aliases = {
+        "home": (
+            *(alias_values.get("home") or ()),
+            fixture.get("homeTeam"),
+            page_identity.get("home_team"),
+        ),
+        "away": (
+            *(alias_values.get("away") or ()),
+            fixture.get("awayTeam"),
+            page_identity.get("away_team"),
+        ),
+    }
+    source["aliases"] = {
+        side: tuple(dict.fromkeys(_clean_name(value) for value in values if _clean_name(value)))
+        for side, values in source_aliases.items()
+    }
     for key in ("nowscore_home_team_id", "nowscore_away_team_id"):
         if _positive_int(alias.get(key)) is not None:
             source[key] = _positive_int(alias.get(key))
+    page_id = _positive_int(page_identity.get("nowscore_id"))
+    page_kickoff = _timestamp(page_identity.get("kickoff_local"))
+    if page_kickoff is None:
+        raw_page_kickoff = _text(page_identity.get("kickoff_local"))
+        try:
+            page_kickoff = dt.datetime.strptime(raw_page_kickoff[:16], "%Y/%m/%d %H:%M").replace(
+                tzinfo=dt.timezone(dt.timedelta(hours=8))
+            )
+        except ValueError:
+            page_kickoff = None
+    source_kickoff = _timestamp(source.get("kickoff"))
+    if (
+        page_id == _positive_int(source.get("nowscore_id"))
+        and page_kickoff is not None
+        and source_kickoff is not None
+        and abs((page_kickoff - source_kickoff).total_seconds()) <= 15 * 60
+    ):
+        for source_key, page_key in (
+            ("nowscore_home_team_id", "home_team_id"),
+            ("nowscore_away_team_id", "away_team_id"),
+        ):
+            if _positive_int(page_identity.get(page_key)) is not None:
+                source[source_key] = _positive_int(page_identity.get(page_key))
+        source["identity_evidence"] = {
+            "nowscore_page_fixture": True,
+            "nowscore_page_team_pair": bool(
+                _positive_int(page_identity.get("home_team_id"))
+                and _positive_int(page_identity.get("away_team_id"))
+            ),
+        }
     if bridge.get("status") == "BOUND":
         source["nowscore_sclass_id"] = bridge.get("competition_id")
     return source
@@ -1230,6 +1282,7 @@ def run_enrichment_cohort(
         nowscore_alias_evidence,
     )
     from scripts.nowscore_prematch_evidence import ANALYSIS_PAGE_URL, NowscorePublicClient
+    from scripts.nowscore_markets import MARKET_URL, _identity as parse_nowscore_market_identity
 
     cutoff = _parse_timestamp(as_of) if as_of else dt.datetime.now(dt.timezone.utc)
     if cutoff is None:
@@ -1250,7 +1303,7 @@ def run_enrichment_cohort(
     else:
         alias_error = None
     alias_index = build_nowscore_alias_index(alias_rows)
-    nowscore_client = NowscorePublicClient(max_requests=max(1, len(selected)))
+    nowscore_client = NowscorePublicClient(max_requests=max(1, len(selected) * 2))
     registry = EntityRegistry.load(registry_path)
     client = api_client or ApiFootballSharedClient(api_key or "")
     records: list[dict[str, Any]] = []
@@ -1263,7 +1316,17 @@ def run_enrichment_cohort(
         if match_id:
             payload = nowscore_client.fetch("analysis_page", ANALYSIS_PAGE_URL.format(match_id=match_id))
             bridge = extract_nowscore_competition_bridge(getattr(payload, "body", None))
-        source = _fixture_source(fixture, alias, bridge)
+        page_identity = {}
+        alias_values = alias.get("aliases") if isinstance(alias.get("aliases"), Mapping) else {}
+        if not (
+            alias.get("nowscore_home_team_id")
+            and alias.get("nowscore_away_team_id")
+            and alias_values.get("home")
+            and alias_values.get("away")
+        ) and match_id:
+            market = nowscore_client.fetch("market_context", MARKET_URL.format(match_id=match_id))
+            page_identity = parse_nowscore_market_identity(getattr(market, "body", None) or "")
+        source = _fixture_source(fixture, alias, bridge, page_identity)
         record = {"source": source, "alias": alias, "competition": bridge}
         if not _text(client._key):
             record["binding"] = {"status": "UNBOUND", "reason_code": "API_KEY_MISSING"}
@@ -1283,7 +1346,7 @@ def run_enrichment_cohort(
         else:
             record["binding"] = bind_fixture_identity(
                 source,
-                alias,
+                source.get("aliases", alias),
                 date_rows[source_date],
                 registry=registry,
                 allow_bootstrap=True,
