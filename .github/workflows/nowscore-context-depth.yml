@@ -1,4 +1,4 @@
-name: Nowscore Context Depth
+name: Nowscore Context Depth and Recent Process
 
 on:
   pull_request:
@@ -109,6 +109,10 @@ jobs:
                   "state_counts": summary["state_counts"],
                   "reject_counts": summary["reject_counts"],
               }, ensure_ascii=False))
+          request_count = report["request_count"]
+          if request_count["delta"] != 0 or request_count["surface_sequence_violation_count"] != 0:
+              raise SystemExit(f"request count proof failed: {request_count}")
+          print(json.dumps({"request_count": request_count}, ensure_ascii=False))
           proof = report["boundary_proof"]
           for key in (
               "identity_violation_count",
@@ -127,7 +131,7 @@ jobs:
         shell: bash
         run: |
           {
-            echo "## NOWSCORE-SAME-ID-CONTEXT-DEPTH-R1"
+            echo "## NOWSCORE-SAME-ID-CONTEXT-DEPTH-AND-RECENT-PROCESS-R1"
             echo
             cat nowscore-context-depth-audit.log 2>/dev/null || true
             echo

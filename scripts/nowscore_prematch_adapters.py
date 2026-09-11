@@ -752,6 +752,146 @@ def _technical_builder(sections: list[dict[str, Any]], combined: str) -> tuple[A
     return {"stat_count": len(stats), "stats": stats}, len(stats), bool(stats)
 
 
+_RECENT_PROCESS_SECTION_MARKERS = ("技术统计", "technical statistics")
+_RECENT_PROCESS_RECENT_MARKERS = ("近期", "recent")
+_RECENT_PROCESS_HEADER = frozenset(("近3场/近10场", "near3/near10", "last3/last10"))
+_RECENT_PROCESS_METRIC_HEADERS = frozenset(("", "指标", "metric"))
+_RECENT_PROCESS_METRICS = (
+    "shots_faced",
+    "corners",
+    "fouls",
+    "possession",
+)
+_RECENT_PROCESS_CROSS_CHECKS = ("goals", "goals_conceded")
+_RECENT_PROCESS_LABELS = {
+    "shots_faced": frozenset(("被射门", "shots faced", "shots against")),
+    "corners": frozenset(("角球", "corners")),
+    "fouls": frozenset(("犯规", "fouls")),
+    "possession": frozenset(("控球率", "possession", "possession %")),
+    "goals": frozenset(("进球", "goals", "goals for")),
+    "goals_conceded": frozenset(("失球", "goals conceded", "goals against")),
+}
+
+
+def _strict_recent_process_records(document: Mapping[str, Any]) -> list[dict[str, Any]]:
+    records = []
+    for record in document.get("table_records") or []:
+        if not isinstance(record, Mapping):
+            continue
+        context = record.get("context") if isinstance(record.get("context"), Mapping) else {}
+        if (
+            _strict_marker_matches(context.get("fenxibar"), _RECENT_PROCESS_SECTION_MARKERS)
+            and _strict_marker_matches(context.get("resultbar"), _RECENT_PROCESS_RECENT_MARKERS)
+        ):
+            records.append({
+                "rows": [list(row) for row in record.get("rows") or [] if isinstance(row, list)],
+                "context": dict(context),
+            })
+    return records
+
+
+def _strict_recent_process_pair(value: Any, metric: str) -> dict[str, Any] | None:
+    raw = _safe_text(value, 120)
+    parts = [part.strip() for part in re.split(r"[/／]", raw)]
+    if len(parts) != 2 or not all(parts):
+        return None
+    parsed: list[float] = []
+    percentage_flags: list[bool] = []
+    for part in parts:
+        match = re.fullmatch(r"([+-]?\d+(?:\.\d+)?)(%)?", part)
+        if not match:
+            return None
+        try:
+            number = float(match.group(1))
+        except ValueError:
+            return None
+        parsed.append(number)
+        percentage_flags.append(bool(match.group(2)))
+    if percentage_flags[0] != percentage_flags[1]:
+        return None
+    is_percentage = percentage_flags[0]
+    if metric == "possession":
+        if not is_percentage or any(value < 0 or value > 100 for value in parsed):
+            return None
+    elif is_percentage or any(value < 0 for value in parsed):
+        return None
+    return {
+        "near3": parsed[0],
+        "near10": parsed[1],
+        "unit": "percent" if is_percentage else "source_value",
+    }
+
+
+def _strict_recent_process_field(document: Mapping[str, Any], target: Mapping[str, Any]) -> tuple[str, Any, str, int, str | None]:
+    records = _strict_recent_process_records(document)
+    if not records:
+        return "ABSENT", None, "RECENT_PROCESS_SECTION_NOT_FOUND", 0, None
+    if len(records) != 1:
+        return "PARSE_UNCERTAIN", None, "RECENT_PROCESS_DUPLICATE_MATRIX", 0, None
+    keys = _strict_target_team_keys(target)
+    if not keys["home"] or not keys["away"] or keys["home"] == keys["away"]:
+        return "PARSE_UNCERTAIN", None, "RECENT_PROCESS_TARGET_SIDE_BINDING_AMBIGUOUS", 0, None
+    rows = records[0].get("rows") or []
+    if not rows:
+        return "PARSE_UNCERTAIN", None, "RECENT_PROCESS_HEADER_MISSING", 0, None
+    header = [_strict_normalize(cell) for cell in rows[0]]
+    if len(header) != 3 or header[0] not in {_strict_normalize(value) for value in _RECENT_PROCESS_HEADER} or header[2] not in {_strict_normalize(value) for value in _RECENT_PROCESS_HEADER}:
+        return "PARSE_UNCERTAIN", None, "RECENT_PROCESS_HEADER_MISSING", 0, None
+    if header[0] != header[2]:
+        return "PARSE_UNCERTAIN", None, "RECENT_PROCESS_HEADER_ASYMMETRIC", 0, None
+    if header[1] not in {_strict_normalize(value) for value in _RECENT_PROCESS_METRIC_HEADERS}:
+        return "PARSE_UNCERTAIN", None, "RECENT_PROCESS_HEADER_MISSING", 0, None
+    data_rows = [row for row in rows[1:] if any(_safe_text(cell, 120) for cell in row)]
+    if not data_rows or all(_strict_explicit_empty([row]) for row in data_rows):
+        return "SECTION_PRESENT_EMPTY", None, "RECENT_PROCESS_EXPLICIT_EMPTY", 0, None
+
+    parsed: dict[str, dict[str, Any]] = {}
+    cross_checks: dict[str, dict[str, Any]] = {}
+    normalized_labels = {
+        _strict_normalize(label): metric
+        for metric, labels in _RECENT_PROCESS_LABELS.items()
+        for label in labels
+    }
+    for row in data_rows:
+        if len(row) != 3:
+            return "PARSE_UNCERTAIN", None, "RECENT_PROCESS_ROW_MALFORMED", 0, None
+        metric = normalized_labels.get(_strict_normalize(row[1]))
+        if metric is None:
+            continue
+        target_values = cross_checks if metric in _RECENT_PROCESS_CROSS_CHECKS else parsed
+        if metric in target_values:
+            return "PARSE_UNCERTAIN", None, "RECENT_PROCESS_DUPLICATE_METRIC", 0, None
+        home = _strict_recent_process_pair(row[0], metric)
+        away = _strict_recent_process_pair(row[2], metric)
+        if home is None or away is None:
+            return "PARSE_UNCERTAIN", None, "RECENT_PROCESS_METRIC_VALUE_MALFORMED", 0, None
+        target_values[metric] = {"home": home, "away": away}
+
+    if not parsed:
+        return "PARSE_UNCERTAIN", None, "RECENT_PROCESS_NO_SUPPORTED_METRICS", 0, None
+    teams = {
+        side: {
+            metric: parsed[metric][side]
+            for metric in _RECENT_PROCESS_METRICS
+            if metric in parsed
+        }
+        for side in ("home", "away")
+    }
+    value = {
+        "teams": teams,
+        "metrics": [metric for metric in _RECENT_PROCESS_METRICS if metric in parsed],
+        "source_cross_checks": {
+            metric: cross_checks[metric]
+            for metric in _RECENT_PROCESS_CROSS_CHECKS
+            if metric in cross_checks
+        },
+        "source_semantics": "EXPLICIT_TECHNICAL_STATS_RECENT_MATRIX",
+        "side_binding": "SOURCE_LEFT_HOME_RIGHT_AWAY",
+        "window_binding": "EXPLICIT_NEAR3_NEAR10_COLUMNS",
+    }
+    return "PRESENT", value, "RECENT_PROCESS_STRUCTURED_MATRIX_PARSED", len(parsed) + len(cross_checks), "EXPLICIT_RECENT_PROCESS_MATRIX_SIDE_BOUND"
+
+
 # Issue #284 deliberately does not use SECTION_ALIASES or the document-text
 # fallback.  These markers and table shapes are the only promotion path for
 # the three same-ID analysis_page fields below.
@@ -1308,6 +1448,24 @@ def _has_domain_fact(field: str, item: Mapping[str, Any]) -> bool:
             and len(stat.get("values") or []) >= 2
             for stat in stats
         )
+    if field == "recent_process_context":
+        teams = value.get("teams")
+        metrics = value.get("metrics")
+        if not isinstance(teams, dict) or set(teams) != {"home", "away"}:
+            return False
+        if not isinstance(metrics, list) or not metrics:
+            return False
+        for metric in metrics:
+            if metric not in _RECENT_PROCESS_METRICS:
+                return False
+            if any(
+                not isinstance((teams.get(side) or {}).get(metric), dict)
+                or set((teams.get(side) or {}).get(metric) or {}) != {"near3", "near10", "unit"}
+                or any(not isinstance((teams.get(side) or {}).get(metric, {}).get(key), (int, float)) for key in ("near3", "near10"))
+                for side in ("home", "away")
+            ):
+                return False
+        return value.get("side_binding") == "SOURCE_LEFT_HOME_RIGHT_AWAY" and value.get("window_binding") == "EXPLICIT_NEAR3_NEAR10_COLUMNS"
     if field == "coach":
         return any(
             isinstance(value.get(side), dict)
@@ -1385,6 +1543,17 @@ def _markup_adapter(payload: SurfacePayload, target: Mapping[str, Any]) -> dict[
                 semantic_state=semantic,
             )
             parsed_count += count
+    if payload.surface == "time_page":
+        state, value, reason, count, semantic = _strict_recent_process_field(document, target)
+        fields["recent_process_context"] = _field(
+            state,
+            value=value,
+            surface=payload.surface,
+            reason_code=reason,
+            record_count=count,
+            semantic_state=semantic,
+        )
+        parsed_count += count
     for field, builder in builders.items():
         if payload.surface not in FIELD_SURFACES[field]:
             continue

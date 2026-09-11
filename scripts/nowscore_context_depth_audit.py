@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from nowscore_prematch_evidence import (
+    SURFACES,
     STATE_NAMES,
     STATE_SET,
     run_natural_cohort,
@@ -22,7 +23,9 @@ TARGET_FIELDS = (
     "standings_context",
     "future_schedule_rest",
     "availability_summary",
+    "recent_process_context",
 )
+RECENT_PROCESS_METRICS = ("shots_faced", "corners", "fouls", "possession")
 SENSITIVE_AVAILABILITY_KEYS = frozenset({
     "player",
     "player_name",
@@ -146,6 +149,22 @@ def _sanitized_value(field: str, value: Any) -> dict[str, Any] | None:
             "side_binding": value.get("side_binding"),
             "source_semantics": value.get("source_semantics"),
         }
+    if field == "recent_process_context":
+        teams = value.get("teams") if isinstance(value.get("teams"), Mapping) else {}
+        return {
+            "metrics": list(value.get("metrics") or []),
+            "teams": {
+                str(side): {
+                    metric: (teams.get(side) or {}).get(metric)
+                    for metric in RECENT_PROCESS_METRICS
+                    if isinstance(teams.get(side), Mapping) and metric in teams.get(side, {})
+                }
+                for side in ("home", "away")
+            },
+            "side_binding": value.get("side_binding"),
+            "window_binding": value.get("window_binding"),
+            "source_semantics": value.get("source_semantics"),
+        }
     return None
 
 
@@ -163,6 +182,20 @@ def _sanitized_records(matches: list[Mapping[str, Any]]) -> list[dict[str, Any]]
                 "value": _sanitized_value(field, item.get("value")),
             })
             break
+    return records[:3]
+
+
+def _sanitized_recent_process_records(matches: list[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
+    for match in matches:
+        item = _field(match, "recent_process_context")
+        records.append({
+            "nowscore_id": match.get("nowscore_id"),
+            "state": item.get("state"),
+            "reason_code": item.get("reason_code"),
+            "record_count": int(item.get("record_count") or 0),
+            "value": _sanitized_value("recent_process_context", item.get("value")),
+        })
     return records[:3]
 
 
@@ -217,7 +250,78 @@ def _side_binding_violations(matches: list[Mapping[str, Any]]) -> int:
             elif field == "availability_summary":
                 if not isinstance(value, Mapping) or value.get("side_binding") != "EXPLICIT_RESULT_BAR_OR_SIDE_COLUMN":
                     violations += 1
+            elif field == "recent_process_context":
+                teams = value.get("teams") if isinstance(value, Mapping) else None
+                if (
+                    not isinstance(teams, Mapping)
+                    or set(teams) != {"home", "away"}
+                    or value.get("side_binding") != "SOURCE_LEFT_HOME_RIGHT_AWAY"
+                    or value.get("window_binding") != "EXPLICIT_NEAR3_NEAR10_COLUMNS"
+                    or any(
+                        not isinstance((teams.get(side) or {}).get(metric), Mapping)
+                        or any(
+                            key not in (teams.get(side) or {}).get(metric, {})
+                            for key in ("near3", "near10")
+                        )
+                        for side in ("home", "away")
+                        for metric in value.get("metrics") or []
+                    )
+                ):
+                    violations += 1
     return violations
+
+
+def _recent_metric_completeness(matches: list[Mapping[str, Any]]) -> dict[str, dict[str, Any]]:
+    eligible = sum(_identity_eligible(match) for match in matches)
+    result: dict[str, dict[str, Any]] = {}
+    for metric in RECENT_PROCESS_METRICS:
+        present = 0
+        for match in matches:
+            if not _identity_eligible(match):
+                continue
+            item = _field(match, "recent_process_context")
+            value = item.get("value") if item.get("state") == "PRESENT" else None
+            teams = value.get("teams") if isinstance(value, Mapping) else None
+            if isinstance(teams, Mapping) and all(
+                isinstance((teams.get(side) or {}).get(metric), Mapping)
+                for side in ("home", "away")
+            ):
+                present += 1
+        result[metric] = {
+            "eligible_fixture_count": eligible,
+            "present_count": present,
+            "present_fraction": round(present / eligible, 4) if eligible else 0.0,
+        }
+    return result
+
+
+def _request_count_proof(matches: list[Mapping[str, Any]]) -> dict[str, Any]:
+    actual = 0
+    baseline = 0
+    surface_sequence_violations = 0
+    observed_surface_counts: Counter[str] = Counter()
+    for match in matches:
+        evidence = _match_evidence(match)
+        observations = evidence.get("observations") if isinstance(evidence.get("observations"), list) else []
+        surfaces = [str(item.get("surface") or "") for item in observations if isinstance(item, Mapping)]
+        actual += len(surfaces)
+        observed_surface_counts.update(surface for surface in surfaces if surface)
+        if match.get("status") == "INVALID_PROVIDER_ID":
+            expected = []
+        elif match.get("status") == "IDENTITY_MISMATCH":
+            expected = [SURFACES[0]]
+        else:
+            expected = list(SURFACES)
+        baseline += len(expected)
+        surface_sequence_violations += surfaces != expected
+    return {
+        "actual_request_count": actual,
+        "baseline_request_count": baseline,
+        "delta": actual - baseline,
+        "baseline_surfaces": list(SURFACES),
+        "observed_surface_counts": dict(observed_surface_counts),
+        "surface_sequence_violation_count": surface_sequence_violations,
+    }
 
 
 def build_audit_report(natural: Mapping[str, Any], *, exact_head: str) -> dict[str, Any]:
@@ -234,6 +338,7 @@ def build_audit_report(natural: Mapping[str, Any], *, exact_head: str) -> dict[s
             "state_counts": {state: int(states.get(state, 0)) for state in STATE_NAMES},
             "reject_counts": dict(sorted(_reject_counts(matches, field).items())),
         }
+    field_reports["recent_process_context"]["metric_completeness"] = _recent_metric_completeness(matches)
 
     serialized_matches = json.dumps(matches, ensure_ascii=False, sort_keys=True)
     raw_marker_hits = [
@@ -267,6 +372,8 @@ def build_audit_report(natural: Mapping[str, Any], *, exact_head: str) -> dict[s
             "fields": field_reports,
         },
         "sanitized_records": _sanitized_records(matches),
+        "sanitized_recent_process_records": _sanitized_recent_process_records(matches),
+        "request_count": _request_count_proof(matches),
         "boundary_proof": {
             "identity_violation_count": int(identity_violations),
             "side_binding_violation_count": _side_binding_violations(matches),
