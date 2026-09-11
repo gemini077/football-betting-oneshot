@@ -8,7 +8,9 @@ on:
       - "scripts/score_engine.py"
       - "scripts/evaluation_kernel.py"
       - "scripts/pure_market_exact_prospective.py"
+      - "scripts/pure_market_exact_paired_review.py"
       - "tests/test_pure_market_exact_prospective.py"
+      - "tests/test_pure_market_exact_paired_review.py"
       - "tests/test_kernel_characterization.py"
       - "tests/test_kernel_ownership_guard.py"
       - "tests/test_evaluation_kernel_characterization.py"
@@ -18,6 +20,7 @@ on:
       - "tests/test_exact_distribution_freeze.py"
       - ".github/workflows/pure-market-exact-prospective.yml"
       - "data/prediction_quality/pure_market_exact_prospective_1/**"
+      - "data/prediction_quality/pure_market_exact_paired_review_1/**"
   schedule:
     - cron: "17 * * * *"
   workflow_dispatch:
@@ -56,7 +59,7 @@ jobs:
         run: |
           while IFS= read -r path; do
             case "$path" in
-              scripts/market_engine.py|scripts/score_engine.py|scripts/evaluation_kernel.py|scripts/pure_market_exact_prospective.py|tests/test_pure_market_exact_prospective.py|tests/test_kernel_characterization.py|tests/test_kernel_ownership_guard.py|tests/test_evaluation_kernel_characterization.py|tests/test_baseline_production_integration.py|tests/test_baseline_settlement.py|tests/test_prospective_settlement.py|tests/test_exact_distribution_freeze.py|.github/workflows/pure-market-exact-prospective.yml|data/prediction_quality/pure_market_exact_prospective_1/*) ;;
+              scripts/market_engine.py|scripts/score_engine.py|scripts/evaluation_kernel.py|scripts/pure_market_exact_prospective.py|scripts/pure_market_exact_paired_review.py|tests/test_pure_market_exact_prospective.py|tests/test_pure_market_exact_paired_review.py|tests/test_kernel_characterization.py|tests/test_kernel_ownership_guard.py|tests/test_evaluation_kernel_characterization.py|tests/test_baseline_production_integration.py|tests/test_baseline_settlement.py|tests/test_prospective_settlement.py|tests/test_exact_distribution_freeze.py|.github/workflows/pure-market-exact-prospective.yml|data/prediction_quality/pure_market_exact_prospective_1/*|data/prediction_quality/pure_market_exact_paired_review_1/*) ;;
               *) echo "out-of-scope file: $path"; exit 1 ;;
             esac
           done < <(git diff --name-only "$BASE_SHA...$HEAD_SHA")
@@ -73,6 +76,7 @@ jobs:
       - name: Run focused authority and regression tests
         run: >-
           python -m pytest -q
+          tests/test_pure_market_exact_paired_review.py
           tests/test_pure_market_exact_prospective.py
           tests/test_kernel_characterization.py
           tests/test_kernel_ownership_guard.py
@@ -89,7 +93,9 @@ jobs:
           scripts/score_engine.py
           scripts/evaluation_kernel.py
           scripts/pure_market_exact_prospective.py
+          scripts/pure_market_exact_paired_review.py
           tests/test_pure_market_exact_prospective.py
+          tests/test_pure_market_exact_paired_review.py
 
       - name: Check patch whitespace
         run: git diff --check "${{ github.event.pull_request.base.sha }}...${{ github.event.pull_request.head.sha }}"
