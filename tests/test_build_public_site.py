@@ -158,6 +158,29 @@ def test_build_renders_missing_contract_from_current_dashboard_fixture_without_w
     assert not (tmp_path / "data" / "match_analysis").exists()
 
 
+def test_build_renders_compiled_prematch_article_before_probability_lane(tmp_path, monkeypatch):
+    make_source_tree(tmp_path, include_contract=False)
+    dashboard_path = tmp_path / "data" / "prediction_dashboard" / "latest.json"
+    dashboard = json.loads(dashboard_path.read_text(encoding="utf-8"))
+    dashboard["fixtures"][0]["prediction"] = {
+        "probabilities": {"home": 0.5, "draw": 0.3, "away": 0.2},
+        "unique_score": "1-0",
+        "top_scores": [{"score": "1-0", "probability": 0.2}],
+    }
+    write_json(dashboard_path, dashboard)
+    monkeypatch.setattr(build_public_site, "ROOT", tmp_path)
+
+    build_public_site.build(tmp_path / "site")
+
+    detail_html = (tmp_path / "site" / "matches/1001/index.html").read_text(encoding="utf-8")
+    article_position = detail_html.index('id="prematch-analysis"')
+    probability_position = detail_html.index('class="probability-section')
+    assert article_position < probability_position
+    assert "\u8d5b\u524d\u5206\u6790" in detail_html
+    assert "source_ref" not in detail_html
+    assert "prediction_record" not in detail_html
+
+
 def test_build_projects_linked_prematch_sidecar_into_current_match_detail(tmp_path, monkeypatch):
     make_source_tree(tmp_path, include_contract=False)
     dashboard_path = tmp_path / "data" / "prediction_dashboard" / "latest.json"

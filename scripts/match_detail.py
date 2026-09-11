@@ -909,16 +909,6 @@ def _render_key_evidence(contract: dict[str, Any]) -> str:
         if block:
             blocks.append(block)
 
-    hero = contract.get("hero") if isinstance(contract.get("hero"), dict) else {}
-    explicit_items: dict[str, list[str]] = {role: [] for role in _EVIDENCE_ROLE_LABELS}
-    for group in (hero.get("supports"), hero.get("conflicts")):
-        for item_role, text in _role_text_items(group):
-            explicit_items[item_role].append(text)
-    for role, texts in explicit_items.items():
-        block = _render_role_block(role, "\u5173\u952e\u8bb0\u5f55", texts)
-        if block:
-            blocks.append(block)
-
     source_quality = evidence.get("source_quality") if isinstance(evidence.get("source_quality"), dict) else {}
     missing = source_quality.get("missing")
     missing_items = [text for role, text in _role_text_items(missing, default_role="MISSING_OR_UNVERIFIED") if role == "MISSING_OR_UNVERIFIED"]
@@ -934,6 +924,46 @@ def _render_key_evidence(contract: dict[str, Any]) -> str:
         '<p>\u53ea\u5c55\u793a\u5df2\u660e\u786e\u6807\u6ce8\u89d2\u8272\u7684\u8bc1\u636e</p></div><div class="evidence-grid">'
         + "".join(blocks)
         + "</div></article>"
+    )
+
+
+def _render_prematch_analysis(contract: dict[str, Any]) -> str:
+    article = contract.get("analysis_article")
+    if not isinstance(article, dict) or article.get("status") not in {"AVAILABLE", "DEGRADED"}:
+        return ""
+    blocks = []
+    for block in article.get("blocks") or []:
+        if not isinstance(block, dict):
+            continue
+        title = str(block.get("title") or "").strip()
+        claims = [
+            item
+            for item in block.get("claims") or []
+            if isinstance(item, dict) and str(item.get("text") or "").strip()
+        ]
+        if not title or not claims:
+            continue
+        claim_html = "".join(
+            f'<p class="article-claim" data-article-claim="{_esc(item.get("id"))}">{_esc(item.get("text"))}</p>'
+            for item in claims
+        )
+        blocks.append(
+            f'<section class="article-block" data-article-block="{_esc(block.get("id"))}">'
+            f"<h3>{_esc(title)}</h3>{claim_html}</section>"
+        )
+    if not blocks:
+        return ""
+    degraded_note = (
+        '<p class="prematch-analysis-note">当前仅列出有明确赛前依据的字段，缺失内容已省略。</p>'
+        if article.get("status") == "DEGRADED"
+        else ""
+    )
+    return (
+        '<article class="panel prematch-analysis" id="prematch-analysis">'
+        '<div class="prematch-analysis-heading"><div class="evidence-role">赛前依据</div>'
+        '<h2>赛前分析</h2>'
+        f"{degraded_note}</div>"
+        f'<div class="article-blocks">{"".join(blocks)}</div></article>'
     )
 
 def _market_comparison(contract: dict[str, Any]) -> dict[str, Any] | None:
@@ -1280,6 +1310,14 @@ DETAIL_CSS = r"""
 .detail-page .source-line { margin: 5px 0 0; color: var(--muted); font-size: var(--type-meta); }
 .detail-page .support-list { margin: 3px 0 0; padding-left: 14px; font-size: var(--type-support); }
 .detail-page .support-list li { margin: 3px 0; }
+.detail-page .prematch-analysis { margin-top: 10px; padding: 14px 0 4px; border-top: 2px solid var(--ink); border-bottom: 1px solid var(--line); }
+.detail-page .prematch-analysis-heading { margin-bottom: 3px; }
+.detail-page .prematch-analysis-heading h2 { margin: 3px 0 0; font-size: var(--type-section); letter-spacing: -.025em; }
+.detail-page .prematch-analysis-note { margin: 4px 0 0; color: var(--muted); font-size: var(--type-meta); }
+.detail-page .article-blocks { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 0 18px; }
+.detail-page .article-block { min-width: 0; padding: 10px 0; border-top: 1px solid var(--line); }
+.detail-page .article-block h3 { margin: 0 0 4px; font-size: var(--type-support); }
+.detail-page .article-claim { margin: 0; color: var(--ink); font-size: var(--type-support); line-height: 1.62; overflow-wrap: anywhere; }
 .detail-page .detail-section,
 .detail-page .result-panel,
 .detail-page .status-panel { margin-top: 10px; padding: 13px 0 14px; border-top: 1px solid var(--line-2); border-bottom: 1px solid var(--line); background: transparent; }
@@ -1354,6 +1392,7 @@ DETAIL_CSS = r"""
   .detail-page .supporting-grid { display: block; margin-top: 0; }
   .detail-page .supporting-grid > .panel,
   .detail-page .supporting-grid > .panel:only-child { width: auto; flex: none; display: block; }
+  .detail-page .article-blocks { display: block; }
   .detail-page .panel { padding: 14px 0; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; box-shadow: none; }
   .detail-page .probability-section .probability-card { padding: 7px 4px 8px; }
   .detail-page .probability-section .probability-card strong { font-size: calc(19px * var(--ui-text-scale)); }
@@ -1484,10 +1523,11 @@ def render_match_detail(contract: dict[str, Any]) -> str:
     change_awareness_html = _render_change_awareness(contract) if serving else ""
     evidence_html = _render_key_evidence(contract) if serving else ""
     market_html = _render_market_comparison(contract) if serving else ""
+    article_html = _render_prematch_analysis(contract) if status_code == "FROZEN" else ""
     if serving:
         primary_html = f'<section class="grid3 primary-grid">{probability_html}{exact_html}{takeaways_html}</section>'
         supporting_html = f'<section class="grid3 second supporting-grid">{goals_html}{market_html}</section>'
-        analysis_html = evidence_html + primary_html + supporting_html + change_awareness_html + (trust_html := _render_trust(contract))
+        analysis_html = article_html + evidence_html + primary_html + supporting_html + change_awareness_html + (trust_html := _render_trust(contract))
     else:
         trust_html = ""
         analysis_html = _render_status_panel(contract)

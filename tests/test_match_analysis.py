@@ -14,6 +14,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 from scripts.match_analysis import (  # noqa: E402
     ANALYSIS_CONTRACT_VERSION,
     assemble_match_analysis,
+    compile_prematch_analysis,
     discover_legacy_analysis_material,
     match_url,
     select_best_real_match,
@@ -1207,6 +1208,77 @@ def test_detail_writer_uses_stable_static_match_route(tmp_path):
     assert page == tmp_path / "site" / "matches" / "2040820" / "index.html"
     assert page.exists()
     assert 'name="viewport"' in page.read_text(encoding="utf-8")
+
+
+def test_prematch_article_is_deterministic_auditable_and_omits_unsupported_fields(tmp_path):
+    payload = roots(tmp_path)
+    write_prematch_sidecar(payload)
+
+    first = assemble(payload)
+    second = assemble(payload)
+    article = first["analysis_article"]
+
+    assert json.dumps(article, ensure_ascii=False, sort_keys=True) == json.dumps(
+        second["analysis_article"], ensure_ascii=False, sort_keys=True
+    )
+    assert article["status"] == "DEGRADED"
+    assert article["coverage"]["available_blocks"][:3] == [
+        "core_judgement",
+        "recent_form",
+        "goal_environment",
+    ]
+    assert "market_alignment" in article["coverage"]["omitted_blocks"]
+    for block in article["blocks"]:
+        for claim in block["claims"]:
+            assert claim["text"].strip()
+            assert claim["provenance"]
+            assert all(
+                item.get("source_ref") and item.get("field") and item.get("evidence_role")
+                for item in claim["provenance"]
+            )
+
+    serialized = json.dumps(article, ensure_ascii=False).lower()
+    for forbidden in ("h2h", "injur", "lineup", "technical", "records"):
+        assert forbidden not in serialized
+
+    html = render_match_detail(first)
+    article_position = html.index('id="prematch-analysis"')
+    analysis_position = html.index('<div id="analysis"')
+    probability_position = html.index('class="probability-section')
+    assert analysis_position < article_position < probability_position
+    assert "\u8d5b\u524d\u5206\u6790" in html
+
+
+def test_prematch_article_market_disagreement_is_neutral_and_exact_state_is_explicit(tmp_path):
+    contract = assemble(roots(tmp_path))
+    contract["market"]["model_comparison"] = {
+        "same_time_authoritative": True,
+        "model_probabilities": {"home": 0.60, "draw": 0.20, "away": 0.20},
+        "market_probabilities": {"home": 0.40, "draw": 0.30, "away": 0.30},
+    }
+    contract["formal_markets"] = {
+        "markets": {"exact_score": {"status": "DEGRADED"}}
+    }
+
+    article = compile_prematch_analysis(contract)
+    market_block = next(item for item in article["blocks"] if item["id"] == "market_alignment")
+    market_text = json.dumps(market_block, ensure_ascii=False)
+    assert "\u4ef7\u503c" not in market_text
+    assert "\u4f18\u52bf" not in market_text
+    score_block = next(item for item in article["blocks"] if item["id"] == "score_convergence")
+    score_text = json.dumps(score_block, ensure_ascii=False)
+    assert "\u5f53\u524d\u964d\u7ea7" in score_text
+    assert "\u4e0d\u7b49\u4e8e\u786e\u5b9a\u7ed3\u679c" in score_text
+
+
+def test_prematch_article_never_reuses_legacy_postmatch_prose(tmp_path):
+    contract = assemble(r4_rich_retained_payload(tmp_path, status="FROZEN"))
+    article_json = json.dumps(contract["analysis_article"], ensure_ascii=False)
+    detail_html = render_match_detail(contract)
+
+    for sentinel in R4_LEAK_SENTINELS:
+        assert sentinel not in article_json
+        assert sentinel not in detail_html
 
 
 def test_assembler_and_renderer_have_no_runtime_model_or_network_path():

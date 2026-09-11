@@ -13,10 +13,10 @@ from urllib.parse import unquote, urlsplit
 from typing import Any
 
 try:
-    from .match_analysis import attach_public_prematch_evidence
+    from .match_analysis import attach_public_prematch_evidence, compile_prematch_analysis
     from .match_detail import render_match_detail
 except ImportError:  # pragma: no cover - direct script execution path.
-    from match_analysis import attach_public_prematch_evidence
+    from match_analysis import attach_public_prematch_evidence, compile_prematch_analysis
     from match_detail import render_match_detail
 
 try:
@@ -397,6 +397,10 @@ def _match_contracts(data_root: Path, dashboard: dict[str, Any], match_ids: set[
                     }
                     payload = _overlay_fixture_crests(payload, fixture)
                     payload = _attach_fixture_prematch_evidence(data_root, payload, fixture, business_date)
+                payload = {
+                    **payload,
+                    "analysis_article": compile_prematch_analysis(payload),
+                }
                 contracts[match_id] = payload
                 break
     for match_id in sorted(match_ids - contracts.keys()):
@@ -419,6 +423,10 @@ def _match_contracts(data_root: Path, dashboard: dict[str, Any], match_ids: set[
                 fixture,
                 business_date,
             )
+            contracts[match_id] = {
+                **contracts[match_id],
+                "analysis_article": compile_prematch_analysis(contracts[match_id]),
+            }
     return contracts
 
 

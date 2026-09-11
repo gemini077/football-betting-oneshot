@@ -30,6 +30,7 @@ from scripts.build_public_site import (  # noqa: E402
     _linked_frozen_formal_markets,
     _prediction_records,
 )
+from scripts.match_analysis import compile_prematch_analysis  # noqa: E402
 from scripts.match_detail import render_match_detail  # noqa: E402
 from scripts.prediction_dashboard import build_dashboard, render_dashboard  # noqa: E402
 from scripts.team_crest_enrichment import (  # noqa: E402
@@ -270,7 +271,7 @@ def _regenerate_dashboard(site_root: Path) -> dict[str, Any]:
     return payload
 
 
-def _write_fixture_pages(site_root: Path, payload: dict[str, Any], current: dict[str, Any]) -> None:
+def _write_fixture_pages(site_root: Path, payload: dict[str, Any], current: dict[str, Any]) -> dict[str, Any]:
     fixture_root = site_root / "visual-fixtures"
     fixture_root.mkdir(parents=True, exist_ok=True)
 
@@ -330,6 +331,7 @@ def _write_fixture_pages(site_root: Path, payload: dict[str, Any], current: dict
         current,
         business_date,
     )
+    current_contract["analysis_article"] = compile_prematch_analysis(current_contract)
     current_contract["prediction_quality_health"] = payload.get("prediction_quality_health") or {}
     pages["detail-current-frozen.html"] = render_match_detail(current_contract)
 
@@ -385,6 +387,7 @@ def _write_fixture_pages(site_root: Path, payload: dict[str, Any], current: dict
     (site_root / "prediction_dashboard" / "latest.html").write_text(
         render_dashboard(payload), encoding="utf-8"
     )
+    return current_contract.get("analysis_article") if isinstance(current_contract.get("analysis_article"), dict) else {}
 
 
 def _visible_count(page: Any, selector: str) -> int:
@@ -579,6 +582,26 @@ def _capture_page(
         wrapper = disclosure.get("wrapper") if isinstance(disclosure, dict) else None
         signature_matrix_visible = _visible_count(page, ".signature-grid") > 0
         existing_crest_count = _visible_count(page, '[data-crest-kind="existing"]')
+        article_metrics = page.evaluate(
+            """() => {
+              const article = document.querySelector('#prematch-analysis');
+              const analysis = document.querySelector('#analysis');
+              const visible = element => {
+                if (!element) return false;
+                const style = window.getComputedStyle(element);
+                const rect = element.getBoundingClientRect();
+                return style.display !== 'none' && style.visibility !== 'hidden'
+                  && rect.width > 0 && rect.height > 0;
+              };
+              return {
+                visible: visible(article),
+                firstInAnalysis: Boolean(article && analysis && analysis.children[0] === article),
+                claimCount: article ? article.querySelectorAll('[data-article-claim]').length : 0,
+                blockCount: article ? article.querySelectorAll('[data-article-block]').length : 0,
+                horizontalOverflow: Boolean(article && article.scrollWidth > article.clientWidth + 1),
+              };
+            }"""
+        )
         visible_forbidden = page.evaluate(
             """() => {
               const text = document.body.innerText || '';
@@ -628,6 +651,11 @@ def _capture_page(
                 isinstance(wrapper, dict)
                 and int(wrapper.get("scrollWidth") or 0) > int(wrapper.get("clientWidth") or 0) + 1
             ),
+            "article_visible": bool(article_metrics.get("visible")),
+            "article_first_in_analysis": bool(article_metrics.get("firstInAnalysis")),
+            "article_claim_count": int(article_metrics.get("claimCount") or 0),
+            "article_block_count": int(article_metrics.get("blockCount") or 0),
+            "article_horizontal_overflow": bool(article_metrics.get("horizontalOverflow")),
             "normal_frozen_badge_count": visible_status_badges,
             "normal_health_badge_count": visible_health_badges,
             "visible_forbidden_tokens": list(visible_forbidden or []),
@@ -1096,7 +1124,7 @@ def main() -> int:
         json.dumps(crest_diagnostics, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
     )
-    _write_fixture_pages(site_root, payload, current)
+    current_article = _write_fixture_pages(site_root, payload, current)
     records, interaction_checks = _capture_all(site_root, output, payload, current)
 
     browser_errors = [
@@ -1135,6 +1163,21 @@ def main() -> int:
             or record["exact_disclosure_open"]
             or record["exact_disclosure_visible_cell_count"] != 0
             or not record["exact_signature_matrix_visible"]
+        )
+    ]
+    article_failures = [
+        {
+            "name": record["name"],
+            "reason": "article missing, not first, empty, or overflowing",
+        }
+        for record in records
+        if record["name"].startswith("detail-current-frozen-")
+        and (
+            not record["article_visible"]
+            or not record["article_first_in_analysis"]
+            or record["article_claim_count"] == 0
+            or record["article_block_count"] == 0
+            or record["article_horizontal_overflow"]
         )
     ]
     change_awareness_failures = []
@@ -1193,7 +1236,7 @@ def main() -> int:
             and float((record.get("shell_metrics") or {}).get("typography", {}).get("matrix")) < 10
         )
     ]
-    if browser_errors or overflow or exact_overflow or mobile_exact_failures or desktop_signature_failures or change_awareness_failures or forbidden_visible or shell_failures:
+    if browser_errors or overflow or exact_overflow or mobile_exact_failures or desktop_signature_failures or article_failures or change_awareness_failures or forbidden_visible or shell_failures:
         raise SystemExit(
             json.dumps(
                 {
@@ -1202,6 +1245,7 @@ def main() -> int:
                     "exact_horizontal_overflow": exact_overflow,
                     "exact_mobile_default_failures": mobile_exact_failures,
                     "exact_desktop_signature_matrix_failures": desktop_signature_failures,
+                    "analysis_article_failures": article_failures,
                     "change_awareness_failures": change_awareness_failures,
                     "visible_forbidden_tokens": forbidden_visible,
                     "public_shell_failures": shell_failures,
@@ -1268,6 +1312,25 @@ def main() -> int:
                 }
                 for record in records
                 if record["exact_cells"] == 169 and record["viewport"] in {"1440x1000", "1920x1080"}
+            },
+            "analysis_article_first_block": {
+                record["name"]: {
+                    "visible": record["article_visible"],
+                    "first_in_analysis": record["article_first_in_analysis"],
+                    "claim_count": record["article_claim_count"],
+                    "block_count": record["article_block_count"],
+                    "horizontal_overflow": record["article_horizontal_overflow"],
+                }
+                for record in records
+                if record["name"].startswith("detail-current-frozen-")
+            },
+            "analysis_article_current_page": {
+                "status": current_article.get("status"),
+                "claim_count": (current_article.get("coverage") or {}).get("claim_count", 0),
+                "block_count": (current_article.get("coverage") or {}).get("block_count", 0),
+                "degradation_count": (current_article.get("coverage") or {}).get("degradation_count", 0),
+                "available_blocks": (current_article.get("coverage") or {}).get("available_blocks", []),
+                "omitted_blocks": (current_article.get("coverage") or {}).get("omitted_blocks", []),
             },
             "dashboard_regenerated_with_pr_renderer": "YES",
             "normal_frozen_badge_count": production_frozen_count,

@@ -546,6 +546,578 @@ def attach_public_prematch_evidence(
     return payload
 
 
+PREMATCH_ANALYSIS_ARTICLE_VERSION = "prematch_analysis_article.v1"
+
+_ARTICLE_OUTCOME_LABELS = {
+    "home": "主胜",
+    "draw": "平局",
+    "away": "客胜",
+}
+_ARTICLE_BLOCK_TITLES = {
+    "core_judgement": "核心判断",
+    "recent_form": "双方近期走势",
+    "goal_environment": "进球环境",
+    "market_alignment": "市场对照",
+    "score_convergence": "比分收敛",
+    "uncertainty": "主要不确定性",
+    "context": "中立背景",
+}
+
+
+def _article_probability(value: Any) -> float | None:
+    number = _safe_number(value)
+    if number is None or not 0 <= float(number) <= 1:
+        return None
+    return float(number)
+
+
+def _article_source_ref(contract: dict[str, Any], kind: str) -> str:
+    canonical = contract.get("canonical_sources") if isinstance(contract.get("canonical_sources"), dict) else {}
+    governance = contract.get("governance") if isinstance(contract.get("governance"), dict) else {}
+    prediction_id = _string(governance.get("prediction_id")).strip()
+    if kind == "model":
+        return _string(canonical.get("prediction_record")).strip() or (
+            f"data/model_governance/predictions/{prediction_id}.json" if prediction_id else "prediction_record"
+        )
+    if kind == "evidence":
+        return (
+            f"data/prospective/football_evidence/{prediction_id}.json"
+            if prediction_id
+            else "prematch_evidence_sidecar"
+        )
+    if kind == "snapshot":
+        return _string(canonical.get("input_snapshot")).strip() or "input_snapshot"
+    if kind == "market":
+        return "official_market_baseline"
+    if kind == "serving":
+        return _string(canonical.get("prediction_record")).strip() or "formal_market_projection"
+    return "current_prematch_authority"
+
+
+def _article_provenance(
+    contract: dict[str, Any],
+    *,
+    kind: str,
+    field: str,
+    role: str,
+    value: Any = None,
+) -> dict[str, Any]:
+    item: dict[str, Any] = {
+        "source_ref": _article_source_ref(contract, kind),
+        "field": field,
+        "evidence_role": role,
+    }
+    if value is not None:
+        item["value"] = copy.deepcopy(value)
+    return item
+
+
+def _article_claim(
+    claim_id: str,
+    text: str,
+    *,
+    evidence_role: str,
+    provenance: list[dict[str, Any]],
+) -> dict[str, Any] | None:
+    clean_text = _string(text).strip()
+    valid_provenance = [
+        item
+        for item in provenance
+        if isinstance(item, dict)
+        and _string(item.get("source_ref")).strip()
+        and _string(item.get("field")).strip()
+        and _string(item.get("evidence_role")).strip()
+    ]
+    if not clean_text or not valid_provenance:
+        return None
+    return {
+        "id": claim_id,
+        "text": clean_text,
+        "evidence_role": evidence_role,
+        "provenance": valid_provenance,
+    }
+
+
+def _article_block(block_id: str, claims: list[dict[str, Any]]) -> dict[str, Any] | None:
+    valid_claims = [item for item in claims if isinstance(item, dict) and item.get("text")]
+    if not valid_claims:
+        return None
+    return {
+        "id": block_id,
+        "title": _ARTICLE_BLOCK_TITLES[block_id],
+        "text": " ".join(_string(item["text"]) for item in valid_claims),
+        "claims": valid_claims,
+    }
+
+
+def _article_form_values(value: Any) -> dict[str, int] | None:
+    if not isinstance(value, dict):
+        return None
+    fields = ("matches", "wins", "draws", "losses", "goals_for", "goals_against")
+    facts: dict[str, int] = {}
+    for field in fields:
+        raw = value.get(field)
+        if isinstance(raw, bool) or not isinstance(raw, int) or raw < 0:
+            return None
+        facts[field] = raw
+    if facts["matches"] <= 0:
+        return None
+    if facts["wins"] + facts["draws"] + facts["losses"] != facts["matches"]:
+        return None
+    return facts
+
+
+def _article_recent_form(contract: dict[str, Any]) -> dict[str, tuple[dict[str, int], str, str]]:
+    evidence = contract.get("evidence") if isinstance(contract.get("evidence"), dict) else {}
+    public = evidence.get("prematch_evidence") if isinstance(evidence.get("prematch_evidence"), dict) else {}
+    public_form = public.get("recent_form") if isinstance(public.get("recent_form"), dict) else {}
+    fundamentals = evidence.get("fundamentals") if isinstance(evidence.get("fundamentals"), dict) else {}
+    raw_form = fundamentals.get("recent_form") if isinstance(fundamentals.get("recent_form"), dict) else {}
+    result: dict[str, tuple[dict[str, int], str, str]] = {}
+    for side, raw_key in (("home", "home_home"), ("away", "away_away")):
+        public_values = _article_form_values(public_form.get(side))
+        if public_values is not None:
+            result[side] = (
+                public_values,
+                "evidence",
+                f"evidence.prematch_evidence.recent_form.{side}",
+            )
+            continue
+        raw_values = _article_form_values(raw_form.get(raw_key))
+        if raw_values is not None:
+            result[side] = (
+                raw_values,
+                "snapshot",
+                f"input.prematch_fundamentals.recent_form.{raw_key}",
+            )
+    return result
+
+
+def _article_model(contract: dict[str, Any]) -> dict[str, Any]:
+    model = contract.get("model") if isinstance(contract.get("model"), dict) else {}
+    if model:
+        return model
+    evidence = contract.get("evidence") if isinstance(contract.get("evidence"), dict) else {}
+    return evidence.get("model") if isinstance(evidence.get("model"), dict) else {}
+
+
+def _article_exact_state(contract: dict[str, Any]) -> str | None:
+    formal = contract.get("formal_markets") if isinstance(contract.get("formal_markets"), dict) else {}
+    markets = formal.get("markets") if isinstance(formal.get("markets"), dict) else {}
+    exact = markets.get("exact_score") if isinstance(markets.get("exact_score"), dict) else {}
+    state = _string(exact.get("status")).strip().upper()
+    return state or None
+
+
+def compile_prematch_analysis(contract: dict[str, Any]) -> dict[str, Any]:
+    """Compile a deterministic, current-authority Match Detail article contract."""
+
+    payload = contract if isinstance(contract, dict) else {}
+    identity = payload.get("identity") if isinstance(payload.get("identity"), dict) else {}
+    model = _article_model(payload)
+    probabilities = model.get("probabilities") if isinstance(model.get("probabilities"), dict) else {}
+    valid_probabilities = [
+        (key, _article_probability(probabilities.get(key)))
+        for key in ("home", "draw", "away")
+    ]
+    valid_probabilities = [(key, value) for key, value in valid_probabilities if value is not None]
+    outcome_order = {key: index for index, key in enumerate(("home", "draw", "away"))}
+    ranked_outcomes = sorted(
+        valid_probabilities,
+        key=lambda item: (-float(item[1]), outcome_order[item[0]]),
+    )
+    blocks: list[dict[str, Any]] = []
+    omitted: dict[str, str] = {}
+
+    if len(ranked_outcomes) >= 2:
+        primary_key, primary_probability = ranked_outcomes[0]
+        runner_key, runner_probability = ranked_outcomes[1]
+        gap = primary_probability - runner_probability
+        if gap > 0:
+            comparison = (
+                f"较次高的{_ARTICLE_OUTCOME_LABELS[runner_key]}高{gap * 100:.1f}个百分点"
+            )
+        else:
+            comparison = f"与{_ARTICLE_OUTCOME_LABELS[runner_key]}并列最高"
+        core_claim = _article_claim(
+            "core-1x2-branch",
+            (
+                f"当前胜平负最高概率分支为{_ARTICLE_OUTCOME_LABELS[primary_key]}"
+                f"（{primary_probability * 100:.1f}%），{comparison}；"
+                "这表示相对占优，不等于确定结果。"
+            ),
+            evidence_role="MODEL_OUTPUT",
+            provenance=[
+                _article_provenance(
+                    payload,
+                    kind="model",
+                    field=f"model.probabilities.{primary_key}",
+                    role="MODEL_OUTPUT",
+                    value=primary_probability,
+                ),
+                _article_provenance(
+                    payload,
+                    kind="model",
+                    field=f"model.probabilities.{runner_key}",
+                    role="MODEL_OUTPUT",
+                    value=runner_probability,
+                ),
+            ],
+        )
+        core_block = _article_block("core_judgement", [core_claim] if core_claim else [])
+        if core_block:
+            blocks.append(core_block)
+    else:
+        omitted["core_judgement"] = "INSUFFICIENT_1X2_PROBABILITIES"
+
+    form_values = _article_recent_form(payload)
+    form_claims: list[dict[str, Any]] = []
+    home_name = _string(identity.get("home")).strip() or "主队"
+    away_name = _string(identity.get("away")).strip() or "客队"
+    for side, label, venue in (("home", home_name, "主场"), ("away", away_name, "客场")):
+        entry = form_values.get(side)
+        if entry is None:
+            continue
+        values, source_kind, field_prefix = entry
+        form_claim = _article_claim(
+            f"recent-form-{side}",
+            (
+                f"{label}{venue}近{values['matches']}场为{values['wins']}胜{values['draws']}平{values['losses']}负，"
+                f"进{values['goals_for']}球、失{values['goals_against']}球。"
+            ),
+            evidence_role="PREMATCH_EVIDENCE",
+            provenance=[
+                _article_provenance(
+                    payload,
+                    kind=source_kind,
+                    field=field_prefix,
+                    role="PREMATCH_EVIDENCE",
+                    value=values,
+                )
+            ],
+        )
+        if form_claim:
+            form_claims.append(form_claim)
+    form_block = _article_block("recent_form", form_claims)
+    if form_block:
+        blocks.append(form_block)
+    else:
+        omitted["recent_form"] = "RECENT_FORM_UNAVAILABLE"
+
+    goal_claims: list[dict[str, Any]] = []
+    btts = model.get("btts") if isinstance(model.get("btts"), dict) else {}
+    btts_yes = _article_probability(btts.get("yes"))
+    btts_no = _article_probability(btts.get("no"))
+    if btts_yes is not None or btts_no is not None:
+        btts_parts = []
+        btts_refs = []
+        if btts_yes is not None:
+            btts_parts.append(f"双方进球{btts_yes * 100:.1f}%")
+            btts_refs.append(
+                _article_provenance(
+                    payload,
+                    kind="model",
+                    field="model.btts.yes",
+                    role="MODEL_OUTPUT",
+                    value=btts_yes,
+                )
+            )
+        if btts_no is not None:
+            btts_parts.append(f"双方不同时进球{btts_no * 100:.1f}%")
+            btts_refs.append(
+                _article_provenance(
+                    payload,
+                    kind="model",
+                    field="model.btts.no",
+                    role="MODEL_OUTPUT",
+                    value=btts_no,
+                )
+            )
+        btts_claim = _article_claim(
+            "goal-environment-btts",
+            "，".join(btts_parts) + "；这里只描述当前分布。",
+            evidence_role="MODEL_OUTPUT",
+            provenance=btts_refs,
+        )
+        if btts_claim:
+            goal_claims.append(btts_claim)
+    totals = model.get("totals") if isinstance(model.get("totals"), list) else []
+    ranked_totals: list[tuple[str, float, int]] = []
+    for index, item in enumerate(totals):
+        if not isinstance(item, dict):
+            continue
+        probability = _article_probability(item.get("probability"))
+        goals = _string(item.get("goals") or item.get("value")).strip()
+        if probability is None or not goals:
+            continue
+        ranked_totals.append((goals, probability, index))
+    ranked_totals.sort(key=lambda item: (-item[1], item[2]))
+    if ranked_totals:
+        goals, probability, source_index = ranked_totals[0]
+        total_claim = _article_claim(
+            "goal-environment-total",
+            f"总进球分布中最高档为{goals}球（{probability * 100:.1f}%）。",
+            evidence_role="MODEL_OUTPUT",
+            provenance=[
+                _article_provenance(
+                    payload,
+                    kind="model",
+                    field=f"model.totals[{source_index}]",
+                    role="MODEL_OUTPUT",
+                    value={"goals": goals, "probability": probability},
+                )
+            ],
+        )
+        if total_claim:
+            goal_claims.append(total_claim)
+    goal_block = _article_block("goal_environment", goal_claims)
+    if goal_block:
+        blocks.append(goal_block)
+    else:
+        omitted["goal_environment"] = "GOAL_DISTRIBUTION_UNAVAILABLE"
+
+    market = payload.get("market") if isinstance(payload.get("market"), dict) else {}
+    comparison = market.get("model_comparison") if isinstance(market.get("model_comparison"), dict) else {}
+    same_time = bool(
+        comparison.get("same_time") is True
+        or comparison.get("same_time_authoritative") is True
+        or (
+            isinstance(comparison.get("same_time_official_market_baseline"), dict)
+            and str(comparison["same_time_official_market_baseline"].get("status") or "").upper() == "AVAILABLE"
+        )
+    )
+    comparison_model = comparison.get("model_probabilities") if isinstance(comparison.get("model_probabilities"), dict) else {}
+    comparison_market = comparison.get("market_probabilities") if isinstance(comparison.get("market_probabilities"), dict) else {}
+    comparison_values: list[tuple[str, float, float]] = []
+    for key in ("home", "draw", "away"):
+        model_value = _article_probability(
+            comparison_model.get(key) if comparison_model else comparison.get(f"model_{key}_probability")
+        )
+        market_value = _article_probability(
+            comparison_market.get(key) if comparison_market else comparison.get(f"market_{key}_probability")
+        )
+        if model_value is not None and market_value is not None:
+            comparison_values.append((key, model_value, market_value))
+    if same_time and len(comparison_values) == 3:
+        comparison_values.sort(key=lambda item: (-(item[1] - item[2]), outcome_order[item[0]]))
+        key, model_value, market_value = comparison_values[0]
+        market_claim = _article_claim(
+            "market-alignment-same-time",
+            (
+                f"同一时间点市场基线与模型分布可对照：{_ARTICLE_OUTCOME_LABELS[key]}"
+                f"模型为{model_value * 100:.1f}%，市场为{market_value * 100:.1f}%；"
+                "差异仅表示两种分布不同，不作额外投注判断。"
+            ),
+            evidence_role="MARKET_COMPARISON",
+            provenance=[
+                _article_provenance(
+                    payload,
+                    kind="market",
+                    field=f"market.model_comparison.model_probabilities.{key}",
+                    role="MARKET_COMPARISON",
+                    value=model_value,
+                ),
+                _article_provenance(
+                    payload,
+                    kind="market",
+                    field=f"market.model_comparison.market_probabilities.{key}",
+                    role="MARKET_COMPARISON",
+                    value=market_value,
+                ),
+                _article_provenance(
+                    payload,
+                    kind="market",
+                    field="market.model_comparison.same_time_authoritative",
+                    role="MARKET_COMPARISON",
+                    value=True,
+                ),
+            ],
+        )
+        market_block = _article_block("market_alignment", [market_claim] if market_claim else [])
+        if market_block:
+            blocks.append(market_block)
+    else:
+        omitted["market_alignment"] = "SAME_TIME_MARKET_COMPARISON_UNAVAILABLE"
+
+    score_items: list[tuple[str, float | None, int]] = []
+    raw_scores = model.get("top_scores") or model.get("score_distribution") or []
+    for index, item in enumerate(raw_scores):
+        if isinstance(item, str):
+            score_items.append((_string(item).strip(), None, index))
+            continue
+        if not isinstance(item, dict):
+            continue
+        score = _string(item.get("score") or item.get("value")).strip()
+        if not score:
+            continue
+        score_items.append((score, _article_probability(item.get("probability")), index))
+    score_items = [item for item in score_items if item[0]][:3]
+    score_claims: list[dict[str, Any]] = []
+    if score_items:
+        lead_score, lead_probability, lead_index = score_items[0]
+        score_parts = [
+            f"当前最高比分候选为{lead_score}"
+            + (f"（{lead_probability * 100:.1f}%）" if lead_probability is not None else "")
+        ]
+        if len(score_items) > 1:
+            score_parts.append("相邻候选包括" + "、".join(item[0] for item in score_items[1:]))
+        scored_items = [item for item in score_items if item[1] is not None]
+        if scored_items:
+            cumulative = sum(float(item[1]) for item in scored_items)
+            score_parts.append(f"已列前{len(scored_items)}个比分累计{cumulative * 100:.1f}%")
+        score_parts.append("单个比分只代表分布中的一个候选，不等于确定结果")
+        score_provenance = [
+            _article_provenance(
+                payload,
+                kind="model",
+                field=f"model.top_scores[{index}]",
+                role="MODEL_OUTPUT",
+                value={"score": score, "probability": probability},
+            )
+            for score, probability, index in score_items
+        ]
+        exact_state = _article_exact_state(payload)
+        exact_labels = {
+            "AVAILABLE": "当前可展示",
+            "DEGRADED": "当前降级",
+            "UNAVAILABLE": "当前不可展示",
+        }
+        if exact_state in exact_labels:
+            score_parts.append(f"精确比分服务{exact_labels[exact_state]}。")
+            score_provenance.append(
+                _article_provenance(
+                    payload,
+                    kind="serving",
+                    field="formal_markets.markets.exact_score.status",
+                    role="SERVING_STATE",
+                    value=exact_state,
+                )
+            )
+        score_claim = _article_claim(
+            "score-convergence-top-near",
+            "；".join(score_parts) + "。",
+            evidence_role="MODEL_OUTPUT",
+            provenance=score_provenance,
+        )
+        if score_claim:
+            score_claims.append(score_claim)
+    score_block = _article_block("score_convergence", score_claims)
+    if score_block:
+        blocks.append(score_block)
+    else:
+        omitted["score_convergence"] = "SCORE_DISTRIBUTION_UNAVAILABLE"
+
+    if len(ranked_outcomes) >= 2:
+        primary_key, primary_probability = ranked_outcomes[0]
+        runner_key, runner_probability = ranked_outcomes[1]
+        uncertainty_claim = _article_claim(
+            "uncertainty-counterexample",
+            (
+                f"需要保留的对立分支是{_ARTICLE_OUTCOME_LABELS[runner_key]}（{runner_probability * 100:.1f}%），"
+                f"与最高分支相差{(primary_probability - runner_probability) * 100:.1f}个百分点；"
+                "因此只保留相对排序，不作确定性结论。"
+            ),
+            evidence_role="UNCERTAINTY",
+            provenance=[
+                _article_provenance(
+                    payload,
+                    kind="model",
+                    field=f"model.probabilities.{primary_key}",
+                    role="UNCERTAINTY",
+                    value=primary_probability,
+                ),
+                _article_provenance(
+                    payload,
+                    kind="model",
+                    field=f"model.probabilities.{runner_key}",
+                    role="UNCERTAINTY",
+                    value=runner_probability,
+                ),
+            ],
+        )
+        uncertainty_block = _article_block("uncertainty", [uncertainty_claim] if uncertainty_claim else [])
+        if uncertainty_block:
+            blocks.append(uncertainty_block)
+    else:
+        omitted["uncertainty"] = "COUNTEREXAMPLE_UNAVAILABLE"
+
+    public_evidence = payload.get("evidence", {}).get("prematch_evidence") if isinstance(payload.get("evidence"), dict) else None
+    public_evidence = public_evidence if isinstance(public_evidence, dict) else {}
+    context_claims: list[dict[str, Any]] = []
+    coach = public_evidence.get("coach") if isinstance(public_evidence.get("coach"), dict) else {}
+    coach_parts = []
+    coach_refs = []
+    for side, name, label in (("home", coach.get("home"), home_name), ("away", coach.get("away"), away_name)):
+        clean_name = _string(name).strip()
+        if not clean_name:
+            continue
+        coach_parts.append(f"{label}主教练为{clean_name}")
+        coach_refs.append(
+            _article_provenance(
+                payload,
+                kind="evidence",
+                field=f"evidence.prematch_evidence.coach.{side}",
+                role="CONTEXT_ONLY",
+                value=clean_name,
+            )
+        )
+    if coach_parts:
+        coach_claim = _article_claim(
+            "context-coach",
+            "；".join(coach_parts) + "；仅作为赛前背景记录，不推导比赛因果。",
+            evidence_role="CONTEXT_ONLY",
+            provenance=coach_refs,
+        )
+        if coach_claim:
+            context_claims.append(coach_claim)
+    referee = _string(public_evidence.get("referee")).strip()
+    if referee:
+        referee_claim = _article_claim(
+            "context-referee",
+            f"裁判记录为{referee}；仅作为赛前背景记录，不推导比赛因果。",
+            evidence_role="CONTEXT_ONLY",
+            provenance=[
+                _article_provenance(
+                    payload,
+                    kind="evidence",
+                    field="evidence.prematch_evidence.referee",
+                    role="CONTEXT_ONLY",
+                    value=referee,
+                )
+            ],
+        )
+        if referee_claim:
+            context_claims.append(referee_claim)
+    context_block = _article_block("context", context_claims)
+    if context_block:
+        blocks.append(context_block)
+    else:
+        omitted["context"] = "COACH_OR_REFEREE_UNAVAILABLE"
+
+    available_ids = [block["id"] for block in blocks]
+    coverage = {
+        "claim_count": sum(len(block.get("claims") or []) for block in blocks),
+        "block_count": len(blocks),
+        "available_blocks": available_ids,
+        "omitted_blocks": list(omitted),
+        "degradation_count": len(omitted),
+        "degradation_reasons": omitted,
+    }
+    if not blocks:
+        status = "UNAVAILABLE"
+    elif omitted:
+        status = "DEGRADED"
+    else:
+        status = "AVAILABLE"
+    return {
+        "contract_version": PREMATCH_ANALYSIS_ARTICLE_VERSION,
+        "status": status,
+        "source_policy": "current_authoritative_prematch_evidence_only",
+        "blocks": blocks,
+        "coverage": coverage,
+    }
+
+
 def _market_facts(snapshot_input: dict[str, Any], prediction: dict[str, Any]) -> dict[str, Any]:
     source_snapshot = _latest_source_snapshot(snapshot_input)
     ouzhi = source_snapshot.get("ouzhi") or {}
@@ -1430,6 +2002,7 @@ def assemble_match_analysis(
             match_id=fixture.get("match_id"),
             business_date=business_date,
         )
+    contract["analysis_article"] = compile_prematch_analysis(contract)
     return contract
 
 
