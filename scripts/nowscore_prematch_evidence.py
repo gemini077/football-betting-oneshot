@@ -98,6 +98,7 @@ FIELD_NAMES = (
     "referee",
     "panlu",
     "technical_stats",
+    "recent_process_context",
     "market_context",
 )
 FIELD_SET = frozenset(FIELD_NAMES)
@@ -115,6 +116,7 @@ FIELD_SURFACES = {
     "referee": ("referee",),
     "panlu": ("panlu",),
     "technical_stats": ("time_page",),
+    "recent_process_context": ("time_page",),
     "market_context": ("market_context",),
 }
 SURFACES = (

@@ -25,10 +25,10 @@ TARGET = {
 STANDINGS_MARKER = '<div class="fenxiBar" data-competition="LEAGUE_A" data-season="2028">\u79ef\u5206\u6392\u540d</div>'
 
 
-def _payload(body):
+def _payload(body, surface="analysis_page"):
     return evidence.SurfacePayload(
-        "analysis_page",
-        "https://example.invalid/analysis",
+        surface,
+        f"https://example.invalid/{surface}",
         body,
         {
             "observed_at": "2098-12-31T12:00:00+08:00",
@@ -102,8 +102,30 @@ def _valid_analysis_page():
     )
 
 
-def _fields(body, target=TARGET):
-    return adapters._markup_adapter(_payload(body), target)["fields"]
+def _fields(body, target=TARGET, surface="analysis_page"):
+    return adapters._markup_adapter(_payload(body, surface), target)["fields"]
+
+
+def _recent_process_matrix(rows=None, left_header="近3场/近10场", right_header="近3场/近10场"):
+    rows = rows or [
+        ("2.3 / 3.6", "进球", "4 / 3.5"),
+        ("1.3 / 1.2", "失球", "1 / 1.1"),
+        ("18.7 / 13", "被射门", "12.7 / 11.8"),
+        ("5.7 / 5.3", "角球", "9 / 7.7"),
+        ("13.3 / 12.2", "犯规", "9.3 / 9.6"),
+        ("54.3% / 56.3%", "控球率", "63.7% / 59.2%"),
+    ]
+    body_rows = "".join(
+        f"<tr><td>{left}</td><td>{label}</td><td>{right}</td></tr>"
+        for left, label, right in rows
+    )
+    return (
+        '<div class="fenxiBar">技术统计</div>'
+        '<div class="resultBar">近期</div>'
+        "<table>"
+        f"<tr><th>{left_header}</th><th></th><th>{right_header}</th></tr>"
+        f"{body_rows}</table>"
+    )
 
 
 def test_field_specific_analysis_page_projection_parses_all_three_targets():
@@ -305,6 +327,95 @@ def test_field_specific_parser_is_deterministic_and_uses_verified_identity_conte
     assert _fields(body, parser_target)["standings_context"]["state"] == "PRESENT"
 
 
+def test_recent_process_matrix_is_side_bound_and_keeps_near3_near10_separate():
+    field = _fields(_recent_process_matrix(), surface="time_page")["recent_process_context"]
+
+    assert field["state"] == "PRESENT"
+    assert field["semantic_state"] == "EXPLICIT_RECENT_PROCESS_MATRIX_SIDE_BOUND"
+    value = field["value"]
+    assert value["metrics"] == ["shots_faced", "corners", "fouls", "possession"]
+    assert value["side_binding"] == "SOURCE_LEFT_HOME_RIGHT_AWAY"
+    assert value["teams"]["home"]["shots_faced"] == {
+        "near3": 18.7,
+        "near10": 13.0,
+        "unit": "source_value",
+    }
+    assert value["teams"]["away"]["corners"]["near3"] == 9.0
+    assert value["teams"]["away"]["corners"]["near10"] == 7.7
+    assert value["teams"]["home"]["possession"]["unit"] == "percent"
+    assert value["source_cross_checks"]["goals"]["home"]["near3"] == 2.3
+
+
+def test_recent_process_header_side_missing_or_asymmetric_fails_closed():
+    missing = _fields(
+        _recent_process_matrix(right_header="近3场"),
+        surface="time_page",
+    )["recent_process_context"]
+    assert missing["state"] == "PARSE_UNCERTAIN"
+    assert missing["reason_code"] in {
+        "RECENT_PROCESS_HEADER_MISSING",
+        "RECENT_PROCESS_HEADER_ASYMMETRIC",
+    }
+
+    no_header = _fields(
+        _recent_process_matrix(left_header="", right_header=""),
+        surface="time_page",
+    )["recent_process_context"]
+    assert no_header["state"] == "PARSE_UNCERTAIN"
+    assert no_header["reason_code"] == "RECENT_PROCESS_HEADER_MISSING"
+
+
+def test_recent_process_duplicate_and_malformed_supported_rows_fail_closed():
+    duplicate = _fields(
+        _recent_process_matrix(rows=[
+            ("18.7/13", "被射门", "12.7/11.8"),
+            ("5.7/5.3", "角球", "9/7.7"),
+            ("6.0/5.0", "角球", "8.0/7.0"),
+        ]),
+        surface="time_page",
+    )["recent_process_context"]
+    assert duplicate["state"] == "PARSE_UNCERTAIN"
+    assert duplicate["reason_code"] == "RECENT_PROCESS_DUPLICATE_METRIC"
+
+    malformed = _fields(
+        _recent_process_matrix(rows=[
+            ("18.7", "被射门", "12.7/11.8"),
+            ("54.3%/56.3%", "控球率", "63.7%/59.2%"),
+        ]),
+        surface="time_page",
+    )["recent_process_context"]
+    assert malformed["state"] == "PARSE_UNCERTAIN"
+    assert malformed["reason_code"] == "RECENT_PROCESS_METRIC_VALUE_MALFORMED"
+
+
+def test_recent_process_arbitrary_numeric_market_table_and_media_prose_are_not_evidence():
+    market = _fields(
+        _recent_process_matrix(rows=[("0.95/-0.5", "赔率", "0.85/-0.5")]),
+        surface="time_page",
+    )["recent_process_context"]
+    assert market["state"] == "PARSE_UNCERTAIN"
+    assert market["reason_code"] == "RECENT_PROCESS_NO_SUPPORTED_METRICS"
+
+    media = _fields(
+        '<div class="fenxiBar">媒体分析</div><p>控球率 99%/1% and tactical prose</p>',
+        surface="time_page",
+    )["recent_process_context"]
+    assert media["state"] == "ABSENT"
+
+
+def test_recent_process_partial_metric_coverage_is_explicit_and_deterministic():
+    body = _recent_process_matrix(rows=[
+        ("18.7/13", "被射门", "12.7/11.8"),
+        ("54.3%/56.3%", "控球率", "63.7%/59.2%"),
+    ])
+    first = _fields(body, surface="time_page")["recent_process_context"]
+    second = _fields(body, surface="time_page")["recent_process_context"]
+    assert first == second
+    assert first["state"] == "PRESENT"
+    assert first["value"]["metrics"] == ["shots_faced", "possession"]
+    assert "corners" not in first["value"]["teams"]["home"]
+
+
 def test_exact_head_audit_reports_field_coverage_and_boundary_proof():
     fields = _fields(_valid_analysis_page())
     natural = {
@@ -343,3 +454,43 @@ def test_exact_head_audit_reports_field_coverage_and_boundary_proof():
     assert proof["media_analysis_promotion_count"] == 0
     assert proof["player_name_persistence_count"] == 0
     assert len(report["sanitized_records"]) == 3
+
+
+def test_recent_process_audit_reports_metric_completeness_and_request_parity():
+    fields = {
+        **_fields(_valid_analysis_page()),
+        **_fields(_recent_process_matrix(), surface="time_page"),
+    }
+    natural = {
+        "run": {"as_of": "2098-12-31T12:00:00+08:00", "max_matches": 1},
+        "cohort": {"selected_fixture_count": 1},
+        "matches": [{
+            "nowscore_id": 123,
+            "status": "OK",
+            "identity_verification": {"trusted": True},
+            "trusted_jc_provenance": {"trusted": True},
+            "prematch_evidence": {
+                "fields": fields,
+                "observations": [{"surface": surface} for surface in evidence.SURFACES],
+            },
+        }],
+        "rights": {
+            "raw_bodies_persisted": False,
+            "raw_html_js_persisted": False,
+            "player_name_lists_persisted": False,
+        },
+    }
+    report = build_audit_report(natural, exact_head="EXACT_HEAD")
+    recent = report["coverage"]["fields"]["recent_process_context"]
+    assert report["selected_fixtures"] == [{
+        "nowscore_id": 123,
+        "status": "OK",
+        "identity_trusted": True,
+    }]
+    assert recent["present_count"] == 1
+    assert all(item["present_count"] == 1 for item in recent["metric_completeness"].values())
+    assert report["request_count"]["actual_request_count"] == len(evidence.SURFACES)
+    assert report["request_count"]["baseline_request_count"] == len(evidence.SURFACES)
+    assert report["request_count"]["delta"] == 0
+    assert report["request_count"]["surface_sequence_violation_count"] == 0
+    assert len(report["sanitized_recent_process_records"]) == 1

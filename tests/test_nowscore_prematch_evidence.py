@@ -152,6 +152,7 @@ def test_verified_same_id_bundle_covers_all_fields_without_raw_bodies():
     assert bundle["fields"]["suspensions"]["state"] == "SECTION_PRESENT_EMPTY"
     assert bundle["fields"]["lineup_state"]["semantic_state"] == "PREDICTED"
     assert bundle["fields"]["technical_stats"]["state"] == "PRESENT"
+    assert bundle["fields"]["recent_process_context"]["state"] == "ABSENT"
     assert bundle["fields"]["coach"]["state"] == "PRESENT"
     assert bundle["fields"]["referee"]["state"] == "PRESENT"
     assert bundle["fields"]["panlu"]["state"] == "PRESENT"
@@ -160,6 +161,25 @@ def test_verified_same_id_bundle_covers_all_fields_without_raw_bodies():
     assert "var h_data" not in serialized
     assert "raw_bodies_persisted" in serialized
     assert bundle["rights"]["raw_html_js_persisted"] is False
+
+
+def test_recent_process_reuses_existing_time_page_request():
+    bodies = {surface: read_fixture(surface) for surface in evidence.SURFACES}
+    bodies["time_page"] = (
+        '<div class="fenxiBar">技术统计</div><div class="resultBar">近期</div>'
+        "<table>"
+        "<tr><th>近3场/近10场</th><th></th><th>近3场/近10场</th></tr>"
+        "<tr><td>18.7/13</td><td>被射门</td><td>12.7/11.8</td></tr>"
+        "<tr><td>54.3%/56.3%</td><td>控球率</td><td>63.7%/59.2%</td></tr>"
+        "</table>"
+    )
+    client = FixtureClient(bodies=bodies)
+    result = crawl(client)
+
+    assert client.calls == list(evidence.SURFACES)
+    field = result["prematch_evidence"]["fields"]["recent_process_context"]
+    assert field["state"] == "PRESENT"
+    assert field["value"]["teams"]["home"]["shots_faced"]["near10"] == 13.0
 
 
 def test_existing_same_id_identity_accepts_abbreviation_full_name_regression():
