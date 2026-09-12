@@ -59,6 +59,20 @@ def _fetched_row(
         },
         "schedule_source_date": business_date,
         "schedule_source_date_format": "month_day",
+        "nowscore_source_identity": {
+            "status": "EXACT",
+            "nowscore_id": 2913701,
+            "home_team_id": 101,
+            "away_team_id": 202,
+            "home_team_en": "Home FC",
+            "away_team_en": "Away FC",
+            "kickoff_local": f"{kickoff_date}T00:30:00+08:00",
+            "calendar_date": kickoff_date,
+            "source_surface": "https://live.nowscore.com/schedule.aspx?f=sc1",
+            "backing_data_url": "https://live.nowscore.com/data/sc1.js",
+            "schedule_source_date": business_date,
+            "schedule_source_date_format": "month_day",
+        },
     }
 
 
@@ -146,6 +160,8 @@ def test_nowscore_schedule_payload_preserves_verified_fixture_provenance():
     assert payload["matches"][0]["sales_row_id"] == "5510001"
     assert payload["matches"][0]["cansale"] == "true"
     assert payload["matches"][0]["matchDate"] == "2026-09-02"
+    assert payload["matches"][0]["homeTeamEn"] == "Home FC"
+    assert payload["matches"][0]["nowscore_source_identity"]["home_team_id"] == 101
     assert payload["matches"][0]["source_surface"].startswith("https://cp.nowscore.com/buy/")
 
 

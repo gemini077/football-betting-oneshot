@@ -1452,8 +1452,7 @@ def run_enrichment_cohort(
 
     from scripts.football_context_identity_feasibility_audit import (
         _fetch_nowscore_alias_rows,
-        _backing_schedule_expected_dates,
-        _backing_schedule_urls,
+        _date_resolved_schedule_requests,
         _future_fixture,
         _parse_timestamp,
         build_nowscore_alias_index,
@@ -1463,6 +1462,7 @@ def run_enrichment_cohort(
     )
     from scripts.nowscore_prematch_evidence import ANALYSIS_PAGE_URL, NowscorePublicClient
     from scripts.nowscore_markets import MARKET_URL, _identity as parse_nowscore_market_identity
+    from scripts.prediction_universe import trusted_nowscore_source_identity
 
     cutoff = _parse_timestamp(as_of) if as_of else dt.datetime.now(dt.timezone.utc)
     if cutoff is None:
@@ -1478,15 +1478,22 @@ def run_enrichment_cohort(
         path = Path(cohort_path)
         cohort = _read_cohort(path)
     selected = [fixture for fixture in cohort["fixtures"] if isinstance(fixture, Mapping) and _future_fixture(fixture, cutoff)][: max(0, min(int(max_matches), 20))]
+    persisted = [fixture for fixture in selected if trusted_nowscore_source_identity(fixture)]
+    strict_backfill = [fixture for fixture in selected if not trusted_nowscore_source_identity(fixture)]
+    backfill_urls: tuple[str, ...] = ()
     if alias_rows is None:
-        alias_rows, alias_error = (
+        backfill_urls, backfill_dates = _date_resolved_schedule_requests(
+            strict_backfill, as_of=cutoff
+        )
+        backfill_rows, alias_error = (
             _fetch_nowscore_alias_rows(
-                schedule_urls=_backing_schedule_urls(selected),
-                expected_dates=_backing_schedule_expected_dates(selected),
+                schedule_urls=backfill_urls,
+                expected_dates=backfill_dates,
             )
-            if selected
+            if strict_backfill
             else ([], None)
         )
+        alias_rows = [*persisted, *backfill_rows]
     else:
         alias_error = None
     alias_index = build_nowscore_alias_index(alias_rows)
@@ -1609,6 +1616,11 @@ def run_enrichment_cohort(
             "path": _relative(Path(registry_path)),
             "summary_before": before_summary,
             "summary_after": after_summary,
+        },
+        "nowscore": {
+            "persisted_identity_count": len(persisted),
+            "strict_backfill_fixture_count": len(strict_backfill),
+            "alias_surface_request_count": len(backfill_urls),
         },
         "api_football": {
             "credential_state": "PRESENT" if _text(client._key) else "MISSING",

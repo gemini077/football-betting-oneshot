@@ -63,6 +63,9 @@ _FIELD_ALIASES = {
     "schedule_source_date_format": (
         "schedule_source_date_format", "scheduleSourceDateFormat"
     ),
+    "nowscore_source_identity": (
+        "nowscore_source_identity", "nowscoreSourceIdentity"
+    ),
     "shujuId": ("shujuId", "shuju_id"),
     "singleMatchAvailable": ("singleMatchAvailable", "single_match_available"),
     "spf": ("spf",),
@@ -110,6 +113,69 @@ def _first_mapping_value(row: Mapping[str, Any] | None, *keys: str) -> Any:
         if _present(row.get(key)):
             return row[key]
     return None
+
+
+def trusted_nowscore_source_identity(
+    fixture: Mapping[str, Any] | None,
+) -> dict[str, Any] | None:
+    """Return only the exact source identity captured during schedule intake."""
+
+    if not isinstance(fixture, Mapping):
+        return None
+    raw = fixture.get("nowscore_source_identity")
+    if not isinstance(raw, Mapping) or raw.get("status") != "EXACT":
+        return None
+
+    fixture_id = _numeric_provider_id(
+        _first_mapping_value(fixture, "nowscore_id", "nowscoreId", "matchId")
+    )
+    source_id = _numeric_provider_id(
+        _first_mapping_value(raw, "nowscore_id", "match_id", "nowscoreId")
+    )
+    home_id = _numeric_provider_id(raw.get("home_team_id"))
+    away_id = _numeric_provider_id(raw.get("away_team_id"))
+    home_alias = str(raw.get("home_team_en") or "").strip()
+    away_alias = str(raw.get("away_team_en") or "").strip()
+    kickoff = str(raw.get("kickoff_local") or "").strip()
+    calendar_date = str(raw.get("calendar_date") or "").strip()
+    fixture_date = str(
+        _first_mapping_value(fixture, "matchDate", "match_date") or ""
+    ).strip()[:10]
+    fixture_time = str(
+        _first_mapping_value(fixture, "matchTime", "match_time") or ""
+    ).strip()[:5]
+    try:
+        date.fromisoformat(calendar_date)
+        datetime.fromisoformat(kickoff.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if (
+        fixture_id is None
+        or source_id != fixture_id
+        or home_id is None
+        or away_id is None
+        or not home_alias
+        or not away_alias
+        or not kickoff.startswith(f"{calendar_date}T")
+        or fixture_date != calendar_date
+        or fixture_time != kickoff[11:16]
+        or not _present(raw.get("source_surface"))
+        or not _present(raw.get("backing_data_url"))
+    ):
+        return None
+    return {
+        "nowscore_id": source_id,
+        "home_team_id": home_id,
+        "away_team_id": away_id,
+        "home_team_en": home_alias,
+        "away_team_en": away_alias,
+        "kickoff_local": kickoff,
+        "calendar_date": calendar_date,
+        "source_surface": str(raw["source_surface"]).strip(),
+        "backing_data_url": str(raw["backing_data_url"]).strip(),
+        "schedule_source_date": raw.get("schedule_source_date"),
+        "schedule_source_date_format": raw.get("schedule_source_date_format"),
+    }
 
 
 def _numeric_provider_id(value: Any) -> int | None:

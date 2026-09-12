@@ -1469,6 +1469,7 @@ def fetch_nowscore_jc_schedule(
             calendar_dates_by_surface.setdefault(surface, set()).add(calendar_date)
 
         a32_by_id: dict[int, list[dict]] = {}
+        source_identity_by_id: dict[int, list[dict]] = {}
         optional_surfaces: dict[str, dict] = {}
         optional_flagged_count = 0
         optional_duplicate_count = 0
@@ -1536,6 +1537,23 @@ def fetch_nowscore_jc_schedule(
                     for corroboration in parsed.get("fixtures") or []:
                         match_id = corroboration.get("nowscore_id")
                         if match_id in candidate_ids:
+                            source_identity_by_id.setdefault(int(match_id), []).append({
+                                "nowscore_id": int(match_id),
+                                "home_team_id": corroboration.get("home_team_id"),
+                                "away_team_id": corroboration.get("away_team_id"),
+                                "home_team_en": corroboration.get("home_team_en"),
+                                "away_team_en": corroboration.get("away_team_en"),
+                                "kickoff_local": corroboration.get("kickoff_local"),
+                                "calendar_date": calendar_date.isoformat(),
+                                "source_surface": source_url,
+                                "backing_data_url": data_base_url,
+                                "schedule_source_date": corroboration.get(
+                                    "schedule_source_date"
+                                ),
+                                "schedule_source_date_format": corroboration.get(
+                                    "schedule_source_date_format"
+                                ),
+                            })
                             a32_by_id.setdefault(int(match_id), []).append({
                                 "filter_function": "SetLevel(3)",
                                 "predicate": "A[j][32] == 1",
@@ -1624,6 +1642,12 @@ def fetch_nowscore_jc_schedule(
                 fixture["a32_corroboration"] = corroborations[0]
             elif len(corroborations) > 1:
                 fixture["a32_corroboration_status"] = "AMBIGUOUS_OPTIONAL"
+            identities = source_identity_by_id.get(int(match_id), [])
+            if len(identities) == 1:
+                fixture["nowscore_source_identity"] = {
+                    "status": "EXACT",
+                    **identities[0],
+                }
             matches.append(fixture)
 
         direct_contract = business_page.get("contract")

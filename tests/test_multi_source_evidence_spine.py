@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from datetime import datetime
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 from urllib.parse import parse_qs, urlparse
 
@@ -20,6 +21,7 @@ from scripts.football_data.multi_source_evidence_spine import (
     bind_fixture_identity,
     build_enrichment_snapshot,
     read_league_coverage,
+    run_enrichment_cohort,
 )
 
 
@@ -63,6 +65,57 @@ def _proven_registry() -> EntityRegistry:
     registry.accept_team("NS-A", 2, aliases=("Away FC",), evidence=("reviewed_pair",))
     registry.accept_competition(25, 39, 2026, country="England", evidence=("reviewed_competition",))
     return registry
+
+
+def test_enrichment_uses_persisted_identity_before_alias_surface_backfill(tmp_path: Path):
+    fixture = {
+        "nowscore_id": 123,
+        "matchId": "123",
+        "matchDate": "2026-09-13",
+        "matchTime": "03:00",
+        "nowscore_source_identity": {
+            "status": "EXACT",
+            "nowscore_id": 123,
+            "home_team_id": 101,
+            "away_team_id": 202,
+            "home_team_en": "Home FC",
+            "away_team_en": "Away FC",
+            "kickoff_local": "2026-09-13T03:00:00+08:00",
+            "calendar_date": "2026-09-13",
+            "source_surface": "https://live.nowscore.com/schedule.aspx?f=sc1",
+            "backing_data_url": "https://live.nowscore.com/data/sc1.js",
+        },
+    }
+    cohort_path = tmp_path / "cohort.json"
+    cohort_path.write_text(
+        json.dumps({
+            "status": "READY",
+            "source": "nowscore_public_jc",
+            "business_date": "2026-09-12",
+            "fixtures": [fixture],
+        }),
+        encoding="utf-8",
+    )
+
+    with patch(
+        "scripts.football_context_identity_feasibility_audit._fetch_nowscore_alias_rows",
+        side_effect=AssertionError("persisted identity must avoid refetch"),
+    ), patch(
+        "scripts.nowscore_prematch_evidence.NowscorePublicClient.fetch",
+        return_value=SimpleNamespace(body=""),
+    ):
+        report = run_enrichment_cohort(
+            cohort_path=cohort_path,
+            as_of="2026-09-12T12:00:00+08:00",
+            registry_path=tmp_path / "registry.json",
+        )
+
+    assert report["nowscore"] == {
+        "persisted_identity_count": 1,
+        "strict_backfill_fixture_count": 0,
+        "alias_surface_request_count": 0,
+    }
+    assert report["snapshots"][0]["identity"]["nowscore_home_team_id"] == "101"
 
 
 def test_next_day_sc1_alias_surface_uses_exact_row_and_source_kickoff():

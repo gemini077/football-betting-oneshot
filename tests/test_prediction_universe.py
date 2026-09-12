@@ -208,6 +208,18 @@ class PredictionUniverseTests(unittest.TestCase):
                     "expected_business_date": "2026-09-01",
                     "source_date_value": "2026-09-01 00:30",
                 },
+                "nowscore_source_identity": {
+                    "status": "EXACT",
+                    "nowscore_id": 2913701,
+                    "home_team_id": 101,
+                    "away_team_id": 202,
+                    "home_team_en": "Home FC",
+                    "away_team_en": "Away FC",
+                    "kickoff_local": "2026-09-01T00:30:00+08:00",
+                    "calendar_date": "2026-09-01",
+                    "source_surface": "https://live.nowscore.com/schedule.aspx?f=ft1",
+                    "backing_data_url": "https://live.nowscore.com/data/ft1.js",
+                },
             }],
         }
 
@@ -229,6 +241,7 @@ class PredictionUniverseTests(unittest.TestCase):
         assert saved["sales_row_id"] == "5510001"
         assert saved["source_surface"].startswith("https://cp.nowscore.com/buy/")
         assert saved["date_provenance"]["expected_business_date"] == "2026-09-01"
+        assert saved["nowscore_source_identity"]["home_team_id"] == 101
 
     def test_full_schedule_creates_fourteen_fixture_universe(self):
         with tempfile.TemporaryDirectory() as temp:

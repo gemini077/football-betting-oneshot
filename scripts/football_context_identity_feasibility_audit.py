@@ -35,6 +35,7 @@ if str(SCRIPT_ROOT) not in sys.path:
 
 try:
     from nowscore_markets import (
+        JC_SCHEDULE_DATA_URL,
         _decode,
         _fetch_bytes,
         _parse_schedule_js,
@@ -47,9 +48,13 @@ try:
         _parse_timestamp,
         discover_natural_cohort,
     )
-    from prediction_universe import trusted_nowscore_jc_fixture
+    from prediction_universe import (
+        trusted_nowscore_jc_fixture,
+        trusted_nowscore_source_identity,
+    )
 except ImportError:  # package imports used by focused tests
     from scripts.nowscore_markets import (
+        JC_SCHEDULE_DATA_URL,
         _decode,
         _fetch_bytes,
         _parse_schedule_js,
@@ -62,7 +67,10 @@ except ImportError:  # package imports used by focused tests
         _parse_timestamp,
         discover_natural_cohort,
     )
-    from scripts.prediction_universe import trusted_nowscore_jc_fixture
+    from scripts.prediction_universe import (
+        trusted_nowscore_jc_fixture,
+        trusted_nowscore_source_identity,
+    )
 
 
 SHANGHAI = ZoneInfo("Asia/Shanghai")
@@ -147,6 +155,43 @@ def _backing_schedule_expected_dates(fixtures: Iterable[Mapping[str, Any]]) -> d
         if calendar_date:
             expected.setdefault(url, calendar_date)
     return expected
+
+
+def _date_resolved_schedule_requests(
+    fixtures: Iterable[Mapping[str, Any]],
+    *,
+    as_of: str | datetime | None = None,
+) -> tuple[tuple[str, ...], dict[str, Any]]:
+    """Build strict exact backfill requests from each fixture's real calendar date."""
+
+    cutoff = _parse_timestamp(as_of) if as_of else datetime.now(SHANGHAI)
+    today = cutoff.astimezone(SHANGHAI).date() if cutoff else datetime.now(SHANGHAI).date()
+    dates_by_url: dict[str, set[str]] = defaultdict(set)
+    for fixture in fixtures:
+        calendar_date = _source_date(fixture)
+        if not calendar_date:
+            continue
+        target = datetime.fromisoformat(calendar_date).date()
+        offset = (target - today).days
+        surface = "ft1" if offset == 0 else f"sc{offset}" if 1 <= offset <= 7 else None
+        corroboration = fixture.get("a32_corroboration")
+        stored_url = (
+            _clean_text(corroboration.get("backing_data_url"))
+            if isinstance(corroboration, Mapping)
+            else ""
+        )
+        url = (
+            JC_SCHEDULE_DATA_URL.format(filename=f"{surface}.js")
+            if surface
+            else stored_url if _schedule_surface(stored_url) else ""
+        )
+        if url:
+            dates_by_url[url].add(calendar_date)
+    expected_dates: dict[str, Any] = {
+        url: next(iter(dates)) if len(dates) == 1 else tuple(sorted(dates))
+        for url, dates in dates_by_url.items()
+    }
+    return tuple(sorted(dates_by_url)), expected_dates
 
 
 def _exact_head() -> str:
@@ -234,6 +279,20 @@ def build_nowscore_alias_index(rows: list[Mapping[str, Any]]) -> dict[int, list[
 
     index: dict[int, list[dict[str, Any]]] = defaultdict(list)
     for row in rows:
+        persisted = trusted_nowscore_source_identity(row)
+        if persisted:
+            row = {
+                **row,
+                "nowscore_id": persisted["nowscore_id"],
+                "home_team_id": persisted["home_team_id"],
+                "away_team_id": persisted["away_team_id"],
+                "home_team_en": persisted["home_team_en"],
+                "away_team_en": persisted["away_team_en"],
+                "kickoff_local": persisted["kickoff_local"],
+                "source_surface": persisted["source_surface"],
+                "_schedule_backing_data_url": persisted["backing_data_url"],
+                "_persisted_identity": True,
+            }
         match_id = _positive_int(row.get("nowscore_id"))
         if match_id is None:
             continue
@@ -255,11 +314,17 @@ def build_nowscore_alias_index(rows: list[Mapping[str, Any]]) -> dict[int, list[
             "nowscore_away_team_id": _positive_int(row.get("away_team_id")),
             "nowscore_schedule_kickoff": _clean_text(row.get("kickoff_local")) or None,
             "source_surface": (
+                "prediction_universe:nowscore_source_identity"
+                if row.get("_persisted_identity")
+                else
                 f"nowscore_schedule_{_clean_text(row.get('_schedule_surface'))}"
                 if _clean_text(row.get("_schedule_surface"))
                 else "cohort_backing_schedule"
             ),
             "evidence_location": (
+                "prediction_universe:nowscore_source_identity"
+                if row.get("_persisted_identity")
+                else
                 f"{_clean_text(row.get('_schedule_surface'))}.js:exact_nowscore_id_row"
                 if _clean_text(row.get("_schedule_surface"))
                 else "backing_schedule:exact_nowscore_id_row"
@@ -278,16 +343,6 @@ def nowscore_alias_evidence(
     """Return sanitized alias availability plus transient exact aliases."""
 
     match_id = _fixture_id(fixture)
-    if surface_error:
-        return {
-            "status": "UNBOUND",
-            "reason_code": "NOWSCORE_ALIAS_SURFACE_UNAVAILABLE",
-            "source_surface": "cohort_backing_schedule",
-            "evidence_location": None,
-            "field_presence": {field: False for field in EXACT_ALIAS_FIELDS},
-            "alias_field_count": 0,
-            "aliases": {"home": (), "away": ()},
-        }
     rows = alias_index.get(match_id or 0, [])
     if len(rows) != 1:
         return {
@@ -296,6 +351,8 @@ def nowscore_alias_evidence(
                 "NOWSCORE_ALIAS_ROW_AMBIGUOUS"
                 if len(rows) > 1
                 else "NOWSCORE_ALIAS_ROW_MISSING"
+                if not surface_error
+                else "NOWSCORE_ALIAS_SURFACE_UNAVAILABLE"
             ),
             "source_surface": "cohort_backing_schedule",
             "evidence_location": None,
@@ -694,20 +751,27 @@ def _fetch_nowscore_alias_rows(
         return [], "NOWSCORE_ALIAS_BACKING_SURFACE_MISSING"
     rows: list[Mapping[str, Any]] = []
     for url in urls:
-        try:
-            fetch_url = f"{url}{'&' if '?' in url else '?'}{int(time.time()) * 1000}"
-            parsed_rows, _ = _parse_schedule_js(
-                _decode(_fetch_bytes(fetch_url)),
-                expected_date=(expected_dates or {}).get(url),
-            )
-        except Exception:
-            continue
         surface = _schedule_surface(url)
-        for row in parsed_rows:
-            enriched = dict(row)
-            enriched["_schedule_backing_data_url"] = url
-            enriched["_schedule_surface"] = surface
-            rows.append(enriched)
+        expected = (expected_dates or {}).get(url)
+        expected_values = (
+            tuple(dict.fromkeys(expected))
+            if isinstance(expected, (list, tuple, set))
+            else (expected,)
+        )
+        for expected_date in expected_values:
+            try:
+                fetch_url = f"{url}{'&' if '?' in url else '?'}{int(time.time()) * 1000}"
+                parsed_rows, _ = _parse_schedule_js(
+                    _decode(_fetch_bytes(fetch_url)),
+                    expected_date=expected_date,
+                )
+            except Exception:
+                continue
+            for row in parsed_rows:
+                enriched = dict(row)
+                enriched["_schedule_backing_data_url"] = url
+                enriched["_schedule_surface"] = surface
+                rows.append(enriched)
     return (rows, None) if rows else ([], "NOWSCORE_ALIAS_SURFACE_UNAVAILABLE")
 
 
@@ -906,6 +970,8 @@ def build_audit_report(
     api_key_present: bool,
     api_secret_for_check: str = "",
     exact_head: str,
+    persisted_identity_count: int = 0,
+    strict_backfill_fixture_count: int = 0,
 ) -> dict[str, Any]:
     api_request_count = api_client.request_count if api_client else 0
     endpoint_counts = {
@@ -928,6 +994,8 @@ def build_audit_report(
         "nowscore": {
             "analysis_page_request_count": nowscore_analysis_requests,
             "alias_surface_request_count": nowscore_alias_request_count,
+            "persisted_identity_count": persisted_identity_count,
+            "strict_backfill_fixture_count": strict_backfill_fixture_count,
             "direct_competition_bridge": nowscore_bridge,
             "exact_alias_bridge": alias_bridge,
             "direct_competition_bindings": _nowscore_competition_bindings(records),
@@ -992,14 +1060,20 @@ def run_audit(
         as_of=as_of,
     )
     selected, cutoff = _select_fixtures(cohort, as_of=as_of, max_matches=max_matches)
-    alias_rows, alias_error = (
+    persisted = [fixture for fixture in selected if trusted_nowscore_source_identity(fixture)]
+    strict_backfill = [fixture for fixture in selected if fixture not in persisted]
+    backfill_urls, backfill_dates = _date_resolved_schedule_requests(
+        strict_backfill, as_of=cutoff
+    )
+    backfill_rows, alias_error = (
         _fetch_nowscore_alias_rows(
-            schedule_urls=_backing_schedule_urls(selected),
-            expected_dates=_backing_schedule_expected_dates(selected),
+            schedule_urls=backfill_urls,
+            expected_dates=backfill_dates,
         )
-        if selected
+        if strict_backfill
         else ([], None)
     )
+    alias_rows = [*persisted, *backfill_rows]
     alias_index = build_nowscore_alias_index(alias_rows)
     client = (
         nowscore_client_factory(max(1, len(selected)))
@@ -1111,11 +1185,13 @@ def run_audit(
         cutoff=cutoff,
         records=records,
         nowscore_analysis_requests=int(getattr(client, "request_count", 0)),
-        nowscore_alias_request_count=1 if selected else 0,
+        nowscore_alias_request_count=len(backfill_urls),
         api_client=live_api,
         api_key_present=bool(key),
         api_secret_for_check=key,
         exact_head=_exact_head(),
+        persisted_identity_count=len(persisted),
+        strict_backfill_fixture_count=len(strict_backfill),
     )
 
 

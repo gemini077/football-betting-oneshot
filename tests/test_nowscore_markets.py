@@ -305,6 +305,57 @@ class NowscoreMarketTests(unittest.TestCase):
         self.assertEqual("OK", result["status"])
         self.assertEqual(1, len(result["matches"]))
 
+    def test_intake_persists_exact_source_identity_for_next_calendar_day(self):
+        business_page = _jc_business_page(
+            [("\u5468\u4e8c", "2026-09-01")],
+            "2026-09-01",
+            row=_jc_business_row(
+                group="\u5468\u4e8c",
+                kickoff="2026-09-02 00:30",
+            ),
+        )
+        schedule_page = (
+            'var filename2="sc1.js";\n'
+            "function SetLevel(l) { if (l == 3) { index = 32; "
+            "A[j][index] == 1; } }\n"
+            '<a href="javascript:SetLevel(3)">JC</a>'
+        )
+        values = [
+            123, 1, 101, 202, "Home", 0, "Home FC", "Away", 0,
+            "Away FC", "00:30", "09-02", 0, 0, 0, None, None, None,
+            0, 0, 0, 0, "", "", "", 0, "", "", "", 0, 0, 0, 1,
+        ]
+        schedule_data = "A[0]=[" + ",".join(
+            "" if value is None else repr(value) for value in values
+        ) + "];"
+
+        with patch.object(
+            nowscore_markets,
+            "_fetch_bytes",
+            side_effect=[
+                business_page.encode("utf-8"),
+                schedule_page.encode("utf-8"),
+                schedule_data.encode("utf-8"),
+            ],
+        ):
+            result = fetch_nowscore_jc_schedule(
+                "2026-09-01", now=date(2026, 9, 1)
+            )
+
+        self.assertTrue(result["success"])
+        identity = result["matches"][0]["nowscore_source_identity"]
+        self.assertEqual("EXACT", identity["status"])
+        self.assertEqual(123, identity["nowscore_id"])
+        self.assertEqual(101, identity["home_team_id"])
+        self.assertEqual(202, identity["away_team_id"])
+        self.assertEqual("Home FC", identity["home_team_en"])
+        self.assertEqual("Away FC", identity["away_team_en"])
+        self.assertEqual("2026-09-02", identity["calendar_date"])
+        self.assertEqual(
+            "https://live.nowscore.com/data/sc1.js",
+            identity["backing_data_url"],
+        )
+
     def test_verified_binding_survives_schedule_outage(self):
         parsed = {
             "identity": {"home_team": "A", "away_team": "B", "kickoff_local": "2026-07-20 03:00"},

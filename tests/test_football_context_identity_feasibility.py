@@ -6,9 +6,12 @@ from pathlib import Path
 
 from scripts.football_context_identity_feasibility_audit import (
     ApiFootballClient,
+    _date_resolved_schedule_requests,
     bind_api_fixture_strict,
     build_audit_report,
+    build_nowscore_alias_index,
     extract_nowscore_competition_bridge,
+    nowscore_alias_evidence,
     read_api_league_coverage,
 )
 
@@ -18,6 +21,55 @@ SOURCE_FIXTURE = {
     "kickoff": "2026-09-11T18:00:00+08:00",
 }
 ALIASES = {"aliases": {"home": ("Home FC",), "away": ("Away FC",)}}
+
+
+def test_persisted_source_identity_wins_when_alias_surface_is_unavailable():
+    fixture = {
+        "nowscore_id": 123,
+        "matchDate": "2026-09-12",
+        "matchTime": "00:30",
+        "nowscore_source_identity": {
+            "status": "EXACT",
+            "nowscore_id": 123,
+            "home_team_id": 101,
+            "away_team_id": 202,
+            "home_team_en": "Home FC",
+            "away_team_en": "Away FC",
+            "kickoff_local": "2026-09-12T00:30:00+08:00",
+            "calendar_date": "2026-09-12",
+            "source_surface": "https://live.nowscore.com/schedule.aspx?f=sc1",
+            "backing_data_url": "https://live.nowscore.com/data/sc1.js",
+        },
+    }
+
+    evidence = nowscore_alias_evidence(
+        fixture,
+        build_nowscore_alias_index([fixture]),
+        surface_error="NOWSCORE_ALIAS_SURFACE_UNAVAILABLE",
+    )
+
+    assert evidence["status"] == "BOUND"
+    assert evidence["nowscore_home_team_id"] == 101
+    assert evidence["nowscore_away_team_id"] == 202
+    assert evidence["aliases"] == {
+        "home": ("Home FC",),
+        "away": ("Away FC",),
+    }
+    assert evidence["evidence_location"] == "prediction_universe:nowscore_source_identity"
+
+
+def test_old_cohort_backfill_resolves_each_fixture_calendar_date():
+    urls, expected_dates = _date_resolved_schedule_requests(
+        [{
+            "nowscore_id": 123,
+            "matchDate": "2026-09-13",
+            "matchTime": "00:30",
+        }],
+        as_of="2026-09-12T12:00:00+08:00",
+    )
+
+    assert urls == ("https://live.nowscore.com/data/sc1.js",)
+    assert expected_dates == {urls[0]: "2026-09-13"}
 
 
 def _api_row(
