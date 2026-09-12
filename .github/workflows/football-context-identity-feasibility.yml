@@ -104,6 +104,7 @@ jobs:
           BUSINESS_DATE: ${{ inputs.business_date || '' }}
         run: |
           COHORT_BUSINESS_DATE="${BUSINESS_DATE:-$(TZ=Asia/Shanghai date +%F)}"
+          export COHORT_BUSINESS_DATE
           echo "COHORT_BUSINESS_DATE=$COHORT_BUSINESS_DATE" >> "$GITHUB_ENV"
           python - <<'PY'
           import json
