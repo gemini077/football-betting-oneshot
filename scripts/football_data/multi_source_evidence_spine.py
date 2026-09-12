@@ -15,6 +15,7 @@ import json
 import os
 import re
 import subprocess
+import time
 import unicodedata
 import urllib.error
 import urllib.parse
@@ -29,6 +30,18 @@ DEFAULT_REGISTRY_PATH = ROOT / "data" / "provider_entity_registry.json"
 DEFAULT_ARTIFACT_PATH = ROOT / "artifacts" / "issue-293-multi-source-evidence-spine.json"
 API_FOOTBALL_BASE_URL = "https://v3.football.api-sports.io"
 MAX_API_FOOTBALL_REQUESTS = 100
+API_FOOTBALL_MIN_INTERVAL_SECONDS = 6.0
+RATE_LIMIT_HEADER_NAMES = frozenset(
+    {
+        "retry-after",
+        "x-ratelimit-limit",
+        "x-ratelimit-remaining",
+        "x-ratelimit-reset",
+        "x-ratelimit-requests-limit",
+        "x-ratelimit-requests-remaining",
+        "x-ratelimit-requests-reset",
+    }
+)
 ALLOWED_ENDPOINTS = (
     "/fixtures",
     "/leagues",
@@ -387,16 +400,29 @@ class ApiFootballSharedClient:
         opener: Callable[..., Any] | None = None,
         timeout: int = 30,
         max_requests: int = MAX_API_FOOTBALL_REQUESTS,
+        min_request_interval: float = API_FOOTBALL_MIN_INTERVAL_SECONDS,
+        sleep: Callable[[float], None] = time.sleep,
+        clock: Callable[[], float] = time.monotonic,
     ) -> None:
         self._key = _text(key)
         self.opener = opener or urllib.request.urlopen
         self.timeout = timeout
         self.max_requests = max(0, min(int(max_requests), MAX_API_FOOTBALL_REQUESTS))
+        self.min_request_interval = max(0.0, float(min_request_interval))
+        self._sleep = sleep
+        self._clock = clock
+        self._last_request_at: float | None = None
+        self._not_before = 0.0
         self.request_count = 0
         self.blocked_request_count = 0
         self.cache_hits = 0
+        self.rate_limit_wait_count = 0
+        self.rate_limit_wait_seconds = 0.0
+        self.rate_limit_backoff_count = 0
         self.endpoint_counts: Counter[str] = Counter()
         self.response_states: Counter[str] = Counter()
+        self.http_status_counts: Counter[str] = Counter()
+        self.provider_error_keys: Counter[str] = Counter()
         self._cache: dict[str, dict[str, Any]] = {}
 
     @staticmethod
@@ -411,6 +437,70 @@ class ApiFootballSharedClient:
         if isinstance(errors, list):
             return sorted(_text(item.get("code") or item.get("type")) for item in errors if isinstance(item, Mapping) and _text(item.get("code") or item.get("type")))
         return ["provider_error"] if errors else []
+
+    @staticmethod
+    def _rate_limit_metadata(headers: Any) -> dict[str, str]:
+        try:
+            items = headers.items()
+        except AttributeError:
+            return {}
+        return {
+            str(key).casefold(): _text(value)
+            for key, value in items
+            if str(key).casefold() in RATE_LIMIT_HEADER_NAMES and _text(value)
+        }
+
+    @staticmethod
+    def _status(value: Any) -> int | None:
+        try:
+            value = value() if callable(value) else value
+            return int(value) if value is not None else None
+        except (TypeError, ValueError):
+            return None
+
+    @staticmethod
+    def _retry_after_seconds(metadata: Mapping[str, Any]) -> float | None:
+        value = _text(metadata.get("retry-after"))
+        if not value:
+            return None
+        try:
+            seconds = float(value)
+        except ValueError:
+            return None
+        return max(0.0, seconds)
+
+    def _wait_for_request(self) -> None:
+        now = self._clock()
+        earliest = now
+        if self._last_request_at is not None:
+            earliest = max(earliest, self._last_request_at + self.min_request_interval)
+        earliest = max(earliest, self._not_before)
+        delay = max(0.0, earliest - now)
+        if delay:
+            self._sleep(delay)
+            self.rate_limit_wait_count += 1
+            self.rate_limit_wait_seconds += delay
+        self._last_request_at = self._clock()
+
+    def _apply_backoff(self, metadata: Mapping[str, Any], *, rate_limited: bool = False) -> None:
+        delay = self._retry_after_seconds(metadata)
+        if delay is None and rate_limited:
+            delay = self.min_request_interval
+        if delay is not None:
+            self._not_before = max(self._not_before, self._clock() + delay)
+            self.rate_limit_backoff_count += 1
+
+    def _finish(self, cache_key: str, result: dict[str, Any]) -> dict[str, Any]:
+        response_state = _text(result.get("response_state")) or "UNKNOWN"
+        self.response_states[response_state] += 1
+        status = result.get("http_status")
+        if status is not None:
+            self.http_status_counts[str(status)] += 1
+        for key in result.get("provider_error_keys", ()):
+            self.provider_error_keys[_text(key)] += 1
+        if result.get("ok") is True:
+            self._cache[cache_key] = copy.deepcopy(result)
+        return result
 
     def get(self, endpoint: str, params: Mapping[str, Any]) -> dict[str, Any]:
         endpoint = "/" + _text(endpoint).strip("/")
@@ -428,6 +518,7 @@ class ApiFootballSharedClient:
         if self.request_count >= self.max_requests:
             self.blocked_request_count += 1
             return {"ok": False, "reason_code": "API_REQUEST_CAP_REACHED", "response_state": "NOT_REQUESTED"}
+        self._wait_for_request()
         self.request_count += 1
         self.endpoint_counts[endpoint] += 1
         query = urllib.parse.urlencode(normalized_params)
@@ -439,32 +530,87 @@ class ApiFootballSharedClient:
                 "x-apisports-key": self._key,
             },
         )
+        rate_limit: dict[str, str] = {}
+        http_status: int | None = None
         try:
             with self.opener(request, timeout=self.timeout) as response:
+                http_status = self._status(getattr(response, "status", None))
+                if http_status is None:
+                    http_status = self._status(getattr(response, "getcode", None))
+                rate_limit = self._rate_limit_metadata(getattr(response, "headers", None))
                 payload = json.loads(response.read().decode("utf-8"))
-        except urllib.error.HTTPError:
-            return {"ok": False, "reason_code": "API_HTTP_ERROR", "response_state": "HTTP_ERROR"}
+        except urllib.error.HTTPError as error:
+            http_status = self._status(getattr(error, "code", None))
+            rate_limit = self._rate_limit_metadata(getattr(error, "headers", None))
+            if http_status == 429:
+                self._apply_backoff(rate_limit, rate_limited=True)
+            return self._finish(
+                cache_key,
+                {
+                    "ok": False,
+                    "reason_code": "API_HTTP_ERROR",
+                    "response_state": "HTTP_ERROR",
+                    "http_status": http_status,
+                    "rate_limit": rate_limit,
+                },
+            )
         except (urllib.error.URLError, TimeoutError, OSError):
-            return {"ok": False, "reason_code": "API_NETWORK_ERROR", "response_state": "NETWORK_ERROR"}
+            return self._finish(
+                cache_key,
+                {"ok": False, "reason_code": "API_NETWORK_ERROR", "response_state": "NETWORK_ERROR"},
+            )
         except (UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError):
-            return {"ok": False, "reason_code": "API_RESPONSE_INVALID", "response_state": "INVALID_ENVELOPE"}
+            return self._finish(
+                cache_key,
+                {
+                    "ok": False,
+                    "reason_code": "API_RESPONSE_INVALID",
+                    "response_state": "INVALID_ENVELOPE",
+                    "http_status": http_status,
+                    "rate_limit": rate_limit,
+                },
+            )
         if not isinstance(payload, Mapping):
-            return {"ok": False, "reason_code": "API_RESPONSE_ENVELOPE_INVALID", "response_state": "INVALID_ENVELOPE"}
+            return self._finish(
+                cache_key,
+                {
+                    "ok": False,
+                    "reason_code": "API_RESPONSE_ENVELOPE_INVALID",
+                    "response_state": "INVALID_ENVELOPE",
+                    "http_status": http_status,
+                    "rate_limit": rate_limit,
+                },
+            )
         errors = payload.get("errors")
         if errors:
+            provider_error_keys = self._provider_error_keys(errors)
             result = {
                 "ok": False,
                 "reason_code": "API_PROVIDER_ERROR",
                 "response_state": "PROVIDER_ERROR",
-                "provider_error_keys": self._provider_error_keys(errors),
+                "provider_error_keys": provider_error_keys,
+                "http_status": http_status,
+                "rate_limit": rate_limit,
             }
+            if any("rate" in key.casefold() for key in provider_error_keys):
+                self._apply_backoff(rate_limit, rate_limited=True)
         elif not isinstance(payload.get("response"), list):
-            result = {"ok": False, "reason_code": "API_RESPONSE_ENVELOPE_INVALID", "response_state": "INVALID_ENVELOPE"}
+            result = {
+                "ok": False,
+                "reason_code": "API_RESPONSE_ENVELOPE_INVALID",
+                "response_state": "INVALID_ENVELOPE",
+                "http_status": http_status,
+                "rate_limit": rate_limit,
+            }
         else:
-            result = {"ok": True, "response_state": "OK", "payload": dict(payload)}
-        self.response_states[str(result.get("response_state"))] += 1
-        self._cache[cache_key] = copy.deepcopy(result)
-        return result
+            result = {
+                "ok": True,
+                "response_state": "OK",
+                "payload": dict(payload),
+                "http_status": http_status,
+                "rate_limit": rate_limit,
+            }
+        return self._finish(cache_key, result)
 
 
 def _response_rows(result: Mapping[str, Any]) -> tuple[list[Mapping[str, Any]], str | None]:
@@ -475,6 +621,16 @@ def _response_rows(result: Mapping[str, Any]) -> tuple[list[Mapping[str, Any]], 
     if not isinstance(rows, list):
         return [], "API_RESPONSE_ENVELOPE_INVALID"
     return [row for row in rows if isinstance(row, Mapping)], None
+
+
+def _response_provenance(result: Mapping[str, Any]) -> dict[str, Any]:
+    return {
+        "response_state": result.get("response_state"),
+        "cache_hit": bool(result.get("cache_hit")),
+        "http_status": result.get("http_status"),
+        "provider_error_keys": list(result.get("provider_error_keys") or ()),
+        "rate_limit": dict(result.get("rate_limit") or {}),
+    }
 
 
 def _league_season_entries(row: Mapping[str, Any]) -> list[dict[str, Any]]:
@@ -521,7 +677,7 @@ def read_league_coverage(
             "league_id": league_id,
             "season": season,
             "coverage": empty_coverage,
-            "provenance": {"response_state": result.get("response_state"), "cache_hit": bool(result.get("cache_hit"))},
+            "provenance": _response_provenance(result),
         }
     exact = []
     season_mismatch = False
@@ -545,6 +701,7 @@ def read_league_coverage(
             "league_id": league_id,
             "season": season,
             "coverage": empty_coverage,
+            "provenance": _response_provenance(result),
         }
     if len(exact) > 1:
         return {
@@ -553,6 +710,7 @@ def read_league_coverage(
             "league_id": league_id,
             "season": season,
             "coverage": empty_coverage,
+            "provenance": _response_provenance(result),
         }
     league = exact[0]
     coverage = league.get("coverage") if isinstance(league.get("coverage"), Mapping) else {}
@@ -574,6 +732,7 @@ def read_league_coverage(
         "country": _clean_name(league.get("country")) or None,
         "season": season,
         "coverage": flags,
+        "provenance": _response_provenance(result),
     }
 
 
@@ -774,8 +933,7 @@ def _provenance(result: Mapping[str, Any], endpoint: str, params: Mapping[str, A
     return {
         "endpoint": endpoint,
         "params": dict(params),
-        "response_state": result.get("response_state"),
-        "cache_hit": bool(result.get("cache_hit")),
+        **_response_provenance(result),
         "reason_code": result.get("reason_code") if result.get("ok") is not True else "RESPONSE_RECEIVED",
     }
 
@@ -954,9 +1112,12 @@ def _coverage_projected_field(
     flag = _coverage_field(coverage, name)
     if flag is False:
         return {"state": "UNSUPPORTED", "reason_code": "API_COVERAGE_FLAG_FALSE", "value": None, "provenance": {"endpoint": "/leagues", "params": {"league": coverage.get("league_id"), "season": coverage.get("season")}}}
-    if flag is None:
-        return _field_unavailable("API_COVERAGE_FLAG_UNKNOWN", endpoint="/leagues", params={"league": coverage.get("league_id"), "season": coverage.get("season")})
-    return _projected_field(client.get(endpoint, params), endpoint, params, projector)
+    field = _projected_field(client.get(endpoint, params), endpoint, params, projector)
+    field["provenance"]["coverage_status"] = coverage.get("status") or "UNKNOWN"
+    field["provenance"]["coverage_flag"] = flag
+    if flag is None and field["state"] == "EMPTY":
+        field["reason_code"] = "NO_PUBLISHED_DATA_COVERAGE_UNKNOWN"
+    return field
 
 
 def _project_sidelined(rows: list[Mapping[str, Any]]) -> list[dict[str, Any]]:
@@ -1029,8 +1190,6 @@ def _team_stats_field(
     base_params = {"league": league_id, "season": season}
     if flag is False:
         return {"state": "UNSUPPORTED", "reason_code": "API_COVERAGE_FLAG_FALSE", "value": None, "provenance": {"endpoint": "/leagues", "params": base_params}}
-    if flag is None:
-        return _field_unavailable("API_COVERAGE_FLAG_UNKNOWN", endpoint="/leagues", params=base_params)
     if as_of is not None and source_kickoff is not None and as_of >= source_kickoff:
         return _field_unavailable("PREMATCH_CUTOFF_AFTER_KICKOFF", endpoint="/teams/statistics", params=base_params)
     rows: list[Mapping[str, Any]] = []
@@ -1051,12 +1210,19 @@ def _team_stats_field(
         "prematch_cutoff": as_of.isoformat() if as_of else None,
         "cache_hits": client.cache_hits,
         "errors": sorted(set(errors)),
+        "coverage_status": coverage.get("status") or "UNKNOWN",
+        "coverage_flag": flag,
     }
     if rows:
         return {"state": "PRESENT", "reason_code": "PROJECTED_FROM_PROVIDER_RESPONSE", "value": _project_stats(rows), "provenance": provenance}
     if errors:
         return {"state": "UNAVAILABLE", "reason_code": errors[0], "value": None, "provenance": provenance}
-    return {"state": "EMPTY", "reason_code": "NO_TEAM_STATISTICS", "value": None, "provenance": provenance}
+    return {
+        "state": "EMPTY",
+        "reason_code": "NO_TEAM_STATISTICS_COVERAGE_UNKNOWN" if flag is None else "NO_TEAM_STATISTICS",
+        "value": None,
+        "provenance": provenance,
+    }
 
 
 def build_enrichment_snapshot(
@@ -1450,8 +1616,14 @@ def run_enrichment_cohort(
             "request_count": client.request_count,
             "blocked_request_count": client.blocked_request_count,
             "cache_hits": client.cache_hits,
+            "min_request_interval_seconds": client.min_request_interval,
+            "rate_limit_wait_count": client.rate_limit_wait_count,
+            "rate_limit_wait_seconds": round(client.rate_limit_wait_seconds, 3),
+            "rate_limit_backoff_count": client.rate_limit_backoff_count,
             "endpoint_counts": dict(sorted(client.endpoint_counts.items())),
             "response_states": dict(sorted(client.response_states.items())),
+            "http_status_counts": dict(sorted(client.http_status_counts.items())),
+            "provider_error_key_counts": dict(sorted(client.provider_error_keys.items())),
             "binding_counts": dict(sorted(binding_counts.items())),
             "binding_reason_counts": dict(sorted(reason_counts.items())),
             "field_state_counts": {name: dict(sorted(counts.items())) for name, counts in field_states.items()},

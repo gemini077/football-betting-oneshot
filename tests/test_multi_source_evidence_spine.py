@@ -197,8 +197,10 @@ def test_empty_registry_bootstrap_requires_counterpart_and_competition_context()
 
 
 class _Response:
-    def __init__(self, payload):
+    def __init__(self, payload, *, headers=None, status=None):
         self.payload = payload
+        self.headers = headers or {}
+        self.status = status
 
     def __enter__(self):
         return self
@@ -217,7 +219,11 @@ def test_leagues_response_error_is_not_reported_as_no_coverage_and_cache_is_shar
         requests.append(request)
         query = parse_qs(urlparse(request.full_url).query)
         if query.get("id") == ["500"]:
-            return _Response({"errors": {"token": "invalid"}, "response": []})
+            return _Response(
+                {"errors": {"token": "invalid"}, "response": []},
+                headers={"X-RateLimit-Requests-Remaining": "0"},
+                status=429,
+            )
         if query.get("id") == ["501"]:
             return _Response({"errors": [], "response": []})
         return _Response({
@@ -237,16 +243,21 @@ def test_leagues_response_error_is_not_reported_as_no_coverage_and_cache_is_shar
             }],
         })
 
-    client = ApiFootballSharedClient("SECRET_TOKEN", opener=opener, max_requests=100)
+    client = ApiFootballSharedClient("SECRET_TOKEN", opener=opener, max_requests=100, min_request_interval=0)
     provider_error = client.get("/leagues", {"id": 500, "season": 2026})
     assert provider_error["reason_code"] == "API_PROVIDER_ERROR"
     assert provider_error["response_state"] == "PROVIDER_ERROR"
+    assert provider_error["http_status"] == 429
+    assert provider_error["rate_limit"] == {"x-ratelimit-requests-remaining": "0"}
     assert "SECRET_TOKEN" not in json.dumps(provider_error)
 
     no_coverage = read_league_coverage(
         client.get("/leagues", {"id": 501, "season": 2026}), league_id=501, season=2026
     )
     assert no_coverage["reason_code"] == "API_LEAGUE_SEASON_NO_COVERAGE"
+    provider_coverage = read_league_coverage(provider_error, league_id=500, season=2026)
+    assert provider_coverage["provenance"]["http_status"] == 429
+    assert provider_coverage["provenance"]["provider_error_keys"] == ["token"]
 
     result = client.get("/leagues", {"id": 39, "season": 2026})
     assert read_league_coverage(result, league_id=39, season=2026)["coverage"] == {
@@ -321,7 +332,7 @@ def test_snapshot_has_field_provenance_without_raw_provider_body():
             payload = {"errors": [], "response": [{"team": {"id": 1, "name": "Home FC"}, "statistics": [{"type": "Shots on Goal", "value": 3}]}]}
         return _Response(payload)
 
-    client = ApiFootballSharedClient("SECRET_TOKEN", opener=opener)
+    client = ApiFootballSharedClient("SECRET_TOKEN", opener=opener, min_request_interval=0)
     binding = {
         "status": "BOUND",
         "api_fixture_id": 456,
@@ -386,7 +397,7 @@ def test_prematch_stats_use_team_history_and_sidelined_keeps_player_evidence():
             raise AssertionError(f"unexpected endpoint: {parsed.path}")
         return _Response(payload)
 
-    client = ApiFootballSharedClient("SECRET_TOKEN", opener=opener)
+    client = ApiFootballSharedClient("SECRET_TOKEN", opener=opener, min_request_interval=0)
     binding = {
         "status": "BOUND",
         "api_fixture_id": 456,
@@ -396,8 +407,8 @@ def test_prematch_stats_use_team_history_and_sidelined_keeps_player_evidence():
         "season": 2026,
     }
     coverage = {
-        "status": "READ",
-        "coverage": {"standings": True, "injuries": True, "lineups": True, "statistics": True},
+        "status": "UNAVAILABLE",
+        "coverage": {"standings": None, "injuries": None, "lineups": None, "statistics": None},
     }
     snapshot = build_enrichment_snapshot(
         SOURCE,
@@ -408,7 +419,9 @@ def test_prematch_stats_use_team_history_and_sidelined_keeps_player_evidence():
     )
 
     assert "/fixtures/statistics" not in paths
+    assert {"/standings", "/injuries", "/sidelined", "/coachs", "/fixtures/lineups", "/teams/statistics"} <= set(paths)
     assert paths.count("/teams/statistics") == 2
+    assert snapshot["fields"]["standings"]["state"] == "EMPTY"
     assert snapshot["fields"]["stats"]["state"] == "PRESENT"
     assert snapshot["fields"]["stats"]["value"][0]["fixtures"]["played"]["total"] == 4
     assert snapshot["fields"]["injuries"]["value"]["players"][0] == {
@@ -424,3 +437,38 @@ def test_prematch_stats_use_team_history_and_sidelined_keeps_player_evidence():
     assert snapshot["fields"]["suspensions"]["value"]["players"][0]["player_id"] == 12
     assert snapshot["fields"]["sidelined"]["state"] == "PRESENT"
     assert snapshot["fields"]["sidelined"]["value"][0]["player_id"] == 11
+
+
+def test_rate_limit_backoff_and_minute_pacing_use_stdlib_clock():
+    now = [0.0]
+    sleeps = []
+    calls = []
+
+    def sleep(seconds):
+        sleeps.append(seconds)
+        now[0] += seconds
+
+    def opener(request, timeout):
+        calls.append(request.full_url)
+        if len(calls) == 1:
+            return _Response(
+                {"errors": {"rateLimit": "slow down"}, "response": []},
+                headers={"Retry-After": "9"},
+                status=200,
+            )
+        return _Response({"errors": [], "response": []}, status=200)
+
+    client = ApiFootballSharedClient(
+        "SECRET_TOKEN",
+        opener=opener,
+        min_request_interval=6,
+        sleep=sleep,
+        clock=lambda: now[0],
+    )
+
+    assert client.get("/leagues", {"id": 1, "season": 2026})["reason_code"] == "API_PROVIDER_ERROR"
+    assert client.get("/leagues", {"id": 2, "season": 2026})["ok"] is True
+    assert sleeps == [9]
+    assert client.rate_limit_backoff_count == 1
+    assert client.rate_limit_wait_count == 1
+    assert client.rate_limit_wait_seconds == 9
