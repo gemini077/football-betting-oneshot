@@ -3,9 +3,17 @@ from __future__ import annotations
 import json
 from datetime import datetime
 from pathlib import Path
+from unittest.mock import patch
 from urllib.parse import parse_qs, urlparse
 
-from scripts.football_context_identity_feasibility_audit import ApiFootballClient as LegacyApiFootballClient
+from scripts.football_context_identity_feasibility_audit import (
+    ApiFootballClient as LegacyApiFootballClient,
+    _backing_schedule_expected_dates,
+    _backing_schedule_urls,
+    _fetch_nowscore_alias_rows,
+    build_nowscore_alias_index,
+    nowscore_alias_evidence,
+)
 from scripts.football_data.multi_source_evidence_spine import (
     ApiFootballSharedClient,
     EntityRegistry,
@@ -24,6 +32,7 @@ SOURCE = {
     "season": 2026,
 }
 ALIASES = {"home": ("Home FC",), "away": ("Away FC",)}
+SC1_URL = "https://live.nowscore.com/data/sc1.js"
 
 
 def _api_row(*, home="Home FC", away="Away FC", fixture_id=456):
@@ -54,6 +63,48 @@ def _proven_registry() -> EntityRegistry:
     registry.accept_team("NS-A", 2, aliases=("Away FC",), evidence=("reviewed_pair",))
     registry.accept_competition(25, 39, 2026, country="England", evidence=("reviewed_competition",))
     return registry
+
+
+def test_next_day_sc1_alias_surface_uses_exact_row_and_source_kickoff():
+    cohort_fixture = {
+        "matchDate": "2026-09-12",
+        "matchTime": "00:30",
+        "a32_corroboration": {"backing_data_url": SC1_URL, "calendar_date": "2026-09-12"},
+    }
+    assert _backing_schedule_urls((cohort_fixture,)) == (SC1_URL,)
+    assert _backing_schedule_expected_dates((cohort_fixture,)) == {SC1_URL: "2026-09-12"}
+    values = [
+        7001, 1, 101, 202, "主队", 0, "Source Home FC", "客队", 0, "Source Away FC",
+        "00:30", "09-12", 0, 0, 0, None, None, None, 0, 0, 0, 0,
+        "", "", "", 0, "", "", "", 0, 0, 0, 1,
+    ]
+    schedule_js = "A[0]=[" + ",".join("" if value is None else repr(value) for value in values) + "];"
+    fetched = []
+
+    def fake_fetch(url):
+        fetched.append(url)
+        return schedule_js.encode("utf-8")
+
+    with patch("scripts.football_context_identity_feasibility_audit._fetch_bytes", side_effect=fake_fetch):
+        rows, error = _fetch_nowscore_alias_rows(
+            schedule_urls=(SC1_URL,),
+            expected_dates={SC1_URL: "2026-09-12"},
+        )
+
+    assert error is None
+    assert fetched == [SC1_URL]
+    index = build_nowscore_alias_index(rows)
+    evidence = nowscore_alias_evidence(
+        {"nowscore_id": 7001, "kickoff": "2026-09-12T00:30:00+08:00"},
+        index,
+    )
+    assert evidence["status"] == "BOUND"
+    assert evidence["aliases"] == {"home": ("Source Home FC",), "away": ("Source Away FC",)}
+    assert evidence["nowscore_home_team_id"] == 101
+    assert evidence["nowscore_away_team_id"] == 202
+    assert evidence["nowscore_schedule_kickoff"] == "2026-09-12T00:30+08:00"
+    assert evidence["source_surface"] == "nowscore_schedule_sc1"
+    assert evidence["backing_data_url"] == SC1_URL
 
 
 def test_name_candidate_alone_never_binds_and_reviewed_ids_bind(tmp_path: Path):

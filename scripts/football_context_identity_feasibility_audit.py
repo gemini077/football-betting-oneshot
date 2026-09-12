@@ -23,7 +23,7 @@ import urllib.request
 from collections import Counter, defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable, Mapping
+from typing import Any, Callable, Iterable, Mapping
 from zoneinfo import ZoneInfo
 
 
@@ -34,7 +34,6 @@ if str(SCRIPT_ROOT) not in sys.path:
 
 try:
     from nowscore_markets import (
-        SCHEDULE_URL,
         _decode,
         _fetch_bytes,
         _parse_schedule_js,
@@ -50,7 +49,6 @@ try:
     from prediction_universe import trusted_nowscore_jc_fixture
 except ImportError:  # package imports used by focused tests
     from scripts.nowscore_markets import (
-        SCHEDULE_URL,
         _decode,
         _fetch_bytes,
         _parse_schedule_js,
@@ -112,6 +110,42 @@ def _kickoff_key(value: Any) -> str | None:
 def _source_date(fixture: Mapping[str, Any]) -> str | None:
     kickoff = _source_kickoff(fixture)
     return kickoff.astimezone(SHANGHAI).date().isoformat() if kickoff else None
+
+
+def _schedule_surface(url: Any) -> str | None:
+    parsed = urllib.parse.urlsplit(_clean_text(url))
+    if parsed.scheme.casefold() != "https" or parsed.netloc.casefold() != "live.nowscore.com":
+        return None
+    filename = parsed.path.rsplit("/", 1)[-1]
+    match = re.fullmatch(r"(?P<surface>(?:bf|sc|ft)\d+)\.js", filename, re.IGNORECASE)
+    return match.group("surface").lower() if match else None
+
+
+def _backing_schedule_urls(fixtures: Iterable[Mapping[str, Any]]) -> tuple[str, ...]:
+    urls: list[str] = []
+    for fixture in fixtures:
+        corroboration = fixture.get("a32_corroboration")
+        if not isinstance(corroboration, Mapping):
+            continue
+        url = _clean_text(corroboration.get("backing_data_url"))
+        if url and _schedule_surface(url) and url not in urls:
+            urls.append(url)
+    return tuple(urls)
+
+
+def _backing_schedule_expected_dates(fixtures: Iterable[Mapping[str, Any]]) -> dict[str, str]:
+    expected: dict[str, str] = {}
+    for fixture in fixtures:
+        corroboration = fixture.get("a32_corroboration")
+        if not isinstance(corroboration, Mapping):
+            continue
+        url = _clean_text(corroboration.get("backing_data_url"))
+        if not url or not _schedule_surface(url):
+            continue
+        calendar_date = _clean_text(corroboration.get("calendar_date")) or _source_date(fixture)
+        if calendar_date:
+            expected.setdefault(url, calendar_date)
+    return expected
 
 
 def _exact_head() -> str:
@@ -218,8 +252,18 @@ def build_nowscore_alias_index(rows: list[Mapping[str, Any]]) -> dict[int, list[
             "aliases": aliases,
             "nowscore_home_team_id": _positive_int(row.get("home_team_id")),
             "nowscore_away_team_id": _positive_int(row.get("away_team_id")),
-            "source_surface": "nowscore_schedule_bf1",
-            "evidence_location": "bf1.js:exact_nowscore_id_row",
+            "nowscore_schedule_kickoff": _clean_text(row.get("kickoff_local")) or None,
+            "source_surface": (
+                f"nowscore_schedule_{_clean_text(row.get('_schedule_surface'))}"
+                if _clean_text(row.get("_schedule_surface"))
+                else "cohort_backing_schedule"
+            ),
+            "evidence_location": (
+                f"{_clean_text(row.get('_schedule_surface'))}.js:exact_nowscore_id_row"
+                if _clean_text(row.get("_schedule_surface"))
+                else "backing_schedule:exact_nowscore_id_row"
+            ),
+            "backing_data_url": _clean_text(row.get("_schedule_backing_data_url")) or None,
         })
     return dict(index)
 
@@ -237,7 +281,7 @@ def nowscore_alias_evidence(
         return {
             "status": "UNBOUND",
             "reason_code": "NOWSCORE_ALIAS_SURFACE_UNAVAILABLE",
-            "source_surface": "nowscore_schedule_bf1",
+            "source_surface": "cohort_backing_schedule",
             "evidence_location": None,
             "field_presence": {field: False for field in EXACT_ALIAS_FIELDS},
             "alias_field_count": 0,
@@ -252,17 +296,48 @@ def nowscore_alias_evidence(
                 if len(rows) > 1
                 else "NOWSCORE_ALIAS_ROW_MISSING"
             ),
-            "source_surface": "nowscore_schedule_bf1",
+            "source_surface": "cohort_backing_schedule",
             "evidence_location": None,
             "field_presence": {field: False for field in EXACT_ALIAS_FIELDS},
             "alias_field_count": 0,
             "aliases": {"home": (), "away": ()},
         }
-    aliases = rows[0].get("aliases") if isinstance(rows[0].get("aliases"), Mapping) else {}
+    row = rows[0]
+    source_surface = _clean_text(row.get("source_surface")) or "cohort_backing_schedule"
+    evidence_location = row.get("evidence_location")
+    metadata = {
+        "source_surface": source_surface,
+        "evidence_location": evidence_location,
+    }
+    if _clean_text(row.get("backing_data_url")):
+        metadata["backing_data_url"] = _clean_text(row.get("backing_data_url"))
+    if _clean_text(row.get("nowscore_schedule_kickoff")):
+        metadata["nowscore_schedule_kickoff"] = _clean_text(row.get("nowscore_schedule_kickoff"))
+    fixture_kickoff = _source_kickoff(fixture)
+    schedule_kickoff = _parse_timestamp(row.get("nowscore_schedule_kickoff"))
+    if schedule_kickoff is None:
+        return {
+            "status": "UNBOUND",
+            "reason_code": "NOWSCORE_SOURCE_EXACT_KICKOFF_MISSING",
+            **metadata,
+            "field_presence": {field: False for field in EXACT_ALIAS_FIELDS},
+            "alias_field_count": 0,
+            "aliases": {"home": (), "away": ()},
+        }
+    if fixture_kickoff is None or abs((schedule_kickoff - fixture_kickoff).total_seconds()) > 15 * 60:
+        return {
+            "status": "UNBOUND",
+            "reason_code": "NOWSCORE_SOURCE_KICKOFF_MISMATCH",
+            **metadata,
+            "field_presence": {field: False for field in EXACT_ALIAS_FIELDS},
+            "alias_field_count": 0,
+            "aliases": {"home": (), "away": ()},
+        }
+    aliases = row.get("aliases") if isinstance(row.get("aliases"), Mapping) else {}
     source_ids = {
-        key: rows[0].get(key)
+        key: row.get(key)
         for key in ("nowscore_home_team_id", "nowscore_away_team_id")
-        if _positive_int(rows[0].get(key)) is not None
+        if _positive_int(row.get(key)) is not None
     }
     home = tuple(str(value) for value in aliases.get("home") or () if _clean_text(value))
     away = tuple(str(value) for value in aliases.get("away") or () if _clean_text(value))
@@ -274,8 +349,7 @@ def nowscore_alias_evidence(
         return {
             "status": "UNBOUND",
             "reason_code": "NOWSCORE_SOURCE_EXACT_ALIAS_MISSING",
-            "source_surface": "nowscore_schedule_bf1",
-            "evidence_location": rows[0].get("evidence_location"),
+            **metadata,
             "field_presence": presence,
             "alias_field_count": int(bool(home)) + int(bool(away)),
             "aliases": {"home": home, "away": away},
@@ -284,8 +358,7 @@ def nowscore_alias_evidence(
     return {
         "status": "BOUND",
         "reason_code": "NOWSCORE_SOURCE_EXACT_ALIASES",
-        "source_surface": "nowscore_schedule_bf1",
-        "evidence_location": rows[0].get("evidence_location"),
+        **metadata,
         "field_presence": presence,
         "alias_field_count": 2,
         "aliases": {"home": home, "away": away},
@@ -604,13 +677,36 @@ def read_api_league_coverage(
     }
 
 
-def _fetch_nowscore_alias_rows() -> tuple[list[Mapping[str, Any]], str | None]:
-    try:
-        raw = _fetch_bytes(SCHEDULE_URL)
-        rows, _ = _parse_schedule_js(_decode(raw))
-        return rows, None
-    except Exception:
-        return [], "NOWSCORE_ALIAS_SURFACE_UNAVAILABLE"
+def _fetch_nowscore_alias_rows(
+    *,
+    schedule_urls: Iterable[str] | None = None,
+    expected_dates: Mapping[str, Any] | None = None,
+) -> tuple[list[Mapping[str, Any]], str | None]:
+    urls = tuple(
+        dict.fromkeys(
+            url
+            for value in schedule_urls or ()
+            if (url := _clean_text(value)) and _schedule_surface(url)
+        )
+    )
+    if not urls:
+        return [], "NOWSCORE_ALIAS_BACKING_SURFACE_MISSING"
+    rows: list[Mapping[str, Any]] = []
+    for url in urls:
+        try:
+            parsed_rows, _ = _parse_schedule_js(
+                _decode(_fetch_bytes(url)),
+                expected_date=(expected_dates or {}).get(url),
+            )
+        except Exception:
+            continue
+        surface = _schedule_surface(url)
+        for row in parsed_rows:
+            enriched = dict(row)
+            enriched["_schedule_backing_data_url"] = url
+            enriched["_schedule_surface"] = surface
+            rows.append(enriched)
+    return (rows, None) if rows else ([], "NOWSCORE_ALIAS_SURFACE_UNAVAILABLE")
 
 
 def _select_fixtures(
@@ -894,7 +990,14 @@ def run_audit(
         as_of=as_of,
     )
     selected, cutoff = _select_fixtures(cohort, as_of=as_of, max_matches=max_matches)
-    alias_rows, alias_error = _fetch_nowscore_alias_rows() if selected else ([], None)
+    alias_rows, alias_error = (
+        _fetch_nowscore_alias_rows(
+            schedule_urls=_backing_schedule_urls(selected),
+            expected_dates=_backing_schedule_expected_dates(selected),
+        )
+        if selected
+        else ([], None)
+    )
     alias_index = build_nowscore_alias_index(alias_rows)
     client = (
         nowscore_client_factory(max(1, len(selected)))

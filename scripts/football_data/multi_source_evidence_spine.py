@@ -1083,6 +1083,8 @@ def build_enrichment_snapshot(
         "api_home_team_id": _positive_int(binding.get("api_home_team_id")),
         "api_away_team_id": _positive_int(binding.get("api_away_team_id")),
         "nowscore_sclass_id": _source_competition_id(source),
+        "nowscore_alias_source_surface": source.get("nowscore_alias_source_surface"),
+        "nowscore_alias_backing_data_url": source.get("nowscore_alias_backing_data_url"),
         "api_league_id": league_id,
         "season": season,
     }
@@ -1163,6 +1165,8 @@ def _unbound_snapshot(source: Mapping[str, Any], binding: Mapping[str, Any]) -> 
             "nowscore_home_team_id": _source_id(source, "home"),
             "nowscore_away_team_id": _source_id(source, "away"),
             "nowscore_sclass_id": _source_competition_id(source),
+            "nowscore_alias_source_surface": source.get("nowscore_alias_source_surface"),
+            "nowscore_alias_backing_data_url": source.get("nowscore_alias_backing_data_url"),
         },
         "binding": dict(binding),
         "fields": {name: _field_unavailable(reason) for name in FIELD_NAMES},
@@ -1214,6 +1218,14 @@ def _fixture_source(
         side: tuple(dict.fromkeys(_clean_name(value) for value in values if _clean_name(value)))
         for side, values in source_aliases.items()
     }
+    schedule_kickoff = _text(alias.get("nowscore_schedule_kickoff"))
+    if schedule_kickoff:
+        source["kickoff"] = schedule_kickoff
+        source["nowscore_schedule_kickoff"] = schedule_kickoff
+    if _text(alias.get("source_surface")):
+        source["nowscore_alias_source_surface"] = _text(alias.get("source_surface"))
+    if _text(alias.get("backing_data_url")):
+        source["nowscore_alias_backing_data_url"] = _text(alias.get("backing_data_url"))
     for key in ("nowscore_home_team_id", "nowscore_away_team_id"):
         if _positive_int(alias.get(key)) is not None:
             source[key] = _positive_int(alias.get(key))
@@ -1274,6 +1286,8 @@ def run_enrichment_cohort(
 
     from scripts.football_context_identity_feasibility_audit import (
         _fetch_nowscore_alias_rows,
+        _backing_schedule_expected_dates,
+        _backing_schedule_urls,
         _future_fixture,
         _parse_timestamp,
         build_nowscore_alias_index,
@@ -1299,7 +1313,14 @@ def run_enrichment_cohort(
         cohort = _read_cohort(path)
     selected = [fixture for fixture in cohort["fixtures"] if isinstance(fixture, Mapping) and _future_fixture(fixture, cutoff)][: max(0, min(int(max_matches), 20))]
     if alias_rows is None:
-        alias_rows, alias_error = _fetch_nowscore_alias_rows() if selected else ([], None)
+        alias_rows, alias_error = (
+            _fetch_nowscore_alias_rows(
+                schedule_urls=_backing_schedule_urls(selected),
+                expected_dates=_backing_schedule_expected_dates(selected),
+            )
+            if selected
+            else ([], None)
+        )
     else:
         alias_error = None
     alias_index = build_nowscore_alias_index(alias_rows)
