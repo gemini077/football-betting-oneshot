@@ -19,7 +19,7 @@ on:
   workflow_dispatch:
     inputs:
       business_date:
-        description: "JC business date to refresh; blank uses the current Asia/Shanghai date"
+        description: "JC business date probe seed; blank probes the current and next Asia/Shanghai dates, then selects the source-accepted snapshot"
         required: false
         default: ""
       as_of:
@@ -103,9 +103,8 @@ jobs:
         env:
           BUSINESS_DATE: ${{ inputs.business_date || '' }}
         run: |
-          COHORT_BUSINESS_DATE="${BUSINESS_DATE:-$(TZ=Asia/Shanghai date +%F)}"
-          export COHORT_BUSINESS_DATE
-          echo "COHORT_BUSINESS_DATE=$COHORT_BUSINESS_DATE" >> "$GITHUB_ENV"
+          PROBE_BUSINESS_DATE="${BUSINESS_DATE:-$(TZ=Asia/Shanghai date +%F)}"
+          export PROBE_BUSINESS_DATE
           python - <<'PY'
           import json
           import os
@@ -116,7 +115,7 @@ jobs:
           from scripts.nowscore_markets import fetch_nowscore_jc_schedule
           from scripts.prediction_universe import trusted_nowscore_source_identity, update_prediction_universe
 
-          base_date = date.fromisoformat(os.environ["COHORT_BUSINESS_DATE"])
+          base_date = date.fromisoformat(os.environ["PROBE_BUSINESS_DATE"])
           now = datetime.now().astimezone()
           snapshots = []
           for offset in (0, 1):
@@ -140,10 +139,26 @@ jobs:
                       if identity is not None
                   }),
               })
+          eligible = [
+              snapshot
+              for snapshot in snapshots
+              if snapshot["source_status"] == "OK"
+              and snapshot["snapshot_status"] == "READY"
+              and snapshot["persisted_identity_count"] > 0
+          ]
+          if len(eligible) != 1:
+              raise SystemExit(
+                  "expected exactly one current-run source-accepted JC snapshot; "
+                  f"found {len(eligible)}: {json.dumps(snapshots, ensure_ascii=False)}"
+              )
+          selected_business_date = eligible[0]["business_date"]
+          with Path(os.environ["GITHUB_ENV"]).open("a", encoding="utf-8") as env:
+              env.write(f"COHORT_BUSINESS_DATE={selected_business_date}\n")
           Path("artifacts").mkdir(parents=True, exist_ok=True)
           Path("artifacts/issue-293-r38-intake.json").write_text(
               json.dumps({
-                  "business_date": os.environ["COHORT_BUSINESS_DATE"],
+                  "business_date": selected_business_date,
+                  "probe_business_date": os.environ["PROBE_BUSINESS_DATE"],
                   "captured_at": now.isoformat(),
                   "snapshots": snapshots,
               }, ensure_ascii=False, indent=2) + "\n",
