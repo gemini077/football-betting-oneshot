@@ -92,7 +92,8 @@ def test_next_day_sc1_alias_surface_uses_exact_row_and_source_kickoff():
         )
 
     assert error is None
-    assert fetched == [SC1_URL]
+    assert len(fetched) == 1
+    assert fetched[0].startswith(f"{SC1_URL}?")
     index = build_nowscore_alias_index(rows)
     evidence = nowscore_alias_evidence(
         {"nowscore_id": 7001, "kickoff": "2026-09-12T00:30:00+08:00"},

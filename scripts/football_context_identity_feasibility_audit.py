@@ -17,6 +17,7 @@ import os
 import re
 import subprocess
 import sys
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -694,8 +695,9 @@ def _fetch_nowscore_alias_rows(
     rows: list[Mapping[str, Any]] = []
     for url in urls:
         try:
+            fetch_url = f"{url}{'&' if '?' in url else '?'}{int(time.time()) * 1000}"
             parsed_rows, _ = _parse_schedule_js(
-                _decode(_fetch_bytes(url)),
+                _decode(_fetch_bytes(fetch_url)),
                 expected_date=(expected_dates or {}).get(url),
             )
         except Exception:
