@@ -146,14 +146,21 @@ jobs:
               and snapshot["snapshot_status"] == "READY"
               and snapshot["persisted_identity_count"] > 0
           ]
-          if len(eligible) != 1:
+          if not eligible:
               raise SystemExit(
-                  "expected exactly one current-run source-accepted JC snapshot; "
-                  f"found {len(eligible)}: {json.dumps(snapshots, ensure_ascii=False)}"
+                  "no current-run source-accepted JC snapshot; "
+                  f"candidates: {json.dumps(snapshots, ensure_ascii=False)}"
               )
-          selected_business_date = eligible[0]["business_date"]
+          selected = min(eligible, key=lambda snapshot: snapshot["business_date"])
+          selected_business_date = selected["business_date"]
+          selection = {
+              "reason": "EARLIEST_ELIGIBLE_FOR_ACCEPTANCE_ONLY",
+              "eligible_candidates": eligible,
+              "production_active_slate_authority": False,
+          }
+          # Acceptance-only representative; production slate/date semantics stay elsewhere.
           with Path(os.environ["GITHUB_ENV"]).open("a", encoding="utf-8") as env:
-              env.write(f"COHORT_BUSINESS_DATE={selected_business_date}\n")
+              env.write(f"ACCEPTANCE_ONLY_BUSINESS_DATE={selected_business_date}\n")
           Path("artifacts").mkdir(parents=True, exist_ok=True)
           Path("artifacts/issue-293-r38-intake.json").write_text(
               json.dumps({
@@ -161,10 +168,11 @@ jobs:
                   "probe_business_date": os.environ["PROBE_BUSINESS_DATE"],
                   "captured_at": now.isoformat(),
                   "snapshots": snapshots,
+                  "selection": selection,
               }, ensure_ascii=False, indent=2) + "\n",
               encoding="utf-8",
           )
-          print(json.dumps(snapshots, ensure_ascii=False))
+          print(json.dumps({"candidates": snapshots, "selection": selection}, ensure_ascii=False))
           PY
 
       - name: Run exact-head live natural-cohort shared spine
@@ -175,7 +183,7 @@ jobs:
           MAX_MATCHES: ${{ inputs.max_matches || '12' }}
         run: |
           args=(--max-matches "$MAX_MATCHES" --output artifacts/issue-293-multi-source-evidence-spine.json --registry data/provider_entity_registry.json)
-          args+=(--business-date "$COHORT_BUSINESS_DATE")
+          args+=(--business-date "$ACCEPTANCE_ONLY_BUSINESS_DATE")
           if [[ -n "$AS_OF" ]]; then
             args+=(--as-of "$AS_OF")
           fi
