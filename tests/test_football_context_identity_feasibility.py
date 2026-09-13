@@ -14,6 +14,7 @@ from scripts.football_context_identity_feasibility_audit import (
     nowscore_alias_evidence,
     read_api_league_coverage,
 )
+from scripts.issue_293_acceptance import select_acceptance_cohort
 
 
 SOURCE_FIXTURE = {
@@ -21,6 +22,65 @@ SOURCE_FIXTURE = {
     "kickoff": "2026-09-11T18:00:00+08:00",
 }
 ALIASES = {"aliases": {"home": ("Home FC",), "away": ("Away FC",)}}
+
+
+def _trusted_fixture(
+    match_id: int,
+    kickoff: str,
+    *,
+    competition: int,
+    trusted: bool = True,
+) -> dict:
+    fixture = {
+        "matchId": match_id,
+        "matchDate": kickoff[:10],
+        "matchTime": kickoff[11:16],
+        "sclassId": competition,
+    }
+    if trusted:
+        fixture["nowscore_source_identity"] = {
+            "status": "EXACT",
+            "nowscore_id": match_id,
+            "home_team_id": match_id + 1,
+            "away_team_id": match_id + 2,
+            "home_team_en": f"Home {match_id}",
+            "away_team_en": f"Away {match_id}",
+            "kickoff_local": kickoff,
+            "calendar_date": kickoff[:10],
+            "source_surface": "https://live.nowscore.com/schedule.aspx?f=sc1",
+            "backing_data_url": "https://live.nowscore.com/data/sc1.js",
+        }
+    return fixture
+
+
+def test_acceptance_cohort_selects_trusted_future_fixtures_deterministically():
+    snapshot = {
+        "fixtures": [
+            _trusted_fixture(2, "2026-09-14T10:00:00+08:00", competition=20),
+            _trusted_fixture(1, "2026-09-14T09:00:00+08:00", competition=10),
+            _trusted_fixture(3, "2026-09-14T11:00:00+08:00", competition=10),
+            _trusted_fixture(4, "2026-09-14T12:00:00+08:00", competition=30, trusted=False),
+        ],
+    }
+
+    result = select_acceptance_cohort(
+        snapshot,
+        business_date="2026-09-14",
+        cutoff=datetime.fromisoformat("2026-09-13T12:00:00+08:00"),
+        max_matches=3,
+    )
+
+    assert result["acceptance_selection"] == {
+        "reason": "TRUSTED_IDENTITY_FUTURE_FIXTURES_ACCEPTANCE_ONLY",
+        "production_fixture_selection_authority": False,
+        "source_snapshot_business_date": "2026-09-14",
+        "candidate_count": 3,
+        "candidate_fixture_ids": [1, 2, 3],
+        "selected_fixture_ids": [1, 2, 3],
+        "limit": 3,
+    }
+    assert result["trusted_identity_count"] == 3
+    assert result["identity_coverage"][-1]["selected_for_acceptance"] is False
 
 
 def test_persisted_source_identity_wins_when_alias_surface_is_unavailable():
