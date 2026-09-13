@@ -34,29 +34,68 @@ SOURCE = {
     "season": 2026,
 }
 ALIASES = {"home": ("Home FC",), "away": ("Away FC",)}
+RELATIONAL_SOURCE = {
+    "nowscore_id": 3085206,
+    "kickoff": "2026-09-14T23:00:00+08:00",
+    "nowscore_home_team_id": "386",
+    "nowscore_away_team_id": "2226",
+    "nowscore_sclass_id": "13",
+    "season": 2026,
+}
+RELATIONAL_ALIASES = {"home": ("Anchor Home",), "away": ("Source Away",)}
 SC1_URL = "https://live.nowscore.com/data/sc1.js"
 
 
-def _api_row(*, home="Home FC", away="Away FC", fixture_id=456):
+def _api_row(
+    *,
+    home="Home FC",
+    away="Away FC",
+    fixture_id=456,
+    date="2026-09-11T10:00:00+00:00",
+    home_id=1,
+    away_id=2,
+    league_id=39,
+    league_name="League A",
+    country="England",
+    season=2026,
+    round_name="Regular Season - 1",
+):
     return {
         "fixture": {
             "id": fixture_id,
-            "date": "2026-09-11T10:00:00+00:00",
+            "date": date,
             "status": {"short": "NS"},
         },
         "teams": {
-            "home": {"id": 1, "name": home},
-            "away": {"id": 2, "name": away},
+            "home": {"id": home_id, "name": home},
+            "away": {"id": away_id, "name": away},
         },
         "league": {
-            "id": 39,
-            "name": "League A",
-            "country": "England",
+            "id": league_id,
+            "name": league_name,
+            "country": country,
             "type": "League",
-            "season": 2026,
-            "round": "Regular Season - 1",
+            "season": season,
+            "round": round_name,
         },
     }
+
+
+def _relational_api_row(**kwargs):
+    values = {
+        "date": "2026-09-14T15:00:00+00:00",
+        "home": "Anchor Home",
+        "away": "Provider Away",
+        "home_id": 1164,
+        "away_id": 650,
+        "league_id": 244,
+        "league_name": "Relational League",
+        "country": "Country A",
+        "round_name": "Group - 1",
+        "fixture_id": 1638097,
+    }
+    values.update(kwargs)
+    return _api_row(**values)
 
 
 def _proven_registry() -> EntityRegistry:
@@ -215,6 +254,135 @@ def test_team_identity_unproven_reports_sanitized_same_kickoff_diagnostic():
             "persisted_away_team": False,
         },
     }]
+
+
+def test_empty_registry_relational_bootstrap_accepts_one_exact_side():
+    result = bind_fixture_identity(
+        RELATIONAL_SOURCE,
+        RELATIONAL_ALIASES,
+        [_relational_api_row()],
+        registry=EntityRegistry(),
+        allow_bootstrap=True,
+    )
+
+    assert result["status"] == "BOUND"
+    assert result["reason_code"] == "UNIQUE_ORIENTED_FIXTURE_WITH_BOOTSTRAP_EVIDENCE"
+    assert result["api_fixture_id"] == 1638097
+    assert result["api_home_team_id"] == 1164
+    assert result["api_away_team_id"] == 650
+    assert result["evidence"]["team_ids"] is False
+    assert result["evidence"]["counterpart_pair"] is True
+    assert result["evidence"]["competition_context"] is True
+    assert result["evidence"]["country_context"] is True
+
+
+def test_relational_bootstrap_negative_controls_fail_closed():
+    cases = [
+        (
+            "neither-side-exact",
+            RELATIONAL_SOURCE,
+            {"home": ("Other Home",), "away": ("Other Away",)},
+            [_relational_api_row()],
+            EntityRegistry(),
+        ),
+        (
+            "substring-only",
+            RELATIONAL_SOURCE,
+            RELATIONAL_ALIASES,
+            [_relational_api_row(home="Anchor Home FC", away="Provider Away")],
+            EntityRegistry(),
+        ),
+        (
+            "reverse-orientation",
+            RELATIONAL_SOURCE,
+            RELATIONAL_ALIASES,
+            [_relational_api_row(home="Source Away", away="Anchor Home")],
+            EntityRegistry(),
+        ),
+        (
+            "kickoff-mismatch",
+            RELATIONAL_SOURCE,
+            RELATIONAL_ALIASES,
+            [_relational_api_row(date="2026-09-14T15:01:00+00:00")],
+            EntityRegistry(),
+        ),
+        (
+            "both-names-kickoff-mismatch",
+            RELATIONAL_SOURCE,
+            {"home": ("Anchor Home",), "away": ("Provider Away",)},
+            [_relational_api_row(date="2026-09-14T15:01:00+00:00")],
+            EntityRegistry(),
+        ),
+        (
+            "two-anchored-candidates",
+            RELATIONAL_SOURCE,
+            RELATIONAL_ALIASES,
+            [_relational_api_row(), _relational_api_row(fixture_id=1638098, away="Other Team", away_id=651)],
+            EntityRegistry(),
+        ),
+        (
+            "missing-candidate-country",
+            RELATIONAL_SOURCE,
+            RELATIONAL_ALIASES,
+            [_relational_api_row(country=None)],
+            EntityRegistry(),
+        ),
+    ]
+    for label, source, aliases, rows, registry in cases:
+        result = bind_fixture_identity(source, aliases, rows, registry=registry, allow_bootstrap=True)
+        assert result["status"] != "BOUND", label
+
+    for missing_key in ("nowscore_home_team_id", "nowscore_away_team_id", "nowscore_sclass_id"):
+        source = dict(RELATIONAL_SOURCE)
+        source.pop(missing_key)
+        result = bind_fixture_identity(
+            source,
+            RELATIONAL_ALIASES,
+            [_relational_api_row()],
+            registry=EntityRegistry(),
+            allow_bootstrap=True,
+        )
+        assert result["status"] != "BOUND", missing_key
+
+    for missing_field in ("home_id", "away_id", "league_id", "season", "country"):
+        result = bind_fixture_identity(
+            RELATIONAL_SOURCE,
+            RELATIONAL_ALIASES,
+            [_relational_api_row(**{missing_field: None})],
+            registry=EntityRegistry(),
+            allow_bootstrap=True,
+        )
+        assert result["status"] != "BOUND", missing_field
+
+
+def test_relational_bootstrap_rejects_existing_mapping_conflicts():
+    fixture_conflict = EntityRegistry()
+    fixture_conflict.accept_fixture(
+        RELATIONAL_SOURCE["nowscore_id"],
+        1638097,
+        api_home_team_id=999,
+        api_away_team_id=650,
+    )
+    result = bind_fixture_identity(
+        RELATIONAL_SOURCE,
+        RELATIONAL_ALIASES,
+        [_relational_api_row()],
+        registry=fixture_conflict,
+        allow_bootstrap=True,
+    )
+    assert result["status"] == "UNBOUND"
+    assert result["reason_code"] == "PERSISTED_ORIENTATION_MISMATCH"
+
+    team_conflict = EntityRegistry()
+    team_conflict.accept_team("386", 999, evidence=("conflict",))
+    result = bind_fixture_identity(
+        RELATIONAL_SOURCE,
+        RELATIONAL_ALIASES,
+        [_relational_api_row()],
+        registry=team_conflict,
+        allow_bootstrap=True,
+    )
+    assert result["status"] != "BOUND"
 
 
 def test_orientation_and_season_mismatch_fail_closed():

@@ -804,6 +804,14 @@ def bind_fixture_identity(
     source_competition_id = _source_competition_id(source)
     home_mapping = registry.lookup_team(source_home_id) if source_home_id else None
     away_mapping = registry.lookup_team(source_away_id) if source_away_id else None
+    relational_bootstrap = bool(
+        allow_bootstrap
+        and not home_mapping
+        and not away_mapping
+        and source_home_id
+        and source_away_id
+        and source_competition_id
+    )
     oriented: list[tuple[dict[str, Any], dict[str, Any]]] = []
     reverse_oriented = 0
     name_oriented = 0
@@ -817,6 +825,10 @@ def bind_fixture_identity(
         id_away = bool(away_mapping and _positive_int(away_mapping.get("api_team_id")) == facts["away_team_id"])
         reverse_name = _name_key(facts["home_name"]) in away_aliases and _name_key(facts["away_name"]) in home_aliases
         reverse_id = bool(home_mapping and away_mapping and _positive_int(home_mapping.get("api_team_id")) == facts["away_team_id"] and _positive_int(away_mapping.get("api_team_id")) == facts["home_team_id"])
+        exact_kickoff = (
+            facts["kickoff"].replace(second=0, microsecond=0)
+            == source_kickoff.replace(second=0, microsecond=0)
+        )
         if same_kickoff:
             kickoff_rows += 1
             same_kickoff_diagnostic.append({
@@ -844,7 +856,8 @@ def bind_fixture_identity(
             # Conflicting names and persisted IDs are not reconciled by a
             # preference rule; the fixture remains fail-closed.
             continue
-        if (name_home and name_away) or (id_home and id_away):
+        relational_anchor = relational_bootstrap and exact_kickoff and (name_home or name_away)
+        if (name_home and name_away) or (id_home and id_away) or relational_anchor:
             name_oriented += int(name_home and name_away)
             if same_kickoff:
                 evidence = {
@@ -863,7 +876,7 @@ def bind_fixture_identity(
                     evidence["counterpart_pair"] = bool(
                         source_home_id and source_away_id
                         and facts["home_team_id"] and facts["away_team_id"]
-                        and name_home and name_away
+                        and ((name_home and name_away) or relational_anchor)
                     )
                     evidence["competition_context"] = bool(
                         source_competition_id and facts["league_id"] and facts["season"]
@@ -877,6 +890,8 @@ def bind_fixture_identity(
         if same_kickoff and (reverse_name or reverse_id):
             reverse_oriented += 1
 
+    if relational_bootstrap and reverse_oriented:
+        return {"status": "UNBOUND", "reason_code": "ORIENTATION_MISMATCH", "candidate_count": reverse_oriented}
     if len(oriented) > 1:
         return {"status": "AMBIGUOUS", "reason_code": "MULTIPLE_ORIENTED_API_FIXTURES", "candidate_count": len(oriented)}
     if not oriented:
@@ -921,7 +936,15 @@ def bind_fixture_identity(
             _text(source_identity.get("home_team_id")) == _text(source_home_id)
             and _text(source_identity.get("away_team_id")) == _text(source_away_id)
         )
-    bootstrap_verified = allow_bootstrap and all(
+    bootstrap_metadata = all(
+        facts[key]
+        for key in ("home_team_id", "away_team_id", "league_id", "season", "country")
+    )
+    bootstrap_kickoff = (
+        facts["kickoff"].replace(second=0, microsecond=0)
+        == source_kickoff.replace(second=0, microsecond=0)
+    )
+    bootstrap_verified = allow_bootstrap and bootstrap_metadata and bootstrap_kickoff and all(
         evidence[key] for key in ("counterpart_pair", "competition_context", "country_context")
     )
     if bootstrap_verified:
