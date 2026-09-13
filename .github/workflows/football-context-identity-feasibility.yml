@@ -1,16 +1,25 @@
-name: Football Context Identity Feasibility
+name: Multi-Source Evidence Spine
 
 on:
   pull_request:
     types: [opened, synchronize, reopened]
     paths:
       - "scripts/football_context_identity_feasibility_audit.py"
+      - "scripts/football_data/multi_source_evidence_spine.py"
+      - "scripts/daily_schedule_workspace.py"
+      - "scripts/nowscore_markets.py"
+      - "scripts/prediction_universe.py"
+      - "tests/test_daily_schedule_workspace.py"
+      - "tests/test_nowscore_markets.py"
+      - "tests/test_prediction_universe.py"
       - "tests/test_football_context_identity_feasibility.py"
+      - "tests/test_multi_source_evidence_spine.py"
+      - "artifacts/issue-293-multi-source-evidence-spine.json"
       - ".github/workflows/football-context-identity-feasibility.yml"
   workflow_dispatch:
     inputs:
       business_date:
-        description: "READY prediction-universe business date; blank selects the latest READY cohort"
+        description: "JC business date probe seed; blank probes the current and next Asia/Shanghai dates, then selects the source-accepted snapshot"
         required: false
         default: ""
       as_of:
@@ -18,7 +27,7 @@ on:
         required: false
         default: ""
       max_matches:
-        description: "Maximum current natural-cohort fixtures to audit"
+        description: "Maximum acceptance-only fixtures to audit; the harness caps this cohort at 6"
         required: false
         default: "12"
 
@@ -26,12 +35,13 @@ permissions:
   contents: read
 
 jobs:
-  exact-head-identity-audit:
+  exact-head-multi-source-spine:
     if: ${{ github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
       API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
+      PYTHONPATH: scripts
     steps:
       - name: Check out exact PR head
         uses: actions/checkout@v4
@@ -50,7 +60,7 @@ jobs:
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             while IFS= read -r path; do
               case "$path" in
-                scripts/football_context_identity_feasibility_audit.py|tests/test_football_context_identity_feasibility.py|.github/workflows/football-context-identity-feasibility.yml) ;;
+                scripts/football_context_identity_feasibility_audit.py|scripts/football_data/multi_source_evidence_spine.py|scripts/daily_schedule_workspace.py|scripts/nowscore_markets.py|scripts/prediction_universe.py|tests/test_football_context_identity_feasibility.py|tests/test_multi_source_evidence_spine.py|tests/test_daily_schedule_workspace.py|tests/test_nowscore_markets.py|tests/test_prediction_universe.py|artifacts/issue-293-multi-source-evidence-spine.json|.github/workflows/football-context-identity-feasibility.yml) ;;
                 *) echo "out-of-scope file: $path"; exit 1 ;;
               esac
             done < <(git diff --name-only "$BASE_SHA...$EXPECTED_HEAD")
@@ -66,7 +76,10 @@ jobs:
         run: python -m pip install -r requirements.txt
 
       - name: Run focused identity feasibility tests
-        run: python -m pytest -q tests/test_football_context_identity_feasibility.py
+        run: python -m pytest -q tests/test_football_context_identity_feasibility.py tests/test_multi_source_evidence_spine.py
+
+      - name: Run R38 prediction-universe intake tests
+        run: python -m pytest -q tests/test_prediction_universe.py tests/test_daily_schedule_workspace.py tests/test_nowscore_markets.py
 
       - name: Run accepted Nowscore regression tests
         run: python -m pytest -q tests/test_nowscore_context_depth.py tests/test_nowscore_prematch_evidence.py
@@ -75,65 +88,318 @@ jobs:
         run: |
           python -m py_compile \
             scripts/football_context_identity_feasibility_audit.py \
-            tests/test_football_context_identity_feasibility.py
+            scripts/football_data/multi_source_evidence_spine.py \
+            scripts/daily_schedule_workspace.py \
+            scripts/nowscore_markets.py \
+            scripts/prediction_universe.py \
+            tests/test_football_context_identity_feasibility.py \
+            tests/test_multi_source_evidence_spine.py \
+            tests/test_daily_schedule_workspace.py \
+            tests/test_nowscore_markets.py \
+            tests/test_prediction_universe.py
 
-      - name: Run exact-head live natural-cohort audit
+      - name: Refresh exact prediction-universe intake for live cohort
         shell: bash
         env:
           BUSINESS_DATE: ${{ inputs.business_date || '' }}
           AS_OF: ${{ inputs.as_of || '' }}
           MAX_MATCHES: ${{ inputs.max_matches || '12' }}
         run: |
-          args=(--max-matches "$MAX_MATCHES" --output football-context-identity-feasibility-audit.json)
-          if [[ -n "$BUSINESS_DATE" ]]; then
-            args+=(--business-date "$BUSINESS_DATE")
-          fi
+          PROBE_BUSINESS_DATE="${BUSINESS_DATE:-$(TZ=Asia/Shanghai date +%F)}"
+          export PROBE_BUSINESS_DATE
+          python - <<'PY'
+          import json
+          import os
+          from datetime import date, datetime, timedelta
+          from pathlib import Path
+
+          from scripts.daily_schedule_workspace import _nowscore_schedule_payload
+          from scripts.nowscore_prematch_evidence import _future_fixture, _parse_timestamp
+          from scripts.nowscore_markets import fetch_nowscore_jc_schedule
+          from scripts.prediction_universe import trusted_nowscore_source_identity, update_prediction_universe
+
+          base_date = date.fromisoformat(os.environ["PROBE_BUSINESS_DATE"])
+          now = datetime.now().astimezone()
+          snapshots = []
+          snapshot_payloads = {}
+          for offset in (0, 1):
+              business_date = (base_date + timedelta(days=offset)).isoformat()
+              fetched = fetch_nowscore_jc_schedule(business_date, now=now)
+              payload = _nowscore_schedule_payload(business_date, fetched)
+              snapshot = update_prediction_universe(business_date, payload)
+              snapshot_payloads[business_date] = snapshot
+              identities = [
+                  trusted_nowscore_source_identity(row)
+                  for row in snapshot.get("fixtures") or []
+              ]
+              snapshots.append({
+                  "business_date": business_date,
+                  "source_status": fetched.get("status"),
+                  "snapshot_status": snapshot.get("status"),
+                  "fixture_count": snapshot.get("fixture_count", 0),
+                  "persisted_identity_count": sum(identity is not None for identity in identities),
+                  "calendar_dates": sorted({
+                      identity["calendar_date"]
+                      for identity in identities
+                      if identity is not None
+                  }),
+              })
+          eligible = [
+              snapshot
+              for snapshot in snapshots
+              if snapshot["source_status"] == "OK"
+              and snapshot["snapshot_status"] == "READY"
+              and snapshot["persisted_identity_count"] > 0
+          ]
+          if not eligible:
+              raise SystemExit(
+                  "no current-run source-accepted JC snapshot; "
+                  f"candidates: {json.dumps(snapshots, ensure_ascii=False)}"
+              )
+          selected = min(eligible, key=lambda snapshot: snapshot["business_date"])
+          selected_business_date = selected["business_date"]
+          selected_snapshot = snapshot_payloads[selected_business_date]
+          selected_fixtures = [
+              fixture
+              for fixture in selected_snapshot.get("fixtures") or []
+              if isinstance(fixture, dict)
+          ]
+          selected_identity_count = sum(
+              trusted_nowscore_source_identity(fixture) is not None
+              for fixture in selected_fixtures
+          )
+          if selected_identity_count != selected["persisted_identity_count"]:
+              raise SystemExit("selected snapshot identity coverage count drifted")
+
+          as_of_value = os.environ.get("AS_OF", "").strip()
+          cutoff = _parse_timestamp(as_of_value) if as_of_value else now
+          if cutoff is None:
+              raise SystemExit(f"invalid acceptance cutoff: {as_of_value}")
+
+          def fixture_id(fixture, identity=None):
+              return (
+                  (identity or {}).get("nowscore_id")
+                  or fixture.get("nowscore_id")
+                  or fixture.get("nowscoreId")
+                  or fixture.get("matchId")
+              )
+
+          def competition_key(fixture):
+              for key in ("sclassId", "sclass_id", "nowscore_sclass_id"):
+                  value = fixture.get(key)
+                  if value not in (None, ""):
+                      return str(value)
+              value = fixture.get("league")
+              return str(value) if isinstance(value, (str, int, float)) and str(value).strip() else ""
+
+          identity_coverage = []
+          future_trusted = []
+          for index, fixture in enumerate(selected_fixtures):
+              identity = trusted_nowscore_source_identity(fixture)
+              future = _future_fixture(fixture, cutoff)
+              raw_identity = fixture.get("nowscore_source_identity")
+              identity_coverage.append({
+                  "fixture_index": index,
+                  "fixture_id": fixture_id(fixture, identity),
+                  "competition_key": competition_key(fixture),
+                  "future_for_acceptance": future,
+                  "source_identity_status": (
+                      raw_identity.get("status")
+                      if isinstance(raw_identity, dict)
+                      else None
+                  ),
+                  "trusted": identity is not None,
+                  "trusted_nowscore_source_identity": identity,
+              })
+              if identity is not None and future:
+                  future_trusted.append((fixture, identity))
+
+          ordered_candidates = sorted(
+              future_trusted,
+              key=lambda item: (item[1]["kickoff_local"], item[1]["nowscore_id"]),
+          )
+          cohort_limit = min(max(int(os.environ.get("MAX_MATCHES", "12")), 1), 6)
+          acceptance_fixtures = []
+          acceptance_ids = set()
+          seen_competitions = set()
+          for fixture, identity in ordered_candidates:
+              current_id = fixture_id(fixture, identity)
+              competition = competition_key(fixture)
+              if current_id in acceptance_ids or (competition and competition in seen_competitions):
+                  continue
+              acceptance_fixtures.append(fixture)
+              acceptance_ids.add(current_id)
+              if competition:
+                  seen_competitions.add(competition)
+              if len(acceptance_fixtures) >= cohort_limit:
+                  break
+          for fixture, identity in ordered_candidates:
+              if len(acceptance_fixtures) >= cohort_limit:
+                  break
+              current_id = fixture_id(fixture, identity)
+              if current_id in acceptance_ids:
+                  continue
+              acceptance_fixtures.append(fixture)
+              acceptance_ids.add(current_id)
+          if not acceptance_fixtures:
+              raise SystemExit("selected snapshot has no trusted future fixture for acceptance")
+
+          acceptance_selection = {
+              "reason": "TRUSTED_IDENTITY_FUTURE_FIXTURES_ACCEPTANCE_ONLY",
+              "production_fixture_selection_authority": False,
+              "source_snapshot_business_date": selected_business_date,
+              "candidate_count": len(ordered_candidates),
+              "candidate_fixture_ids": [
+                  fixture_id(fixture, identity)
+                  for fixture, identity in ordered_candidates
+              ],
+              "selected_fixture_ids": [
+                  fixture_id(fixture, trusted_nowscore_source_identity(fixture))
+                  for fixture in acceptance_fixtures
+              ],
+              "limit": cohort_limit,
+          }
+          acceptance_selection_ids = set(acceptance_selection["selected_fixture_ids"])
+          for row in identity_coverage:
+              row["selected_for_acceptance"] = row["fixture_id"] in acceptance_selection_ids
+
+          Path("artifacts").mkdir(parents=True, exist_ok=True)
+          acceptance_cohort_path = Path("artifacts/issue-293-acceptance-cohort.json")
+          acceptance_cohort_path.write_text(
+              json.dumps({
+                  "status": "READY",
+                  "source": selected_snapshot.get("source", "nowscore_public_jc"),
+                  "business_date": selected_business_date,
+                  "acceptance_only": True,
+                  "production_fixture_selection_authority": False,
+                  "selection": acceptance_selection,
+                  "fixtures": acceptance_fixtures,
+              }, ensure_ascii=False, indent=2) + "\n",
+              encoding="utf-8",
+          )
+          if len(identity_coverage) != len(selected_fixtures):
+              raise SystemExit("selected snapshot identity coverage is incomplete")
+          if not all(
+              trusted_nowscore_source_identity(fixture) is not None
+              and _future_fixture(fixture, cutoff)
+              for fixture in acceptance_fixtures
+          ):
+              raise SystemExit("acceptance cohort contains an untrusted or non-future fixture")
+          selection = {
+              "reason": "EARLIEST_ELIGIBLE_FOR_ACCEPTANCE_ONLY",
+              "eligible_candidates": eligible,
+              "production_active_slate_authority": False,
+          }
+          with Path(os.environ["GITHUB_ENV"]).open("a", encoding="utf-8") as env:
+              env.write(f"ACCEPTANCE_ONLY_COHORT_PATH={acceptance_cohort_path}\n")
+              env.write(f"ACCEPTANCE_ONLY_COHORT_COUNT={len(acceptance_fixtures)}\n")
+          Path("artifacts/issue-293-r38-intake.json").write_text(
+              json.dumps({
+                  "business_date": selected_business_date,
+                  "probe_business_date": os.environ["PROBE_BUSINESS_DATE"],
+                  "captured_at": now.isoformat(),
+                  "snapshots": snapshots,
+                  "selection": selection,
+                  "selected_snapshot": {
+                      "business_date": selected_business_date,
+                      "source_status": selected["source_status"],
+                      "snapshot_status": selected["snapshot_status"],
+                      "fixture_count": len(selected_fixtures),
+                      "trusted_identity_count": selected_identity_count,
+                      "identity_coverage": identity_coverage,
+                      "acceptance_selection": acceptance_selection,
+                  },
+              }, ensure_ascii=False, indent=2) + "\n",
+              encoding="utf-8",
+          )
+          print(json.dumps({
+              "candidates": snapshots,
+              "selection": selection,
+              "selected_snapshot": {
+                  "fixture_count": len(selected_fixtures),
+                  "trusted_identity_count": selected_identity_count,
+              },
+              "acceptance_selection": acceptance_selection,
+          }, ensure_ascii=False))
+          PY
+
+      - name: Run exact-head live natural-cohort shared spine
+        shell: bash
+        env:
+          AS_OF: ${{ inputs.as_of || '' }}
+        run: |
+          args=(--max-matches "$ACCEPTANCE_ONLY_COHORT_COUNT" --cohort-path "$ACCEPTANCE_ONLY_COHORT_PATH" --output artifacts/issue-293-multi-source-evidence-spine.json --registry data/provider_entity_registry.json)
           if [[ -n "$AS_OF" ]]; then
             args+=(--as-of "$AS_OF")
           fi
-          python scripts/football_context_identity_feasibility_audit.py "${args[@]}" | tee football-context-identity-feasibility-audit.log
+          python -m scripts.football_data.multi_source_evidence_spine "${args[@]}" | tee multi-source-evidence-spine.log
           python - <<'PY'
           import json
           import subprocess
           from pathlib import Path
 
-          report = json.loads(Path("football-context-identity-feasibility-audit.json").read_text(encoding="utf-8"))
+          report = json.loads(Path("artifacts/issue-293-multi-source-evidence-spine.json").read_text(encoding="utf-8"))
+          intake = json.loads(Path("artifacts/issue-293-r38-intake.json").read_text(encoding="utf-8"))
           head = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
           if report["run"]["exact_head"] != head:
-              raise SystemExit("audit exact_head does not match checked-out HEAD")
+              raise SystemExit("spine exact_head does not match checked-out HEAD")
+          if report["run"]["cohort_source_path"] != "artifacts/issue-293-acceptance-cohort.json":
+              raise SystemExit("spine did not consume the acceptance-only cohort")
+          selected_snapshot = intake["selected_snapshot"]
+          if len(selected_snapshot["identity_coverage"]) != selected_snapshot["fixture_count"]:
+              raise SystemExit("selected snapshot identity coverage report is incomplete")
+          if selected_snapshot["trusted_identity_count"] <= 0:
+              raise SystemExit("selected snapshot has no trusted identity coverage")
           if report["run"]["natural_cohort_count"] <= 0:
               raise SystemExit("natural cohort is empty")
           api = report["api_football"]
-          if api["request_count"] > api["request_cap"] or api["request_cap"] != 25:
+          if api["credential_state"] != "PRESENT":
+              raise SystemExit("API-Football secret was not exercised")
+          if api["request_count"] > api["request_cap"] or api["request_cap"] != 100:
               raise SystemExit("API-Football request cap failed")
-          if set(api["endpoint_counts"]) != {"/fixtures", "/leagues"}:
-              raise SystemExit("unexpected API-Football endpoint")
-          if any(api["forbidden_endpoint_counts"].values()):
-              raise SystemExit("standings/injuries endpoint was called")
-          nowscore = report["nowscore"]["direct_competition_bridge"]
-          api_bridge = api["fixture_bridge"]
-          if sum(nowscore["status_counts"].values()) != report["run"]["natural_cohort_count"]:
-              raise SystemExit("Nowscore bridge counts do not cover the cohort")
-          if sum(api_bridge["status_counts"].values()) != report["run"]["natural_cohort_count"]:
-              raise SystemExit("API fixture bridge counts do not cover the cohort")
+          if "/fixtures/statistics" in api["endpoint_counts"]:
+              raise SystemExit("future fixture statistics endpoint was called")
+          before = report["identity_registry"]["summary_before"]
+          after = report["identity_registry"]["summary_after"]
+          if sum(before.values()) == 0 and sum(after.values()) == 0:
+              raise SystemExit("empty registry bootstrap produced no accepted mapping")
+          if report["nowscore"]["persisted_identity_count"] <= 0:
+              raise SystemExit("R38 intake persisted no exact source identities")
+          if report["nowscore"]["strict_backfill_fixture_count"] != 0 or report["nowscore"]["alias_surface_request_count"] != 0:
+              raise SystemExit("acceptance-only cohort was not limited to trusted source identities")
+          if api["binding_counts"].get("BOUND", 0) <= 0:
+              raise SystemExit("R38 live cohort produced no BOUND fixture")
+          if api["endpoint_counts"].get("/leagues", 0) <= 0 or api["endpoint_counts"].get("/teams/statistics", 0) <= 0:
+              raise SystemExit("R38 live cohort did not enter enrichment endpoints")
+          if not any(
+              reason in {
+                  "PERSISTED_ACCEPTED_MAPPING",
+                  "UNIQUE_ORIENTED_FIXTURE_WITH_BOOTSTRAP_EVIDENCE",
+              }
+              and count > 0
+              for reason, count in api["binding_reason_counts"].items()
+          ):
+              raise SystemExit("registry bootstrap/reuse evidence is missing")
+          if sum(api["binding_counts"].values()) != report["run"]["natural_cohort_count"]:
+              raise SystemExit("binding counts do not cover the cohort")
+          for field in ("standings", "injuries", "suspensions", "sidelined", "coach", "lineup", "stats"):
+              if sum(api["field_state_counts"].get(field, {}).values()) != report["run"]["natural_cohort_count"]:
+                  raise SystemExit(f"field states do not cover cohort: {field}")
           proof = report["boundary_proof"]
           for key in (
               "raw_body_persistence_count",
               "raw_body_output_marker_count",
               "secret_leakage_count",
-              "orientation_swap_attempt_count",
-              "date_only_binding_count",
-              "kickoff_only_binding_count",
-              "standings_endpoint_call_count",
-              "injuries_endpoint_call_count",
+              "name_similarity_acceptance_count",
+              "ambiguous_mapping_acceptance_count",
+              "orientation_swap_acceptance_count",
           ):
               if proof[key] != 0:
                   raise SystemExit(f"boundary proof failed: {key}={proof[key]}")
           for key in (
               "fuzzy_matching_used",
-              "manual_mapping_used",
+              "api_prediction_used",
               "production_enrichment_written",
-              "production_mapping_file_created",
               "article_changed",
               "ui_changed",
               "model_changed",
@@ -144,11 +410,12 @@ jobs:
                   raise SystemExit(f"boundary proof failed: {key}={proof[key]}")
           print(json.dumps({
               "natural_cohort_count": report["run"]["natural_cohort_count"],
-              "nowscore_direct_competition_bridge": nowscore,
-              "api_fixture_bridge": api_bridge,
+              "identity_registry": report["identity_registry"],
+              "binding_counts": api["binding_counts"],
+              "field_state_counts": api["field_state_counts"],
               "api_request_count": api["request_count"],
+              "api_cache_hits": api["cache_hits"],
               "api_endpoint_counts": api["endpoint_counts"],
-              "league_season_coverage_pairs": api["league_season_coverage_pairs"],
               "boundary_proof": proof,
           }, ensure_ascii=False))
           PY
@@ -158,11 +425,15 @@ jobs:
         shell: bash
         run: |
           {
-            echo "## FOOTBALL-CONTEXT-IDENTITY-FEASIBILITY-R1"
+            echo "## MULTI-SOURCE-EVIDENCE-SPINE-R1"
             echo
-            cat football-context-identity-feasibility-audit.log 2>/dev/null || true
+            cat artifacts/issue-293-r38-intake.json 2>/dev/null || true
             echo
-            cat football-context-identity-feasibility-audit.json 2>/dev/null || true
+            cat artifacts/issue-293-acceptance-cohort.json 2>/dev/null || true
+            echo
+            cat multi-source-evidence-spine.log 2>/dev/null || true
+            echo
+            cat artifacts/issue-293-multi-source-evidence-spine.json 2>/dev/null || true
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Check patch whitespace
@@ -182,9 +453,11 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: football-context-identity-feasibility-${{ github.event.pull_request.number || github.run_id }}
+          name: multi-source-evidence-spine-${{ github.event.pull_request.number || github.run_id }}
           path: |
-            football-context-identity-feasibility-audit.json
-            football-context-identity-feasibility-audit.log
+            artifacts/issue-293-multi-source-evidence-spine.json
+            artifacts/issue-293-r38-intake.json
+            artifacts/issue-293-acceptance-cohort.json
+            multi-source-evidence-spine.log
           if-no-files-found: error
           retention-days: 14

@@ -177,6 +177,8 @@ def _nowscore_schedule_payload(business_date: str, fetched: dict) -> dict:
             row["a32_corroboration"] = source_row["a32_corroboration"]
         if source_row.get("a32_corroboration_status") not in (None, ""):
             row["a32_corroboration_status"] = source_row["a32_corroboration_status"]
+        if source_row.get("nowscore_source_identity") not in (None, ""):
+            row["nowscore_source_identity"] = source_row["nowscore_source_identity"]
         if source_row.get("league") not in (None, ""):
             row["league"] = source_row["league"]
         matches.append(row)
@@ -235,12 +237,24 @@ def _payload_nowscore_schedule_rows(payloads: list[dict]) -> list[dict]:
             nowscore_id = row.get("nowscoreId") or row.get("nowscore_id")
             if nowscore_id in (None, ""):
                 continue
+            identity = row.get("nowscore_source_identity")
+            identity = identity if isinstance(identity, dict) else {}
             rows.append({
                 "nowscore_id": int(nowscore_id),
                 "home_team": row.get("homeTeam") or row.get("home_team") or "",
                 "away_team": row.get("awayTeam") or row.get("away_team") or "",
-                "home_team_en": row.get("homeTeamEn") or row.get("home_team_en") or "",
-                "away_team_en": row.get("awayTeamEn") or row.get("away_team_en") or "",
+                "home_team_en": (
+                    row.get("homeTeamEn")
+                    or row.get("home_team_en")
+                    or identity.get("home_team_en")
+                    or ""
+                ),
+                "away_team_en": (
+                    row.get("awayTeamEn")
+                    or row.get("away_team_en")
+                    or identity.get("away_team_en")
+                    or ""
+                ),
                 "kickoff_local": _kickoff(row),
             })
     return rows
