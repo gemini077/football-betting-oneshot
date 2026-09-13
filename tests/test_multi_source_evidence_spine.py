@@ -165,6 +165,7 @@ def test_name_candidate_alone_never_binds_and_reviewed_ids_bind(tmp_path: Path):
     rejected = bind_fixture_identity(SOURCE, ALIASES, [_api_row()], registry=EntityRegistry())
     assert rejected["status"] == "UNBOUND"
     assert rejected["reason_code"] == "NAME_CANDIDATE_ONLY"
+    assert "diagnostic" not in rejected
 
     registry = _proven_registry()
     bound = bind_fixture_identity(SOURCE, ALIASES, [_api_row()], registry=registry)
@@ -180,6 +181,40 @@ def test_name_candidate_alone_never_binds_and_reviewed_ids_bind(tmp_path: Path):
     reloaded = EntityRegistry.load(path)
     assert reloaded.lookup_team("NS-H")["api_team_id"] == 1
     assert reloaded.lookup_competition(25, 2026)["api_league_id"] == 39
+
+
+def test_team_identity_unproven_reports_sanitized_same_kickoff_diagnostic():
+    result = bind_fixture_identity(
+        SOURCE,
+        {"home": ("Other Home",), "away": ("Other Away",)},
+        [_api_row()],
+        registry=EntityRegistry(),
+    )
+
+    assert result["reason_code"] == "TEAM_IDENTITY_UNPROVEN"
+    diagnostic = result["diagnostic"]
+    assert diagnostic["source_fixture_id"] == "123"
+    assert diagnostic["source_kickoff"] == "2026-09-11T18:00:00+08:00"
+    assert diagnostic["same_kickoff_api_rows"] == [{
+        "api_fixture_id": 456,
+        "kickoff": "2026-09-11T10:00:00+00:00",
+        "home": {"api_team_id": 1, "name": "Home FC"},
+        "away": {"api_team_id": 2, "name": "Away FC"},
+        "league": {
+            "id": 39,
+            "name": "League A",
+            "country": "England",
+            "season": 2026,
+            "round": "Regular Season - 1",
+        },
+        "checks": {
+            "kickoff": True,
+            "home_alias": False,
+            "away_alias": False,
+            "persisted_home_team": False,
+            "persisted_away_team": False,
+        },
+    }]
 
 
 def test_orientation_and_season_mismatch_fail_closed():

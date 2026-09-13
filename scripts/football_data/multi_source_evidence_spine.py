@@ -808,6 +808,7 @@ def bind_fixture_identity(
     reverse_oriented = 0
     name_oriented = 0
     kickoff_rows = 0
+    same_kickoff_diagnostic: list[dict[str, Any]] = []
     for facts in facts_rows:
         same_kickoff = abs((facts["kickoff"] - source_kickoff).total_seconds()) <= 15 * 60
         name_home = _name_key(facts["home_name"]) in home_aliases
@@ -818,6 +819,26 @@ def bind_fixture_identity(
         reverse_id = bool(home_mapping and away_mapping and _positive_int(home_mapping.get("api_team_id")) == facts["away_team_id"] and _positive_int(away_mapping.get("api_team_id")) == facts["home_team_id"])
         if same_kickoff:
             kickoff_rows += 1
+            same_kickoff_diagnostic.append({
+                "api_fixture_id": facts["fixture_id"],
+                "kickoff": facts["kickoff"].isoformat(),
+                "home": {"api_team_id": facts["home_team_id"], "name": facts["home_name"]},
+                "away": {"api_team_id": facts["away_team_id"], "name": facts["away_name"]},
+                "league": {
+                    "id": facts["league_id"],
+                    "name": facts["league_name"],
+                    "country": facts["country"],
+                    "season": facts["season"],
+                    "round": facts["round"],
+                },
+                "checks": {
+                    "kickoff": same_kickoff,
+                    "home_alias": name_home,
+                    "away_alias": name_away,
+                    "persisted_home_team": id_home,
+                    "persisted_away_team": id_away,
+                },
+            })
         if reverse_name:
             reverse_oriented += int(same_kickoff)
             # Conflicting names and persisted IDs are not reconciled by a
@@ -864,7 +885,16 @@ def bind_fixture_identity(
         if name_oriented:
             return {"status": "UNBOUND", "reason_code": "KICKOFF_MISMATCH", "candidate_count": name_oriented}
         if kickoff_rows:
-            return {"status": "UNBOUND", "reason_code": "TEAM_IDENTITY_UNPROVEN", "candidate_count": 0}
+            return {
+                "status": "UNBOUND",
+                "reason_code": "TEAM_IDENTITY_UNPROVEN",
+                "candidate_count": 0,
+                "diagnostic": {
+                    "source_fixture_id": source_id,
+                    "source_kickoff": source_kickoff.isoformat(),
+                    "same_kickoff_api_rows": same_kickoff_diagnostic,
+                },
+            }
         return {"status": "UNBOUND", "reason_code": "NO_ORIENTED_API_FIXTURE", "candidate_count": 0}
 
     facts, evidence = oriented[0]
