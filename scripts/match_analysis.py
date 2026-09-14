@@ -32,6 +32,11 @@ try:
 except ImportError:  # pragma: no cover - exercised by the direct CLI path.
     from current_serving_state import resolve_current_job_for_match
 
+try:
+    from .match_analysis_article import build_match_analysis_article
+except ImportError:  # pragma: no cover - exercised by the direct CLI path.
+    from match_analysis_article import build_match_analysis_article
+
 
 ROOT = Path(__file__).resolve().parents[1]
 DATA_ROOT = ROOT / "data"
@@ -526,6 +531,7 @@ def attach_public_prematch_evidence(
     prediction_id: Any,
     match_id: Any,
     business_date: Any,
+    sidecar: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Attach a sanitized sidecar projection without mutating the source contract."""
 
@@ -533,12 +539,13 @@ def attach_public_prematch_evidence(
     evidence = payload.get("evidence") if isinstance(payload.get("evidence"), dict) else {}
     evidence = copy.deepcopy(evidence)
     evidence.pop("prematch_evidence", None)
-    sidecar = load_football_evidence_sidecar(
-        Path(prospective_root),
-        prediction_id,
-        match_id=match_id,
-        business_date=business_date,
-    )
+    if sidecar is None:
+        sidecar = load_football_evidence_sidecar(
+            Path(prospective_root),
+            prediction_id,
+            match_id=match_id,
+            business_date=business_date,
+        )
     public = project_public_prematch_evidence(sidecar)
     if isinstance(sidecar, dict) and isinstance(sidecar.get("prematch_evidence"), dict):
         evidence["prematch_evidence"] = public
@@ -1422,14 +1429,29 @@ def assemble_match_analysis(
         },
         "universe_status": universe_payload.get("status"),
     }
+    sidecar = None
     if serving_prediction and prediction_id:
+        sidecar = load_football_evidence_sidecar(
+            Path(prospective_root),
+            prediction_id,
+            match_id=fixture.get("match_id"),
+            business_date=business_date,
+        )
         contract = attach_public_prematch_evidence(
             contract,
             prospective_root=Path(prospective_root),
             prediction_id=prediction_id,
             match_id=fixture.get("match_id"),
             business_date=business_date,
+            sidecar=sidecar,
         )
+    contract["match_analysis_article"] = build_match_analysis_article(
+        serving_prediction,
+        snapshot or {},
+        sidecar or {},
+        fixture.get("source_fixture") or fixture,
+        contract.get("identity"),
+    )
     return contract
 
 

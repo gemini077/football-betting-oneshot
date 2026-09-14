@@ -936,6 +936,29 @@ def _render_key_evidence(contract: dict[str, Any]) -> str:
         + "</div></article>"
     )
 
+
+def _render_match_analysis_article(contract: dict[str, Any]) -> str:
+    article = contract.get("match_analysis_article")
+    if not isinstance(article, dict) or article.get("status") != "AVAILABLE":
+        return ""
+    paragraphs = [
+        item for item in article.get("paragraphs", [])
+        if isinstance(item, dict) and str(item.get("text") or "").strip()
+    ]
+    if not paragraphs:
+        return ""
+    identifiability = html.escape(str(article.get("identifiability") or ""), quote=True)
+    body = "".join(
+        f'<p data-article-role="{html.escape(str(item.get("role") or "context"), quote=True)}">{html.escape(str(item["text"]))}</p>'
+        for item in paragraphs
+    )
+    return (
+        f'<article class="panel analysis-article" id="analysis-article" data-article-version="match_analysis_article.v2" data-identifiability="{identifiability}">'
+        '<div class="section-kicker">赛前连接分析</div>'
+        '<h2>把近期结果、过程与市场放在同一条判断链里</h2>'
+        f'<div class="analysis-article-body">{body}</div></article>'
+    )
+
 def _market_comparison(contract: dict[str, Any]) -> dict[str, Any] | None:
     market = contract.get("market")
     if not isinstance(market, dict):
@@ -1258,6 +1281,11 @@ DETAIL_CSS = r"""
 .detail-page .market-panel .subtle-note { min-height: 22px; }
 .detail-page .market-panel .compare-head { margin-bottom: 6px; }
 .detail-page .market-panel .compare-grid { min-height: 85px; }
+.detail-page .analysis-article { margin-top: 10px; padding: 17px 18px 18px; border-top: 2px solid var(--orange); }
+.detail-page .analysis-article h2 { margin: 4px 0 12px; font-size: var(--type-section); line-height: 1.35; }
+.detail-page .analysis-article-body { max-width: 76ch; }
+.detail-page .analysis-article-body p { margin: 0; padding-top: 9px; border-top: 1px solid var(--line); color: var(--ink); font-size: var(--type-support); line-height: 1.7; }
+.detail-page .analysis-article-body p + p { margin-top: 9px; }
 .detail-page .evidence-panel { overflow: hidden; }
 .detail-page .evidence-panel-heading { margin-bottom: 7px; }
 .detail-page .evidence-panel-heading .evidence-role { margin-bottom: 3px; }
@@ -1483,11 +1511,12 @@ def render_match_detail(contract: dict[str, Any]) -> str:
     takeaways_html = _render_key_takeaways(contract, exact_state=serving_context["state"]) if serving else ""
     change_awareness_html = _render_change_awareness(contract) if serving else ""
     evidence_html = _render_key_evidence(contract) if serving else ""
+    article_html = _render_match_analysis_article(contract) if serving else ""
     market_html = _render_market_comparison(contract) if serving else ""
     if serving:
         primary_html = f'<section class="grid3 primary-grid">{probability_html}{exact_html}{takeaways_html}</section>'
         supporting_html = f'<section class="grid3 second supporting-grid">{goals_html}{market_html}</section>'
-        analysis_html = evidence_html + primary_html + supporting_html + change_awareness_html + (trust_html := _render_trust(contract))
+        analysis_html = article_html + evidence_html + primary_html + supporting_html + change_awareness_html + (trust_html := _render_trust(contract))
     else:
         trust_html = ""
         analysis_html = _render_status_panel(contract)
