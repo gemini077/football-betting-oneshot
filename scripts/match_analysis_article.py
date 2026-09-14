@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any
+from typing import Any, TypedDict
 
 try:  # Keep direct script imports and package imports working.
     from .match_analysis_evidence_projection import (
@@ -31,6 +31,19 @@ CONTRACT_VERSION = "match_analysis_article.v2"
 PROCESS_METRICS = ("shots_faced", "corners", "possession")
 OUTCOME_LABELS = {"home": "主胜", "draw": "平局", "away": "客胜"}
 SIDE_LABELS = {"home": "主队", "away": "客队"}
+
+
+class ArticlePlanItem(TypedDict):
+    role: str
+    subject: str
+    direction: str
+    strength: str
+    evidence_refs: list[str]
+    order: int
+    text: str
+
+
+ArticlePlan = list[ArticlePlanItem]
 
 
 def _accepted_field(evidence: Mapping[str, Any], name: str) -> Any:
@@ -403,7 +416,7 @@ def _team_name(identity: Mapping[str, Any], side: str) -> str:
     return _text(identity.get(side)) or SIDE_LABELS[side]
 
 
-def _recent_text(recent: Mapping[str, Any], identity: Mapping[str, Any]) -> str:
+def _recent_text(recent: Mapping[str, Any], identity: Mapping[str, Any]) -> str | None:
     parts: list[str] = []
     for side in SIDES:
         stats = _last5(recent.get(side))
@@ -413,14 +426,17 @@ def _recent_text(recent: Mapping[str, Any], identity: Mapping[str, Any]) -> str:
         parts.append(
             f"{_team_name(identity, side)}近5场{_format_number(wdl.get('wins'))}胜{_format_number(wdl.get('draws'))}平{_format_number(wdl.get('losses'))}负，进{_format_number(stats.get('goals_for'))}球、失{_format_number(stats.get('goals_against'))}球"
         )
-    if not parts:
-        return "近期结果序列没有足够的已接受记录，胜平负不作额外外推。"
-    return "；".join(parts) + "。这组结果只作为本场方向的起点，仍需和过程记录及市场变化交叉核对。"
+    return "；".join(parts) + "。" if parts else None
 
 
-def _process_text(process: Mapping[str, Any] | None, identity: Mapping[str, Any], alignment: str) -> str:
+def _process_text(
+    process: Mapping[str, Any] | None,
+    identity: Mapping[str, Any],
+    alignment: str,
+    process_direction: str | None,
+) -> str | None:
     if not isinstance(process, Mapping):
-        return "过程指标没有形成可用的双方对照，因此不把结果段落扩写成更强的判断。"
+        return None
     facts: list[str] = []
     teams = process.get("teams")
     for metric, label in (("shots_faced", "被射门"), ("corners", "角球"), ("possession", "控球")):
@@ -433,16 +449,17 @@ def _process_text(process: Mapping[str, Any] | None, identity: Mapping[str, Any]
             suffix = "%" if metric == "possession" else ""
             facts.append(f"{label}{_team_name(identity, 'home')} {values[0]:.1f}{suffix}/{_team_name(identity, 'away')} {values[1]:.1f}{suffix}")
     if not facts:
-        return "过程指标没有形成可用的双方对照，因此不把结果段落扩写成更强的判断。"
+        return None
     relation = {
         "supportive": "与近期结果同向",
         "contradictory": "与近期结果相反",
         "mixed": "没有形成单边同向",
     }[alignment]
-    return "近3场的" + "、".join(facts) + f"；这些记录{relation}，所以本场判断不只依赖 W/D/L。"
+    subject = _team_name(identity, process_direction) if process_direction in SIDES else "两队"
+    return "近3场的" + "、".join(facts) + f"；这些记录{relation}，过程方向偏向{subject}。"
 
 
-def _market_details(projection: Mapping[str, Any], prediction: Mapping[str, Any]) -> tuple[str, dict[str, Any]]:
+def _market_details(projection: Mapping[str, Any], prediction: Mapping[str, Any]) -> tuple[str | None, dict[str, Any]]:
     market = projection.get("market_1x2_chronology") if isinstance(projection, Mapping) else None
     alignment = projection.get("model_market_alignment") if isinstance(projection, Mapping) else None
     relationship = "neutral"
@@ -450,7 +467,7 @@ def _market_details(projection: Mapping[str, Any], prediction: Mapping[str, Any]
         relationship = {"ALIGNED": "aligned", "CONFLICT": "conflicting"}.get(_text(alignment.get("direction")), "neutral")
     details: dict[str, Any] = {"status": "OMITTED", "relationship": relationship}
     if not isinstance(market, Mapping) or market.get("status") != "AVAILABLE":
-        return "没有完整的开盘—当前1X2成对记录，市场不被用作方向确认。", details
+        return None, details
     opening = market.get("median_opening_probability")
     current = market.get("median_current_probability")
     current_preferred = _preferred(current)
@@ -479,12 +496,12 @@ def _market_details(projection: Mapping[str, Any], prediction: Mapping[str, Any]
         "conflicting": "与当前方向冲突",
         "neutral": "暂不构成方向关系",
     }[relationship]
-    return f"1X2从开盘到当前的去水中位概率仍以{current_text}为首位，{movement}；市场信号{relation_text}，因此只作为独立的确认或反证，不替代比分层。", details
+    return f"1X2从开盘到当前的去水中位概率仍以{current_text}为首位，{movement}；市场信号{relation_text}。", details
 
 
-def _future_text(future: Mapping[str, Any], identity: Mapping[str, Any]) -> str:
+def _future_text(future: Mapping[str, Any], identity: Mapping[str, Any]) -> str | None:
     if _text(future.get("status")) != "AVAILABLE":
-        return "后续赛程没有可用的休息间隔证据，不据此添加负面判断。"
+        return None
     short = [side for side in SIDES if (future.get(side) or {}).get("short_rest")]
     if short:
         detail = "、".join(
@@ -492,15 +509,7 @@ def _future_text(future: Mapping[str, Any], identity: Mapping[str, Any]) -> str:
             for side in short
         )
         return f"后续赛程显示{detail}；短间隔会压低对近期强度直接外推的把握，因此只保留已有方向，不追加阵容或战术推断。"
-    intervals = [
-        _number((future.get(side) or {}).get("next_interval_days"))
-        for side in SIDES
-        if _number((future.get(side) or {}).get("next_interval_days")) is not None
-    ]
-    if not intervals:
-        return "后续赛程没有可用的休息间隔证据，不据此添加负面判断。"
-    interval_text = "和".join(f"{_format_number(value)}天" for value in intervals)
-    return f"两队下一段休息间隔约为{interval_text}，休息因素暂不形成独立的反向信号。"
+    return None
 
 
 def _counter_text(
@@ -511,7 +520,7 @@ def _counter_text(
     market_details: Mapping[str, Any],
     identity: Mapping[str, Any],
     identifiability: str,
-) -> str:
+) -> str | None:
     parts: list[str] = []
     if _text(outlier.get("status")) == "PRESENT":
         side = _text(outlier.get("side"))
@@ -527,11 +536,9 @@ def _counter_text(
         parts.append(
             f"市场当前首位为{OUTCOME_LABELS.get(_text(market_details.get('current_preferred_outcome')), '方向未定')}，而当前胜平负分布首位为{OUTCOME_LABELS.get(_text(market_details.get('model_preferred_outcome')), '方向未定')}，两者没有合并成确定性。"
         )
-    if not parts:
-        parts.append("未发现足以改写主线的单一反证，但邻近比分仍保留尾部不确定性。")
     if identifiability == "LOW":
         parts.append("因此本场只保留弱方向，不把单一比分写成唯一答案。")
-    return "".join(parts)
+    return "".join(parts) or None
 
 
 def _forecast_text(
@@ -576,6 +583,122 @@ def _forecast_text(
     return text, forecast
 
 
+def _join_text(*parts: str | None) -> str | None:
+    return "".join(filter(None, parts)) or None
+
+
+def _build_article_plan(
+    *,
+    prediction: Mapping[str, Any],
+    identity: Mapping[str, Any],
+    recent: Mapping[str, Any],
+    process: Mapping[str, Any] | None,
+    result_direction: str | None,
+    process_direction: str | None,
+    result_process_alignment: str,
+    future: Mapping[str, Any],
+    market_text: str | None,
+    market_details: Mapping[str, Any],
+    market_relationship: str,
+    outlier: Mapping[str, Any],
+    identifiability: str,
+    forecast_text: str,
+) -> ArticlePlan:
+    model_preferred = _preferred(prediction.get("probabilities"))
+    home, away = _team_name(identity, "home"), _team_name(identity, "away")
+    aligned_direction = result_direction or process_direction or model_preferred or "mixed"
+    model_subject = _team_name(identity, model_preferred) if model_preferred in SIDES else "胜平负分布"
+    result_subject = _team_name(identity, result_direction) if result_direction in SIDES else "两队"
+
+    if identifiability == "HIGH" and result_process_alignment == "supportive" and market_relationship == "aligned":
+        thesis = f"{_team_name(identity, aligned_direction)}的近期结果、过程记录与1X2方向同向，{home}对{away}的主线清晰；但比分仍按候选簇理解，不把方向优势写成确定赛果。"
+        thesis_direction = aligned_direction
+    elif identifiability == "LOW":
+        thesis = f"{home}对{away}的核心不是单边结论：{model_subject}只保留弱倾向，近期结果、过程和市场没有形成足够一致的证据，比分需以分散候选簇读取。"
+        thesis_direction = model_preferred or "mixed"
+    elif market_relationship == "conflicting":
+        thesis = f"{model_subject}在当前胜平负分布中占优，但市场与近期证据保留反向信息；{home}对{away}更适合写成有条件的方向，而不是单一路径。"
+        thesis_direction = model_preferred or "mixed"
+    elif result_process_alignment == "contradictory":
+        thesis = f"{result_subject}的近期结果占优，但过程记录把注意力推向另一侧；{home}对{away}的预测主线因此需要保留反证与进球尾部。"
+        thesis_direction = result_direction or "mixed"
+    else:
+        thesis = f"{home}对{away}的方向信号存在层次差异：近期结果提供{OUTCOME_LABELS.get(result_direction, '有限')}起点，过程与市场只作交叉确认，比分不作单点承诺。"
+        thesis_direction = result_direction or process_direction or "mixed"
+
+    recent_text = _recent_text(recent, identity)
+    process_text = _process_text(process, identity, result_process_alignment, process_direction)
+    future_text = _future_text(future, identity)
+    recent_process_text = _join_text(recent_text, process_text, future_text)
+    counter_text = _counter_text(
+        outlier,
+        result_direction,
+        process_direction,
+        market_relationship,
+        market_details,
+        identity,
+        identifiability,
+    )
+
+    recent_refs = ["football_evidence.recent_form"] if recent_text else []
+    if process_text:
+        recent_refs.append("football_evidence.recent_process_context")
+    if future_text:
+        recent_refs.append("football_evidence.future_schedule_rest")
+    counter_refs: list[str] = []
+    if _text(outlier.get("status")) == "PRESENT":
+        counter_refs.append("football_evidence.recent_form")
+    if result_direction and process_direction and result_direction != process_direction and result_direction != "draw":
+        counter_refs.append("football_evidence.recent_process_context")
+    if market_relationship == "conflicting":
+        counter_refs.append("football_evidence.market_context")
+    forecast_refs = ["prediction_record.probabilities_and_score_cluster", "football_evidence.recent_form"]
+    thesis_refs = ["prediction_record.probabilities_and_score_cluster"]
+    if recent_text:
+        thesis_refs.insert(0, "football_evidence.recent_form")
+    if process_text:
+        thesis_refs.append("football_evidence.recent_process_context")
+    if market_text:
+        thesis_refs.append("football_evidence.market_context")
+
+    plan: ArticlePlan = []
+
+    def add(role: str, subject: str, direction: str, refs: list[str], text: str | None) -> None:
+        if not text:
+            return
+        plan.append({
+            "role": role,
+            "subject": subject,
+            "direction": direction,
+            "strength": {"HIGH": "strong", "MEDIUM": "moderate", "LOW": "weak"}.get(identifiability, "weak"),
+            "evidence_refs": list(dict.fromkeys(refs)),
+            "order": len(plan) + 1,
+            "text": text,
+        })
+
+    add(
+        "thesis",
+        _team_name(identity, thesis_direction) if thesis_direction in SIDES else "两队",
+        thesis_direction,
+        thesis_refs,
+        thesis,
+    )
+    if identifiability == "LOW":
+        add(
+            "evidence_conflict",
+            "两队",
+            "mixed",
+            recent_refs + counter_refs,
+            _join_text(recent_process_text, counter_text),
+        )
+    else:
+        add("recent_process", "两队", process_direction or result_direction or "mixed", recent_refs, recent_process_text)
+        add("counterevidence", "两队", "mixed", counter_refs, counter_text)
+    add("market", "market", _text(market_details.get("current_preferred_outcome")) or "neutral", ["football_evidence.market_context"], market_text)
+    add("forecast", "prediction", model_preferred or "mixed", forecast_refs, forecast_text)
+    return plan
+
+
 def build_match_analysis_article(
     prediction: Mapping[str, Any] | None,
     input_snapshot: Mapping[str, Any] | None,
@@ -589,7 +712,13 @@ def build_match_analysis_article(
     input_snapshot = input_snapshot if isinstance(input_snapshot, Mapping) else {}
     football_evidence = football_evidence if isinstance(football_evidence, Mapping) else {}
     identity = identity if isinstance(identity, Mapping) else {}
-    empty = {"contract_version": CONTRACT_VERSION, "status": "OMITTED", "paragraphs": [], "source_refs": []}
+    empty = {
+        "contract_version": CONTRACT_VERSION,
+        "status": "OMITTED",
+        "article_plan": [],
+        "paragraphs": [],
+        "source_refs": [],
+    }
     if not prediction or not football_evidence:
         return empty
     try:
@@ -624,45 +753,35 @@ def build_match_analysis_article(
         process_available=process_direction is not None,
     )
     future = _future_schedule_rest(football_evidence)
-    home, away = _team_name(identity, "home"), _team_name(identity, "away")
-    model_preferred = _preferred(prediction.get("probabilities"))
-    result_team = _team_name(identity, result_direction) if result_direction in SIDES else "两队"
-    model_team = _team_name(identity, model_preferred) if model_preferred in SIDES else "胜平负分布"
-    if identifiability == "HIGH" and result_process_alignment == "supportive" and market_relationship == "aligned":
-        thesis = f"{model_team}的近期结果、过程记录与1X2方向同向，{home}对{away}的主线清晰；但比分仍按候选簇理解，不把方向优势写成确定赛果。"
-    elif identifiability == "LOW":
-        thesis = f"{home}对{away}的核心不是单边结论：{model_team}只保留弱倾向，近期结果、过程和市场没有形成足够一致的证据，比分需以分散候选簇读取。"
-    elif market_relationship == "conflicting":
-        thesis = f"{model_team}在当前胜平负分布中占优，但市场与近期证据保留反向信息；{home}对{away}更适合写成有条件的方向，而不是单一路径。"
-    elif result_process_alignment == "contradictory":
-        thesis = f"{result_team}的近期结果占优，但过程记录把注意力推向另一侧；{home}对{away}的预测主线因此需要保留反证与进球尾部。"
-    else:
-        thesis = f"{home}对{away}的方向信号存在层次差异：近期结果提供{OUTCOME_LABELS.get(result_direction, '有限')}起点，过程与市场只作交叉确认，比分不作单点承诺。"
-
-    recent_text = _recent_text(recent, identity)
-    process_text = _process_text(process, identity, result_process_alignment)
-    future_text = _future_text(future, identity)
-    if result_process_alignment == "supportive":
-        connection = f"把两队放在同一场景里，{model_team}的结果方向与过程方向一致，另一侧的防守/被射门记录则构成可见的抵抗；这支持方向判断，但不消除平局和邻近比分。"
-    elif result_process_alignment == "contradictory":
-        connection = f"把两队放在同一场景里，{result_team}的结果优势没有得到过程方向完整复现，另一侧的近期内容仍有抵抗；因此方向和进球环境要分开读。"
-    else:
-        connection = f"把两队放在同一场景里，{home}与{away}的结果和过程只有部分重合；这意味着方向证据需要市场与比分簇共同约束。"
-    counter_text = _counter_text(outlier, result_direction, process_direction, market_relationship, market_details, identity, identifiability)
     forecast_text, forecast = _forecast_text(prediction, goal_shape, scores, identifiability)
-    paragraphs = [
-        {"role": "thesis", "text": thesis},
-        {"role": "recent_process", "text": recent_text + process_text},
-        {"role": "teams_and_rest", "text": connection + future_text},
-        {"role": "market", "text": market_text},
-        {"role": "counterevidence", "text": counter_text},
-        {"role": "forecast", "text": forecast_text},
-    ]
+    article_plan = _build_article_plan(
+        prediction=prediction,
+        identity=identity,
+        recent=recent,
+        process=process,
+        result_direction=result_direction,
+        process_direction=process_direction,
+        result_process_alignment=result_process_alignment,
+        future=future,
+        market_text=market_text,
+        market_details=market_details,
+        market_relationship=market_relationship,
+        outlier=outlier,
+        identifiability=identifiability,
+        forecast_text=forecast_text,
+    )
+    source_refs: list[str] = []
+    for item in article_plan:
+        for ref in item["evidence_refs"]:
+            if ref not in source_refs:
+                source_refs.append(ref)
+    headline = article_plan[0]["text"] if article_plan else ""
     return {
         "contract_version": CONTRACT_VERSION,
         "status": "AVAILABLE",
-        "headline": thesis,
-        "paragraphs": paragraphs,
+        "headline": headline,
+        "article_plan": article_plan,
+        "paragraphs": article_plan,
         "result_process_alignment": result_process_alignment,
         "market_relationship": market_relationship,
         "goal_shape": goal_shape,
@@ -673,13 +792,7 @@ def build_match_analysis_article(
         "market_evidence": market_details,
         "future_schedule_rest": future,
         "forecast": forecast,
-        "source_refs": [
-            "football_evidence.recent_form",
-            "football_evidence.recent_process_context",
-            "football_evidence.future_schedule_rest",
-            "football_evidence.market_context",
-            "prediction_record.probabilities_and_score_cluster",
-        ],
+        "source_refs": source_refs,
     }
 
 

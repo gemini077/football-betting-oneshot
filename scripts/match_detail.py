@@ -941,10 +941,9 @@ def _render_match_analysis_article(contract: dict[str, Any]) -> str:
     article = contract.get("match_analysis_article")
     if not isinstance(article, dict) or article.get("status") != "AVAILABLE":
         return ""
-    paragraphs = [
-        item for item in article.get("paragraphs", [])
-        if isinstance(item, dict) and str(item.get("text") or "").strip()
-    ]
+    raw_plan = article.get("article_plan")
+    plan = [item for item in raw_plan if isinstance(item, dict)] if isinstance(raw_plan, list) else []
+    paragraphs = [item for item in sorted(plan, key=lambda item: item.get("order", 0)) if str(item.get("text") or "").strip()]
     if not paragraphs:
         return ""
     identifiability = html.escape(str(article.get("identifiability") or ""), quote=True)
