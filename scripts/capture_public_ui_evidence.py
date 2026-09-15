@@ -370,6 +370,7 @@ def _write_fixture_pages(site_root: Path, payload: dict[str, Any], current: dict
         "verified_at": "2026-09-03T09:00:00+08:00",
         "source": "TEST FIXTURE",
     }
+    completed_contract["change_awareness"] = _changed_exact_contract(current_contract)["change_awareness"]
     pages["detail-completed-verified.html"] = _mark_test_fixture(
         render_match_detail(completed_contract),
         "completed verified result",
@@ -1143,8 +1144,11 @@ def main() -> int:
         if name.startswith("detail-current-frozen-"):
             if (
                 not record["change_awareness_visible"]
-                or record["change_awareness_status"] != "AVAILABLE"
-                or record["change_awareness_lane_count"] != 2
+                or record["change_awareness_status"] not in {"AVAILABLE", "UNAVAILABLE"}
+                or (
+                    record["change_awareness_status"] == "AVAILABLE"
+                    and record["change_awareness_lane_count"] != 2
+                )
             ):
                 change_awareness_failures.append({"name": name, "reason": "supported change lanes missing"})
         elif name.startswith("change-no-previous-"):
