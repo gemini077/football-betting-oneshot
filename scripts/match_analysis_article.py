@@ -45,6 +45,55 @@ class ArticlePlanItem(TypedDict):
 
 ArticlePlan = list[ArticlePlanItem]
 
+_ARTICLE_PLAN_ROLES = {"thesis", "recent_process", "counterevidence", "evidence_conflict", "market", "forecast"}
+_ARTICLE_PLAN_DIRECTIONS = set(OUTCOMES) | {"mixed", "neutral"}
+_ARTICLE_PLAN_STRENGTHS = {"strong", "moderate", "weak"}
+
+
+def render_article_plan(plan: Any) -> ArticlePlan:
+    """Validate and normalize the article plan at the article-to-HTML boundary."""
+
+    if not isinstance(plan, list) or not all(isinstance(item, Mapping) for item in plan):
+        return []
+    rendered: ArticlePlan = []
+    for item in sorted(plan, key=lambda value: value.get("order", 0)):
+        role = _text(item.get("role"))
+        subject = _text(item.get("subject"))
+        direction = _text(item.get("direction"))
+        strength = _text(item.get("strength"))
+        text = _text(item.get("text"))
+        refs = item.get("evidence_refs")
+        order = item.get("order")
+        if (
+            role not in _ARTICLE_PLAN_ROLES
+            or not subject
+            or direction not in _ARTICLE_PLAN_DIRECTIONS
+            or strength not in _ARTICLE_PLAN_STRENGTHS
+            or not text
+            or not isinstance(refs, list)
+            or not refs
+            or not all(isinstance(ref, str) and ref.strip() for ref in refs)
+            or not isinstance(order, int)
+            or order != len(rendered) + 1
+        ):
+            return []
+        if role in {"thesis", "recent_process"} and direction in SIDES and subject not in text:
+            return []
+        if role == "recent_process" and direction == "mixed" and "\u8fc7\u7a0b\u65b9\u5411\u504f\u5411" in text:
+            return []
+        rendered.append(
+            {
+                "role": role,
+                "subject": subject,
+                "direction": direction,
+                "strength": strength,
+                "evidence_refs": list(refs),
+                "order": order,
+                "text": text,
+            }
+        )
+    return rendered
+
 
 def _accepted_field(evidence: Mapping[str, Any], name: str) -> Any:
     bundle = evidence.get("prematch_evidence")
@@ -455,8 +504,12 @@ def _process_text(
         "contradictory": "与近期结果相反",
         "mixed": "没有形成单边同向",
     }[alignment]
-    subject = _team_name(identity, process_direction) if process_direction in SIDES else "两队"
-    return "近3场的" + "、".join(facts) + f"；这些记录{relation}，过程方向偏向{subject}。"
+    if process_direction in SIDES:
+        subject = _team_name(identity, process_direction)
+        direction_text = f"；这些记录{relation}，过程方向偏向{subject}。"
+    else:
+        direction_text = "；这些记录没有形成单边方向。"
+    return "近3场的" + "、".join(facts) + direction_text
 
 
 def _market_details(projection: Mapping[str, Any], prediction: Mapping[str, Any]) -> tuple[str | None, dict[str, Any]]:
@@ -692,7 +745,8 @@ def _build_article_plan(
             _join_text(recent_process_text, counter_text),
         )
     else:
-        add("recent_process", "两队", process_direction or result_direction or "mixed", recent_refs, recent_process_text)
+        process_subject = _team_name(identity, process_direction) if process_direction in SIDES else "两队"
+        add("recent_process", process_subject, process_direction or result_direction or "mixed", recent_refs, recent_process_text)
         add("counterevidence", "两队", "mixed", counter_refs, counter_text)
     add("market", "market", _text(market_details.get("current_preferred_outcome")) or "neutral", ["football_evidence.market_context"], market_text)
     add("forecast", "prediction", model_preferred or "mixed", forecast_refs, forecast_text)

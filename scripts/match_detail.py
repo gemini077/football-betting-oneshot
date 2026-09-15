@@ -17,6 +17,11 @@ except ImportError:
     from match_analysis import MATCH_ANALYSIS_ROOT, build_match_contracts, match_url
 
 try:
+    from .match_analysis_article import render_article_plan
+except ImportError:
+    from match_analysis_article import render_article_plan
+
+try:
     from .exact_score_serving_policy import exact_score_serving_presentation
 except ImportError:
     from exact_score_serving_policy import exact_score_serving_presentation
@@ -941,15 +946,18 @@ def _render_match_analysis_article(contract: dict[str, Any]) -> str:
     article = contract.get("match_analysis_article")
     if not isinstance(article, dict) or article.get("status") != "AVAILABLE":
         return ""
-    raw_plan = article.get("article_plan")
-    plan = [item for item in raw_plan if isinstance(item, dict)] if isinstance(raw_plan, list) else []
-    paragraphs = [item for item in sorted(plan, key=lambda item: item.get("order", 0)) if str(item.get("text") or "").strip()]
-    if not paragraphs:
+    plan = render_article_plan(article.get("article_plan"))
+    if not plan:
         return ""
     identifiability = html.escape(str(article.get("identifiability") or ""), quote=True)
     body = "".join(
-        f'<p data-article-role="{html.escape(str(item.get("role") or "context"), quote=True)}">{html.escape(str(item["text"]))}</p>'
-        for item in paragraphs
+        f'<p data-article-role="{html.escape(item["role"], quote=True)}" '
+        f'data-article-subject="{html.escape(item["subject"], quote=True)}" '
+        f'data-article-direction="{html.escape(item["direction"], quote=True)}" '
+        f'data-article-strength="{html.escape(item["strength"], quote=True)}" '
+        f'data-article-evidence-refs="{html.escape(",".join(item["evidence_refs"]), quote=True)}">'
+        f'{html.escape(item["text"])}</p>'
+        for item in plan
     )
     return (
         f'<article class="panel analysis-article" id="analysis-article" data-article-version="match_analysis_article.v2" data-identifiability="{identifiability}">'

@@ -86,6 +86,29 @@ def test_benchmark_primitives_keep_alignment_outlier_and_conflict_visible():
     assert all("沙尔克04的结果方向与过程方向一致" not in item["text"] for item in union["article_plan"])
 
 
+def test_plan_surface_fidelity_is_validated_and_emitted():
+    contract = _contract("2993794")
+    article = contract["match_analysis_article"]
+    rendered = _render_match_analysis_article(contract)
+    serialized = json.dumps(article, ensure_ascii=False)
+    assert "\u8fc7\u7a0b\u65b9\u5411\u504f\u5411\u4e24\u961f" not in serialized
+    assert "\u6ca1\u6709\u5f62\u6210\u5355\u8fb9\u65b9\u5411" in serialized
+    for item in article["article_plan"]:
+        assert f'data-article-role="{item["role"]}"' in rendered
+        assert f'data-article-subject="{item["subject"]}"' in rendered
+        assert f'data-article-direction="{item["direction"]}"' in rendered
+        assert f'data-article-strength="{item["strength"]}"' in rendered
+    invalid = copy.deepcopy(contract)
+    invalid["match_analysis_article"]["article_plan"][0]["strength"] = "invalid"
+    assert _render_match_analysis_article(invalid) == ""
+
+
+def test_public_ui_workflow_runs_article_validation():
+    workflow = (ROOT / ".github/workflows/public-ui-visual-evidence.yml").read_text(encoding="utf-8")
+    assert workflow.count("scripts/match_analysis_article.py") >= 2
+    assert workflow.count("tests/test_match_analysis_article.py") >= 2
+
+
 def test_low_identifiability_weakens_exact_score_language_and_article_is_first():
     contract = _contract("2993794")
     article = contract["match_analysis_article"]
