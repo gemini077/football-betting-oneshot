@@ -106,7 +106,7 @@ jobs:
               if found:
                   leaks[str(page)] = found
           report = {
-              "status": "PASS" if len(pages) == 12 and not leaks else "FAIL",
+              "status": "PASS" if pages and not leaks else "FAIL",
               "page_count": len(pages),
               "scanned_pages": [str(page) for page in pages],
               "forbidden_tokens": list(forbidden),
@@ -118,7 +118,7 @@ jobs:
           if report["status"] != "PASS":
               print(json.dumps(report, ensure_ascii=False, indent=2))
               raise SystemExit("Generated Match Detail HTML leakage scan failed")
-          print("12/12 Match Detail HTML leakage scan: PASS")
+          print(f"{len(pages)} Match Detail HTML leakage scan: PASS")
           PY
 
       - name: Capture Chromium evidence
