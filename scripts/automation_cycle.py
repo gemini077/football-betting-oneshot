@@ -81,6 +81,8 @@ def _summary(payload: dict) -> dict:
         "result_files_rejected", "result_identity_conflicts", "result_identity_mismatches",
         "unmatched_pair_count", "auto_promote",
         "business_dates", "source_states",
+        "evidence_state", "locked_unique_matches", "settled_unique_matches",
+        "pending_unique_matches", "unresolved_unique_matches", "paired_unique_matches",
     }
     return {key: value for key, value in payload.items() if key in allowed}
 
@@ -165,7 +167,7 @@ def _is_expected_future_not_yet_published(step: dict) -> bool:
 
 
 def _overall_status(steps: dict[str, dict]) -> str:
-    if any(steps.get(name, {}).get("status") == "FAILED" for name in ("dashboard", "site")):
+    if any(steps.get(name, {}).get("status") == "FAILED" for name in ("dashboard", "site", "trust_projection")):
         return "FAILED"
     if any(value.get("status") not in {"SUCCESS", "SKIPPED"} for value in steps.values()):
         return "DEGRADED"
@@ -302,6 +304,14 @@ def cycle(
     steps["market_side_shadow_evaluation"] = _step("market_side_shadow_evaluation", [
         python, "scripts/market_side_shadow_refresh.py",
     ], optional=True)
+    steps["trust_projection"] = _step("trust_projection", [
+        python, "scripts/prediction_trust_projection.py", "--business-date", business_date,
+    ], optional=False)
+    if (
+        steps["trust_projection"]["status"] == "SUCCESS"
+        and steps["trust_projection"]["summary"].get("status") in {"DEGRADED", "UNAVAILABLE"}
+    ):
+        steps["trust_projection"]["status"] = "DEGRADED"
     if persist_runtime:
         _write_runtime(Path(runtime_path), business_date=business_date, started_at=started, finished_at=None, steps=steps)
 
@@ -411,6 +421,14 @@ def production_cycle(
         steps=steps,
         carryover_business_dates=carryover_dates,
     )
+    steps["trust_projection"] = _step("trust_projection", [
+        sys.executable, "scripts/prediction_trust_projection.py", "--business-date", current_date,
+    ], optional=False)
+    if (
+        steps["trust_projection"]["status"] == "SUCCESS"
+        and steps["trust_projection"]["summary"].get("status") in {"DEGRADED", "UNAVAILABLE"}
+    ):
+        steps["trust_projection"]["status"] = "DEGRADED"
     steps["dashboard"] = _step("dashboard_refresh", [
         sys.executable, "scripts/prediction_dashboard.py", "--date", current_date,
     ], optional=False)

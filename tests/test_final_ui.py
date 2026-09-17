@@ -112,6 +112,77 @@ def test_dashboard_uses_locked_probability_desk_surface():
     assert html.count('class="bottom-item') == 4
 
 
+def test_dashboard_exposes_current_champion_trust_and_keeps_misses_visible():
+    payload = dashboard_payload()
+    payload["prediction_quality_trust"] = {
+        "status": "AVAILABLE",
+        "status_label": "持续更新中",
+        "message": "只统计当前正式模型；命中与失误均保留。",
+        "model": {"release_version": "v0.19.0"},
+        "cohort": {
+            "locked_unique_match_count": 2,
+            "settled_unique_match_count": 1,
+            "pending_unique_match_count": 1,
+            "unresolved_unique_match_count": 0,
+        },
+        "metrics": {
+            "ft_1x2": {
+                "top1_accuracy": {"n": 1, "hits": 0, "rate": 0.0},
+                "log_loss": {"n": 1, "mean": 1.2},
+                "brier": {"n": 1, "mean": 0.8},
+            },
+            "exact_score": {
+                "top1": {"n": 1, "hits": 0, "rate": 0.0},
+                "top3": {"n": 1, "hits": 1, "rate": 1.0},
+                "top5": {"n": 1, "hits": 1, "rate": 1.0},
+                "formal_nll": {"n": 1, "mean": 2.1},
+            },
+        },
+        "freshness": {"settled_through": "2026-09-08T23:00:00+08:00"},
+        "comparator": {
+            "status": "AVAILABLE",
+            "paired_unique_match_count": 1,
+            "unpaired_unique_match_count": 1,
+            "decision": {"verdict": "INSUFFICIENT_SAMPLE_CONTINUE_ACCUMULATING"},
+        },
+        "history": [
+            {
+                "home": "主队",
+                "away": "客队",
+                "kickoff_at": "2026-09-08T20:00:00+08:00",
+                "status": "SETTLED",
+                "actual_score": "0-1",
+                "ft_1x2_hit": False,
+                "exact_top1_hit": False,
+                "exact_top3_hit": True,
+                "exact_top5_hit": True,
+                "paired": False,
+            },
+            {
+                "home": "后续主队",
+                "away": "后续客队",
+                "kickoff_at": "2026-09-09T20:00:00+08:00",
+                "status": "PENDING",
+                "paired": None,
+            },
+        ],
+    }
+
+    html = render_dashboard(payload)
+
+    assert 'id="trust-history"' in html
+    assert 'data-trust-status="AVAILABLE"' in html
+    assert "胜平负首选命中" in html
+    assert "未命中" in html
+    assert "待核验" in html
+    assert "未配对" in html
+    assert "同场市场对照" in html
+    assert "校准" in html
+    trust_html = html[html.index('id="trust-history"'):]
+    assert "prediction_id" not in trust_html
+    assert "model_run_fingerprint" not in trust_html
+
+
 def test_detail_keeps_exact_score_as_separate_truthful_lane(tmp_path):
     contract = assemble(roots(tmp_path, include_formal_markets=True))
     contract["model"]["probabilities"] = {"home": 0.486, "draw": 0.276, "away": 0.238}

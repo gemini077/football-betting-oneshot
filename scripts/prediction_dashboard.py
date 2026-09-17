@@ -1008,6 +1008,34 @@ MODERN_CSS = r"""
 .history-context strong { margin-top: 2px; color: var(--ink); font-size: var(--type-support); font-weight: 650; overflow-wrap: anywhere; }
 .history-context-missing strong { color: var(--warning); }
 .history-empty { padding: 22px 0; color: var(--muted); font-size: var(--type-support); }
+.trust-history { margin-top: 18px; scroll-margin-top: 16px; }
+.trust-history-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.trust-history-head h2 { margin: 0; font-size: var(--type-section); }
+.trust-history-head p { max-width: 720px; margin: 6px 0 0; color: var(--muted); font-size: var(--type-support); }
+.trust-status { flex: none; padding: 5px 9px; border: 1px solid var(--line-2); border-radius: 99px; color: var(--muted); font-size: var(--type-meta); }
+.trust-status.available { border-color: #A7D6B9; background: #EFFAF2; color: var(--verified); }
+.trust-status.degraded { border-color: #F2CB9E; background: var(--warning-soft); color: var(--warning); }
+.trust-status.unavailable { border-color: #E3B5B0; background: var(--danger-soft); color: var(--danger); }
+.trust-metric-grid { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 8px; margin-top: 13px; }
+.trust-metric { min-width: 0; padding: 11px 12px; border: 1px solid var(--line); border-radius: 9px; background: var(--card-soft); }
+.trust-metric span, .trust-metric strong, .trust-metric small { display: block; }
+.trust-metric span { color: var(--muted); font-size: var(--type-meta); }
+.trust-metric strong { margin-top: 5px; color: var(--ink); font-size: calc(18px * var(--ui-text-scale)); font-variant-numeric: tabular-nums; }
+.trust-metric small { margin-top: 4px; color: var(--muted); font-size: var(--type-meta); line-height: 1.4; }
+.trust-comparator { margin-top: 10px; padding: 11px 12px; border-top: 1px solid var(--line); color: var(--muted); font-size: var(--type-support); }
+.trust-comparator strong { color: var(--ink); }
+.trust-comparator-grid { display: flex; flex-wrap: wrap; gap: 8px 18px; margin-top: 6px; }
+.trust-comparator-grid span { color: var(--muted); }
+.trust-history-list { margin-top: 10px; border-top: 1px solid var(--line); }
+.trust-history-row { display: grid; grid-template-columns: minmax(180px,1.2fr) 130px 130px minmax(180px,1fr) 100px; gap: 12px; align-items: center; min-height: 62px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.trust-history-row > * { min-width: 0; }
+.trust-history-row span, .trust-history-row strong { display: block; }
+.trust-history-row span { color: var(--muted); font-size: var(--type-meta); }
+.trust-history-row strong { margin-top: 3px; color: var(--ink); font-size: var(--type-support); overflow-wrap: anywhere; }
+.trust-history-row .trust-hit { color: var(--verified); }
+.trust-history-row .trust-miss { color: var(--danger); }
+.trust-history-row .trust-pending { color: var(--warning); }
+.trust-history-note { margin-top: 9px; color: var(--muted); font-size: var(--type-meta); }
 .dashboard-trust { padding: 8px 0 0; }
 .dashboard-trust strong, .dashboard-trust span { display: block; margin-top: 3px; }
 .dashboard-data-method { scroll-margin-top: 16px; }
@@ -1057,6 +1085,14 @@ MODERN_CSS = r"""
   .history-context { margin-top: 10px; }
   .history-links { margin-top: 10px; }
   .history-meta, .history-links { grid-column: 1 / -1; }
+  .trust-history { margin-top: 25px; }
+  .trust-history-head { display: block; }
+  .trust-status { display: inline-block; margin-top: 9px; }
+  .trust-metric-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .trust-history-row { display: block; min-height: 0; padding: 12px 0; }
+  .trust-history-row > * { margin-top: 8px; }
+  .trust-history-row > :first-child { margin-top: 0; }
+  .trust-comparator-grid { display: grid; gap: 5px; }
   .page-footer { display: block; }
   .page-footer span { display: block; }
   .page-footer span:last-child { max-width: none; margin-top: 6px; text-align: left; }
@@ -1697,6 +1733,151 @@ def _historical_results_html(rows: list[dict[str, Any]]) -> str:
     )
 
 
+def _trust_metric_text(value: Any, *, percent: bool = False) -> str:
+    number = _number(value)
+    if number is None:
+        return "—"
+    return f"{number * 100:.1f}%" if percent else f"{number:.3f}"
+
+
+def _trust_int(value: Any) -> int:
+    try:
+        return max(0, int(value or 0))
+    except (TypeError, ValueError):
+        return 0
+
+
+def _trust_hit_text(value: Any) -> tuple[str, str]:
+    if value is True or value == 1:
+        return "命中", "trust-hit"
+    if value is False or value == 0:
+        return "未命中", "trust-miss"
+    return "—", ""
+
+
+def _trust_history_html(trust: dict[str, Any] | None) -> str:
+    trust = trust if isinstance(trust, dict) else {}
+    status = str(trust.get("status") or "UNAVAILABLE").upper()
+    status_class = status.lower() if status in {"AVAILABLE", "DEGRADED", "UNAVAILABLE"} else "unavailable"
+    status_label = str(trust.get("status_label") or {
+        "AVAILABLE": "持续更新中",
+        "DEGRADED": "证据正在补齐",
+        "UNAVAILABLE": "暂时无法形成可信记录",
+    }.get(status, "暂待确认"))
+    model = trust.get("model") if isinstance(trust.get("model"), dict) else {}
+    cohort = trust.get("cohort") if isinstance(trust.get("cohort"), dict) else {}
+    metrics = trust.get("metrics") if isinstance(trust.get("metrics"), dict) else {}
+    ft = metrics.get("ft_1x2") if isinstance(metrics.get("ft_1x2"), dict) else {}
+    ft_top1 = ft.get("top1_accuracy") if isinstance(ft.get("top1_accuracy"), dict) else {}
+    ft_log_loss = ft.get("log_loss") if isinstance(ft.get("log_loss"), dict) else {}
+    ft_brier = ft.get("brier") if isinstance(ft.get("brier"), dict) else {}
+    exact = metrics.get("exact_score") if isinstance(metrics.get("exact_score"), dict) else {}
+    exact_top1 = exact.get("top1") if isinstance(exact.get("top1"), dict) else {}
+    exact_top3 = exact.get("top3") if isinstance(exact.get("top3"), dict) else {}
+    exact_top5 = exact.get("top5") if isinstance(exact.get("top5"), dict) else {}
+    exact_nll = exact.get("formal_nll") if isinstance(exact.get("formal_nll"), dict) else {}
+    freshness = trust.get("freshness") if isinstance(trust.get("freshness"), dict) else {}
+    comparator = trust.get("comparator") if isinstance(trust.get("comparator"), dict) else {}
+    diagnostics = trust.get("collapse_diagnostics") if isinstance(trust.get("collapse_diagnostics"), dict) else {}
+    one_one = diagnostics.get("one_one_top1") if isinstance(diagnostics.get("one_one_top1"), dict) else {}
+    locked = _trust_int(cohort.get("locked_unique_match_count"))
+    settled = _trust_int(cohort.get("settled_unique_match_count"))
+    pending = _trust_int(cohort.get("pending_unique_match_count"))
+    unresolved = _trust_int(cohort.get("unresolved_unique_match_count"))
+    model_version = str(model.get("release_version") or "").strip()
+    model_copy = (
+        f'当前正式模型{(" · " + html.escape(model_version)) if model_version else ""}'
+        if status != "UNAVAILABLE"
+        else "当前正式模型记录"
+    )
+    comparator_html = ""
+    if str(comparator.get("status") or "").upper() == "AVAILABLE":
+        decision = comparator.get("decision") if isinstance(comparator.get("decision"), dict) else {}
+        verdict = str(decision.get("verdict") or "").upper()
+        verdict_label = (
+            "样本继续积累"
+            if verdict == "INSUFFICIENT_SAMPLE_CONTINUE_ACCUMULATING"
+            else "仅作方向与不确定性参考"
+            if verdict == "DIRECTION_AND_UNCERTAINTY_ONLY_NO_AUTOMATIC_PROMOTION"
+            else "已达到独立复核门槛"
+            if verdict == "MATURE_FOR_SEPARATE_INDEPENDENT_PROMOTION_REGATE"
+            else "暂待确认"
+        )
+        champion_unpaired = comparator.get("champion_unpaired_unique_match_count")
+        champion_unpaired_html = (
+            f'<span>正式模型未配对 {_trust_int(champion_unpaired)} 场</span>'
+            if champion_unpaired is not None
+            else ""
+        )
+        comparator_html = (
+            '<div class="trust-comparator" data-trust-comparator="available">'
+            '<strong>同场市场对照</strong>'
+            f'<div class="trust-comparator-grid"><span>配对 { _trust_int(comparator.get("paired_unique_match_count")) } 场</span>'
+            f'<span>未配对 { _trust_int(comparator.get("unpaired_unique_match_count")) } 场</span>'
+            f'{champion_unpaired_html}'
+            f'<span>{html.escape(verdict_label)}</span></div>'
+            '</div>'
+        )
+    history = [row for row in trust.get("history") or [] if isinstance(row, dict)]
+    history.sort(key=lambda row: str(row.get("kickoff_at") or ""), reverse=True)
+    history_rows: list[str] = []
+    for row in history:
+        row_status = str(row.get("status") or "UNRESOLVED").upper()
+        if row_status == "SETTLED":
+            result = html.escape(str(row.get("actual_score") or "结果待定"))
+            ft_text, ft_class = _trust_hit_text(row.get("ft_1x2_hit"))
+            exact_text, exact_class = _trust_hit_text(row.get("exact_top1_hit"))
+            exact_detail = (
+                f'{exact_text} · 前3 {_trust_hit_text(row.get("exact_top3_hit"))[0]} · 前5 {_trust_hit_text(row.get("exact_top5_hit"))[0]}'
+            )
+            paired_text = "已配对" if row.get("paired") is True else "未配对" if row.get("paired") is False else "—"
+        elif row_status == "PENDING":
+            result, ft_text, exact_detail, paired_text = "待核验", "—", "—", "—"
+            ft_class = exact_class = "trust-pending"
+        else:
+            result, ft_text, exact_detail, paired_text = "待确认", "—", "—", "—"
+            ft_class = exact_class = "trust-pending"
+        row_class = "trust-pending" if row_status != "SETTLED" else ""
+        history_rows.append(
+            f'<div class="trust-history-row {row_class}" data-trust-history-row="true" data-trust-status="{html.escape(row_status, quote=True)}">'
+            f'<div><strong>{html.escape(str(row.get("home") or "主队待定"))} <span>vs</span> {html.escape(str(row.get("away") or "客队待定"))}</strong><span>{html.escape(_format_kickoff(row.get("kickoff_at")))}</span></div>'
+            f'<div><span>90分钟结果</span><strong>{result}</strong></div>'
+            f'<div><span>胜平负首选</span><strong class="{ft_class}">{ft_text}</strong></div>'
+            f'<div><span>准确比分</span><strong class="{exact_class}">{exact_detail}</strong></div>'
+            f'<div><span>同场对照</span><strong>{html.escape(paired_text)}</strong></div>'
+            '</div>'
+        )
+    history_html = "".join(history_rows) or '<div class="trust-history-note">当前没有可展示的核验记录。</div>'
+    collapse_note = (
+        f'比分集中诊断：1-1 首选占 {_trust_metric_text(one_one.get("share"), percent=True)}（{_trust_int(one_one.get("n"))} 场）；仅作描述，不改变赛前输出。'
+        if _trust_int(one_one.get("n"))
+        else "比分集中诊断：当前没有可用的首选比分样本；仅作描述，不改变赛前输出。"
+    )
+    return (
+        f'<section id="trust-history" class="panel trust-history" data-trust-status="{html.escape(status, quote=True)}" aria-labelledby="trust-history-title">'
+        '<div class="trust-history-head">'
+        '<div><h2 id="trust-history-title">历史信任记录</h2>'
+        f'<p>{html.escape(str(trust.get("message") or "命中与失误均保留，结果按90分钟及伤停补时核验。"))}</p></div>'
+        f'<span class="trust-status {status_class}">{html.escape(status_label)}</span>'
+        '</div>'
+        f'<div class="trust-metric-grid">'
+        f'<div class="trust-metric"><span>锁定比赛</span><strong>{locked}</strong><small>已核验 {settled} 场 · 待核验 {pending} 场</small></div>'
+        f'<div class="trust-metric"><span>胜平负首选命中</span><strong>{_trust_metric_text(ft_top1.get("rate"), percent=True)}</strong><small>有效样本 {_trust_int(ft_top1.get("n"))} 场</small></div>'
+        f'<div class="trust-metric"><span>胜平负平均损失</span><strong>{_trust_metric_text(ft_log_loss.get("mean"))}</strong><small>数值越低越好 · 样本 {_trust_int(ft_log_loss.get("n"))}</small></div>'
+        f'<div class="trust-metric"><span>准确比分首选</span><strong>{_trust_metric_text(exact_top1.get("rate"), percent=True)}</strong><small>样本 {_trust_int(exact_top1.get("n"))} 场</small></div>'
+        f'<div class="trust-metric"><span>准确比分前3覆盖</span><strong>{_trust_metric_text(exact_top3.get("rate"), percent=True)}</strong><small>前5覆盖 {_trust_metric_text(exact_top5.get("rate"), percent=True)}</small></div>'
+        f'<div class="trust-metric"><span>正式比分损失</span><strong>{_trust_metric_text(exact_nll.get("mean"))}</strong><small>正式样本 {_trust_int(exact_nll.get("n"))} 场</small></div>'
+        '</div>'
+        f'<div class="trust-history-note">{html.escape(model_copy)} · 最近核验 {html.escape(_format_updated_at(freshness.get("settled_through")))}</div>'
+        f'<div class="trust-history-note">{html.escape(collapse_note)}</div>'
+        '<div class="trust-history-note">校准：主队、平局、客队按固定五档展示；空档保留，不做事后平滑。</div>'
+        f'{comparator_html}'
+        f'<div class="trust-history-list" aria-label="历史核验记录">{history_html}</div>'
+        f'<div class="trust-history-note">共保留 {len(history)} 条记录；命中、未命中、待核验与未配对记录不互相覆盖。</div>'
+        '</section>'
+    )
+
+
 def _runtime_warning_html(system_health: dict[str, Any], errors: list[Any]) -> str:
     overall = str(system_health.get("overall_status") or system_health.get("status") or "UNKNOWN").upper()
     if overall in {"HEALTHY", "SUCCESS"}:
@@ -1796,6 +1977,7 @@ def render_dashboard(payload: dict[str, Any]) -> str:
     runtime_warning = _runtime_warning_html(system_health, payload.get("data_errors") or [])
     # Exact-state caution is rendered once inside the affected score lane.
     quality_warning = ""
+    trust_history_html = _trust_history_html(payload.get("prediction_quality_trust"))
     historical_html = _historical_results_html(payload.get("completed") or [])
     beginner_help = render_beginner_help()
     dashboard_trust = render_closed_beta_notice("dashboard-trust")
@@ -1817,6 +1999,7 @@ def render_dashboard(payload: dict[str, Any]) -> str:
   {cards_html}
   {filter_empty_html}
 </section>
+{trust_history_html}
 {historical_html}
 {beginner_help}
 <section class="trust-strip dashboard-trust-strip dashboard-data-method" id="data-method"><div class="trust-item"><span class="trust-ico">\u26bd</span><div><strong>\u4eca\u65e5\u961f\u5217</strong><span>\u9ed8\u8ba4\u53ea\u7a81\u51fa\u80dc / \u5e73 / \u8d1f\u6982\u7387\u4e0e\u6700\u53ef\u80fd\u6bd4\u5206\u3002</span></div></div><div class="trust-item"><span class="trust-ico">!</span><div><strong>\u5f02\u5e38\u63d0\u793a</strong><span>\u53ea\u6709\u771f\u6b63\u6539\u53d8\u5224\u65ad\u65f6\u624d\u51fa\u73b0\u3002</span></div></div><div class="trust-item"><span class="trust-ico">\u25c7</span><div><strong>\u8d5b\u524d\u8bb0\u5f55</strong><span>\u6bd4\u8d5b\u5f00\u59cb\u524d\u5f62\u6210\u5e76\u4fdd\u7559\u3002</span></div></div><div class="trust-item"><span class="trust-ico">\u2713</span><div><strong>\u5386\u53f2\u9a8c\u8bc1</strong><span>\u6210\u529f\u548c\u5931\u8d25\u540c\u53e3\u5f84\u8bb0\u5f55\u3002</span></div></div><div class="trust-item"><span class="trust-ico">i</span><div><strong>\u65b9\u6cd5\u8bf4\u660e</strong><span>\u6280\u672f\u7ec6\u8282\u4e0b\u6c89\uff0c\u4e0d\u62a2\u9996\u5c4f\u3002</span></div></div></section>
@@ -1858,7 +2041,7 @@ buttons.forEach(button => button.addEventListener('click', () => {
         css=MODERN_CSS,
         content_html=content_html,
         dashboard_href="./latest.html",
-        history_href="#historical-results",
+        history_href="#trust-history",
         sources_href="#data-method",
         help_href="#beginner-help",
         mobile_label="\u6bd4\u8d5b",
@@ -1878,6 +2061,7 @@ def build_dashboard(
     runtime_path: Path = RUNTIME_PATH,
     health_watch_path: Path = HEALTH_WATCH_PATH,
     workspace_path: Path = WORKSPACE_LATEST,
+    trust_path: Path | None = None,
     output_root: Path = DASHBOARD_ROOT,
     now: datetime | None = None,
 ) -> dict[str, Any]:
@@ -1916,6 +2100,15 @@ def build_dashboard(
     health_watch = _read_optional_json(Path(health_watch_path), [], "health_watch", {})
     if not isinstance(health_watch, dict):
         health_watch = {}
+    resolved_trust_path = (
+        Path(trust_path)
+        if trust_path is not None
+        else Path(prospective_root).parent / "prediction_quality" / "current_champion_trust.json"
+    )
+    trust_payload = _read_optional_json(resolved_trust_path, [], "prediction_quality_trust", {})
+    public_trust = trust_payload.get("public") if isinstance(trust_payload, dict) else None
+    if not isinstance(public_trust, dict):
+        public_trust = {"status": "UNAVAILABLE", "status_label": "暂时无法形成可信记录"}
     completed, history = _workspace_history(Path(workspace_path), errors)
     completed = _attach_history_prematch_context(completed, records)
     cards: list[dict[str, Any]] = []
@@ -1994,6 +2187,7 @@ def build_dashboard(
         "business_date": business_date,
         "system_runtime_health": system_runtime_health,
         "prediction_quality_health": prediction_quality_health,
+        "prediction_quality_trust": public_trust,
         "health": system_runtime_health,
         "universe": {
             "status": universe.get("status") or "UNAVAILABLE",
