@@ -1,259 +1,13 @@
 {
   "schema_version": "1.0",
-  "started_at": "2026-09-17T20:48:19.645343+08:00",
-  "finished_at": "2026-09-17T20:55:37.010493+08:00",
-  "business_date": "2026-09-17",
+  "started_at": "2026-09-18T01:40:04.839455+08:00",
+  "finished_at": "2026-09-18T01:44:48.932734+08:00",
+  "business_date": "2026-09-18",
   "carryover_business_dates": [
-    "2026-09-16"
+    "2026-09-17"
   ],
   "steps": {
     "carryover_base_jobs": {
-      "status": "SUCCESS",
-      "returncode": 0,
-      "summary": {
-        "status": "READY",
-        "fixture_count": 17,
-        "job_count": 17
-      },
-      "command": [
-        "/opt/hostedtoolcache/Python/3.12.14/x64/bin/python",
-        "scripts/base_prediction_jobs.py",
-        "--date",
-        "2026-09-16"
-      ]
-    },
-    "carryover_base_prediction": {
-      "status": "SUCCESS",
-      "returncode": 0,
-      "summary": {
-        "frozen": 17,
-        "insufficient_data": 0,
-        "prediction_failed": 0,
-        "missed_prematch": 0,
-        "pending": 0,
-        "failure_reasons": {},
-        "input_provenance_failure_stages": {},
-        "shadow_attempted": 0,
-        "shadow_created": 0,
-        "shadow_existing": 0,
-        "shadow_failed": 0,
-        "shadow_failure_reasons": {}
-      },
-      "command": [
-        "/opt/hostedtoolcache/Python/3.12.14/x64/bin/python",
-        "scripts/base_prediction_runner.py",
-        "--date",
-        "2026-09-16"
-      ]
-    },
-    "carryover_result_schedule": {
-      "status": "SUCCESS",
-      "returncode": 0,
-      "summary": {},
-      "command": [
-        "/opt/hostedtoolcache/Python/3.12.14/x64/bin/python",
-        "scripts/sync_result_schedules.py",
-        "--date",
-        "2026-09-16"
-      ]
-    },
-    "universe": {
-      "status": "SUCCESS",
-      "returncode": 0,
-      "summary": {
-        "business_dates": [
-          "2026-09-17",
-          "2026-09-18"
-        ],
-        "source_states": [
-          {
-            "business_date": "2026-09-17",
-            "source": "nowscore_public_jc",
-            "status": "BUSINESS_DATE_CONTRACT_REJECTED",
-            "success": false,
-            "fetched_at": "2026-09-17T20:48:19+08:00",
-            "error": null,
-            "business_date_contract": {
-              "surface": "nowscore_public_jc_sales",
-              "date_anchor": "SelDate + niDate header date",
-              "sales_window": "11:00--次日11:00",
-              "match_number": "niDate group name + row number cell",
-              "selected_date": "2026-09-17",
-              "requested_date": "2026-09-17",
-              "date_selector_present": true,
-              "headers": [
-                {
-                  "group": "周四",
-                  "date": "2026-09-17",
-                  "sales_window": "11:00--次日11:00"
-                },
-                {
-                  "group": "周五",
-                  "date": "2026-09-18",
-                  "sales_window": "11:00--次日11:00"
-                },
-                {
-                  "group": "周四",
-                  "date": "2026-09-17",
-                  "sales_window": "11:00--次日11:00"
-                },
-                {
-                  "group": "周三",
-                  "date": "2026-09-16",
-                  "sales_window": "11:00--次日11:00"
-                }
-              ],
-              "requested_header": null,
-              "requested_group": "周四",
-              "conflicting_groups": {},
-              "valid": false
-            },
-            "diagnostics": {
-              "business_date_page_status": "FAIL"
-            }
-          },
-          {
-            "business_date": "2026-09-18",
-            "source": "nowscore_public_jc",
-            "status": "OK",
-            "success": true,
-            "fetched_at": "2026-09-17T20:48:23+08:00",
-            "error": null,
-            "business_date_contract": {
-              "surface": "nowscore_public_jc_sales",
-              "date_anchor": "SelDate + niDate header date",
-              "sales_window": "11:00--次日11:00",
-              "match_number": "niDate group name + row number cell",
-              "selected_date": "2026-09-18",
-              "requested_date": "2026-09-18",
-              "date_selector_present": true,
-              "headers": [
-                {
-                  "group": "周四",
-                  "date": "2026-09-17",
-                  "sales_window": "11:00--次日11:00"
-                },
-                {
-                  "group": "周五",
-                  "date": "2026-09-18",
-                  "sales_window": "11:00--次日11:00"
-                },
-                {
-                  "group": "周四",
-                  "date": "2026-09-17",
-                  "sales_window": "11:00--次日11:00"
-                },
-                {
-                  "group": "周三",
-                  "date": "2026-09-16",
-                  "sales_window": "11:00--次日11:00"
-                }
-              ],
-              "requested_header": {
-                "group": "周五",
-                "date": "2026-09-18",
-                "sales_window": "11:00--次日11:00"
-              },
-              "requested_group": "周五",
-              "conflicting_groups": {},
-              "valid": true
-            },
-            "diagnostics": {
-              "business_date_page_status": "PASS",
-              "optional_a32_corroboration": {
-                "filter_function": "SetLevel(3)",
-                "predicate": "A[j][32] == 1",
-                "surfaces": {
-                  "sc1": {
-                    "surface": "sc1",
-                    "source_url": "https://live.nowscore.com/schedule.aspx?f=sc1",
-                    "backing_data_url": "https://live.nowscore.com/data/sc1.js",
-                    "calendar_dates": [
-                      "2026-09-18"
-                    ],
-                    "status": "OK",
-                    "parsed": [
-                      {
-                        "calendar_date": "2026-09-18",
-                        "status": "PASS",
-                        "target_row_count": 172,
-                        "jc_flagged_row_count": 1,
-                        "duplicate_nowscore_id_count": 0,
-                        "ambiguous_nowscore_id_count": 0
-                      }
-                    ],
-                    "contract": {
-                      "surface": "sc1",
-                      "expected_filename": "sc1.js",
-                      "filename2": "sc1.js",
-                      "jc_filter_link_present": true,
-                      "jc_filter_label": "竞足",
-                      "function_present": true,
-                      "row_index": 32,
-                      "filter_function": "SetLevel(3)",
-                      "predicate": "A[j][32] == 1",
-                      "row_index_contract_present": true,
-                      "predicate_contract_present": true,
-                      "valid": true
-                    },
-                    "data_url": "https://live.nowscore.com/data/sc1.js?1789649306000"
-                  },
-                  "sc2": {
-                    "surface": "sc2",
-                    "source_url": "https://live.nowscore.com/schedule.aspx?f=sc2",
-                    "backing_data_url": "https://live.nowscore.com/data/sc2.js",
-                    "calendar_dates": [
-                      "2026-09-19"
-                    ],
-                    "status": "OK",
-                    "parsed": [
-                      {
-                        "calendar_date": "2026-09-19",
-                        "status": "PASS",
-                        "target_row_count": 1067,
-                        "jc_flagged_row_count": 0,
-                        "duplicate_nowscore_id_count": 0,
-                        "ambiguous_nowscore_id_count": 0
-                      }
-                    ],
-                    "contract": {
-                      "surface": "sc2",
-                      "expected_filename": "sc2.js",
-                      "filename2": "sc2.js",
-                      "jc_filter_link_present": true,
-                      "jc_filter_label": "竞足",
-                      "function_present": true,
-                      "row_index": 32,
-                      "filter_function": "SetLevel(3)",
-                      "predicate": "A[j][32] == 1",
-                      "row_index_contract_present": true,
-                      "predicate_contract_present": true,
-                      "valid": true
-                    },
-                    "data_url": "https://live.nowscore.com/data/sc2.js?1789649308000"
-                  }
-                },
-                "skipped": [],
-                "flagged_row_count": 1,
-                "duplicate_nowscore_id_count": 0,
-                "ambiguous_nowscore_id_count": 0
-              }
-            }
-          }
-        ],
-        "match_count": 14,
-        "refresh_status": "partial_success"
-      },
-      "command": [
-        "/opt/hostedtoolcache/Python/3.12.14/x64/bin/python",
-        "scripts/daily_schedule_workspace.py",
-        "--date",
-        "2026-09-17",
-        "--no-cache",
-        "--fetch-only"
-      ]
-    },
-    "base_jobs": {
       "status": "SUCCESS",
       "returncode": 0,
       "summary": {
@@ -268,7 +22,7 @@
         "2026-09-17"
       ]
     },
-    "base_prediction": {
+    "carryover_base_prediction": {
       "status": "SUCCESS",
       "returncode": 0,
       "summary": {
@@ -279,8 +33,8 @@
         "pending": 0,
         "failure_reasons": {},
         "input_provenance_failure_stages": {},
-        "shadow_attempted": 9,
-        "shadow_created": 9,
+        "shadow_attempted": 7,
+        "shadow_created": 7,
         "shadow_existing": 0,
         "shadow_failed": 0,
         "shadow_failure_reasons": {}
@@ -292,97 +46,18 @@
         "2026-09-17"
       ]
     },
-    "postmatch": {
+    "carryover_result_schedule": {
       "status": "SUCCESS",
       "returncode": 0,
-      "summary": [
-        {
-          "step": 1,
-          "status": "SUCCESS"
-        },
-        {
-          "step": 2,
-          "status": "SUCCESS"
-        },
-        {
-          "step": 3,
-          "status": "SUCCESS"
-        },
-        {
-          "step": 4,
-          "status": "SUCCESS"
-        }
-      ],
+      "summary": {},
       "command": [
         "/opt/hostedtoolcache/Python/3.12.14/x64/bin/python",
         "scripts/sync_result_schedules.py",
         "--date",
-        "2026-09-17",
-        "/opt/hostedtoolcache/Python/3.12.14/x64/bin/python",
-        "scripts/postmatch_result.py",
-        "/opt/hostedtoolcache/Python/3.12.14/x64/bin/python",
-        "scripts/automatic_postmatch_review.py",
-        "/opt/hostedtoolcache/Python/3.12.14/x64/bin/python",
-        "scripts/postmatch_dashboard.py"
-      ]
-    },
-    "prospective": {
-      "status": "SUCCESS",
-      "returncode": 0,
-      "summary": {
-        "failure_reasons": {},
-        "formal_prospective_total": 3240,
-        "formal_samples_added": 0,
-        "pending_results": 74,
-        "pilot_excluded_settled": 0,
-        "results_found": 6,
-        "shadow_failure_reasons": {},
-        "shadow_settlement_failures": 0,
-        "shadow_settlements_added": 0,
-        "shadow_settlements_existing": 6
-      },
-      "command": [
-        "/opt/hostedtoolcache/Python/3.12.14/x64/bin/python",
-        "scripts/prospective_settlement.py",
-        "--date",
         "2026-09-17"
       ]
     },
-    "market_side_shadow_evaluation": {
-      "status": "SUCCESS",
-      "returncode": 0,
-      "summary": {
-        "auto_promote": false,
-        "challenger_abstain_count": 0,
-        "checkpoint_status": "PROMOTION_REVIEW_READY",
-        "early_stop_status": "WINDOW_CLOSED",
-        "excluded_non_promotion_pair_count": 1,
-        "extra_version_rows": 2464,
-        "latest_status": "REPLACED",
-        "market_side_shadow_status": "REFRESHED",
-        "paired_count": 3063,
-        "promotion_eligible_pair_version_rows": 3062,
-        "promotion_eligible_pairs": 3062,
-        "promotion_eligible_unique_matches": 303,
-        "result_files_accepted": 646,
-        "result_files_rejected": 0,
-        "result_files_scanned": 646,
-        "result_identity_conflicts": 0,
-        "result_identity_mismatches": 0,
-        "status": "SUCCESS",
-        "total_pair_version_rows": 3063,
-        "unmatched_pair_count": 339,
-        "verified_pair_version_rows": 2723,
-        "verified_paired_count": 2723,
-        "verified_unique_matches": 259,
-        "version_history_match_groups": 249
-      },
-      "command": [
-        "/opt/hostedtoolcache/Python/3.12.14/x64/bin/python",
-        "scripts/market_side_shadow_refresh.py"
-      ]
-    },
-    "next_universe": {
+    "universe": {
       "status": "SUCCESS",
       "returncode": 0,
       "summary": {
@@ -396,7 +71,7 @@
             "source": "nowscore_public_jc",
             "status": "OK",
             "success": true,
-            "fetched_at": "2026-09-17T20:51:04+08:00",
+            "fetched_at": "2026-09-18T01:40:05+08:00",
             "error": null,
             "business_date_contract": {
               "surface": "nowscore_public_jc_sales",
@@ -415,11 +90,6 @@
                 {
                   "group": "周五",
                   "date": "2026-09-18",
-                  "sales_window": "11:00--次日11:00"
-                },
-                {
-                  "group": "周四",
-                  "date": "2026-09-17",
                   "sales_window": "11:00--次日11:00"
                 },
                 {
@@ -443,10 +113,10 @@
                 "filter_function": "SetLevel(3)",
                 "predicate": "A[j][32] == 1",
                 "surfaces": {
-                  "sc1": {
-                    "surface": "sc1",
-                    "source_url": "https://live.nowscore.com/schedule.aspx?f=sc1",
-                    "backing_data_url": "https://live.nowscore.com/data/sc1.js",
+                  "ft1": {
+                    "surface": "ft1",
+                    "source_url": "https://live.nowscore.com/schedule.aspx?f=ft1",
+                    "backing_data_url": "https://live.nowscore.com/data/ft1.js",
                     "calendar_dates": [
                       "2026-09-18"
                     ],
@@ -455,8 +125,42 @@
                       {
                         "calendar_date": "2026-09-18",
                         "status": "PASS",
-                        "target_row_count": 172,
-                        "jc_flagged_row_count": 1,
+                        "target_row_count": 0,
+                        "jc_flagged_row_count": 0,
+                        "duplicate_nowscore_id_count": 0,
+                        "ambiguous_nowscore_id_count": 0
+                      }
+                    ],
+                    "contract": {
+                      "surface": "ft1",
+                      "expected_filename": "ft1.js",
+                      "filename2": "ft1.js",
+                      "jc_filter_link_present": true,
+                      "jc_filter_label": "竞足",
+                      "function_present": true,
+                      "row_index": 32,
+                      "filter_function": "SetLevel(3)",
+                      "predicate": "A[j][32] == 1",
+                      "row_index_contract_present": true,
+                      "predicate_contract_present": true,
+                      "valid": true
+                    },
+                    "data_url": "https://live.nowscore.com/data/ft1.js?1789666807000"
+                  },
+                  "sc1": {
+                    "surface": "sc1",
+                    "source_url": "https://live.nowscore.com/schedule.aspx?f=sc1",
+                    "backing_data_url": "https://live.nowscore.com/data/sc1.js",
+                    "calendar_dates": [
+                      "2026-09-19"
+                    ],
+                    "status": "OK",
+                    "parsed": [
+                      {
+                        "calendar_date": "2026-09-19",
+                        "status": "PASS",
+                        "target_row_count": 281,
+                        "jc_flagged_row_count": 13,
                         "duplicate_nowscore_id_count": 0,
                         "ambiguous_nowscore_id_count": 0
                       }
@@ -475,45 +179,11 @@
                       "predicate_contract_present": true,
                       "valid": true
                     },
-                    "data_url": "https://live.nowscore.com/data/sc1.js?1789649468000"
-                  },
-                  "sc2": {
-                    "surface": "sc2",
-                    "source_url": "https://live.nowscore.com/schedule.aspx?f=sc2",
-                    "backing_data_url": "https://live.nowscore.com/data/sc2.js",
-                    "calendar_dates": [
-                      "2026-09-19"
-                    ],
-                    "status": "OK",
-                    "parsed": [
-                      {
-                        "calendar_date": "2026-09-19",
-                        "status": "PASS",
-                        "target_row_count": 1067,
-                        "jc_flagged_row_count": 0,
-                        "duplicate_nowscore_id_count": 0,
-                        "ambiguous_nowscore_id_count": 0
-                      }
-                    ],
-                    "contract": {
-                      "surface": "sc2",
-                      "expected_filename": "sc2.js",
-                      "filename2": "sc2.js",
-                      "jc_filter_link_present": true,
-                      "jc_filter_label": "竞足",
-                      "function_present": true,
-                      "row_index": 32,
-                      "filter_function": "SetLevel(3)",
-                      "predicate": "A[j][32] == 1",
-                      "row_index_contract_present": true,
-                      "predicate_contract_present": true,
-                      "valid": true
-                    },
-                    "data_url": "https://live.nowscore.com/data/sc2.js?1789649472000"
+                    "data_url": "https://live.nowscore.com/data/sc1.js?1789666810000"
                   }
                 },
                 "skipped": [],
-                "flagged_row_count": 1,
+                "flagged_row_count": 13,
                 "duplicate_nowscore_id_count": 0,
                 "ambiguous_nowscore_id_count": 0
               }
@@ -524,7 +194,7 @@
             "source": "nowscore_public_jc",
             "status": "NOT_YET_PUBLISHED",
             "success": false,
-            "fetched_at": "2026-09-17T20:51:14+08:00",
+            "fetched_at": "2026-09-18T01:40:12+08:00",
             "error": null,
             "business_date_contract": {
               "surface": "nowscore_public_jc_sales",
@@ -543,11 +213,6 @@
                 {
                   "group": "周五",
                   "date": "2026-09-18",
-                  "sales_window": "11:00--次日11:00"
-                },
-                {
-                  "group": "周四",
-                  "date": "2026-09-17",
                   "sales_window": "11:00--次日11:00"
                 },
                 {
@@ -579,7 +244,7 @@
         "--fetch-only"
       ]
     },
-    "next_base_jobs": {
+    "base_jobs": {
       "status": "SUCCESS",
       "returncode": 0,
       "summary": {
@@ -594,7 +259,7 @@
         "2026-09-18"
       ]
     },
-    "next_base_prediction": {
+    "base_prediction": {
       "status": "SUCCESS",
       "returncode": 0,
       "summary": {
@@ -607,34 +272,246 @@
         "2026-09-18"
       ]
     },
-    "carryover_prospective": {
+    "postmatch": {
+      "status": "SUCCESS",
+      "returncode": 0,
+      "summary": [
+        {
+          "step": 1,
+          "status": "SUCCESS"
+        },
+        {
+          "step": 2,
+          "status": "SUCCESS"
+        },
+        {
+          "step": 3,
+          "status": "SUCCESS"
+        },
+        {
+          "step": 4,
+          "status": "SUCCESS"
+        }
+      ],
+      "command": [
+        "/opt/hostedtoolcache/Python/3.12.14/x64/bin/python",
+        "scripts/sync_result_schedules.py",
+        "--date",
+        "2026-09-18",
+        "/opt/hostedtoolcache/Python/3.12.14/x64/bin/python",
+        "scripts/postmatch_result.py",
+        "/opt/hostedtoolcache/Python/3.12.14/x64/bin/python",
+        "scripts/automatic_postmatch_review.py",
+        "/opt/hostedtoolcache/Python/3.12.14/x64/bin/python",
+        "scripts/postmatch_dashboard.py"
+      ]
+    },
+    "prospective": {
       "status": "SUCCESS",
       "returncode": 0,
       "summary": {
         "failure_reasons": {},
         "formal_prospective_total": 3240,
         "formal_samples_added": 0,
-        "pending_results": 12,
+        "pending_results": 39,
         "pilot_excluded_settled": 0,
-        "results_found": 82,
+        "results_found": 0,
         "shadow_failure_reasons": {},
         "shadow_settlement_failures": 0,
         "shadow_settlements_added": 0,
-        "shadow_settlements_existing": 82
+        "shadow_settlements_existing": 0
       },
       "command": [
         "/opt/hostedtoolcache/Python/3.12.14/x64/bin/python",
         "scripts/prospective_settlement.py",
         "--date",
-        "2026-09-16"
+        "2026-09-18"
+      ]
+    },
+    "market_side_shadow_evaluation": {
+      "status": "SUCCESS",
+      "returncode": 0,
+      "summary": {
+        "auto_promote": false,
+        "challenger_abstain_count": 0,
+        "checkpoint_status": "PROMOTION_REVIEW_READY",
+        "early_stop_status": "WINDOW_CLOSED",
+        "excluded_non_promotion_pair_count": 1,
+        "extra_version_rows": 2464,
+        "latest_status": "REPLACED",
+        "market_side_shadow_status": "REFRESHED",
+        "paired_count": 3096,
+        "promotion_eligible_pair_version_rows": 3095,
+        "promotion_eligible_pairs": 3095,
+        "promotion_eligible_unique_matches": 303,
+        "result_files_accepted": 646,
+        "result_files_rejected": 0,
+        "result_files_scanned": 646,
+        "result_identity_conflicts": 0,
+        "result_identity_mismatches": 0,
+        "status": "SUCCESS",
+        "total_pair_version_rows": 3096,
+        "unmatched_pair_count": 372,
+        "verified_pair_version_rows": 2723,
+        "verified_paired_count": 2723,
+        "verified_unique_matches": 259,
+        "version_history_match_groups": 249
+      },
+      "command": [
+        "/opt/hostedtoolcache/Python/3.12.14/x64/bin/python",
+        "scripts/market_side_shadow_refresh.py"
+      ]
+    },
+    "next_universe": {
+      "status": "SKIPPED",
+      "returncode": 0,
+      "summary": {
+        "status": "NOT_YET_PUBLISHED",
+        "business_dates": [
+          "2026-09-19",
+          "2026-09-20"
+        ],
+        "source_states": [
+          {
+            "business_date": "2026-09-19",
+            "source": "nowscore_public_jc",
+            "status": "NOT_YET_PUBLISHED",
+            "success": false,
+            "fetched_at": "2026-09-18T01:43:23+08:00",
+            "error": null,
+            "business_date_contract": {
+              "surface": "nowscore_public_jc_sales",
+              "date_anchor": "SelDate + niDate header date",
+              "sales_window": "11:00--次日11:00",
+              "match_number": "niDate group name + row number cell",
+              "selected_date": "2026-09-19",
+              "requested_date": "2026-09-19",
+              "date_selector_present": true,
+              "headers": [
+                {
+                  "group": "周四",
+                  "date": "2026-09-17",
+                  "sales_window": "11:00--次日11:00"
+                },
+                {
+                  "group": "周五",
+                  "date": "2026-09-18",
+                  "sales_window": "11:00--次日11:00"
+                },
+                {
+                  "group": "周三",
+                  "date": "2026-09-16",
+                  "sales_window": "11:00--次日11:00"
+                }
+              ],
+              "requested_header": null,
+              "requested_group": null,
+              "conflicting_groups": {},
+              "valid": false,
+              "publication_status": "NOT_YET_PUBLISHED"
+            },
+            "diagnostics": {
+              "business_date_page_status": "NOT_YET_PUBLISHED"
+            }
+          },
+          {
+            "business_date": "2026-09-20",
+            "source": "nowscore_public_jc",
+            "status": "NOT_YET_PUBLISHED",
+            "success": false,
+            "fetched_at": "2026-09-18T01:43:25+08:00",
+            "error": null,
+            "business_date_contract": {
+              "surface": "nowscore_public_jc_sales",
+              "date_anchor": "SelDate + niDate header date",
+              "sales_window": "11:00--次日11:00",
+              "match_number": "niDate group name + row number cell",
+              "selected_date": "2026-09-20",
+              "requested_date": "2026-09-20",
+              "date_selector_present": true,
+              "headers": [
+                {
+                  "group": "周四",
+                  "date": "2026-09-17",
+                  "sales_window": "11:00--次日11:00"
+                },
+                {
+                  "group": "周五",
+                  "date": "2026-09-18",
+                  "sales_window": "11:00--次日11:00"
+                },
+                {
+                  "group": "周三",
+                  "date": "2026-09-16",
+                  "sales_window": "11:00--次日11:00"
+                }
+              ],
+              "requested_header": null,
+              "requested_group": null,
+              "conflicting_groups": {},
+              "valid": false,
+              "publication_status": "NOT_YET_PUBLISHED"
+            },
+            "diagnostics": {
+              "business_date_page_status": "NOT_YET_PUBLISHED"
+            }
+          }
+        ],
+        "match_count": 0,
+        "refresh_status": "not_yet_published",
+        "reason": "NOT_YET_PUBLISHED"
+      },
+      "command": [
+        "/opt/hostedtoolcache/Python/3.12.14/x64/bin/python",
+        "scripts/daily_schedule_workspace.py",
+        "--date",
+        "2026-09-19",
+        "--no-cache",
+        "--fetch-only"
+      ]
+    },
+    "next_base_jobs": {
+      "status": "SKIPPED",
+      "returncode": 0,
+      "summary": {
+        "reason": "NEXT_UNIVERSE_NOT_YET_PUBLISHED"
+      }
+    },
+    "next_base_prediction": {
+      "status": "SKIPPED",
+      "returncode": 0,
+      "summary": {
+        "reason": "NEXT_UNIVERSE_NOT_YET_PUBLISHED"
+      }
+    },
+    "carryover_prospective": {
+      "status": "SUCCESS",
+      "returncode": 0,
+      "summary": {
+        "failure_reasons": {},
+        "formal_prospective_total": 3242,
+        "formal_samples_added": 2,
+        "pending_results": 79,
+        "pilot_excluded_settled": 0,
+        "results_found": 8,
+        "shadow_failure_reasons": {},
+        "shadow_settlement_failures": 0,
+        "shadow_settlements_added": 2,
+        "shadow_settlements_existing": 6
+      },
+      "command": [
+        "/opt/hostedtoolcache/Python/3.12.14/x64/bin/python",
+        "scripts/prospective_settlement.py",
+        "--date",
+        "2026-09-17"
       ]
     },
     "workspace": {
       "status": "SUCCESS",
       "returncode": 0,
       "summary": {
-        "target_date": "2026-09-17",
-        "match_count": 44,
+        "target_date": "2026-09-18",
+        "match_count": 34,
         "completed_count": 20,
         "published_as_latest": true,
         "latest_only": true
@@ -643,7 +520,7 @@
         "/opt/hostedtoolcache/Python/3.12.14/x64/bin/python",
         "scripts/match_workspace.py",
         "--date",
-        "2026-09-17",
+        "2026-09-18",
         "--latest-only"
       ]
     },
@@ -651,17 +528,17 @@
       "status": "SUCCESS",
       "returncode": 0,
       "summary": {
-        "fixture_count": 11,
-        "frozen": 11,
+        "fixture_count": 14,
+        "frozen": 13,
         "pending": 0,
-        "insufficient_data": 0,
-        "formal_prospective_total": 3240
+        "insufficient_data": 1,
+        "formal_prospective_total": 3242
       },
       "command": [
         "/opt/hostedtoolcache/Python/3.12.14/x64/bin/python",
         "scripts/prediction_dashboard.py",
         "--date",
-        "2026-09-17"
+        "2026-09-18"
       ]
     },
     "site": {
