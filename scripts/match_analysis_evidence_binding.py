@@ -197,7 +197,6 @@ def _field_status(field: Mapping[str, Any], availability: Mapping[str, Any] | No
             return "DEGRADED"
     return "VERIFIED"
 
-
 def build_evidence_envelope(
     prediction: Mapping[str, Any] | None,
     football_evidence: Mapping[str, Any] | None,
@@ -394,11 +393,11 @@ def build_late_briefing(
     base_article: Mapping[str, Any],    prediction: Mapping[str, Any] | None,
     football_evidence: Mapping[str, Any] | None,
     evidence_envelope: Mapping[str, Any],
+    expected_subject_id: str | None = None,
 ) -> dict[str, Any]:
     prediction = prediction if isinstance(prediction, Mapping) else {}
     evidence = football_evidence if isinstance(football_evidence, Mapping) else {}
-    omitted = {
-        "contract_version": LATE_BRIEFING_CONTRACT_VERSION,
+    omitted = {        "contract_version": LATE_BRIEFING_CONTRACT_VERSION,
         "status": "OMITTED",
         "reason_code": "CONFIRMED_LINEUP_UNAVAILABLE",
         "base_article_hash": article_base_hash(base_article),
@@ -424,6 +423,11 @@ def build_late_briefing(
         or field.get("prematch_eligible") is not True
     ):
         return {**omitted, "reason_code": "LINEUP_EVIDENCE_DEGRADED"}
+    if (
+        expected_subject_id
+        and item.get("subject_id") != expected_subject_id
+    ):
+        return {**omitted, "reason_code": "LINEUP_FIXTURE_IDENTITY_MISMATCH"}
 
     observed = _dt(field.get("observed_at"))
     source_update = _dt(field.get("source_update_at"))
