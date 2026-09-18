@@ -1,0 +1,116 @@
+name: Solution-first goal intensity shadow bounded validation
+
+on:
+  workflow_dispatch:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - ".github/workflows/solution-first-goal-intensity-shadow.yml"
+      - "scripts/accepted_market_lambda.py"
+      - "scripts/solution_first_goal_intensity_shadow.py"
+      - "scripts/market_side_shadow.py"
+      - "scripts/market_side_shadow_refresh.py"
+      - "scripts/model_governance.py"
+      - "scripts/prediction_quality.py"
+      - "tests/test_solution_first_goal_intensity_shadow.py"
+      - "tests/test_market_side_shadow.py"
+      - "tests/test_market_side_shadow_refresh.py"
+      - "tests/test_model_governance.py"
+      - "tests/test_prediction_quality.py"
+      - "requirements.txt"
+      - "requirements-solution-first.txt"
+      - "data/prediction_quality/solution_first_goal_intensity_shadow_1/summary.json"
+      - "data/prediction_quality/solution_first_goal_intensity_shadow_1/model.json"
+      - "data/prediction_quality/solution_first_goal_intensity_shadow_1/latest.json"
+      - "data/prediction_quality/solution_first_goal_intensity_shadow_1/report.md"
+
+permissions:
+  contents: read
+
+jobs:
+  bounded-validation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout the PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install bounded dependencies
+        run: python -m pip install -r requirements.txt -r requirements-solution-first.txt
+
+      - name: Run focused solution-first tests
+        run: python -m pytest -q tests/test_solution_first_goal_intensity_shadow.py
+
+      - name: Run production regression tests
+        run: >-
+          python -m pytest -q
+          tests/test_market_side_shadow.py
+          tests/test_market_side_shadow_refresh.py
+          tests/test_model_governance.py
+          tests/test_prediction_quality.py
+
+      - name: Compile touched production and test paths
+        run: >-
+          python -m py_compile
+          scripts/accepted_market_lambda.py
+          scripts/solution_first_goal_intensity_shadow.py
+          scripts/market_side_shadow.py
+          scripts/market_side_shadow_refresh.py
+          scripts/model_governance.py
+          scripts/prediction_quality.py
+          tests/test_solution_first_goal_intensity_shadow.py
+
+      - name: Parse and assert committed evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          root = Path("data/prediction_quality/solution_first_goal_intensity_shadow_1")
+          summary = json.loads((root / "summary.json").read_text(encoding="utf-8"))
+          model = json.loads((root / "model.json").read_text(encoding="utf-8"))
+          latest = json.loads((root / "latest.json").read_text(encoding="utf-8"))
+          assert summary["decision"] in {"FAIL_CLOSED", "SHADOW_CHALLENGER_WIRED"}
+          assert summary["current_serving_changed"] is False
+          assert summary["feature_authority"]["status"] != "SHARED_CONTRACT_VERIFIED"
+          assert summary["feature_authority"]["event_scope"] == "COMPETITION_SCOPED_PREMATCH_EVENTS"
+          assert summary["feature_authority"]["unsupported_policy"].startswith("missing, unsupported")
+          assert summary["source_level_scope_audit"]["prospective_rows"] == summary["source_level_scope_audit"]["accepted_rows"] + summary["source_level_scope_audit"]["blocked_rows"]
+          assert model["model_digest"] == summary["model_digest"]
+          assert latest["row_count"] == len(latest["rows"])
+          assert latest["production_enabled"] is False
+          assert latest["user_visible"] is False
+          PY
+
+      - name: Check diff whitespace
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="${{ github.event.pull_request.base.sha || '' }}"
+          head="${{ github.event.pull_request.head.sha || github.sha }}"
+          if [[ -n "$base" ]]; then
+            git diff --check "$base...$head"
+          else
+            git diff --check
+          fi
+
+      - name: Upload bounded evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: solution-first-goal-intensity-shadow-${{ github.run_id }}
+          path: |
+            data/prediction_quality/solution_first_goal_intensity_shadow_1/summary.json
+            data/prediction_quality/solution_first_goal_intensity_shadow_1/model.json
+            data/prediction_quality/solution_first_goal_intensity_shadow_1/latest.json
+            data/prediction_quality/solution_first_goal_intensity_shadow_1/report.md
