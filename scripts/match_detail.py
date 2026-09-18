@@ -946,7 +946,7 @@ def _render_match_analysis_article(contract: dict[str, Any]) -> str:
     article = contract.get("match_analysis_article")
     if not isinstance(article, dict) or article.get("status") != "AVAILABLE":
         return ""
-    plan = render_article_plan(article.get("article_plan"))
+    plan = render_article_plan(article.get("article_plan"), article.get("evidence_envelope"))
     if not plan:
         return ""
     identifiability = html.escape(str(article.get("identifiability") or ""), quote=True)
@@ -965,6 +965,44 @@ def _render_match_analysis_article(contract: dict[str, Any]) -> str:
         '<h2>把近期结果、过程与市场放在同一条判断链里</h2>'
         f'<div class="analysis-article-body">{body}</div></article>'
     )
+
+def _render_late_briefing(contract: dict[str, Any]) -> str:
+    briefing = contract.get("late_briefing")
+    if not isinstance(briefing, dict) or briefing.get("status") != "AVAILABLE":
+        return ""
+    rows = []
+    for team in briefing.get("confirmed_lineup") or []:
+        if not isinstance(team, dict):
+            continue
+        label = _esc(team.get("team_name") or team.get("side") or "team")
+        players = team.get("players") or []
+        names = [
+            _esc(player.get("player_name") or player.get("player_id"))
+            for player in players
+            if isinstance(player, dict) and (player.get("player_name") or player.get("player_id"))
+        ]
+        count = team.get("player_count") or len(names)
+        value = ", ".join(names) if names else f"{_esc(count)} confirmed players"
+        rows.append(f'<div class="evidence-fact"><span>{label}</span><strong>{value}</strong></div>')
+    updates = []
+    for update in briefing.get("assumption_updates") or []:
+        if not isinstance(update, dict):
+            continue
+        updates.append(
+            f'<p data-late-briefing-status="{html.escape(str(update.get("status") or ""), quote=True)}">{_esc(update.get("text"))}</p>'
+        )
+    if not rows and not updates:
+        return ""
+    base_hash = html.escape(str(briefing.get("base_article_sha256") or ""), quote=True)
+    return (
+        f'<article class="panel late-briefing" id="late-briefing" data-base-article-sha256="{base_hash}">'
+        '<div class="section-kicker">LATE PREMATCH BRIEFING</div>'
+        '<h2>Confirmed lineup update</h2>'
+        + "".join(rows)
+        + "".join(updates)
+        + "</article>"
+    )
+
 
 def _market_comparison(contract: dict[str, Any]) -> dict[str, Any] | None:
     market = contract.get("market")
@@ -1519,11 +1557,12 @@ def render_match_detail(contract: dict[str, Any]) -> str:
     change_awareness_html = _render_change_awareness(contract) if serving else ""
     evidence_html = _render_key_evidence(contract) if serving else ""
     article_html = _render_match_analysis_article(contract) if serving else ""
+    late_briefing_html = _render_late_briefing(contract) if serving else ""
     market_html = _render_market_comparison(contract) if serving else ""
     if serving:
         primary_html = f'<section class="grid3 primary-grid">{probability_html}{exact_html}{takeaways_html}</section>'
         supporting_html = f'<section class="grid3 second supporting-grid">{goals_html}{market_html}</section>'
-        analysis_html = article_html + evidence_html + primary_html + supporting_html + change_awareness_html + (trust_html := _render_trust(contract))
+        analysis_html = article_html + late_briefing_html + evidence_html + primary_html + supporting_html + change_awareness_html + (trust_html := _render_trust(contract))
     else:
         trust_html = ""
         analysis_html = _render_status_panel(contract)

@@ -9,7 +9,8 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
 from scripts.match_analysis import assemble_match_analysis  # noqa: E402
-from scripts.match_detail import _render_match_analysis_article, render_match_detail  # noqa: E402
+from scripts.match_analysis_article import build_evidence_envelope, build_late_briefing, render_article_plan  # noqa: E402
+from scripts.match_detail import _render_late_briefing, _render_match_analysis_article, render_match_detail  # noqa: E402
 
 
 DATE = "2026-09-11"
@@ -141,3 +142,93 @@ def test_article_is_deterministic_without_mutating_prediction_record():
     second = _contract("3019134")["match_analysis_article"]
     assert first == second
     assert prediction_path.read_bytes() == before
+
+
+def _issue301_inputs(*, lineup_state="CONFIRMED", lineup_value=None):
+    prediction = {
+        "prediction_id": "P-301",
+        "prediction_sha256": "prediction-301-sha",
+        "match_id": "301",
+        "kickoff_at": "2026-09-10T18:00:00+08:00",
+        "freeze_created_at": "2026-09-10T12:00:00+08:00",
+        "probabilities": {"home": 0.5, "draw": 0.25, "away": 0.25},
+    }
+    fields = {
+        "market_context": {
+            "state": "PRESENT",
+            "value": {"bookmakers": []},
+            "observed_at": "2026-09-10T11:00:00+08:00",
+            "prematch_eligible": True,
+        },
+        "lineup_state": {
+            "state": "PRESENT",
+            "semantic_state": lineup_state,
+            "value": lineup_value if lineup_value is not None else {
+                "home": {"team_id": 10, "team_name": "Team A", "players": [{"player_id": 101, "player_name": "A One"}]},
+                "away": {"team_id": 20, "team_name": "Team B", "players": [{"player_id": 201, "player_name": "B One"}]},
+            },
+            "observed_at": "2026-09-10T11:30:00+08:00",
+            "prematch_eligible": True,
+        },
+    }
+    evidence = {
+        "source": {"provider": "fixture", "source_cutoff_at": "2026-09-10T12:00:00+08:00"},
+        "prematch_evidence": {"fields": fields},
+    }
+    fixture = {"matchId": "301", "home_team_id": 10, "away_team_id": 20, "kickoff_at": prediction["kickoff_at"]}
+    identity = {"home_team_id": 10, "away_team_id": 20, "home_team_name": "Team A", "away_team_name": "Team B"}
+    return prediction, {}, evidence, fixture, identity
+
+
+def test_issue301_envelope_fails_closed_on_future_and_unresolved_refs():
+    prediction, snapshot, evidence, fixture, _ = _issue301_inputs()
+    evidence["prematch_evidence"]["fields"]["market_context"]["observed_at"] = "2026-09-10T19:00:00+08:00"
+    envelope = build_evidence_envelope(prediction, snapshot, evidence, fixture)
+    items = {item["evidence_id"]: item for item in envelope["items"]}
+    assert items["football_evidence.market_context"]["status"] == "STALE"
+    assert items["football_evidence.market_context"]["admissible"] is False
+    plan = [{
+        "role": "market", "subject": "market", "direction": "neutral", "strength": "weak",
+        "evidence_refs": ["football_evidence.market_context"], "order": 1, "text": "market",
+    }]
+    assert render_article_plan(plan, envelope) == []
+
+
+def test_issue301_availability_latest_recovery_cancels_prior_absence():
+    prediction, snapshot, evidence, fixture, _ = _issue301_inputs()
+    evidence["prematch_evidence"]["fields"]["injuries"] = {
+        "state": "PRESENT",
+        "value": {"records": [
+            {"player_id": 7, "status": "OUT", "observed_at": "2026-09-09T10:00:00+08:00"},
+            {"player_id": 7, "status": "AVAILABLE", "observed_at": "2026-09-10T11:00:00+08:00"},
+        ]},
+        "observed_at": "2026-09-10T11:00:00+08:00",
+        "prematch_eligible": True,
+    }
+    envelope = build_evidence_envelope(prediction, snapshot, evidence, fixture)
+    item = next(item for item in envelope["items"] if item["evidence_id"] == "football_evidence.injuries")
+    assert item["status"] == "VERIFIED"
+    assert item["value"]["records"] == [{"player_id": 7, "status": "AVAILABLE", "observed_at": "2026-09-10T11:00:00+08:00"}]
+
+
+def test_issue301_late_briefing_requires_confirmed_identity_and_preserves_base():
+    prediction, snapshot, evidence, fixture, identity = _issue301_inputs()
+    base = {"contract_version": "match_analysis_article.v2", "status": "AVAILABLE", "article_plan": [{"text": "frozen"}]}
+    base_before = copy.deepcopy(base)
+    prediction_before = copy.deepcopy(prediction)
+    briefing = build_late_briefing(base, prediction, snapshot, evidence, fixture, identity)
+    assert briefing["status"] == "AVAILABLE"
+    assert briefing["lineup_status"] == "CONFIRMED"
+    assert briefing["base_article_sha256"]
+    assert "probabilities" not in briefing
+    assert 'id="late-briefing"' in _render_late_briefing({"late_briefing": briefing})
+    assert base == base_before
+    assert prediction == prediction_before
+
+    expected = copy.deepcopy(evidence)
+    expected["prematch_evidence"]["fields"]["lineup_state"]["semantic_state"] = "PREDICTED"
+    assert build_late_briefing(base, prediction, snapshot, expected, fixture, identity)["status"] == "OMITTED"
+
+    wrong_team = copy.deepcopy(evidence)
+    wrong_team["prematch_evidence"]["fields"]["lineup_state"]["value"]["home"]["players"][0]["team_id"] = 20
+    assert build_late_briefing(base, prediction, snapshot, wrong_team, fixture, identity)["reason"] == "LINEUP_IDENTITY_AMBIGUOUS"
