@@ -237,8 +237,7 @@ def _process_projection(evidence: Mapping[str, Any]) -> dict[str, Any] | None:
                 row = source.get(side)
                 if not isinstance(row, Mapping):
                     continue
-                near3, near10 = _number(row.get("near3")), _number(row.get("near10"))
-                if near3 is not None or near10 is not None:
+                near3, near10 = _number(row.get("near3")), _number(row.get("near10"))                if near3 is not None or near10 is not None:
                     rows[side] = {"near3": _round(near3), "near10": _round(near10)}            if len(rows) == 2:
                 cross_checks[name] = rows
     if cross_checks:
@@ -477,7 +476,6 @@ def _format_number(value: Any) -> str:
 def _format_percent(value: Any) -> str:
     number = _number(value)
     return "未知" if number is None else f"{number * 100:.0f}%"
-
 def _team_name(identity: Mapping[str, Any], side: str) -> str:
     return _text(identity.get(side)) or SIDE_LABELS[side]
 
@@ -717,8 +715,7 @@ def _build_article_plan(
         recent_refs.append("football_evidence.future_schedule_rest")
     counter_refs: list[str] = []
     if _text(outlier.get("status")) == "PRESENT":
-        counter_refs.append("football_evidence.recent_form")    if result_direction and process_direction and result_direction != process_direction and result_direction != "draw":
-        counter_refs.append("football_evidence.recent_process_context")
+        counter_refs.append("football_evidence.recent_form")    if result_direction and process_direction and result_direction != process_direction and result_direction != "draw":        counter_refs.append("football_evidence.recent_process_context")
     if market_relationship == "conflicting":
         counter_refs.append("football_evidence.market_context")
     forecast_refs = ["prediction_record.probabilities_and_score_cluster", "football_evidence.recent_form"]
@@ -775,6 +772,7 @@ def build_match_analysis_article(
     football_evidence: Mapping[str, Any] | None,
     accepted_fixture: Mapping[str, Any] | None,
     identity: Mapping[str, Any] | None = None,
+    late_football_evidence: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Build a public-safe article without mutating frozen inputs."""
 
@@ -783,6 +781,11 @@ def build_match_analysis_article(
     football_evidence = football_evidence if isinstance(football_evidence, Mapping) else {}
     accepted_fixture = accepted_fixture if isinstance(accepted_fixture, Mapping) else {}
     identity = identity if isinstance(identity, Mapping) else {}
+    late_football_evidence = (
+        late_football_evidence
+        if isinstance(late_football_evidence, Mapping)
+        else {}
+    )
     evidence_envelope = build_evidence_envelope(
         prediction,
         football_evidence,
@@ -887,11 +890,16 @@ def build_match_analysis_article(
         "evidence_envelope": evidence_envelope,
     }
     base_article["base_article_hash"] = article_base_hash(base_article)
+    late_envelope = build_evidence_envelope(
+        prediction,
+        late_football_evidence,
+        accepted_fixture,
+    )
     base_article["late_briefing"] = build_late_briefing(
         base_article,
         prediction,
-        football_evidence,
-        evidence_envelope,
+        late_football_evidence,
+        late_envelope,
     )
     return base_article
 
