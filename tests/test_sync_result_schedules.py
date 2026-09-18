@@ -2,7 +2,7 @@ import json
 from datetime import datetime, timedelta, timezone
 
 import sync_result_schedules
-from sync_result_schedules import sync_date
+from sync_result_schedules import recover_overdue_schedules, sync_date
 
 
 SHANGHAI = timezone(timedelta(hours=8))
@@ -147,4 +147,71 @@ def test_canonical_prediction_universe_is_primary_result_schedule_authority(tmp_
     assert saved["nowscore_id"] == 3003885
     assert saved["match_num"] == "周六016"
     assert saved["kickoff_local"] == "2026-09-12T22:00:00+08:00"
+
+def test_overdue_recovery_backfills_missing_schedule_and_rearms_result_not_final_once(tmp_path):
+    now = datetime(2026, 9, 18, 20, tzinfo=SHANGHAI)
+    universe = tmp_path / "universe"
+    universe.mkdir()
+    (universe / "2026-09-12.json").write_text(json.dumps({
+        "business_date": "2026-09-12",
+        "status": "READY",
+        "fixtures": [{
+            "matchId": "3003885",
+            "matchNum": "周六016",
+            "businessDate": "2026-09-12",
+            "matchDate": "2026-09-12",
+            "matchTime": "22:00",
+            "homeTeam": "利物浦",
+            "awayTeam": "富勒姆",
+            "nowscoreId": 3003885,
+        }],
+    }, ensure_ascii=False), encoding="utf-8")
+    predictions = tmp_path / "predictions"
+    predictions.mkdir()
+    (predictions / "FBOS-PRED-OLD.json").write_text(json.dumps({
+        "prediction_id": "FBOS-PRED-OLD",
+        "business_date": "2026-09-12",
+        "match_key": "FBOS-202609122200-test",
+    }), encoding="utf-8")
+    trust = tmp_path / "trust.json"
+    trust.write_text(json.dumps({
+        "history": [{
+            "status": "PENDING",
+            "prediction_id": "FBOS-PRED-OLD",
+            "match_key": "FBOS-202609122200-test",
+            "kickoff_at": "2026-09-12T14:00:00Z",
+        }]
+    }), encoding="utf-8")
+    schedules = tmp_path / "schedules"
+    updates = tmp_path / "updates"
+    updates.mkdir()
+
+    first = recover_overdue_schedules(
+        now, schedules, updates, universe, trust, predictions
+    )
+    path = next(schedules.glob("*.json"))
+    saved = json.loads(path.read_text(encoding="utf-8"))
+    saved.update({
+        "status": "expired_unresolved",
+        "verification_issue": "result_not_final",
+        "last_error": "espn_fetch_failed:HTTPError",
+        "terminal_reason": "result_not_final_after_bounded_retry",
+    })
+    path.write_text(json.dumps(saved), encoding="utf-8")
+
+    second = recover_overdue_schedules(
+        now, schedules, updates, universe, trust, predictions
+    )
+    rearmed = json.loads(path.read_text(encoding="utf-8"))
+    third = recover_overdue_schedules(
+        now, schedules, updates, universe, trust, predictions
+    )
+
+    assert first["created"] == 1
+    assert first["recovery_dates"] == ["2026-09-12"]
+    assert second["rearmed_terminal_count"] == 1
+    assert rearmed["status"] == "scheduled"
+    assert rearmed["overdue_recovery_count"] == 1
+    assert "terminal_reason" not in rearmed
+    assert third["rearmed_terminal_count"] == 0
 
