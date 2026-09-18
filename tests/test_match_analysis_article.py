@@ -9,8 +9,10 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
 from scripts.match_analysis import assemble_match_analysis  # noqa: E402
+from scripts.match_analysis_article import build_match_analysis_article  # noqa: E402
 from scripts.match_analysis_evidence_binding import (  # noqa: E402
     article_base_hash,
+    base_article_evidence,
     bind_article_plan,
     build_evidence_envelope,
     build_late_briefing,
@@ -178,7 +180,6 @@ def _o2_evidence(fields: dict) -> dict:
             "fields": fields,
         },
     }
-
 
 def _o2_field(
     value,
@@ -357,8 +358,7 @@ def test_o2_expected_lineup_never_becomes_confirmed_late_briefing():
         )
     })
     envelope = build_evidence_envelope(prediction, evidence, {})
-    base = {"contract_version": "match_analysis_article.v2", "status": "AVAILABLE", "article_plan": []}
-    late = build_late_briefing(base, prediction, evidence, envelope)
+    base = {"contract_version": "match_analysis_article.v2", "status": "AVAILABLE", "article_plan": []}    late = build_late_briefing(base, prediction, evidence, envelope)
     assert late["status"] == "OMITTED"
     assert late["reason_code"] == "LINEUP_NOT_CONFIRMED"
 
@@ -440,4 +440,75 @@ def test_o2_real_article_refs_resolve_and_late_briefing_fails_closed_without_con
             assert lookup[ref]["admissible"] is True
     assert article["base_article_hash"] == article_base_hash(article)
     assert article["late_briefing"]["status"] == "OMITTED"
+
+def test_o2_base_article_calculation_cannot_use_post_cutoff_field_updates():
+    prediction_path = ROOT / "data/model_governance/predictions/FBOS-PRED-2c1954b82f30ee7155f39b4e.json"
+    sidecar_path = ROOT / "data/prospective/football_evidence/FBOS-PRED-2c1954b82f30ee7155f39b4e.json"
+    prediction = json.loads(prediction_path.read_text(encoding="utf-8"))
+    sidecar = json.loads(sidecar_path.read_text(encoding="utf-8"))
+    snapshot_ref = prediction["model_input_snapshot_ref"]
+    snapshot = json.loads((ROOT / snapshot_ref).read_text(encoding="utf-8"))
+    identity = {
+        "match_id": "3019134",
+        "home": "纽伦堡",
+        "away": "汉诺威96",
+        "kickoff_at": prediction["kickoff_at"],
+    }
+
+    future = copy.deepcopy(sidecar)
+    future_field = future["prematch_evidence"]["fields"]["future_schedule_rest"]
+    future_field["observed_at"] = "2026-09-11T13:52:27+00:00"
+    future_field["source_update_at"] = "2026-09-11T13:52:27+00:00"
+    for fixture in future_field["value"]["fixtures"]:
+        fixture["interval_days"] = 1
+
+    absent = copy.deepcopy(sidecar)
+    absent_field = absent["prematch_evidence"]["fields"]["future_schedule_rest"]
+    absent_field["state"] = "ABSENT"
+    absent_field["value"] = None
+
+    future_article = build_match_analysis_article(
+        prediction, snapshot, future, identity, identity
+    )
+    absent_article = build_match_analysis_article(
+        prediction, snapshot, absent, identity, identity
+    )
+    assert future_article["article_plan"] == absent_article["article_plan"]
+    assert future_article["forecast"] == absent_article["forecast"]
+    assert future_article["future_schedule_rest"] == absent_article["future_schedule_rest"]
+
+    envelope = build_evidence_envelope(prediction, future, identity)
+    frozen = base_article_evidence(future, envelope)
+    assert frozen["prematch_evidence"]["fields"]["future_schedule_rest"]["state"] == "ABSENT"
+    assert frozen["prematch_evidence"]["fields"]["future_schedule_rest"]["value"] is None
+
+
+def test_o2_late_briefing_rejects_post_kickoff_source_update_and_semantic_conflict():
+    prediction = _o2_prediction()
+    evidence = _o2_evidence({
+        "lineup_state": _o2_field(
+            {
+                "confirmation_status": "CONFIRMED",
+                "home": _confirmed_side(10, "h"),
+                "away": _confirmed_side(20, "a"),
+            },
+            observed_at="2026-09-18T11:30:00+00:00",
+            semantic_state="CONFIRMED",
+        )
+    })
+    evidence["prematch_evidence"]["fields"]["lineup_state"]["source_update_at"] = "2026-09-18T12:00:01+00:00"
+    envelope = build_evidence_envelope(prediction, evidence, {})
+    base = {"contract_version": "match_analysis_article.v2", "status": "AVAILABLE", "article_plan": []}
+    late = build_late_briefing(base, prediction, evidence, envelope)
+    assert late["status"] == "OMITTED"
+    assert late["reason_code"] == "LINEUP_AFTER_KICKOFF_OR_TIME_UNKNOWN"
+
+    conflict = copy.deepcopy(evidence)
+    conflict_field = conflict["prematch_evidence"]["fields"]["lineup_state"]
+    conflict_field["source_update_at"] = "2026-09-18T11:30:00+00:00"
+    conflict_field["value"]["confirmation_status"] = "EXPECTED"
+    conflict_envelope = build_evidence_envelope(prediction, conflict, {})
+    conflict_late = build_late_briefing(base, prediction, conflict, conflict_envelope)
+    assert conflict_late["status"] == "OMITTED"
+    assert conflict_late["reason_code"] == "LINEUP_NOT_CONFIRMED"
 
