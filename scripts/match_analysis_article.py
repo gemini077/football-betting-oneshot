@@ -26,6 +26,25 @@ except ImportError:  # pragma: no cover - direct CLI compatibility.
         project_match_analysis_evidence,
     )
 
+try:
+    from .match_analysis_evidence_binding import (
+        LATE_BRIEFING_CONTRACT_VERSION,
+        article_base_hash,
+        base_article_evidence,
+        bind_article_plan,
+        build_evidence_envelope,
+        build_late_briefing,
+    )
+except ImportError:  # pragma: no cover - direct CLI compatibility.
+    from match_analysis_evidence_binding import (
+        LATE_BRIEFING_CONTRACT_VERSION,
+        article_base_hash,
+        base_article_evidence,
+        bind_article_plan,
+        build_evidence_envelope,
+        build_late_briefing,
+    )
+
 
 CONTRACT_VERSION = "match_analysis_article.v2"
 PROCESS_METRICS = ("shots_faced", "corners", "possession")
@@ -459,11 +478,8 @@ def _format_number(value: Any) -> str:
 def _format_percent(value: Any) -> str:
     number = _number(value)
     return "未知" if number is None else f"{number * 100:.0f}%"
-
-
 def _team_name(identity: Mapping[str, Any], side: str) -> str:
     return _text(identity.get(side)) or SIDE_LABELS[side]
-
 
 def _recent_text(recent: Mapping[str, Any], identity: Mapping[str, Any]) -> str | None:
     parts: list[str] = []
@@ -759,37 +775,61 @@ def build_match_analysis_article(
     football_evidence: Mapping[str, Any] | None,
     accepted_fixture: Mapping[str, Any] | None,
     identity: Mapping[str, Any] | None = None,
+    late_football_evidence: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Build a public-safe article without mutating frozen inputs."""
 
     prediction = prediction if isinstance(prediction, Mapping) else {}
     input_snapshot = input_snapshot if isinstance(input_snapshot, Mapping) else {}
     football_evidence = football_evidence if isinstance(football_evidence, Mapping) else {}
+    accepted_fixture = accepted_fixture if isinstance(accepted_fixture, Mapping) else {}
     identity = identity if isinstance(identity, Mapping) else {}
+    late_football_evidence = (
+        late_football_evidence
+        if isinstance(late_football_evidence, Mapping)
+        else {}
+    )
+    evidence_envelope = build_evidence_envelope(
+        prediction,
+        football_evidence,
+        accepted_fixture,
+    )
+    frozen_evidence = base_article_evidence(
+        football_evidence,
+        evidence_envelope,
+    )
     empty = {
         "contract_version": CONTRACT_VERSION,
         "status": "OMITTED",
         "article_plan": [],
         "paragraphs": [],
         "source_refs": [],
+        "evidence_envelope": evidence_envelope,
+        "base_article_hash": None,
+        "late_briefing": {
+            "contract_version": LATE_BRIEFING_CONTRACT_VERSION,
+            "status": "OMITTED",
+            "reason_code": "BASE_ARTICLE_UNAVAILABLE",
+            "evidence_refs": [],
+        },
     }
     if not prediction or not football_evidence:
         return empty
     try:
-        projection = project_match_analysis_evidence(prediction, input_snapshot, football_evidence, accepted_fixture or {})
+        projection = project_match_analysis_evidence(prediction, input_snapshot, frozen_evidence, accepted_fixture)
     except (AttributeError, KeyError, TypeError, ValueError):
         return empty
     if projection.get("projection_success") is not True:
         return empty
-    if not isinstance(_accepted_field(football_evidence, "market_context"), Mapping):
+    if not isinstance(_accepted_field(frozen_evidence, "market_context"), Mapping):
         projection = {
             **projection,
             "market_1x2_chronology": {"status": "OMITTED"},
             "model_market_alignment": {"status": "OMITTED"},
         }
 
-    recent = _recent_state(projection, football_evidence)
-    process = _process_projection(football_evidence)
+    recent = _recent_state(projection, frozen_evidence)
+    process = _process_projection(frozen_evidence)
     result_direction = _result_direction(recent)
     process_direction, process_votes = _process_direction(process)
     result_process_alignment = _alignment(result_direction, process_direction)
@@ -806,7 +846,7 @@ def build_match_analysis_article(
         recent_available=len(recent) == 2 and all(_last5(recent.get(side)) for side in SIDES),
         process_available=process_direction is not None,
     )
-    future = _future_schedule_rest(football_evidence)
+    future = _future_schedule_rest(frozen_evidence)
     forecast_text, forecast = _forecast_text(prediction, goal_shape, scores, identifiability)
     article_plan = _build_article_plan(
         prediction=prediction,
@@ -824,13 +864,16 @@ def build_match_analysis_article(
         identifiability=identifiability,
         forecast_text=forecast_text,
     )
+    article_plan = bind_article_plan(article_plan, evidence_envelope)
+    if not article_plan:
+        return empty
     source_refs: list[str] = []
     for item in article_plan:
         for ref in item["evidence_refs"]:
             if ref not in source_refs:
                 source_refs.append(ref)
     headline = article_plan[0]["text"] if article_plan else ""
-    return {
+    base_article = {
         "contract_version": CONTRACT_VERSION,
         "status": "AVAILABLE",
         "headline": headline,
@@ -847,7 +890,31 @@ def build_match_analysis_article(
         "future_schedule_rest": future,
         "forecast": forecast,
         "source_refs": source_refs,
+        "evidence_envelope": evidence_envelope,
     }
+    base_article["base_article_hash"] = article_base_hash(base_article)
+    late_envelope = build_evidence_envelope(
+        prediction,
+        late_football_evidence,
+        accepted_fixture,
+    )
+    expected_subject_id = next(
+        (
+            item.get("subject_id")
+            for item in evidence_envelope.get("items", [])
+            if isinstance(item, Mapping)
+            and str(item.get("evidence_id") or "").startswith("football_evidence.")
+        ),
+        None,
+    )
+    base_article["late_briefing"] = build_late_briefing(
+        base_article,
+        prediction,
+        late_football_evidence,
+        late_envelope,
+        expected_subject_id,
+    )
+    return base_article
 
 
 __all__ = ["CONTRACT_VERSION", "build_match_analysis_article"]
