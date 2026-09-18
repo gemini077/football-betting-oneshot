@@ -609,4 +609,3 @@ def test_direct_prospective_fetch_reuses_official_sporttery_fallback(tmp_path, m
     assert fetched["status"] == "result_verified"
     assert fetched["score_90m"] == "1-0"
     assert fetched["source"] == "sporttery_official_result"
-
