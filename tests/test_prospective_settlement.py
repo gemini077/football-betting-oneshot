@@ -11,6 +11,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
+import prospective_settlement as settlement_module  # noqa: E402
 from prediction_exclusions import is_prediction_excluded  # noqa: E402
 from exact_distribution import (  # noqa: E402
     build_exact_distribution_contract,
@@ -20,6 +21,7 @@ from prospective_settlement import (  # noqa: E402
     BASE_PREDICTION_POLICY,
     _jc_total_goals_summary,
     evaluate_prediction,
+    fetch_result_for_record,
     is_formally_eligible,
     normalize_result,
     settle_records,
@@ -553,3 +555,58 @@ def test_result_verified_before_kickoff_is_rejected(tmp_path):
     )
     assert out["formal_samples_added"] == 0
     assert out["failure_reasons"]["RESULT_TIME_UNVERIFIED"] == 1
+
+def test_direct_prospective_fetch_reuses_official_sporttery_fallback(tmp_path, monkeypatch):
+    current = record(kickoff="2026-08-12T11:00:00+08:00")
+    current["business_date"] = "2026-08-12"
+    current["match_id"] = "2040001"
+    current["match_identity"]["kickoff_at"] = current["kickoff_at"]
+    universe = tmp_path / "universe"
+    universe.mkdir()
+    (universe / "2026-08-12.json").write_text(json.dumps({
+        "business_date": "2026-08-12",
+        "status": "READY",
+        "fixtures": [{
+            "matchId": "2040001",
+            "matchNum": "周三016",
+            "homeTeam": "Home FC",
+            "awayTeam": "Away FC",
+            "nowscoreId": 3003885,
+        }],
+    }), encoding="utf-8")
+
+    monkeypatch.setattr(
+        settlement_module,
+        "fetch_nowscore_result",
+        lambda *_: (None, "https://nowscore.invalid", "result_not_final"),
+    )
+    monkeypatch.setattr(
+        settlement_module,
+        "fetch_sporttery_result",
+        lambda schedule: (
+            {
+                "score_90m": "1-0",
+                "home_score_90m": 1,
+                "away_score_90m": 0,
+                "scope": "REGULATION_90M_PLUS_STOPPAGE",
+            },
+            "https://webapi.sporttery.cn/result",
+            None,
+        ),
+    )
+
+    def forbidden_espn(*_args, **_kwargs):
+        raise AssertionError("ESPN must not be called after an official result")
+
+    monkeypatch.setattr(settlement_module, "fetch_espn_result", forbidden_espn)
+    fetched = fetch_result_for_record(
+        current,
+        datetime(2026, 8, 12, 18, 0, tzinfo=TZ),
+        universe_root=universe,
+        result_root=tmp_path / "results",
+    )
+
+    assert fetched["status"] == "result_verified"
+    assert fetched["score_90m"] == "1-0"
+    assert fetched["source"] == "sporttery_official_result"
+
