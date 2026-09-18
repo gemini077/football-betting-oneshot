@@ -11,6 +11,7 @@ from scripts.prediction_dashboard import (  # noqa: E402
     build_dashboard,
     render_dashboard,
     select_primary_recommendation,
+    _trust_history_html,
 )
 from test_formal_market_projection import formal_record  # noqa: E402
 
@@ -1305,3 +1306,52 @@ def test_abnormal_runtime_shows_warning_without_normal_kpi_grid(tmp_path):
     assert "当前数据更新异常" in html
     assert "base_prediction" not in html
     assert "预测已冻结" not in html
+
+def test_trust_history_distinguishes_not_started_waiting_finish_and_result_verification():
+    trust = {
+        "status": "AVAILABLE",
+        "generated_at": "2026-09-18T16:39:25+00:00",
+        "cohort": {
+            "locked_unique_match_count": 4,
+            "settled_unique_match_count": 1,
+            "pending_unique_match_count": 3,
+            "unresolved_unique_match_count": 0,
+        },
+        "history": [
+            {
+                "status": "PENDING",
+                "home": "未来主队",
+                "away": "未来客队",
+                "kickoff_at": "2026-09-18T17:00:00Z",
+            },
+            {
+                "status": "PENDING",
+                "home": "进行主队",
+                "away": "进行客队",
+                "kickoff_at": "2026-09-18T15:30:00Z",
+            },
+            {
+                "status": "PENDING",
+                "home": "积压主队",
+                "away": "积压客队",
+                "kickoff_at": "2026-09-18T10:00:00Z",
+            },
+            {
+                "status": "SETTLED",
+                "home": "已结主队",
+                "away": "已结客队",
+                "kickoff_at": "2026-09-18T08:00:00Z",
+                "actual_score": "2-1",
+            },
+        ],
+    }
+
+    rendered = _trust_history_html(trust)
+
+    assert "未开赛 1 场" in rendered
+    assert "等待完赛 1 场" in rendered
+    assert "赛果待核验 1 场" in rendered
+    assert "<strong>未开赛</strong>" in rendered
+    assert "<strong>等待完赛</strong>" in rendered
+    assert "<strong>赛果待核验</strong>" in rendered
+
