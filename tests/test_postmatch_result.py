@@ -8,7 +8,7 @@ from unittest.mock import patch
 ROOT = __import__("pathlib").Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
-from postmatch_result import fetch_nowscore_result, verify_schedule  # noqa: E402
+from postmatch_result import fetch_nowscore_result, fetch_sporttery_result, verify_schedule  # noqa: E402
 
 
 class Response(io.BytesIO):
@@ -154,3 +154,104 @@ def test_live_nowscore_result_is_not_written_to_result_store(tmp_path):
         outcome = verify_schedule(schedule_path, now, tmp_path / "results")
     assert outcome["status"] == "retry_scheduled"
     assert not (tmp_path / "results").exists()
+
+def _sporttery_payload(*, match_num_str="周六016", status="2", pool="Payout", score="2:1"):
+    return {
+        "errorCode": "0",
+        "errorMessage": "OK",
+        "value": {
+            "total": 1,
+            "matchResult": [{
+                "matchId": 900016,
+                "matchNum": "0016",
+                "matchNumStr": match_num_str,
+                "matchDate": "2026-09-12",
+                "homeTeam": "利物浦",
+                "awayTeam": "富勒姆",
+                "matchResultStatus": status,
+                "poolStatus": pool,
+                "sectionsNo1": "1:0",
+                "sectionsNo999": score,
+            }],
+        },
+    }
+
+
+def _json_opener(payload):
+    def opener(_request, timeout=0):
+        return Response(json.dumps(payload, ensure_ascii=False).encode("utf-8"))
+    return opener
+
+
+def test_sporttery_official_result_requires_exact_jc_identity_and_payout_finality():
+    schedule = {
+        "business_date": "2026-09-12",
+        "match_num": "周六016",
+        "kickoff_local": "2026-09-12T22:00:00+08:00",
+    }
+    result, source, error = fetch_sporttery_result(
+        schedule, _json_opener(_sporttery_payload())
+    )
+    assert result["score_90m"] == "2-1"
+    assert "getMatchResultV1.qry" in source
+    assert error is None
+
+    result, _source, error = fetch_sporttery_result(
+        schedule, _json_opener(_sporttery_payload(match_num_str="周六017"))
+    )
+    assert result is None
+    assert "sporttery_identity_missing" in error
+
+    result, _source, error = fetch_sporttery_result(
+        schedule, _json_opener(_sporttery_payload(pool="Selling"))
+    )
+    assert result is None
+    assert "sporttery_result_not_final" in error
+
+    result, _source, error = fetch_sporttery_result(
+        schedule, _json_opener(_sporttery_payload(status="1"))
+    )
+    assert result is None
+    assert "sporttery_result_not_final" in error
+
+
+def test_verify_schedule_uses_official_result_before_espn(tmp_path):
+    schedule_path = tmp_path / "schedule.json"
+    schedule_path.write_text(json.dumps({
+        "match_key": "FBOS-202609122200-test",
+        "home": "利物浦",
+        "away": "富勒姆",
+        "business_date": "2026-09-12",
+        "match_num": "周六016",
+        "kickoff_local": "2026-09-12T22:00:00+08:00",
+        "nowscore_id": 3003885,
+        "review_due_at": "2026-09-13T00:15:00+08:00",
+        "verification_expires_at": "2026-09-13T22:00:00+08:00",
+        "status": "scheduled",
+        "verification_attempts": 0,
+        "retry_policy": {"maximum_retries": 1, "retry_after_minutes": 45},
+    }), encoding="utf-8")
+    official = {
+        "score_90m": "2-1",
+        "home_score_90m": 2,
+        "away_score_90m": 1,
+        "scope": "REGULATION_90M_PLUS_STOPPAGE",
+    }
+    now = datetime(2026, 9, 13, 1, 0, tzinfo=timezone(timedelta(hours=8)))
+    with patch(
+        "postmatch_result.fetch_nowscore_result",
+        return_value=(None, "https://nowscore.invalid", "result_not_final"),
+    ), patch(
+        "postmatch_result.fetch_sporttery_result",
+        return_value=(official, "https://webapi.sporttery.cn/result", None),
+    ), patch("postmatch_result.fetch_espn_result") as espn:
+        outcome = verify_schedule(schedule_path, now, tmp_path / "results")
+
+    assert outcome["status"] == "result_verified"
+    assert outcome["score"] == "2-1"
+    espn.assert_not_called()
+    saved = json.loads(schedule_path.read_text(encoding="utf-8"))
+    assert saved["result_source"] == "sporttery_official_result"
+    assert saved["verification_quality"] == "official_settlement_fallback"
+    assert saved["result_sources"]["official_fallback"]["status"] == "verified"
+
