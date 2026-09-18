@@ -294,6 +294,7 @@ def cycle(
     ], optional=True, timeout=BASE_PREDICTION_TIMEOUT)
     steps["postmatch"] = _group("postmatch", [
         [python, "scripts/sync_result_schedules.py", "--date", business_date],
+        [python, "scripts/sync_result_schedules.py", "--recover-overdue"],
         [python, "scripts/postmatch_result.py"],
         [python, "scripts/automatic_postmatch_review.py"],
         [python, "scripts/postmatch_dashboard.py"],
