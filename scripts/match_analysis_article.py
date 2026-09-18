@@ -26,6 +26,23 @@ except ImportError:  # pragma: no cover - direct CLI compatibility.
         project_match_analysis_evidence,
     )
 
+try:
+    from .match_analysis_evidence_binding import (
+        LATE_BRIEFING_CONTRACT_VERSION,
+        article_base_hash,
+        bind_article_plan,
+        build_evidence_envelope,
+        build_late_briefing,
+    )
+except ImportError:  # pragma: no cover - direct CLI compatibility.
+    from match_analysis_evidence_binding import (
+        LATE_BRIEFING_CONTRACT_VERSION,
+        article_base_hash,
+        bind_article_plan,
+        build_evidence_envelope,
+        build_late_briefing,
+    )
+
 
 CONTRACT_VERSION = "match_analysis_article.v2"
 PROCESS_METRICS = ("shots_faced", "corners", "possession")
@@ -765,18 +782,32 @@ def build_match_analysis_article(
     prediction = prediction if isinstance(prediction, Mapping) else {}
     input_snapshot = input_snapshot if isinstance(input_snapshot, Mapping) else {}
     football_evidence = football_evidence if isinstance(football_evidence, Mapping) else {}
+    accepted_fixture = accepted_fixture if isinstance(accepted_fixture, Mapping) else {}
     identity = identity if isinstance(identity, Mapping) else {}
+    evidence_envelope = build_evidence_envelope(
+        prediction,
+        football_evidence,
+        accepted_fixture,
+    )
     empty = {
         "contract_version": CONTRACT_VERSION,
         "status": "OMITTED",
         "article_plan": [],
         "paragraphs": [],
         "source_refs": [],
+        "evidence_envelope": evidence_envelope,
+        "base_article_hash": None,
+        "late_briefing": {
+            "contract_version": LATE_BRIEFING_CONTRACT_VERSION,
+            "status": "OMITTED",
+            "reason_code": "BASE_ARTICLE_UNAVAILABLE",
+            "evidence_refs": [],
+        },
     }
     if not prediction or not football_evidence:
         return empty
     try:
-        projection = project_match_analysis_evidence(prediction, input_snapshot, football_evidence, accepted_fixture or {})
+        projection = project_match_analysis_evidence(prediction, input_snapshot, football_evidence, accepted_fixture)
     except (AttributeError, KeyError, TypeError, ValueError):
         return empty
     if projection.get("projection_success") is not True:
@@ -824,13 +855,16 @@ def build_match_analysis_article(
         identifiability=identifiability,
         forecast_text=forecast_text,
     )
+    article_plan = bind_article_plan(article_plan, evidence_envelope)
+    if not article_plan:
+        return empty
     source_refs: list[str] = []
     for item in article_plan:
         for ref in item["evidence_refs"]:
             if ref not in source_refs:
                 source_refs.append(ref)
     headline = article_plan[0]["text"] if article_plan else ""
-    return {
+    base_article = {
         "contract_version": CONTRACT_VERSION,
         "status": "AVAILABLE",
         "headline": headline,
@@ -847,7 +881,16 @@ def build_match_analysis_article(
         "future_schedule_rest": future,
         "forecast": forecast,
         "source_refs": source_refs,
+        "evidence_envelope": evidence_envelope,
     }
+    base_article["base_article_hash"] = article_base_hash(base_article)
+    base_article["late_briefing"] = build_late_briefing(
+        base_article,
+        prediction,
+        football_evidence,
+        evidence_envelope,
+    )
+    return base_article
 
 
 __all__ = ["CONTRACT_VERSION", "build_match_analysis_article"]
