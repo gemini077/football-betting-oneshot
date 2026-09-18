@@ -1770,6 +1770,30 @@ def _trust_hit_text(value: Any) -> tuple[str, str]:
     return "—", ""
 
 
+def _trust_pending_result_label(
+    row: dict[str, Any], generated_at: datetime | None
+) -> str:
+    text = str(row.get("kickoff_at") or "").strip()
+    try:
+        kickoff = datetime.fromisoformat(text.replace("Z", "+00:00")) if text else None
+    except ValueError:
+        kickoff = None
+    if (
+        kickoff is None
+        or kickoff.tzinfo is None
+        or generated_at is None
+        or generated_at.tzinfo is None
+    ):
+        return "赛果待核验"
+    kickoff = kickoff.astimezone(timezone.utc)
+    generated_at = generated_at.astimezone(timezone.utc)
+    if generated_at < kickoff:
+        return "未开赛"
+    if generated_at < kickoff + timedelta(hours=3):
+        return "等待完赛"
+    return "赛果待核验"
+
+
 def _trust_history_html(trust: dict[str, Any] | None) -> str:
     trust = trust if isinstance(trust, dict) else {}
     status = str(trust.get("status") or "UNAVAILABLE").upper()
@@ -1800,6 +1824,20 @@ def _trust_history_html(trust: dict[str, Any] | None) -> str:
     settled = _trust_int(cohort.get("settled_unique_match_count"))
     pending = _trust_int(cohort.get("pending_unique_match_count"))
     unresolved = _trust_int(cohort.get("unresolved_unique_match_count"))
+    history = [row for row in trust.get("history") or [] if isinstance(row, dict)]
+    generated_text = str(trust.get("generated_at") or "").strip()
+    try:
+        trust_generated_at = datetime.fromisoformat(generated_text.replace("Z", "+00:00")) if generated_text else None
+    except ValueError:
+        trust_generated_at = None
+    pending_labels = [
+        _trust_pending_result_label(row, trust_generated_at)
+        for row in history
+        if str(row.get("status") or "").upper() == "PENDING"
+    ]
+    pending_not_started = pending_labels.count("未开赛")
+    pending_waiting_finish = pending_labels.count("等待完赛")
+    pending_result_verification = pending_labels.count("赛果待核验")
     model_version = str(model.get("release_version") or "").strip()
     model_copy = (
         f'当前正式模型{(" · " + html.escape(model_version)) if model_version else ""}'
@@ -1879,7 +1917,6 @@ def _trust_history_html(trust: dict[str, Any] | None) -> str:
                 f'n={_trust_int(delta.get("n"))}</span>'
             )
         comparator_html += '<div class="trust-control-values"><strong>市场对照差值</strong>' + "".join(control_rows) + '</div>'
-    history = [row for row in trust.get("history") or [] if isinstance(row, dict)]
     history.sort(key=lambda row: str(row.get("kickoff_at") or ""), reverse=True)
     history_rows: list[str] = []
     for row in history:
@@ -1893,7 +1930,8 @@ def _trust_history_html(trust: dict[str, Any] | None) -> str:
             )
             paired_text = "已配对" if row.get("paired") is True else "未配对" if row.get("paired") is False else "—"
         elif row_status == "PENDING":
-            result, ft_text, exact_detail, paired_text = "待核验", "—", "—", "—"
+            result = _trust_pending_result_label(row, trust_generated_at)
+            ft_text, exact_detail, paired_text = "—", "—", "—"
             ft_class = exact_class = "trust-pending"
         else:
             result, ft_text, exact_detail, paired_text = "待确认", "—", "—", "—"
@@ -1922,7 +1960,7 @@ def _trust_history_html(trust: dict[str, Any] | None) -> str:
         f'<span class="trust-status {status_class}">{html.escape(status_label)}</span>'
         '</div>'
         f'<div class="trust-metric-grid">'
-        f'<div class="trust-metric"><span>锁定比赛</span><strong>{locked}</strong><small>已核验 {settled} 场 · 待核验 {pending} 场</small></div>'
+        f'<div class="trust-metric"><span>锁定比赛</span><strong>{locked}</strong><small>已核验 {settled} 场 · 未开赛 {pending_not_started} 场 · 等待完赛 {pending_waiting_finish} 场 · 赛果待核验 {pending_result_verification} 场</small></div>'
         f'<div class="trust-metric"><span>胜平负首选命中</span><strong>{_trust_metric_text(ft_top1.get("rate"), percent=True)}</strong><small>有效样本 {_trust_int(ft_top1.get("n"))} 场</small></div>'
         f'<div class="trust-metric"><span>胜平负平均损失</span><strong>{_trust_metric_text(ft_log_loss.get("mean"))}</strong><small>数值越低越好 · 样本 {_trust_int(ft_log_loss.get("n"))}</small></div>'
         f'<div class="trust-metric"><span>准确比分首选</span><strong>{_trust_metric_text(exact_top1.get("rate"), percent=True)}</strong><small>样本 {_trust_int(exact_top1.get("n"))} 场</small></div>'
@@ -1934,7 +1972,7 @@ def _trust_history_html(trust: dict[str, Any] | None) -> str:
         f'{calibration_html}'
         f'{comparator_html}'
         f'<div class="trust-history-list" aria-label="历史核验记录">{history_html}</div>'
-        f'<div class="trust-history-note">共保留 {len(history)} 条记录；命中、未命中、待核验与未配对记录不互相覆盖。</div>'
+        f'<div class="trust-history-note">共保留 {len(history)} 条记录；命中、未命中、未开赛、等待完赛、赛果待核验与未配对记录不互相覆盖。</div>'
         '</section>'
     )
 
