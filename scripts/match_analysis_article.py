@@ -223,9 +223,11 @@ def _envelope_item(
     value = field.get("value") if isinstance(field, Mapping) else fallback_value
     if field is None and fallback_value is not None:
         status, admissible, reason = "VERIFIED", True, "PROJECTED_PREMATCH_EVIDENCE"
+    as_of = _field_as_of(field or {}, source)
+    if status == "VERIFIED" and as_of is None and fallback_value is None:
+        status, admissible, reason = "DEGRADED", False, "TEMPORAL_METADATA_MISSING"
     if status != "VERIFIED":
         value = None
-    as_of = _field_as_of(field or {}, source)
     if as_of is None and fallback_value is not None:
         as_of = cutoff_at
     freshness = {
@@ -1435,12 +1437,15 @@ def build_late_briefing(
         for team in confirmed
     ]
     updates = []
-    raw_updates = value.get("assumption_updates") if isinstance(value, Mapping) else None
+    raw_updates = None
+    if isinstance(value, Mapping):
+        raw_updates = value.get("assumption_updates") or value.get("changes") or value.get("material_changes")
     if isinstance(raw_updates, list):
         for update in raw_updates:
             if not isinstance(update, Mapping):
                 continue
             status = (_text(update.get("status")) or "").upper()
+            status = "MATERIALLY_CHANGED" if status in {"CHANGED", "MATERIAL_CHANGE"} else status
             if status not in {"SUPPORTED", "MATERIALLY_CHANGED"}:
                 continue
             updates.append(
