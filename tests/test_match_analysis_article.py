@@ -217,8 +217,7 @@ def test_o2_exact_cutoff_is_admissible_but_future_evidence_is_not():
         prediction,
         _o2_evidence({"recent_form": _o2_field({"summary": {}})}),
         {},
-    )
-    exact_item = next(
+    )    exact_item = next(
         item for item in exact["items"]
         if item["evidence_id"] == "football_evidence.recent_form"
     )
@@ -437,8 +436,7 @@ def test_o2_real_article_refs_resolve_and_late_briefing_fails_closed_without_con
     for item in article["article_plan"]:
         for ref in item["evidence_refs"]:
             assert ref in lookup
-            assert lookup[ref]["admissible"] is True
-    assert article["base_article_hash"] == article_base_hash(article)
+            assert lookup[ref]["admissible"] is True    assert article["base_article_hash"] == article_base_hash(article)
     assert article["late_briefing"]["status"] == "OMITTED"
 
 def test_o2_base_article_calculation_cannot_use_post_cutoff_field_updates():
@@ -511,4 +509,88 @@ def test_o2_late_briefing_rejects_post_kickoff_source_update_and_semantic_confli
     conflict_late = build_late_briefing(base, prediction, conflict, conflict_envelope)
     assert conflict_late["status"] == "OMITTED"
     assert conflict_late["reason_code"] == "LINEUP_NOT_CONFIRMED"
+
+def _real_3019134_late_evidence(provider_match_id: str = "3019134") -> dict:
+    return {
+        "source_provider": "fixture-test",
+        "prematch_evidence": {
+            "source": {"provider": "fixture-test", "source_references": ["fixture://late"]},
+            "target_fixture": {
+                "provider_match_id": provider_match_id,
+                "home_team_id": 136,
+                "away_team_id": 169,
+                "kickoff_at": "2026-09-12T00:30:00+08:00",
+            },
+            "fields": {
+                "lineup_state": _o2_field(
+                    {
+                        "confirmation_status": "CONFIRMED",
+                        "home": _confirmed_side(136, "h"),
+                        "away": _confirmed_side(169, "a"),
+                    },
+                    observed_at="2026-09-11T16:00:00+00:00",
+                    semantic_state="CONFIRMED",
+                )
+            },
+        },
+    }
+
+
+def test_o2_late_evidence_cannot_change_frozen_base_article_hash_or_plan():
+    prediction_path = ROOT / "data/model_governance/predictions/FBOS-PRED-2c1954b82f30ee7155f39b4e.json"
+    sidecar_path = ROOT / "data/prospective/football_evidence/FBOS-PRED-2c1954b82f30ee7155f39b4e.json"
+    prediction = json.loads(prediction_path.read_text(encoding="utf-8"))
+    sidecar = json.loads(sidecar_path.read_text(encoding="utf-8"))
+    snapshot = json.loads((ROOT / prediction["model_input_snapshot_ref"]).read_text(encoding="utf-8"))
+    identity = {
+        "match_id": "3019134",
+        "home": "纽伦堡",
+        "away": "汉诺威96",
+        "kickoff_at": prediction["kickoff_at"],
+    }
+
+    base_only = build_match_analysis_article(
+        prediction, snapshot, sidecar, identity, identity
+    )
+    with_late = build_match_analysis_article(
+        prediction,
+        snapshot,
+        sidecar,
+        identity,
+        identity,
+        _real_3019134_late_evidence(),
+    )
+
+    assert base_only["base_article_hash"] == with_late["base_article_hash"]
+    assert base_only["article_plan"] == with_late["article_plan"]
+    assert base_only["forecast"] == with_late["forecast"]
+    assert base_only["evidence_envelope"] == with_late["evidence_envelope"]
+    assert base_only["late_briefing"]["status"] == "OMITTED"
+    assert with_late["late_briefing"]["status"] == "AVAILABLE"
+    assert with_late["late_briefing"]["base_article_hash"] == base_only["base_article_hash"]
+
+
+def test_o2_late_briefing_rejects_wrong_fixture_even_with_valid_team_and_player_ids():
+    prediction_path = ROOT / "data/model_governance/predictions/FBOS-PRED-2c1954b82f30ee7155f39b4e.json"
+    sidecar_path = ROOT / "data/prospective/football_evidence/FBOS-PRED-2c1954b82f30ee7155f39b4e.json"
+    prediction = json.loads(prediction_path.read_text(encoding="utf-8"))
+    sidecar = json.loads(sidecar_path.read_text(encoding="utf-8"))
+    snapshot = json.loads((ROOT / prediction["model_input_snapshot_ref"]).read_text(encoding="utf-8"))
+    identity = {
+        "match_id": "3019134",
+        "home": "纽伦堡",
+        "away": "汉诺威96",
+        "kickoff_at": prediction["kickoff_at"],
+    }
+
+    article = build_match_analysis_article(
+        prediction,
+        snapshot,
+        sidecar,
+        identity,
+        identity,
+        _real_3019134_late_evidence("9999999"),
+    )
+    assert article["late_briefing"]["status"] == "OMITTED"
+    assert article["late_briefing"]["reason_code"] == "LINEUP_FIXTURE_IDENTITY_MISMATCH"
 
