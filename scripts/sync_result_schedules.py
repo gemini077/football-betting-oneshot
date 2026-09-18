@@ -17,11 +17,34 @@ SCHEDULE_ROOT = BASE_DIR / "data" / "postmatch_automation" / "schedules"
 UPDATE_ROOT = BASE_DIR / "data" / "schedule_updates"
 FETCH_ROOT = BASE_DIR / "data" / "fetch_runs"
 POSTMATCH_QUEUE_PATH = BASE_DIR / "data" / "postmatch_automation" / "queue.json"
+PREDICTION_UNIVERSE_ROOT = BASE_DIR / "data" / "prediction_universe"
 FINAL = {"result_verified", "reviewed"}
 
 
 def fixture_kickoff(row: dict[str, Any]) -> datetime | None:
     return parse_datetime(f"{row.get('matchDate')}T{str(row.get('matchTime') or '')[:5]}:00+08:00")
+
+
+def canonical_universe_payload(
+    business_date: str,
+    universe_root: Path = PREDICTION_UNIVERSE_ROOT,
+) -> dict[str, Any] | None:
+    """Load the accepted Prediction Universe used by the formal prediction lane."""
+    path = Path(universe_root) / f"{business_date}.json"
+    try:
+        payload = load_json(path)
+    except (OSError, json.JSONDecodeError):
+        return None
+    if not isinstance(payload, dict):
+        return None
+    if str(payload.get("business_date") or "") != business_date:
+        return None
+    if payload.get("status") not in {"READY", "EMPTY_CONFIRMED"}:
+        return None
+    fixtures = payload.get("fixtures")
+    if not isinstance(fixtures, list):
+        return None
+    return {**payload, "matches": fixtures}
 
 
 def latest_schedule_payload(business_date: str, update_root: Path = UPDATE_ROOT, fetch_root: Path = FETCH_ROOT) -> dict[str, Any]:
@@ -148,9 +171,16 @@ def merge_schedule(existing: dict[str, Any], fresh: dict[str, Any], now: datetim
     return merged
 
 
-def sync_date(business_date: str, now: datetime, output_root: Path = SCHEDULE_ROOT,
-              update_root: Path = UPDATE_ROOT) -> dict[str, int]:
-    payload = latest_schedule_payload(business_date, update_root)
+def sync_date(
+    business_date: str,
+    now: datetime,
+    output_root: Path = SCHEDULE_ROOT,
+    update_root: Path = UPDATE_ROOT,
+    universe_root: Path = PREDICTION_UNIVERSE_ROOT,
+) -> dict[str, int]:
+    payload = canonical_universe_payload(business_date, universe_root)
+    if payload is None:
+        payload = latest_schedule_payload(business_date, update_root)
     output_root.mkdir(parents=True, exist_ok=True)
     created = updated = 0
     for row in payload.get("matches") or []:
