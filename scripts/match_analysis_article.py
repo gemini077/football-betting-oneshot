@@ -237,8 +237,7 @@ def _process_projection(evidence: Mapping[str, Any]) -> dict[str, Any] | None:
                 row = source.get(side)
                 if not isinstance(row, Mapping):
                     continue
-                near3, near10 = _number(row.get("near3")), _number(row.get("near10"))                if near3 is not None or near10 is not None:
-                    rows[side] = {"near3": _round(near3), "near10": _round(near10)}            if len(rows) == 2:
+                near3, near10 = _number(row.get("near3")), _number(row.get("near10"))                if near3 is not None or near10 is not None:                    rows[side] = {"near3": _round(near3), "near10": _round(near10)}            if len(rows) == 2:
                 cross_checks[name] = rows
     if cross_checks:
         projected["goal_cross_checks"] = cross_checks
@@ -479,7 +478,6 @@ def _format_percent(value: Any) -> str:
 def _team_name(identity: Mapping[str, Any], side: str) -> str:
     return _text(identity.get(side)) or SIDE_LABELS[side]
 
-
 def _recent_text(recent: Mapping[str, Any], identity: Mapping[str, Any]) -> str | None:
     parts: list[str] = []
     for side in SIDES:
@@ -717,8 +715,7 @@ def _build_article_plan(
     if _text(outlier.get("status")) == "PRESENT":
         counter_refs.append("football_evidence.recent_form")    if result_direction and process_direction and result_direction != process_direction and result_direction != "draw":        counter_refs.append("football_evidence.recent_process_context")
     if market_relationship == "conflicting":
-        counter_refs.append("football_evidence.market_context")
-    forecast_refs = ["prediction_record.probabilities_and_score_cluster", "football_evidence.recent_form"]
+        counter_refs.append("football_evidence.market_context")    forecast_refs = ["prediction_record.probabilities_and_score_cluster", "football_evidence.recent_form"]
     thesis_refs = ["prediction_record.probabilities_and_score_cluster"]
     if recent_text:
         thesis_refs.insert(0, "football_evidence.recent_form")
@@ -895,11 +892,21 @@ def build_match_analysis_article(
         late_football_evidence,
         accepted_fixture,
     )
+    expected_subject_id = next(
+        (
+            item.get("subject_id")
+            for item in evidence_envelope.get("items", [])
+            if isinstance(item, Mapping)
+            and str(item.get("evidence_id") or "").startswith("football_evidence.")
+        ),
+        None,
+    )
     base_article["late_briefing"] = build_late_briefing(
         base_article,
         prediction,
         late_football_evidence,
         late_envelope,
+        expected_subject_id,
     )
     return base_article
 
