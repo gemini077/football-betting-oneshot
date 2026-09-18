@@ -402,6 +402,16 @@ def test_o2_confirmed_lineup_is_independent_and_identity_bound():
     assert wrong_late["status"] == "OMITTED"
     assert wrong_late["reason_code"] == "LINEUP_IDENTITY_MISMATCH"
 
+    bad_player = copy.deepcopy(evidence)
+    players = bad_player["prematch_evidence"]["fields"]["lineup_state"]["value"]["home"]["starting_xi"]
+    players[1]["player_id"] = players[0]["player_id"]
+    bad_player_envelope = build_evidence_envelope(prediction, bad_player, {})
+    bad_player_late = build_late_briefing(
+        base, prediction, bad_player, bad_player_envelope
+    )
+    assert bad_player_late["status"] == "OMITTED"
+    assert bad_player_late["reason_code"] == "PLAYER_IDENTITY_MISSING"
+
 
 def test_o2_evidence_hash_changes_when_relevant_freshness_changes():
     prediction = _o2_prediction()
