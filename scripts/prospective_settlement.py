@@ -20,6 +20,7 @@ from postmatch_result import (
     RESULT_ROOT as POSTMATCH_RESULT_ROOT,
     fetch_espn_result,
     fetch_nowscore_result,
+    fetch_sporttery_result,
     resolve_nowscore_id,
     safe_key,
 )
@@ -606,6 +607,7 @@ def _provider_schedule(record: dict[str, Any], universe_root: Path) -> dict[str,
         "away": fixture.get("awayTeam") or identity.get("away"),
         "kickoff_local": record.get("kickoff_at") or identity.get("kickoff_at"),
         "business_date": record.get("business_date"),
+        "match_num": fixture.get("matchNum") or record.get("match_num"),
     }
 
 
@@ -641,6 +643,12 @@ def fetch_result_for_record(
         raw, source_url, error = fetch_nowscore_result(int(schedule["nowscore_id"]))
         if raw is not None:
             source = "nowscore_match_detail"
+        elif error:
+            errors.append(error)
+    if raw is None:
+        raw, source_url, error = fetch_sporttery_result(schedule)
+        if raw is not None:
+            source = "sporttery_official_result"
         elif error:
             errors.append(error)
     if raw is None:

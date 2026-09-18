@@ -26,7 +26,8 @@ FINAL_STATUSES = {
     "manual_review_required",
     "expired_unresolved",
 }
-RESULT_STRATEGY_VERSION = "nowscore_matchdetail_v6_espn_regulation_fallback"
+RESULT_STRATEGY_VERSION = "nowscore_matchdetail_v7_sporttery_official_espn_fallback"
+SPORTTERY_RESULT_URL = "https://webapi.sporttery.cn/gateway/jc/football/getMatchResultV1.qry"
 WORKSPACE_PATH = BASE_DIR / "data" / "match_workspace" / "latest.json"
 SCORE_PATTERN = re.compile(
     r'<p\s+class=["\']odds_hd_bf["\'][^>]*>\s*<strong>\s*(\d+)\s*[:：]\s*(\d+)\s*</strong>',
@@ -252,6 +253,93 @@ def fetch_nowscore_result(match_id: int) -> tuple[dict[str, Any] | None, str, st
     return None, urls[0], "; ".join(errors)
 
 
+def _sporttery_match_num(value: Any) -> str:
+    digits = re.sub(r"\D", "", str(value or ""))
+    return str(int(digits)) if digits else ""
+
+
+def _sporttery_score(value: Any) -> tuple[int, int] | None:
+    match = re.fullmatch(r"\s*(\d+)\s*[:：-]\s*(\d+)\s*", str(value or ""))
+    return (int(match.group(1)), int(match.group(2))) if match else None
+
+
+def fetch_sporttery_result(
+    schedule: dict[str, Any],
+    opener=urllib.request.urlopen,
+) -> tuple[dict[str, Any] | None, str | None, str | None]:
+    """Read an official JC 90-minute result, fail-closed on identity/finality."""
+
+    business_date = str(schedule.get("business_date") or "").strip()
+    kickoff = parse_datetime(schedule.get("kickoff_local"))
+    dates = [business_date] if len(business_date) == 10 else []
+    if kickoff is not None:
+        kickoff_date = kickoff.astimezone(SHANGHAI).date().isoformat()
+        if kickoff_date not in dates:
+            dates.append(kickoff_date)
+    wanted_name = str(schedule.get("match_num") or "").strip()
+    wanted_num = _sporttery_match_num(wanted_name)
+    if not dates or not wanted_num:
+        return None, None, "sporttery_identity_incomplete"
+
+    errors: list[str] = []
+    for query_date in dates:
+        params = urllib.parse.urlencode({
+            "matchPage": 1,
+            "matchBeginDate": query_date,
+            "matchEndDate": query_date,
+            "leagueId": "",
+            "pageSize": 200,
+            "pageNo": 1,
+            "isFix": 0,
+            "pcOrWap": 1,
+        })
+        url = f"{SPORTTERY_RESULT_URL}?{params}"
+        try:
+            request = urllib.request.Request(
+                url,
+                headers={
+                    "User-Agent": "Mozilla/5.0",
+                    "Referer": "https://www.sporttery.cn/",
+                    "Accept": "application/json, text/plain, */*",
+                },
+            )
+            with opener(request, timeout=30) as response:
+                payload = json.loads(response.read().decode("utf-8-sig"))
+        except Exception as exc:
+            errors.append(f"{url}: {type(exc).__name__}")
+            continue
+        if str(payload.get("errorCode") or "") != "0":
+            errors.append(f"{url}: sporttery_api_error")
+            continue
+        rows = ((payload.get("value") or {}).get("matchResult") or [])
+        candidates = []
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            row_name = str(row.get("matchNumStr") or "").strip()
+            row_num = _sporttery_match_num(row_name or row.get("matchNum"))
+            if row_num != wanted_num:
+                continue
+            if wanted_name and row_name and row_name != wanted_name:
+                continue
+            candidates.append(row)
+        if len(candidates) != 1:
+            errors.append(f"{url}: sporttery_identity_{'missing' if not candidates else 'ambiguous'}")
+            continue
+        row = candidates[0]
+        status = str(row.get("matchResultStatus") or "").strip()
+        pool_status = str(row.get("poolStatus") or "").strip().upper()
+        score = _sporttery_score(row.get("sectionsNo999"))
+        if status != "2" or pool_status != "PAYOUT" or score is None:
+            errors.append(
+                f"{url}: sporttery_result_not_final:"
+                f"status={status or 'missing'},pool={pool_status or 'missing'}"
+            )
+            continue
+        return _score_result(*score), url, None
+    return None, None, errors[-1] if errors else "sporttery_result_unavailable"
+
+
 def fetch_espn_result(
     schedule: dict[str, Any],
     opener=urllib.request.urlopen,
@@ -328,6 +416,9 @@ def verify_schedule(path: Path, now: datetime, result_root: Path = RESULT_ROOT) 
     schedule["last_checked_at"] = now.isoformat()
     nowscore_result = None
     nowscore_source_url = None
+    sporttery_result = None
+    sporttery_source_url = None
+    sporttery_error = None
     espn_result = None
     espn_source_url = None
     espn_error = None
@@ -354,6 +445,13 @@ def verify_schedule(path: Path, now: datetime, result_root: Path = RESULT_ROOT) 
             primary_error = nowscore_error
 
     if nowscore_result is None:
+        sporttery_result, sporttery_source_url, sporttery_error = fetch_sporttery_result(schedule)
+        if sporttery_result is not None:
+            result_source = "sporttery_official_result"
+            result_source_url = sporttery_source_url
+            verification_quality = "official_settlement_fallback"
+
+    if nowscore_result is None and sporttery_result is None:
         espn_result, espn_source_url, espn_error = fetch_espn_result(schedule)
         if espn_result is not None:
             result_source = "espn_scoreboard"
@@ -368,6 +466,14 @@ def verify_schedule(path: Path, now: datetime, result_root: Path = RESULT_ROOT) 
             "source_url": nowscore_source_url,
             "error": primary_error,
         },
+        "official_fallback": {
+            "name": "sporttery_official_result",
+            "status": "verified" if sporttery_result is not None else "unavailable",
+            "score_90m": sporttery_result.get("score_90m") if sporttery_result else None,
+            "source_url": sporttery_source_url,
+            "error": sporttery_error,
+            "guardrail": "same JC business date + exact matchNum + Payout + result status 2",
+        },
         "fallback": {
             "name": "espn_scoreboard",
             "status": "verified" if espn_result is not None else "unavailable",
@@ -377,7 +483,7 @@ def verify_schedule(path: Path, now: datetime, result_root: Path = RESULT_ROOT) 
             "guardrail": "exact teams + kickoff + completed period 2 only",
         },
     }
-    verified_result = nowscore_result or espn_result
+    verified_result = nowscore_result or sporttery_result or espn_result
     schedule["verification_issue"] = None if verified_result is not None else "result_not_final"
 
     result = None
@@ -427,7 +533,7 @@ def verify_schedule(path: Path, now: datetime, result_root: Path = RESULT_ROOT) 
     expires = parse_datetime(schedule.get("verification_expires_at"))
     within_window = expires is None or now < expires
     retry_limit = int((schedule.get("retry_policy") or {}).get("maximum_retries", 1))
-    issue_error = espn_error or primary_error or "result_not_final"
+    issue_error = sporttery_error or espn_error or primary_error or "result_not_final"
     if result is None and within_window and attempts <= retry_limit:
         retry_minutes = int((schedule.get("retry_policy") or {}).get("retry_after_minutes", 45))
         schedule["status"] = "retry_scheduled"
