@@ -1026,6 +1026,15 @@ MODERN_CSS = r"""
 .trust-comparator strong { color: var(--ink); }
 .trust-comparator-grid { display: flex; flex-wrap: wrap; gap: 8px 18px; margin-top: 6px; }
 .trust-comparator-grid span { color: var(--muted); }
+.trust-control-values { display: grid; gap: 4px; margin-top: 8px; }
+.trust-control-values strong { color: var(--ink); }
+.trust-calibration { margin-top: 12px; overflow-x: hidden; }
+.trust-calibration > strong, .trust-calibration-note { display: block; }
+.trust-calibration-note { margin-top: 4px; color: var(--muted); font-size: var(--type-meta); }
+.trust-calibration table { width: 100%; margin-top: 7px; border-collapse: collapse; table-layout: fixed; font-size: var(--type-meta); }
+.trust-calibration th, .trust-calibration td { padding: 7px 6px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; overflow-wrap: anywhere; }
+.trust-calibration th { color: var(--muted); font-weight: 650; }
+.trust-calibration td span { display: block; line-height: 1.45; }
 .trust-history-list { margin-top: 10px; border-top: 1px solid var(--line); }
 .trust-history-row { display: grid; grid-template-columns: minmax(180px,1.2fr) 130px 130px minmax(180px,1fr) 100px; gap: 12px; align-items: center; min-height: 62px; padding: 10px 0; border-bottom: 1px solid var(--line); }
 .trust-history-row > * { min-width: 0; }
@@ -1093,6 +1102,7 @@ MODERN_CSS = r"""
   .trust-history-row > * { margin-top: 8px; }
   .trust-history-row > :first-child { margin-top: 0; }
   .trust-comparator-grid { display: grid; gap: 5px; }
+  .trust-calibration th, .trust-calibration td { padding: 6px 3px; font-size: 11px; }
   .page-footer { display: block; }
   .page-footer span { display: block; }
   .page-footer span:last-child { max-width: none; margin-top: 6px; text-align: left; }
@@ -1740,6 +1750,11 @@ def _trust_metric_text(value: Any, *, percent: bool = False) -> str:
     return f"{number * 100:.1f}%" if percent else f"{number:.3f}"
 
 
+def _trust_signed_percent(value: Any) -> str:
+    number = _number(value)
+    return "—" if number is None else f"{number * 100:+.1f}%"
+
+
 def _trust_int(value: Any) -> int:
     try:
         return max(0, int(value or 0))
@@ -1777,6 +1792,7 @@ def _trust_history_html(trust: dict[str, Any] | None) -> str:
     exact_top5 = exact.get("top5") if isinstance(exact.get("top5"), dict) else {}
     exact_nll = exact.get("formal_nll") if isinstance(exact.get("formal_nll"), dict) else {}
     freshness = trust.get("freshness") if isinstance(trust.get("freshness"), dict) else {}
+    calibration = trust.get("calibration") if isinstance(trust.get("calibration"), dict) else {}
     comparator = trust.get("comparator") if isinstance(trust.get("comparator"), dict) else {}
     diagnostics = trust.get("collapse_diagnostics") if isinstance(trust.get("collapse_diagnostics"), dict) else {}
     one_one = diagnostics.get("one_one_top1") if isinstance(diagnostics.get("one_one_top1"), dict) else {}
@@ -1790,18 +1806,51 @@ def _trust_history_html(trust: dict[str, Any] | None) -> str:
         if status != "UNAVAILABLE"
         else "当前正式模型记录"
     )
+    calibration_labels = (("home", "主胜"), ("draw", "平局"), ("away", "客胜"))
+    calibration_bands = {
+        key: calibration.get(key) if isinstance(calibration.get(key), list) else []
+        for key, _ in calibration_labels
+    }
+    band_count = max((len(value) for value in calibration_bands.values()), default=0)
+    calibration_rows: list[str] = []
+    for index in range(band_count):
+        bands = [calibration_bands[key] for key, _ in calibration_labels]
+        first_band = bands[0][index] if index < len(bands[0]) and isinstance(bands[0][index], dict) else {}
+        lower = _trust_metric_text(first_band.get("lower_bound"), percent=True)
+        upper = _trust_metric_text(first_band.get("upper_bound"), percent=True)
+        bound = f"[{lower}–{upper}{']' if upper == '100.0%' else ')'}"
+        cells = []
+        for band in bands:
+            value = band[index] if index < len(band) and isinstance(band[index], dict) else {}
+            n = value.get("n")
+            n_text = f"n={_trust_int(n)}" if n is not None else "n=—"
+            cells.append(
+                f'<td><span>预测 {_trust_metric_text(value.get("mean_predicted"), percent=True)}</span>'
+                f'<span>实际 {_trust_metric_text(value.get("observed_frequency"), percent=True)}</span>'
+                f'<span>{n_text} · 差 {_trust_signed_percent(value.get("gap"))}</span></td>'
+            )
+        calibration_rows.append(f'<tr><th scope="row">{bound}</th>{"".join(cells)}</tr>')
+    calibration_html = (
+        '<div class="trust-calibration" data-trust-calibration="available">'
+        '<strong>校准实际值</strong>'
+        '<span class="trust-calibration-note">预测概率 → 实际频率；差值为实际−预测；每档保留样本 n。</span>'
+        '<table><thead><tr><th scope="col">概率档</th><th scope="col">主胜</th><th scope="col">平局</th><th scope="col">客胜</th></tr></thead>'
+        f'<tbody>{"".join(calibration_rows)}</tbody></table></div>'
+        if calibration_rows
+        else '<div class="trust-calibration" data-trust-calibration="unavailable"><strong>校准实际值</strong><span class="trust-calibration-note">当前暂无可用的分档样本。</span></div>'
+    )
     comparator_html = ""
     if str(comparator.get("status") or "").upper() == "AVAILABLE":
         decision = comparator.get("decision") if isinstance(comparator.get("decision"), dict) else {}
         verdict = str(decision.get("verdict") or "").upper()
         verdict_label = (
-            "样本继续积累"
+            "样本仍在积累"
             if verdict == "INSUFFICIENT_SAMPLE_CONTINUE_ACCUMULATING"
-            else "仅作方向与不确定性参考"
+            else "结果方向可见，但不确定性仍大"
             if verdict == "DIRECTION_AND_UNCERTAINTY_ONLY_NO_AUTOMATIC_PROMOTION"
-            else "已达到独立复核门槛"
+            else "样本较充足，继续作为对照"
             if verdict == "MATURE_FOR_SEPARATE_INDEPENDENT_PROMOTION_REGATE"
-            else "暂待确认"
+            else "暂待更多数据"
         )
         champion_unpaired = comparator.get("champion_unpaired_unique_match_count")
         champion_unpaired_html = (
@@ -1811,13 +1860,25 @@ def _trust_history_html(trust: dict[str, Any] | None) -> str:
         )
         comparator_html = (
             '<div class="trust-comparator" data-trust-comparator="available">'
-            '<strong>同场市场对照</strong>'
-            f'<div class="trust-comparator-grid"><span>配对 { _trust_int(comparator.get("paired_unique_match_count")) } 场</span>'
-            f'<span>未配对 { _trust_int(comparator.get("unpaired_unique_match_count")) } 场</span>'
+            '<strong>同场市场对照</strong><span>同一赛前时间窗口；差值按市场−当前模型计算。</span>'
+            f'<div class="trust-comparator-grid"><span>有效配对 {_trust_int(comparator.get("paired_unique_match_count"))} 场</span>'
+            f'<span>市场未配对 {_trust_int(comparator.get("unpaired_unique_match_count"))} 场</span>'
             f'{champion_unpaired_html}'
             f'<span>{html.escape(verdict_label)}</span></div>'
             '</div>'
         )
+        deltas = ((comparator.get("metrics") or {}).get("deltas") or {})
+        control_rows = []
+        for key, label in (("ft_1x2_log_loss", "胜平负平均损失"), ("exact_nll", "准确比分平均损失")):
+            delta = deltas.get(key)
+            if not isinstance(delta, dict):
+                continue
+            control_rows.append(
+                f'<span>{label}：市场−当前模型 {_trust_metric_text(delta.get("mean"))} · '
+                f'95%区间 {_trust_metric_text(delta.get("ci95_low"))} 至 {_trust_metric_text(delta.get("ci95_high"))} · '
+                f'n={_trust_int(delta.get("n"))}</span>'
+            )
+        comparator_html += '<div class="trust-control-values"><strong>市场对照差值</strong>' + "".join(control_rows) + '</div>'
     history = [row for row in trust.get("history") or [] if isinstance(row, dict)]
     history.sort(key=lambda row: str(row.get("kickoff_at") or ""), reverse=True)
     history_rows: list[str] = []
@@ -1870,7 +1931,7 @@ def _trust_history_html(trust: dict[str, Any] | None) -> str:
         '</div>'
         f'<div class="trust-history-note">{html.escape(model_copy)} · 最近核验 {html.escape(_format_updated_at(freshness.get("settled_through")))}</div>'
         f'<div class="trust-history-note">{html.escape(collapse_note)}</div>'
-        '<div class="trust-history-note">校准：主队、平局、客队按固定五档展示；空档保留，不做事后平滑。</div>'
+        f'{calibration_html}'
         f'{comparator_html}'
         f'<div class="trust-history-list" aria-label="历史核验记录">{history_html}</div>'
         f'<div class="trust-history-note">共保留 {len(history)} 条记录；命中、未命中、待核验与未配对记录不互相覆盖。</div>'

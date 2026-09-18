@@ -138,12 +138,22 @@ def test_dashboard_exposes_current_champion_trust_and_keeps_misses_visible():
                 "formal_nll": {"n": 1, "mean": 2.1},
             },
         },
+        "calibration": {
+            "home": [{"lower_bound": 0.0, "upper_bound": 0.2, "n": 10, "mean_predicted": 0.2, "observed_frequency": 0.25, "gap": 0.05}],
+            "draw": [{"lower_bound": 0.0, "upper_bound": 0.2, "n": 10, "mean_predicted": 0.3, "observed_frequency": 0.2, "gap": -0.1}],
+            "away": [{"lower_bound": 0.0, "upper_bound": 0.2, "n": 10, "mean_predicted": 0.1, "observed_frequency": 0.15, "gap": 0.05}],
+        },
         "freshness": {"settled_through": "2026-09-08T23:00:00+08:00"},
         "comparator": {
             "status": "AVAILABLE",
             "paired_unique_match_count": 1,
             "unpaired_unique_match_count": 1,
             "decision": {"verdict": "INSUFFICIENT_SAMPLE_CONTINUE_ACCUMULATING"},
+            "metrics": {
+                "deltas": {
+                    "ft_1x2_log_loss": {"mean": -0.115, "n": 40, "ci95_low": -0.190, "ci95_high": -0.041},
+                },
+            },
         },
         "history": [
             {
@@ -177,7 +187,14 @@ def test_dashboard_exposes_current_champion_trust_and_keeps_misses_visible():
     assert "待核验" in html
     assert "未配对" in html
     assert "同场市场对照" in html
-    assert "校准" in html
+    assert 'data-trust-calibration="available"' in html
+    assert "校准实际值" in html
+    assert "预测 20.0%" in html
+    assert "实际 25.0%" in html
+    assert "n=10" in html
+    assert "市场对照差值" in html
+    assert "-0.115" in html
+    assert "95%区间" in html
     trust_html = html[html.index('id="trust-history"'):]
     assert "prediction_id" not in trust_html
     assert "model_run_fingerprint" not in trust_html

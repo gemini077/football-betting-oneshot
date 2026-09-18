@@ -261,21 +261,27 @@ def _calibration(rows: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
             values = []
             for row in rows:
                 probability = _number((row.get("probabilities") or {}).get(outcome))
-                if probability is None:
+                if probability is None or not 0.0 <= probability <= 1.0:
                     continue
-                in_band = lower <= probability < upper or (index == len(CALIBRATION_BANDS) - 1 and probability <= upper)
+                in_band = (
+                    lower <= probability <= upper
+                    if index == len(CALIBRATION_BANDS) - 1
+                    else lower <= probability < upper
+                )
                 if in_band:
                     values.append((probability, row.get("actual_outcome") == outcome))
             n = len(values)
             mean_predicted = sum(value for value, _ in values) / n if n else None
             observed = sum(bool(hit) for _, hit in values) / n if n else None
+            mean_predicted = _rounded(mean_predicted)
+            observed = _rounded(observed)
             bands.append({
                 "lower_bound": lower,
                 "upper_bound": upper,
                 "n": n,
-                "mean_predicted": _rounded(mean_predicted),
-                "observed_frequency": _rounded(observed),
-                "gap": _rounded(mean_predicted - observed) if mean_predicted is not None and observed is not None else None,
+                "mean_predicted": mean_predicted,
+                "observed_frequency": observed,
+                "gap": _rounded(observed - mean_predicted) if mean_predicted is not None and observed is not None else None,
             })
         output[outcome] = bands
     return output
