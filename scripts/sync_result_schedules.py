@@ -17,11 +17,38 @@ SCHEDULE_ROOT = BASE_DIR / "data" / "postmatch_automation" / "schedules"
 UPDATE_ROOT = BASE_DIR / "data" / "schedule_updates"
 FETCH_ROOT = BASE_DIR / "data" / "fetch_runs"
 POSTMATCH_QUEUE_PATH = BASE_DIR / "data" / "postmatch_automation" / "queue.json"
+PREDICTION_UNIVERSE_ROOT = BASE_DIR / "data" / "prediction_universe"
+PREDICTION_ROOT = BASE_DIR / "data" / "model_governance" / "predictions"
+TRUST_PATH = BASE_DIR / "data" / "prediction_quality" / "current_champion_trust.json"
+OVERDUE_RECOVERY_AGE = timedelta(hours=3)
+OVERDUE_RECOVERY_LOOKBACK = timedelta(days=14)
 FINAL = {"result_verified", "reviewed"}
 
 
 def fixture_kickoff(row: dict[str, Any]) -> datetime | None:
     return parse_datetime(f"{row.get('matchDate')}T{str(row.get('matchTime') or '')[:5]}:00+08:00")
+
+
+def canonical_universe_payload(
+    business_date: str,
+    universe_root: Path = PREDICTION_UNIVERSE_ROOT,
+) -> dict[str, Any] | None:
+    """Load the accepted Prediction Universe used by the formal prediction lane."""
+    path = Path(universe_root) / f"{business_date}.json"
+    try:
+        payload = load_json(path)
+    except (OSError, json.JSONDecodeError):
+        return None
+    if not isinstance(payload, dict):
+        return None
+    if str(payload.get("business_date") or "") != business_date:
+        return None
+    if payload.get("status") not in {"READY", "EMPTY_CONFIRMED"}:
+        return None
+    fixtures = payload.get("fixtures")
+    if not isinstance(fixtures, list):
+        return None
+    return {**payload, "matches": fixtures}
 
 
 def latest_schedule_payload(business_date: str, update_root: Path = UPDATE_ROOT, fetch_root: Path = FETCH_ROOT) -> dict[str, Any]:
@@ -148,9 +175,16 @@ def merge_schedule(existing: dict[str, Any], fresh: dict[str, Any], now: datetim
     return merged
 
 
-def sync_date(business_date: str, now: datetime, output_root: Path = SCHEDULE_ROOT,
-              update_root: Path = UPDATE_ROOT) -> dict[str, int]:
-    payload = latest_schedule_payload(business_date, update_root)
+def sync_date(
+    business_date: str,
+    now: datetime,
+    output_root: Path = SCHEDULE_ROOT,
+    update_root: Path = UPDATE_ROOT,
+    universe_root: Path = PREDICTION_UNIVERSE_ROOT,
+) -> dict[str, int]:
+    payload = canonical_universe_payload(business_date, universe_root)
+    if payload is None:
+        payload = latest_schedule_payload(business_date, update_root)
     output_root.mkdir(parents=True, exist_ok=True)
     created = updated = 0
     for row in payload.get("matches") or []:
@@ -194,13 +228,104 @@ def sync_date(business_date: str, now: datetime, output_root: Path = SCHEDULE_RO
     return {"fixtures": len(payload.get("matches") or []), "created": created, "updated": updated}
 
 
+def overdue_pending_records(
+    now: datetime,
+    trust_path: Path = TRUST_PATH,
+    prediction_root: Path = PREDICTION_ROOT,
+) -> list[dict[str, Any]]:
+    """Resolve overdue formal PENDING trust rows to their authoritative business dates."""
+    try:
+        trust = load_json(trust_path) or {}
+    except (OSError, json.JSONDecodeError):
+        return []
+    lower_bound = now - OVERDUE_RECOVERY_LOOKBACK
+    rows: list[dict[str, Any]] = []
+    for row in trust.get("history") or []:
+        if not isinstance(row, dict) or str(row.get("status") or "").upper() != "PENDING":
+            continue
+        kickoff = parse_datetime(row.get("kickoff_at"))
+        if kickoff is None or kickoff > now - OVERDUE_RECOVERY_AGE or kickoff < lower_bound:
+            continue
+        prediction_id = str(row.get("prediction_id") or "").strip()
+        if not prediction_id:
+            continue
+        try:
+            prediction = load_json(Path(prediction_root) / f"{prediction_id}.json") or {}
+        except (OSError, json.JSONDecodeError):
+            continue
+        business_date = str(prediction.get("business_date") or "").strip()
+        match_key = str(row.get("match_key") or prediction.get("match_key") or "").strip()
+        if len(business_date) != 10 or not match_key:
+            continue
+        rows.append({
+            "prediction_id": prediction_id,
+            "business_date": business_date,
+            "match_key": match_key,
+        })
+    return rows
+
+
+def recover_overdue_schedules(
+    now: datetime,
+    output_root: Path = SCHEDULE_ROOT,
+    update_root: Path = UPDATE_ROOT,
+    universe_root: Path = PREDICTION_UNIVERSE_ROOT,
+    trust_path: Path = TRUST_PATH,
+    prediction_root: Path = PREDICTION_ROOT,
+) -> dict[str, Any]:
+    overdue = overdue_pending_records(now, trust_path, prediction_root)
+    dates = sorted({row["business_date"] for row in overdue})
+    totals = {"fixtures": 0, "created": 0, "updated": 0}
+    for business_date in dates:
+        result = sync_date(business_date, now, output_root, update_root, universe_root)
+        for key in totals:
+            totals[key] += int(result.get(key) or 0)
+
+    rearmed = 0
+    for row in overdue:
+        path = Path(output_root) / f"{row['match_key'].replace(':', '_')}.json"
+        if not path.exists():
+            continue
+        try:
+            schedule = load_json(path) or {}
+        except (OSError, json.JSONDecodeError):
+            continue
+        if (
+            schedule.get("status") == "expired_unresolved"
+            and schedule.get("verification_issue") == "result_not_final"
+            and int(schedule.get("overdue_recovery_count") or 0) < 1
+        ):
+            schedule["overdue_recovery_previous_status"] = "expired_unresolved"
+            schedule["overdue_recovery_previous_error"] = schedule.get("last_error")
+            schedule["overdue_recovery_count"] = 1
+            schedule["overdue_recovered_at"] = now.isoformat()
+            schedule["status"] = "scheduled"
+            schedule["verification_attempts"] = 0
+            schedule.pop("terminal_reason", None)
+            schedule.pop("last_error", None)
+            path.write_text(json.dumps(schedule, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+            rearmed += 1
+
+    return {
+        "overdue_match_count": len(overdue),
+        "recovery_dates": dates,
+        "rearmed_terminal_count": rearmed,
+        **totals,
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--date")
+    parser.add_argument("--recover-overdue", action="store_true")
     args = parser.parse_args()
     now = datetime.now(SHANGHAI)
-    business_date = args.date or now.date().isoformat()
-    print(json.dumps(sync_date(business_date, now), ensure_ascii=False))
+    if args.recover_overdue:
+        payload = recover_overdue_schedules(now)
+    else:
+        business_date = args.date or now.date().isoformat()
+        payload = sync_date(business_date, now)
+    print(json.dumps(payload, ensure_ascii=False))
     return 0
 
 
