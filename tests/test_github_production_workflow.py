@@ -38,6 +38,8 @@ def test_deploy_pages_persists_mvp_durable_state_without_site():
         "data/model_governance/prediction_exclusions",
         "data/prospective",
         "data/prediction_quality/market_side_shadow_1",
+        "data/prediction_quality/current_champion_trust.json",
+        "data/prediction_quality/current_champion_trust.md",
         "data/prediction_dashboard",
         "data/product_runtime",
     ):

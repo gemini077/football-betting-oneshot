@@ -418,6 +418,7 @@ def _shell_metrics(page: Any) -> dict[str, Any]:
           const missingFragmentTargets = [...new Set(fragmentLinks)]
             .filter(id => !visible(document.getElementById(id)));
           const text = document.body.innerText || '';
+          const trustHistory = document.querySelector('#trust-history');
           const sizes = selector => {
             const element = document.querySelector(selector);
             return element && visible(element)
@@ -453,6 +454,9 @@ def _shell_metrics(page: Any) -> dict[str, Any]:
             forbiddenShellText: ['Dark mode', '9:41', '\u6536\u85cf', '\u901a\u77e5', '\u8d26\u6237'].filter(token => text.includes(token)),
             firstLayerJargon: ['1X2', 'Top3', 'Top-3', 'H\\A', 'H/A'].filter(token => text.includes(token)),
             dashboardAnalysisLinks: [...document.querySelectorAll('a[href="#analysis"]')].filter(visible).length,
+            trustHistoryVisible: visible(trustHistory),
+            trustHistoryRows: trustHistory ? [...trustHistory.querySelectorAll('[data-trust-history-row="true"]')].filter(visible).length : 0,
+            trustStatus: trustHistory ? trustHistory.getAttribute('data-trust-status') : null,
             closedBetaLinks: [...document.querySelectorAll('a[href="#closed-beta"]')].filter(visible).length,
             mobileDataLinks: [...document.querySelectorAll('.mobile-bottom a[href="#data-method"]')].filter(visible).length,
             tabTargets,
@@ -737,6 +741,10 @@ def _check_public_shell_and_responsive(browser: Any, base_url: str) -> dict[str,
             raise RuntimeError(f"{label} exposes first-layer jargon: {metrics['firstLayerJargon']}")
         if dashboard and metrics.get("dashboardAnalysisLinks"):
             raise RuntimeError(f"{label} exposes a missing dashboard analysis route")
+        if dashboard and not metrics.get("trustHistoryVisible"):
+            raise RuntimeError(f"{label} does not expose the current Champion trust history")
+        if dashboard and str(metrics.get("trustStatus") or "").upper() == "AVAILABLE" and not int(metrics.get("trustHistoryRows") or 0):
+            raise RuntimeError(f"{label} exposes an empty available trust history")
         if metrics.get("closedBetaLinks"):
             raise RuntimeError(f"{label} points the beginner guide at closed beta")
         if metrics.get("missingConditionalTabTargets"):
@@ -797,8 +805,13 @@ def _check_public_shell_and_responsive(browser: Any, base_url: str) -> dict[str,
         dashboard_metrics = _shell_metrics(page)
         assert_shell(dashboard_metrics, "dashboard desktop", dashboard=True)
         checks["dashboard_shell_desktop"] = "VERIFIED"
-        if _visible_count(page, "#historical-results") != 1 or _visible_count(page, "#beginner-help") != 1:
-            raise RuntimeError("dashboard does not expose stable history and beginner-help destinations")
+        if (
+            _visible_count(page, "#trust-history") != 1
+            or _visible_count(page, "#historical-results") != 1
+            or _visible_count(page, "#beginner-help") != 1
+        ):
+            raise RuntimeError("dashboard does not expose stable trust, history, and beginner-help destinations")
+        checks["dashboard_trust_history"] = "VERIFIED"
         checks["dashboard_history_and_help_targets"] = "VERIFIED"
 
         page.goto(f"{base_url}/visual-fixtures/detail-current-frozen.html", wait_until="networkidle", timeout=30_000)
@@ -821,7 +834,7 @@ def _check_public_shell_and_responsive(browser: Any, base_url: str) -> dict[str,
         assert_scaled(
             mobile_page,
             "dashboard mobile",
-            [".matches-head h1", ".matchup-name", ".compact-prob-values", ".recommendation-context"],
+            [".matches-head h1", ".matchup-name", ".compact-prob-values", ".recommendation-context", ".trust-history h2"],
         )
         checks["dashboard_mobile_200_percent_text"] = "VERIFIED"
 
