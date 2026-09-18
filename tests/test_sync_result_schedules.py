@@ -2,6 +2,7 @@ import json
 from datetime import datetime, timedelta, timezone
 
 import sync_result_schedules
+from match_identity import canonical_match_id
 from sync_result_schedules import recover_overdue_schedules, sync_date
 
 
@@ -166,19 +167,24 @@ def test_overdue_recovery_backfills_missing_schedule_and_rearms_result_not_final
             "nowscoreId": 3003885,
         }],
     }, ensure_ascii=False), encoding="utf-8")
+    match_key = canonical_match_id({
+        "home": "利物浦",
+        "away": "富勒姆",
+        "kickoff_local": "2026-09-12T22:00:00+08:00",
+    })
     predictions = tmp_path / "predictions"
     predictions.mkdir()
     (predictions / "FBOS-PRED-OLD.json").write_text(json.dumps({
         "prediction_id": "FBOS-PRED-OLD",
         "business_date": "2026-09-12",
-        "match_key": "FBOS-202609122200-test",
+        "match_key": match_key,
     }), encoding="utf-8")
     trust = tmp_path / "trust.json"
     trust.write_text(json.dumps({
         "history": [{
             "status": "PENDING",
             "prediction_id": "FBOS-PRED-OLD",
-            "match_key": "FBOS-202609122200-test",
+            "match_key": match_key,
             "kickoff_at": "2026-09-12T14:00:00Z",
         }]
     }), encoding="utf-8")
