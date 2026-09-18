@@ -33,9 +33,9 @@ except ImportError:  # pragma: no cover - exercised by the direct CLI path.
     from current_serving_state import resolve_current_job_for_match
 
 try:
-    from .match_analysis_article import build_match_analysis_article
+    from .match_analysis_article import build_late_briefing, build_match_analysis_article
 except ImportError:  # pragma: no cover - exercised by the direct CLI path.
-    from match_analysis_article import build_match_analysis_article
+    from match_analysis_article import build_late_briefing, build_match_analysis_article
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -1446,6 +1446,14 @@ def assemble_match_analysis(
             sidecar=sidecar,
         )
     contract["match_analysis_article"] = build_match_analysis_article(
+        serving_prediction,
+        snapshot or {},
+        sidecar or {},
+        fixture.get("source_fixture") or fixture,
+        contract.get("identity"),
+    )
+    contract["late_briefing"] = build_late_briefing(
+        contract["match_analysis_article"],
         serving_prediction,
         snapshot or {},
         sidecar or {},

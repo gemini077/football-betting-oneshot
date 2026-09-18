@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import copy
+import hashlib
+import json
 from collections.abc import Mapping
 from typing import Any, TypedDict
 
@@ -11,6 +14,7 @@ try:  # Keep direct script imports and package imports working.
         SIDES,
         _first,
         _number,
+        _parse_datetime,
         _round,
         _text,
         project_match_analysis_evidence,
@@ -21,6 +25,7 @@ except ImportError:  # pragma: no cover - direct CLI compatibility.
         SIDES,
         _first,
         _number,
+        _parse_datetime,
         _round,
         _text,
         project_match_analysis_evidence,
@@ -28,7 +33,27 @@ except ImportError:  # pragma: no cover - direct CLI compatibility.
 
 
 CONTRACT_VERSION = "match_analysis_article.v2"
+EVIDENCE_ENVELOPE_VERSION = "match_analysis_evidence_envelope.v1"
+LATE_BRIEFING_CONTRACT_VERSION = "match_analysis_late_briefing.v1"
 PROCESS_METRICS = ("shots_faced", "corners", "possession")
+_EVIDENCE_STATUSES = {"VERIFIED", "MISSING", "STALE", "DEGRADED", "NOT_COVERED"}
+_PREMATCH_EVIDENCE_FIELDS = (
+    "recent_form",
+    "recent_process_context",
+    "future_schedule_rest",
+    "market_context",
+    "lineup_state",
+    "injuries",
+    "suspensions",
+    "availability_summary",
+    "coach",
+    "referee",
+    "h2h",
+    "competition_standings_stage",
+    "standings_context",
+    "technical_stats",
+    "panlu",
+)
 OUTCOME_LABELS = {"home": "主胜", "draw": "平局", "away": "客胜"}
 SIDE_LABELS = {"home": "主队", "away": "客队"}
 
@@ -50,11 +75,369 @@ _ARTICLE_PLAN_DIRECTIONS = set(OUTCOMES) | {"mixed", "neutral"}
 _ARTICLE_PLAN_STRENGTHS = {"strong", "moderate", "weak"}
 
 
-def render_article_plan(plan: Any) -> ArticlePlan:
+def _stable_hash(value: Any) -> str:
+    payload = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str)
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _iso_datetime(value: Any) -> str | None:
+    parsed = _parse_datetime(value)
+    return parsed.isoformat() if parsed else None
+
+
+def _latest_datetime(*values: Any) -> tuple[Any, str | None]:
+    candidates = []
+    for value in values:
+        parsed = _parse_datetime(value)
+        if parsed:
+            candidates.append((parsed, parsed.isoformat()))
+    return max(candidates, key=lambda item: item[0]) if candidates else (None, None)
+
+
+def _article_temporal_context(
+    prediction: Mapping[str, Any],
+    input_snapshot: Mapping[str, Any],
+    football_evidence: Mapping[str, Any],
+    accepted_fixture: Mapping[str, Any],
+) -> tuple[str | None, str | None]:
+    source = football_evidence.get("source") if isinstance(football_evidence.get("source"), Mapping) else {}
+    nested_input = input_snapshot.get("input") if isinstance(input_snapshot.get("input"), Mapping) else {}
+    cutoff = None
+    for mapping in (prediction, source, football_evidence, input_snapshot, nested_input):
+        for key in ("freeze_created_at", "prediction_frozen_at", "frozen_at", "source_cutoff_at", "captured_at", "prediction_created_at"):
+            candidate = mapping.get(key) if isinstance(mapping, Mapping) else None
+            if _parse_datetime(candidate):
+                cutoff = candidate
+                break
+        if cutoff:
+            break
+    kickoff = _first(prediction, "kickoff_at", "kickoff", "match_datetime")
+    kickoff = kickoff or _first(accepted_fixture, "kickoff_at", "kickoff", "matchDate")
+    return _iso_datetime(cutoff), _iso_datetime(kickoff)
+
+
+def _subject_id(
+    prediction: Mapping[str, Any],
+    football_evidence: Mapping[str, Any],
+    accepted_fixture: Mapping[str, Any],
+    projection: Mapping[str, Any],
+) -> str:
+    identity = projection.get("identity") if isinstance(projection.get("identity"), Mapping) else {}
+    target = football_evidence.get("state_memory", {}).get("target_fixture") if isinstance(football_evidence.get("state_memory"), Mapping) else {}
+    for value in (
+        identity.get("provider_match_id"),
+        _first(target, "source_fixture_id", "provider_match_id", "match_id"),
+        _first(accepted_fixture, "nowscoreId", "matchId", "match_id"),
+        _first(prediction, "match_id", "match_key"),
+    ):
+        text = _text(value)
+        if text:
+            return f"match:{text}"
+    return "match:unresolved"
+
+
+def _field_source(field: Mapping[str, Any], provider: Any = "nowscore") -> str:
+    surface = _text(field.get("surface")) or _text(field.get("source"))
+    return f"{provider}:{surface}" if surface else str(provider)
+
+
+def _field_as_of(field: Mapping[str, Any], source: Mapping[str, Any]) -> str | None:
+    _, latest = _latest_datetime(
+        field.get("as_of"),
+        field.get("source_update_at"),
+        field.get("observed_at"),
+        source.get("source_update_at"),
+        source.get("observed_at"),
+    )
+    return latest
+
+
+def _field_status(
+    field: Mapping[str, Any] | None,
+    *,
+    cutoff_at: str | None,
+    kickoff_at: str | None,
+) -> tuple[str, bool, str]:
+    if not isinstance(field, Mapping):
+        return "NOT_COVERED", False, "FIELD_NOT_COVERED"
+    explicit = _text(field.get("status") or field.get("freshness"))
+    explicit = explicit.upper() if explicit else None
+    state = (_text(field.get("state")) or "").upper()
+    if explicit in _EVIDENCE_STATUSES and explicit != "VERIFIED":
+        return explicit, False, f"EXPLICIT_{explicit}"
+    if state in {"ABSENT", "SECTION_PRESENT_EMPTY"}:
+        return "MISSING", False, state
+    if state in {"ACCESS_GATED", "PARSE_UNCERTAIN", "CONFLICT"}:
+        return "DEGRADED", False, "DEGRADED_EVIDENCE"
+    if state not in {"PRESENT", ""} and explicit != "VERIFIED":
+        return "NOT_COVERED", False, "UNKNOWN_FIELD_STATE"
+    if field.get("value") is None:
+        return "MISSING", False, "VALUE_MISSING"
+    if (_text(field.get("semantic_state")) or "").upper() == "UNLABELLED":
+        return "DEGRADED", False, "SEMANTICS_UNLABELLED"
+    observed = _parse_datetime(field.get("observed_at"))
+    source_update = _parse_datetime(field.get("source_update_at"))
+    cutoff = _parse_datetime(cutoff_at)
+    kickoff = _parse_datetime(kickoff_at)
+    for timestamp, reason in ((observed, "OBSERVED_AFTER_CUTOFF"), (source_update, "SOURCE_UPDATED_AFTER_CUTOFF")):
+        if timestamp and cutoff and timestamp > cutoff:
+            return "STALE", False, reason
+        if timestamp and kickoff and timestamp >= kickoff:
+            return "STALE", False, "POST_KICKOFF_EVIDENCE"
+    if field.get("prematch_eligible") is False:
+        return "STALE", False, "PREMATCH_INELIGIBLE"
+    value = field.get("value")
+    rows = []
+    if isinstance(value, Mapping):
+        for key in ("records", "items", "players"):
+            if isinstance(value.get(key), list):
+                rows.extend(row for row in value[key] if isinstance(row, Mapping))
+                break
+    for row in rows:
+        row_freshness = (_text(row.get("freshness")) or "").upper()
+        if row_freshness in {"STALE", "DEGRADED"}:
+            return "STALE" if row_freshness == "STALE" else "DEGRADED", False, f"ROW_{row_freshness}"
+        timestamp = _parse_datetime(_first(row, "as_of", "observed_at", "source_update_at"))
+        if timestamp and cutoff and timestamp > cutoff:
+            return "STALE", False, "ROW_AFTER_CUTOFF"
+        if timestamp and kickoff and timestamp >= kickoff:
+            return "STALE", False, "ROW_POST_KICKOFF"
+    if field.get("prematch_eligible") is None and not (observed or source_update):
+        return "DEGRADED", False, "TEMPORAL_METADATA_MISSING"
+    return "VERIFIED", True, "ADMISSIBLE_PREMATCH_EVIDENCE"
+
+
+def _envelope_item(
+    evidence_id: str,
+    subject_id: str,
+    evidence_type: str,
+    field: Mapping[str, Any] | None,
+    *,
+    source: Mapping[str, Any],
+    cutoff_at: str | None,
+    kickoff_at: str | None,
+    fallback_value: Any = None,
+    fallback_source: str | None = None,
+) -> dict[str, Any]:
+    status, admissible, reason = _field_status(field, cutoff_at=cutoff_at, kickoff_at=kickoff_at)
+    value = field.get("value") if isinstance(field, Mapping) else fallback_value
+    if field is None and fallback_value is not None:
+        status, admissible, reason = "VERIFIED", True, "PROJECTED_PREMATCH_EVIDENCE"
+    as_of = _field_as_of(field or {}, source)
+    if status == "VERIFIED" and as_of is None and fallback_value is None:
+        status, admissible, reason = "DEGRADED", False, "TEMPORAL_METADATA_MISSING"
+    if status != "VERIFIED":
+        value = None
+    if as_of is None and fallback_value is not None:
+        as_of = cutoff_at
+    freshness = {
+        "VERIFIED": "fresh",
+        "STALE": "stale",
+        "DEGRADED": "degraded",
+        "MISSING": "missing",
+        "NOT_COVERED": "not_covered",
+    }[status]
+    return {
+        "evidence_id": evidence_id,
+        "subject_id": subject_id,
+        "type": evidence_type,
+        "value": copy.deepcopy(value),
+        "source": fallback_source or _field_source(field or {}, source.get("provider") or "nowscore"),
+        "observed_at": _text((field or {}).get("observed_at")) or _text(source.get("observed_at")),
+        "as_of": as_of,
+        "freshness": freshness,
+        "status": status,
+        "admissible": admissible,
+        "reason": reason,
+    }
+
+
+def _prediction_envelope_item(
+    prediction: Mapping[str, Any],
+    *,
+    subject_id: str,
+    cutoff_at: str | None,
+    kickoff_at: str | None,
+) -> dict[str, Any]:
+    probabilities = prediction.get("probabilities")
+    if not isinstance(probabilities, Mapping):
+        output = prediction.get("prediction_output")
+        probabilities = output.get("probabilities") if isinstance(output, Mapping) else None
+    valid = isinstance(probabilities, Mapping) and all(
+        _number(probabilities.get(outcome)) is not None for outcome in OUTCOMES
+    )
+    prediction_field = {
+        "state": "PRESENT" if valid else "ABSENT",
+        "value": {
+            "probabilities": copy.deepcopy(probabilities),
+            "top_scores": copy.deepcopy(prediction.get("top_scores") or []),
+        } if valid else None,
+        "observed_at": _first(prediction, "freeze_created_at", "prediction_frozen_at", "prediction_created_at"),
+        "source_update_at": None,
+        "prematch_eligible": True if valid else False,
+    }
+    item = _envelope_item(
+        "prediction_record.probabilities_and_score_cluster",
+        subject_id,
+        "frozen_prediction",
+        prediction_field,
+        source={"provider": "prediction_record"},
+        cutoff_at=cutoff_at,
+        kickoff_at=kickoff_at,
+        fallback_source="prediction_record",
+    )
+    item["prediction_id"] = _text(prediction.get("prediction_id"))
+    item["prediction_sha256"] = _text(prediction.get("prediction_sha256"))
+    return item
+
+
+def _recent_state_fallback_field(
+    football_evidence: Mapping[str, Any],
+    value: Any,
+    cutoff_at: str | None,
+    kickoff_at: str | None,
+) -> dict[str, Any] | None:
+    state_memory = football_evidence.get("state_memory")
+    history = state_memory.get("history") if isinstance(state_memory, Mapping) else None
+    if not isinstance(history, Mapping) or not isinstance(value, Mapping):
+        return None
+    timestamps = []
+    for side in SIDES:
+        rows = history.get(f"{side}_team")
+        if not isinstance(rows, list):
+            continue
+        for row in rows:
+            if not isinstance(row, Mapping):
+                continue
+            timestamp = _parse_datetime(_first(row, "source_cutoff_at", "source_update_at", "captured_at"))
+            if not timestamp:
+                return None
+            cutoff = _parse_datetime(cutoff_at)
+            kickoff = _parse_datetime(kickoff_at)
+            if (cutoff and timestamp > cutoff) or (kickoff and timestamp >= kickoff):
+                return None
+            timestamps.append(timestamp)
+    if not timestamps:
+        return None
+    return {
+        "state": "PRESENT",
+        "value": value,
+        "surface": "state_memory",
+        "observed_at": max(timestamps).isoformat(timespec="seconds"),
+        "source_update_at": None,
+        "prematch_eligible": True,
+    }
+
+
+def _current_availability_value(value: Any) -> Any:
+    if not isinstance(value, Mapping):
+        return value
+    for key in ("records", "items", "players"):
+        rows = value.get(key)
+        if not isinstance(rows, list):
+            continue
+        latest: dict[str, tuple[Any, int, Mapping[str, Any]]] = {}
+        for index, row in enumerate(rows):
+            if not isinstance(row, Mapping):
+                continue
+            subject = _text(_first(row, "player_id", "canonical_player_id", "player_name", "name"))
+            if not subject:
+                continue
+            timestamp = _parse_datetime(_first(row, "as_of", "observed_at", "source_update_at"))
+            key_value = subject.casefold()
+            previous = latest.get(key_value)
+            if previous is None or (timestamp or _parse_datetime("1970-01-01"), index) >= (previous[0] or _parse_datetime("1970-01-01"), previous[1]):
+                latest[key_value] = (timestamp, index, row)
+        if not latest:
+            return value
+        current_rows = [row for _, _, row in sorted(latest.values(), key=lambda item: item[1])]
+        return {**value, key: copy.deepcopy(current_rows)}
+    return value
+
+
+def build_evidence_envelope(
+    prediction: Mapping[str, Any] | None,
+    input_snapshot: Mapping[str, Any] | None,
+    football_evidence: Mapping[str, Any] | None,
+    accepted_fixture: Mapping[str, Any] | None,
+    *,
+    projection: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Bind article references to admissible, immutable prematch evidence."""
+
+    prediction = prediction if isinstance(prediction, Mapping) else {}
+    input_snapshot = input_snapshot if isinstance(input_snapshot, Mapping) else {}
+    football_evidence = football_evidence if isinstance(football_evidence, Mapping) else {}
+    accepted_fixture = accepted_fixture if isinstance(accepted_fixture, Mapping) else {}
+    projection = projection if isinstance(projection, Mapping) else {}
+    source = football_evidence.get("source") if isinstance(football_evidence.get("source"), Mapping) else {}
+    fields = football_evidence.get("prematch_evidence", {}).get("fields") if isinstance(football_evidence.get("prematch_evidence"), Mapping) else {}
+    fields = fields if isinstance(fields, Mapping) else {}
+    cutoff_at, kickoff_at = _article_temporal_context(prediction, input_snapshot, football_evidence, accepted_fixture)
+    subject_id = _subject_id(prediction, football_evidence, accepted_fixture, projection)
+    items = [_prediction_envelope_item(prediction, subject_id=subject_id, cutoff_at=cutoff_at, kickoff_at=kickoff_at)]
+    for field_name in _PREMATCH_EVIDENCE_FIELDS:
+        fallback = None
+        field = fields.get(field_name)
+        if field_name == "recent_form" and not isinstance(field, Mapping):
+            coverage = projection.get("coverage", {}).get("atoms", {}).get("recent_state") if isinstance(projection.get("coverage"), Mapping) else {}
+            recent_state = projection.get("recent_state")
+            if isinstance(coverage, Mapping) and coverage.get("status") == "AVAILABLE" and isinstance(recent_state, Mapping):
+                field = _recent_state_fallback_field(football_evidence, recent_state, cutoff_at, kickoff_at)
+                fallback = recent_state if field is not None else None
+        if isinstance(field, Mapping) and field_name in {"injuries", "suspensions", "availability_summary"} and field.get("state") == "PRESENT":
+            field = {**field, "value": _current_availability_value(field.get("value"))}
+        items.append(
+            _envelope_item(
+                f"football_evidence.{field_name}",
+                subject_id,
+                field_name,
+                field if isinstance(field, Mapping) else None,
+                source=source,
+                cutoff_at=cutoff_at,
+                kickoff_at=kickoff_at,
+                fallback_value=fallback,
+                fallback_source="state_memory" if fallback is not None else None,
+            )
+        )
+    return {
+        "contract_version": EVIDENCE_ENVELOPE_VERSION,
+        "subject_id": subject_id,
+        "article_cutoff": cutoff_at,
+        "article_cutoff_at": cutoff_at,
+        "kickoff_at": kickoff_at,
+        "items": items,
+    }
+
+
+def _envelope_by_id(envelope: Mapping[str, Any] | None) -> dict[str, Mapping[str, Any]]:
+    items = envelope.get("items") if isinstance(envelope, Mapping) else None
+    return {
+        str(item.get("evidence_id")): item
+        for item in items or []
+        if isinstance(item, Mapping) and _text(item.get("evidence_id"))
+    }
+
+
+def _bind_article_plan(plan: ArticlePlan, envelope: Mapping[str, Any]) -> ArticlePlan:
+    by_id = _envelope_by_id(envelope)
+    bound: ArticlePlan = []
+    for item in plan:
+        refs = item.get("evidence_refs") or []
+        if not refs or any(not isinstance(ref, str) or not by_id.get(ref, {}).get("admissible") for ref in refs):
+            continue
+        bound_item = copy.deepcopy(item)
+        bound_item["order"] = len(bound) + 1
+        bound.append(bound_item)
+    return bound
+
+
+def render_article_plan(plan: Any, evidence_envelope: Mapping[str, Any] | None = None) -> ArticlePlan:
     """Validate and normalize the article plan at the article-to-HTML boundary."""
 
     if not isinstance(plan, list) or not all(isinstance(item, Mapping) for item in plan):
         return []
+    envelope_by_id = _envelope_by_id(evidence_envelope) if evidence_envelope is not None else None
     rendered: ArticlePlan = []
     for item in sorted(plan, key=lambda value: value.get("order", 0)):
         role = _text(item.get("role"))
@@ -75,6 +458,8 @@ def render_article_plan(plan: Any) -> ArticlePlan:
             or not all(isinstance(ref, str) and ref.strip() for ref in refs)
             or not isinstance(order, int)
             or order != len(rendered) + 1
+            or envelope_by_id is not None
+            and any(not envelope_by_id.get(ref, {}).get("admissible") for ref in refs)
         ):
             return []
         if role in {"thesis", "recent_process"} and direction in SIDES and subject not in text:
@@ -772,6 +1157,7 @@ def build_match_analysis_article(
         "article_plan": [],
         "paragraphs": [],
         "source_refs": [],
+        "evidence_envelope": build_evidence_envelope(prediction, input_snapshot, football_evidence, accepted_fixture),
     }
     if not prediction or not football_evidence:
         return empty
@@ -824,6 +1210,14 @@ def build_match_analysis_article(
         identifiability=identifiability,
         forecast_text=forecast_text,
     )
+    evidence_envelope = build_evidence_envelope(
+        prediction,
+        input_snapshot,
+        football_evidence,
+        accepted_fixture,
+        projection=projection,
+    )
+    article_plan = _bind_article_plan(article_plan, evidence_envelope)
     source_refs: list[str] = []
     for item in article_plan:
         for ref in item["evidence_refs"]:
@@ -832,7 +1226,7 @@ def build_match_analysis_article(
     headline = article_plan[0]["text"] if article_plan else ""
     return {
         "contract_version": CONTRACT_VERSION,
-        "status": "AVAILABLE",
+        "status": "AVAILABLE" if article_plan else "OMITTED",
         "headline": headline,
         "article_plan": article_plan,
         "paragraphs": article_plan,
@@ -847,7 +1241,246 @@ def build_match_analysis_article(
         "future_schedule_rest": future,
         "forecast": forecast,
         "source_refs": source_refs,
+        "evidence_envelope": evidence_envelope,
     }
 
 
-__all__ = ["CONTRACT_VERSION", "build_match_analysis_article"]
+def _lineup_field(football_evidence: Mapping[str, Any]) -> Mapping[str, Any] | None:
+    prematch = football_evidence.get("prematch_evidence")
+    fields = prematch.get("fields") if isinstance(prematch, Mapping) else None
+    field = fields.get("lineup_state") if isinstance(fields, Mapping) else None
+    return field if isinstance(field, Mapping) else None
+
+
+def _lineup_groups(value: Any) -> dict[str, dict[str, Any]]:
+    groups: dict[str, dict[str, Any]] = {}
+    if isinstance(value, Mapping):
+        for side in SIDES:
+            raw = value.get(side) or value.get(f"{side}_lineup") or value.get(f"{side}_team")
+            if isinstance(raw, Mapping):
+                groups[side] = {
+                    "team_id": _first(raw, "team_id", "id", "canonical_team_id"),
+                    "team_name": _first(raw, "team_name", "name"),
+                    "players": raw.get("players") if isinstance(raw.get("players"), list) else raw.get("lineup"),
+                    "player_count": _first(raw, "player_count", "count"),
+                }
+            elif isinstance(raw, list):
+                groups[side] = {"team_id": None, "team_name": None, "players": raw, "player_count": len(raw)}
+        rows = value.get("teams") or value.get("lineups")
+        if isinstance(rows, list):
+            for row in rows:
+                if not isinstance(row, Mapping):
+                    continue
+                side = _text(row.get("side")).lower()
+                if side not in SIDES or side in groups and groups[side].get("players"):
+                    continue
+                groups[side] = {
+                    "team_id": _first(row, "team_id", "id", "canonical_team_id"),
+                    "team_name": _first(row, "team_name", "name"),
+                    "players": row.get("players") if isinstance(row.get("players"), list) else row.get("lineup"),
+                    "player_count": _first(row, "player_count", "count"),
+                }
+        players = value.get("players")
+        if isinstance(players, list):
+            for player in players:
+                if not isinstance(player, Mapping):
+                    continue
+                side = _text(player.get("side")).lower()
+                if side not in SIDES:
+                    continue
+                groups.setdefault(side, {"team_id": None, "team_name": None, "players": [], "player_count": None})
+                groups[side]["players"].append(player)
+    elif isinstance(value, list):
+        for player in value:
+            if not isinstance(player, Mapping):
+                continue
+            side = _text(player.get("side")).lower()
+            if side not in SIDES:
+                continue
+            groups.setdefault(side, {"team_id": None, "team_name": None, "players": [], "player_count": None})
+            groups[side]["players"].append(player)
+    return groups
+
+
+def _confirmed_lineup(
+    value: Any,
+    identity: Mapping[str, Any],
+) -> list[dict[str, Any]] | None:
+    groups = _lineup_groups(value)
+    result: list[dict[str, Any]] = []
+    for side in SIDES:
+        expected_id = _text(identity.get(f"{side}_team_id"))
+        expected_name = _text(identity.get(f"{side}_team_name"))
+        group = groups.get(side) or {}
+        supplied_id = _text(group.get("team_id"))
+        supplied_name = _text(group.get("team_name"))
+        if supplied_id and expected_id and supplied_id != expected_id:
+            return None
+        if supplied_name and expected_name and supplied_name.casefold() != expected_name.casefold():
+            return None
+        players: list[dict[str, Any]] = []
+        seen: set[str] = set()
+        raw_players = group.get("players")
+        if raw_players is not None and not isinstance(raw_players, list):
+            return None
+        for player in raw_players or []:
+            if not isinstance(player, Mapping):
+                return None
+            player_side = _text(player.get("side"))
+            if player_side and player_side.casefold() != side:
+                return None
+            player_team_id = _text(_first(player, "team_id", "canonical_team_id"))
+            if player_team_id and expected_id and player_team_id != expected_id:
+                return None
+            if player.get("starter") is False or player.get("is_starter") is False or player.get("bench") is True:
+                continue
+            player_id = _text(_first(player, "player_id", "id", "canonical_player_id"))
+            player_name = _text(_first(player, "player_name", "name", "display_name"))
+            if not player_id and not player_name:
+                return None
+            key = f"id:{player_id}" if player_id else f"name:{player_name.casefold()}"
+            if key in seen:
+                return None
+            seen.add(key)
+            players.append(
+                {
+                    "player_id": player_id,
+                    "player_name": player_name,
+                    "side": side,
+                }
+            )
+        count = len(players)
+        if not players:
+            count = _first(group, "player_count", "count")
+            if count in (None, ""):
+                return None
+            try:
+                count = int(count)
+            except (TypeError, ValueError):
+                return None
+            if count <= 0:
+                return None
+        result.append(
+            {
+                "side": side,
+                "team_id": supplied_id or expected_id,
+                "team_name": supplied_name or expected_name,
+                "player_count": count,
+                "players": players,
+            }
+        )
+    return result if len(result) == 2 else None
+
+
+def build_late_briefing(
+    base_article: Mapping[str, Any] | None,
+    prediction: Mapping[str, Any] | None,
+    input_snapshot: Mapping[str, Any] | None,
+    football_evidence: Mapping[str, Any] | None,
+    accepted_fixture: Mapping[str, Any] | None,
+    identity: Mapping[str, Any] | None = None,
+    *,
+    evidence_envelope: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Build an independent confirmed-lineup brief without touching frozen inputs."""
+
+    base_article = base_article if isinstance(base_article, Mapping) else {}
+    prediction = prediction if isinstance(prediction, Mapping) else {}
+    input_snapshot = input_snapshot if isinstance(input_snapshot, Mapping) else {}
+    football_evidence = football_evidence if isinstance(football_evidence, Mapping) else {}
+    accepted_fixture = accepted_fixture if isinstance(accepted_fixture, Mapping) else {}
+    identity = identity if isinstance(identity, Mapping) else {}
+    envelope = evidence_envelope if isinstance(evidence_envelope, Mapping) else base_article.get("evidence_envelope")
+    if not isinstance(envelope, Mapping):
+        envelope = build_evidence_envelope(prediction, input_snapshot, football_evidence, accepted_fixture)
+    base_hash = _stable_hash(base_article)
+    prediction_hash = _text(prediction.get("prediction_sha256")) or _stable_hash(prediction)
+    prediction_ref = _text(prediction.get("prediction_id")) or f"prediction:{prediction_hash}"
+    common = {
+        "contract_version": LATE_BRIEFING_CONTRACT_VERSION,
+        "kind": "LateBriefing",
+        "base_article_ref": f"match_analysis_article:{base_hash}",
+        "base_article_sha256": base_hash,
+        "formal_prediction_ref": prediction_ref,
+        "formal_prediction_sha256": prediction_hash,
+        "evidence_refs": ["football_evidence.lineup_state"],
+    }
+    omitted = {**common, "status": "OMITTED", "reason": "CONFIRMED_LINEUP_UNAVAILABLE"}
+    if base_article.get("status") != "AVAILABLE":
+        omitted["reason"] = "BASE_ARTICLE_UNAVAILABLE"
+        return omitted
+    by_id = _envelope_by_id(envelope)
+    lineup_item = by_id.get("football_evidence.lineup_state")
+    field = _lineup_field(football_evidence)
+    semantic = (_text((field or {}).get("semantic_state")) or "").upper()
+    value = field.get("value") if isinstance(field, Mapping) else None
+    value_semantic = ""
+    if semantic != "CONFIRMED" and isinstance(value, Mapping):
+        semantic = (_text(value.get("semantic_state")) or _text(value.get("status")) or "").upper()
+    elif isinstance(value, Mapping):
+        value_semantic = (_text(value.get("semantic_state")) or _text(value.get("status")) or "").upper()
+    if not lineup_item or lineup_item.get("status") != "VERIFIED" or not lineup_item.get("admissible") or semantic != "CONFIRMED" or value_semantic in {"PREDICTED", "EXPECTED", "PROBABLE"}:
+        omitted["reason"] = "LINEUP_NOT_CONFIRMED" if semantic in {"PREDICTED", "EXPECTED", "PROBABLE", "UNLABELLED"} else omitted["reason"]
+        return omitted
+    confirmed = _confirmed_lineup(value, identity)
+    if confirmed is None:
+        omitted["reason"] = "LINEUP_IDENTITY_AMBIGUOUS"
+        return omitted
+    claims = [
+        {
+            "type": "confirmed_starting_xi",
+            "subject_id": f"{envelope.get('subject_id', 'match:unresolved')}:team:{team.get('team_id') or team.get('side')}",
+            "status": "VERIFIED",
+            "value": team,
+            "evidence_refs": ["football_evidence.lineup_state"],
+        }
+        for team in confirmed
+    ]
+    updates = []
+    raw_updates = None
+    if isinstance(value, Mapping):
+        raw_updates = value.get("assumption_updates") or value.get("changes") or value.get("material_changes")
+    if isinstance(raw_updates, list):
+        for update in raw_updates:
+            if not isinstance(update, Mapping):
+                continue
+            status = (_text(update.get("status")) or "").upper()
+            status = "MATERIALLY_CHANGED" if status in {"CHANGED", "MATERIAL_CHANGE"} else status
+            if status not in {"SUPPORTED", "MATERIALLY_CHANGED"}:
+                continue
+            updates.append(
+                {
+                    "status": status,
+                    "subject_id": _text(update.get("subject_id")) or envelope.get("subject_id"),
+                    "text": _text(update.get("text")) or status,
+                    "evidence_refs": ["football_evidence.lineup_state"],
+                }
+            )
+    if not updates:
+        updates = [
+            {
+                "status": "SUPPORTED",
+                "subject_id": envelope.get("subject_id"),
+                "text": "Confirmed lineup evidence is available; the frozen base article remains unchanged.",
+                "evidence_refs": ["football_evidence.lineup_state"],
+            }
+        ]
+    return {
+        **common,
+        "status": "AVAILABLE",
+        "lineup_status": "CONFIRMED",
+        "confirmed_lineup": confirmed,
+        "claims": claims,
+        "assumption_updates": updates,
+    }
+
+
+__all__ = [
+    "CONTRACT_VERSION",
+    "EVIDENCE_ENVELOPE_VERSION",
+    "LATE_BRIEFING_CONTRACT_VERSION",
+    "build_evidence_envelope",
+    "build_late_briefing",
+    "build_match_analysis_article",
+    "render_article_plan",
+]
