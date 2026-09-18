@@ -30,6 +30,7 @@ try:
     from .match_analysis_evidence_binding import (
         LATE_BRIEFING_CONTRACT_VERSION,
         article_base_hash,
+        base_article_evidence,
         bind_article_plan,
         build_evidence_envelope,
         build_late_briefing,
@@ -38,6 +39,7 @@ except ImportError:  # pragma: no cover - direct CLI compatibility.
     from match_analysis_evidence_binding import (
         LATE_BRIEFING_CONTRACT_VERSION,
         article_base_hash,
+        base_article_evidence,
         bind_article_plan,
         build_evidence_envelope,
         build_late_briefing,
@@ -237,8 +239,7 @@ def _process_projection(evidence: Mapping[str, Any]) -> dict[str, Any] | None:
                     continue
                 near3, near10 = _number(row.get("near3")), _number(row.get("near10"))
                 if near3 is not None or near10 is not None:
-                    rows[side] = {"near3": _round(near3), "near10": _round(near10)}
-            if len(rows) == 2:
+                    rows[side] = {"near3": _round(near3), "near10": _round(near10)}            if len(rows) == 2:
                 cross_checks[name] = rows
     if cross_checks:
         projected["goal_cross_checks"] = cross_checks
@@ -476,7 +477,6 @@ def _format_number(value: Any) -> str:
 def _format_percent(value: Any) -> str:
     number = _number(value)
     return "未知" if number is None else f"{number * 100:.0f}%"
-
 
 def _team_name(identity: Mapping[str, Any], side: str) -> str:
     return _text(identity.get(side)) or SIDE_LABELS[side]
@@ -717,8 +717,7 @@ def _build_article_plan(
         recent_refs.append("football_evidence.future_schedule_rest")
     counter_refs: list[str] = []
     if _text(outlier.get("status")) == "PRESENT":
-        counter_refs.append("football_evidence.recent_form")
-    if result_direction and process_direction and result_direction != process_direction and result_direction != "draw":
+        counter_refs.append("football_evidence.recent_form")    if result_direction and process_direction and result_direction != process_direction and result_direction != "draw":
         counter_refs.append("football_evidence.recent_process_context")
     if market_relationship == "conflicting":
         counter_refs.append("football_evidence.market_context")
@@ -789,6 +788,10 @@ def build_match_analysis_article(
         football_evidence,
         accepted_fixture,
     )
+    frozen_evidence = base_article_evidence(
+        football_evidence,
+        evidence_envelope,
+    )
     empty = {
         "contract_version": CONTRACT_VERSION,
         "status": "OMITTED",
@@ -807,20 +810,20 @@ def build_match_analysis_article(
     if not prediction or not football_evidence:
         return empty
     try:
-        projection = project_match_analysis_evidence(prediction, input_snapshot, football_evidence, accepted_fixture)
+        projection = project_match_analysis_evidence(prediction, input_snapshot, frozen_evidence, accepted_fixture)
     except (AttributeError, KeyError, TypeError, ValueError):
         return empty
     if projection.get("projection_success") is not True:
         return empty
-    if not isinstance(_accepted_field(football_evidence, "market_context"), Mapping):
+    if not isinstance(_accepted_field(frozen_evidence, "market_context"), Mapping):
         projection = {
             **projection,
             "market_1x2_chronology": {"status": "OMITTED"},
             "model_market_alignment": {"status": "OMITTED"},
         }
 
-    recent = _recent_state(projection, football_evidence)
-    process = _process_projection(football_evidence)
+    recent = _recent_state(projection, frozen_evidence)
+    process = _process_projection(frozen_evidence)
     result_direction = _result_direction(recent)
     process_direction, process_votes = _process_direction(process)
     result_process_alignment = _alignment(result_direction, process_direction)
@@ -837,7 +840,7 @@ def build_match_analysis_article(
         recent_available=len(recent) == 2 and all(_last5(recent.get(side)) for side in SIDES),
         process_available=process_direction is not None,
     )
-    future = _future_schedule_rest(football_evidence)
+    future = _future_schedule_rest(frozen_evidence)
     forecast_text, forecast = _forecast_text(prediction, goal_shape, scores, identifiability)
     article_plan = _build_article_plan(
         prediction=prediction,
