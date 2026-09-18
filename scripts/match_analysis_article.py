@@ -237,7 +237,10 @@ def _process_projection(evidence: Mapping[str, Any]) -> dict[str, Any] | None:
                 row = source.get(side)
                 if not isinstance(row, Mapping):
                     continue
-                near3, near10 = _number(row.get("near3")), _number(row.get("near10"))                if near3 is not None or near10 is not None:                    rows[side] = {"near3": _round(near3), "near10": _round(near10)}            if len(rows) == 2:
+                near3, near10 = _number(row.get("near3")), _number(row.get("near10"))
+                if near3 is not None or near10 is not None:
+                    rows[side] = {"near3": _round(near3), "near10": _round(near10)}
+            if len(rows) == 2:
                 cross_checks[name] = rows
     if cross_checks:
         projected["goal_cross_checks"] = cross_checks
@@ -713,9 +716,12 @@ def _build_article_plan(
         recent_refs.append("football_evidence.future_schedule_rest")
     counter_refs: list[str] = []
     if _text(outlier.get("status")) == "PRESENT":
-        counter_refs.append("football_evidence.recent_form")    if result_direction and process_direction and result_direction != process_direction and result_direction != "draw":        counter_refs.append("football_evidence.recent_process_context")
+        counter_refs.append("football_evidence.recent_form")
+    if result_direction and process_direction and result_direction != process_direction and result_direction != "draw":
+        counter_refs.append("football_evidence.recent_process_context")
     if market_relationship == "conflicting":
-        counter_refs.append("football_evidence.market_context")    forecast_refs = ["prediction_record.probabilities_and_score_cluster", "football_evidence.recent_form"]
+        counter_refs.append("football_evidence.market_context")
+    forecast_refs = ["prediction_record.probabilities_and_score_cluster", "football_evidence.recent_form"]
     thesis_refs = ["prediction_record.probabilities_and_score_cluster"]
     if recent_text:
         thesis_refs.insert(0, "football_evidence.recent_form")
