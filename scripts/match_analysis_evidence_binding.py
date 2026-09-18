@@ -177,7 +177,8 @@ def _resolve_availability(
         "records_seen": len(records),
         "resolved_count": len(resolved),
         "stale_count": stale_count,
-        "binding_errors": errors,    }
+        "binding_errors": errors,
+    }
 
 
 def _field_status(field: Mapping[str, Any], availability: Mapping[str, Any] | None) -> str:
@@ -390,14 +391,16 @@ def _confirmed_side(
 
 
 def build_late_briefing(
-    base_article: Mapping[str, Any],    prediction: Mapping[str, Any] | None,
+    base_article: Mapping[str, Any],
+    prediction: Mapping[str, Any] | None,
     football_evidence: Mapping[str, Any] | None,
     evidence_envelope: Mapping[str, Any],
     expected_subject_id: str | None = None,
 ) -> dict[str, Any]:
     prediction = prediction if isinstance(prediction, Mapping) else {}
     evidence = football_evidence if isinstance(football_evidence, Mapping) else {}
-    omitted = {        "contract_version": LATE_BRIEFING_CONTRACT_VERSION,
+    omitted = {
+        "contract_version": LATE_BRIEFING_CONTRACT_VERSION,
         "status": "OMITTED",
         "reason_code": "CONFIRMED_LINEUP_UNAVAILABLE",
         "base_article_hash": article_base_hash(base_article),
