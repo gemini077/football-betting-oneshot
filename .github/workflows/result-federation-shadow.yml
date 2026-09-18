@@ -1,0 +1,70 @@
+name: Result federation shadow
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - "scripts/result_federation_shadow.py"
+      - "tests/test_result_federation_shadow.py"
+      - ".github/workflows/result-federation-shadow.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  shadow-validation:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install project dependencies
+        run: python -m pip install -r requirements.txt
+
+      - name: Run focused unit tests
+        run: python -m pytest -q tests/test_result_federation_shadow.py
+
+      - name: Compile shadow resolver
+        run: python -m py_compile scripts/result_federation_shadow.py tests/test_result_federation_shadow.py
+
+      - name: Run live overdue shadow
+        run: python scripts/result_federation_shadow.py --output result_federation_shadow.json --max-matches 12
+
+      - name: Enforce useful shadow evidence
+        run: |
+          python - <<'PY'
+          import json
+          report = json.load(open("result_federation_shadow.json", encoding="utf-8"))
+          assert report["formal_write_authorized"] is False
+          assert report["identity_bootstrap_error"] is None, report["identity_bootstrap_error"]
+          assert report["target_count"] >= 1, "no overdue targets found"
+          matched = 0
+          for row in report["matches"]:
+              for provider in (row.get("providers") or {}).values():
+                  if provider.get("identity") == "MATCHED":
+                      matched += 1
+          assert matched >= 1, "no free provider produced an exact-ID event match"
+          print(json.dumps({
+              "target_count": report["target_count"],
+              "provider_exact_matches": matched,
+              "decision_counts": report["decision_counts"],
+          }, ensure_ascii=False))
+          PY
+
+      - name: Check patch whitespace
+        run: git diff --check "${{ github.event.pull_request.base.sha }}...${{ github.event.pull_request.head.sha }}"
+
+      - name: Upload shadow evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: result-federation-shadow
+          path: result_federation_shadow.json
+          if-no-files-found: warn
