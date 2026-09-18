@@ -177,8 +177,7 @@ def _resolve_availability(
         "records_seen": len(records),
         "resolved_count": len(resolved),
         "stale_count": stale_count,
-        "binding_errors": errors,
-    }
+        "binding_errors": errors,    }
 
 
 def _field_status(field: Mapping[str, Any], availability: Mapping[str, Any] | None) -> str:
@@ -310,6 +309,41 @@ def build_evidence_envelope(
     return {**payload, "content_hash": stable_hash(payload)}
 
 
+def base_article_evidence(
+    football_evidence: Mapping[str, Any] | None,
+    envelope: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Return a copy whose prematch fields contain only cutoff-admissible facts."""
+
+    evidence = (
+        copy.deepcopy(dict(football_evidence))
+        if isinstance(football_evidence, Mapping)
+        else {}
+    )
+    bundle = evidence.get("prematch_evidence")
+    fields = bundle.get("fields") if isinstance(bundle, Mapping) else None
+    if not isinstance(fields, dict):
+        return evidence
+    admissible = {
+        item.get("evidence_id"): item.get("admissible") is True
+        for item in envelope.get("items", [])
+        if isinstance(item, Mapping)
+    }
+    for name, field in list(fields.items()):
+        evidence_id = f"football_evidence.{name}"
+        if admissible.get(evidence_id) is True or not isinstance(field, Mapping):
+            continue
+        fields[name] = {
+            **copy.deepcopy(dict(field)),
+            "state": "ABSENT",
+            "value": None,
+            "reason_code": "INADMISSIBLE_AT_ARTICLE_CUTOFF",
+            "record_count": 0,
+            "prematch_eligible": False,
+        }
+    return evidence
+
+
 def bind_article_plan(plan: Any, envelope: Mapping[str, Any]) -> list[dict[str, Any]]:
     if not isinstance(plan, list):
         return []
@@ -357,8 +391,7 @@ def _confirmed_side(
 
 
 def build_late_briefing(
-    base_article: Mapping[str, Any],
-    prediction: Mapping[str, Any] | None,
+    base_article: Mapping[str, Any],    prediction: Mapping[str, Any] | None,
     football_evidence: Mapping[str, Any] | None,
     evidence_envelope: Mapping[str, Any],
 ) -> dict[str, Any]:
@@ -385,23 +418,36 @@ def build_late_briefing(
         ),
         None,
     )
-    if not isinstance(item, Mapping) or item.get("status") != "VERIFIED":
+    if (
+        not isinstance(item, Mapping)
+        or item.get("status") != "VERIFIED"
+        or field.get("prematch_eligible") is not True
+    ):
         return {**omitted, "reason_code": "LINEUP_EVIDENCE_DEGRADED"}
 
     observed = _dt(field.get("observed_at"))
+    source_update = _dt(field.get("source_update_at"))
     kickoff = _dt(evidence_envelope.get("kickoff_at"))
-    if observed is None or kickoff is None or observed > kickoff:
+    latest = max(
+        (value for value in (observed, source_update) if value is not None),
+        default=None,
+    )
+    if latest is None or kickoff is None or latest > kickoff:
         return {**omitted, "reason_code": "LINEUP_AFTER_KICKOFF_OR_TIME_UNKNOWN"}
 
     value = field.get("value")
     if not isinstance(value, Mapping):
         return {**omitted, "reason_code": "LINEUP_VALUE_MISSING"}
-    semantic = (
-        _text(field.get("semantic_state"))
-        or _text(value.get("confirmation_status"))
-        or ""
-    ).upper()
-    if semantic not in {"CONFIRMED", "CONFIRMED_XI", "OFFICIAL_CONFIRMED"}:
+    allowed = {"CONFIRMED", "CONFIRMED_XI", "OFFICIAL_CONFIRMED"}
+    semantic_markers = [
+        marker
+        for marker in (
+            (_text(field.get("semantic_state")) or "").upper(),
+            (_text(value.get("confirmation_status")) or "").upper(),
+        )
+        if marker
+    ]
+    if not semantic_markers or any(marker not in allowed for marker in semantic_markers):
         return {**omitted, "reason_code": "LINEUP_NOT_CONFIRMED"}
 
     target = _target(evidence, {})
@@ -431,6 +477,7 @@ __all__ = [
     "EVIDENCE_ENVELOPE_VERSION",
     "LATE_BRIEFING_CONTRACT_VERSION",
     "article_base_hash",
+    "base_article_evidence",
     "bind_article_plan",
     "build_evidence_envelope",
     "build_late_briefing",
