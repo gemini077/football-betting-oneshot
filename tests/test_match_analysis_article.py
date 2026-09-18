@@ -217,7 +217,8 @@ def test_o2_exact_cutoff_is_admissible_but_future_evidence_is_not():
         prediction,
         _o2_evidence({"recent_form": _o2_field({"summary": {}})}),
         {},
-    )    exact_item = next(
+    )
+    exact_item = next(
         item for item in exact["items"]
         if item["evidence_id"] == "football_evidence.recent_form"
     )
@@ -357,7 +358,8 @@ def test_o2_expected_lineup_never_becomes_confirmed_late_briefing():
         )
     })
     envelope = build_evidence_envelope(prediction, evidence, {})
-    base = {"contract_version": "match_analysis_article.v2", "status": "AVAILABLE", "article_plan": []}    late = build_late_briefing(base, prediction, evidence, envelope)
+    base = {"contract_version": "match_analysis_article.v2", "status": "AVAILABLE", "article_plan": []}
+    late = build_late_briefing(base, prediction, evidence, envelope)
     assert late["status"] == "OMITTED"
     assert late["reason_code"] == "LINEUP_NOT_CONFIRMED"
 
@@ -436,7 +438,8 @@ def test_o2_real_article_refs_resolve_and_late_briefing_fails_closed_without_con
     for item in article["article_plan"]:
         for ref in item["evidence_refs"]:
             assert ref in lookup
-            assert lookup[ref]["admissible"] is True    assert article["base_article_hash"] == article_base_hash(article)
+            assert lookup[ref]["admissible"] is True
+    assert article["base_article_hash"] == article_base_hash(article)
     assert article["late_briefing"]["status"] == "OMITTED"
 
 def test_o2_base_article_calculation_cannot_use_post_cutoff_field_updates():
@@ -593,4 +596,3 @@ def test_o2_late_briefing_rejects_wrong_fixture_even_with_valid_team_and_player_
     )
     assert article["late_briefing"]["status"] == "OMITTED"
     assert article["late_briefing"]["reason_code"] == "LINEUP_FIXTURE_IDENTITY_MISMATCH"
-
