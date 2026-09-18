@@ -214,4 +214,3 @@ def test_overdue_recovery_backfills_missing_schedule_and_rearms_result_not_final
     assert rearmed["overdue_recovery_count"] == 1
     assert "terminal_reason" not in rearmed
     assert third["rearmed_terminal_count"] == 0
-
