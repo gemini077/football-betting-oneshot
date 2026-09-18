@@ -43,6 +43,10 @@ def test_cycle_calls_base_runner_and_prospective_settlement_and_writes_health(tm
 
     assert any("base_prediction_runner.py" in part for command in calls for part in command)
     assert any("prospective_settlement.py" in part for command in calls for part in command)
+    assert any(
+        _has_script(command, "sync_result_schedules.py") and "--recover-overdue" in command
+        for command in calls
+    )
     shadow_index = next(
         index for index, command in enumerate(calls)
         if _has_script(command, "market_side_shadow_refresh.py")
