@@ -1778,7 +1778,12 @@ def _trust_pending_result_label(
         kickoff = datetime.fromisoformat(text.replace("Z", "+00:00")) if text else None
     except ValueError:
         kickoff = None
-    if kickoff is None or kickoff.tzinfo is None or generated_at is None:
+    if (
+        kickoff is None
+        or kickoff.tzinfo is None
+        or generated_at is None
+        or generated_at.tzinfo is None
+    ):
         return "赛果待核验"
     kickoff = kickoff.astimezone(timezone.utc)
     generated_at = generated_at.astimezone(timezone.utc)
