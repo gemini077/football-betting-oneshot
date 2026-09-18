@@ -254,4 +254,3 @@ def test_verify_schedule_uses_official_result_before_espn(tmp_path):
     assert saved["result_source"] == "sporttery_official_result"
     assert saved["verification_quality"] == "official_settlement_fallback"
     assert saved["result_sources"]["official_fallback"]["status"] == "verified"
-
