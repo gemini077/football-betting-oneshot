@@ -1,0 +1,44 @@
+name: FBOS - Publish Verified Static Snapshot
+on:
+  push:
+    branches:
+      - fbos/recover-pages-20261014
+    paths:
+      - 'fbos-release/**'
+      - '.github/workflows/fbos-pages-snapshot.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: fbos-snapshot-pages-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify immutable snapshot and extract public files
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo 'e3098afefcf6b2a31d3b65656958588ff0ba5b30d67180fce09715d91bb76c4c  fbos-release/site-20261014.tar.gz' | sha256sum --check -
+          mkdir -p fbos-published-site
+          tar -xzf fbos-release/site-20261014.tar.gz -C fbos-published-site --strip-components=1
+          test -s fbos-published-site/index.html
+          test -s fbos-published-site/prediction_dashboard/latest.html
+          test -s fbos-published-site/prediction_dashboard/latest.json
+          grep -q '2026-10-14' fbos-published-site/prediction_dashboard/latest.html
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: fbos-published-site
+      - id: deployment
+        uses: actions/deploy-pages@v4
