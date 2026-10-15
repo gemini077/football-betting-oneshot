@@ -176,3 +176,49 @@ def test_target_workflows_use_bounded_writer_and_rebuild_after_prematch_write() 
     assert prematch.index("python scripts/durable_main_write.py") < prematch.index(
         "Rebuild Pages artifact after durable write"
     )
+
+
+def test_market_checkout_sync_before_refresh_prevents_latest_workspace_merge_conflict(
+    remote_fixture: tuple[Path, Path, Path], tmp_path: Path
+) -> None:
+    remote, full, market = remote_fixture
+    # A queued checkpoint workflow must read the most recent canonical workspace first.
+    commit_file(
+        full,
+        "data/match_workspace/latest.json",
+        '{"date":"2026-10-16","producer":"core"}\\n',
+        "core updates the workspace",
+    )
+    git(full, "push", "origin", "main")
+    assert not (market / "data/match_workspace/latest.json").exists()
+
+    workflow = (
+        REPO_ROOT / ".github" / "workflows" / "prematch-market-monitor.yml"
+    ).read_text(encoding="utf-8")
+    assert workflow.index("git pull --rebase origin main") < workflow.index(
+        "Check whether an analyzed match reached a new checkpoint"
+    )
+    git(market, "pull", "--rebase", "origin", "main")
+    assert '"producer":"core"' in (
+        market / "data/match_workspace/latest.json"
+    ).read_text(encoding="utf-8")
+
+    commit_file(
+        market,
+        "data/match_workspace/latest.json",
+        '{"date":"2026-10-16","producer":"core+market"}\\n',
+        "market refreshes synced workspace",
+    )
+    commit_file(
+        market,
+        "data/market_history/checkpoint.json",
+        '{"capture":"pre-ko"}\\n',
+        "market persists source capture",
+    )
+    result = run_writer(market)
+    assert result.returncode == 0, result.stdout
+    verified = verify_remote(remote, tmp_path)
+    assert '"producer":"core+market"' in (
+        verified / "data/match_workspace/latest.json"
+    ).read_text(encoding="utf-8")
+    assert (verified / "data/market_history/checkpoint.json").is_file()

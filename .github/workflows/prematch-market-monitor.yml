@@ -40,6 +40,9 @@ jobs:
           cache: pip
       - if: steps.due.outputs.count != '0'
         run: pip install -r requirements.txt
+      - name: Verify queued market checkout against remote head
+        if: steps.due.outputs.count != '0'
+        run: python -m pytest -q tests/test_durable_main_write.py -k test_market_checkout_sync_before_refresh_prevents_latest_workspace_merge_conflict
       - name: Refresh analyzed matches at the eight pre-match checkpoints
         if: steps.due.outputs.count != '0'
         continue-on-error: true
