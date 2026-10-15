@@ -43,6 +43,11 @@ except ImportError:  # package import used by tests
     from scripts.public_ui_shared import render_beginner_help, render_public_document, render_team_badge
 
 try:
+    from match_identity import canonical_match_id
+except ImportError:
+    from scripts.match_identity import canonical_match_id
+
+try:
     from formal_market_projection import (
         project_frozen_formal_markets,
         summarize_formal_markets,
@@ -60,6 +65,7 @@ JOBS_ROOT = BASE_DIR / "data" / "base_prediction_jobs"
 PREDICTION_ROOT = BASE_DIR / "data" / "model_governance" / "predictions"
 EXCLUSION_ROOT = BASE_DIR / "data" / "model_governance" / "prediction_exclusions"
 RESULT_ROOT = BASE_DIR / "data" / "postmatch_automation" / "results"
+SCHEDULE_ROOT = BASE_DIR / "data" / "postmatch_automation" / "schedules"
 PROSPECTIVE_ROOT = BASE_DIR / "data" / "prospective"
 RUNTIME_PATH = BASE_DIR / "data" / "product_runtime" / "latest_cycle.json"
 HEALTH_WATCH_PATH = BASE_DIR / "data" / "product_runtime" / "health_watch.json"
@@ -122,6 +128,71 @@ def _read_optional_json(path: Path, errors: list[str], label: str, default: Any)
         return default
     return _read_json(path, errors, label, default)
 
+
+def _previous_business_day_results(
+    business_date: str, universe_root: Path, schedule_root: Path, result_root: Path,
+) -> dict[str, Any] | None:
+    try:
+        previous_date = (datetime.fromisoformat(business_date).date() - timedelta(days=1)).isoformat()
+    except ValueError:
+        return None
+    path = Path(universe_root) / f"{previous_date}.json"
+    try:
+        universe = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        return None
+    fixtures = universe.get("fixtures") if isinstance(universe, dict) else None
+    if not isinstance(fixtures, list) or not fixtures:
+        return None
+    entries = []
+    for fixture in [row for row in fixtures if isinstance(row, dict)][:100]:
+        home, away = fixture.get("homeTeam"), fixture.get("awayTeam")
+        try:
+            kickoff = datetime.fromisoformat(f"{fixture['matchDate']}T{str(fixture['matchTime'])[:5]}:00+08:00")
+            if kickoff.tzinfo is None:
+                continue
+        except (KeyError, TypeError, ValueError):
+            continue
+        key = canonical_match_id({"home": home, "away": away, "kickoff_local": kickoff.isoformat()}) if home and away else None
+        schedule_path = Path(schedule_root) / f"{key}.json" if key else None
+        result_path = Path(result_root) / f"{key}.json" if key else None
+        schedule = result = {}
+        if schedule_path and schedule_path.is_file():
+            try: schedule = json.loads(schedule_path.read_text(encoding="utf-8"))
+            except (OSError, UnicodeError, json.JSONDecodeError): pass
+        if result_path and result_path.is_file():
+            try: result = json.loads(result_path.read_text(encoding="utf-8"))
+            except (OSError, UnicodeError, json.JSONDecodeError): pass
+        source = result.get("source") if isinstance(result, dict) else None
+        source_url = result.get("source_url") if isinstance(result, dict) else None
+        score = result.get("result_90m") if isinstance(result, dict) else None
+        provenance = next((item for item in (schedule.get("result_sources") or {}).values()
+                           if isinstance(item, dict) and item.get("name") == source
+                           and item.get("status") == "verified"), {}) if isinstance(schedule, dict) else {}
+        verified = bool(
+            isinstance(schedule, dict) and isinstance(result, dict)
+            and schedule.get("status") == "result_verified"
+            and schedule.get("canonical_match_id") == key and schedule.get("match_key") == key
+            and result.get("match_key") == key
+            and schedule.get("home") == home == result.get("home")
+            and schedule.get("away") == away == result.get("away")
+            and _strict_kickoff_utc_key(schedule.get("kickoff_local")) == kickoff.astimezone(timezone.utc).isoformat(timespec="seconds")
+            and _strict_kickoff_utc_key(result.get("kickoff_local")) == kickoff.astimezone(timezone.utc).isoformat(timespec="seconds")
+            and isinstance(score, str) and re.fullmatch(r"\d{1,2}-\d{1,2}", score)
+            and schedule.get("result_90m") == score
+            and schedule.get("result_source") == source and bool(source)
+            and provenance.get("source_url") == source_url and bool(source_url)
+        )
+        entries.append({
+            "match_num": fixture.get("matchNum"), "home": home, "away": away,
+            "status": "VERIFIED" if verified else "PENDING",
+            "90m_score": score if verified else None, "source_url": source_url if verified else None,
+        })
+    if not entries:
+        return None
+    verified_count = sum(entry["status"] == "VERIFIED" for entry in entries)
+    return {"business_date": previous_date, "fixture_count": len(entries), "verified_count": verified_count,
+            "pending_count": len(entries) - verified_count, "entries": entries}
 
 def _read_jsonl(path: Path, errors: list[str], label: str) -> list[dict[str, Any]]:
     if not path.is_file():
@@ -662,6 +733,16 @@ def _prediction_projection(
     }
 
 
+def _strict_kickoff_utc_key(value: Any) -> str | None:
+    """Canonicalize an aware instant; never infer timezone for naive values."""
+    try:
+        moment = datetime.fromisoformat(str(value).strip())
+    except (TypeError, ValueError):
+        return None
+    if moment.tzinfo is None or moment.utcoffset() is None:
+        return None
+    return moment.astimezone(timezone.utc).isoformat(timespec="seconds")
+
 def _result_keys(result: dict[str, Any]) -> set[str]:
     keys: set[str] = set()
     for field in ("match_key", "match_id", "provider_match_id"):
@@ -933,6 +1014,16 @@ MODERN_CSS = r"""
 .runtime-warning strong { color: var(--danger); }
 .data-warning { border-left-color: var(--warning); background: var(--warning-soft); color: var(--warning); }
 .fixture-table { min-width: 0; }
+.recent-results { margin: 24px 0; padding: 18px 20px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); }
+.recent-results-head h2 { margin: 0; color: var(--ink); font-size: 18px; }
+.recent-results-head p, .recent-results-note { color: var(--muted); font-size: 12px; }
+.recent-result-row { display: grid; grid-template-columns: 64px minmax(0,1fr) 54px 54px; align-items: center; gap: 10px; padding: 10px 0; border-top: 1px solid var(--line); font-size: 13px; }
+.recent-result-row strong { overflow-wrap: anywhere; }
+.recent-result-row strong i { color: var(--muted); font-style: normal; }
+.recent-result-row b { color: var(--verified); text-align: center; }
+.recent-result-row small { color: var(--muted); text-align: right; }
+@media (max-width: 520px) { .recent-results { padding: 14px; } .recent-result-row { grid-template-columns: 42px minmax(0,1fr) 42px; gap: 7px; } .recent-result-row small { grid-column: 2 / 4; text-align: left; } }
+
 .league-group { margin-top: 10px; overflow: hidden; border: 1px solid var(--line); border-radius: 12px; background: #FFF; }
 .league-title { display: flex; align-items: center; justify-content: space-between; padding: 9px 14px; border-bottom: 1px solid var(--line); background: #FBFBFC; }
 .league-title strong { font-size: var(--type-support); }
@@ -1743,6 +1834,27 @@ def _historical_results_html(rows: list[dict[str, Any]]) -> str:
     )
 
 
+def _previous_business_day_html(data: dict[str, Any] | None) -> str:
+    if not isinstance(data, dict):
+        return ""
+    rows = []
+    for entry in data.get("entries", []):
+        state = "已核验" if entry.get("status") == "VERIFIED" else "待核验"
+        score = entry.get("90m_score") or "—"
+        rows.append(
+            f'<div class="recent-result-row"><span>{_esc(entry.get("match_num"))}</span>'
+            f'<strong>{_esc(entry.get("home"))} <i>vs</i> {_esc(entry.get("away"))}</strong>'
+            f'<b>{_esc(score)}</b><small>{state}</small></div>'
+        )
+    return (
+        '<section class="recent-results" id="previous-business-day-results">'
+        f'<div class="recent-results-head"><div><h2>前一竞彩日赛果</h2>'
+        f'<p>{html.escape(str(data.get("business_date")))} · '
+        f'{data.get("verified_count", 0)}/{data.get("fixture_count", 0)} 场已核验</p></div></div>'
+        + "".join(rows)
+        + '<p class="recent-results-note">MISSED_PREMATCH_WINDOW 比赛仅展示赛果，不计入预测命中率。</p></section>'
+    )
+
 def _trust_metric_text(value: Any, *, percent: bool = False) -> str:
     number = _number(value)
     if number is None:
@@ -2080,6 +2192,7 @@ def render_dashboard(payload: dict[str, Any]) -> str:
     quality_warning = ""
     trust_history_html = _trust_history_html(payload.get("prediction_quality_trust"))
     historical_html = _historical_results_html(payload.get("completed") or [])
+    previous_html = _previous_business_day_html(payload.get("previous_business_day_results"))
     beginner_help = render_beginner_help()
     dashboard_trust = render_closed_beta_notice("dashboard-trust")
     data_warning = ""
@@ -2102,6 +2215,7 @@ def render_dashboard(payload: dict[str, Any]) -> str:
 </section>
 {trust_history_html}
 {historical_html}
+{previous_html}
 {beginner_help}
 <section class="trust-strip dashboard-trust-strip dashboard-data-method" id="data-method"><div class="trust-item"><span class="trust-ico">\u26bd</span><div><strong>\u4eca\u65e5\u961f\u5217</strong><span>\u9ed8\u8ba4\u53ea\u7a81\u51fa\u80dc / \u5e73 / \u8d1f\u6982\u7387\u4e0e\u6700\u53ef\u80fd\u6bd4\u5206\u3002</span></div></div><div class="trust-item"><span class="trust-ico">!</span><div><strong>\u5f02\u5e38\u63d0\u793a</strong><span>\u53ea\u6709\u771f\u6b63\u6539\u53d8\u5224\u65ad\u65f6\u624d\u51fa\u73b0\u3002</span></div></div><div class="trust-item"><span class="trust-ico">\u25c7</span><div><strong>\u8d5b\u524d\u8bb0\u5f55</strong><span>\u6bd4\u8d5b\u5f00\u59cb\u524d\u5f62\u6210\u5e76\u4fdd\u7559\u3002</span></div></div><div class="trust-item"><span class="trust-ico">\u2713</span><div><strong>\u5386\u53f2\u9a8c\u8bc1</strong><span>\u6210\u529f\u548c\u5931\u8d25\u540c\u53e3\u5f84\u8bb0\u5f55\u3002</span></div></div><div class="trust-item"><span class="trust-ico">i</span><div><strong>\u65b9\u6cd5\u8bf4\u660e</strong><span>\u6280\u672f\u7ec6\u8282\u4e0b\u6c89\uff0c\u4e0d\u62a2\u9996\u5c4f\u3002</span></div></div></section>
 {dashboard_trust}
@@ -2158,6 +2272,7 @@ def build_dashboard(
     prediction_root: Path = PREDICTION_ROOT,
     exclusion_root: Path = EXCLUSION_ROOT,
     result_root: Path = RESULT_ROOT,
+    schedule_root: Path = SCHEDULE_ROOT,
     prospective_root: Path = PROSPECTIVE_ROOT,
     runtime_path: Path = RUNTIME_PATH,
     health_watch_path: Path = HEALTH_WATCH_PATH,
@@ -2321,6 +2436,9 @@ def build_dashboard(
         health_watch,
         business_date,
     )
+    previous_results = _previous_business_day_results(
+        business_date, Path(universe_root), Path(schedule_root), Path(result_root)
+    )
     payload = {
         "schema_version": "1.0",
         "generated_at": (now or datetime.now(SHANGHAI)).isoformat(),
@@ -2362,6 +2480,8 @@ def build_dashboard(
         "completed": completed,
         "history": history,
     }
+    if previous_results is not None:
+        payload["previous_business_day_results"] = previous_results
     output_root = Path(output_root)
     output_root.mkdir(parents=True, exist_ok=True)
     (output_root / "latest.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
