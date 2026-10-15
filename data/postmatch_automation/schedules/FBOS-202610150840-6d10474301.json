@@ -14,8 +14,8 @@
   "schedule_type": "result_only",
   "review_delay_minutes": 135,
   "review_due_at": "2026-10-15T11:57:20.762028+08:00",
-  "status": "retry_scheduled",
-  "verification_attempts": 1,
+  "status": "result_verified",
+  "verification_attempts": 2,
   "verification_expires_at": "2026-10-16T08:40:00+08:00",
   "retry_policy": {
     "maximum_retries": 1,
@@ -26,25 +26,55 @@
   "analysis_available": false,
   "registered_at": "2026-10-15T10:16:55.818570+08:00",
   "last_fixture_sync_at": "2026-10-15T11:41:04.978940+08:00",
-  "last_checked_at": "2026-10-15T11:12:20.762028+08:00",
-  "result_strategy_version": "nowscore_matchdetail_v6_espn_regulation_fallback",
+  "last_checked_at": "2026-10-15T12:03:20.459972+08:00",
+  "result_strategy_version": "nowscore_matchdetail_v15_afc_elite_espn_strict_ft",
   "result_sources": {
     "primary": {
-      "name": "nowscore_match_detail",
+      "name": "nowscore_live_score",
+      "status": "verified",
+      "score_90m": "0-0",
+      "source_url": "https://live.nowscore.com/football/GetLiveScore?scheid=2908842",
+      "error": null
+    },
+    "same_provider_fallback": {
+      "name": "nowscore_finished_schedule",
       "status": "unavailable",
       "score_90m": null,
-      "source_url": "https://live.nowscore.com/MatchDetail/2908842.html",
-      "error": "https://live.nowscore.com/MatchDetail/2908842.html: result_not_final; https://live.nowscore.com/detail/2908842.html: result_not_final"
+      "source_url": null,
+      "error": null,
+      "guardrail": "exact Nowscore ID + both teams + kickoff within 120 seconds + state -1"
     },
     "fallback": {
+      "name": "api_football",
+      "status": "unavailable",
+      "score_90m": null,
+      "source_url": null,
+      "error": null,
+      "guardrail": "Nowscore English identity + home/away orientation + kickoff within 120 seconds"
+    },
+    "tertiary": {
       "name": "espn_scoreboard",
       "status": "unavailable",
       "score_90m": null,
-      "source_url": "https://site.api.espn.com/apis/site/v2/sports/soccer/all/scoreboard?dates=20261015&limit=1000",
-      "error": "espn_exact_fixture_not_found",
+      "source_url": null,
+      "error": null,
       "guardrail": "exact teams + kickoff + completed period 2 only"
+    },
+    "quaternary": {
+      "name": "thesportsdb_event_search",
+      "status": "unavailable",
+      "score_90m": null,
+      "source_url": null,
+      "error": null,
+      "guardrail": "reviewed national-team name bridge + exact orientation + kickoff within 120 seconds + FT + unique event"
     }
   },
-  "verification_issue": "result_not_final",
-  "last_error": "espn_exact_fixture_not_found"
+  "verification_issue": null,
+  "result_90m": "0-0",
+  "after_extra_time": null,
+  "penalties": null,
+  "result_verified_at": "2026-10-15T12:03:20.459972+08:00",
+  "result_source": "nowscore_live_score",
+  "verification_quality": "authoritative_primary",
+  "result_file": "data/postmatch_automation/results/FBOS-202610150840-6d10474301.json"
 }
