@@ -2,6 +2,9 @@ import json
 from pathlib import Path
 from unittest.mock import patch
 
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+
 from scripts import build_public_site as builder
 from scripts import match_detail
 
