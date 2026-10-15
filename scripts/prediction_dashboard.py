@@ -2272,7 +2272,7 @@ def build_dashboard(
                 identity=_prematch_identity(fixture, job),
             )
             record = selection.get("selected_record")
-        cards.append(_card(
+        card = _card(
             fixture,
             job,
             record,
@@ -2282,7 +2282,9 @@ def build_dashboard(
             exploratory_samples,
             selection,
             current_job_resolution,
-        ))
+        )
+        card["business_date"] = fixture_date
+        cards.append(card)
     cards.sort(key=lambda item: (_iso_sort(item.get("kickoff")), _text(item.get("match_num"))))
     counts = Counter(card.get("status") for card in cards)
     verified_results = sum(
