@@ -222,3 +222,23 @@ def test_market_checkout_sync_before_refresh_prevents_latest_workspace_merge_con
         verified / "data/match_workspace/latest.json"
     ).read_text(encoding="utf-8")
     assert (verified / "data/market_history/checkpoint.json").is_file()
+
+def test_market_stages_only_latest_workspace_files(remote_fixture: tuple[Path, Path, Path]) -> None:
+    _remote, _full, market = remote_fixture
+    workflow = (REPO_ROOT / ".github/workflows/prematch-market-monitor.yml").read_text(encoding="utf8")
+    cmd = next(line.strip().split() for line in workflow.splitlines() if line.strip().startswith("git add data/fetch_runs "))
+    tracked = (
+        "data/fetch_runs/market.json", "data/market_history/checkpoints/fixture/T-4H.json",
+        "data/analysis_inputs/automated/fixture.json", "data/analysis_reports/current/fixture.html",
+        "data/match_workspace/latest.json", "data/match_workspace/latest.html",
+    )
+    snapshots = ("data/match_workspace/20261015_205327/workspace.json",
+                 "data/match_workspace/20261015_205451/workspace.json")
+    for name in tracked+snapshots:
+        p = market/name
+        p.parent.mkdir(parents=True,exist_ok=True)
+        p.write_text("test",encoding="utf8")
+    assert cmd[:2]==["git","add"]
+    git(market,*cmd[1:])
+    assert git(market,"diff","--cached","--name-only").stdout.splitlines()==sorted(tracked)
+    assert git(market,"ls-files","--others","--exclude-standard").stdout.splitlines()==sorted(snapshots)
