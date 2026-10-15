@@ -6,7 +6,8 @@ on:
   workflow_dispatch:
   schedule:
     # Deterministic maintenance only; no LLM/API token use.
-    - cron: "7,37 * * * *"
+    # Resubscribe the actor after the schedule stopped triggering; UTC, same 30-minute cadence.
+    - cron: "12,42 * * * *"
 
 permissions:
   contents: write
