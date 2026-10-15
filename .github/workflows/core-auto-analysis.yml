@@ -61,3 +61,15 @@ jobs:
           path: site
       - id: deployment
         uses: actions/deploy-pages@v4
+      - name: Require truthful core job outcome
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          state = json.loads(Path("data/analysis_jobs/core_auto_state.json").read_text(encoding="utf-8"))
+          status = state.get("last_status")
+          if status == "PARTIAL_FAILURE":
+              raise SystemExit("core analysis partially failed; reports and diagnostics already persisted")
+          print(f"Core report status: {status}")
+          PY

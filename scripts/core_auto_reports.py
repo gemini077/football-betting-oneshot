@@ -108,7 +108,7 @@ def main() -> int:
         }, ensure_ascii=False))
         return 1
     chosen = select(workspace.get("matches") or [])
-    completed = failed = 0
+    completed = failed = attempted = 0
     for row in chosen:
         if completed + failed >= max(1, args.max_jobs):
             break
@@ -124,6 +124,7 @@ def main() -> int:
             "attempts": int(previous.get("attempts") or 0) + 1,
             "updated_at": datetime.now(SHANGHAI).isoformat(),
         }
+        attempted += 1
         try:
             result = subprocess.run(command, cwd=ROOT, text=True, capture_output=True, encoding="utf-8", errors="replace", timeout=600)
         except subprocess.TimeoutExpired as error:
@@ -141,14 +142,23 @@ def main() -> int:
         state["jobs"][job_key] = record
         save(STATE_PATH, state)
     state["updated_at"] = datetime.now(SHANGHAI).isoformat()
-    state["last_status"] = "SUCCESS" if chosen else "NO_ELIGIBLE_CORE_MATCH"
+    if failed:
+        status = "PARTIAL_FAILURE"
+    elif completed:
+        status = "SUCCESS"
+    elif not chosen:
+        status = "NO_ELIGIBLE_CORE_MATCH"
+    else:
+        status = "NO_PENDING_CORE_JOB"
+    state["last_status"] = status
     state["last_error"] = None
     state["selected_today"] = [{"id": row.get("id"), "match": f"{row.get('home')} vs {row.get('away')}",
                                  "tier": row.get("core_tier"), "score": row.get("core_score")} for row in chosen]
     save(STATE_PATH, state)
     print(json.dumps({
-        "status": "SUCCESS" if chosen else "NO_ELIGIBLE_CORE_MATCH",
-        "selected": len(chosen), "completed": completed, "failed": failed,
+        "status": status,
+        "selected": len(chosen), "attempted": attempted,
+        "completed": completed, "failed": failed,
     }, ensure_ascii=False))
     return 0
 
