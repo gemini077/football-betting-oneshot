@@ -1,6 +1,12 @@
 name: Pure Market Exact prospective authority
 
 on:
+  # Run the same immutable-evidence smoke on narrowly scoped source changes.
+  push:
+    branches: [main]
+    paths:
+      - "scripts/pure_market_exact_prospective.py"
+      - ".github/workflows/pure-market-exact-prospective.yml"
   pull_request:
     types: [opened, synchronize, reopened]
     paths:
@@ -101,7 +107,7 @@ jobs:
         run: git diff --check "${{ github.event.pull_request.base.sha }}...${{ github.event.pull_request.head.sha }}"
 
   future-current-smoke:
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.event_name == 'push'
     runs-on: ubuntu-latest
     permissions:
       contents: write
