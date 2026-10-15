@@ -459,7 +459,7 @@ def _index_preko_analysis_reports(data_root: Path) -> dict[tuple[str, str, str, 
             continue
         kickoff = instant(match.get("kickoff_at") or match.get("kickoff") or match.get("kickoff_local"), naive_is_shanghai=True)
         cutoff = instant(payload.get("source_cutoff_at") or report.get("source_cutoff_at"))
-        created = instant(payload.get("prediction_created_at") or report.get("prediction_created_at"))
+        created = instant(payload.get("prediction_created_at") or report.get("prediction_created_at") or report.get("analysis_timestamp"))
         if kickoff is None or cutoff is None or created is None or cutoff > created or cutoff >= kickoff or created >= kickoff:
             continue
         key = (match_id, business_date, home, away, kickoff)

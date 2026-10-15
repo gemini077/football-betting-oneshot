@@ -65,3 +65,38 @@ def test_future_source_vs_prediction_rejected(tmp_path):
     out=tmp_path/"site";got=publish(data,c,out)
     assert "analysis_report_href" not in got
     assert not (out/"matches/3075322/analysis.html").exists()
+
+
+def _report_missing_created(data, timestamp):
+    source = data / "analysis_reports/current/r.json"
+    record = json.loads(source.read_text(encoding="utf-8"))
+    record.pop("prediction_created_at", None)
+    record["report"] = {"analysis_timestamp": timestamp}
+    source.write_text(json.dumps(record), encoding="utf-8")
+
+
+def test_live_report_schema_uses_preko_analysis_timestamp(tmp_path):
+    data, contract = setup(tmp_path)
+    _report_missing_created(data, "2026-10-15T15:41:00+00:00")
+    out = tmp_path / "site"
+    record = publish(data, contract, out)
+    assert record["analysis_report_href"] == "analysis.html"
+    assert (out / "matches/3075322/analysis.html").is_file()
+
+
+def test_live_report_schema_rejects_analysis_at_kickoff(tmp_path):
+    data, contract = setup(tmp_path)
+    _report_missing_created(data, "2026-10-15T16:45:00+00:00")
+    out = tmp_path / "site"
+    record = publish(data, contract, out)
+    assert "analysis_report_href" not in record
+    assert not (out / "matches/3075322/analysis.html").exists()
+
+
+def test_live_report_schema_rejects_analysis_before_source_cutoff(tmp_path):
+    data, contract = setup(tmp_path)
+    _report_missing_created(data, "2026-10-15T15:20:00+00:00")
+    out = tmp_path / "site"
+    record = publish(data, contract, out)
+    assert "analysis_report_href" not in record
+    assert not (out / "matches/3075322/analysis.html").exists()
