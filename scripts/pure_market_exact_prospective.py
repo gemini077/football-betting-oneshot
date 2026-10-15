@@ -1148,9 +1148,33 @@ def run_lane(
     settlement_paths: dict[str, str] = {}
     settlements: list[dict[str, Any]] = []
     if not storage_load_failed:
+        try:
+            prior_settlements, _ = _load_persisted_settlement_documents(output_root)
+        except (LaneConflictError, OSError, ValueError, json.JSONDecodeError) as error:
+            conflicts.append(str(error))
+            storage_load_failed = True
+    if not storage_load_failed:
+        prior_by_id = {str(item["prediction_id"]): item for item in prior_settlements}
         result_map = discover_verified_results(result_root)
         for prediction in predictions:
             result_item, reason = _find_verified_result(prediction, result_map)
+            prior = prior_by_id.get(str(prediction["prediction_id"]))
+            if prior is not None:
+                try:
+                    if result_item is not None:
+                        normalized = normalize_verified_result(result_item["payload"])
+                        stored = prior.get("result") or {}
+                        prior_identity = (stored.get("scope"), stored.get("actual_score"))
+                        observed_identity = (normalized.get("scope"), normalized.get("actual_score"))
+                        if prior_identity != observed_identity:
+                            raise LaneConflictError(
+                                f"immutable settlement result conflict: {prediction['prediction_id']}; "
+                                f"stored={prior_identity!r} current={observed_identity!r}"
+                            )
+                    settlement_existing += 1
+                except (LaneConflictError, OSError, ValueError, json.JSONDecodeError) as error:
+                    conflicts.append(str(error))
+                continue
             if result_item is None:
                 settlement_skipped[reason or "RESULT_NOT_AVAILABLE"] += 1
                 continue
