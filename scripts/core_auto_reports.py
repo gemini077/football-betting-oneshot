@@ -6,7 +6,7 @@ import argparse
 import json
 import subprocess
 import sys
-from datetime import date, datetime
+from datetime import date, datetime, time, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -38,7 +38,8 @@ def _business_date_now(now: datetime | None = None) -> date:
     current = now or datetime.now(SHANGHAI)
     if current.tzinfo is None:
         current = current.replace(tzinfo=SHANGHAI)
-    return current.astimezone(SHANGHAI).date()
+    local = current.astimezone(SHANGHAI)
+    return local.date() if local.time() >= time(11) else local.date() - timedelta(days=1)
 
 
 def _parse_generated_at(value) -> datetime | None:
@@ -53,8 +54,30 @@ def _parse_generated_at(value) -> datetime | None:
     return parsed.astimezone(SHANGHAI)
 
 
+def filter_pre_kickoff(rows: list[dict], *, now: datetime | None = None) -> list[dict]:
+    """Keep only rows whose known kickoff is at least 15 minutes away."""
+    current = now or datetime.now(SHANGHAI)
+    if current.tzinfo is None:
+        current = current.replace(tzinfo=SHANGHAI)
+    cutoff = current.astimezone(SHANGHAI) + timedelta(minutes=15)
+    eligible = []
+    for row in rows:
+        kickoff_value = row.get("kickoff") if isinstance(row, dict) else None
+        if kickoff_value in (None, ""):
+            continue
+        try:
+            kickoff = datetime.fromisoformat(str(kickoff_value).strip().replace("Z", "+00:00"))
+        except (TypeError, ValueError):
+            continue
+        if kickoff.tzinfo is None:
+            kickoff = kickoff.replace(tzinfo=SHANGHAI)
+        if kickoff.astimezone(SHANGHAI) >= cutoff:
+            eligible.append(row)
+    return eligible
+
+
 def validate_workspace(workspace: dict | None, *, now: datetime | None = None) -> dict:
-    """Validate the workspace snapshot before allowing core selection."""
+    """Validate JC business-date coverage and bounded source freshness."""
     if not isinstance(workspace, dict) or not workspace:
         return {"status": "INVALID_WORKSPACE", "reason": "WORKSPACE_MISSING_OR_INVALID"}
     target_date = str(workspace.get("target_date") or "").strip()
@@ -65,11 +88,24 @@ def validate_workspace(workspace: dict | None, *, now: datetime | None = None) -
         parsed_target = date.fromisoformat(target_date)
     except ValueError:
         return {"status": "INVALID_WORKSPACE", "reason": "WORKSPACE_TARGET_DATE_INVALID"}
-    current_date = _business_date_now(now)
-    if parsed_target != current_date or generated_at.date() != parsed_target:
+    current = now or datetime.now(SHANGHAI)
+    if current.tzinfo is None:
+        current = current.replace(tzinfo=SHANGHAI)
+    current = current.astimezone(SHANGHAI)
+    current_date = _business_date_now(current)
+    if parsed_target not in (current_date, current_date + timedelta(days=1)):
         return {
             "status": "STALE_WORKSPACE",
             "reason": "WORKSPACE_BUSINESS_DATE_STALE",
+            "target_date": target_date,
+            "current_business_date": current_date.isoformat(),
+            "generated_at": generated_at.isoformat(),
+        }
+    age = current - generated_at
+    if age < -timedelta(minutes=2) or age > timedelta(hours=12):
+        return {
+            "status": "STALE_WORKSPACE",
+            "reason": "WORKSPACE_SOURCE_TIMESTAMP_STALE",
             "target_date": target_date,
             "current_business_date": current_date.isoformat(),
             "generated_at": generated_at.isoformat(),
@@ -107,7 +143,9 @@ def main() -> int:
             "failed": 0,
         }, ensure_ascii=False))
         return 1
-    chosen = select(workspace.get("matches") or [])
+    selected = select(workspace.get("matches") or [])
+    chosen = filter_pre_kickoff(selected)
+    skipped_pre_kickoff = len(selected) - len(chosen)
     completed = failed = attempted = 0
     for row in chosen:
         if completed + failed >= max(1, args.max_jobs):
@@ -159,6 +197,7 @@ def main() -> int:
         "status": status,
         "selected": len(chosen), "attempted": attempted,
         "completed": completed, "failed": failed,
+        "skipped_pre_kickoff": skipped_pre_kickoff,
     }, ensure_ascii=False))
     return 0
 
