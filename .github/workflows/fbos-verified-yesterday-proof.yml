@@ -1,0 +1,66 @@
+name: FBOS Previous-Day Result Proof
+on:
+  push:
+    branches: [fbos/verified-yesterday-results-20261015]
+    paths: [".github/workflows/fbos-verified-yesterday-proof.yml"]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  proof:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            scripts/
+            tests/
+            config/
+            data/prediction_universe/
+            data/base_prediction_jobs/
+            data/postmatch_automation/schedules/
+            data/postmatch_automation/results/
+            data/model_governance/predictions/
+            data/model_governance/prediction_exclusions/
+            data/prospective/
+            data/match_workspace/latest.json
+            data/product_runtime/latest_cycle.json
+            data/product_runtime/health_watch.json
+            data/prediction_quality/current_champion_trust.json
+            requirements.txt
+          sparse-checkout-cone-mode: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install runtime
+        run: pip install -q -r requirements.txt pytest
+      - name: Existing prediction dashboard regression
+        run: python -m pytest -q tests/test_prediction_dashboard.py
+      - name: Verify genuine saved prior business-day results and public HTML
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json,tempfile
+          from pathlib import Path
+          from scripts.prediction_dashboard import build_dashboard
+          with tempfile.TemporaryDirectory(prefix="fbos-prevft-") as td:
+              p=build_dashboard("2026-10-15",output_root=Path(td))
+              r=p.get("previous_business_day_results")
+              assert isinstance(r,dict),p.keys()
+              assert r["business_date"]=="2026-10-14",r
+              assert r["fixture_count"]==14,r
+              assert r["verified_count"]>=13,r
+              assert r["verified_count"]+r["pending_count"]==14,r
+              valid=[x for x in r["entries"] if x["status"]=="VERIFIED"]
+              pending=[x for x in r["entries"] if x["status"]=="PENDING"]
+              assert all(x["90m_score"] and x["source_url"] for x in valid)
+              assert all(x["90m_score"] is None and x["source_url"] is None for x in pending)
+              assert all("hit" not in k.lower() and "prediction" not in k.lower() for x in r["entries"] for k in x)
+              html=(Path(td)/"latest.html").read_text(encoding="utf8")
+              assert "\u524d\u4e00\u7ade\u5f69\u65e5\u8d5b\u679c" in html
+              assert "\u4e0d\u8ba1\u5165\u9884\u6d4b\u547d\u4e2d\u7387" in html
+              again=json.loads((Path(td)/"latest.json").read_text(encoding="utf8"))
+              assert again["previous_business_day_results"]==r
+              print(json.dumps({"status":"PREVIOUS_JC_FT_PROVENANCE_ACCEPTED","day":r["business_date"],"verified":r["verified_count"],"pending":r["pending_count"],"fixtures":r["fixture_count"]},ensure_ascii=False))
+          PY
