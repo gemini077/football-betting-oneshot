@@ -19,6 +19,9 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+      # repository_dispatch may be queued behind data writers; avoid a stale default-branch snapshot.
+      - name: Sync latest main before reading due market checkpoints
+        run: git pull --rebase origin main
       - name: Check whether an analyzed match reached a new checkpoint
         id: due
         shell: bash
