@@ -1,0 +1,42 @@
+name: FBOS Free Runner Proof
+on:
+  push:
+    branches: [fbos/free-runner-proof-20261015]
+    paths: [".github/workflows/fbos-free-runner-proof.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify native FBOS business date without Pages environment
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json
+          from datetime import datetime, timezone
+          from scripts.automation_cycle import active_business_dates
+          date, carry = active_business_dates(datetime.now(timezone.utc))
+          assert len(date) == 10 and len(carry) == 1
+          print(json.dumps({"status":"cloud_runner_started","business_date":date,"carryover":carry}))
+          PY
+      - name: Verify official source read-only
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import gzip,json,urllib.request
+          from scripts.fetch_sporttery import SPORTTERY_SCHEDULE_API, OFFICIAL_PAGE_HEADERS
+          req=urllib.request.Request(SPORTTERY_SCHEDULE_API, headers=OFFICIAL_PAGE_HEADERS)
+          with urllib.request.urlopen(req,timeout=15) as res:
+              raw=res.read(5242881)
+              assert res.status==200 and len(raw)<=5242880
+          decoded=gzip.decompress(raw) if raw[:2]==bytes([31,139]) else raw
+          value=json.loads(decoded)
+          assert value.get("success") is True and isinstance(value.get("value",{}).get("matchInfoList"),list)
+          print(json.dumps({"status":"upstream_live","groups":len(value["value"]["matchInfoList"])}))
+          PY
