@@ -883,7 +883,9 @@ def _render_key_takeaways(contract: dict[str, Any], *, exact_state: str = "UNVER
         '<article class="panel takeaway-panel decision-context" id="decision-context">'
         '<h2>\u5173\u952e\u7ed3\u8bba</h2>'
         f'<div class="take-list">{"".join(items)}</div>'
-        '<div class="panel-link"><span>\u67e5\u770b\u5b8c\u6574\u5206\u6790</span><span>\u203a</span></div></article>'
+        + (('<a class="panel-link" href="analysis.html">\u67e5\u770b\u81ea\u52a8\u5206\u6790\u62a5\u544a <span>\u203a</span></a>')
+           if contract.get("analysis_report_href") == "analysis.html" else "")
+        + '</article>'
     )
 
 def _render_key_evidence(contract: dict[str, Any]) -> str:

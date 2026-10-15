@@ -422,8 +422,79 @@ def _match_contracts(data_root: Path, dashboard: dict[str, Any], match_ids: set[
     return contracts
 
 
+def _index_preko_analysis_reports(data_root: Path) -> dict[tuple[str, str, str, str, Any], tuple[Any, Path]]:
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    shanghai = ZoneInfo("Asia/Shanghai")
+
+    def instant(value: Any, *, naive_is_shanghai: bool = False) -> datetime | None:
+        if not isinstance(value, str) or not value.strip():
+            return None
+        try:
+            parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+            if parsed.tzinfo is None:
+                if not naive_is_shanghai:
+                    return None
+                parsed = parsed.replace(tzinfo=shanghai)
+            return parsed.astimezone(shanghai)
+        except (ValueError, OverflowError):
+            return None
+
+    index: dict[tuple[str, str, str, str, Any], tuple[Any, Path]] = {}
+    reports = data_root / "analysis_reports" / "current"
+    for json_path in sorted(reports.glob("*.json")):
+        html_path = json_path.with_suffix(".html")
+        if not html_path.is_file():
+            continue
+        try:
+            payload = json.loads(json_path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, json.JSONDecodeError):
+            continue
+        match = payload.get("match") if isinstance(payload.get("match"), dict) else {}
+        report = payload.get("report") if isinstance(payload.get("report"), dict) else {}
+        match_id, business_date = match.get("match_id"), match.get("business_date")
+        home, away = match.get("home"), match.get("away")
+        if not all(isinstance(value, str) and value for value in (match_id, business_date, home, away)):
+            continue
+        kickoff = instant(match.get("kickoff_at") or match.get("kickoff") or match.get("kickoff_local"), naive_is_shanghai=True)
+        cutoff = instant(payload.get("source_cutoff_at") or report.get("source_cutoff_at"))
+        created = instant(payload.get("prediction_created_at") or report.get("prediction_created_at"))
+        if kickoff is None or cutoff is None or created is None or cutoff > created or cutoff >= kickoff or created >= kickoff:
+            continue
+        key = (match_id, business_date, home, away, kickoff)
+        previous = index.get(key)
+        if previous is None or created > previous[0]:
+            index[key] = (created, html_path)
+    return index
+
+
+def _analysis_report_for_contract(index: dict[tuple[str, str, str, str, Any], tuple[Any, Path]], contract: dict[str, Any]) -> Path | None:
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    identity = contract.get("identity") if isinstance(contract.get("identity"), dict) else {}
+    values = (identity.get("match_id"), identity.get("business_date"), identity.get("home"), identity.get("away"))
+    if not all(isinstance(value, str) and value for value in values):
+        return None
+    value = identity.get("kickoff_at")
+    if not isinstance(value, str) or not value.strip():
+        return None
+    try:
+        kickoff = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        shanghai = ZoneInfo("Asia/Shanghai")
+        if kickoff.tzinfo is None:
+            kickoff = kickoff.replace(tzinfo=shanghai)
+        kickoff = kickoff.astimezone(shanghai)
+    except (ValueError, OverflowError):
+        return None
+    entry = index.get((*values, kickoff))
+    return entry[1] if entry else None
+
+
 def _build_match_pages(data_root: Path, output: Path, match_ids: set[str], dashboard: dict[str, Any]) -> None:
     contracts = _match_contracts(data_root, dashboard, match_ids)
+    report_index = _index_preko_analysis_reports(data_root)
     for match_id in sorted(match_ids):
         contract = contracts.get(match_id)
         if contract is None:
@@ -434,6 +505,10 @@ def _build_match_pages(data_root: Path, output: Path, match_ids: set[str], dashb
         }
         target = output / "matches" / match_id / "index.html"
         target.parent.mkdir(parents=True, exist_ok=True)
+        report_path = _analysis_report_for_contract(report_index, contract)
+        if report_path is not None:
+            shutil.copyfile(report_path, target.parent / "analysis.html")
+            contract["analysis_report_href"] = "analysis.html"
         target.write_text(render_match_detail(contract), encoding="utf-8")
 
 
