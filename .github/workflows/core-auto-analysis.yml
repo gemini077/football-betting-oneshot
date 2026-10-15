@@ -1,6 +1,12 @@
 name: Core event automatic reports
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/deepseek_auto_analysis.py"
+      - "data/team_aliases.json"
+      - ".github/workflows/core-auto-analysis.yml"
   workflow_dispatch:
   schedule:
     - cron: "7,37 * * * *"
