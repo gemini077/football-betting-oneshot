@@ -313,3 +313,59 @@ def test_report_manifest_uses_same_fallback_as_model(tmp_path):
     payload = json.loads(output.read_text(encoding="utf-8"))
     assert payload["sources"]["500_deep"]["status"] == "VERIFIED_LOCAL_FALLBACK"
     assert payload["sources"]["500_deep"]["matches"][0]["file"].endswith("1.json")
+
+
+
+def test_automatic_core_forwards_exact_provider_id_without_name_guessing(tmp_path, monkeypatch):
+    import deepseek_auto_analysis as pipeline
+
+    path = tmp_path / "workspace.json"
+    path.write_text(json.dumps({"matches": [{
+        "id": "3075322", "business_date": "2026-10-15",
+        "home": "克拉约瓦", "away": "赫塔费", "nowscore_id": 3075322,
+    }]}), encoding="utf-8")
+    monkeypatch.setattr(pipeline, "WORKSPACE_PATH", path)
+    captured = []
+
+    class StopAfterCommand(Exception):
+        pass
+
+    def intercept(command, **kwargs):
+        captured.append(command)
+        raise StopAfterCommand()
+
+    monkeypatch.setattr(pipeline, "run_json_command", intercept)
+    try:
+        pipeline.run_pipeline({
+            "match_id": "3075322", "business_date": "2026-10-15",
+            "match": "克拉约瓦 vs 赫塔费",
+        })
+    except StopAfterCommand:
+        pass
+    else:
+        raise AssertionError("Expected the stubbed fetch command to stop the pipeline")
+    assert len(captured) == 1
+    argv = captured[0]
+    assert argv[argv.index("--nowscore-id") + 1] == "3075322"
+    assert argv[argv.index("--match") + 1] == "3075322"
+
+
+def test_automatic_core_provider_id_conflicts_and_wrong_date_fail_closed(tmp_path, monkeypatch):
+    import deepseek_auto_analysis as pipeline
+
+    path = tmp_path / "workspace.json"
+    monkeypatch.setattr(pipeline, "WORKSPACE_PATH", path)
+    request = {"match_id": "3075322", "business_date": "2026-10-15"}
+    cases = (
+        {"matches": [{"id": "3075322", "business_date": "2026-10-15", "nowscore_id": 0}]},
+        {"matches": [{"id": "3075322", "business_date": "2026-10-14", "nowscore_id": 3075322}]},
+        {"matches": [{"id": "other", "business_date": "2026-10-15", "nowscore_id": 3075322}]},
+        {"matches": [{"id": "3075322", "business_date": "2026-10-15", "nowscore_id": 3075322}],
+         "selected_matches": [{"id": "3075322", "business_date": "2026-10-15", "nowscore_id": 42}]},
+        {"matches": [{"id": "3075322", "business_date": "2026-10-15", "nowscore_id": 3075322}],
+         "selected_matches": [{"id": "3075322", "business_date": "2026-10-15"}]},
+    )
+    for row in cases:
+        path.write_text(json.dumps(row), encoding="utf-8")
+        assert pipeline.fetch_nowscore_id(request) == ""
+    assert pipeline.fetch_nowscore_id({**request, "match_id": "500-3075322"}) == ""

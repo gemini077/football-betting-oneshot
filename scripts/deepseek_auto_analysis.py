@@ -136,6 +136,42 @@ def fetch_shuju_id(request: dict) -> str:
     return match.group(1) if match else ""
 
 
+def fetch_nowscore_id(request: dict) -> str:
+    """Resolve a source ID only for the identical frozen fixture and business date."""
+    requested_id = str(request.get("match_id") or "").strip()
+    if not re.fullmatch(r"[1-9]\d*", requested_id):
+        return ""
+    try:
+        workspace = load_json(WORKSPACE_PATH)
+    except (OSError, json.JSONDecodeError):
+        return ""
+    if not isinstance(workspace, dict):
+        return ""
+    request_date = str(request.get("business_date") or "").strip()
+    fixtures = []
+    for collection in (workspace.get("matches"), workspace.get("selected_matches")):
+        if isinstance(collection, list):
+            fixtures.extend(
+                fixture for fixture in collection
+                if isinstance(fixture, dict)
+                and str(fixture.get("id") or "").strip() == requested_id
+                and str(fixture.get("business_date") or "").strip() == request_date
+            )
+    if not fixtures:
+        return ""
+
+    provider_ids = set()
+    for fixture in fixtures:
+        provider_id = fixture.get("nowscore_id")
+        if isinstance(provider_id, int) and not isinstance(provider_id, bool) and provider_id > 0:
+            provider_ids.add(str(provider_id))
+        elif isinstance(provider_id, str) and re.fullmatch(r"[1-9]\d*", provider_id.strip()):
+            provider_ids.add(provider_id.strip())
+        else:
+            return ""
+    return provider_ids.pop() if len(provider_ids) == 1 else ""
+
+
 def devig_three_way(odds: dict) -> dict | None:
     keys = ("home", "draw", "away")
     try:
@@ -738,6 +774,9 @@ def run_pipeline(request: dict, api_key: str = "", model_name: str = DEFAULT_MOD
     shuju_id = fetch_shuju_id(request)
     if shuju_id:
         fetch_command.extend(["--shuju-id", shuju_id])
+    nowscore_id = fetch_nowscore_id(request)
+    if nowscore_id:
+        fetch_command.extend(["--nowscore-id", nowscore_id])
     fetch = run_json_command(fetch_command, allow_failure=True, timeout=240)
     manifest_path = Path(fetch["manifest"])
     if not manifest_path.is_absolute():
