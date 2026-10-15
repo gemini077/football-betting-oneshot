@@ -1,0 +1,63 @@
+name: FBOS Next Day Dashboard Acceptance
+on:
+  push:
+    branches: [fbos/next-day-dashboard-20261015]
+    paths: [".github/workflows/fbos-next-day-dashboard-accept.yml"]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  acceptance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          filter: blob:none
+          sparse-checkout: |
+            scripts/
+            tests/test_prediction_dashboard.py
+            data/prediction_universe/
+            data/base_prediction_jobs/
+            data/model_governance/predictions/
+            data/model_governance/prediction_exclusions/
+            data/postmatch_automation/results/
+            data/prospective/
+            data/match_workspace/latest.json
+            data/product_runtime/latest_cycle.json
+            data/product_runtime/health_watch.json
+            data/prediction_quality/current_champion_trust.json
+            requirements.txt
+          sparse-checkout-cone-mode: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install runtime dependencies
+        run: pip install -q -r requirements.txt pytest
+      - name: Validate dashboard code and regression tests
+        run: |
+          python -m py_compile scripts/prediction_dashboard.py
+          python -m pytest -q tests/test_prediction_dashboard.py
+      - name: Verify real saved next-day freezes are visible with immutable identity
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json,tempfile
+          from pathlib import Path
+          from scripts.prediction_dashboard import build_dashboard
+          with tempfile.TemporaryDirectory(prefix="fbos-preview-") as d:
+              p=build_dashboard("2026-10-14",output_root=Path(d))
+              s=p["summary"]
+              assert s["current_business_date_fixture_count"]==14,s
+              assert s["next_business_date_fixture_count"]==13,s
+              assert s["card_count"]==27,s
+              assert s["frozen"]==13,s
+              nxt=[c for c in p["fixtures"] if c.get("business_date")=="2026-10-15"]
+              assert len(nxt)==13,(len(nxt),[list(x)[:10] for x in p["fixtures"][:2]])
+              assert all(c.get("status")=="FROZEN" for c in nxt)
+              assert len({c.get("prediction_id") for c in nxt})==13
+              html=(Path(d)/"latest.html").read_text(encoding="utf8")
+              assert "\u542b\u4e0b\u4e00\u7ade\u5f69\u65e5" in html
+              print(json.dumps({"status":"ACCEPTED_NEXT_13_VISIBLE","active":s["current_business_date_fixture_count"],"next":s["next_business_date_fixture_count"],"frozen":s["frozen"],"unique_prediction_ids":13},ensure_ascii=False))
+          PY

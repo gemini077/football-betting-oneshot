@@ -2058,6 +2058,8 @@ def render_dashboard(payload: dict[str, Any]) -> str:
         else date_value or "\u6bd4\u8d5b\u65e5"
     )
     business_date_label = f"\u7ade\u5f69\u65e5 {date_label}"
+    if int(summary.get("next_business_date_fixture_count") or 0) > 0:
+        business_date_label += " \u00b7 \u542b\u4e0b\u4e00\u7ade\u5f69\u65e5"
     fixture_count = int(summary.get("fixture_count") or len(payload.get("fixtures") or []))
     verified_results = int(summary.get("verified_results") or 0)
     exact_score_serving = exact_score_serving_presentation(quality_health)
@@ -2173,16 +2175,51 @@ def build_dashboard(
         universe = {}
     if not isinstance(jobs_payload, dict):
         jobs_payload = {}
-    fixtures = [row for row in (universe.get("fixtures") or []) if isinstance(row, dict)]
-    jobs = [
-        row
-        for row in (jobs_payload.get("jobs") or [])
-        if isinstance(row, dict)
-        and (
-            not str(_pick(row, "business_date", "businessDate") or "").strip()
-            or str(_pick(row, "business_date", "businessDate") or "").strip() == business_date
+    # Display the active JC sales day alongside its next day when the latter
+    # has independently stored, matching-day universe and job artifacts.
+    # Never infer or synthesize next-day forecasts from current-day jobs.
+    display_dates = [business_date]
+    try:
+        next_date = (datetime.fromisoformat(business_date).date() + timedelta(days=1)).isoformat()
+    except ValueError:
+        next_date = None
+    jobs_by_date: dict[str, list[dict[str, Any]]] = {}
+    universes_by_date: dict[str, dict[str, Any]] = {business_date: universe}
+    fixtures: list[dict[str, Any]] = []
+    if next_date:
+        next_universe = _read_optional_json(
+            Path(universe_root) / f"{next_date}.json", [], f"universe:{next_date}", {}
         )
+        next_jobs_payload = _read_optional_json(
+            Path(jobs_root) / f"{next_date}.json", [], f"base_jobs:{next_date}", {}
+        )
+        if (isinstance(next_universe, dict)
+                and isinstance(next_jobs_payload, dict)
+                and next_universe.get("business_date") == next_date
+                and next_jobs_payload.get("business_date") == next_date
+                and next_universe.get("status") == "READY"
+                and next_jobs_payload.get("status") == "READY"):
+            display_dates.append(next_date)
+            universes_by_date[next_date] = next_universe
+            jobs_by_date[next_date] = [
+                row for row in (next_jobs_payload.get("jobs") or [])
+                if isinstance(row, dict)
+                and str(_pick(row, "business_date", "businessDate") or "") == next_date
+            ]
+    jobs_by_date[business_date] = [
+        row for row in (jobs_payload.get("jobs") or [])
+        if isinstance(row, dict)
+        and (not str(_pick(row, "business_date", "businessDate") or "").strip()
+             or str(_pick(row, "business_date", "businessDate") or "").strip() == business_date)
     ]
+    for day in display_dates:
+        day_universe = universes_by_date[day]
+        fixtures.extend([
+            fixture for fixture in (day_universe.get("fixtures") or [])
+            if isinstance(fixture, dict)
+            and str(_pick(fixture, "businessDate", "business_date") or day) == day
+        ])
+    jobs = jobs_by_date[business_date]
     records = _read_records(Path(prediction_root), errors)
     exclusions = _exclusion_index(Path(exclusion_root), errors)
     result_index = _result_index(Path(result_root), errors)
@@ -2212,8 +2249,10 @@ def build_dashboard(
     completed = _attach_history_prematch_context(completed, records)
     cards: list[dict[str, Any]] = []
     for fixture in fixtures:
+        fixture_date = str(_pick(fixture, "businessDate", "business_date") or business_date)
+        fixture_jobs = jobs_by_date.get(fixture_date, [])
         current_job_resolution = resolve_current_job_for_match(
-            jobs,
+            fixture_jobs,
             _prematch_identity(fixture, None),
         )
         if current_job_resolution["status"] == "UNIQUE":
@@ -2292,10 +2331,13 @@ def build_dashboard(
             "status": universe.get("status") or "UNAVAILABLE",
             "source": universe.get("source"),
             "fetched_at": universe.get("fetched_at"),
-            "fixture_count": universe.get("fixture_count", len(fixtures)),
+            "fixture_count": len(fixtures),
+            "business_dates": display_dates,
         },
         "summary": {
-            "fixture_count": int(universe.get("fixture_count") or len(fixtures)),
+            "fixture_count": len(fixtures),
+            "current_business_date_fixture_count": len(universe.get("fixtures") or []),
+            "next_business_date_fixture_count": max(0, len(fixtures) - len(universe.get("fixtures") or [])),
             "card_count": len(cards),
             "frozen": counts.get("FROZEN", 0),
             "pending": counts.get("PENDING", 0),
@@ -2311,7 +2353,7 @@ def build_dashboard(
             "formal_prospective_total": int(formal_total or 0),
             "samples_added_today": int(samples_added or 0),
             "pilot_excluded_count": int(excluded_count or 0),
-            "silent_missing_fixture": max(0, int(universe.get("fixture_count") or len(fixtures)) - len(cards)),
+            "silent_missing_fixture": max(0, len(fixtures) - len(cards)),
         },
         "data_errors": errors,
         "fixtures": cards,
