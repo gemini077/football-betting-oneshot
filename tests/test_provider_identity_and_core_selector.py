@@ -55,3 +55,22 @@ class CoreSelectorTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+
+def test_getafe_verified_bilingual_alias_preserves_wrong_team_and_time_guards():
+    from nowscore_markets import _verified
+    from team_identity import team_similarity
+
+    assert team_similarity("赫塔费", "赫塔菲")[0] == 1.0
+    actual_page = {
+        "home_team": "克拉约瓦大学(主)",
+        "away_team": "赫塔菲",
+        "kickoff_local": "2026/10/16 00:45",
+    }
+    allowed = {"home": "克拉约瓦", "away": "赫塔费", "kickoff": "2026-10-16 00:45"}
+    assert _verified(allowed, actual_page) == (True, [])
+    wrong_side = _verified({**allowed, "away": "巴塞罗那"}, actual_page)
+    wrong_time = _verified({**allowed, "kickoff": "2026-10-17 23:45"}, actual_page)
+    assert not wrong_side[0] and "AWAY_TEAM_MISMATCH" in wrong_side[1]
+    assert not wrong_time[0] and "KICKOFF_MISMATCH" in wrong_time[1]
