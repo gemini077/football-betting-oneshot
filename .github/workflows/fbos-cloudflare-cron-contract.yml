@@ -1,0 +1,26 @@
+name: FBOS Cloudflare Cron Dispatcher Contract
+on:
+  push:
+    branches: [fbos/cloudflare-free-cron-dispatch-20261015]
+    paths:
+      - ".github/workflows/fbos-cloudflare-cron-contract.yml"
+      - "scheduler/cloudflare/github_dispatch/**"
+permissions:
+  contents: read
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            scheduler/cloudflare/github_dispatch/
+          sparse-checkout-cone-mode: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Validate worker module
+        run: node --check scheduler/cloudflare/github_dispatch/src/index.mjs
+      - name: Run pure HTTP mocks; no external API calls or tokens
+        run: node --test scheduler/cloudflare/github_dispatch/test/worker.test.mjs
