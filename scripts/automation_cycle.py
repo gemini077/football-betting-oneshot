@@ -20,6 +20,7 @@ BASE_JOBS_DIR = ROOT / "data" / "base_prediction_jobs"
 NOT_YET_PUBLISHED = "NOT_YET_PUBLISHED"
 DEFAULT_SUBPROCESS_TIMEOUT = 360
 BASE_PREDICTION_TIMEOUT = 600
+JC_BUSINESS_DAY_ROLLOVER_HOUR = 11
 
 
 def run(
@@ -199,12 +200,16 @@ def _write_runtime(
 
 
 def active_business_dates(now: datetime | None = None) -> tuple[str, list[str]]:
-    """Return today and the immediately prior Shanghai business date."""
+    """The JC sales business day rolls over at 11:00 Asia/Shanghai."""
     current = now or datetime.now(SHANGHAI)
     if current.tzinfo is None:
         current = current.replace(tzinfo=SHANGHAI)
-    current_date = current.astimezone(SHANGHAI).date()
-    return current_date.isoformat(), [(current_date - timedelta(days=1)).isoformat()]
+    shanghai_now = current.astimezone(SHANGHAI)
+    day = shanghai_now.date()
+    if shanghai_now.hour < JC_BUSINESS_DAY_ROLLOVER_HOUR:
+        day -= timedelta(days=1)
+    return day.isoformat(), [(day - timedelta(days=1)).isoformat()]
+
 
 
 def next_business_date(business_date: str) -> str:

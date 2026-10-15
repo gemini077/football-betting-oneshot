@@ -40,6 +40,18 @@ USER_AGENT = (
 )
 
 # ── 工具函数 ──────────────────────────────────────
+SPORTTERY_SCHEDULE_API = "https://webapi.sporttery.cn/gateway/uniform/football/getMatchListV1.qry?clientCode=3001"
+OFFICIAL_PAGE_HEADERS = {
+    "User-Agent": USER_AGENT.replace("17_0", "17_5").replace("17.0", "17.5"),
+    "Accept": "application/json, text/javascript, */*; q=0.01",
+    "Accept-Language": "zh-CN,zh;q=0.9",
+    "Referer": "https://m.sporttery.cn/mjc/jsq/zqspf/",
+    "Origin": "https://m.sporttery.cn",
+    "X-Requested-With": "XMLHttpRequest",
+    "Accept-Encoding": "gzip",
+}
+
+
 def log(msg: str, level: str = "INFO"):
     ts = datetime.now().strftime("%H:%M:%S")
     print(f"[{ts}][{level}] {msg}", file=sys.stderr)

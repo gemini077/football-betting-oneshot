@@ -2,41 +2,49 @@ name: FBOS Free Runner Proof
 on:
   push:
     branches: [fbos/free-runner-proof-20261015]
-    paths: [".github/workflows/fbos-free-runner-proof.yml"]
+    paths:
+      - ".github/workflows/fbos-free-runner-proof.yml"
   workflow_dispatch:
-
 permissions:
   contents: read
-
 jobs:
   check:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 8
     steps:
       - uses: actions/checkout@v4
-      - name: Verify native FBOS business date without Pages environment
+        with:
+          sparse-checkout: |
+            scripts/automation_cycle.py
+            scripts/jc_market_calendar.py
+            scripts/fetch_sporttery.py
+            scripts/cloud_daily_source_freeze.py
+          sparse-checkout-cone-mode: false
+      - name: Verify canonical business-day cutover on real Linux runner
         shell: bash
         run: |
           python3 - <<'PY'
-          import json
-          from datetime import datetime, timezone
-          from scripts.automation_cycle import active_business_dates
-          date, carry = active_business_dates(datetime.now(timezone.utc))
-          assert len(date) == 10 and len(carry) == 1
-          print(json.dumps({"status":"cloud_runner_started","business_date":date,"carryover":carry}))
+          from datetime import datetime
+          from scripts.automation_cycle import active_business_dates, SHANGHAI
+          assert active_business_dates(datetime(2026, 10, 15, 10, 59, tzinfo=SHANGHAI))[0] == "2026-10-14"
+          assert active_business_dates(datetime(2026, 10, 15, 11, 0, tzinfo=SHANGHAI))[0] == "2026-10-15"
+          print("CLOUD_JC_11AM_BOUNDARY_PASS")
           PY
-      - name: Verify official source read-only
+      - name: Freeze real original official schedule in runner temp only
         shell: bash
         run: |
-          python3 - <<'PY'
-          import gzip,json,urllib.request
-          from scripts.fetch_sporttery import SPORTTERY_SCHEDULE_API, OFFICIAL_PAGE_HEADERS
-          req=urllib.request.Request(SPORTTERY_SCHEDULE_API, headers=OFFICIAL_PAGE_HEADERS)
-          with urllib.request.urlopen(req,timeout=15) as res:
-              raw=res.read(5242881)
-              assert res.status==200 and len(raw)<=5242880
-          decoded=gzip.decompress(raw) if raw[:2]==bytes([31,139]) else raw
-          value=json.loads(decoded)
-          assert value.get("success") is True and isinstance(value.get("value",{}).get("matchInfoList"),list)
-          print(json.dumps({"status":"upstream_live","groups":len(value["value"]["matchInfoList"])}))
+          set -euo pipefail
+          work="$(mktemp -d)"
+          trap 'rm -rf "$work"' EXIT
+          python3 scripts/cloud_daily_source_freeze.py --output-dir "$work"
+          python3 - "$work" <<'PY'
+          import base64,gzip,hashlib,json,sys
+          from pathlib import Path
+          p=list(Path(sys.argv[1]).glob("*.json.gz"))
+          assert len(p)==1
+          rec=json.loads(gzip.decompress(p[0].read_bytes()))
+          raw=base64.b64decode(rec["raw_payload_base64"],validate=True)
+          assert hashlib.sha256(raw).hexdigest()==rec["source_sha256"]
+          assert rec["summary"]["status"] in {"OK","SOURCE_HAS_NO_ACTIVE_BUSINESS_DATE"}
+          print("CLOUD_OFFICIAL_WIRE_FREEZE_PASS",rec["business_date"],rec["summary"]["status"],len(raw))
           PY
