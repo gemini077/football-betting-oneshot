@@ -271,6 +271,7 @@ def _fixture_projection(fixture: dict[str, Any]) -> dict[str, Any]:
         "match_id": str(_pick(fixture, "matchId", "match_id", "id") or ""),
         "match_num": _pick(fixture, "matchNum", "match_num"),
         "competition": _pick(fixture, "league", "competition"),
+        "business_date": _pick(fixture, "businessDate", "business_date"),
         "home": _pick(fixture, "homeTeam", "home_team", "home"),
         "away": _pick(fixture, "awayTeam", "away_team", "away"),
         "home_crest": _pick(fixture, "homeCrest", "home_crest", "homeLogo", "home_logo"),
@@ -1679,24 +1680,36 @@ def _league_groups_html(
     cards: list[dict[str, Any]],
     *,
     exact_score_serving: dict[str, str] | None = None,
+    default_business_date: str | None = None,
 ) -> str:
-    """Keep the R4 editorial league grouping while preserving fixture order."""
+    """Group by exact business day and competition, preserving card order."""
 
-    groups: dict[str, list[dict[str, Any]]] = {}
+    groups: dict[tuple[str | None, str], list[dict[str, Any]]] = {}
     for card in cards:
         if not isinstance(card, dict):
             continue
+        raw_date = card.get("business_date")
+        business_date = str(raw_date) if raw_date not in (None, "") else default_business_date
         label = _text(card.get("competition"), "\u8d5b\u4e8b\u5f85\u5b9a")
-        groups.setdefault(label, []).append(card)
+        groups.setdefault((business_date, label), []).append(card)
     sections = []
-    for competition, group in groups.items():
+    for (business_date, competition), group in groups.items():
         cards_html = "".join(
             _modern_card_html(card, exact_score_serving=exact_score_serving)
             for card in group
         )
+        date_label = ""
+        if business_date:
+            match = re.fullmatch(r"(\d{4})-(\d{2})-(\d{2})", business_date)
+            if match:
+                month, day = int(match.group(2)), int(match.group(3))
+                date_label = f"\u7ade\u5f69\u65e5 {month}\u6708{day}\u65e5 \u00b7 "
+            else:
+                date_label = f"\u7ade\u5f69\u65e5 {html.escape(business_date)} \u00b7 "
+        heading = f"{date_label}{html.escape(competition)}"
         sections.append(
-            f'<section class="league-group" data-league="{html.escape(competition, quote=True)}">'
-            f'<div class="league-title"><strong>{html.escape(competition)}</strong>'
+            f'<section class="league-group" data-business-date="{html.escape(business_date or "", quote=True)}" data-league="{html.escape(competition, quote=True)}">'
+            f'<div class="league-title"><strong>{heading}</strong>'
             f'<span>{len(group)} \u573a \u203a</span></div>{cards_html}</section>'
         )
     return "".join(sections)
@@ -2177,7 +2190,12 @@ def render_dashboard(payload: dict[str, Any]) -> str:
     verified_results = int(summary.get("verified_results") or 0)
     exact_score_serving = exact_score_serving_presentation(quality_health)
     cards = [card for card in payload.get("fixtures") or [] if isinstance(card, dict)]
-    cards_html = _league_groups_html(cards, exact_score_serving=exact_score_serving)
+    cards_html = _league_groups_html(
+        cards,
+        exact_score_serving=exact_score_serving,
+        default_business_date=date_value or None,
+    )
+    dashboard_title = "\u672c\u671f\u6bd4\u8d5b" if int(summary.get("next_business_date_fixture_count") or 0) > 0 else "\u4eca\u65e5\u6bd4\u8d5b"
     overall_empty_html = (
         '<div class="filter-empty" data-filter-empty="ALL">\u4eca\u5929\u6ca1\u6709\u53ef\u5c55\u793a\u7684\u6bd4\u8d5b\u3002</div>'
         if fixture_count == 0
@@ -2205,10 +2223,10 @@ def render_dashboard(payload: dict[str, Any]) -> str:
     content_html = f"""
 <section class="page dashboard-page">
 <header class="topbar">
-  <div class="crumbs"><strong>\u4eca\u65e5\u6bd4\u8d5b</strong><span>\u00b7</span><span>{html.escape(business_date_label)}</span></div>
+  <div class="crumbs"><strong>{dashboard_title}</strong><span>\u00b7</span><span>{html.escape(business_date_label)}</span></div>
 </header>
 <div class="content">
-<section class="matches-head"><div><h1>\u4eca\u65e5\u6bd4\u8d5b</h1><p>\u5148\u770b\u8c01\u548c\u8c01\u6bd4\u8d5b\uff0c\u518d\u770b\u80dc / \u5e73 / \u8d1f\u6982\u7387\u4e0e\u6700\u53ef\u80fd\u6bd4\u5206\u3002\u5f02\u5e38\u53ea\u5728\u771f\u6b63\u6539\u53d8\u5224\u65ad\u65f6\u51fa\u73b0\u3002 \u6d4b\u8bd5\u9636\u6bb5 \u00b7 \u4ec5\u4f9b\u8d5b\u524d\u5206\u6790</p></div><div class="chips" aria-label="\u6bd4\u8d5b\u7b5b\u9009"><button class="chip filter" type="button" data-filter="ALL" aria-pressed="true">\u5168\u90e8</button><button class="chip filter" type="button" data-filter="UPCOMING" aria-pressed="false">\u672a\u5f00\u8d5b</button><button class="chip filter" type="button" data-filter="RESULT" data-result-count="{verified_results}" aria-pressed="false">\u5df2\u7ed3\u675f</button></div></section>
+<section class="matches-head"><div><h1>{dashboard_title}</h1><p>\u5148\u770b\u8c01\u548c\u8c01\u6bd4\u8d5b\uff0c\u518d\u770b\u80dc / \u5e73 / \u8d1f\u6982\u7387\u4e0e\u6700\u53ef\u80fd\u6bd4\u5206\u3002\u5f02\u5e38\u53ea\u5728\u771f\u6b63\u6539\u53d8\u5224\u65ad\u65f6\u51fa\u73b0\u3002 \u6d4b\u8bd5\u9636\u6bb5 \u00b7 \u4ec5\u4f9b\u8d5b\u524d\u5206\u6790</p></div><div class="chips" aria-label="\u6bd4\u8d5b\u7b5b\u9009"><button class="chip filter" type="button" data-filter="ALL" aria-pressed="true">\u5168\u90e8</button><button class="chip filter" type="button" data-filter="UPCOMING" aria-pressed="false">\u672a\u5f00\u8d5b</button><button class="chip filter" type="button" data-filter="RESULT" data-result-count="{verified_results}" aria-pressed="false">\u5df2\u7ed3\u675f</button></div></section>
 {runtime_warning}{quality_warning}{data_warning}
 <section class="fixture-table" id="fixture-list" aria-label="\u7ade\u5f69\u65e5\u6bd4\u8d5b\u5217\u8868">
   {cards_html}
