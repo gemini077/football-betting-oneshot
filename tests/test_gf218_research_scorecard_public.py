@@ -100,3 +100,24 @@ def test_rolling_missing_details_fail_closed():
     p=rolling_sample()
     p['matches'][0]['market_top5']=['1-1']*5
     assert not _valid(p)
+
+
+def test_rolling_market_line_identity_is_visible():
+    from scripts.research_scorecard_public import render_report, _valid
+    p=rolling_sample()
+    p['matches'][0]['market_ou_line']=3.0
+    p['matches'][0]['market_ou_line_type']='whole_push'
+    assert _valid(p)
+    h=render_report(p)
+    assert 'Bet365 大小球 3.0' in h and '整数盘（走盘）' in h
+    p['matches'][0]['market_ou_line_type']='half_binary'
+    assert not _valid(p)
+    p['matches'][0]['market_ou_line_type']='whole_push'
+    p['matches'][0]['market_ou_line']=float('nan')
+    assert not _valid(p)
+
+def test_rolling_legacy_unlabelled_market_allowed():
+    from scripts.research_scorecard_public import _valid, render_report
+    p=rolling_sample()
+    assert _valid(p)
+    assert 'Bet365 大小球 3.0' not in render_report(p)

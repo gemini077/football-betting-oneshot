@@ -39,6 +39,11 @@ def _valid(p: Any) -> bool:
             for f in ("champion_top5","market_top5","blend_top5"):
                 v=r.get(f)
                 if not isinstance(v,list) or len(v)!=5 or len(set(str(k) for k in v))!=5 or any(not isinstance(k,str) or re.fullmatch(r"(?:[0-9]|1[0-2])-(?:[0-9]|1[0-2])",k) is None for k in v): return False
+            if 'market_ou_line' in r or 'market_ou_line_type' in r:
+                line=r.get('market_ou_line'); mode=r.get('market_ou_line_type')
+                if isinstance(line,bool) or not isinstance(line,(int,float)) or not math.isfinite(line) or not 0<=line<=10: return False
+                if mode not in ('whole_push','quarter_split','half_binary'): return False
+                if (mode=='whole_push' and line%1!=0) or (mode=='half_binary' and line%1!=0.5) or (mode=='quarter_split' and line%1 not in (0.25,0.75)): return False
             if r["state"]=="SETTLED" and (not isinstance(r.get("score"),str) or re.fullmatch(r"(?:[0-9]|1[0-2])-(?:[0-9]|1[0-2])",r["score"]) is None): return False
     return True
 def _fmt(v,pct=False): return "—" if v is None else (f"{v*100:.1f}%" if pct else f"{v:.4f}")
@@ -58,6 +63,9 @@ def render_report(p: dict[str,Any]) -> str:
         for r in visible:
             esc=lambda v: html.escape(str(v),quote=True)
             label=esc(r["home_team"])+" <span class='muted'>vs</span> "+esc(r["away_team"])
+            if 'market_ou_line_type' in r:
+                mode_names={'whole_push':'整数盘（走盘）','quarter_split':'四分之一球盘（半赢半输）','half_binary':'半球盘'}
+                label += "<div class='muted'>Bet365 大小球 "+esc(r['market_ou_line'])+" · "+mode_names[r['market_ou_line_type']]+"</div>"
             summaries=[esc(" / ".join(r[f][:3])) for f in ("champion_top5","market_top5","blend_top5")]
             status="已核验" if r["state"]=="SETTLED" else ("待核验" if r["state"]=="PENDING" else "已排除")
             score=esc(r.get("score","—")) if r["state"]=="SETTLED" else "—"
@@ -116,7 +124,7 @@ def publish_optional(source: Path, output: Path) -> bool:
     try:
         p=json.loads(Path(source).read_text(encoding="utf-8"))
         if not _valid(p): return False
-        clean={"schema":p["schema"],"summary":p["summary"],"matches":[{k:r[k] for k in ("match_id","state","reason","home_team","away_team","kickoff_at","champion_top5","market_top5","blend_top5","score") if k in r} for r in p["matches"]]}
+        clean={"schema":p["schema"],"summary":p["summary"],"matches":[{k:r[k] for k in ("match_id","state","reason","home_team","away_team","kickoff_at","champion_top5","market_top5","blend_top5","score","market_ou_line","market_ou_line_type") if k in r} for r in p["matches"]]}
         report=render_report(clean); dashboard=Path(output)/"prediction_dashboard"/"latest.html"
         text=dashboard.read_text(encoding="utf-8"); text=re.sub(r'<a class="research-scorecard-link"[^>]*>\u7814\u7a76\u590d\u76d8</a>','',text)
         pos=text.lower().rfind("</body>")

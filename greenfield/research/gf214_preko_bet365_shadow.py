@@ -2,6 +2,7 @@ import hashlib, json, math
 from datetime import datetime, timezone
 from pathlib import Path
 from scripts.market_score_math import fit_market_lambdas
+from scripts.market_asian_totals import parse_line, fit_asian_market_lambdas
 
 BASE = "https://raw.githubusercontent.com/gemini077/football-betting-oneshot/main/"
 DASH = "https://gemini077.github.io/football-betting-oneshot/prediction_dashboard/latest.json"
@@ -48,8 +49,9 @@ def market_targets(snap):
             pass
         else: raise ValueError("invalid_spf_current")
         wdl=inverse_normalize(spf)
-        line=number(d.get("current_line"),"line")
-        if not math.isfinite(line) or abs((line*2)-round(line*2))>1e-9 or int(round(line*2))%2!=1: raise ValueError("line_not_x5")
+        raw_line=d.get("current_line")
+        try: line=parse_line(raw_line)
+        except (TypeError,ValueError) as e: raise ValueError("invalid_asian_line") from e
         over=1+number(d.get("current_over_water"),"over_water")
         under=1+number(d.get("current_under_water"),"under_water")
         if over<=0 or under<=0: raise ValueError("nonpositive_water_odds")
@@ -103,7 +105,10 @@ def snapshot_record(row, snapshot_bytes, now):
     if fetched!=cutoff: raise ValueError("nowscore_fetched_at_mismatch")
     if source_cut>=ko or fetched>=ko: raise ValueError("snapshot_not_preko")
     if fetched>now: raise ValueError("capture_clock_before_source")
-    wdl,ou=market_targets(snap); lh,la=fit_market_lambdas(wdl,ou); grid=score_grid(lh,la)
+    wdl,ou=market_targets(snap); line=float(next(iter(ou)))
+    if line % 1 == 0.5: lh,la=fit_market_lambdas(wdl,ou)
+    else: lh,la=fit_asian_market_lambdas(wdl,ou)
+    grid=score_grid(lh,la)
     p=row["prediction"]
     top3=p.get("score_top3") or []
     if not isinstance(top3,list): raise ValueError("invalid_original_top3")
@@ -115,4 +120,4 @@ def snapshot_record(row, snapshot_bytes, now):
     digest=hashlib.sha256(snapshot_bytes).hexdigest()
     cells=score_grid(0,0) if False else sorted(grid,key=lambda x:tuple(map(int,x["score"].split("-"))))
     if len(cells)!=169 or len({x["score"] for x in cells})!=169 or abs(sum(x["probability"] for x in cells)-1)>1e-12: raise ValueError("invalid_pmf_169")
-    return {"match_id":str(row["match_id"]),"date":"2026-10-16","original_model":{"top1":p.get("unique_score") or p.get("primary_score"),"top3":original_top3,"top5":original_top5},"original_cutoff":row["selected_source_cutoff_at"],"original_freeze_created_at":row["selected_freeze_created_at"],"kickoff_timestamp":row["kickoff_timestamp"],"input_snapshot_ref":p["input_snapshot_ref"],"selected_prediction_id":row.get("selected_prediction_id"),"fixed_bookmaker":"bet365","market":{"top1":top_scores(grid,1),"top3":top_scores(grid,3),"top5":top_scores(grid,5),"pmf_169":cells},"snapshot_sha256":digest,"snapshot_source_cutoff_at":snap["source_cutoff_at"],"nowscore_fetched_at":ns[0]["fetched_at"],"source_time":"CAPTURE_ONLY"}
+    return {"match_id":str(row["match_id"]),"date":"2026-10-16","original_model":{"top1":p.get("unique_score") or p.get("primary_score"),"top3":original_top3,"top5":original_top5},"original_cutoff":row["selected_source_cutoff_at"],"original_freeze_created_at":row["selected_freeze_created_at"],"kickoff_timestamp":row["kickoff_timestamp"],"input_snapshot_ref":p["input_snapshot_ref"],"selected_prediction_id":row.get("selected_prediction_id"),"fixed_bookmaker":"bet365","market":{"top1":top_scores(grid,1),"top3":top_scores(grid,3),"top5":top_scores(grid,5),"pmf_169":cells},"snapshot_sha256":digest,"snapshot_source_cutoff_at":snap["source_cutoff_at"],"nowscore_fetched_at":ns[0]["fetched_at"],"source_time":"CAPTURE_ONLY","market_ou_line":line,"market_ou_line_type":("half_binary" if line % 1 == 0.5 else ("whole_push" if line % 1 == 0 else "quarter_split"))}

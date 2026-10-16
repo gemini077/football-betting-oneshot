@@ -14,8 +14,8 @@ def test_duplicate_bet365_rejected():
     with pytest.raises(ValueError,match="duplicate"): single_named([{"name":"bet365"},{"name":"bet365"}],"name","bet365")
 def test_inverse_normalization(): assert inverse_normalize([2,4,4])==pytest.approx([.5,.25,.25])
 def test_wrong_line_rejected():
-    s={"input":{"source_snapshots":{"nowscore":{"snapshots":[{"ouzhi":{"bookmakers":[{"name":"bet365","spf_current":{"home":2,"draw":3,"away":4}}]},"daxiao":{"companies":[{"name":"bet365","current_line":"2.25","current_over_water":.9,"current_under_water":.9}]}}]}}}}
-    with pytest.raises(ValueError,match="x5"): market_targets(s)
+    s={"input":{"source_snapshots":{"nowscore":{"snapshots":[{"ouzhi":{"bookmakers":[{"name":"bet365","spf_current":{"home":2,"draw":3,"away":4}}]},"daxiao":{"companies":[{"name":"bet365","current_line":"2.3","current_over_water":.9,"current_under_water":.9}]}}]}}}}
+    with pytest.raises(ValueError,match="asian_line"): market_targets(s)
 def test_grid_169_normalized_stable():
     a=score_grid(1.2,1.4); b=score_grid(1.2,1.4)
     assert len(a)==169 and sum(x["probability"] for x in a)==pytest.approx(1)

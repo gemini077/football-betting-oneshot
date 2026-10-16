@@ -128,6 +128,14 @@ def evaluate(repo_root, months_root=None, output=None, no_write=False):
         out={'match_id':str(row['match_id']),'match_key':item['match_key'],'prediction_id':pid,'state':state['state'],
              'home_team':home,'away_team':away,'kickoff_at':rec['kickoff_at'],
              'champion_top5':row['original_top5'],'market_top5':row['market_top5'],'blend_top5':row['combined_top5']}
+        if 'market_ou_line' in row and 'market_ou_line_type' in row:
+            line=row['market_ou_line']; mode=row['market_ou_line_type']
+            if (isinstance(line,bool) or not isinstance(line,(int,float)) or not math.isfinite(line)
+                    or line<0 or line>10 or mode not in ('whole_push','quarter_split','half_binary')):
+                raise LedgerError('invalid_market_line_metadata')
+            if (mode=='whole_push' and line%1!=0) or (mode=='half_binary' and line%1!=.5) or (mode=='quarter_split' and line%1 not in (.25,.75)):
+                raise LedgerError('mismatched_market_line_metadata')
+            out['market_ou_line']=line;out['market_ou_line_type']=mode
         if state['state']=='EXCLUDED': out['reason']=state['reason']
         elif state['state']=='SETTLED':
             out.update({k:state[k] for k in ('score','metrics')})

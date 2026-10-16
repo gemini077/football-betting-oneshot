@@ -162,3 +162,12 @@ def test_freeze_match_context_persists_into_rolling_report(tmp_path):
         assert 'kickoff_at' in row
         assert len(row['champion_top5'])==len(row['market_top5'])==len(row['blend_top5'])==5
         assert 'score' not in row
+
+
+def test_legacy_line_metadata_and_new_half_source(tmp_path):
+    repo,months,_rows=make_case(tmp_path)
+    out=run(repo,months,no_write=True)
+    assert out['summary']['pending']==4
+    labelled=[x for x in out['matches'] if 'market_ou_line_type' in x]
+    assert len(labelled)==4
+    assert all(x['market_ou_line']==2.5 and x['market_ou_line_type']=='half_binary' for x in labelled)

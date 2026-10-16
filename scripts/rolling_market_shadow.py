@@ -117,12 +117,15 @@ def capture_one(row, repo_root, now, gf214, gf215):
     blend=gf215.blend(champ,market)
     original_top5=_rank(champ,5,gf215)
     if len(original_top5)!=5 or len(set(original_top5))!=5: raise ValueError("invalid_original_top5")
-    return {"research_only":True,"kickoff_utc_date":ko.date().isoformat(),"match_id":mid,"selected_prediction_id":pid,
+    record = {"research_only":True,"kickoff_utc_date":ko.date().isoformat(),"match_id":mid,"selected_prediction_id":pid,
       "champion_source_sha256":digest(src_bytes),"snapshot_sha256":digest(snap_bytes),
       "source_cutoff_at":row["selected_source_cutoff_at"],"freeze_created_at":row["selected_freeze_created_at"],"kickoff_timestamp":row["kickoff_timestamp"],
       "input_snapshot_ref":ref,"source_time":SOURCE_TIME,"market_pmf_169":[{"home_goals":h,"away_goals":a,"probability":market[h,a]} for h in range(13) for a in range(13)],
       "original_top5":original_top5,"market_top1":_rank(market,1,gf215),"market_top3":_rank(market,3,gf215),"market_top5":_rank(market,5,gf215),
       "combined_top1":_rank(blend,1,gf215),"combined_top3":_rank(blend,3,gf215),"combined_top5":_rank(blend,5,gf215)}
+    for key in ("market_ou_line", "market_ou_line_type"):
+        if key in market_record: record[key] = market_record[key]
+    return record
 
 def _atomic_write(path, data):
     path.parent.mkdir(parents=True,exist_ok=True)
