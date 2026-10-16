@@ -59,7 +59,7 @@ def test_rolling_preferred_schema(tmp_path):
     assert publish_optional(source,out)
     text=(out/'research/scorecard.html').read_text(encoding='utf8')
     assert '滚动比分预测复盘' in text
-    assert '每 UTC 日最多 4 场' in text
+    assert '每 UTC 日最多 32 场' in text
     assert '0.0%' not in text
     published=json.loads((out/'research/scorecard.json').read_text(encoding='utf8'))
     assert published['schema']==ROLLING_SCHEMA

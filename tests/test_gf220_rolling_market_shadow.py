@@ -41,7 +41,7 @@ def setup(tmp_path, rows):
     runner.modules=lambda _: (gf214,gf215)
     return root,out
 
-def run(root,out,rows,now=NOW,cap=4):
+def run(root,out,rows,now=NOW,cap=32):
     d=root/'data/prediction_dashboard/latest.json'; d.write_text(json.dumps({'fixtures':rows}))
     return runner.run(root,now,max_per_day=cap,output_root=out)
 
@@ -81,9 +81,9 @@ def test_stale_prediction_version_conflicts_without_overwrite(tmp_path):
     res=run(root,out,[newer]); assert res['captured']==0 and res['reasons']['existing_record_conflict']==1
     assert p.read_bytes()==before
 
-def test_four_per_utc_day_cap(tmp_path):
-    rows=[fixture(tmp_path/'repo',mid=f'M{i}') for i in range(5)]; root,out=setup(tmp_path,rows)
-    res=run(root,out,rows); assert res['captured']==4 and len(read_rows(out))==4
+def test_thirty_two_per_utc_day_cap(tmp_path):
+    rows=[fixture(tmp_path/'repo',mid=f'M{i}') for i in range(33)]; root,out=setup(tmp_path,rows)
+    res=run(root,out,rows); assert res['captured']==32 and len(read_rows(out))==32
     assert res['reasons']['daily_cap_reached']==1
     before=(out/'2026-10.json.gz').read_bytes()
     replay=run(root,out,rows); assert replay['captured']==0 and replay['reasons']['daily_cap_reached']==1

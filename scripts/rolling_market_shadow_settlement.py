@@ -47,6 +47,7 @@ def load_gf216(repo):
     mod=importlib.util.module_from_spec(spec); spec.loader.exec_module(mod); return mod
 
 def validate_ledger(path, month, gf216):
+    if path.stat().st_size > 4 * 1024 * 1024: raise LedgerError('ledger_too_large')
     raw=path.read_bytes()
     try:
         blob=gzip.decompress(raw); rows=json.loads(blob.decode('utf-8'))
@@ -57,7 +58,7 @@ def validate_ledger(path, month, gf216):
         canonical = canonical_json(rows).rstrip(b'\n')
     except (ValueError, TypeError) as e: raise LedgerError('nonfinite_or_invalid_json_value') from e
     if canonical != blob: raise LedgerError('noncanonical_ledger_json')
-    if len(rows)>124: raise LedgerError('month_cap_exceeded')
+    if len(rows)>992: raise LedgerError('month_cap_exceeded')
     seen=set(); daily={}
     for r in rows:
         if not isinstance(r,dict): raise LedgerError('invalid_ledger_row')
@@ -67,7 +68,7 @@ def validate_ledger(path, month, gf216):
         key=(day,mid)
         if key in seen: raise LedgerError('duplicate_date_match_id')
         seen.add(key); daily[day]=daily.get(day,0)+1
-        if daily[day]>4: raise LedgerError('day_cap_exceeded')
+        if daily[day]>32: raise LedgerError('day_cap_exceeded')
         if r.get('research_only') is not True: raise LedgerError('not_research_only')
         if any(k in r for k in ('result','ft','odds','raw_quote')): raise LedgerError('forbidden_ledger_field')
         p=pmf(r.get('market_pmf_169'),gf216,'market_pmf')

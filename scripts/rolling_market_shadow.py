@@ -4,9 +4,9 @@ import argparse, gzip, hashlib, importlib.util, json, math, os, sys, tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
-MAX_DAY = 4
-MAX_MONTH = 124
-MAX_GZIP = 1024 * 1024
+MAX_DAY = 32
+MAX_MONTH = 992
+MAX_GZIP = 4 * 1024 * 1024
 SOURCE_TIME = "CAPTURE_ONLY_ORIGINAL_BOOK_QUOTE_TIME_UNVERIFIED"
 
 class LedgerError(ValueError): pass
@@ -133,9 +133,9 @@ def _atomic_write(path, data):
     finally:
         if os.path.exists(tmp): os.unlink(tmp)
 
-def run(repo_root, now=None, max_per_day=4, output_root=None, dry_run=False):
+def run(repo_root, now=None, max_per_day=32, output_root=None, dry_run=False):
     root=Path(repo_root).resolve(); now=utc(now) if now else datetime.now(timezone.utc)
-    if not isinstance(max_per_day,int) or isinstance(max_per_day,bool) or not 1<=max_per_day<=MAX_DAY: raise ValueError("max_per_day_must_be_1_to_4")
+    if not isinstance(max_per_day,int) or isinstance(max_per_day,bool) or not 1<=max_per_day<=MAX_DAY: raise ValueError("max_per_day_must_be_1_to_32")
     gf214,gf215=modules(root)
     dash=json.loads((root/"data/prediction_dashboard/latest.json").read_bytes()); fixtures=dash.get("fixtures")
     if not isinstance(fixtures,list): raise ValueError("missing_fixtures")
@@ -192,7 +192,7 @@ def run(repo_root, now=None, max_per_day=4, output_root=None, dry_run=False):
     return {"captured":processed,"writes":written,"skipped":sum(reasons.values()),"reasons":dict(sorted(reasons.items())),"dry_run":dry_run}
 
 def main(argv=None):
-    ap=argparse.ArgumentParser(description=__doc__); ap.add_argument("--repo-root",required=True); ap.add_argument("--now",help="ISO timestamp for deterministic tests only"); ap.add_argument("--max-per-day",type=int,default=4); ap.add_argument("--output-root"); ap.add_argument("--dry-run",action="store_true")
+    ap=argparse.ArgumentParser(description=__doc__); ap.add_argument("--repo-root",required=True); ap.add_argument("--now",help="ISO timestamp for deterministic tests only"); ap.add_argument("--max-per-day",type=int,default=32); ap.add_argument("--output-root"); ap.add_argument("--dry-run",action="store_true")
     a=ap.parse_args(argv)
     try: result=run(a.repo_root,a.now,a.max_per_day,a.output_root,a.dry_run)
     except LedgerError as e: print(json.dumps({"error":str(e),"writes":[]},sort_keys=True)); return 2

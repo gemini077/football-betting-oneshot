@@ -47,7 +47,7 @@ def render_report(p: dict[str,Any]) -> str:
     s=p["summary"]; rows=[]
     rolling=p["schema"]==ROLLING_SCHEMA
     page_title="滚动比分预测复盘" if rolling else "三组比分预测复盘"
-    cohort_note="按真实赛前来源冻结，每 UTC 日最多 4 场，非全部赛事覆盖。" if rolling else "固定六场赛前冻结研究样本。"
+    cohort_note="按真实赛前来源冻结，每 UTC 日最多 32 场，非全部赛事覆盖。" if rolling else "固定六场赛前冻结研究样本。"
     for k,label in METHODS:
         m=s["methods"][k]; nll=m["mean_nll"] if m["nll_matches"] else None
         rows.append("<tr><th>"+label+"</th>"+"".join("<td>"+_fmt(m[x],True)+"</td>" for x in ("top1","top3","top5"))+"<td>"+_fmt(nll)+"</td>"+("<td>"+_fmt(m.get("mean_rps") if m.get("rps_matches",0) else None)+"</td>" if rolling else "")+"</tr>")
