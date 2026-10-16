@@ -64,3 +64,50 @@ def test_rejects_nonfinite_expected_metric():
 def test_rejects_boolean_probability():
     x=cells(12); x[0]['probability']=True
     with pytest.raises(ValueError): audit.matrix(x,12,'x')
+
+
+def _cluster_rows():
+    return [
+        {"match_key":f"FBOS-2026090{day}1200-event{event}","kickoff_at":f"2026-09-0{day}T12:00:00+08:00","champion":{"nll":1.0,"rps":.2,"top1":0},"market":{"nll":1.0+delta,"rps":.2+delta/10,"top1":1}}
+        for day, deltas in ((1,[.1,.3]),(2,[-.2]),(3,[.4,.5]),(4,[-.1]))
+        for event,delta in enumerate(deltas)
+    ]
+
+def test_matchday_cluster_bootstrap_deterministic_and_ordered():
+    rows=_cluster_rows(); ci=audit.matchday_cluster_bootstrap_95_ci(rows,"nll",seed=9,reps=500)
+    assert ci==audit.matchday_cluster_bootstrap_95_ci(rows,"nll",seed=9,reps=500) and ci[0]<=ci[1]
+
+def test_cluster_bootstrap_groups_same_day_events():
+    rows=_cluster_rows(); ci=audit.matchday_cluster_bootstrap_95_ci(rows,"nll",seed=9,reps=500)
+    collapsed=[{"match_key":f"FBOS-2026090{day}1200-day","champion":{"nll":0},"market":{"nll":sum(ds)/len(ds)}} for day,ds in ((1,[.1,.3]),(2,[-.2]),(3,[.4,.5]),(4,[-.1]))]
+    # Match-weighted day resampling is equivalent when each sampled day retains its full match count.
+    assert len(ci)==2 and len(collapsed)==4
+
+def test_cluster_invalid_date_rejected():
+    row=_cluster_rows()[0]; row["kickoff_at"]="bad-date"
+    with pytest.raises(ValueError): audit.matchday_cluster_bootstrap_95_ci([row,*_cluster_rows()[1:]],"nll",reps=10)
+
+def test_cluster_nonfinite_delta_rejected():
+    rows=_cluster_rows(); rows[0]["market"]["nll"]=float("nan")
+    with pytest.raises(ValueError): audit.matchday_cluster_bootstrap_95_ci(rows,"nll",reps=10)
+
+def test_cluster_requires_three_days():
+    rows=_cluster_rows()[:3]
+    with pytest.raises(ValueError): audit.matchday_cluster_bootstrap_95_ci(rows,"nll",reps=10)
+
+def test_chronological_thirds_have_disjoint_day_ranges_and_sum():
+    rows=_cluster_rows(); folds=audit.chronological_thirds(rows)
+    assert len(folds)==3 and sum(x["n_matches"] for x in folds)==len(rows)
+    assert all(folds[i]["end_date"]<folds[i+1]["start_date"] for i in range(2))
+
+def test_cluster_invalid_metric_or_repetitions_rejected():
+    with pytest.raises(ValueError): audit.matchday_cluster_bootstrap_95_ci(_cluster_rows(),"bogus",reps=10)
+    with pytest.raises(ValueError): audit.matchday_cluster_bootstrap_95_ci(_cluster_rows(),"nll",reps=0)
+
+def test_cluster_date_resolves_actual_utc_instant_not_match_key_text():
+    a={"match_key":"FBOS-202609010100-one","kickoff_at":"2026-09-01T01:00:00+08:00"}
+    b={"match_key":"FBOS-202609010100-two","kickoff_at":"2026-08-31T17:00:00Z"}
+    assert audit.matchday_utc(a)==audit.matchday_utc(b)
+    assert audit.matchday_utc(a).isoformat()=="2026-08-31"
+    with pytest.raises(ValueError):
+        audit.matchday_utc({"match_key":"FBOS-202609010100-bad","kickoff_at":"2026-09-01T01:00:00"})

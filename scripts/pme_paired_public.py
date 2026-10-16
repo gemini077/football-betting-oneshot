@@ -47,6 +47,19 @@ def _valid(report: Any) -> bool:
         ci = item.get("paired_bootstrap_95_ci")
         if not isinstance(ci, list) or len(ci) != 2 or not all(_number(x) for x in ci) or ci[0] > ci[1]:
             return False
+    if "robustness" in report:
+        rob=report["robustness"]
+        if not isinstance(rob,dict) or type(rob.get("cluster_days")) is not int or rob["cluster_days"]<3: return False
+        thirds=rob.get("chronological_thirds")
+        if not isinstance(thirds,list) or len(thirds)!=3: return False
+        if sum((x.get("n_matches",-1) if isinstance(x,dict) else -1) for x in thirds)!=n: return False
+        for x in thirds:
+            if not isinstance(x,dict) or type(x.get("n_matches")) is not int or x["n_matches"]<0 or type(x.get("n_matchdays")) is not int or x["n_matchdays"]<0: return False
+            if any(not _number(x.get(k)) for k in ("market_minus_champion_mean_nll","market_minus_champion_mean_rps")): return False
+            if any(type(x.get(k)) is not int or x[k]<0 for k in ("champion_top1","market_top1")): return False
+        for metric in ("nll","rps"):
+            ci=report["deltas"][metric].get("matchday_cluster_bootstrap_95_ci")
+            if not isinstance(ci,list) or len(ci)!=2 or not all(_number(v) for v in ci) or ci[0]>ci[1]: return False
     tests = report.get("tests")
     mcnemar = tests.get("top1_mcnemar") if isinstance(tests, dict) else None
     p = mcnemar.get("two_sided_exact_p") if isinstance(mcnemar, dict) else None
@@ -87,7 +100,8 @@ def _clean(report: dict[str, Any]) -> dict[str, Any]:
         "control": report.get("control"),
         "methods": report.get("methods"),
         "summary": {m: {k: report["summary"][m][k] for k in (*TOPS, "nll", "rps", "score_1_1_top1")} for m in METHODS},
-        "deltas": {k: report["deltas"][k] for k in ("nll", "rps")},
+        "deltas": {k: {**{x: report["deltas"][k][x] for x in ("market_minus_champion_mean", "paired_bootstrap_95_ci")}, **({"matchday_cluster_bootstrap_95_ci": report["deltas"][k]["matchday_cluster_bootstrap_95_ci"]} if "matchday_cluster_bootstrap_95_ci" in report["deltas"][k] else {})} for k in ("nll", "rps")},
+        "robustness": report.get("robustness"),
         "tests": {"top1_mcnemar": {k: report["tests"]["top1_mcnemar"].get(k) for k in ("champion_only", "market_only", "two_sided_exact_p", "interpretation")}},
         "matches": [{"match_key": r["match_key"], "actual": r["actual"], "top1": r["top1"],
                      "champion": {k: r["champion"][k] for k in ("score1", *TOPS)},
@@ -106,6 +120,12 @@ def _render(data: dict[str, Any]) -> str:
     ci_nll = data["deltas"]["nll"]["paired_bootstrap_95_ci"]
     ci_rps = data["deltas"]["rps"]["paired_bootstrap_95_ci"]
     p = data["tests"]["top1_mcnemar"]["two_sided_exact_p"]
+    robustness = data.get("robustness") or {}
+    thirds = robustness.get("chronological_thirds", [])
+    cluster_nll = data["deltas"]["nll"].get("matchday_cluster_bootstrap_95_ci", [None,None])
+    cluster_rps = data["deltas"]["rps"].get("matchday_cluster_bootstrap_95_ci", [None,None])
+    cluster_text = (f"NLL [{cluster_nll[0]:.4f}, {cluster_nll[1]:.4f}], RPS [{cluster_rps[0]:.5f}, {cluster_rps[1]:.5f}] (days={robustness.get('cluster_days')})" if all(_number(x) for x in cluster_nll+cluster_rps) else "not available")
+    third_rows = "".join(f"<tr><td>{x['segment']}</td><td>{esc(x['start_date'])} ? {esc(x['end_date'])}</td><td>{x['n_matches']} / {x['n_matchdays']}</td><td>{x['market_minus_champion_mean_nll']:.4f}</td><td>{x['market_minus_champion_mean_rps']:.5f}</td><td>{x['champion_top1']} ? {x['market_top1']}</td></tr>" for x in thirds)
     return f'''<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>历史配对回测 | Football Prediction Day</title><style>
 *{{box-sizing:border-box}}body{{margin:0;background:#f6f7f5;color:#1d2925;font:15px/1.65 system-ui,-apple-system,"Segoe UI",sans-serif}}main{{max-width:980px;margin:36px auto 72px;padding:0 22px}}a{{color:#345d50}}.muted{{color:#61726a;font-size:13px}}h1{{font-size:30px;margin:12px 0 6px}}h2{{font-size:18px;margin:0 0 12px}}section{{background:#fff;border:1px solid #e0e6e1;border-radius:10px;padding:20px;margin:16px 0;overflow:auto}}.notice{{background:#eaf0eb;border-left:3px solid #647e70;padding:14px 18px;border-radius:0 6px 6px 0}}table{{border-collapse:collapse;width:100%;min-width:580px}}th,td{{text-align:left;padding:10px;border-bottom:1px solid #edf0ec;font-variant-numeric:tabular-nums}}@media(max-width:600px){{main{{margin-top:18px;padding:0 14px}}section{{padding:13px}}h1{{font-size:26px}}}}
@@ -118,6 +138,7 @@ def _render(data: dict[str, Any]) -> str:
 <p>Top 1/3/5 命中：{s['champion']['top1']}–{s['market']['top1']} / {s['champion']['top3']}–{s['market']['top3']} / {s['champion']['top5']}–{s['market']['top5']}；NLL：{s['champion']['nll']:.4f}–{s['market']['nll']:.4f}；RPS：{s['champion']['rps']:.5f}–{s['market']['rps']:.5f}。预测众数为 1–1：Champion {s['champion']['score_1_1_top1']} 场，市场 {s['market']['score_1_1_top1']} 场。</p>
 <p class="muted">指标基于合法赛前来源与同一截止时间的冻结配对；结果为 90 分钟及伤停补时。市场基线仅供研究，不作生产晋级结论。</p></section>
 <section><h2>配对样本明细（最多 250 场）</h2><table><thead><tr><th>比赛键</th><th>实际比分</th><th>Champion Top 1</th><th>市场 Top 1</th></tr></thead><tbody>{matches}</tbody></table></section>
+<section><h2>按比赛日聚类的稳健性检查（stability check only; no training or tuning）</h2><p>Matchday-cluster paired bootstrap 95% CI alongside the IID interval: {cluster_text}. Whole UTC matchdays are resampled; evidence, not proof, and not a promotion basis.</p><table><thead><tr><th>Chronological third</th><th>Date range</th><th>Matches / days</th><th>ΔNLL</th><th>ΔRPS</th><th>Top1 Champion / Market</th></tr></thead><tbody>{third_rows or '<tr><td colspan="6">not available</td></tr>'}</tbody></table></section>
 </main></body></html>'''
 
 

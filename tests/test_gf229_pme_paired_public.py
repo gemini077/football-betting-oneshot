@@ -106,3 +106,25 @@ def test_zero_values_are_not_substituted_for_missing_metrics(tmp_path):
     source.write_text(json.dumps(data), encoding="utf-8")
     assert public.publish_optional(source, tmp_path) is False
     assert not (tmp_path / "research/pme-paired.html").exists()
+
+
+def test_legacy_report_still_renders_with_cluster_unavailable(tmp_path):
+    site(tmp_path); assert public.publish_optional(SOURCE,tmp_path)
+    page=(tmp_path/"research/pme-paired.html").read_text(encoding="utf-8")
+    assert "not available" in page and "stability" in page
+
+def test_optional_cluster_fields_render_and_are_allowlisted(tmp_path):
+    site(tmp_path); data=report()
+    data["deltas"]["nll"]["matchday_cluster_bootstrap_95_ci"]=[-.4,-.1]
+    data["deltas"]["rps"]["matchday_cluster_bootstrap_95_ci"]=[-.05,-.01]
+    data["robustness"]={"cluster_days":9,"chronological_thirds":[{"segment":i,"start_date":f"2026-09-0{i}","end_date":f"2026-09-0{i}","n_matches":30,"n_matchdays":3,"market_minus_champion_mean_nll":-.1,"market_minus_champion_mean_rps":-.01,"champion_top1":5,"market_top1":6} for i in range(1,4)],"chronological_thirds_label":"stability check only; no training or tuning"}
+    path=tmp_path/"new.json"; path.write_text(json.dumps(data),encoding="utf-8")
+    assert public.publish_optional(path,tmp_path)
+    page=(tmp_path/"research/pme-paired.html").read_text(encoding="utf-8")
+    payload=json.loads((tmp_path/"research/pme-paired.json").read_text(encoding="utf-8"))
+    assert "Matchday-cluster paired bootstrap" in page and "stability check only" in page and payload["robustness"]["cluster_days"]==9
+
+def test_invalid_optional_cluster_interval_fails_closed(tmp_path):
+    data=report(); data["deltas"]["nll"]["matchday_cluster_bootstrap_95_ci"]=[1,-1]
+    data["robustness"]={"cluster_days":3,"chronological_thirds":[{"n_matches":30,"n_matchdays":1,"market_minus_champion_mean_nll":0,"market_minus_champion_mean_rps":0,"champion_top1":1,"market_top1":1} for _ in range(3)]}
+    assert not public._valid(data)

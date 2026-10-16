@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Fail-closed paired Pure Market Exact / frozen Champion audit (stdlib only)."""
 import argparse, hashlib, json, math, os, random, tempfile
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 TOL=1e-7
@@ -75,12 +75,49 @@ def load_pair(root,mroot,entry):
     for k in ('top1','top3','top5'):
         if bool(market[k])!=bool(sm['exact_'+k]): raise ValueError(key+': settlement '+k+' mismatch')
     close(market['nll'],sm['exact_nll']); close(market['rps'],sm['ft_1x2_rps'])
-    return {'match_key':key,'actual':f'{actual[0]}-{actual[1]}','top1':{'champion':champ['top1'],'market':market['top1']},'champion':champ,'market':market},[pp,sp,cp,result_path]
+    return {'match_key':key,'kickoff_at':entry['kickoff_at'],'actual':f'{actual[0]}-{actual[1]}','top1':{'champion':champ['top1'],'market':market['top1']},'champion':champ,'market':market},[pp,sp,cp,result_path]
 def mean(xs): return sum(xs)/len(xs)
 def bootstrap(xs,seed=228,reps=5000):
     rng=random.Random(seed); n=len(xs); vals=[]
     for _ in range(reps): vals.append(mean([xs[rng.randrange(n)] for __ in range(n)]))
     vals.sort(); return [vals[int(.025*reps)],vals[min(reps-1,int(.975*reps))]]
+def matchday_utc(row):
+    # Fixture local dates can differ from the real UTC date.
+    # Reuse independently matched frozen kickoff timestamp, not a match-key substring.
+    if not isinstance(row,dict) or not isinstance(row.get("kickoff_at"),str):
+        raise ValueError("missing frozen kickoff for cluster")
+    return dt(row["kickoff_at"]).astimezone(timezone.utc).date()
+
+
+def matchday_cluster_bootstrap_95_ci(rows, metric, seed=232, reps=5000):
+    if metric not in ("nll", "rps") or isinstance(reps,bool) or not isinstance(reps,int) or reps<1: raise ValueError("invalid cluster bootstrap arguments")
+    groups={}
+    for row in rows:
+        day=matchday_utc(row); delta=row["market"][metric]-row["champion"][metric]
+        if not math.isfinite(delta): raise ValueError("nonfinite cluster delta")
+        groups.setdefault(day,[]).append(delta)
+    days=sorted(groups)
+    if len(days)<3: raise ValueError("cluster bootstrap requires >=3 distinct matchdays")
+    rng=random.Random(seed); vals=[]
+    for _ in range(reps):
+        sampled=[days[rng.randrange(len(days))] for __ in days]
+        denom=sum(len(groups[d]) for d in sampled)
+        vals.append(sum(sum(groups[d]) for d in sampled)/denom)
+    vals.sort(); ci=[vals[int(.025*reps)], vals[min(reps-1,int(.975*reps))]]
+    if not all(math.isfinite(x) for x in ci) or ci[0]>ci[1]: raise ValueError("invalid cluster bootstrap interval")
+    return ci
+
+def chronological_thirds(rows):
+    groups={}
+    for row in rows: groups.setdefault(matchday_utc(row),[]).append(row)
+    days=sorted(groups); nday=len(days); folds=[]
+    for i in range(3):
+        lo=round(i*nday/3); hi=round((i+1)*nday/3); segment=days[lo:hi]
+        sample=[r for d in segment for r in groups[d]]
+        folds.append({"segment":i+1,"start_date":segment[0].isoformat() if segment else None,"end_date":segment[-1].isoformat() if segment else None,"n_matches":len(sample),"n_matchdays":len(segment),"market_minus_champion_mean_nll":mean([r["market"]["nll"]-r["champion"]["nll"] for r in sample]) if sample else None,"market_minus_champion_mean_rps":mean([r["market"]["rps"]-r["champion"]["rps"] for r in sample]) if sample else None,"champion_top1":sum(r["champion"]["top1"] for r in sample),"market_top1":sum(r["market"]["top1"] for r in sample)})
+    if sum(f["n_matches"] for f in folds)!=len(rows): raise ValueError("chronological fold count mismatch")
+    return folds
+
 def binom2(a,b):
     n=a+b
     if not n:return 1.0
@@ -105,9 +142,9 @@ def build(root,market_root=None,reps=5000):
     deltas={}
     for k in ('nll','rps'):
         v=[r['market'][k]-r['champion'][k] for r in rows]
-        deltas[k]={'market_minus_champion_mean':mean(v),'paired_bootstrap_95_ci':bootstrap(v,reps=reps)}
+        deltas[k]={'market_minus_champion_mean':mean(v),'paired_bootstrap_95_ci':bootstrap(v,reps=reps),'matchday_cluster_bootstrap_95_ci':matchday_cluster_bootstrap_95_ci(rows,k,reps=reps)}
     a=sum(r['champion']['top1'] and not r['market']['top1'] for r in rows); b=sum(r['market']['top1'] and not r['champion']['top1'] for r in rows)
-    report={'schema_version':'gf228.paired_champion_market.v1','n':len(rows),'source_cutoff_policy':'same_snapshot_asof_preko','quote_clock_policy':'CAPTURE_ONLY_SOURCE_QUOTE_CLOCK_NOT_VERIFIED','control':'non_promotion_research','methods':{'observation_unit':'latest_by_match unique match_key with nonnull settlement_path','score_grid':'full exact grid; probability sum tolerance 1e-7; tie rank (-p,home,away)','nll':'-log(actual exact-score probability)','rps':'1X2 cumulative ranked probability score Away/Draw/Home divided by 2','bootstrap':{'paired':True,'repetitions':reps,'seed':228,'interval':'percentile 95%'},'top1_test':'two-sided exact McNemar binomial; descriptive only'},'summary':summary,'deltas':deltas,'tests':{'top1_mcnemar':{'champion_only':a,'market_only':b,'two_sided_exact_p':binom2(a,b),'interpretation':'descriptive; no promotion inference'}},'matches':[{'match_key':r['match_key'],'actual':r['actual'],'top1':r['top1'],'champion':{k:r['champion'][k] for k in ('score1','top1','top3','top5')},'market':{k:r['market'][k] for k in ('score1','top1','top3','top5')}} for r in rows[-250:]],'match_display_limit':250,'provenance':{'index_sha256':sha(index),'source_files_sha256':hashlib.sha256(''.join(sha(p) for p in sorted(set(files),key=str)).encode()).hexdigest()}}
+    report={'schema_version':'gf228.paired_champion_market.v1','n':len(rows),'source_cutoff_policy':'same_snapshot_asof_preko','quote_clock_policy':'CAPTURE_ONLY_SOURCE_QUOTE_CLOCK_NOT_VERIFIED','control':'non_promotion_research','methods':{'observation_unit':'latest_by_match unique match_key with nonnull settlement_path','score_grid':'full exact grid; probability sum tolerance 1e-7; tie rank (-p,home,away)','nll':'-log(actual exact-score probability)','rps':'1X2 cumulative ranked probability score Away/Draw/Home divided by 2','bootstrap':{'paired':True,'repetitions':reps,'seed':228,'interval':'percentile 95%'},'top1_test':'two-sided exact McNemar binomial; descriptive only'},'summary':summary,'deltas':deltas,'robustness':{'cluster_days':len({matchday_utc(r) for r in rows}),'chronological_thirds':chronological_thirds(rows),'chronological_thirds_label':'stability check only; no training or tuning'},'tests':{'top1_mcnemar':{'champion_only':a,'market_only':b,'two_sided_exact_p':binom2(a,b),'interpretation':'descriptive; no promotion inference'}},'matches':[{'match_key':r['match_key'],'actual':r['actual'],'top1':r['top1'],'champion':{k:r['champion'][k] for k in ('score1','top1','top3','top5')},'market':{k:r['market'][k] for k in ('score1','top1','top3','top5')}} for r in rows[-250:]],'match_display_limit':250,'provenance':{'index_sha256':sha(index),'source_files_sha256':hashlib.sha256(''.join(sha(p) for p in sorted(set(files),key=str)).encode()).hexdigest()}}
     canonical=json.dumps(report,sort_keys=True,separators=(',',':'),ensure_ascii=False).encode(); report['report_sha256']=hashlib.sha256(canonical).hexdigest()
     out=json.dumps(report,sort_keys=True,separators=(',',':'),ensure_ascii=False).encode()+b'\n'
     if len(out)>500*1024: raise ValueError('report exceeds 500 KiB')
