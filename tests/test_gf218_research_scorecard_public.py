@@ -33,10 +33,26 @@ def test_report_has_no_garbled_placeholder():
     assert "????" not in output and "\ufffd" not in output
 
 
+def rolling_sample(settled=0):
+    from scripts.research_scorecard_public import ROLLING_SCHEMA
+    p=sample(settled)
+    p['schema']=ROLLING_SCHEMA
+    for m in p['summary']['methods'].values():
+        m.update(mean_rps=0.3 if settled else None,rps_matches=settled)
+    for i,r in enumerate(p['matches']):
+        r.update(home_team='<script>Home' if i==0 else 'Home',
+                 away_team='Away',kickoff_at=f'2026-10-17T{i:02d}:00:00+08:00',
+                 champion_top5=['1-1','2-1','1-2','0-1','2-0'],
+                 market_top5=['2-1','1-1','3-1','1-2','0-0'],
+                 blend_top5=['2-1','1-1','2-0','3-1','1-2'])
+        if r['state']=='SETTLED':r['score']='2-1'
+    return p
+
 def test_rolling_preferred_schema(tmp_path):
     from scripts.research_scorecard_public import ROLLING_SCHEMA
-    p=sample()
+    p=rolling_sample()
     p['schema']=ROLLING_SCHEMA
+    for m in p['summary']['methods'].values(): m.update(mean_rps=None,rps_matches=0)
     out,dash=setup(tmp_path)
     source=tmp_path/'rolling.json'
     source.write_text(json.dumps(p),encoding='utf8')
@@ -48,3 +64,39 @@ def test_rolling_preferred_schema(tmp_path):
     published=json.loads((out/'research/scorecard.json').read_text(encoding='utf8'))
     assert published['schema']==ROLLING_SCHEMA
     assert 'match_key' not in published['matches'][0]
+
+
+def test_rolling_rps_contract_and_column():
+    from scripts.research_scorecard_public import ROLLING_SCHEMA, _valid
+    p=rolling_sample(2); p['schema']=ROLLING_SCHEMA
+    for m in p['summary']['methods'].values(): m.update(mean_rps=.25,rps_matches=2)
+    assert _valid(p)
+    page=render_report(p); assert 'RPS ' in page and '\u8d8a\u4f4e\u8d8a\u597d' in page and '0.2500' in page
+    bad=json.loads(json.dumps(p)); bad['summary']['methods']['champion']['mean_rps']=1.01; assert not _valid(bad)
+    bad=json.loads(json.dumps(p)); bad['summary']['methods']['champion']['mean_rps']=None; assert not _valid(bad)
+    bad=json.loads(json.dumps(p)); bad['summary']['methods']['champion']['rps_matches']=0; assert not _valid(bad)
+
+def test_rolling_rps_none_rendered_as_dash():
+    from scripts.research_scorecard_public import ROLLING_SCHEMA, _valid
+    p=rolling_sample(); p['schema']=ROLLING_SCHEMA
+    for m in p['summary']['methods'].values(): m.update(mean_rps=None,rps_matches=0)
+    assert _valid(p); assert 'RPS ' in render_report(p)
+
+def test_rolling_match_details_and_html_escape():
+    from scripts.research_scorecard_public import render_report
+    p=rolling_sample(2)
+    page=render_report(p)
+    assert 'Champion Top3' in page and '市场 Top3' in page and '50/50 Top3' in page
+    assert '1-1 / 2-1 / 1-2' in page and '2-1 / 1-1 / 3-1' in page
+    assert '&lt;script&gt;Home' in page and '<script>Home' not in page
+    assert '2026-10-17T00:00:00+08:00' in page
+    assert '已核验' in page and '>2-1</td>' in page
+
+def test_rolling_missing_details_fail_closed():
+    from scripts.research_scorecard_public import _valid
+    p=rolling_sample()
+    del p['matches'][0]['home_team']
+    assert not _valid(p)
+    p=rolling_sample()
+    p['matches'][0]['market_top5']=['1-1']*5
+    assert not _valid(p)

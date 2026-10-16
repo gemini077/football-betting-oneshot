@@ -24,6 +24,18 @@ def pmf(rows, gf216, field):
     if not all(math.isfinite(v) and v >= 0 for v in out.values()) or abs(sum(out.values())-1) > 1e-8: raise LedgerError('unnormalized_' + field)
     return out
 def rank(d, n): return sorted(d, key=lambda s: (-d[s], *map(int,s.split('-'))))[:n]
+def rps_1x2(pmf_map, score):
+    if not isinstance(score, str) or re.fullmatch(r'(?:[0-9]|1[0-2])-(?:[0-9]|1[0-2])', score) is None:
+        raise LedgerError('invalid_verified_score')
+    home, away = map(int, score.split('-'))
+    if set(pmf_map) != {f'{h}-{a}' for h in range(13) for a in range(13)} or any(not math.isfinite(v) or v < 0 for v in pmf_map.values()) or abs(sum(pmf_map.values())-1) > 1e-8:
+        raise LedgerError('invalid_rps_pmf')
+    p_a = sum(v for k,v in pmf_map.items() if int(k.split('-')[0]) < int(k.split('-')[1]))
+    p_d = sum(v for k,v in pmf_map.items() if int(k.split('-')[0]) == int(k.split('-')[1]))
+    p_h = sum(v for k,v in pmf_map.items() if int(k.split('-')[0]) > int(k.split('-')[1]))
+    o_a, o_d, o_h = (int(home < away), int(home == away), int(home > away))
+    return ((p_a-o_a)**2 + (p_a+p_d-o_a-o_d)**2) / 2
+
 def tops_as_scores(x):
     if not isinstance(x,list) or len(x)!=5 or any(not isinstance(v,str) for v in x) or len(set(x))!=5: raise LedgerError('invalid_top5')
     return x
@@ -108,18 +120,28 @@ def evaluate(repo_root, months_root=None, output=None, no_write=False):
         item={'match_key':rec.get('match_key'),'kickoff_at':rec['kickoff_at'],'identity':rec.get('match_identity') or {},'pmfs':{'champion':champ,'bet365':market,'blend_50_50':blend}}
         if not isinstance(item['match_key'],str) or not item['match_key']: raise LedgerError('missing_match_key:'+pid)
         state=gf216.resolve_result(item,results)
-        out={'match_id':str(row['match_id']),'match_key':item['match_key'],'prediction_id':pid,'state':state['state']}
+        identity=rec.get('match_identity') or {}
+        home=identity.get('home'); away=identity.get('away')
+        if not isinstance(home,str) or not home.strip() or not isinstance(away,str) or not away.strip():
+            raise LedgerError('missing_display_teams:'+pid)
+        out={'match_id':str(row['match_id']),'match_key':item['match_key'],'prediction_id':pid,'state':state['state'],
+             'home_team':home,'away_team':away,'kickoff_at':rec['kickoff_at'],
+             'champion_top5':row['original_top5'],'market_top5':row['market_top5'],'blend_top5':row['combined_top5']}
         if state['state']=='EXCLUDED': out['reason']=state['reason']
-        elif state['state']=='SETTLED': out.update({k:state[k] for k in ('score','metrics')})
+        elif state['state']=='SETTLED':
+            out.update({k:state[k] for k in ('score','metrics')})
+            for method, dist in item['pmfs'].items():
+                out['metrics'][method]['rps'] = rps_1x2(dist, state['score'])
         else: out['reason']=state['reason']
         matches.append(out)
     matches.sort(key=lambda x:(x['match_key'],x['match_id'],x['prediction_id']))
     settled=[x for x in matches if x['state']=='SETTLED']; summary={'settled':len(settled),'pending':sum(x['state']=='PENDING' for x in matches),'excluded':sum(x['state']=='EXCLUDED' for x in matches),'methods':{}}
     # All mean NLLs must use exactly the same matched events; never compare different cohorts.
     paired=[x for x in settled if all(x['metrics'][m]['nll'] is not None for m in METHODS)]
+    paired_rps=[x for x in settled if all(isinstance(x['metrics'][m].get('rps'),(int,float)) and math.isfinite(x['metrics'][m]['rps']) for m in METHODS)]
     for method in METHODS:
         vals=[x['metrics'][method] for x in settled]; nll=[x['metrics'][method]['nll'] for x in paired]
-        summary['methods'][method]={'top1':sum(v['top1'] for v in vals)/len(vals) if vals else None,'top3':sum(v['top3'] for v in vals)/len(vals) if vals else None,'top5':sum(v['top5'] for v in vals)/len(vals) if vals else None,'mean_nll':sum(nll)/len(nll) if nll else None,'nll_matches':len(nll),'nll_excluded_zero_probability':sum(v['nll'] is None for v in vals)}
+        summary['methods'][method]={'top1':sum(v['top1'] for v in vals)/len(vals) if vals else None,'top3':sum(v['top3'] for v in vals)/len(vals) if vals else None,'top5':sum(v['top5'] for v in vals)/len(vals) if vals else None,'mean_nll':sum(nll)/len(nll) if nll else None,'nll_matches':len(nll),'nll_excluded_zero_probability':sum(v['nll'] is None for v in vals),'mean_rps':sum(x['metrics'][method]['rps'] for x in paired_rps)/len(paired_rps) if paired_rps else None,'rps_matches':len(paired_rps)}
     report={'schema':SCHEMA,'summary':summary,'matches':matches,'provenance':{'monthly_ledger_sha256':hashes}}
     report['checksum_sha256']=digest(canonical_json(report))
     raw=canonical_json(report)

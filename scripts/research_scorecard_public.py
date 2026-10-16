@@ -13,9 +13,12 @@ def _valid(p: Any) -> bool:
     if any(not isinstance(s.get(k),int) or isinstance(s[k],bool) or s[k]<0 for k in ("settled","pending","excluded")): return False
     methods=s.get("methods")
     if not isinstance(methods,dict): return False
+    rolling=p.get("schema")==ROLLING_SCHEMA
     for key,_ in METHODS:
         m=methods.get(key)
         if not isinstance(m,dict) or not isinstance(m.get("nll_matches"),int) or isinstance(m.get("nll_matches"),bool) or m["nll_matches"]<0: return False
+        if rolling and (not isinstance(m.get("rps_matches"),int) or isinstance(m.get("rps_matches"),bool) or m["rps_matches"]<0): return False
+        if rolling and m.get("mean_rps") is not None and (not isinstance(m.get("mean_rps"),(int,float)) or isinstance(m.get("mean_rps"),bool) or not math.isfinite(m["mean_rps"])): return False
         for k in ("top1","top3","top5","mean_nll"):
             v=m.get(k)
             if v is not None and (not isinstance(v,(int,float)) or isinstance(v,bool) or not math.isfinite(v)): return False
@@ -23,12 +26,21 @@ def _valid(p: Any) -> bool:
     for k,_ in METHODS:
         m=methods[k]
         if m["nll_matches"] > s["settled"]: return False
+        if rolling and (m["rps_matches"] > s["settled"] or (m["rps_matches"] == 0) != (m.get("mean_rps") is None) or (m.get("mean_rps") is not None and not 0 <= m["mean_rps"] <= 1)): return False
         if s["settled"] == 0 and any(m.get(v) is not None for v in ("top1","top3","top5","mean_nll")): return False
         for v in ("top1","top3","top5"):
-            p=m.get(v)
-            if p is not None and not 0 <= p <= 1: return False
+            val=m.get(v)
+            if val is not None and not 0 <= val <= 1: return False
         if m.get("mean_nll") is not None and (m["mean_nll"] < 0 or m["nll_matches"] == 0): return False
-    return all(isinstance(r,dict) and isinstance(r.get("match_id"),str) and r.get("state") in ("PENDING","SETTLED","EXCLUDED") for r in matches)
+    for r in matches:
+        if not isinstance(r,dict) or not isinstance(r.get("match_id"),str) or r.get("state") not in ("PENDING","SETTLED","EXCLUDED"): return False
+        if p["schema"] == ROLLING_SCHEMA:
+            if any(not isinstance(r.get(f),str) or not r[f] or len(r[f])>128 for f in ("home_team","away_team","kickoff_at")): return False
+            for f in ("champion_top5","market_top5","blend_top5"):
+                v=r.get(f)
+                if not isinstance(v,list) or len(v)!=5 or len(set(str(k) for k in v))!=5 or any(not isinstance(k,str) or re.fullmatch(r"(?:[0-9]|1[0-2])-(?:[0-9]|1[0-2])",k) is None for k in v): return False
+            if r["state"]=="SETTLED" and (not isinstance(r.get("score"),str) or re.fullmatch(r"(?:[0-9]|1[0-2])-(?:[0-9]|1[0-2])",r["score"]) is None): return False
+    return True
 def _fmt(v,pct=False): return "—" if v is None else (f"{v*100:.1f}%" if pct else f"{v:.4f}")
 def render_report(p: dict[str,Any]) -> str:
     if not _valid(p): raise ValueError("invalid scorecard schema")
@@ -38,10 +50,24 @@ def render_report(p: dict[str,Any]) -> str:
     cohort_note="按真实赛前来源冻结，每 UTC 日最多 4 场，非全部赛事覆盖。" if rolling else "固定六场赛前冻结研究样本。"
     for k,label in METHODS:
         m=s["methods"][k]; nll=m["mean_nll"] if m["nll_matches"] else None
-        rows.append("<tr><th>"+label+"</th>"+"".join("<td>"+_fmt(m[x],True)+"</td>" for x in ("top1","top3","top5"))+"<td>"+_fmt(nll)+"</td></tr>")
+        rows.append("<tr><th>"+label+"</th>"+"".join("<td>"+_fmt(m[x],True)+"</td>" for x in ("top1","top3","top5"))+"<td>"+_fmt(nll)+"</td>"+("<td>"+_fmt(m.get("mean_rps") if m.get("rps_matches",0) else None)+"</td>" if rolling else "")+"</tr>")
     matches=[]
-    for r in p["matches"]:
-        matches.append("<tr><td>"+html.escape(r["match_id"],quote=True)+"</td><td>"+html.escape(r["state"],quote=True)+"</td><td>"+html.escape(str(r.get("reason","")),quote=True)+"</td></tr>")
+    if rolling:
+        # Most recent 60 matches on the static page; full bounded annual history stays in the JSON.
+        visible=sorted(p["matches"],key=lambda x:(x["kickoff_at"],x["match_id"]),reverse=True)[:60]
+        for r in visible:
+            esc=lambda v: html.escape(str(v),quote=True)
+            label=esc(r["home_team"])+" <span class='muted'>vs</span> "+esc(r["away_team"])
+            summaries=[esc(" / ".join(r[f][:3])) for f in ("champion_top5","market_top5","blend_top5")]
+            status="已核验" if r["state"]=="SETTLED" else ("待核验" if r["state"]=="PENDING" else "已排除")
+            score=esc(r.get("score","—")) if r["state"]=="SETTLED" else "—"
+            matches.append("<tr><td>"+label+"<div class='muted'>"+esc(r["match_id"])+"</div></td>"+
+              "<td>"+esc(r["kickoff_at"])+"</td>"+
+              "".join("<td>"+txt+"</td>" for txt in summaries)+"<td>"+score+"</td>"+
+              "<td>"+status+"</td></tr>")
+    else:
+        for r in p["matches"]:
+            matches.append("<tr><td>"+html.escape(r["match_id"],quote=True)+"</td><td>"+html.escape(r["state"],quote=True)+"</td><td>"+html.escape(str(r.get("reason","")),quote=True)+"</td></tr>")
     note="\u5c1a\u65e0\u5df2\u9a8c\u6536\u8d5b\u679c\uff0c\u4e0d\u80fd\u6bd4\u8f83\u547d\u4e2d\u7387\u6216\u63d0\u5347" if s["settled"]==0 else "\u4ec5\u5c55\u793a\u5df2\u9a8c\u6536\u914d\u5bf9\u6837\u672c\u7684\u7814\u7a76\u6bd4\u8f83\uff0c\u4e0d\u4ee3\u8868\u6b63\u5f0f\u8bc4\u4f30\u6216\u63a8\u5e7f\u7ed3\u8bba"
     return f'''<!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -76,20 +102,21 @@ th{{font-weight:650}}thead{{background:#f7f9f7}}.muted{{margin:12px 0 0}}
  <div class="stat"><span>\u5df2\u6392\u9664</span><b>{s['excluded']}</b></div>
 </div>
 <section><h2>\u4e09\u7ec4\u540c\u573a\u9884\u6d4b\u5bf9\u7167</h2>
-<table><thead><tr><th>\u65b9\u6cd5</th><th>Top 1</th><th>Top 3</th><th>Top 5</th><th>\u5e73\u5747 NLL</th></tr></thead>
+<table><thead><tr><th>\u65b9\u6cd5</th><th>Top 1</th><th>Top 3</th><th>Top 5</th><th>\u5e73\u5747 NLL</th>{"<th>\u80dc\u5e73\u8d1f RPS \u2193</th>" if rolling else ""}</tr></thead>
 <tbody>{''.join(rows)}</tbody></table>
-<p class="muted">\u540d\u6b21\u547d\u4e2d\u7387\u4ec5\u6839\u636e\u5df2\u6838\u9a8c\u540c\u573a\u6bd4\u8d5b\u8ba1\u7b97\u3002NLL \u53ea\u5bf9\u4e09\u7ec4\u6982\u7387\u5747\u6709\u6548\u7684\u914d\u5bf9\u6837\u672c\u8ba1\u5206\u3002</p>
+<p class="muted">\u540d\u6b21\u547d\u4e2d\u7387\u4ec5\u6839\u636e\u5df2\u6838\u9a8c\u540c\u573a\u6bd4\u8d5b\u8ba1\u7b97\u3002NLL \u53ea\u5bf9\u4e09\u7ec4\u6982\u7387\u5747\u6709\u6548\u7684\u914d\u5bf9\u6837\u672c\u8ba1\u5206\u3002{"RPS \u2193 \u8d8a\u4f4e\u8d8a\u597d\uff0c\u4e0d\u4ee3\u8868\u6b63\u5f0f\u63d0\u5347\u8bc1\u636e\u3002" if rolling else ""}</p>
 </section>
 <section><h2>\u51bb\u7ed3\u6837\u672c\u660e\u7ec6</h2>
-<table><thead><tr><th>\u6bd4\u8d5b ID</th><th>\u6838\u9a8c\u72b6\u6001</th><th>\u539f\u56e0</th></tr></thead>
-<tbody>{''.join(matches) or '<tr><td colspan="3">\u65e0\u6837\u672c</td></tr>'}</tbody></table></section>
+{("<p class='muted'>显示按开赛时间倒序的最近 60 场，完整记录以研究 JSON 为准；Top 3 为实际赛前冻结候选，非赛后重排。</p>" if rolling else "")}
+<table><thead><tr>{("<th>比赛</th><th>开赛（含时区）</th><th>Champion Top3</th><th>市场 Top3</th><th>50/50 Top3</th><th>实际比分</th><th>状态</th>" if rolling else "<th>比赛 ID</th><th>核验状态</th><th>原因</th>")}</tr></thead>
+<tbody>{''.join(matches) or '<tr><td colspan="7">无样本</td></tr>'}</tbody></table></section>
 <p class="muted">\u4ec5\u7528\u4e8e\u7814\u7a76\uff0c\u4e0d\u4ee3\u8868\u6b63\u5f0f Champion \u6216\u6295\u6ce8\u5efa\u8bae\u3002</p>
 </main></body></html>'''
 def publish_optional(source: Path, output: Path) -> bool:
     try:
         p=json.loads(Path(source).read_text(encoding="utf-8"))
         if not _valid(p): return False
-        clean={"schema":p["schema"],"summary":p["summary"],"matches":[{k:r[k] for k in ("match_id","state","reason") if k in r} for r in p["matches"]]}
+        clean={"schema":p["schema"],"summary":p["summary"],"matches":[{k:r[k] for k in ("match_id","state","reason","home_team","away_team","kickoff_at","champion_top5","market_top5","blend_top5","score") if k in r} for r in p["matches"]]}
         report=render_report(clean); dashboard=Path(output)/"prediction_dashboard"/"latest.html"
         text=dashboard.read_text(encoding="utf-8"); text=re.sub(r'<a class="research-scorecard-link"[^>]*>\u7814\u7a76\u590d\u76d8</a>','',text)
         pos=text.lower().rfind("</body>")
