@@ -2172,7 +2172,7 @@ STATIC_REFRESH_SCRIPT = """<script>
 </script>"""
 
 
-def summarize_frozen_exact_score_review(payload: dict[str, Any]) -> dict[str, int] | None:
+def summarize_frozen_exact_score_review(payload: dict[str, Any]) -> dict[str, Any] | None:
     """Summarize only unique, formally evaluated, verified frozen fixtures."""
     rows, seen = [], set()
     try:
@@ -2198,9 +2198,24 @@ def summarize_frozen_exact_score_review(payload: dict[str, Any]) -> dict[str, in
     except (KeyError, TypeError, ValueError):
         return None
     if not rows: return None
+    probabilities = []
+    expected_11_valid = True
+    for fixture, _, _ in rows:
+        distribution = (fixture.get("prediction") or {}).get("score_distribution")
+        matches = [item for item in distribution if isinstance(item, dict) and item.get("score") == "1-1"] if isinstance(distribution, list) else []
+        if len(matches) != 1:
+            expected_11_valid = False
+            continue
+        probability = matches[0].get("probability")
+        if isinstance(probability, bool) or not isinstance(probability, (int, float)) or not math.isfinite(probability) or not 0 <= probability <= 1:
+            expected_11_valid = False
+            continue
+        probabilities.append(probability)
+    expected_11 = sum(probabilities) if expected_11_valid and len(probabilities) == len(rows) else None
     return {"count": len(rows), "top1": sum(m["exact_score_top1"] for _,m,_ in rows),
             "top3": sum(m["exact_score_top3"] for _,m,_ in rows), "top5": sum(m["exact_score_top5"] for _,m,_ in rows),
             "predicted_11": sum((f.get("prediction") or {}).get("primary_score") == "1-1" for f,_,_ in rows),
+            "expected_11": expected_11,
             "actual_11": sum(score == "1-1" for _,_,score in rows),
             "c_count": sum((f.get("prediction") or {}).get("data_grade") == "C" for f,_,_ in rows), "business_days": len({f["business_date"] for f,_,_ in rows})}
 
@@ -2208,9 +2223,10 @@ def summarize_frozen_exact_score_review(payload: dict[str, Any]) -> dict[str, in
 def render_frozen_exact_score_review(payload: dict[str, Any]) -> str:
     s = summarize_frozen_exact_score_review(payload)
     if not s: return ""
+    expected_phrase = f"\u6309\u6982\u7387\u9884\u671f{s['expected_11']:.2f}\u573a" if s["expected_11"] is not None else "\u6982\u7387\u9884\u671f\u6682\u4e0d\u53ef\u5f97"
     return (f'<section class="trust-strip dashboard-trust-strip" aria-label="赛前冻结样本复核">'
             f'<div class="trust-item"><div><strong>Top1 / Top3 / Top5</strong><span>{s["top1"]} / {s["top3"]} / {s["top5"]}（{s["count"]}场）</span></div></div>'
-            f'<div class="trust-item"><div><strong>1-1 比分</strong><span>预测 {s["predicted_11"]} 场 · 实际 {s["actual_11"]} 场</span></div></div>'
+            f'<div class="trust-item"><div><strong>1-1 \u6bd4\u5206</strong><span>\u9996\u90091-1 {s["predicted_11"]}\u573a \u00b7 {expected_phrase} \u00b7 \u5b9e\u9645{s["actual_11"]}\u573a</span></div></div>' 
             f'<div class="trust-item"><div><strong>数据质量</strong><span>C级 {s["c_count"]}/{s["count"]} 场 · {s["business_days"]} 个竞彩日</span></div></div>'
             f'<div class="trust-item"><span>本期已核验赛前冻结样本；小样本仅展示事实，不代表长期命中率</span></div></section>')
 
