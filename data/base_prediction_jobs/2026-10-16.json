@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "business_date": "2026-10-16",
   "status": "READY",
-  "generated_at": "2026-10-16T02:36:28.299240+00:00",
+  "generated_at": "2026-10-16T03:14:34.180694+00:00",
   "fixture_count": 11,
   "job_count": 11,
   "pending_count": 0,
@@ -41,10 +41,10 @@
       "kickoff": "2026-10-16T17:00:00+08:00",
       "status": "INSUFFICIENT_DATA",
       "created_at": "2026-10-15T08:15:08.724826+00:00",
-      "updated_at": "2026-10-16T02:36:28.563291+00:00",
+      "updated_at": "2026-10-16T03:14:34.393491+00:00",
       "source_universe": "data/prediction_universe/2026-10-16.json",
       "prediction_id": null,
-      "last_error": "SOURCE_FETCH_FAILED",
+      "last_error": "INPUT_PROVENANCE_UNVERIFIED",
       "coverage": {
         "status": "UNSUPPORTED",
         "reason_codes": [
@@ -56,7 +56,7 @@
         "warning_codes": [],
         "historical_challenger_allowed": false,
         "champion_prediction_allowed": true,
-        "evaluated_at": "2026-10-16T02:36:28Z"
+        "evaluated_at": "2026-10-16T03:14:34Z"
       },
       "coverage_status": "UNSUPPORTED",
       "coverage_reason_codes": [
@@ -68,23 +68,84 @@
       "historical_challenger_allowed": false,
       "input_provenance_diagnostic": {
         "schema_version": "input_provenance_diagnostic.v1",
-        "stage": "SOURCE_FETCH_FAILED",
-        "error_code": "SOURCE_FETCH_FAILED",
-        "source": "500_deep",
-        "status": "FETCH_ERROR",
-        "detail": "500 deep recent-form page fetch failed before usable form evidence was built",
-        "captured_at": "2026-10-16T02:36:40+08:00",
+        "stage": "OTHER_DETERMINISTIC_CAUSE",
+        "error_code": "INPUT_PROVENANCE_UNVERIFIED",
+        "source": "nowscore",
+        "status": "IDENTITY_MISMATCH",
+        "detail": "nowscore identity verification rejected",
         "references": [
-          "data/source_cache/shared-football/parsed/2026-10-16_1450967.json"
+          "https://live.nowscore.com/odds/match/3041373.htm",
+          "https://live.nowscore.com/analysisJs/data3041373.js",
+          "https://m.nowscore.com/Analy/Analysis/3041373.htm",
+          "https://m.nowscore.com/Analy/ShiJian/3041373.htm",
+          "https://live.nowscore.com/info/coach/3041373.htm?l=1",
+          "https://live.nowscore.com/info/referee/3041373.htm?l=1",
+          "https://live.nowscore.com/panlu/3041373.html"
         ],
-        "pages": [
-          "ouzhi",
-          "yazhi",
-          "rangqiu",
-          "daxiao",
-          "shuju",
-          "touzhu"
+        "nowscore_status": "IDENTITY_MISMATCH",
+        "resolution": {
+          "status": "EXPLICIT_ID",
+          "nowscore_id": 3041373
+        },
+        "identity_errors": [
+          "AMBIGUOUS_IDENTITY"
         ],
+        "identity_verification": {
+          "trusted": false,
+          "status": "TRUSTED_JC_REJECTED",
+          "source": "nowscore_public_jc_sales",
+          "nowscore_id": 3041373,
+          "page_provider_id": 3041373,
+          "page_provider_id_availability_state": "AVAILABLE",
+          "page_provider_id_reason": null,
+          "page_provider_id_parse_state": "POSITIVE",
+          "page_provider_id_raw": "3041373",
+          "page_provider_id_corroborated": true,
+          "display_name_mismatch": false,
+          "same_side_scores": {
+            "home": 1.0,
+            "away": 0.92
+          },
+          "reverse_side_scores": {
+            "home": 0.92,
+            "away": 0.0
+          },
+          "reasons": [
+            "AMBIGUOUS_IDENTITY"
+          ],
+          "non_blocking_reasons": []
+        },
+        "identity_verification_status": "TRUSTED_JC_REJECTED",
+        "identity_verification_reasons": [
+          "AMBIGUOUS_IDENTITY"
+        ],
+        "trusted_jc_provenance": {
+          "trusted": true,
+          "source": "nowscore_public_jc_sales",
+          "nowscore_id": 3041373,
+          "business_date": "2026-10-16",
+          "source_url": "https://cp.nowscore.com/buy/jingcai.aspx?typeID=101&oddstype=2&date=2026-10-16",
+          "reasons": []
+        },
+        "trusted_jc_provenance_reasons": [],
+        "page_identity": {
+          "nowscore_id": 3041373,
+          "nowscore_id_raw": "3041373",
+          "page_provider_id": 3041373,
+          "page_provider_id_availability_state": "AVAILABLE",
+          "page_provider_id_reason": null,
+          "page_provider_id_parse_state": "POSITIVE",
+          "page_provider_id_raw": "3041373",
+          "kickoff_local": "2026/10/16 17:00",
+          "home_team": "悉尼FC(主)",
+          "away_team": "西悉尼流浪者",
+          "home_team_id": 2909,
+          "away_team_id": 20394
+        },
+        "parsed_page_provider_id": 3041373,
+        "page_provider_id": 3041373,
+        "page_provider_id_availability_state": "AVAILABLE",
+        "page_provider_id_reason": null,
         "expected_before": "2026-10-16T17:00:00+08:00",
         "attempts": [
           {
@@ -167,26 +228,6 @@
             "page_provider_id": 3041373,
             "page_provider_id_availability_state": "AVAILABLE",
             "page_provider_id_reason": null
-          },
-          {
-            "schema_version": "input_provenance_diagnostic.v1",
-            "stage": "SOURCE_FETCH_FAILED",
-            "error_code": "SOURCE_FETCH_FAILED",
-            "source": "500_deep",
-            "status": "FETCH_ERROR",
-            "detail": "500 deep recent-form page fetch failed before usable form evidence was built",
-            "captured_at": "2026-10-16T02:36:40+08:00",
-            "references": [
-              "data/source_cache/shared-football/parsed/2026-10-16_1450967.json"
-            ],
-            "pages": [
-              "ouzhi",
-              "yazhi",
-              "rangqiu",
-              "daxiao",
-              "shuju",
-              "touzhu"
-            ]
           }
         ]
       }
@@ -202,9 +243,9 @@
       "kickoff": "2026-10-17T00:30:00+08:00",
       "status": "FROZEN",
       "created_at": "2026-10-15T08:15:08.724826+00:00",
-      "updated_at": "2026-10-16T02:36:28.563291+00:00",
+      "updated_at": "2026-10-16T03:14:34.393491+00:00",
       "source_universe": "data/prediction_universe/2026-10-16.json",
-      "prediction_id": "FBOS-PRED-68b1debec37c8aaede69ce82",
+      "prediction_id": "FBOS-PRED-10ddd98a522aef39ae81437b",
       "last_error": null,
       "coverage": {
         "status": "UNSUPPORTED",
@@ -217,7 +258,7 @@
         "warning_codes": [],
         "historical_challenger_allowed": false,
         "champion_prediction_allowed": true,
-        "evaluated_at": "2026-10-16T02:36:28Z"
+        "evaluated_at": "2026-10-16T03:14:34Z"
       },
       "coverage_status": "UNSUPPORTED",
       "coverage_reason_codes": [
@@ -228,10 +269,10 @@
       ],
       "historical_challenger_allowed": false,
       "football_evidence_status": "created",
-      "football_evidence_ref": "/home/runner/work/football-betting-oneshot/football-betting-oneshot/data/prospective/football_evidence/FBOS-PRED-68b1debec37c8aaede69ce82.json",
+      "football_evidence_ref": "/home/runner/work/football-betting-oneshot/football-betting-oneshot/data/prospective/football_evidence/FBOS-PRED-10ddd98a522aef39ae81437b.json",
       "football_evidence_error": null,
       "shadow_status": "created",
-      "shadow_comparison_id": "259f414b0053c3731eb05dcf2421934855b19eed8242af0c699fa68c352b94e4",
+      "shadow_comparison_id": "2b904b7c2ebf3727b98db4b4597ece888bc17588d5eee7c917084bbced83b8cf",
       "shadow_failure_reason": null,
       "prediction_ids": [
         "FBOS-PRED-737d23c77eef6ee726740725",
@@ -244,10 +285,11 @@
         "FBOS-PRED-0b711b057070d03e5511092b",
         "FBOS-PRED-091bf6f690c9ec73c5824f32",
         "FBOS-PRED-9ad648c2cd7ccd32be5a9f9a",
-        "FBOS-PRED-68b1debec37c8aaede69ce82"
+        "FBOS-PRED-68b1debec37c8aaede69ce82",
+        "FBOS-PRED-10ddd98a522aef39ae81437b"
       ],
-      "prediction_created_at": "2026-10-16T02:36:53.488372+00:00",
-      "freeze_created_at": "2026-10-16T02:36:53.643863+00:00"
+      "prediction_created_at": "2026-10-16T03:15:18.920231+00:00",
+      "freeze_created_at": "2026-10-16T03:15:19.038059+00:00"
     },
     {
       "job_id": "BASE-2026-10-16-2912292",
@@ -260,9 +302,9 @@
       "kickoff": "2026-10-17T01:00:00+08:00",
       "status": "FROZEN",
       "created_at": "2026-10-15T08:15:08.724826+00:00",
-      "updated_at": "2026-10-16T02:36:28.563291+00:00",
+      "updated_at": "2026-10-16T03:14:34.393491+00:00",
       "source_universe": "data/prediction_universe/2026-10-16.json",
-      "prediction_id": "FBOS-PRED-383a08a045d8ab7d93fd9de6",
+      "prediction_id": "FBOS-PRED-5c225d45ac64b507ca7987ec",
       "last_error": null,
       "coverage": {
         "status": "UNSUPPORTED",
@@ -275,7 +317,7 @@
         "warning_codes": [],
         "historical_challenger_allowed": false,
         "champion_prediction_allowed": true,
-        "evaluated_at": "2026-10-16T02:36:28Z"
+        "evaluated_at": "2026-10-16T03:14:34Z"
       },
       "coverage_status": "UNSUPPORTED",
       "coverage_reason_codes": [
@@ -286,10 +328,10 @@
       ],
       "historical_challenger_allowed": false,
       "football_evidence_status": "created",
-      "football_evidence_ref": "/home/runner/work/football-betting-oneshot/football-betting-oneshot/data/prospective/football_evidence/FBOS-PRED-383a08a045d8ab7d93fd9de6.json",
+      "football_evidence_ref": "/home/runner/work/football-betting-oneshot/football-betting-oneshot/data/prospective/football_evidence/FBOS-PRED-5c225d45ac64b507ca7987ec.json",
       "football_evidence_error": null,
       "shadow_status": "created",
-      "shadow_comparison_id": "63dcf11ce75c62ee928d1a0d785d74fad9ffa26c0d06a8a291d5b08d2efd3350",
+      "shadow_comparison_id": "e2fdfc729fb36a003148be8c9ad6c882e9ced6d8aeb51d94a889c5606c42bc07",
       "shadow_failure_reason": null,
       "prediction_ids": [
         "FBOS-PRED-3f71e334d4679c8734140a50",
@@ -302,10 +344,11 @@
         "FBOS-PRED-606ca865494d6434e82df287",
         "FBOS-PRED-14816850089a6cca374a0536",
         "FBOS-PRED-a38d91c4b72ea5b9bd14eed3",
-        "FBOS-PRED-383a08a045d8ab7d93fd9de6"
+        "FBOS-PRED-383a08a045d8ab7d93fd9de6",
+        "FBOS-PRED-5c225d45ac64b507ca7987ec"
       ],
-      "prediction_created_at": "2026-10-16T02:37:06.741931+00:00",
-      "freeze_created_at": "2026-10-16T02:37:06.897393+00:00"
+      "prediction_created_at": "2026-10-16T03:15:31.797704+00:00",
+      "freeze_created_at": "2026-10-16T03:15:31.915150+00:00"
     },
     {
       "job_id": "BASE-2026-10-16-2996170",
@@ -318,9 +361,9 @@
       "kickoff": "2026-10-17T02:00:00+08:00",
       "status": "FROZEN",
       "created_at": "2026-10-15T08:15:08.724826+00:00",
-      "updated_at": "2026-10-16T02:36:28.563291+00:00",
+      "updated_at": "2026-10-16T03:14:34.393491+00:00",
       "source_universe": "data/prediction_universe/2026-10-16.json",
-      "prediction_id": "FBOS-PRED-bd5711044498b933f7c6b098",
+      "prediction_id": "FBOS-PRED-6f76305790cab180fb525a95",
       "last_error": null,
       "coverage": {
         "status": "UNSUPPORTED",
@@ -333,7 +376,7 @@
         "warning_codes": [],
         "historical_challenger_allowed": false,
         "champion_prediction_allowed": true,
-        "evaluated_at": "2026-10-16T02:36:28Z"
+        "evaluated_at": "2026-10-16T03:14:34Z"
       },
       "coverage_status": "UNSUPPORTED",
       "coverage_reason_codes": [
@@ -344,10 +387,10 @@
       ],
       "historical_challenger_allowed": false,
       "football_evidence_status": "created",
-      "football_evidence_ref": "/home/runner/work/football-betting-oneshot/football-betting-oneshot/data/prospective/football_evidence/FBOS-PRED-bd5711044498b933f7c6b098.json",
+      "football_evidence_ref": "/home/runner/work/football-betting-oneshot/football-betting-oneshot/data/prospective/football_evidence/FBOS-PRED-6f76305790cab180fb525a95.json",
       "football_evidence_error": null,
       "shadow_status": "created",
-      "shadow_comparison_id": "f5b63ac78c7aeea8e3ee78e014e66195bad0e1874272c5aad320fe076c11aa12",
+      "shadow_comparison_id": "cb29007a13f188d7a0bb2dd9180cdf50dc592a779b97bb2cf6c783f1469f08c5",
       "shadow_failure_reason": null,
       "prediction_ids": [
         "FBOS-PRED-468e953e576a504a69e0d721",
@@ -363,10 +406,11 @@
         "FBOS-PRED-bc9259dd54106f05e0691a8c",
         "FBOS-PRED-b60a7d76d66b11dcf56785e4",
         "FBOS-PRED-77fb7532c83a7c40c6732d5a",
-        "FBOS-PRED-bd5711044498b933f7c6b098"
+        "FBOS-PRED-bd5711044498b933f7c6b098",
+        "FBOS-PRED-6f76305790cab180fb525a95"
       ],
-      "prediction_created_at": "2026-10-16T02:37:25.730004+00:00",
-      "freeze_created_at": "2026-10-16T02:37:25.880636+00:00"
+      "prediction_created_at": "2026-10-16T03:15:43.841077+00:00",
+      "freeze_created_at": "2026-10-16T03:15:43.954513+00:00"
     },
     {
       "job_id": "BASE-2026-10-16-2996504",
@@ -379,9 +423,9 @@
       "kickoff": "2026-10-17T02:00:00+08:00",
       "status": "FROZEN",
       "created_at": "2026-10-15T08:15:08.724826+00:00",
-      "updated_at": "2026-10-16T02:36:28.563291+00:00",
+      "updated_at": "2026-10-16T03:14:34.393491+00:00",
       "source_universe": "data/prediction_universe/2026-10-16.json",
-      "prediction_id": "FBOS-PRED-81d6c199b7cc5dfb73b2c352",
+      "prediction_id": "FBOS-PRED-86cd69cdf3cf4b59c71f7ccd",
       "last_error": null,
       "coverage": {
         "status": "UNSUPPORTED",
@@ -394,7 +438,7 @@
         "warning_codes": [],
         "historical_challenger_allowed": false,
         "champion_prediction_allowed": true,
-        "evaluated_at": "2026-10-16T02:36:28Z"
+        "evaluated_at": "2026-10-16T03:14:34Z"
       },
       "coverage_status": "UNSUPPORTED",
       "coverage_reason_codes": [
@@ -405,10 +449,10 @@
       ],
       "historical_challenger_allowed": false,
       "football_evidence_status": "created",
-      "football_evidence_ref": "/home/runner/work/football-betting-oneshot/football-betting-oneshot/data/prospective/football_evidence/FBOS-PRED-81d6c199b7cc5dfb73b2c352.json",
+      "football_evidence_ref": "/home/runner/work/football-betting-oneshot/football-betting-oneshot/data/prospective/football_evidence/FBOS-PRED-86cd69cdf3cf4b59c71f7ccd.json",
       "football_evidence_error": null,
       "shadow_status": "created",
-      "shadow_comparison_id": "c03c5502cb40db607865b2bf26beda0048f6aeacba9ffdeb1f8506569b17cbbb",
+      "shadow_comparison_id": "56e49648cedbe0fb9173ee19306defc222b5e716c4acbf3b654491f30c857dc5",
       "shadow_failure_reason": null,
       "prediction_ids": [
         "FBOS-PRED-7c1615708a0d5060e4c290ff",
@@ -418,10 +462,11 @@
         "FBOS-PRED-cc94c1b3b78b297b9ffdb32e",
         "FBOS-PRED-71efac7837db5e4d1f4e1a2c",
         "FBOS-PRED-10fd1150bde65c78c4639d78",
-        "FBOS-PRED-81d6c199b7cc5dfb73b2c352"
+        "FBOS-PRED-81d6c199b7cc5dfb73b2c352",
+        "FBOS-PRED-86cd69cdf3cf4b59c71f7ccd"
       ],
-      "prediction_created_at": "2026-10-16T02:37:41.691002+00:00",
-      "freeze_created_at": "2026-10-16T02:37:41.844669+00:00"
+      "prediction_created_at": "2026-10-16T03:16:00.693191+00:00",
+      "freeze_created_at": "2026-10-16T03:16:00.809969+00:00"
     },
     {
       "job_id": "BASE-2026-10-16-3018834",
@@ -434,9 +479,9 @@
       "kickoff": "2026-10-17T02:30:00+08:00",
       "status": "FROZEN",
       "created_at": "2026-10-15T08:15:08.724826+00:00",
-      "updated_at": "2026-10-16T02:36:28.563291+00:00",
+      "updated_at": "2026-10-16T03:14:34.393491+00:00",
       "source_universe": "data/prediction_universe/2026-10-16.json",
-      "prediction_id": "FBOS-PRED-e11f5cd943313c6e76c03cb5",
+      "prediction_id": "FBOS-PRED-817db37a252d0cf428f55d6b",
       "last_error": null,
       "coverage": {
         "status": "UNSUPPORTED",
@@ -449,7 +494,7 @@
         "warning_codes": [],
         "historical_challenger_allowed": false,
         "champion_prediction_allowed": true,
-        "evaluated_at": "2026-10-16T02:36:28Z"
+        "evaluated_at": "2026-10-16T03:14:34Z"
       },
       "coverage_status": "UNSUPPORTED",
       "coverage_reason_codes": [
@@ -460,10 +505,10 @@
       ],
       "historical_challenger_allowed": false,
       "football_evidence_status": "created",
-      "football_evidence_ref": "/home/runner/work/football-betting-oneshot/football-betting-oneshot/data/prospective/football_evidence/FBOS-PRED-e11f5cd943313c6e76c03cb5.json",
+      "football_evidence_ref": "/home/runner/work/football-betting-oneshot/football-betting-oneshot/data/prospective/football_evidence/FBOS-PRED-817db37a252d0cf428f55d6b.json",
       "football_evidence_error": null,
       "shadow_status": "created",
-      "shadow_comparison_id": "51fe88ed4b08a5d943df3d42b1a8e8907df663300862602fc02f3c1d86aa8fa7",
+      "shadow_comparison_id": "b925ef0d5af3bea79d4251f41748b4e098f7a2a01cffe2196a63b952bf669e29",
       "shadow_failure_reason": null,
       "prediction_ids": [
         "FBOS-PRED-71194256aaf5ac07c5f32a14",
@@ -479,10 +524,11 @@
         "FBOS-PRED-4b6b65d30505ea60c2dac06c",
         "FBOS-PRED-5f48e03d584f983f15fd401a",
         "FBOS-PRED-1aecf273388df6ff6bf54d28",
-        "FBOS-PRED-e11f5cd943313c6e76c03cb5"
+        "FBOS-PRED-e11f5cd943313c6e76c03cb5",
+        "FBOS-PRED-817db37a252d0cf428f55d6b"
       ],
-      "prediction_created_at": "2026-10-16T02:37:55.921213+00:00",
-      "freeze_created_at": "2026-10-16T02:37:56.078088+00:00"
+      "prediction_created_at": "2026-10-16T03:16:13.485593+00:00",
+      "freeze_created_at": "2026-10-16T03:16:13.603451+00:00"
     },
     {
       "job_id": "BASE-2026-10-16-2993818",
@@ -495,9 +541,9 @@
       "kickoff": "2026-10-17T02:45:00+08:00",
       "status": "FROZEN",
       "created_at": "2026-10-15T08:15:08.724826+00:00",
-      "updated_at": "2026-10-16T02:36:28.563291+00:00",
+      "updated_at": "2026-10-16T03:14:34.393491+00:00",
       "source_universe": "data/prediction_universe/2026-10-16.json",
-      "prediction_id": "FBOS-PRED-054d4b4a087a6a3c69cd50e7",
+      "prediction_id": "FBOS-PRED-e0b238fcc36dffe89e19206e",
       "last_error": null,
       "coverage": {
         "status": "UNSUPPORTED",
@@ -510,7 +556,7 @@
         "warning_codes": [],
         "historical_challenger_allowed": false,
         "champion_prediction_allowed": true,
-        "evaluated_at": "2026-10-16T02:36:28Z"
+        "evaluated_at": "2026-10-16T03:14:34Z"
       },
       "coverage_status": "UNSUPPORTED",
       "coverage_reason_codes": [
@@ -521,10 +567,10 @@
       ],
       "historical_challenger_allowed": false,
       "football_evidence_status": "created",
-      "football_evidence_ref": "/home/runner/work/football-betting-oneshot/football-betting-oneshot/data/prospective/football_evidence/FBOS-PRED-054d4b4a087a6a3c69cd50e7.json",
+      "football_evidence_ref": "/home/runner/work/football-betting-oneshot/football-betting-oneshot/data/prospective/football_evidence/FBOS-PRED-e0b238fcc36dffe89e19206e.json",
       "football_evidence_error": null,
       "shadow_status": "created",
-      "shadow_comparison_id": "93ba255df68da41a0ccaf93b5ae739981bb5a2efe760bc2be5602fe58c4c9ecc",
+      "shadow_comparison_id": "888ee89f9b5dc891fc88faa0d96b971727b1dee9f6d50b53a86f729c7b54603b",
       "shadow_failure_reason": null,
       "prediction_ids": [
         "FBOS-PRED-af88827d77a7363d134b0d93",
@@ -538,10 +584,11 @@
         "FBOS-PRED-0658dc075fadd93447fcb8af",
         "FBOS-PRED-1093d52ee94d940d6a3ccb48",
         "FBOS-PRED-1f9f48994b7f5f82cc96857c",
-        "FBOS-PRED-054d4b4a087a6a3c69cd50e7"
+        "FBOS-PRED-054d4b4a087a6a3c69cd50e7",
+        "FBOS-PRED-e0b238fcc36dffe89e19206e"
       ],
-      "prediction_created_at": "2026-10-16T02:38:11.154367+00:00",
-      "freeze_created_at": "2026-10-16T02:38:11.310894+00:00"
+      "prediction_created_at": "2026-10-16T03:16:26.311712+00:00",
+      "freeze_created_at": "2026-10-16T03:16:26.426946+00:00"
     },
     {
       "job_id": "BASE-2026-10-16-2995364",
@@ -554,9 +601,9 @@
       "kickoff": "2026-10-17T02:45:00+08:00",
       "status": "FROZEN",
       "created_at": "2026-10-15T08:15:08.724826+00:00",
-      "updated_at": "2026-10-16T02:36:28.563291+00:00",
+      "updated_at": "2026-10-16T03:14:34.393491+00:00",
       "source_universe": "data/prediction_universe/2026-10-16.json",
-      "prediction_id": "FBOS-PRED-0f4b8688d27b4acfa018960d",
+      "prediction_id": "FBOS-PRED-14419a1843b9b5f9872ba990",
       "last_error": null,
       "coverage": {
         "status": "UNSUPPORTED",
@@ -569,7 +616,7 @@
         "warning_codes": [],
         "historical_challenger_allowed": false,
         "champion_prediction_allowed": true,
-        "evaluated_at": "2026-10-16T02:36:28Z"
+        "evaluated_at": "2026-10-16T03:14:34Z"
       },
       "coverage_status": "UNSUPPORTED",
       "coverage_reason_codes": [
@@ -580,10 +627,10 @@
       ],
       "historical_challenger_allowed": false,
       "football_evidence_status": "created",
-      "football_evidence_ref": "/home/runner/work/football-betting-oneshot/football-betting-oneshot/data/prospective/football_evidence/FBOS-PRED-0f4b8688d27b4acfa018960d.json",
+      "football_evidence_ref": "/home/runner/work/football-betting-oneshot/football-betting-oneshot/data/prospective/football_evidence/FBOS-PRED-14419a1843b9b5f9872ba990.json",
       "football_evidence_error": null,
       "shadow_status": "created",
-      "shadow_comparison_id": "c8de0a3de2e1c1fae954190ee85e5244ca3ea20d015f112e3e030d4da21551dc",
+      "shadow_comparison_id": "2ee7dc6d3b7a555217018c3d766ca626268141ae799315f0616f3f574591bccc",
       "shadow_failure_reason": null,
       "prediction_ids": [
         "FBOS-PRED-0b641be189eae46f5c836f1f",
@@ -598,10 +645,11 @@
         "FBOS-PRED-48794dc0a98ad07e59c1491f",
         "FBOS-PRED-a75880b0cd1ee780769ebd9e",
         "FBOS-PRED-099908307fb89f6aa1b80c22",
-        "FBOS-PRED-0f4b8688d27b4acfa018960d"
+        "FBOS-PRED-0f4b8688d27b4acfa018960d",
+        "FBOS-PRED-14419a1843b9b5f9872ba990"
       ],
-      "prediction_created_at": "2026-10-16T02:38:27.040683+00:00",
-      "freeze_created_at": "2026-10-16T02:38:27.194842+00:00"
+      "prediction_created_at": "2026-10-16T03:16:40.498840+00:00",
+      "freeze_created_at": "2026-10-16T03:16:40.613950+00:00"
     },
     {
       "job_id": "BASE-2026-10-16-3008274",
@@ -614,9 +662,9 @@
       "kickoff": "2026-10-17T03:00:00+08:00",
       "status": "FROZEN",
       "created_at": "2026-10-15T08:15:08.724826+00:00",
-      "updated_at": "2026-10-16T02:36:28.563291+00:00",
+      "updated_at": "2026-10-16T03:14:34.393491+00:00",
       "source_universe": "data/prediction_universe/2026-10-16.json",
-      "prediction_id": "FBOS-PRED-d14797bb697435efeb406266",
+      "prediction_id": "FBOS-PRED-08946dc5bad0e31b5e29b680",
       "last_error": null,
       "coverage": {
         "status": "UNSUPPORTED",
@@ -629,7 +677,7 @@
         "warning_codes": [],
         "historical_challenger_allowed": false,
         "champion_prediction_allowed": true,
-        "evaluated_at": "2026-10-16T02:36:28Z"
+        "evaluated_at": "2026-10-16T03:14:34Z"
       },
       "coverage_status": "UNSUPPORTED",
       "coverage_reason_codes": [
@@ -640,10 +688,10 @@
       ],
       "historical_challenger_allowed": false,
       "football_evidence_status": "created",
-      "football_evidence_ref": "/home/runner/work/football-betting-oneshot/football-betting-oneshot/data/prospective/football_evidence/FBOS-PRED-d14797bb697435efeb406266.json",
+      "football_evidence_ref": "/home/runner/work/football-betting-oneshot/football-betting-oneshot/data/prospective/football_evidence/FBOS-PRED-08946dc5bad0e31b5e29b680.json",
       "football_evidence_error": null,
       "shadow_status": "created",
-      "shadow_comparison_id": "bb6e669d3f66c7d4fd30225c60e5c098153b3d7aeee2bba9ee5e7cd55cae3f97",
+      "shadow_comparison_id": "c0b3fb519e9ee5b27d4bf1fc14b888ef124b21ca08ec2470aa5df261e4d4e2a9",
       "shadow_failure_reason": null,
       "prediction_ids": [
         "FBOS-PRED-d31f7826134f8f0e7a2cc436",
@@ -658,10 +706,11 @@
         "FBOS-PRED-6c104f87319182d87f70cc11",
         "FBOS-PRED-d222dd16a52497b73925c3d1",
         "FBOS-PRED-5627f702431497ca5385077f",
-        "FBOS-PRED-d14797bb697435efeb406266"
+        "FBOS-PRED-d14797bb697435efeb406266",
+        "FBOS-PRED-08946dc5bad0e31b5e29b680"
       ],
-      "prediction_created_at": "2026-10-16T02:38:40.827577+00:00",
-      "freeze_created_at": "2026-10-16T02:38:40.986027+00:00"
+      "prediction_created_at": "2026-10-16T03:16:52.696612+00:00",
+      "freeze_created_at": "2026-10-16T03:16:52.816211+00:00"
     },
     {
       "job_id": "BASE-2026-10-16-3013724",
@@ -674,9 +723,9 @@
       "kickoff": "2026-10-17T03:00:00+08:00",
       "status": "FROZEN",
       "created_at": "2026-10-15T08:15:08.724826+00:00",
-      "updated_at": "2026-10-16T02:36:28.563291+00:00",
+      "updated_at": "2026-10-16T03:14:34.393491+00:00",
       "source_universe": "data/prediction_universe/2026-10-16.json",
-      "prediction_id": "FBOS-PRED-6ab4530393c8ffab83af30e4",
+      "prediction_id": "FBOS-PRED-e58efa1975d87435f3a5b714",
       "last_error": null,
       "coverage": {
         "status": "UNSUPPORTED",
@@ -689,7 +738,7 @@
         "warning_codes": [],
         "historical_challenger_allowed": false,
         "champion_prediction_allowed": true,
-        "evaluated_at": "2026-10-16T02:36:28Z"
+        "evaluated_at": "2026-10-16T03:14:34Z"
       },
       "coverage_status": "UNSUPPORTED",
       "coverage_reason_codes": [
@@ -700,10 +749,10 @@
       ],
       "historical_challenger_allowed": false,
       "football_evidence_status": "created",
-      "football_evidence_ref": "/home/runner/work/football-betting-oneshot/football-betting-oneshot/data/prospective/football_evidence/FBOS-PRED-6ab4530393c8ffab83af30e4.json",
+      "football_evidence_ref": "/home/runner/work/football-betting-oneshot/football-betting-oneshot/data/prospective/football_evidence/FBOS-PRED-e58efa1975d87435f3a5b714.json",
       "football_evidence_error": null,
       "shadow_status": "created",
-      "shadow_comparison_id": "2e49e80bcbb5f8f6ea2d9dd3c90760da488d810ad2113076c2636d74218db635",
+      "shadow_comparison_id": "b4ecce2f59d4b5eb56b20dd83880cfcd587cafc0e72475e1f6295e7f8e3697cd",
       "shadow_failure_reason": null,
       "prediction_ids": [
         "FBOS-PRED-ef4929a6af9cd6985d1bffa5",
@@ -722,10 +771,11 @@
         "FBOS-PRED-e5d07950adc0dadf373bee18",
         "FBOS-PRED-21856e3b97d28a64edaaf07b",
         "FBOS-PRED-5d2ff4591df26be981d7e611",
-        "FBOS-PRED-6ab4530393c8ffab83af30e4"
+        "FBOS-PRED-6ab4530393c8ffab83af30e4",
+        "FBOS-PRED-e58efa1975d87435f3a5b714"
       ],
-      "prediction_created_at": "2026-10-16T02:38:54.624808+00:00",
-      "freeze_created_at": "2026-10-16T02:38:54.779646+00:00"
+      "prediction_created_at": "2026-10-16T03:17:05.497039+00:00",
+      "freeze_created_at": "2026-10-16T03:17:05.613261+00:00"
     },
     {
       "job_id": "BASE-2026-10-16-2910934",
@@ -738,9 +788,9 @@
       "kickoff": "2026-10-17T07:00:00+08:00",
       "status": "FROZEN",
       "created_at": "2026-10-15T08:15:08.724826+00:00",
-      "updated_at": "2026-10-16T02:36:28.563291+00:00",
+      "updated_at": "2026-10-16T03:14:34.393491+00:00",
       "source_universe": "data/prediction_universe/2026-10-16.json",
-      "prediction_id": "FBOS-PRED-a573b75f38e5d718414ede07",
+      "prediction_id": "FBOS-PRED-85d506e7afc10470acdcd0a1",
       "last_error": null,
       "coverage": {
         "status": "UNSUPPORTED",
@@ -753,7 +803,7 @@
         "warning_codes": [],
         "historical_challenger_allowed": false,
         "champion_prediction_allowed": true,
-        "evaluated_at": "2026-10-16T02:36:28Z"
+        "evaluated_at": "2026-10-16T03:14:34Z"
       },
       "coverage_status": "UNSUPPORTED",
       "coverage_reason_codes": [
@@ -764,10 +814,10 @@
       ],
       "historical_challenger_allowed": false,
       "football_evidence_status": "created",
-      "football_evidence_ref": "/home/runner/work/football-betting-oneshot/football-betting-oneshot/data/prospective/football_evidence/FBOS-PRED-a573b75f38e5d718414ede07.json",
+      "football_evidence_ref": "/home/runner/work/football-betting-oneshot/football-betting-oneshot/data/prospective/football_evidence/FBOS-PRED-85d506e7afc10470acdcd0a1.json",
       "football_evidence_error": null,
       "shadow_status": "created",
-      "shadow_comparison_id": "c452794372065c4e357ce052928c14c0bb4285aef815ba872caaea1f72265ff9",
+      "shadow_comparison_id": "47cec58f1799aa2fdf4606fa0040d290e0a5fc923f448972652fb8e66d96972b",
       "shadow_failure_reason": null,
       "prediction_ids": [
         "FBOS-PRED-75723b34ebfab92d3407ee1a",
@@ -779,17 +829,18 @@
         "FBOS-PRED-da725d3f68cd19b75ac32b4d",
         "FBOS-PRED-2f51c05caf527425bdf35fd1",
         "FBOS-PRED-f7a4bbc6a63bfa0f3f16467e",
-        "FBOS-PRED-a573b75f38e5d718414ede07"
+        "FBOS-PRED-a573b75f38e5d718414ede07",
+        "FBOS-PRED-85d506e7afc10470acdcd0a1"
       ],
-      "prediction_created_at": "2026-10-16T02:39:11.712900+00:00",
-      "freeze_created_at": "2026-10-16T02:39:11.874014+00:00"
+      "prediction_created_at": "2026-10-16T03:17:17.645065+00:00",
+      "freeze_created_at": "2026-10-16T03:17:17.767289+00:00"
     }
   ],
-  "last_run_at": "2026-10-16T02:36:28.563291+00:00",
+  "last_run_at": "2026-10-16T03:14:34.393491+00:00",
   "failure_reasons": {
-    "SOURCE_FETCH_FAILED": 1
+    "INPUT_PROVENANCE_UNVERIFIED": 1
   },
   "input_provenance_failure_stages": {
-    "SOURCE_FETCH_FAILED": 1
+    "OTHER_DETERMINISTIC_CAUSE": 1
   }
 }
