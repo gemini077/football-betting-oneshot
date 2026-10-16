@@ -17,6 +17,7 @@ on:
       - 'scripts/rolling_market_shadow.py'
       - 'scripts/rolling_market_shadow_settlement.py'
       - 'tests/test_gf22*.py'
+      - 'tests/test_gf231_de_team_identity.py'
       - '.github/workflows/research-shadow-checks.yml'
   workflow_dispatch:
 
@@ -38,7 +39,7 @@ jobs:
           python-version: '3.12'
       - name: Install research test dependencies
         run: python -m pip install pytest
-      - name: Verify GF214 through GF222
+      - name: Verify frozen market research and paired audit
         run: |
           python -m pytest -q -p no:cacheprovider \
             tests/test_gf214_preko_bet365_shadow.py \
@@ -50,3 +51,12 @@ jobs:
             tests/test_gf221_rolling_market_shadow_settlement.py \
             tests/test_gf228_pme_champion_paired_audit.py \
             tests/test_gf229_pme_paired_public.py
+
+      - name: Verify source-proven club aliases and Nowscore identity
+        env:
+          PYTHONPATH: '.:./scripts'
+        run: |
+          python -m pytest -q -p no:cacheprovider \
+            tests/test_gf231_de_team_identity.py \
+            tests/test_gf219_atletico_team_identity.py \
+            tests/test_nowscore_markets.py

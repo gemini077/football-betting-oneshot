@@ -104,6 +104,10 @@ def team_similarity(left: Any, right: Any) -> tuple[float, str]:
     basis = "no_match"
     for first in left_names:
         for second in right_names:
+            # Never infer a CJK club from a mixed-script name like Bremen SV/U21.
+            # Explicit, source-verified aliases above remain eligible for exact match.
+            if _is_cjk(first) != _is_cjk(second):
+                continue
             shorter, longer = sorted((first, second), key=len)
             if len(shorter) >= 2 and _is_cjk(shorter) and (longer.startswith(shorter) or longer.endswith(shorter)):
                 if 0.92 > best:
