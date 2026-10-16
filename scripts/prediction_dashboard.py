@@ -2172,6 +2172,49 @@ STATIC_REFRESH_SCRIPT = """<script>
 </script>"""
 
 
+def summarize_frozen_exact_score_review(payload: dict[str, Any]) -> dict[str, int] | None:
+    """Summarize only unique, formally evaluated, verified frozen fixtures."""
+    rows, seen = [], set()
+    try:
+        for f in payload.get("fixtures") or []:
+            if not isinstance(f, dict) or f.get("status") != "FROZEN" or f.get("formal_prospective") is not True or f.get("pilot_excluded") is True:
+                continue
+            date, mid = f.get("business_date"), f.get("match_id")
+            if not date or not mid: continue
+            key = (date, mid)
+            if key in seen: return None
+            seen.add(key)
+            ev, result = f.get("evaluation") or {}, f.get("result") or {}
+            metrics = ev.get("metrics") or {}
+            ko = datetime.fromisoformat(f["kickoff_timestamp"].replace("Z", "+00:00"))
+            freeze = datetime.fromisoformat(f["selected_freeze_created_at"].replace("Z", "+00:00"))
+            cutoff = datetime.fromisoformat(f["selected_source_cutoff_at"].replace("Z", "+00:00"))
+            score = result.get("score_90m")
+            if (ev.get("kind") != "formal" or metrics.get("exact_score_authority_status") != "FROZEN_PREDICTION_TIME" or
+                any(type(metrics.get(k)) is not bool for k in ("exact_score_top1", "exact_score_top3", "exact_score_top5")) or
+                not isinstance(score, str) or not re.fullmatch(r"\d{1,2}-\d{1,2}", score) or not freeze < ko or not cutoff < ko):
+                continue
+            rows.append((f, metrics, score))
+    except (KeyError, TypeError, ValueError):
+        return None
+    if not rows: return None
+    return {"count": len(rows), "top1": sum(m["exact_score_top1"] for _,m,_ in rows),
+            "top3": sum(m["exact_score_top3"] for _,m,_ in rows), "top5": sum(m["exact_score_top5"] for _,m,_ in rows),
+            "predicted_11": sum((f.get("prediction") or {}).get("primary_score") == "1-1" for f,_,_ in rows),
+            "actual_11": sum(score == "1-1" for _,_,score in rows),
+            "c_count": sum((f.get("prediction") or {}).get("data_grade") == "C" for f,_,_ in rows), "business_days": len({f["business_date"] for f,_,_ in rows})}
+
+
+def render_frozen_exact_score_review(payload: dict[str, Any]) -> str:
+    s = summarize_frozen_exact_score_review(payload)
+    if not s: return ""
+    return (f'<section class="trust-strip dashboard-trust-strip" aria-label="赛前冻结样本复核">'
+            f'<div class="trust-item"><div><strong>Top1 / Top3 / Top5</strong><span>{s["top1"]} / {s["top3"]} / {s["top5"]}（{s["count"]}场）</span></div></div>'
+            f'<div class="trust-item"><div><strong>1-1 比分</strong><span>预测 {s["predicted_11"]} 场 · 实际 {s["actual_11"]} 场</span></div></div>'
+            f'<div class="trust-item"><div><strong>数据质量</strong><span>C级 {s["c_count"]}/{s["count"]} 场 · {s["business_days"]} 个竞彩日</span></div></div>'
+            f'<div class="trust-item"><span>本期已核验赛前冻结样本；小样本仅展示事实，不代表长期命中率</span></div></section>')
+
+
 def render_dashboard(payload: dict[str, Any]) -> str:
     summary = payload.get("summary") or {}
     system_health = payload.get("system_runtime_health") or payload.get("health") or {}
@@ -2207,6 +2250,7 @@ def render_dashboard(payload: dict[str, Any]) -> str:
         '<div class="filter-empty" data-filter-empty="RESULT" hidden>\u5f53\u524d\u7ade\u5f69\u65e5\u6682\u65e0\u5df2\u7ed3\u675f\u5e76\u6838\u9a8c\u7684\u6bd4\u8d5b</div>'
     )
     runtime_warning = _runtime_warning_html(system_health, payload.get("data_errors") or [])
+    frozen_review_html = render_frozen_exact_score_review(payload)
     # Exact-state caution is rendered once inside the affected score lane.
     quality_warning = ""
     trust_history_html = _trust_history_html(payload.get("prediction_quality_trust"))
@@ -2227,7 +2271,7 @@ def render_dashboard(payload: dict[str, Any]) -> str:
 </header>
 <div class="content">
 <section class="matches-head"><div><h1>{dashboard_title}</h1><p>\u5148\u770b\u8c01\u548c\u8c01\u6bd4\u8d5b\uff0c\u518d\u770b\u80dc / \u5e73 / \u8d1f\u6982\u7387\u4e0e\u6700\u53ef\u80fd\u6bd4\u5206\u3002\u5f02\u5e38\u53ea\u5728\u771f\u6b63\u6539\u53d8\u5224\u65ad\u65f6\u51fa\u73b0\u3002 \u6d4b\u8bd5\u9636\u6bb5 \u00b7 \u4ec5\u4f9b\u8d5b\u524d\u5206\u6790</p></div><div class="chips" aria-label="\u6bd4\u8d5b\u7b5b\u9009"><button class="chip filter" type="button" data-filter="ALL" aria-pressed="true">\u5168\u90e8</button><button class="chip filter" type="button" data-filter="UPCOMING" aria-pressed="false">\u672a\u5f00\u8d5b</button><button class="chip filter" type="button" data-filter="RESULT" data-result-count="{verified_results}" aria-pressed="false">\u5df2\u7ed3\u675f</button></div></section>
-{runtime_warning}{quality_warning}{data_warning}
+{runtime_warning}{quality_warning}{data_warning}{frozen_review_html}
 <section class="fixture-table" id="fixture-list" aria-label="\u7ade\u5f69\u65e5\u6bd4\u8d5b\u5217\u8868">
   {cards_html}
   {filter_empty_html}
