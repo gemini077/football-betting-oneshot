@@ -92,6 +92,18 @@ jobs:
           business_date="$(python -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["business_date"])' data/product_runtime/latest_cycle.json)"
           python scripts/prediction_dashboard.py --date "$business_date"
 
+      - name: Evaluate frozen three-arm research shadow
+        shell: bash
+        run: |
+          if python -m pytest -q tests/test_gf216_frozen_three_arm_settlement.py \
+             && python -m greenfield.research.gf216_frozen_three_arm_settlement \
+                --repo-root . \
+                --output data/prediction_dashboard/gf216_research_review.json; then
+            echo 'GF216 frozen three-arm research scorecard updated'
+          else
+            echo '::warning::GF216 research scorecard unavailable; daily predictions and Pages continue unchanged'
+          fi
+
       - name: Save generated public data
         if: ${{ !cancelled() && steps.generated_data_gate.outputs.ready == 'true' }}
         shell: bash
