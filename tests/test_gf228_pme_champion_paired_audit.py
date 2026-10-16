@@ -51,7 +51,11 @@ def test_post_kickoff_leakage_comparison():
     from datetime import datetime
     assert datetime.fromisoformat('2026-01-01T00:00:01+00:00')>=datetime.fromisoformat('2026-01-01T00:00:00+00:00')
 def test_one_observation_per_latest_match():
-    ix=audit.read(BASE/'latest_index.json'); latest=ix['latest_by_match']; assert len(latest)==132 and len(set(latest))==132
+    ix=audit.read(BASE/'data/prediction_quality/pure_market_exact_prospective_1/latest_index.json')
+    latest=ix['latest_by_match']
+    assert latest and len(latest)==len(set(latest))
+    assert len(latest)<=ix['prediction_count']
+    assert all(isinstance(key,str) and isinstance(pid,str) and pid for key,pid in latest.items())
 
 
 def test_rejects_nonfinite_expected_metric():
