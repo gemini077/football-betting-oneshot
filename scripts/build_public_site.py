@@ -565,6 +565,11 @@ def build(output: Path, *, data_root: Path | None = None) -> Path:
     rolling_review = data_root / "prediction_dashboard" / "gf221_rolling_shadow_review.json"
     pilot_review = data_root / "prediction_dashboard" / "gf216_research_review.json"
     publish_optional(rolling_review if rolling_review.is_file() else pilot_review, output)
+    try:
+        from .pme_paired_public import publish_optional as publish_pme_optional
+    except ImportError:  # pragma: no cover - direct script execution path.
+        from pme_paired_public import publish_optional as publish_pme_optional
+    publish_pme_optional(data_root / "prediction_quality" / "pure_market_exact_prospective_1" / "champion_market_paired_review.json", output)
     _build_match_pages(data_root, output, match_ids, dashboard)
 
     downloads = output / "downloads"

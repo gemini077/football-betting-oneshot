@@ -1,0 +1,108 @@
+import copy
+import importlib.util
+import json
+from pathlib import Path
+
+import pytest
+
+BASE = Path(__file__).resolve().parents[1]
+SOURCE = BASE / "data/prediction_quality/pure_market_exact_prospective_1/champion_market_paired_review.json"
+spec = importlib.util.spec_from_file_location("paired_public", BASE / "scripts/pme_paired_public.py")
+public = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(public)
+
+
+def report():
+    return json.loads(SOURCE.read_text(encoding="utf-8"))
+
+
+def site(tmp_path):
+    research = tmp_path / "research"
+    research.mkdir(parents=True, exist_ok=True)
+    (research / "scorecard.html").write_text("<html><main><h1>Scorecard</h1></main></html>", encoding="utf-8")
+
+
+def test_real_report_renders_expected_metrics_and_provenance(tmp_path):
+    site(tmp_path)
+    assert public.publish_optional(SOURCE, tmp_path)
+    page = (tmp_path / "research/pme-paired.html").read_text(encoding="utf-8")
+    for text in ("14 / 90", "17 / 90", "28 / 90", "31 / 90", "44 / 90", "47 / 90", "3.0495", "2.9153", "0.18723", "0.16555", "CAPTURE_ONLY", "latest_by_match", "169 格", "441 格"):
+        assert text in page
+
+
+def test_top1_test_displayed(tmp_path):
+    site(tmp_path)
+    assert public.publish_optional(SOURCE, tmp_path)
+    assert "p = 0.5078" in (tmp_path / "research/pme-paired.html").read_text(encoding="utf-8")
+
+
+def test_unsafe_match_key_is_escaped(tmp_path):
+    site(tmp_path)
+    data = report()
+    data["matches"][0]["match_key"] = '<script>alert("x")</script>'
+    source = tmp_path / "unsafe.json"
+    source.write_text(json.dumps(data), encoding="utf-8")
+    assert public.publish_optional(source, tmp_path)
+    page = (tmp_path / "research/pme-paired.html").read_text(encoding="utf-8")
+    assert "&lt;script&gt;alert(&quot;x&quot;)&lt;/script&gt;" in page
+    assert '<script>alert("x")</script>' not in page
+
+
+@pytest.mark.parametrize("mutate", [
+    lambda d: d.update(schema_version="wrong"),
+    lambda d: d.update(n=0),
+    lambda d: d["summary"]["market"].update(top1=91),
+    lambda d: d["summary"]["champion"].update(nll=float("nan")),
+    lambda d: d["deltas"]["nll"].update(paired_bootstrap_95_ci=[1, -1]),
+    lambda d: d["tests"]["top1_mcnemar"].update(two_sided_exact_p=1.1),
+    lambda d: d["matches"][0].update(actual="not-a-score"),
+])
+def test_invalid_report_rejected_without_site_change(tmp_path, mutate):
+    site(tmp_path)
+    before = (tmp_path / "research/scorecard.html").read_bytes()
+    data = report()
+    mutate(data)
+    source = tmp_path / "bad.json"
+    source.write_text(json.dumps(data), encoding="utf-8")
+    assert public.publish_optional(source, tmp_path) is False
+    assert (tmp_path / "research/scorecard.html").read_bytes() == before
+    assert not (tmp_path / "research/pme-paired.html").exists()
+
+
+def test_missing_report_leaves_existing_site_intact(tmp_path):
+    site(tmp_path)
+    before = (tmp_path / "research/scorecard.html").read_bytes()
+    assert public.publish_optional(tmp_path / "missing.json", tmp_path) is False
+    assert (tmp_path / "research/scorecard.html").read_bytes() == before
+
+
+def test_link_is_idempotent_on_repeat_publish(tmp_path):
+    site(tmp_path)
+    assert public.publish_optional(SOURCE, tmp_path)
+    assert public.publish_optional(SOURCE, tmp_path)
+    page = (tmp_path / "research/scorecard.html").read_text(encoding="utf-8")
+    assert page.count("research-historical-paired-link") == 1
+
+
+def test_outputs_are_bounded_and_exclude_raw_quote_data(tmp_path):
+    site(tmp_path)
+    data = report()
+    data["raw_bookmaker_quote"] = {"odds": [1.23, 4.56]}
+    source = tmp_path / "report.json"
+    source.write_text(json.dumps(data), encoding="utf-8")
+    assert public.publish_optional(source, tmp_path)
+    payload = (tmp_path / "research/pme-paired.json").read_text(encoding="utf-8")
+    assert "raw_bookmaker_quote" not in payload and "1.23" not in payload
+    assert len((tmp_path / "research/pme-paired.html").read_bytes()) < 400 * 1024
+    assert len((tmp_path / "research/pme-paired.json").read_bytes()) < 400 * 1024
+    assert len(json.loads(payload)["matches"]) <= 250
+
+
+def test_zero_values_are_not_substituted_for_missing_metrics(tmp_path):
+    site(tmp_path)
+    data = report()
+    del data["summary"]["champion"]["top1"]
+    source = tmp_path / "missing_metric.json"
+    source.write_text(json.dumps(data), encoding="utf-8")
+    assert public.publish_optional(source, tmp_path) is False
+    assert not (tmp_path / "research/pme-paired.html").exists()

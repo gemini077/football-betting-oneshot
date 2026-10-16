@@ -1,0 +1,149 @@
+"""Public, research-only presentation for GF228 paired historical evaluation."""
+from __future__ import annotations
+
+import html
+import json
+import math
+from pathlib import Path
+from typing import Any
+
+SCHEMA = "gf228.paired_champion_market.v1"
+METHODS = ("champion", "market")
+TOPS = ("top1", "top3", "top5")
+
+
+def _number(value: Any) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
+
+
+def _valid(report: Any) -> bool:
+    if not isinstance(report, dict) or report.get("schema_version") != SCHEMA:
+        return False
+    n = report.get("n")
+    if isinstance(n, bool) or not isinstance(n, int) or n < 1:
+        return False
+    summary = report.get("summary")
+    if not isinstance(summary, dict):
+        return False
+    for method in METHODS:
+        row = summary.get(method)
+        if not isinstance(row, dict):
+            return False
+        for key in TOPS:
+            count = row.get(key)
+            if isinstance(count, bool) or not isinstance(count, int) or not 0 <= count <= n:
+                return False
+        if any(not _number(row.get(key)) for key in ("nll", "rps")):
+            return False
+        if not 0 <= row["rps"] <= 1 or row["nll"] < 0:
+            return False
+    deltas = report.get("deltas")
+    if not isinstance(deltas, dict):
+        return False
+    for metric in ("nll", "rps"):
+        item = deltas.get(metric)
+        if not isinstance(item, dict) or not _number(item.get("market_minus_champion_mean")):
+            return False
+        ci = item.get("paired_bootstrap_95_ci")
+        if not isinstance(ci, list) or len(ci) != 2 or not all(_number(x) for x in ci) or ci[0] > ci[1]:
+            return False
+    tests = report.get("tests")
+    mcnemar = tests.get("top1_mcnemar") if isinstance(tests, dict) else None
+    p = mcnemar.get("two_sided_exact_p") if isinstance(mcnemar, dict) else None
+    if not _number(p) or not 0 <= p <= 1:
+        return False
+    matches = report.get("matches")
+    if not isinstance(matches, list) or len(matches) > 5000:
+        return False
+    for match in matches:
+        if not isinstance(match, dict) or any(not isinstance(match.get(k), str) or not match[k] for k in ("match_key", "actual")):
+            return False
+        if not _score(match["actual"]):
+            return False
+        for method in METHODS:
+            side = match.get(method)
+            if not isinstance(side, dict) or not isinstance(side.get("score1"), str) or not _score(side["score1"]):
+                return False
+            if any(type(side.get(k)) is not int or side[k] not in (0, 1) for k in TOPS):
+                return False
+        pair = match.get("top1")
+        if not isinstance(pair, dict) or any(type(pair.get(k)) is not int or pair[k] not in (0, 1) for k in METHODS):
+            return False
+    return True
+
+
+def _score(value: str) -> bool:
+    parts = value.split("-")
+    return len(parts) == 2 and all(x.isdigit() for x in parts)
+
+
+def _clean(report: dict[str, Any]) -> dict[str, Any]:
+    # Explicit allowlist: raw quote/bookmaker payloads and unrelated provenance are excluded.
+    return {
+        "schema_version": report["schema_version"],
+        "n": report["n"],
+        "source_cutoff_policy": report.get("source_cutoff_policy"),
+        "quote_clock_policy": report.get("quote_clock_policy"),
+        "control": report.get("control"),
+        "methods": report.get("methods"),
+        "summary": {m: {k: report["summary"][m][k] for k in (*TOPS, "nll", "rps", "score_1_1_top1")} for m in METHODS},
+        "deltas": {k: report["deltas"][k] for k in ("nll", "rps")},
+        "tests": {"top1_mcnemar": {k: report["tests"]["top1_mcnemar"].get(k) for k in ("champion_only", "market_only", "two_sided_exact_p", "interpretation")}},
+        "matches": [{"match_key": r["match_key"], "actual": r["actual"], "top1": r["top1"],
+                     "champion": {k: r["champion"][k] for k in ("score1", *TOPS)},
+                     "market": {k: r["market"][k] for k in ("score1", *TOPS)}} for r in report["matches"][:250]],
+    }
+
+
+def _render(data: dict[str, Any]) -> str:
+    s = data["summary"]
+    esc = lambda value: html.escape(str(value), quote=True)
+    rows = "".join("<tr><th>" + label + "</th>" + "".join(f"<td>{s[method][k]} / {data['n']}</td>" for k in TOPS) +
+                   f"<td>{s[method]['nll']:.4f}</td><td>{s[method]['rps']:.5f}</td></tr>"
+                   for method, label in (("champion", "Champion"), ("market", "市场基线（研究）")))
+    matches = "".join("<tr><td>" + esc(r["match_key"]) + "</td><td>" + esc(r["actual"]) + "</td><td>" +
+                      esc(r["champion"]["score1"]) + "</td><td>" + esc(r["market"]["score1"]) + "</td></tr>" for r in data["matches"])
+    ci_nll = data["deltas"]["nll"]["paired_bootstrap_95_ci"]
+    ci_rps = data["deltas"]["rps"]["paired_bootstrap_95_ci"]
+    p = data["tests"]["top1_mcnemar"]["two_sided_exact_p"]
+    return f'''<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>历史配对回测 | Football Prediction Day</title><style>
+*{{box-sizing:border-box}}body{{margin:0;background:#f6f7f5;color:#1d2925;font:15px/1.65 system-ui,-apple-system,"Segoe UI",sans-serif}}main{{max-width:980px;margin:36px auto 72px;padding:0 22px}}a{{color:#345d50}}.muted{{color:#61726a;font-size:13px}}h1{{font-size:30px;margin:12px 0 6px}}h2{{font-size:18px;margin:0 0 12px}}section{{background:#fff;border:1px solid #e0e6e1;border-radius:10px;padding:20px;margin:16px 0;overflow:auto}}.notice{{background:#eaf0eb;border-left:3px solid #647e70;padding:14px 18px;border-radius:0 6px 6px 0}}table{{border-collapse:collapse;width:100%;min-width:580px}}th,td{{text-align:left;padding:10px;border-bottom:1px solid #edf0ec;font-variant-numeric:tabular-nums}}@media(max-width:600px){{main{{margin-top:18px;padding:0 14px}}section{{padding:13px}}h1{{font-size:26px}}}}
+</style></head><body><main><nav><a href="../research/scorecard.html">← 研究复盘</a> · <a href="../prediction_dashboard/latest.html">每日预测</a></nav>
+<p class="muted">RESEARCH ONLY / 研究样本</p><h1>历史 {data['n']} 场 Champion / 市场配对回测</h1>
+<p>按固定 unique latest_by_match 前瞻记录选择；Champion 使用完全相同 source cutoff 的冻结预测。每场单独配对。</p>
+<div class="notice">仅作历史研究，不构成市场模型晋级或替换生产 Champion 的依据。源报价时间戳为 CAPTURE_ONLY（仅记录捕获时间，未验证报价时钟）。完整比分网格：Champion 169 格，市场 441 格。</div>
+<section><h2>配对表现（{data['n']} 场）</h2><table><thead><tr><th>方法</th><th>Top 1</th><th>Top 3</th><th>Top 5</th><th>平均 NLL ↓</th><th>1X2 RPS ↓</th></tr></thead><tbody>{rows}</tbody></table>
+<p>市场 − Champion 配对 bootstrap 95% CI：NLL [{ci_nll[0]:.4f}, {ci_nll[1]:.4f}]；RPS [{ci_rps[0]:.5f}, {ci_rps[1]:.5f}]。Top 1 双侧 exact McNemar p = {p:.4f}，未显示显著差异。</p>
+<p>Top 1/3/5 命中：{s['champion']['top1']}–{s['market']['top1']} / {s['champion']['top3']}–{s['market']['top3']} / {s['champion']['top5']}–{s['market']['top5']}；NLL：{s['champion']['nll']:.4f}–{s['market']['nll']:.4f}；RPS：{s['champion']['rps']:.5f}–{s['market']['rps']:.5f}。预测众数为 1–1：Champion {s['champion']['score_1_1_top1']} 场，市场 {s['market']['score_1_1_top1']} 场。</p>
+<p class="muted">指标基于合法赛前来源与同一截止时间的冻结配对；结果为 90 分钟及伤停补时。市场基线仅供研究，不作生产晋级结论。</p></section>
+<section><h2>配对样本明细（最多 250 场）</h2><table><thead><tr><th>比赛键</th><th>实际比分</th><th>Champion Top 1</th><th>市场 Top 1</th></tr></thead><tbody>{matches}</tbody></table></section>
+</main></body></html>'''
+
+
+def publish_optional(source: Path, output: Path) -> bool:
+    try:
+        report = json.loads(Path(source).read_text(encoding="utf-8"))
+        if not _valid(report):
+            return False
+        data = _clean(report)
+        page = _render(data)
+        base = Path(output) / "research"
+        scorecard = base / "scorecard.html"
+        if not scorecard.is_file():
+            return False
+        score_text = scorecard.read_text(encoding="utf-8")
+        link = "<a class='research-historical-paired-link' href='pme-paired.html'>历史 90 场配对回测</a>"
+        import re
+        score_text = re.sub(r"\s*<a class='research-historical-paired-link' href='pme-paired\.html'>.*?</a>", "", score_text)
+        pos = score_text.lower().rfind("</main>")
+        if pos < 0:
+            return False
+        score_text = score_text[:pos] + "\n<p>" + link + "</p>\n" + score_text[pos:]
+        json_text = json.dumps(data, ensure_ascii=False, indent=2) + "\n"
+        (base / "pme-paired.html").write_text(page, encoding="utf-8")
+        (base / "pme-paired.json").write_text(json_text, encoding="utf-8")
+        scorecard.write_text(score_text, encoding="utf-8")
+        return True
+    except (OSError, ValueError, TypeError, KeyError):
+        return False

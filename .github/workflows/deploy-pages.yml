@@ -140,6 +140,23 @@ jobs:
           echo '::warning::GF220/GF221 rolling research shadow failed; official predictions and Pages continue unchanged'
           echo 'GF220/GF221 bounded research capture and settlement: FAILED (official predictions and Pages unchanged)' >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Evaluate independent historical paired research
+        id: historical_pair_audit
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -e
+          python -m pytest -q -p no:cacheprovider tests/test_gf228_pme_champion_paired_audit.py tests/test_gf229_pme_paired_public.py
+          python -m scripts.pme_champion_paired_audit --repo-root .
+          echo 'GF228/229 historical prospective paired audit: PASS' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Report optional historical paired failure
+        if: ${{ steps.historical_pair_audit.outcome == 'failure' }}
+        shell: bash
+        run: |
+          echo '::warning::GF228/229 research audit failed; daily predictions and Pages continue unchanged'
+          echo 'GF228/229 historical paired research: FAILED' >> "$GITHUB_STEP_SUMMARY"
+
       - name: Save generated public data
         if: ${{ !cancelled() && steps.generated_data_gate.outputs.ready == 'true' }}
         shell: bash
