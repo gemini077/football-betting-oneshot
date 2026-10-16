@@ -356,3 +356,27 @@ def test_refresh_is_repeatable_and_replaces_latest_atomically(tmp_path):
     assert first["latest_status"] == "CREATED"
     assert second["latest_status"] == "REPLACED"
     assert json.loads(output.read_text(encoding="utf-8"))["refresh"]["refreshed_at"] == "2026-08-30T12:01:00+08:00"
+
+def test_gzip_pair_index_round_trip_with_legacy(tmp_path):
+    """A mixed old/new pair root must preserve digest and checkpoint count."""
+    from market_side_shadow import persist_pair
+    flat, result_root = _copy_smoke_inputs(tmp_path)
+    original = json.loads((flat / PAIR_SOURCE.name).read_text(encoding="utf-8"))
+    newer = dict(original)
+    newer["pair_id"] = "MS-SHADOW-PAIR-FUTURE-GZIP-IDENTITY"
+    newer["match_id"] = "future-fixture"
+    newer["match_key"] = "future-fixture"
+    saved = persist_pair(newer, flat)
+    assert saved["status"] == "created" and saved["path"].name.endswith(".json.gz")
+    pairs = load_persisted_pairs(flat)
+    assert len(pairs) == 2
+    index = {
+        "schema_version": PAIR_INDEX_SCHEMA_VERSION,
+        "root": "pairs",
+        "pair_count": len(pairs),
+        "pair_set_digest": pair_set_digest(pairs),
+    }
+    assert load_indexed_pairs(index, flat) == pairs
+    saved["path"].write_bytes(b"corrupt")
+    with pytest.raises(Exception):
+        load_indexed_pairs(index, flat)

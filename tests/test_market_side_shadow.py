@@ -23,6 +23,7 @@ from market_side_shadow import (  # noqa: E402
     iter_persisted_pair_paths,
     load_persisted_pairs,
     pair_shard_path,
+    compressed_pair_shard_path,
     pair_shard_prefix,
     persist_pair,
     checkpoint_status,
@@ -134,7 +135,7 @@ def test_capture_pair_has_same_identity_and_write_once_persistence(tmp_path):
     second = persist_pair(pair, root)
     assert first["status"] == "created"
     assert second["status"] == "existing"
-    assert first["path"] == pair_shard_path(pair["pair_id"], root)
+    assert first["path"] == compressed_pair_shard_path(pair["pair_id"], root)
     assert not (root / f"{pair['pair_id']}.json").exists()
 
     changed = copy.deepcopy(pair)
@@ -190,7 +191,7 @@ def test_future_pair_shards_keep_directory_width_bounded_at_high_water(tmp_path)
             "promotion_eligible": True,
         }
         written = persist_pair(pair, root)
-        assert written["path"] == pair_shard_path(pair["pair_id"], root)
+        assert written["path"] == compressed_pair_shard_path(pair["pair_id"], root)
 
     paths = iter_persisted_pair_paths(root)
     widths = {}
@@ -202,7 +203,7 @@ def test_future_pair_shards_keep_directory_width_bounded_at_high_water(tmp_path)
     assert not list(root.glob("MS-SHADOW-PAIR-*.json"))
     assert len(widths) >= 32
     assert max(widths.values()) < 1000
-    assert all(path.parent.name == pair_shard_prefix(path.stem) for path in paths)
+    assert all(path.parent.name == pair_shard_prefix(path.name.removesuffix(".json.gz")) for path in paths)
 
 
 def test_promotion_cohort_requires_explicit_production_capture_and_formal_eligibility(tmp_path):
@@ -353,9 +354,56 @@ def test_base_runner_shadow_hook_persists_c_without_touching_champion(tmp_path):
 
     assert result["status"] == "created"
     assert result["pair_status"] == "PAIRED"
-    assert result["path"].endswith(".json")
+    assert result["path"].endswith(".json.gz")
     saved_path = Path(result["path"])
     assert saved_path.parent != tmp_path / "pairs"
-    saved_pair = json.loads(saved_path.read_text(encoding="utf-8"))
+    import gzip
+    saved_pair = json.loads(gzip.decompress(saved_path.read_bytes()))
     assert saved_pair["promotion_eligible"] is True
     assert record["prediction_id"] == "FBOS-PRED-fixture-001"
+
+
+
+def test_lossless_gzip_pair_saved_and_legacy_read_compatible(tmp_path):
+    import gzip
+    pair = capture_pair(frozen_record(tmp_path), snapshot_root=tmp_path)
+    root = tmp_path / "pairs"
+    first = persist_pair(pair, root)
+    assert first["status"] == "created"
+    assert first["path"].name.endswith(".json.gz")
+    assert json.loads(gzip.decompress(first["path"].read_bytes())) == pair
+    old_bytes = first["path"].read_bytes()
+    assert persist_pair(pair, root)["status"] == "existing"
+    assert first["path"].read_bytes() == old_bytes
+    assert load_persisted_pairs(root) == [pair]
+
+
+def test_compressed_pair_tamper_and_duplicate_conflicts_fail_closed(tmp_path):
+    import gzip
+    pair = capture_pair(frozen_record(tmp_path), snapshot_root=tmp_path)
+    root = tmp_path / "pairs"
+    first = persist_pair(pair, root)
+    legacy = pair_shard_path(pair["pair_id"], root)
+    legacy.write_text(json.dumps(pair), encoding="utf-8")
+    assert load_persisted_pairs(root) == [pair]
+    tampered = copy.deepcopy(pair)
+    tampered["match_key"] = "wrong"
+    legacy.write_text(json.dumps(tampered), encoding="utf-8")
+    with pytest.raises(ShadowCaptureConflictError):
+        load_persisted_pairs(root)
+    legacy.unlink()
+    first["path"].write_bytes(b"not gzip")
+    with pytest.raises(ShadowCaptureConflictError):
+        load_persisted_pairs(root)
+
+
+def test_compressed_pair_filename_wrong_shard_rejected(tmp_path):
+    import shutil
+    pair = capture_pair(frozen_record(tmp_path), snapshot_root=tmp_path)
+    root = tmp_path / "pairs"
+    saved = persist_pair(pair, root)
+    wrong = root / "zz" / saved["path"].name
+    wrong.parent.mkdir()
+    shutil.move(saved["path"], wrong)
+    with pytest.raises(ValueError):
+        load_persisted_pairs(root)

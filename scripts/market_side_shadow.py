@@ -13,6 +13,7 @@ import argparse
 from collections import Counter, defaultdict
 from copy import deepcopy
 import hashlib
+import gzip
 import json
 import math
 import sys
@@ -627,49 +628,74 @@ def pair_shard_prefix(pair_id: str) -> str:
 
 
 def pair_shard_path(pair_id: str, pair_root: Path = DEFAULT_PAIR_ROOT) -> Path:
+    """Legacy immutable JSON shard path (still supported for reads)."""
     pair_id = _safe_pair_id(pair_id)
     return Path(pair_root) / pair_shard_prefix(pair_id) / f"{pair_id}.json"
 
 
-def iter_persisted_pair_paths(pair_root: Path = DEFAULT_PAIR_ROOT) -> list[Path]:
-    """Enumerate the supported one-level legacy-flat and future-sharded layout."""
+def compressed_pair_shard_path(pair_id: str, pair_root: Path = DEFAULT_PAIR_ROOT) -> Path:
+    """New immutable gzip shard path. Do not rewrite legacy JSON evidence."""
+    return pair_shard_path(pair_id, pair_root).with_suffix(".json.gz")
 
+
+def _supported_pair_file(path: Path) -> bool:
+    return (path.is_file() and path.name.startswith(PAIR_FILENAME_PREFIX)
+            and (path.name.endswith(".json") or path.name.endswith(".json.gz")))
+
+
+def iter_persisted_pair_paths(pair_root: Path = DEFAULT_PAIR_ROOT) -> list[Path]:
+    """Read flat/sharded uncompressed history and new sharded gzip files."""
     root = Path(pair_root)
     if not root.is_dir():
         return []
-    paths = [
-        path
-        for path in root.iterdir()
-        if path.is_file() and path.name.startswith(PAIR_FILENAME_PREFIX) and path.suffix == ".json"
-    ]
-    for directory in sorted(path for path in root.iterdir() if path.is_dir()):
-        paths.extend(
-            path
-            for path in directory.iterdir()
-            if path.is_file() and path.name.startswith(PAIR_FILENAME_PREFIX) and path.suffix == ".json"
-        )
-    return sorted(
-        paths,
-        key=lambda path: (len(path.relative_to(root).parts), path.relative_to(root).as_posix()),
-    )
+    paths = [p for p in root.iterdir() if _supported_pair_file(p)]
+    for directory in sorted(p for p in root.iterdir() if p.is_dir()):
+        paths.extend(p for p in directory.iterdir() if _supported_pair_file(p))
+    return sorted(paths, key=lambda p: (len(p.relative_to(root).parts), p.relative_to(root).as_posix()))
 
 
 def _load_persisted_pair_file(path: Path, pair_root: Path) -> dict[str, Any]:
     try:
-        value = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as error:
+        if path.name.endswith(".json.gz"):
+            # Reject gzip bombs while permitting the existing ~60KiB canonical pair.
+            with gzip.open(path, "rb") as reader:
+                payload = reader.read(4 * 1024 * 1024 + 1)
+            if len(payload) > 4 * 1024 * 1024:
+                raise ShadowCaptureConflictError(f"shadow pair decompressed size exceeds limit: {path}")
+            value = json.loads(payload.decode("utf-8"))
+        else:
+            value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, EOFError, UnicodeDecodeError, json.JSONDecodeError) as error:
         raise ShadowCaptureConflictError(f"shadow pair is unreadable: {path}") from error
     if not isinstance(value, dict) or value.get("schema_version") != SCHEMA_VERSION:
         raise ValueError(f"shadow pair is noncanonical: {path}")
     pair_id = _safe_pair_id(value.get("pair_id"))
-    if path.name != f"{pair_id}.json":
+    if path.name not in {f"{pair_id}.json", f"{pair_id}.json.gz"}:
         raise ValueError(f"shadow pair filename does not match pair_id: {path}")
     relative = path.relative_to(pair_root)
-    if len(relative.parts) == 1:
+    if len(relative.parts) == 1 and path.name.endswith(".json"):
         return value
     if len(relative.parts) == 2 and relative.parts[0] == pair_shard_prefix(pair_id):
         return value
     raise ValueError(f"shadow pair is outside the supported layout: {path}")
+
+
+def _persist_compressed_pair(path: Path, pair: Mapping[str, Any]) -> dict[str, Any]:
+    """Exclusive, deterministic gzip create. Existing bytes remain immutable."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = (canonical_json(pair) + "\n").encode("utf-8")
+    if len(payload) > 4 * 1024 * 1024:
+        raise ValueError("shadow pair exceeds 4 MiB uncompressed limit")
+    compressed = gzip.compress(payload, compresslevel=9, mtime=0)
+    try:
+        with path.open("xb") as f:
+            f.write(compressed)
+        return {"status": "created", "path": path, "document": deepcopy(dict(pair))}
+    except FileExistsError:
+        existing = _load_persisted_pair_file(path, path.parent.parent)
+        if canonical_json(existing) != canonical_json(pair):
+            raise ShadowCaptureConflictError(f"shadow pair content conflict: {pair.get('pair_id')}")
+        return {"status": "existing", "path": path, "document": existing}
 
 
 def persist_pair(pair: Mapping[str, Any], pair_root: Path = DEFAULT_PAIR_ROOT) -> dict[str, Any]:
@@ -681,18 +707,18 @@ def persist_pair(pair: Mapping[str, Any], pair_root: Path = DEFAULT_PAIR_ROOT) -
     pair_root = Path(pair_root)
     legacy_path = pair_root / f"{pair_id}.json"
     sharded_path = pair_shard_path(pair_id, pair_root)
-    existing_paths = [path for path in (legacy_path, sharded_path) if path.exists()]
+    compressed_path = compressed_pair_shard_path(pair_id, pair_root)
+    existing_paths = [p for p in (legacy_path, sharded_path, compressed_path) if p.exists()]
     if existing_paths:
         serialized = canonical_json(pair)
         for path in existing_paths:
             existing = _load_persisted_pair_file(path, pair_root)
             if canonical_json(existing) != serialized:
                 raise ShadowCaptureConflictError(f"shadow pair content conflict: {pair_id}")
-        target = legacy_path if legacy_path.exists() else sharded_path
-    else:
-        target = sharded_path
-    return _persist_json(target, pair, "shadow pair")
-
+        # Do not rewrite old or new history, and reject ambiguous variants in reader.
+        path = existing_paths[0]
+        return {"status": "existing", "path": path, "document": existing}
+    return _persist_compressed_pair(compressed_path, pair)
 
 def load_persisted_pairs(pair_root: Path = DEFAULT_PAIR_ROOT) -> list[dict[str, Any]]:
     pair_root = Path(pair_root)

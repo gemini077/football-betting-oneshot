@@ -9,6 +9,9 @@ on:
       - 'tests/test_gf21*.py'
       - 'scripts/market_score_math.py'
       - 'scripts/market_asian_totals.py'
+      - 'scripts/market_side_shadow.py'
+      - 'tests/test_market_side_shadow.py'
+      - 'tests/test_market_side_shadow_refresh.py'
       - 'scripts/research_scorecard_public.py'
       - 'scripts/pme_champion_paired_audit.py'
       - 'scripts/pme_paired_public.py'
@@ -54,6 +57,14 @@ jobs:
             tests/test_gf228_pme_champion_paired_audit.py \
             tests/test_gf229_pme_paired_public.py \
             tests/test_gf233_paired_audit_durability.py
+
+      - name: Verify lossless frozen market-side pair storage
+        env:
+          PYTHONPATH: '.:./scripts'
+        run: |
+          python -m pytest -q -p no:cacheprovider \
+            tests/test_market_side_shadow.py \
+            tests/test_market_side_shadow_refresh.py
 
       - name: Verify source-proven club aliases and Nowscore identity
         env:
