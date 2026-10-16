@@ -3,6 +3,19 @@ name: Refresh data and deploy Pages
 on:
   push:
     branches: [main]
+    # Research-only pushes use a fast CI workflow; retain 30-minute production schedule.
+    paths:
+      - 'scripts/**'
+      - 'config/**'
+      - 'src/**'
+      - 'frontend/**'
+      - 'templates/**'
+      - 'assets/**'
+      - 'static/**'
+      - 'web/**'
+      - 'requirements.txt'
+      - '.github/actions/**'
+      - '.github/workflows/deploy-pages.yml'
   workflow_dispatch:
   schedule:
     # Deterministic maintenance only; no LLM/API token use.

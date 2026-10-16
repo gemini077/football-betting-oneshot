@@ -558,6 +558,11 @@ def build(output: Path, *, data_root: Path | None = None) -> Path:
     dashboard_json = output / "prediction_dashboard" / "latest.json"
     dashboard_json.write_text(json.dumps(dashboard, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     match_ids = _copy_linked_public_pages(data_root, output, dashboard=dashboard)
+    try:
+        from .research_scorecard_public import publish_optional
+    except ImportError:  # pragma: no cover - direct script execution path.
+        from research_scorecard_public import publish_optional
+    publish_optional(data_root / "prediction_dashboard" / "gf216_research_review.json", output)
     _build_match_pages(data_root, output, match_ids, dashboard)
 
     downloads = output / "downloads"
