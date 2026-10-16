@@ -9,6 +9,9 @@ on:
       - 'tests/test_gf21*.py'
       - 'scripts/market_score_math.py'
       - 'scripts/research_scorecard_public.py'
+      - 'scripts/rolling_market_shadow.py'
+      - 'scripts/rolling_market_shadow_settlement.py'
+      - 'tests/test_gf22*.py'
       - '.github/workflows/research-shadow-checks.yml'
   workflow_dispatch:
 
@@ -30,10 +33,12 @@ jobs:
           python-version: '3.12'
       - name: Install research test dependencies
         run: python -m pip install pytest
-      - name: Verify GF214 through GF218
+      - name: Verify GF214 through GF222
         run: |
           python -m pytest -q -p no:cacheprovider \
             tests/test_gf214_preko_bet365_shadow.py \
             tests/test_gf215_preko_pair_blend.py \
             tests/test_gf216_frozen_three_arm_settlement.py \
-            tests/test_gf218_research_scorecard_public.py
+            tests/test_gf218_research_scorecard_public.py \
+            tests/test_gf220_rolling_market_shadow.py \
+            tests/test_gf221_rolling_market_shadow_settlement.py

@@ -31,3 +31,20 @@ def test_report_has_no_garbled_placeholder():
     data = sample()
     output=render_report(data)
     assert "????" not in output and "\ufffd" not in output
+
+
+def test_rolling_preferred_schema(tmp_path):
+    from scripts.research_scorecard_public import ROLLING_SCHEMA
+    p=sample()
+    p['schema']=ROLLING_SCHEMA
+    out,dash=setup(tmp_path)
+    source=tmp_path/'rolling.json'
+    source.write_text(json.dumps(p),encoding='utf8')
+    assert publish_optional(source,out)
+    text=(out/'research/scorecard.html').read_text(encoding='utf8')
+    assert '滚动比分预测复盘' in text
+    assert '每 UTC 日最多 4 场' in text
+    assert '0.0%' not in text
+    published=json.loads((out/'research/scorecard.json').read_text(encoding='utf8'))
+    assert published['schema']==ROLLING_SCHEMA
+    assert 'match_key' not in published['matches'][0]

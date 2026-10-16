@@ -562,7 +562,9 @@ def build(output: Path, *, data_root: Path | None = None) -> Path:
         from .research_scorecard_public import publish_optional
     except ImportError:  # pragma: no cover - direct script execution path.
         from research_scorecard_public import publish_optional
-    publish_optional(data_root / "prediction_dashboard" / "gf216_research_review.json", output)
+    rolling_review = data_root / "prediction_dashboard" / "gf221_rolling_shadow_review.json"
+    pilot_review = data_root / "prediction_dashboard" / "gf216_research_review.json"
+    publish_optional(rolling_review if rolling_review.is_file() else pilot_review, output)
     _build_match_pages(data_root, output, match_ids, dashboard)
 
     downloads = output / "downloads"

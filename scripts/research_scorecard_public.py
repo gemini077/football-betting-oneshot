@@ -4,9 +4,10 @@ import html, json, math, re
 from pathlib import Path
 from typing import Any
 SCHEMA = "gf216.strict_paired_score_eval.v1"
+ROLLING_SCHEMA = "gf221.rolling_paired_score_eval.v1"
 METHODS = (("champion", "Champion"), ("bet365", "\u5e02\u573a\u57fa\u7ebf"), ("blend_50_50", "\u56fa\u5b9a50-50"))
 def _valid(p: Any) -> bool:
-    if not isinstance(p,dict) or p.get("schema")!=SCHEMA: return False
+    if not isinstance(p,dict) or p.get("schema") not in (SCHEMA, ROLLING_SCHEMA): return False
     s,matches=p.get("summary"),p.get("matches")
     if not isinstance(s,dict) or not isinstance(matches,list): return False
     if any(not isinstance(s.get(k),int) or isinstance(s[k],bool) or s[k]<0 for k in ("settled","pending","excluded")): return False
@@ -32,6 +33,9 @@ def _fmt(v,pct=False): return "—" if v is None else (f"{v*100:.1f}%" if pct el
 def render_report(p: dict[str,Any]) -> str:
     if not _valid(p): raise ValueError("invalid scorecard schema")
     s=p["summary"]; rows=[]
+    rolling=p["schema"]==ROLLING_SCHEMA
+    page_title="滚动比分预测复盘" if rolling else "三组比分预测复盘"
+    cohort_note="按真实赛前来源冻结，每 UTC 日最多 4 场，非全部赛事覆盖。" if rolling else "固定六场赛前冻结研究样本。"
     for k,label in METHODS:
         m=s["methods"][k]; nll=m["mean_nll"] if m["nll_matches"] else None
         rows.append("<tr><th>"+label+"</th>"+"".join("<td>"+_fmt(m[x],True)+"</td>" for x in ("top1","top3","top5"))+"<td>"+_fmt(nll)+"</td></tr>")
@@ -62,8 +66,9 @@ th{{font-weight:650}}thead{{background:#f7f9f7}}.muted{{margin:12px 0 0}}
 </style></head><body><main>
 <nav><a href="../prediction_dashboard/latest.html">\u2190 \u8fd4\u56de\u6bcf\u65e5\u9884\u6d4b</a></nav>
 <div class="overline">RESEARCH ONLY / \u7814\u7a76\u6837\u672c</div>
-<h1>\u4e09\u7ec4\u6bd4\u5206\u9884\u6d4b\u590d\u76d8</h1>
+<h1>{page_title}</h1>
 <p class="muted">Champion \u00b7 Bet365 \u5e02\u573a\u57fa\u7ebf \u00b7 \u56fa\u5b9a 50/50 \u7ec4\u5408</p>
+<p class="muted">{cohort_note}</p>
 <div class="notice">{note}</div>
 <div class="stats">
  <div class="stat"><span>\u5df2\u9a8c\u6536</span><b>{s['settled']}</b></div>
@@ -84,7 +89,7 @@ def publish_optional(source: Path, output: Path) -> bool:
     try:
         p=json.loads(Path(source).read_text(encoding="utf-8"))
         if not _valid(p): return False
-        clean={"schema":SCHEMA,"summary":p["summary"],"matches":[{k:r[k] for k in ("match_id","state","reason") if k in r} for r in p["matches"]]}
+        clean={"schema":p["schema"],"summary":p["summary"],"matches":[{k:r[k] for k in ("match_id","state","reason") if k in r} for r in p["matches"]]}
         report=render_report(clean); dashboard=Path(output)/"prediction_dashboard"/"latest.html"
         text=dashboard.read_text(encoding="utf-8"); text=re.sub(r'<a class="research-scorecard-link"[^>]*>\u7814\u7a76\u590d\u76d8</a>','',text)
         pos=text.lower().rfind("</body>")

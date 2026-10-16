@@ -6,6 +6,8 @@ on:
     # Research-only pushes use a fast CI workflow; retain 30-minute production schedule.
     paths:
       - 'scripts/**'
+      - '!scripts/rolling_market_shadow.py'
+      - '!scripts/rolling_market_shadow_settlement.py'
       - 'config/**'
       - 'src/**'
       - 'frontend/**'
@@ -117,13 +119,22 @@ jobs:
             echo '::warning::GF216 research scorecard unavailable; daily predictions and Pages continue unchanged'
           fi
 
+      - name: Capture and settle bounded rolling research shadow
+        shell: bash
+        run: |
+          if python -m pytest -q -p no:cacheprovider                tests/test_gf220_rolling_market_shadow.py                tests/test_gf221_rolling_market_shadow_settlement.py                tests/test_gf218_research_scorecard_public.py              && python scripts/rolling_market_shadow.py --repo-root .              && python scripts/rolling_market_shadow_settlement.py --repo-root .; then
+            echo 'GF220/GF221 research-only monthly receipts and settlement review updated'
+          else
+            echo '::warning::GF220/GF221 shadow unavailable; official predictions and Pages continue unchanged'
+          fi
+
       - name: Save generated public data
         if: ${{ !cancelled() && steps.generated_data_gate.outputs.ready == 'true' }}
         shell: bash
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          paths=(data/schedule_updates data/match_workspace data/fetch_runs data/market_history data/match_archive data/analysis_inputs data/analysis_reports data/analysis_jobs data/provider_match_crosswalk.json data/live_ev_profiles data/postmatch_automation data/postmatch_reviews data/postmatch_reports data/postmatch_dashboard data/paper_ledger data/prediction_universe data/base_prediction_jobs data/model_governance/predictions data/model_governance/input_snapshots data/model_governance/prediction_exclusions data/prospective data/prediction_quality/market_side_shadow_1 data/prediction_quality/current_champion_trust.json data/prediction_quality/current_champion_trust.md data/model_benchmarks/predictions data/model_benchmarks/settlements data/prediction_dashboard data/product_runtime)
+          paths=(data/schedule_updates data/match_workspace data/fetch_runs data/market_history data/match_archive data/analysis_inputs data/analysis_reports data/analysis_jobs data/provider_match_crosswalk.json data/live_ev_profiles data/postmatch_automation data/postmatch_reviews data/postmatch_reports data/postmatch_dashboard data/paper_ledger data/prediction_universe data/base_prediction_jobs data/model_governance/predictions data/model_governance/input_snapshots data/model_governance/prediction_exclusions data/prospective data/prediction_quality/market_side_shadow_1 data/prediction_quality/research_shadow_monthly data/prediction_quality/current_champion_trust.json data/prediction_quality/current_champion_trust.md data/model_benchmarks/predictions data/model_benchmarks/settlements data/prediction_dashboard data/product_runtime)
           existing=()
           for path in "${paths[@]}"; do
             [[ -e "$path" ]] && existing+=("$path")
