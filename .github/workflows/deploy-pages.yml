@@ -120,13 +120,24 @@ jobs:
           fi
 
       - name: Capture and settle bounded rolling research shadow
+        id: rolling_shadow
+        continue-on-error: true
         shell: bash
         run: |
-          if python -m pytest -q -p no:cacheprovider                tests/test_gf220_rolling_market_shadow.py                tests/test_gf221_rolling_market_shadow_settlement.py                tests/test_gf218_research_scorecard_public.py              && python scripts/rolling_market_shadow.py --repo-root .              && python scripts/rolling_market_shadow_settlement.py --repo-root .; then
-            echo 'GF220/GF221 research-only monthly receipts and settlement review updated'
-          else
-            echo '::warning::GF220/GF221 shadow unavailable; official predictions and Pages continue unchanged'
-          fi
+          set -e
+          python -m pytest -q -p no:cacheprovider tests/test_gf220_rolling_market_shadow.py
+          python -m pytest -q -p no:cacheprovider tests/test_gf221_rolling_market_shadow_settlement.py
+          python -m pytest -q -p no:cacheprovider tests/test_gf218_research_scorecard_public.py
+          python -m scripts.rolling_market_shadow --repo-root .
+          python -m scripts.rolling_market_shadow_settlement --repo-root .
+          echo 'GF220/GF221 bounded research capture and settlement: PASS' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Report optional rolling research failure
+        if: ${{ steps.rolling_shadow.outcome == 'failure' }}
+        shell: bash
+        run: |
+          echo '::warning::GF220/GF221 rolling research shadow failed; official predictions and Pages continue unchanged'
+          echo 'GF220/GF221 bounded research capture and settlement: FAILED (official predictions and Pages unchanged)' >> "$GITHUB_STEP_SUMMARY"
 
       - name: Save generated public data
         if: ${{ !cancelled() && steps.generated_data_gate.outputs.ready == 'true' }}

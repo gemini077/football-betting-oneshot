@@ -1,4 +1,4 @@
-﻿import gzip, hashlib, importlib.util, json, os, sys
+import gzip, hashlib, importlib.util, json, os, sys
 from pathlib import Path
 from datetime import datetime, timezone
 import pytest
@@ -131,3 +131,31 @@ def test_genuinely_different_kickoff_rejected(tmp_path):
     result=run(root,out,[r])
     assert result['captured']==0
     assert result['reasons']['frozen_kickoff_mismatch']==1
+
+
+def test_cli_cold_start_from_outside_repo_with_isolated_python(tmp_path):
+    import subprocess
+    import textwrap
+
+    checkout=tmp_path/'checkout'
+    scripts=checkout/'scripts'; scripts.mkdir(parents=True)
+    research=checkout/'greenfield/research'; research.mkdir(parents=True)
+    (checkout/'data/prediction_dashboard').mkdir(parents=True)
+    (checkout/'data/prediction_dashboard/latest.json').write_text('{"fixtures":[]}')
+    (scripts/'rolling_market_shadow.py').write_bytes(SCRIPT.read_bytes())
+    (scripts/'market_score_math.py').write_text('VALUE = 1\n')
+    (research/'gf214_preko_bet365_shadow.py').write_text('import scripts.market_score_math\ndef fit_market_lambdas(*args): return (1.0, 1.0)\n')
+    (research/'gf215_preko_pair_blend.py').write_text('def validate_grid(value): return value\ndef rank(*args): return []\n')
+    result=subprocess.run([sys.executable,'-I',str(scripts/'rolling_market_shadow.py'),'--repo-root',str(checkout)],cwd=str(tmp_path),capture_output=True,text=True,check=False)
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout)['captured'] == 0
+
+
+def test_missing_root_modules_are_rejected(tmp_path):
+    import subprocess
+    checkout=tmp_path/'missing-checkout'
+    (checkout/'data/prediction_dashboard').mkdir(parents=True)
+    (checkout/'data/prediction_dashboard/latest.json').write_text('{"fixtures":[]}')
+    result=subprocess.run([sys.executable,'-I',str(SCRIPT),'--repo-root',str(checkout),'--dry-run'],cwd=str(tmp_path),capture_output=True,text=True,check=False)
+    assert result.returncode != 0
+    assert 'ModuleNotFoundError' in result.stderr or 'FileNotFoundError' in result.stderr or 'ImportError' in result.stderr

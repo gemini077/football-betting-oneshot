@@ -1,6 +1,6 @@
 """Bounded monthly pre-kickoff market score-distribution shadow capture."""
 from __future__ import annotations
-import argparse, gzip, hashlib, importlib.util, json, math, os, tempfile
+import argparse, gzip, hashlib, importlib.util, json, math, os, sys, tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -23,6 +23,10 @@ def compact(obj):
 def digest(b): return hashlib.sha256(b).hexdigest()
 
 def modules(repo_root):
+    root = Path(repo_root).resolve()
+    root_text = str(root)
+    if root_text not in sys.path:
+        sys.path.insert(0, root_text)
     # Normal package imports first; temp/self-contained fallback is the pinned modules beside this script.
     try:
         from greenfield.research import gf214_preko_bet365_shadow as gf214
