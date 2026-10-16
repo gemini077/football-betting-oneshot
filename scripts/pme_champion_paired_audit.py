@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Fail-closed paired Pure Market Exact / frozen Champion audit (stdlib only)."""
-import argparse, hashlib, json, math, os, random, tempfile
+import argparse, hashlib, json, math, os, random, tempfile, statistics
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -40,6 +40,66 @@ def metric(m,rank,actual):
     return {'top1':int(rank[0]==actual),'top3':int(actual in rank[:3]),'top5':int(actual in rank[:5]),'nll':-math.log(m[actual]),'rps':rps(m,actual),'score1':f'{rank[0][0]}-{rank[0][1]}'}
 def close(a,b,t=1e-5):
     if any(isinstance(z,bool) or not isinstance(z,(int,float)) or not math.isfinite(z) for z in (a,b)) or abs(a-b)>t: raise ValueError('reproduced settlement metric mismatch')
+def source_quote_provenance(p,ko):
+    """Separate observed (FBOS) collection clocks from provider quote event clocks."""
+    gen=dt(p['generated_at'])
+    captured=dt(p['source_snapshot_captured_at'])
+    cutoff=dt(p['source_cutoff_at'])
+    market=dt(p['market_snapshot_at'])
+    if not(captured<=gen<ko and captured<=cutoff<ko and market<=captured):
+        raise ValueError('market snapshot/collection time violates independent pre-kickoff provenance')
+    rows=[]
+    for family in ('one_x2_quotes','ou_quotes'):
+        group=p.get(family)
+        if not isinstance(group,dict) or not isinstance(group.get('valid'),list):
+            raise ValueError('missing market quote family '+family)
+        rows.extend(group['valid'])
+    if not rows or not all(isinstance(x,dict) for x in rows):
+        raise ValueError('missing used bookmaker quote observations')
+    verified=0
+    for quote in rows:
+        # Only explicitly named provider/bookmaker clock fields qualify.
+        update=quote.get('provider_quote_updated_at',quote.get('bookmaker_quote_updated_at'))
+        if update is None:
+            continue
+        if not isinstance(update,str):
+            raise ValueError('invalid provider quote clock')
+        upstream=dt(update)
+        if upstream>captured or upstream>=ko:
+            raise ValueError('provider quote update appears after collection or kickoff')
+        verified+=1
+    return {'capture_lead_minutes':(ko-captured).total_seconds()/60,
+            'cutoff_lead_minutes':(ko-cutoff).total_seconds()/60,
+            'capture_to_prediction_minutes':(gen-captured).total_seconds()/60,
+            'used_quote_observations':len(rows),
+            'quote_provider_clock_verified':verified==len(rows),
+            'quote_provider_clock_observations':verified}
+
+
+def summarize_capture_provenance(rows):
+    if not rows: raise ValueError('no source observations')
+    vals=[r['capture_provenance'] for r in rows]
+    leads=[v['capture_lead_minutes'] for v in vals]
+    buckets={'0_to_3h':[],'3_to_12h':[],'over_12h':[]}
+    for r in rows:
+        lead=r['capture_provenance']['capture_lead_minutes']
+        key='0_to_3h' if lead<180 else ('3_to_12h' if lead<720 else 'over_12h')
+        buckets[key].append(r)
+    by={}
+    for key,sample in buckets.items():
+        by[key]={'n':len(sample),
+                 'market_minus_champion_nll':mean([x['market']['nll']-x['champion']['nll'] for x in sample]) if sample else None,
+                 'market_minus_champion_rps':mean([x['market']['rps']-x['champion']['rps'] for x in sample]) if sample else None}
+    verified=sum(v['quote_provider_clock_verified'] for v in vals)
+    return {'n':len(rows),'source_capture_before_kickoff':len(rows),
+            'provider_quote_clock_verified_matches':verified,
+            'provider_quote_clock_missing_matches':len(rows)-verified,
+            'capture_lead_minutes':{'min':min(leads),'median':statistics.median(leads),'max':max(leads)},
+            'by_capture_lead':by,
+            'promotion_gate':'BLOCKED_UPSTREAM_QUOTE_EVENT_CLOCK_UNVERIFIED' if verified<len(rows) else 'RESEARCH_ONLY_NO_AUTOMATIC_PROMOTION',
+            'interpretation':'collection timestamps are not bookmaker quote update timestamps; exploratory lead bins are not a held-out test'}
+
+
 def load_pair(root,mroot,entry):
     key=entry['match_key']; mid=entry['prediction_id']; pp=mroot/entry['prediction_path']; sp=mroot/entry['settlement_path']
     p,s=read(pp),read(sp)
@@ -50,6 +110,8 @@ def load_pair(root,mroot,entry):
     if p.get('prediction_digest')!=s.get('prediction_digest'): raise ValueError(key+': digest mismatch')
     ko=dt(entry['kickoff_at']);
     if dt(p['generated_at'])>=ko: raise ValueError(key+': market generated after kickoff')
+    # Collection clocks prove when FBOS saw a quote, never when the provider updated it.
+    provenance=source_quote_provenance(p,ko)
     cpair=s.get('control_pair') or {}; ref=p.get('champion_reference') or {}
     if cpair.get('match_key')!=key or not cpair.get('same_match') or not cpair.get('same_source_cutoff'): raise ValueError(key+': invalid control pair')
     if not eqtime(cpair['source_cutoff_at'],entry['source_cutoff_at']) or not eqtime(ref['source_cutoff_at'],entry['source_cutoff_at']): raise ValueError(key+': control cutoff mismatch')
@@ -75,7 +137,7 @@ def load_pair(root,mroot,entry):
     for k in ('top1','top3','top5'):
         if bool(market[k])!=bool(sm['exact_'+k]): raise ValueError(key+': settlement '+k+' mismatch')
     close(market['nll'],sm['exact_nll']); close(market['rps'],sm['ft_1x2_rps'])
-    return {'match_key':key,'kickoff_at':entry['kickoff_at'],'actual':f'{actual[0]}-{actual[1]}','top1':{'champion':champ['top1'],'market':market['top1']},'champion':champ,'market':market},[pp,sp,cp,result_path]
+    return {'match_key':key,'kickoff_at':entry['kickoff_at'],'actual':f'{actual[0]}-{actual[1]}','top1':{'champion':champ['top1'],'market':market['top1']},'champion':champ,'market':market,'capture_provenance':provenance},[pp,sp,cp,result_path]
 def mean(xs): return sum(xs)/len(xs)
 def bootstrap(xs,seed=228,reps=5000):
     rng=random.Random(seed); n=len(xs); vals=[]
@@ -145,6 +207,7 @@ def build(root,market_root=None,reps=5000):
         deltas[k]={'market_minus_champion_mean':mean(v),'paired_bootstrap_95_ci':bootstrap(v,reps=reps),'matchday_cluster_bootstrap_95_ci':matchday_cluster_bootstrap_95_ci(rows,k,reps=reps)}
     a=sum(r['champion']['top1'] and not r['market']['top1'] for r in rows); b=sum(r['market']['top1'] and not r['champion']['top1'] for r in rows)
     report={'schema_version':'gf228.paired_champion_market.v1','n':len(rows),'source_cutoff_policy':'same_snapshot_asof_preko','quote_clock_policy':'CAPTURE_ONLY_SOURCE_QUOTE_CLOCK_NOT_VERIFIED','control':'non_promotion_research','methods':{'observation_unit':'latest_by_match unique match_key with nonnull settlement_path','score_grid':'full exact grid; probability sum tolerance 1e-7; tie rank (-p,home,away)','nll':'-log(actual exact-score probability)','rps':'1X2 cumulative ranked probability score Away/Draw/Home divided by 2','bootstrap':{'paired':True,'repetitions':reps,'seed':228,'interval':'percentile 95%'},'top1_test':'two-sided exact McNemar binomial; descriptive only'},'summary':summary,'deltas':deltas,'robustness':{'cluster_days':len({matchday_utc(r) for r in rows}),'chronological_thirds':chronological_thirds(rows),'chronological_thirds_label':'stability check only; no training or tuning'},'tests':{'top1_mcnemar':{'champion_only':a,'market_only':b,'two_sided_exact_p':binom2(a,b),'interpretation':'descriptive; no promotion inference'}},'matches':[{'match_key':r['match_key'],'actual':r['actual'],'top1':r['top1'],'champion':{k:r['champion'][k] for k in ('score1','top1','top3','top5')},'market':{k:r['market'][k] for k in ('score1','top1','top3','top5')}} for r in rows[-250:]],'match_display_limit':250,'provenance':{'index_sha256':sha(index),'source_files_sha256':hashlib.sha256(''.join(sha(p) for p in sorted(set(files),key=str)).encode()).hexdigest()}}
+    report['capture_provenance']=summarize_capture_provenance(rows)
     canonical=json.dumps(report,sort_keys=True,separators=(',',':'),ensure_ascii=False).encode(); report['report_sha256']=hashlib.sha256(canonical).hexdigest()
     out=json.dumps(report,sort_keys=True,separators=(',',':'),ensure_ascii=False).encode()+b'\n'
     if len(out)>500*1024: raise ValueError('report exceeds 500 KiB')

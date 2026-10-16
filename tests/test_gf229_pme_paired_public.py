@@ -109,7 +109,12 @@ def test_zero_values_are_not_substituted_for_missing_metrics(tmp_path):
 
 
 def test_legacy_report_still_renders_with_cluster_unavailable(tmp_path):
-    site(tmp_path); assert public.publish_optional(SOURCE,tmp_path)
+    site(tmp_path)
+    data=report();data.pop("robustness",None);data.pop("capture_provenance",None)
+    for metric in ("nll","rps"):
+        data["deltas"][metric].pop("matchday_cluster_bootstrap_95_ci",None)
+    legacy=tmp_path/"legacy.json";legacy.write_text(json.dumps(data),encoding="utf-8")
+    assert public.publish_optional(legacy,tmp_path)
     page=(tmp_path/"research/pme-paired.html").read_text(encoding="utf-8")
     assert "not available" in page and "stability" in page
 
@@ -127,4 +132,37 @@ def test_optional_cluster_fields_render_and_are_allowlisted(tmp_path):
 def test_invalid_optional_cluster_interval_fails_closed(tmp_path):
     data=report(); data["deltas"]["nll"]["matchday_cluster_bootstrap_95_ci"]=[1,-1]
     data["robustness"]={"cluster_days":3,"chronological_thirds":[{"n_matches":30,"n_matchdays":1,"market_minus_champion_mean_nll":0,"market_minus_champion_mean_rps":0,"champion_top1":1,"market_top1":1} for _ in range(3)]}
+    assert not public._valid(data)
+
+def _gf234_report():
+    data=report()
+    n=data['n']
+    data['capture_provenance']={
+       'n':n,'source_capture_before_kickoff':n,
+       'provider_quote_clock_verified_matches':0,
+       'provider_quote_clock_missing_matches':n,
+       'capture_lead_minutes':{'min':63.1,'median':314.64,'max':2781.27},
+       'by_capture_lead':{'0_to_3h':{'n':20,'market_minus_champion_nll':-.15,'market_minus_champion_rps':-.02},
+                          '3_to_12h':{'n':55,'market_minus_champion_nll':-.10,'market_minus_champion_rps':-.01},
+                          'over_12h':{'n':n-75,'market_minus_champion_nll':-.2,'market_minus_champion_rps':-.03}},
+       'promotion_gate':'BLOCKED_UPSTREAM_QUOTE_EVENT_CLOCK_UNVERIFIED'}
+    return data
+
+
+def test_source_quote_clock_audit_visible_and_fail_closed(tmp_path):
+    site(tmp_path)
+    data=_gf234_report()
+    source=tmp_path/'source.json';source.write_text(json.dumps(data),encoding='utf8')
+    assert public.publish_optional(source,tmp_path)
+    page=(tmp_path/'research/pme-paired.html').read_text(encoding='utf8')
+    assert '赛前数据时钟审计' in page
+    assert '0 / 90' in page
+    assert '3–12 小时' in page
+    exposed=json.loads((tmp_path/'research/pme-paired.json').read_text(encoding='utf8'))
+    assert exposed['capture_provenance']['provider_quote_clock_verified_matches']==0
+    data['capture_provenance']['provider_quote_clock_verified_matches']=data['n']+1
+    assert not public._valid(data)
+    data=_gf234_report();data['capture_provenance']['capture_lead_minutes']['min']=-1
+    assert not public._valid(data)
+    data=_gf234_report();data['capture_provenance']['by_capture_lead']['0_to_3h']['n']+=1
     assert not public._valid(data)

@@ -111,3 +111,61 @@ def test_cluster_date_resolves_actual_utc_instant_not_match_key_text():
     assert audit.matchday_utc(a).isoformat()=="2026-08-31"
     with pytest.raises(ValueError):
         audit.matchday_utc({"match_key":"FBOS-202609010100-bad","kickoff_at":"2026-09-01T01:00:00"})
+
+def _gf234_prediction():
+    return {'kickoff_at':'2026-10-16T20:00:00Z',
+            'source_cutoff_at':'2026-10-16T17:00:00Z',
+            'source_snapshot_captured_at':'2026-10-16T17:00:00Z',
+            'market_snapshot_at':'2026-10-16T17:00:00Z',
+            'generated_at':'2026-10-16T17:10:00Z',
+            'one_x2_quotes':{'valid':[{'bookmaker':'A','odds':{'home':2.1}}]},
+            'ou_quotes':{'valid':[{'bookmaker':'A','odds':{'over':1.9}}]}}
+
+
+def test_independent_capture_provenance_preko_and_no_bookmaker_clock():
+    p=_gf234_prediction()
+    q=audit.source_quote_provenance(p,audit.dt(p['kickoff_at']))
+    assert q['capture_lead_minutes']==180
+    assert q['capture_to_prediction_minutes']==10
+    assert q['used_quote_observations']==2
+    assert not q['quote_provider_clock_verified']
+    assert q['quote_provider_clock_observations']==0
+
+
+@pytest.mark.parametrize('field,value',[
+    ('source_snapshot_captured_at','2026-10-16T21:00:00Z'),
+    ('generated_at','2026-10-16T16:00:00Z'),
+    ('market_snapshot_at','2026-10-16T18:00:00Z'),
+    ('source_cutoff_at','2026-10-16T20:00:00Z'),
+    ('source_snapshot_captured_at','2026-10-16T17:00:00'),
+])
+def test_provenance_rejects_timestamp_inconsistency(field,value):
+    p=_gf234_prediction();p[field]=value
+    with pytest.raises(ValueError):
+        audit.source_quote_provenance(p,audit.dt(p['kickoff_at']))
+
+
+def test_explicit_bookmaker_event_clock_must_not_be_post_collection():
+    p=_gf234_prediction()
+    p['one_x2_quotes']['valid'][0]['provider_quote_updated_at']='2026-10-16T17:01:00Z'
+    with pytest.raises(ValueError):
+        audit.source_quote_provenance(p,audit.dt(p['kickoff_at']))
+    p['one_x2_quotes']['valid'][0]['provider_quote_updated_at']='2026-10-16T16:50:00Z'
+    q=audit.source_quote_provenance(p,audit.dt(p['kickoff_at']))
+    assert not q['quote_provider_clock_verified'] and q['quote_provider_clock_observations']==1
+    p['ou_quotes']['valid'][0]['bookmaker_quote_updated_at']='2026-10-16T16:55:00Z'
+    assert audit.source_quote_provenance(p,audit.dt(p['kickoff_at']))['quote_provider_clock_verified']
+
+
+def test_provenance_lead_windows_are_descriptive_only():
+    rows=[]
+    for i,lead in enumerate((60,360,1000)):
+        rows.append({'market':{'nll':1.5+i*.1,'rps':.15+i*.01},
+                     'champion':{'nll':1.6+i*.1,'rps':.16+i*.01},
+                     'capture_provenance':{'capture_lead_minutes':lead,
+                         'quote_provider_clock_verified':False}})
+    q=audit.summarize_capture_provenance(rows)
+    assert q['n']==3 and q['provider_quote_clock_verified_matches']==0
+    assert q['capture_lead_minutes']=={'min':60,'median':360,'max':1000}
+    assert [x['n'] for x in q['by_capture_lead'].values()]==[1,1,1]
+    assert q['promotion_gate']=='BLOCKED_UPSTREAM_QUOTE_EVENT_CLOCK_UNVERIFIED'

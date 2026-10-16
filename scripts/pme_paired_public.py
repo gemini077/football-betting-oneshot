@@ -60,6 +60,28 @@ def _valid(report: Any) -> bool:
         for metric in ("nll","rps"):
             ci=report["deltas"][metric].get("matchday_cluster_bootstrap_95_ci")
             if not isinstance(ci,list) or len(ci)!=2 or not all(_number(v) for v in ci) or ci[0]>ci[1]: return False
+    if 'capture_provenance' in report:
+        q=report['capture_provenance']
+        if not isinstance(q,dict) or type(q.get('n')) is not int or q['n']!=n: return False
+        verified=q.get('provider_quote_clock_verified_matches')
+        missing=q.get('provider_quote_clock_missing_matches')
+        if type(verified) is not int or type(missing) is not int or verified<0 or missing<0 or verified+missing!=n: return False
+        if q.get('source_capture_before_kickoff')!=n: return False
+        if q.get('promotion_gate') not in ('BLOCKED_UPSTREAM_QUOTE_EVENT_CLOCK_UNVERIFIED','RESEARCH_ONLY_NO_AUTOMATIC_PROMOTION'): return False
+        if (verified<n)!=(q['promotion_gate']=='BLOCKED_UPSTREAM_QUOTE_EVENT_CLOCK_UNVERIFIED'): return False
+        lead=q.get('capture_lead_minutes')
+        if not isinstance(lead,dict) or any(not _number(lead.get(k)) for k in ('min','median','max')): return False
+        if not 0<lead['min']<=lead['median']<=lead['max']: return False
+        bins=q.get('by_capture_lead')
+        if not isinstance(bins,dict) or set(bins)!= {'0_to_3h','3_to_12h','over_12h'}: return False
+        total=0
+        for b in bins.values():
+            if not isinstance(b,dict) or type(b.get('n')) is not int or b['n']<0: return False
+            total+=b['n']
+            for field in ('market_minus_champion_nll','market_minus_champion_rps'):
+                val=b.get(field)
+                if (b['n']==0 and val is not None) or (b['n']>0 and not _number(val)): return False
+        if total!=n: return False
     tests = report.get("tests")
     mcnemar = tests.get("top1_mcnemar") if isinstance(tests, dict) else None
     p = mcnemar.get("two_sided_exact_p") if isinstance(mcnemar, dict) else None
@@ -102,6 +124,7 @@ def _clean(report: dict[str, Any]) -> dict[str, Any]:
         "summary": {m: {k: report["summary"][m][k] for k in (*TOPS, "nll", "rps", "score_1_1_top1")} for m in METHODS},
         "deltas": {k: {**{x: report["deltas"][k][x] for x in ("market_minus_champion_mean", "paired_bootstrap_95_ci")}, **({"matchday_cluster_bootstrap_95_ci": report["deltas"][k]["matchday_cluster_bootstrap_95_ci"]} if "matchday_cluster_bootstrap_95_ci" in report["deltas"][k] else {})} for k in ("nll", "rps")},
         "robustness": report.get("robustness"),
+        "capture_provenance": report.get("capture_provenance"),
         "tests": {"top1_mcnemar": {k: report["tests"]["top1_mcnemar"].get(k) for k in ("champion_only", "market_only", "two_sided_exact_p", "interpretation")}},
         "matches": [{"match_key": r["match_key"], "actual": r["actual"], "top1": r["top1"],
                      "champion": {k: r["champion"][k] for k in ("score1", *TOPS)},
@@ -125,6 +148,18 @@ def _render(data: dict[str, Any]) -> str:
     cluster_nll = data["deltas"]["nll"].get("matchday_cluster_bootstrap_95_ci", [None,None])
     cluster_rps = data["deltas"]["rps"].get("matchday_cluster_bootstrap_95_ci", [None,None])
     cluster_text = (f"NLL [{cluster_nll[0]:.4f}, {cluster_nll[1]:.4f}], RPS [{cluster_rps[0]:.5f}, {cluster_rps[1]:.5f}] (days={robustness.get('cluster_days')})" if all(_number(x) for x in cluster_nll+cluster_rps) else "not available")
+    clock=data.get('capture_provenance') or {}
+    if clock:
+        nclock=clock['provider_quote_clock_verified_matches']
+        lead=clock['capture_lead_minutes']
+        bin_names={'0_to_3h':'0–3 小时','3_to_12h':'3–12 小时','over_12h':'12 小时以上'}
+        bin_text='；'.join(f"{bin_names[k]} {v['n']} 场（市场−Champion NLL {v['market_minus_champion_nll']:+.4f}）" if v['n'] else f"{bin_names[k]} 0 场" for k,v in clock['by_capture_lead'].items())
+        capture_notice=(f"<p><strong>赛前数据时钟审计：</strong>{clock['source_capture_before_kickoff']} / {data['n']} 场在开赛前抓取；"
+                        f"最短提前 {lead['min']:.1f} 分钟，中位 {lead['median']:.1f} 分钟，最长 {lead['max']:.1f} 分钟。"
+                        f"独立博彩公司报价更新时间完整可核验：{nclock} / {data['n']} 场。"
+                        f"分层仅为探索性统计：{esc(bin_text)}。仍不得自动升级 Champion。</p>")
+    else:
+        capture_notice=''
     third_rows = "".join(f"<tr><td>{x['segment']}</td><td>{esc(x['start_date'])} ? {esc(x['end_date'])}</td><td>{x['n_matches']} / {x['n_matchdays']}</td><td>{x['market_minus_champion_mean_nll']:.4f}</td><td>{x['market_minus_champion_mean_rps']:.5f}</td><td>{x['champion_top1']} ? {x['market_top1']}</td></tr>" for x in thirds)
     return f'''<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>历史配对回测 | Football Prediction Day</title><style>
@@ -133,6 +168,7 @@ def _render(data: dict[str, Any]) -> str:
 <p class="muted">RESEARCH ONLY / 研究样本</p><h1>历史 {data['n']} 场 Champion / 市场配对回测</h1>
 <p>按固定 unique latest_by_match 前瞻记录选择；Champion 使用完全相同 source cutoff 的冻结预测。每场单独配对。</p>
 <div class="notice">仅作历史研究，不构成市场模型晋级或替换生产 Champion 的依据。源报价时间戳为 CAPTURE_ONLY（仅记录捕获时间，未验证报价时钟）。完整比分网格：Champion 169 格，市场 441 格。</div>
+{capture_notice}
 <section><h2>配对表现（{data['n']} 场）</h2><table><thead><tr><th>方法</th><th>Top 1</th><th>Top 3</th><th>Top 5</th><th>平均 NLL ↓</th><th>1X2 RPS ↓</th></tr></thead><tbody>{rows}</tbody></table>
 <p>市场 − Champion 配对 bootstrap 95% CI：NLL [{ci_nll[0]:.4f}, {ci_nll[1]:.4f}]；RPS [{ci_rps[0]:.5f}, {ci_rps[1]:.5f}]。Top 1 双侧 exact McNemar p = {p:.4f}，未显示显著差异。</p>
 <p>Top 1/3/5 命中：{s['champion']['top1']}–{s['market']['top1']} / {s['champion']['top3']}–{s['market']['top3']} / {s['champion']['top5']}–{s['market']['top5']}；NLL：{s['champion']['nll']:.4f}–{s['market']['nll']:.4f}；RPS：{s['champion']['rps']:.5f}–{s['market']['rps']:.5f}。预测众数为 1–1：Champion {s['champion']['score_1_1_top1']} 场，市场 {s['market']['score_1_1_top1']} 场。</p>
