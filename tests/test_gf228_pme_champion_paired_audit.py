@@ -51,7 +51,9 @@ def test_post_kickoff_leakage_comparison():
     from datetime import datetime
     assert datetime.fromisoformat('2026-01-01T00:00:01+00:00')>=datetime.fromisoformat('2026-01-01T00:00:00+00:00')
 def test_one_observation_per_latest_match():
-    ix=audit.read(BASE/'data/prediction_quality/pure_market_exact_prospective_1/latest_index.json')
+    index=BASE/'data/prediction_quality/pure_market_exact_prospective_1/latest_index.json'
+    if not index.is_file(): pytest.skip('staged fixture intentionally excludes the full-pair source index')
+    ix=audit.read(index)
     latest=ix['latest_by_match']
     assert latest and len(latest)==len(set(latest))
     assert len(latest)<=ix['prediction_count']
@@ -169,3 +171,21 @@ def test_provenance_lead_windows_are_descriptive_only():
     assert q['capture_lead_minutes']=={'min':60,'median':360,'max':1000}
     assert [x['n'] for x in q['by_capture_lead'].values()]==[1,1,1]
     assert q['promotion_gate']=='BLOCKED_UPSTREAM_QUOTE_EVENT_CLOCK_UNVERIFIED'
+
+
+def test_frozen_score_calibration_distinguishes_modal_1_1_from_probability():
+    rows=[]
+    for i,(actual,cs,cp,ct,ms,mp,mt) in enumerate((
+        (True,'1-1',.20,.30,'0-0',.10,.25),
+        (False,'1-1',.25,.35,'1-1',.20,.30),
+        (True,'2-0',.10,.20,'1-1',.30,.40),
+        (False,'0-1',.15,.15,'2-0',.05,.20),
+    )):
+        rows.append({'is_actual_1_1':actual,'champion':{'score1':cs,'p_1_1':cp,'p_top1':ct,'top1':int((i==0) or (i==2))},'market':{'score1':ms,'p_1_1':mp,'p_top1':mt,'top1':int(i==1)}})
+    result=audit.score_calibration(rows)
+    assert result['n']==4 and result['observed1_1_count']==2
+    assert result['methods']['champion']['expected_1_1_count']==pytest.approx(.70)
+    assert result['methods']['champion']['modal_1_1_top1_count']==2
+    assert result['methods']['champion']['expected_top1_hits']==pytest.approx(1.0)
+    assert result['methods']['champion']['observed_top1_hits']==2
+    assert result['methods']['champion']['one_one_modal_subset']=={'count':2,'expected_1_1_count':pytest.approx(.45),'observed_1_1_count':1}
