@@ -25,6 +25,9 @@ on:
       - 'tests/test_gf231_de_team_identity.py'
       - '.github/workflows/research-shadow-checks.yml'
   workflow_dispatch:
+  # Re-evaluate the real settled cohort daily, without changing any production forecasts.
+  schedule:
+    - cron: '43 07 * * *'
 
 permissions:
   contents: read
