@@ -5,6 +5,8 @@ from pathlib import Path
 
 import pytest
 
+TOPS = ("top1", "top3", "top5")
+
 BASE = Path(__file__).resolve().parents[1]
 SOURCE = BASE / "data/prediction_quality/pure_market_exact_prospective_1/champion_market_paired_review.json"
 spec = importlib.util.spec_from_file_location("paired_public", BASE / "scripts/pme_paired_public.py")
@@ -24,16 +26,26 @@ def site(tmp_path):
 
 def test_real_report_renders_expected_metrics_and_provenance(tmp_path):
     site(tmp_path)
+    data = report()
     assert public.publish_optional(SOURCE, tmp_path)
     page = (tmp_path / "research/pme-paired.html").read_text(encoding="utf-8")
-    for text in ("14 / 90", "17 / 90", "28 / 90", "31 / 90", "44 / 90", "47 / 90", "3.0495", "2.9153", "0.18723", "0.16555", "CAPTURE_ONLY", "latest_by_match", "169 格", "441 格"):
-        assert text in page
+    n = data["n"]
+    assert f"{data['summary']['champion']['top1']} / {n}" in page
+    assert f"{data['summary']['market']['top1']} / {n}" in page
+    for method in ("champion", "market"):
+        assert f"{data['summary'][method]['nll']:.4f}" in page
+        assert f"{data['summary'][method]['rps']:.5f}" in page
+    assert f"p = {data['tests']['top1_mcnemar']['two_sided_exact_p']:.4f}" in page
+    assert "CAPTURE_ONLY" in page and "latest_by_match" in page
+    assert f"{data['capture_provenance']['provider_quote_clock_verified_matches']} / {n}" in page
+    assert str(data['capture_provenance']['provider_quote_clock_missing_matches']) in page
 
 
 def test_top1_test_displayed(tmp_path):
     site(tmp_path)
+    data = report()
     assert public.publish_optional(SOURCE, tmp_path)
-    assert "p = 0.5078" in (tmp_path / "research/pme-paired.html").read_text(encoding="utf-8")
+    assert f"p = {data['tests']['top1_mcnemar']['two_sided_exact_p']:.4f}" in (tmp_path / "research/pme-paired.html").read_text(encoding="utf-8")
 
 
 def test_unsafe_match_key_is_escaped(tmp_path):
@@ -52,6 +64,8 @@ def test_unsafe_match_key_is_escaped(tmp_path):
     lambda d: d.update(schema_version="wrong"),
     lambda d: d.update(n=0),
     lambda d: d["summary"]["market"].update(top1=91),
+    lambda d: d["summary"]["market"].update(top1=d["summary"]["market"]["top3"] + 1),
+    lambda d: d.update(n=d["n"] + 1),
     lambda d: d["summary"]["champion"].update(nll=float("nan")),
     lambda d: d["deltas"]["nll"].update(paired_bootstrap_95_ci=[1, -1]),
     lambda d: d["tests"]["top1_mcnemar"].update(two_sided_exact_p=1.1),
@@ -122,7 +136,7 @@ def test_optional_cluster_fields_render_and_are_allowlisted(tmp_path):
     site(tmp_path); data=report()
     data["deltas"]["nll"]["matchday_cluster_bootstrap_95_ci"]=[-.4,-.1]
     data["deltas"]["rps"]["matchday_cluster_bootstrap_95_ci"]=[-.05,-.01]
-    data["robustness"]={"cluster_days":9,"chronological_thirds":[{"segment":i,"start_date":f"2026-09-0{i}","end_date":f"2026-09-0{i}","n_matches":30,"n_matchdays":3,"market_minus_champion_mean_nll":-.1,"market_minus_champion_mean_rps":-.01,"champion_top1":5,"market_top1":6} for i in range(1,4)],"chronological_thirds_label":"stability check only; no training or tuning"}
+    data["robustness"]={"cluster_days":9,"chronological_thirds":[{"segment":i,"start_date":f"2026-09-{8 + i * 2:02d}","end_date":f"2026-09-{9 + i * 2:02d}","n_matches":count,"n_matchdays":3,"market_minus_champion_mean_nll":-.1,"market_minus_champion_mean_rps":-.01,"champion_top1":min(5,count),"market_top1":min(6,count)} for i,count in enumerate((28,37,29),1)],"chronological_thirds_label":"stability check only; no training or tuning"}
     path=tmp_path/"new.json"; path.write_text(json.dumps(data),encoding="utf-8")
     assert public.publish_optional(path,tmp_path)
     page=(tmp_path/"research/pme-paired.html").read_text(encoding="utf-8")
@@ -142,9 +156,9 @@ def _gf234_report():
        'provider_quote_clock_verified_matches':0,
        'provider_quote_clock_missing_matches':n,
        'capture_lead_minutes':{'min':63.1,'median':314.64,'max':2781.27},
-       'by_capture_lead':{'0_to_3h':{'n':20,'market_minus_champion_nll':-.15,'market_minus_champion_rps':-.02},
-                          '3_to_12h':{'n':55,'market_minus_champion_nll':-.10,'market_minus_champion_rps':-.01},
-                          'over_12h':{'n':n-75,'market_minus_champion_nll':-.2,'market_minus_champion_rps':-.03}},
+       'by_capture_lead':{'0_to_3h':{'n':min(20,n),'market_minus_champion_nll':(-.15 if n else None),'market_minus_champion_rps':(-.02 if n else None)},
+                          '3_to_12h':{'n':min(55,max(0,n-20)),'market_minus_champion_nll':(-.10 if n>20 else None),'market_minus_champion_rps':(-.01 if n>20 else None)},
+                          'over_12h':{'n':max(0,n-75),'market_minus_champion_nll':(-.2 if n>75 else None),'market_minus_champion_rps':(-.03 if n>75 else None)}},
        'promotion_gate':'BLOCKED_UPSTREAM_QUOTE_EVENT_CLOCK_UNVERIFIED'}
     return data
 
@@ -156,7 +170,7 @@ def test_source_quote_clock_audit_visible_and_fail_closed(tmp_path):
     assert public.publish_optional(source,tmp_path)
     page=(tmp_path/'research/pme-paired.html').read_text(encoding='utf8')
     assert '赛前数据时钟审计' in page
-    assert '0 / 90' in page
+    assert f"0 / {data['n']}" in page
     assert '3–12 小时' in page
     exposed=json.loads((tmp_path/'research/pme-paired.json').read_text(encoding='utf8'))
     assert exposed['capture_provenance']['provider_quote_clock_verified_matches']==0
@@ -166,3 +180,27 @@ def test_source_quote_clock_audit_visible_and_fail_closed(tmp_path):
     assert not public._valid(data)
     data=_gf234_report();data['capture_provenance']['by_capture_lead']['0_to_3h']['n']+=1
     assert not public._valid(data)
+
+
+def test_validator_accepts_current_and_resized_120_sample_report():
+    data = report()
+    assert public._valid(data)
+    grown = copy.deepcopy(data)
+    original = list(grown["matches"])
+    while len(grown["matches"]) < 120:
+        row = copy.deepcopy(original[len(grown["matches"]) % len(original)])
+        row["match_key"] = f"synthetic-{len(grown['matches'])}"
+        grown["matches"].append(row)
+    grown["n"] = 120
+    for method in ("champion", "market"):
+        for key in TOPS:
+            grown["summary"][method][key] += sum(row[method][key] for row in grown["matches"][len(original):])
+    if "robustness" in grown:
+        grown["robustness"]["chronological_thirds"][-1]["n_matches"] += 26
+    if "capture_provenance" in grown:
+        clock = grown["capture_provenance"]
+        clock["n"] = clock["source_capture_before_kickoff"] = clock["provider_quote_clock_missing_matches"] = 120
+        clock["by_capture_lead"]["over_12h"]["n"] += 26
+    assert public._valid(grown)
+    grown["matches"].pop()
+    assert not public._valid(grown)
