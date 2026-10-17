@@ -1,0 +1,39 @@
+name: Checkpoint scheduler contract
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'scheduler/cloudflare/src/worker.js'
+      - 'scheduler/cloudflare/test/**'
+      - 'scheduler/cloudflare/package.json'
+      - '.github/workflows/checkpoint-scheduler-tests.yml'
+  pull_request:
+    paths:
+      - 'scheduler/cloudflare/src/worker.js'
+      - 'scheduler/cloudflare/test/**'
+      - 'scheduler/cloudflare/package.json'
+      - '.github/workflows/checkpoint-scheduler-tests.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: checkpoint-scheduler-test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  scheduler-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate complete minute scheduler contract offline
+        working-directory: scheduler/cloudflare
+        run: node --test
+      - name: Syntax check dispatched checkpoint worker
+        run: node --check scheduler/cloudflare/src/worker.js
