@@ -220,4 +220,22 @@ def publish_optional(source: Path, output: Path) -> bool:
             return False
         data = _clean(report)
         page = _render(data)
-        base = 
+        base = Path(output) / "research"
+        scorecard = base / "scorecard.html"
+        if not scorecard.is_file():
+            return False
+        score_text = scorecard.read_text(encoding="utf-8")
+        link = f"<a class='research-historical-paired-link' href='pme-paired.html'>历史 {data['n']} 场配对回测</a>"
+        import re
+        score_text = re.sub(r"\s*<a class='research-historical-paired-link' href='pme-paired\.html'>.*?</a>", "", score_text)
+        pos = score_text.lower().rfind("</main>")
+        if pos < 0:
+            return False
+        score_text = score_text[:pos] + "\n<p>" + link + "</p>\n" + score_text[pos:]
+        json_text = json.dumps(data, ensure_ascii=False, indent=2) + "\n"
+        (base / "pme-paired.html").write_text(page, encoding="utf-8")
+        (base / "pme-paired.json").write_text(json_text, encoding="utf-8")
+        scorecard.write_text(score_text, encoding="utf-8")
+        return True
+    except (OSError, ValueError, TypeError, KeyError):
+        return False
