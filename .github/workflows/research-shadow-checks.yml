@@ -16,7 +16,9 @@ on:
       - 'scripts/pme_champion_paired_audit.py'
       - 'scripts/pme_paired_public.py'
       - 'scripts/pme_forward_score_calibration.py'
+      - 'scripts/pme_forward_public.py'
       - 'tests/test_pme_forward_score_calibration.py'
+      - 'tests/test_pme_forward_public.py'
       - 'tests/test_gf228_pme_champion_paired_audit.py'
       - 'tests/test_gf229_pme_paired_public.py'
       - 'scripts/rolling_market_shadow.py'
@@ -62,7 +64,8 @@ jobs:
             tests/test_gf228_pme_champion_paired_audit.py \
             tests/test_gf229_pme_paired_public.py \
             tests/test_gf233_paired_audit_durability.py \
-            tests/test_pme_forward_score_calibration.py
+            tests/test_pme_forward_score_calibration.py \
+            tests/test_pme_forward_public.py
 
       - name: Publish frozen-probability calibration diagnostics to job summary
         shell: bash
@@ -166,6 +169,36 @@ jobs:
           for row in rows: print(row)
           with open(os.environ['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8') as f:
               f.write(chr(10).join(rows)+chr(10))
+          PY
+
+      - name: Verify public forward research from real frozen cohort
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, math, os
+          from pathlib import Path
+          from scripts import pme_forward_public as pub
+          root=Path.cwd()
+          site=Path(os.environ['RUNNER_TEMP'])/'gf241-site'
+          research=site/'research'
+          research.mkdir(parents=True,exist_ok=True)
+          (research/'scorecard.html').write_text('<html><main><h1>Research scorecard</h1></main></html>',encoding='utf-8')
+          assert pub.publish_optional(root,site), 'real GF240 forward score publishing failed'
+          data=json.loads((research/'pme-forward.json').read_text(encoding='utf-8'))
+          assert data['n']>=1 and data['evaluated_days']>=1
+          for method in pub.METHODS:
+              expected=sum(s['methods'][method]['expected_1_1'] for s in data['segments'])
+              observed=sum(s['methods'][method]['observed_1_1'] for s in data['segments'])
+              assert math.isclose(data['pooled'][method]['expected_1_1'],expected,abs_tol=1e-8)
+              assert data['pooled'][method]['observed_1_1']==observed
+          html=(research/'pme-forward.html').read_text(encoding='utf-8')
+          index=(research/'scorecard.html').read_text(encoding='utf-8')
+          assert 'held-out' in html and 'Champion' in html and 'Market' in html
+          assert index.count('class="research-forward-score-link"')==1
+          assert pub.publish_optional(root,site) and (research/'scorecard.html').read_text(encoding='utf-8').count('class="research-forward-score-link"')==1
+          with open(os.environ['GITHUB_STEP_SUMMARY'],'a',encoding='utf-8') as f:
+              f.write(f'GF241 forward public render verified: {data["n"]} held-out fixtures, {data["evaluated_days"]} UTC matchdays; scorecard link PASS.'+chr(10))
           PY
 
       - name: Verify lossless frozen market-side pair storage
