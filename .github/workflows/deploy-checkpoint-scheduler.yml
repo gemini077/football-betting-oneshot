@@ -1,13 +1,38 @@
 name: Deploy minute checkpoint scheduler
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - 'scheduler/cloudflare/src/worker.js'
+      - 'scheduler/cloudflare/test/**'
+      - 'scheduler/cloudflare/wrangler.toml'
+      - '.github/workflows/deploy-checkpoint-scheduler.yml'
   workflow_dispatch:
 
 permissions:
   contents: read
 
+concurrency:
+  group: fbos-checkpoint-worker-deploy
+  queue: max
+  cancel-in-progress: false
+
 jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify checkpoint batch scheduling before deploy
+        working-directory: scheduler/cloudflare
+        run: node --test
+
   deploy:
+    needs: verify
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
