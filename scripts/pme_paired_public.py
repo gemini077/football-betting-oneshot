@@ -29,10 +29,12 @@ def _valid(report: Any) -> bool:
         row = summary.get(method)
         if not isinstance(row, dict):
             return False
+        previous = -1
         for key in TOPS:
             count = row.get(key)
-            if isinstance(count, bool) or not isinstance(count, int) or not 0 <= count <= n:
+            if isinstance(count, bool) or not isinstance(count, int) or not 0 <= count <= n or count < previous:
                 return False
+            previous = count
         if any(not _number(row.get(key)) for key in ("nll", "rps")):
             return False
         if not 0 <= row["rps"] <= 1 or row["nll"] < 0:
@@ -52,9 +54,10 @@ def _valid(report: Any) -> bool:
         if not isinstance(rob,dict) or type(rob.get("cluster_days")) is not int or rob["cluster_days"]<3: return False
         thirds=rob.get("chronological_thirds")
         if not isinstance(thirds,list) or len(thirds)!=3: return False
-        if sum((x.get("n_matches",-1) if isinstance(x,dict) else -1) for x in thirds)!=n: return False
+        if any(not isinstance(x,dict) or type(x.get("n_matches")) is not int or x["n_matches"]<0 for x in thirds): return False
+        if sum(x["n_matches"] for x in thirds)!=n: return False
         for x in thirds:
-            if not isinstance(x,dict) or type(x.get("n_matches")) is not int or x["n_matches"]<0 or type(x.get("n_matchdays")) is not int or x["n_matchdays"]<0: return False
+            if type(x.get("n_matchdays")) is not int or x["n_matchdays"]<0: return False
             if any(not _number(x.get(k)) for k in ("market_minus_champion_mean_nll","market_minus_champion_mean_rps")): return False
             if any(type(x.get(k)) is not int or x[k]<0 for k in ("champion_top1","market_top1")): return False
         for metric in ("nll","rps"):
@@ -89,6 +92,8 @@ def _valid(report: Any) -> bool:
         return False
     matches = report.get("matches")
     if not isinstance(matches, list) or len(matches) > 5000:
+        return False
+    if len(matches) != min(n, 250):
         return False
     for match in matches:
         if not isinstance(match, dict) or any(not isinstance(match.get(k), str) or not match[k] for k in ("match_key", "actual")):
