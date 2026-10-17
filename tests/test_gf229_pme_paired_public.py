@@ -137,12 +137,56 @@ def test_optional_cluster_fields_render_and_are_allowlisted(tmp_path):
     site(tmp_path); data=report()
     data["deltas"]["nll"]["matchday_cluster_bootstrap_95_ci"]=[-.4,-.1]
     data["deltas"]["rps"]["matchday_cluster_bootstrap_95_ci"]=[-.05,-.01]
-    data["robustness"]={"cluster_days":9,"chronological_thirds":[{"segment":i,"start_date":f"2026-09-{8 + i * 2:02d}","end_date":f"2026-09-{9 + i * 2:02d}","n_matches":count,"n_matchdays":3,"market_minus_champion_mean_nll":-.1,"market_minus_champion_mean_rps":-.01,"champion_top1":min(5,count),"market_top1":min(6,count)} for i,count in enumerate((28,37,29),1)],"chronological_thirds_label":"stability check only; no training or tuning"}
+    counts=[data['n']//3,data['n']//3,data['n']-2*(data['n']//3)]
+    data["robustness"]={"cluster_days":9,"chronological_thirds":[{"segment":i,"start_date":f"2026-09-{8 + i * 2:02d}","end_date":f"2026-09-{9 + i * 2:02d}","n_matches":count,"n_matchdays":3,"market_minus_champion_mean_nll":-.1,"market_minus_champion_mean_rps":-.01,"champion_top1":min(5,count),"market_top1":min(6,count)} for i,count in enumerate(counts,1)],"chronological_thirds_label":"stability check only; no training or tuning"}
     path=tmp_path/"new.json"; path.write_text(json.dumps(data),encoding="utf-8")
     assert public.publish_optional(path,tmp_path)
     page=(tmp_path/"research/pme-paired.html").read_text(encoding="utf-8")
     payload=json.loads((tmp_path/"research/pme-paired.json").read_text(encoding="utf-8"))
     assert "Matchday-cluster paired bootstrap" in page and "stability check only" in page and payload["robustness"]["cluster_days"]==9
+
+
+def test_optional_score_calibration_renders_and_is_allowlisted(tmp_path):
+    site(tmp_path); data=report(); n=data['n']
+    methods={}
+    for method in ('champion','market'):
+        methods[method]={'expected_1_1_count':20.5,'observed_1_1_count':20,'modal_1_1_top1_count':80,
+          'expected_top1_hits':30.25,'observed_top1_hits':17,'one_one_modal_subset':{'count':80,'expected_1_1_count':18.0,'observed_1_1_count':15}}
+    data['score_calibration']={'n':n,'observed1_1_count':20,'methods':methods,
+      'description':'Frozen PMF diagnostics only; modal frequency is not p(1-1).'}
+    for match in data['matches']:
+        match['is_actual_1_1']=match['actual']=='1-1'
+        for method in ('champion','market'):
+            match[method]['p_1_1']=0.2; match[method]['p_top1']=0.3
+    source=tmp_path/'calibration.json'; source.write_text(json.dumps(data),encoding='utf8')
+    assert public.publish_optional(source,tmp_path)
+    page=(tmp_path/'research/pme-paired.html').read_text(encoding='utf8')
+    payload=json.loads((tmp_path/'research/pme-paired.json').read_text(encoding='utf8'))
+    assert '实际 1-1' in page and '众数 1-1' in page and '20.50 / 20' in page
+    assert payload['score_calibration']['methods']['champion']['expected_top1_hits']==30.25
+    assert 'raw_bookmaker_quote' not in json.dumps(payload).lower()
+
+
+@pytest.mark.parametrize('mutate', [
+    lambda d: d['score_calibration'].update(n=d['n']+1),
+    lambda d: d['score_calibration']['methods']['champion'].update(expected_1_1_count=float('nan')),
+    lambda d: d['score_calibration']['methods']['market']['one_one_modal_subset'].update(count=-1),
+    lambda d: d['score_calibration']['methods']['market'].update(modal_1_1_top1_count=d['n']+1),
+    lambda d: d['score_calibration']['methods']['champion'].update(observed_1_1_count=21),
+])
+def test_invalid_optional_score_calibration_fails_closed(tmp_path, mutate):
+    site(tmp_path); data=report(); n=data['n']
+    data['score_calibration']={'n':n,'observed1_1_count':20,'description':'diagnostic', 'methods':{
+      method:{'expected_1_1_count':20.0,'observed_1_1_count':20,'modal_1_1_top1_count':80,
+       'expected_top1_hits':25.0,'observed_top1_hits':17,
+       'one_one_modal_subset':{'count':80,'expected_1_1_count':18.0,'observed_1_1_count':15}} for method in ('champion','market')}}
+    for match in data['matches']:
+        match['is_actual_1_1']=match['actual']=='1-1'
+        for method in ('champion','market'):
+            match[method]['p_1_1']=0.2; match[method]['p_top1']=0.3
+    mutate(data)
+    source=tmp_path/'bad_calibration.json'; source.write_text(json.dumps(data),encoding='utf8')
+    assert not public.publish_optional(source,tmp_path)
 
 def test_invalid_optional_cluster_interval_fails_closed(tmp_path):
     data=report(); data["deltas"]["nll"]["matchday_cluster_bootstrap_95_ci"]=[1,-1]
@@ -193,15 +237,16 @@ def test_validator_accepts_current_and_resized_120_sample_report():
         row["match_key"] = f"synthetic-{len(grown['matches'])}"
         grown["matches"].append(row)
     grown["n"] = 120
+    added = 120 - len(original)
     for method in ("champion", "market"):
         for key in TOPS:
             grown["summary"][method][key] += sum(row[method][key] for row in grown["matches"][len(original):])
-    if "robustness" in grown:
-        grown["robustness"]["chronological_thirds"][-1]["n_matches"] += 26
-    if "capture_provenance" in grown:
+    if "robustness" in grown and added:
+        grown["robustness"]["chronological_thirds"][-1]["n_matches"] += added
+    if "capture_provenance" in grown and added:
         clock = grown["capture_provenance"]
         clock["n"] = clock["source_capture_before_kickoff"] = clock["provider_quote_clock_missing_matches"] = 120
-        clock["by_capture_lead"]["over_12h"]["n"] += 26
+        clock["by_capture_lead"]["over_12h"]["n"] += added
     assert public._valid(grown)
     grown["matches"].pop()
     assert not public._valid(grown)
