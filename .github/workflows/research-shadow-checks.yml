@@ -15,6 +15,8 @@ on:
       - 'scripts/research_scorecard_public.py'
       - 'scripts/pme_champion_paired_audit.py'
       - 'scripts/pme_paired_public.py'
+      - 'scripts/pme_forward_score_calibration.py'
+      - 'tests/test_pme_forward_score_calibration.py'
       - 'tests/test_gf228_pme_champion_paired_audit.py'
       - 'tests/test_gf229_pme_paired_public.py'
       - 'scripts/rolling_market_shadow.py'
@@ -59,7 +61,8 @@ jobs:
             tests/test_gf221_rolling_market_shadow_settlement.py \
             tests/test_gf228_pme_champion_paired_audit.py \
             tests/test_gf229_pme_paired_public.py \
-            tests/test_gf233_paired_audit_durability.py
+            tests/test_gf233_paired_audit_durability.py \
+            tests/test_pme_forward_score_calibration.py
 
       - name: Publish frozen-probability calibration diagnostics to job summary
         shell: bash
@@ -89,6 +92,48 @@ jobs:
           rows.append("Modal frequency is not event probability. No model promotion, no training on settled rows.")
           for row in rows: print(row)
           with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as f: f.write(chr(10).join(rows)+chr(10))
+          PY
+
+      - name: Evaluate out-of-sample frozen score recalibration
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/pme_forward_score_calibration.py --repo-root . --output "$RUNNER_TEMP/gf240-forward.json"
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          p = Path(os.environ['RUNNER_TEMP']) / 'gf240-forward.json'
+          report = json.loads(p.read_text(encoding='utf-8'))
+          segments = report['segments']
+          assert len(segments) >= 1, 'No legal whole-day holdout segments'
+          names = ('champion', 'market_baseline', 'one_one_odds', 'draw_diagonal_odds', 'pmf_power')
+          n = sum(x['test_n'] for x in segments)
+          assert n > 0 and all(x['test_n'] > 0 for x in segments)
+          rows = [
+              '### Forward-chaining score-model experiments (research only)',
+              f'Out-of-sample fixtures: {n}; whole UTC matchdays: {len(segments)}',
+              '| Method | mean exact NLL ↓ | 1X2 RPS ↓ | Top1 / Top3 / Top5 | expected 1-1 / actual |',
+              '|---|---:|---:|---:|---:|',
+          ]
+          pooled = {}
+          for name in names:
+              ms = [seg['methods'][name] for seg in segments]
+              assert all(m['n'] == seg['test_n'] for m, seg in zip(ms, segments))
+              nll = sum(m['nll']*m['n'] for m in ms)/n
+              rps = sum(m['rps_1x2']*m['n'] for m in ms)/n
+              top1 = sum(m['top1'] for m in ms)
+              top3 = sum(m['top3'] for m in ms)
+              top5 = sum(m['top5'] for m in ms)
+              exp11 = sum(m['expected_1_1'] for m in ms)
+              act11 = sum(m['observed_1_1'] for m in ms)
+              pooled[name] = nll
+              rows.append(f'| {name} | {nll:.5f} | {rps:.5f} | {top1}/{top3}/{top5} | {exp11:.2f}/{act11} |')
+          for name in names[1:]:
+              rows.append(f'{name} - Champion exact NLL: {pooled[name]-pooled["champion"]:+.5f}')
+          rows.append('Coefficients selected using previous UTC days only; no same-day label leakage. No tuning or promotion of the deployed Champion.')
+          for row in rows: print(row)
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8') as f:
+              f.write(chr(10).join(rows)+chr(10))
           PY
 
       - name: Verify lossless frozen market-side pair storage
