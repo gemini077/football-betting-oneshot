@@ -106,17 +106,21 @@ test("queued market workflow suppresses duplicate dispatcher enqueue", async () 
   } finally { globalThis.fetch = original; }
 });
 
-test("workflow queue status request failures do not submit duplicates", async () => {
+test("Actions status 403 degrades queue inspection without disabling capture", async () => {
   const original = globalThis.fetch;
   const calls = [];
-  globalThis.fetch = async (url) => {
-    calls.push(String(url));
+  globalThis.fetch = async (url, options = {}) => {
+    calls.push({ url: String(url), options });
     if (String(url).includes("raw.githubusercontent")) return { ok: true, json: async () => ({ tasks: { match: task } }) };
+    if (String(url).endsWith("/dispatches")) return { ok: true, status: 204 };
     return { ok: false, status: 403 };
   };
   try {
-    await assert.rejects(run(env, true, planned), /GitHub workflow status 403/);
-    assert.equal(calls.length, 2);
+    const result = await run(env, true, planned);
+    assert.equal(result.status, "queue_state_unverified");
+    assert.equal(result.dispatched, 1);
+    assert.equal(calls.length, 3);
+    assert.equal(calls.filter(call => call.options.method === "POST").length, 1);
   } finally { globalThis.fetch = original; }
 });
 
