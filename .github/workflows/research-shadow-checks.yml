@@ -19,6 +19,9 @@ on:
       - 'scripts/pme_forward_public.py'
       - 'tests/test_pme_forward_score_calibration.py'
       - 'tests/test_pme_forward_public.py'
+      - 'scripts/pme_index_integrity.py'
+      - 'scripts/pure_market_exact_prospective.py'
+      - 'tests/test_pme_index_integrity.py'
       - 'tests/test_gf228_pme_champion_paired_audit.py'
       - 'tests/test_gf229_pme_paired_public.py'
       - 'scripts/rolling_market_shadow.py'
@@ -51,6 +54,23 @@ jobs:
           python-version: '3.12'
       - name: Install research test dependencies
         run: python -m pip install pytest
+      - name: Guard PME immutable history and fail-closed index writes
+        run: |
+          python -m pytest -q -p no:cacheprovider tests/test_pme_index_integrity.py
+          python -m py_compile scripts/pure_market_exact_prospective.py scripts/pme_index_integrity.py
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          from scripts.pme_index_integrity import assert_index_monotonic
+          path=Path('data/prediction_quality/pure_market_exact_prospective_1/latest_index.json')
+          if path.is_file():
+              index=json.loads(path.read_text(encoding='utf-8'))
+              assert_index_monotonic(index,index)
+              print(f"Existing frozen PME index verified: {index['prediction_count']} records, "
+                    f"{len(index['latest_by_match'])} match keys, "
+                    f"{index['settled_prediction_count']} settled versions")
+          PY
+
       - name: Verify frozen market research and paired audit
         run: |
           python -m pytest -q -p no:cacheprovider \
