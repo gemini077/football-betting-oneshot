@@ -58,6 +58,36 @@ jobs:
             tests/test_gf229_pme_paired_public.py \
             tests/test_gf233_paired_audit_durability.py
 
+      - name: Publish frozen-probability calibration diagnostics to job summary
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/pme_champion_paired_audit.py --repo-root . --output "$RUNNER_TEMP/paired-calibration.json"
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          report=json.loads((Path(os.environ["RUNNER_TEMP"])/"paired-calibration.json").read_text(encoding="utf-8"))
+          calibration=report["score_calibration"]
+          assert calibration["n"] == report["n"]
+          rows=[
+              "### Frozen score-probability calibration (RESEARCH ONLY)",
+              f"Unique matched settled fixtures: {report['n']}",
+              f"Actual 1-1 results: {calibration['observed1_1_count']} / {calibration['n']}",
+              "| Method | Expected 1-1 results | 1-1 modal matches | Expected Top1 hits | Observed Top1 hits |",
+              "|---|---:|---:|---:|---:|",
+          ]
+          for name in ("champion", "market"):
+              m=calibration["methods"][name]
+              rows.append(
+                  f"| {name} | {m['expected_1_1_count']:.3f} | {m['modal_1_1_top1_count']} | "
+                  f"{m['expected_top1_hits']:.3f} | {m['observed_top1_hits']} |"
+              )
+          rows.append(f"Provider bookmaker quote timestamps verified: {report['capture_provenance']['provider_quote_clock_verified_matches']} / {report['n']}.")
+          rows.append("Modal frequency is not event probability. No model promotion, no training on settled rows.")
+          for row in rows: print(row)
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as f: f.write("\\n".join(rows)+"\\n")
+          PY
+
       - name: Verify lossless frozen market-side pair storage
         env:
           PYTHONPATH: '.:./scripts'
