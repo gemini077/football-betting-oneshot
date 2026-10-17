@@ -96,6 +96,7 @@ def test_link_is_idempotent_on_repeat_publish(tmp_path):
     assert public.publish_optional(SOURCE, tmp_path)
     page = (tmp_path / "research/scorecard.html").read_text(encoding="utf-8")
     assert page.count("research-historical-paired-link") == 1
+    assert f"历史 {report()['n']} 场配对回测" in page
 
 
 def test_outputs_are_bounded_and_exclude_raw_quote_data(tmp_path):
