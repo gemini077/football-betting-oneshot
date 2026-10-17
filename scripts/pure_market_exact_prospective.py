@@ -34,6 +34,7 @@ from market_engine import (
 )
 from model_governance import load_frozen_prediction, load_input_snapshot
 from prematch_versioning import _identity, _parse_timestamp, select_latest_legal_prematch
+from pme_index_integrity import IndexIntegrityError, assert_index_monotonic
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -1210,9 +1211,17 @@ def run_lane(
             settlement_paths=settlement_paths,
             refreshed_at=now.isoformat(),
         )
-        # Derived views are allowed to refresh; they never embed prediction distributions.
-        _write_derived_if_changed(index_path, index, ignored_keys=frozenset({"refreshed_at"}))
-        _write_derived_if_changed(summary_path, summary, ignored_keys=frozenset({"generated_at"}))
+        # Refuse to replace the compact index with a projection missing historical
+        # frozen predictions or prior settlements. Do not alter immutable evidence.
+        try:
+            if index_path.exists():
+                assert_index_monotonic(_json_file(index_path), index)
+        except (IndexIntegrityError, OSError, ValueError, json.JSONDecodeError) as error:
+            conflicts.append(f"index integrity guard: {error}")
+        else:
+            # The index and settlement summary must advance together.
+            _write_derived_if_changed(index_path, index, ignored_keys=frozenset({"refreshed_at"}))
+            _write_derived_if_changed(summary_path, summary, ignored_keys=frozenset({"generated_at"}))
     completion_state = "FAIL_CLOSED" if conflicts else (
         "PURE_MARKET_PROSPECTIVE_WIRED" if predictions else "PURE_MARKET_PROSPECTIVE_WIRED_NO_CURRENT_ROWS"
     )
