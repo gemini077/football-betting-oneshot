@@ -107,12 +107,21 @@ async function run(env, shouldDispatch = true, now = Date.now()) {
     };
   }
   if (!events.length) return { status: "ok", due: due.length, dispatchable: 0, dispatched: 0, results: [] };
-  if (await hasQueuedMarketRun(env)) {
+  // The dispatch PAT may lack Actions:read. Preserve real capture if
+  // queue inspection fails, but mark the anti-duplication state unverified.
+  let queueVerified = true;
+  let queued = false;
+  try {
+    queued = await hasQueuedMarketRun(env);
+  } catch {
+    queueVerified = false;
+  }
+  if (queued) {
     return { status: "queued_runner_exists", due: due.length, dispatchable: events.length, dispatched: 0, results: [] };
   }
   await dispatch(env, events);
   return {
-    status: "ok",
+    status: queueVerified ? "ok" : "queue_state_unverified",
     due: due.length,
     dispatchable: events.length,
     dispatched: 1,
