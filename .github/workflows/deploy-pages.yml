@@ -157,6 +157,50 @@ jobs:
           echo '::warning::GF228/229 research audit failed; daily predictions and Pages continue unchanged'
           echo 'GF228/229 historical paired research: FAILED' >> "$GITHUB_STEP_SUMMARY"
 
+      # A healthy Pages deployment must not hide a stalled paired audit.
+      # Report visibility only: unavailable/invalid evidence never changes the frozen Champion.
+      - name: Report paired-research freshness and coverage
+        if: ${{ always() }}
+        continue-on-error: true
+        shell: bash
+        run: |
+          python - <<'PY'
+          import hashlib, json, os
+          from pathlib import Path
+          root = Path("data/prediction_quality/pure_market_exact_prospective_1")
+          index_path = root / "latest_index.json"
+          report_path = root / "champion_market_paired_review.json"
+          summary_file = os.environ.get("GITHUB_STEP_SUMMARY")
+          lines = ["### Paired research provenance freshness"]
+          if not index_path.is_file() or not report_path.is_file():
+              lines.append("Missing paired index/report; research remains UNVERIFIED.")
+              print("::warning::Paired research index or report is missing")
+          else:
+              try:
+                  index = json.loads(index_path.read_text(encoding="utf-8"))
+                  report = json.loads(report_path.read_text(encoding="utf-8"))
+                  refs = {row["prediction_id"]: row for row in index["predictions"]}
+                  eligible = sum(bool(refs.get(pid, {}).get("settlement_path"))
+                                 for pid in index["latest_by_match"].values())
+                  matched = report.get("n")
+                  digest = hashlib.sha256(index_path.read_bytes()).hexdigest()
+                  pinned = (report.get("provenance") or {}).get("index_sha256")
+                  fresh = matched == eligible and pinned == digest
+                  lines.append(f"Latest settled unique cohort: {eligible}; validated paired report: {matched}.")
+                  lines.append(f"Index digest current and pinned: {'MATCH' if pinned == digest else 'MISMATCH'}.")
+                  lines.append(f"Audit freshness: {'PASS' if fresh else 'STALE / RESEARCH BLOCKED'}.")
+                  if not fresh:
+                      print(f"::warning::Paired report stale: settled unique={eligible}, report n={matched}, index pinned={pinned == digest}")
+              except (ValueError, KeyError, TypeError) as exc:
+                  lines.append("Audit status: INVALID / RESEARCH BLOCKED.")
+                  print(f"::warning::Paired report freshness check failed: {type(exc).__name__}")
+          if summary_file:
+              with open(summary_file, "a", encoding="utf-8") as f:
+                  f.write("\\n".join(lines) + "\\n")
+          for line in lines:
+              print(line)
+          PY
+
       - name: Save generated public data
         if: ${{ !cancelled() && steps.generated_data_gate.outputs.ready == 'true' }}
         shell: bash
