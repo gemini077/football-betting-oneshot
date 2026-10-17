@@ -195,7 +195,7 @@ def publish_optional(source: Path, output: Path) -> bool:
         if not scorecard.is_file():
             return False
         score_text = scorecard.read_text(encoding="utf-8")
-        link = "<a class='research-historical-paired-link' href='pme-paired.html'>历史 90 场配对回测</a>"
+        link = f"<a class='research-historical-paired-link' href='pme-paired.html'>历史 {data['n']} 场配对回测</a>"
         import re
         score_text = re.sub(r"\s*<a class='research-historical-paired-link' href='pme-paired\.html'>.*?</a>", "", score_text)
         pos = score_text.lower().rfind("</main>")
