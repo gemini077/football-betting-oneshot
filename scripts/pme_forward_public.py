@@ -118,7 +118,7 @@ def publish_optional(repo_root: Path, output: Path) -> bool:
         if pos < 0:
             return False
         link = '<a class="research-forward-score-link" href="pme-forward.html">Forward score calibration (research)</a>'
-        score_text = score_text[:pos] + "\n<p>" + link + "</p>\n" + score_text[pos:]
+        score_text = score_text[:pos].rstrip() + "\n<p>" + link + "</p>\n" + score_text[pos:]
         if len(page.encode("utf-8")) > MAX_PAGE:
             return False
         # All source and output validation is complete before any published file is changed.
