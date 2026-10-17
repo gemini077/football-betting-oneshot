@@ -130,6 +130,38 @@ jobs:
               rows.append(f'| {name} | {nll:.5f} | {rps:.5f} | {top1}/{top3}/{top5} | {exp11:.2f}/{act11} |')
           for name in names[1:]:
               rows.append(f'{name} - Champion exact NLL: {pooled[name]-pooled["champion"]:+.5f}')
+          import random
+          rows.extend([
+              '| Holdout UTC day | Matches | Selected 1-1 tilt | ΔNLL (tilt−Champion) | ΔTop1 |',
+              '|---|---:|---:|---:|---:|',
+          ])
+          for seg in segments[-14:]:
+              base = seg['methods']['champion']
+              cand = seg['methods']['one_one_odds']
+              rows.append(
+                  f"| {seg['utc_matchday']} | {seg['test_n']} | {seg['coefficients']['one_one_odds']:.2f} | "
+                  f"{cand['nll']-base['nll']:+.5f} | {cand['top1']-base['top1']:+d} |"
+              )
+          improvements = sum(
+              seg['methods']['one_one_odds']['nll'] < seg['methods']['champion']['nll']
+              for seg in segments
+          )
+          rng = random.Random(240)
+          boot = []
+          for _ in range(5000):
+              sampled = [segments[rng.randrange(len(segments))] for __ in segments]
+              denom = sum(seg['test_n'] for seg in sampled)
+              delta = sum(
+                  (seg['methods']['one_one_odds']['nll']-seg['methods']['champion']['nll'])
+                  * seg['test_n'] for seg in sampled
+              )/denom
+              boot.append(delta)
+          boot.sort()
+          rows.append(
+              f"1-1 tilt improves NLL on {improvements}/{len(segments)} held-out days; "
+              f"matchday-cluster bootstrap ΔNLL 95% interval "
+              f"[{boot[125]:+.5f}, {boot[4875]:+.5f}] (exploratory; only {len(segments)} dates)."
+          )
           rows.append('Coefficients selected using previous UTC days only; no same-day label leakage. No tuning or promotion of the deployed Champion.')
           for row in rows: print(row)
           with open(os.environ['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8') as f:
