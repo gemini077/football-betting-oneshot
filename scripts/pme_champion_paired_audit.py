@@ -137,8 +137,28 @@ def load_pair(root,mroot,entry):
     for k in ('top1','top3','top5'):
         if bool(market[k])!=bool(sm['exact_'+k]): raise ValueError(key+': settlement '+k+' mismatch')
     close(market['nll'],sm['exact_nll']); close(market['rps'],sm['ft_1x2_rps'])
-    return {'match_key':key,'kickoff_at':entry['kickoff_at'],'actual':f'{actual[0]}-{actual[1]}','top1':{'champion':champ['top1'],'market':market['top1']},'champion':champ,'market':market,'capture_provenance':provenance},[pp,sp,cp,result_path]
+    return {'match_key':key,'kickoff_at':entry['kickoff_at'],'actual':f'{actual[0]}-{actual[1]}','is_actual_1_1':actual==(1,1),'top1':{'champion':champ['top1'],'market':market['top1']},'champion':{**champ,'p_1_1':cm.get((1,1),0.0),'p_top1':cm[cr[0]]},'market':{**market,'p_1_1':mm.get((1,1),0.0),'p_top1':mm[mr[0]]},'capture_provenance':provenance},[pp,sp,cp,result_path]
 def mean(xs): return sum(xs)/len(xs)
+def score_calibration(rows):
+    """Descriptive frozen-PMF event calibration counts; never a promotion test."""
+    n=len(rows)
+    if not 1<=n<=5000: raise ValueError('invalid score calibration sample size')
+    observed=sum(r['is_actual_1_1'] for r in rows)
+    out={'n':n,'observed1_1_count':observed,'methods':{}}
+    for method in ('champion','market'):
+        subset=[r for r in rows if r[method]['score1']=='1-1']
+        p11=[r[method]['p_1_1'] for r in rows]; ptop=[r[method]['p_top1'] for r in rows]
+        msubset=[r for r in subset if r['is_actual_1_1']]
+        vals=p11+[x for x in ptop]
+        if any(isinstance(x,bool) or not isinstance(x,(int,float)) or not math.isfinite(x) or not 0<=x<=1 for x in vals): raise ValueError('invalid score calibration probability')
+        expected_top=sum(ptop); hits=sum(r[method]['top1'] for r in rows)
+        if not 0<=hits<=n or not 0<=observed<=n: raise ValueError('score calibration count bounds')
+        out['methods'][method]={'expected_1_1_count':sum(p11),'observed_1_1_count':observed,
+            'modal_1_1_top1_count':sum(r[method]['score1']=='1-1' for r in rows),
+            'expected_top1_hits':expected_top,'observed_top1_hits':hits,
+            'one_one_modal_subset':{'count':len(subset),'expected_1_1_count':sum(r[method]['p_1_1'] for r in subset),'observed_1_1_count':len(msubset)}}
+    out['description']='Frozen-PMF descriptive diagnostics only: modal frequency is distinct from p(1-1); not evidence of systematic overconfidence and not a model-promotion criterion.'
+    return out
 def bootstrap(xs,seed=228,reps=5000):
     rng=random.Random(seed); n=len(xs); vals=[]
     for _ in range(reps): vals.append(mean([xs[rng.randrange(n)] for __ in range(n)]))
@@ -206,7 +226,7 @@ def build(root,market_root=None,reps=5000):
         v=[r['market'][k]-r['champion'][k] for r in rows]
         deltas[k]={'market_minus_champion_mean':mean(v),'paired_bootstrap_95_ci':bootstrap(v,reps=reps),'matchday_cluster_bootstrap_95_ci':matchday_cluster_bootstrap_95_ci(rows,k,reps=reps)}
     a=sum(r['champion']['top1'] and not r['market']['top1'] for r in rows); b=sum(r['market']['top1'] and not r['champion']['top1'] for r in rows)
-    report={'schema_version':'gf228.paired_champion_market.v1','n':len(rows),'source_cutoff_policy':'same_snapshot_asof_preko','quote_clock_policy':'CAPTURE_ONLY_SOURCE_QUOTE_CLOCK_NOT_VERIFIED','control':'non_promotion_research','methods':{'observation_unit':'latest_by_match unique match_key with nonnull settlement_path','score_grid':'full exact grid; probability sum tolerance 1e-7; tie rank (-p,home,away)','nll':'-log(actual exact-score probability)','rps':'1X2 cumulative ranked probability score Away/Draw/Home divided by 2','bootstrap':{'paired':True,'repetitions':reps,'seed':228,'interval':'percentile 95%'},'top1_test':'two-sided exact McNemar binomial; descriptive only'},'summary':summary,'deltas':deltas,'robustness':{'cluster_days':len({matchday_utc(r) for r in rows}),'chronological_thirds':chronological_thirds(rows),'chronological_thirds_label':'stability check only; no training or tuning'},'tests':{'top1_mcnemar':{'champion_only':a,'market_only':b,'two_sided_exact_p':binom2(a,b),'interpretation':'descriptive; no promotion inference'}},'matches':[{'match_key':r['match_key'],'actual':r['actual'],'top1':r['top1'],'champion':{k:r['champion'][k] for k in ('score1','top1','top3','top5')},'market':{k:r['market'][k] for k in ('score1','top1','top3','top5')}} for r in rows[-250:]],'match_display_limit':250,'provenance':{'index_sha256':sha(index),'source_files_sha256':hashlib.sha256(''.join(sha(p) for p in sorted(set(files),key=str)).encode()).hexdigest()}}
+    report={'schema_version':'gf228.paired_champion_market.v1','n':len(rows),'source_cutoff_policy':'same_snapshot_asof_preko','quote_clock_policy':'CAPTURE_ONLY_SOURCE_QUOTE_CLOCK_NOT_VERIFIED','control':'non_promotion_research','methods':{'observation_unit':'latest_by_match unique match_key with nonnull settlement_path','score_grid':'full exact grid; probability sum tolerance 1e-7; tie rank (-p,home,away)','nll':'-log(actual exact-score probability)','rps':'1X2 cumulative ranked probability score Away/Draw/Home divided by 2','bootstrap':{'paired':True,'repetitions':reps,'seed':228,'interval':'percentile 95%'},'top1_test':'two-sided exact McNemar binomial; descriptive only'},'summary':summary,'score_calibration':score_calibration(rows),'deltas':deltas,'robustness':{'cluster_days':len({matchday_utc(r) for r in rows}),'chronological_thirds':chronological_thirds(rows),'chronological_thirds_label':'stability check only; no training or tuning'},'tests':{'top1_mcnemar':{'champion_only':a,'market_only':b,'two_sided_exact_p':binom2(a,b),'interpretation':'descriptive; no promotion inference'}},'matches':[{'match_key':r['match_key'],'actual':r['actual'],'is_actual_1_1':r['is_actual_1_1'],'top1':r['top1'],'champion':{k:r['champion'][k] for k in ('score1','top1','top3','top5','p_1_1','p_top1')},'market':{k:r['market'][k] for k in ('score1','top1','top3','top5','p_1_1','p_top1')}} for r in rows[-250:]],'match_display_limit':250,'provenance':{'index_sha256':sha(index),'source_files_sha256':hashlib.sha256(''.join(sha(p) for p in sorted(set(files),key=str)).encode()).hexdigest()}}
     report['capture_provenance']=summarize_capture_provenance(rows)
     canonical=json.dumps(report,sort_keys=True,separators=(',',':'),ensure_ascii=False).encode(); report['report_sha256']=hashlib.sha256(canonical).hexdigest()
     out=json.dumps(report,sort_keys=True,separators=(',',':'),ensure_ascii=False).encode()+b'\n'
