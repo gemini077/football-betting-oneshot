@@ -40,8 +40,13 @@ def compact_team_name(value: Any) -> str:
         if text.endswith(suffix) and len(text) > len(suffix) + 1:
             text = text[: -len(suffix)]
             break
-    latin = [token for token in re.findall(r"[a-z0-9]+", text) if token not in _LATIN_TOKENS]
+    latin_tokens = re.findall(r"[a-z0-9]+", text)
     chinese = "".join(re.findall(r"[\u4e00-\u9fff]+", text))
+    # Keep FC in mixed-script CJK names: dropping it turns e.g. ??FC into
+    # the ambiguous ?? token, which can collide with unrelated Paris clubs.
+    if chinese and "fc" in latin_tokens:
+        return normalize_team_name(text)
+    latin = [token for token in latin_tokens if token not in _LATIN_TOKENS]
     return "".join(latin) + chinese
 
 
