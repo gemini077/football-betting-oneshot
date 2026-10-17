@@ -85,7 +85,7 @@ jobs:
           rows.append(f"Provider bookmaker quote timestamps verified: {report['capture_provenance']['provider_quote_clock_verified_matches']} / {report['n']}.")
           rows.append("Modal frequency is not event probability. No model promotion, no training on settled rows.")
           for row in rows: print(row)
-          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as f: f.write("\\n".join(rows)+"\\n")
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as f: f.write(chr(10).join(rows)+chr(10))
           PY
 
       - name: Verify lossless frozen market-side pair storage
