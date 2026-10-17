@@ -19,7 +19,9 @@ permissions:
   id-token: write
 
 concurrency:
+  # All production writers share this queue. Core must not evict pending Pages/checkpoint runs.
   group: football-betting-oneshot-write
+  queue: max
   cancel-in-progress: false
 
 jobs:
