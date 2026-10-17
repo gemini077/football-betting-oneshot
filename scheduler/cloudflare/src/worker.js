@@ -11,6 +11,11 @@ const DISPATCH_WINDOWS = [
   { attempt: "primary", startMinutes: 0, endMinutes: 1 },
   { attempt: "bounded_retry", startMinutes: 10, endMinutes: 11 },
 ];
+const GITHUB_HEADERS = {
+  "Accept": "application/vnd.github+json",
+  "User-Agent": "football-betting-oneshot-checkpoint-scheduler",
+  "X-GitHub-Api-Version": "2022-11-28",
+};
 
 function dispatchAttempt(latenessMinutes) {
   const window = DISPATCH_WINDOWS.find(
@@ -38,24 +43,44 @@ function dueEvents(tasks, now, dispatchableOnly = false) {
   return rows.sort((a, b) => a.planned - b.planned).slice(0, 12);
 }
 
-async function dispatch(env, event) {
-  const response = await fetch(`https://api.github.com/repos/${env.GITHUB_OWNER}/${env.GITHUB_REPO}/dispatches`, {
+function githubBase(env) {
+  if (!env.GITHUB_OWNER || !env.GITHUB_REPO || !env.GITHUB_TOKEN) {
+    throw new Error("Missing GitHub owner/repo/token configuration");
+  }
+  return `https://api.github.com/repos/${env.GITHUB_OWNER}/${env.GITHUB_REPO}`;
+}
+
+// At most one pending market runner: every runner scans all currently due
+// checkpoints, so a second pending runner adds latency without new coverage.
+async function hasQueuedMarketRun(env) {
+  const response = await fetch(`${githubBase(env)}/actions/workflows/prematch-market-monitor.yml/runs?per_page=100`, {
+    headers: { ...GITHUB_HEADERS, Authorization: `Bearer ${env.GITHUB_TOKEN}` },
+  });
+  if (!response.ok) throw new Error(`GitHub workflow status ${response.status}`);
+  const body = await response.json();
+  if (!Array.isArray(body.workflow_runs)) throw new Error("GitHub workflow status malformed");
+  return body.workflow_runs.some(row => ["pending", "queued", "requested", "waiting"].includes(row.status));
+}
+
+async function dispatch(env, events) {
+  const response = await fetch(`${githubBase(env)}/dispatches`, {
     method: "POST",
     headers: {
+      ...GITHUB_HEADERS,
       "Authorization": `Bearer ${env.GITHUB_TOKEN}`,
-      "Accept": "application/vnd.github+json",
       "Content-Type": "application/json",
-      "User-Agent": "football-betting-oneshot-checkpoint-scheduler",
-      "X-GitHub-Api-Version": "2022-11-28",
     },
     body: JSON.stringify({
       event_type: "prematch_checkpoint_due",
       client_payload: {
-        match_id: event.matchId,
-        checkpoint: event.checkpoint,
-        planned_at: new Date(event.planned).toISOString(),
-        idempotency_key: `${event.matchId}:${event.checkpoint}`,
-        dispatch_attempt: event.attempt,
+        scan_scope: "all_due", // Omit match_id/checkpoint: the existing GH job scans the entire due registry.
+        batch_count: events.length,
+        batch_checkpoints: events.map(event => ({
+          match_id: event.matchId,
+          checkpoint: event.checkpoint,
+          planned_at: new Date(event.planned).toISOString(),
+          dispatch_attempt: event.attempt,
+        })),
         scheduler: "cloudflare-minute-cron",
       },
     }),
@@ -71,7 +96,7 @@ async function run(env, shouldDispatch = true, now = Date.now()) {
   if (!response.ok) throw new Error(`Registry fetch ${response.status}`);
   const registry = await response.json();
   const due = dueEvents(registry.tasks, now);
-  const events = dueEvents(registry.tasks, now, true).slice(0, 1);
+  const events = dueEvents(registry.tasks, now, true);
   if (!shouldDispatch) {
     return {
       status: "ok",
@@ -81,21 +106,18 @@ async function run(env, shouldDispatch = true, now = Date.now()) {
       results: due,
     };
   }
-  const results = [];
-  for (const event of events) {
-    try {
-      await dispatch(env, event);
-      results.push({ ...event, status: "dispatched" });
-    } catch (error) {
-      results.push({ ...event, status: "error", error: String(error) });
-    }
+  if (!events.length) return { status: "ok", due: due.length, dispatchable: 0, dispatched: 0, results: [] };
+  if (await hasQueuedMarketRun(env)) {
+    return { status: "queued_runner_exists", due: due.length, dispatchable: events.length, dispatched: 0, results: [] };
   }
+  await dispatch(env, events);
   return {
     status: "ok",
     due: due.length,
     dispatchable: events.length,
-    dispatched: results.filter(row => row.status === "dispatched").length,
-    results,
+    dispatched: 1,
+    batched_checkpoints: events.length,
+    results: events.map(event => ({ ...event, status: "batched" })),
   };
 }
 
@@ -113,4 +135,4 @@ export default {
   },
 };
 
-export { dispatchAttempt, dueEvents, run };
+export { dispatchAttempt, dueEvents, run, hasQueuedMarketRun };
