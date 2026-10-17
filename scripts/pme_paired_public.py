@@ -39,6 +39,23 @@ def _valid(report: Any) -> bool:
             return False
         if not 0 <= row["rps"] <= 1 or row["nll"] < 0:
             return False
+    calibration = report.get("score_calibration")
+    if calibration is not None:
+        if not isinstance(calibration, dict) or type(calibration.get("n")) is not int or calibration["n"] != n: return False
+        observed, methods = calibration.get("observed1_1_count"), calibration.get("methods")
+        if type(observed) is not int or not 0 <= observed <= n or not isinstance(methods, dict): return False
+        for method in METHODS:
+            row = methods.get(method)
+            if not isinstance(row, dict) or type(row.get("observed_1_1_count")) is not int or row["observed_1_1_count"] != observed: return False
+            for key in ("expected_1_1_count", "expected_top1_hits"):
+                if not _number(row.get(key)) or not 0 <= row[key] <= n: return False
+            for key in ("observed_1_1_count", "modal_1_1_top1_count", "observed_top1_hits"):
+                if type(row.get(key)) is not int or not 0 <= row[key] <= n: return False
+            subset = row.get("one_one_modal_subset")
+            if not isinstance(subset, dict) or type(subset.get("count")) is not int or not 0 <= subset["count"] <= n: return False
+            if subset["count"] != row["modal_1_1_top1_count"] or not _number(subset.get("expected_1_1_count")) or not 0 <= subset["expected_1_1_count"] <= subset["count"]: return False
+            if type(subset.get("observed_1_1_count")) is not int or not 0 <= subset["observed_1_1_count"] <= min(subset["count"], observed): return False
+        if not isinstance(calibration.get("description"), str) or not calibration["description"]: return False
     deltas = report.get("deltas")
     if not isinstance(deltas, dict):
         return False
@@ -106,8 +123,13 @@ def _valid(report: Any) -> bool:
                 return False
             if any(type(side.get(k)) is not int or side[k] not in (0, 1) for k in TOPS):
                 return False
+            if calibration is not None:
+                if not _number(side.get("p_1_1")) or not 0 <= side["p_1_1"] <= 1 or not _number(side.get("p_top1")) or not 0 <= side["p_top1"] <= 1:
+                    return False
         pair = match.get("top1")
         if not isinstance(pair, dict) or any(type(pair.get(k)) is not int or pair[k] not in (0, 1) for k in METHODS):
+            return False
+        if calibration is not None and (type(match.get("is_actual_1_1")) is not bool or match["is_actual_1_1"] != (match["actual"] == "1-1")):
             return False
     return True
 
@@ -127,13 +149,15 @@ def _clean(report: dict[str, Any]) -> dict[str, Any]:
         "control": report.get("control"),
         "methods": report.get("methods"),
         "summary": {m: {k: report["summary"][m][k] for k in (*TOPS, "nll", "rps", "score_1_1_top1")} for m in METHODS},
+        **({"score_calibration": {"n": report["score_calibration"]["n"], "observed1_1_count": report["score_calibration"]["observed1_1_count"], "description": report["score_calibration"]["description"], "methods": {m: {k: report["score_calibration"]["methods"][m][k] for k in ("expected_1_1_count", "observed_1_1_count", "modal_1_1_top1_count", "expected_top1_hits", "observed_top1_hits")} | {"one_one_modal_subset": dict(report["score_calibration"]["methods"][m]["one_one_modal_subset"])} for m in METHODS}}} if "score_calibration" in report else {}),
         "deltas": {k: {**{x: report["deltas"][k][x] for x in ("market_minus_champion_mean", "paired_bootstrap_95_ci")}, **({"matchday_cluster_bootstrap_95_ci": report["deltas"][k]["matchday_cluster_bootstrap_95_ci"]} if "matchday_cluster_bootstrap_95_ci" in report["deltas"][k] else {})} for k in ("nll", "rps")},
         "robustness": report.get("robustness"),
         "capture_provenance": report.get("capture_provenance"),
         "tests": {"top1_mcnemar": {k: report["tests"]["top1_mcnemar"].get(k) for k in ("champion_only", "market_only", "two_sided_exact_p", "interpretation")}},
         "matches": [{"match_key": r["match_key"], "actual": r["actual"], "top1": r["top1"],
-                     "champion": {k: r["champion"][k] for k in ("score1", *TOPS)},
-                     "market": {k: r["market"][k] for k in ("score1", *TOPS)}} for r in report["matches"][:250]],
+                     **({"is_actual_1_1": r["is_actual_1_1"]} if "is_actual_1_1" in r else {}),
+                     "champion": {k: r["champion"][k] for k in ("score1", *TOPS, "p_1_1", "p_top1") if k in r["champion"]},
+                     "market": {k: r["market"][k] for k in ("score1", *TOPS, "p_1_1", "p_top1") if k in r["market"]}} for r in report["matches"][:250]],
     }
 
 
@@ -148,6 +172,11 @@ def _render(data: dict[str, Any]) -> str:
     ci_nll = data["deltas"]["nll"]["paired_bootstrap_95_ci"]
     ci_rps = data["deltas"]["rps"]["paired_bootstrap_95_ci"]
     p = data["tests"]["top1_mcnemar"]["two_sided_exact_p"]
+    calibration = data.get("score_calibration")
+    calibration_html = ""
+    if calibration:
+        crows = "".join(f"<tr><th>{esc(label)}</th><td>{calibration['methods'][method]['expected_1_1_count']:.2f} / {calibration['methods'][method]['observed_1_1_count']} (modal 1-1 top1: {calibration['methods'][method]['modal_1_1_top1_count']})</td><td>{calibration['methods'][method]['expected_top1_hits']:.2f} / {calibration['methods'][method]['observed_top1_hits']}</td><td>{calibration['methods'][method]['one_one_modal_subset']['count']} / {calibration['methods'][method]['one_one_modal_subset']['expected_1_1_count']:.2f} / {calibration['methods'][method]['one_one_modal_subset']['observed_1_1_count']}</td></tr>" for method, label in (("champion", "Champion"), ("market", "Market")))
+        calibration_html = f"<section><h2>冻结比分概率诊断（研究用途）</h2><p>实际 1-1 与汇总 p(1,1) 对比的是概率和观测；众数 1-1 仅统计其为单场最高概率比分，两者并不等同。这是描述性指标，不构成系统性过度自信的证据，也不触发模型晋级。</p><table><thead><tr><th>方法</th><th>预期 / 实际 1-1；众数 1-1 Top1 场数</th><th>预期 / 实际 Top1 命中</th><th>1-1 众数子集：场数 / 预期 / 实际 1-1</th></tr></thead><tbody>{crows}</tbody></table><p>{esc(calibration['description'])}</p></section>"
     robustness = data.get("robustness") or {}
     thirds = robustness.get("chronological_thirds", [])
     cluster_nll = data["deltas"]["nll"].get("matchday_cluster_bootstrap_95_ci", [None,None])
@@ -174,6 +203,7 @@ def _render(data: dict[str, Any]) -> str:
 <p>按固定 unique latest_by_match 前瞻记录选择；Champion 使用完全相同 source cutoff 的冻结预测。每场单独配对。</p>
 <div class="notice">仅作历史研究，不构成市场模型晋级或替换生产 Champion 的依据。源报价时间戳为 CAPTURE_ONLY（仅记录捕获时间，未验证报价时钟）。完整比分网格：Champion 169 格，市场 441 格。</div>
 {capture_notice}
+{calibration_html}
 <section><h2>配对表现（{data['n']} 场）</h2><table><thead><tr><th>方法</th><th>Top 1</th><th>Top 3</th><th>Top 5</th><th>平均 NLL ↓</th><th>1X2 RPS ↓</th></tr></thead><tbody>{rows}</tbody></table>
 <p>市场 − Champion 配对 bootstrap 95% CI：NLL [{ci_nll[0]:.4f}, {ci_nll[1]:.4f}]；RPS [{ci_rps[0]:.5f}, {ci_rps[1]:.5f}]。Top 1 双侧 exact McNemar p = {p:.4f}，未显示显著差异。</p>
 <p>Top 1/3/5 命中：{s['champion']['top1']}–{s['market']['top1']} / {s['champion']['top3']}–{s['market']['top3']} / {s['champion']['top5']}–{s['market']['top5']}；NLL：{s['champion']['nll']:.4f}–{s['market']['nll']:.4f}；RPS：{s['champion']['rps']:.5f}–{s['market']['rps']:.5f}。预测众数为 1–1：Champion {s['champion']['score_1_1_top1']} 场，市场 {s['market']['score_1_1_top1']} 场。</p>
@@ -190,22 +220,4 @@ def publish_optional(source: Path, output: Path) -> bool:
             return False
         data = _clean(report)
         page = _render(data)
-        base = Path(output) / "research"
-        scorecard = base / "scorecard.html"
-        if not scorecard.is_file():
-            return False
-        score_text = scorecard.read_text(encoding="utf-8")
-        link = f"<a class='research-historical-paired-link' href='pme-paired.html'>历史 {data['n']} 场配对回测</a>"
-        import re
-        score_text = re.sub(r"\s*<a class='research-historical-paired-link' href='pme-paired\.html'>.*?</a>", "", score_text)
-        pos = score_text.lower().rfind("</main>")
-        if pos < 0:
-            return False
-        score_text = score_text[:pos] + "\n<p>" + link + "</p>\n" + score_text[pos:]
-        json_text = json.dumps(data, ensure_ascii=False, indent=2) + "\n"
-        (base / "pme-paired.html").write_text(page, encoding="utf-8")
-        (base / "pme-paired.json").write_text(json_text, encoding="utf-8")
-        scorecard.write_text(score_text, encoding="utf-8")
-        return True
-    except (OSError, ValueError, TypeError, KeyError):
-        return False
+        base = 
