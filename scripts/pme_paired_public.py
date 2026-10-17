@@ -236,6 +236,20 @@ def publish_optional(source: Path, output: Path) -> bool:
         (base / "pme-paired.html").write_text(page, encoding="utf-8")
         (base / "pme-paired.json").write_text(json_text, encoding="utf-8")
         scorecard.write_text(score_text, encoding="utf-8")
+        # Optional GF240 page runs only after the paired artifact was written.
+        # Infer root solely from the canonical report hierarchy; failures are isolated.
+        try:
+            source_path = Path(source).resolve()
+            if (len(source_path.parents) > 3 and
+                    source_path.parents[0].name.startswith("pure_market_exact_prospective_") and
+                    source_path.parents[1].name == "prediction_quality" and
+                    source_path.parents[2].name == "data"):
+                repo_root = source_path.parents[3]
+                if (repo_root / "scripts" / "pme_forward_public.py").is_file():
+                    import pme_forward_public
+                    pme_forward_public.publish_optional(repo_root, output)
+        except Exception:
+            pass
         return True
     except (OSError, ValueError, TypeError, KeyError):
         return False
