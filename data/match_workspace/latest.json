@@ -5,10 +5,10 @@
   "open_bets": [],
   "real_bets": [],
   "target_date": "2026-10-17",
-  "generated_at": "2026-10-18T05:18:34.097492+08:00",
+  "generated_at": "2026-10-18T05:34:35.999899+08:00",
   "schedule_refreshed_at": null,
   "analysis_refreshed_at": "2026-10-18T03:04:43+08:00",
-  "result_refreshed_at": "2026-10-18T05:09:12.392984+08:00",
+  "result_refreshed_at": "2026-10-18T05:25:22.385385+08:00",
   "published_as_latest": true,
   "latest_only": true,
   "automatic_analysis": "owner_selected_fifo_plus_bounded_core_events",
@@ -4126,13 +4126,29 @@
       "after_extra_time": null,
       "kickoff": "2026-10-18 03:00",
       "bet_locked": false,
-      "classification": "赛果待核验",
+      "classification": "赛果尚未最终确认，等待一次重试",
       "prematch_report_url": "../analysis_reports/current/2026-10-17_周六029_巴伦西亚_vs_毕尔巴鄂.html",
       "postmatch_report_url": "",
       "review": null,
-      "verification_status": "scheduled",
-      "verification_issue": null,
-      "result_sources": {},
+      "verification_status": "retry_scheduled",
+      "verification_issue": "result_not_final",
+      "result_sources": {
+        "primary": {
+          "name": "nowscore_match_detail",
+          "status": "unavailable",
+          "score_90m": null,
+          "source_url": "https://live.nowscore.com/MatchDetail/3013730.html",
+          "error": "https://live.nowscore.com/MatchDetail/3013730.html: result_not_final; https://live.nowscore.com/detail/3013730.html: result_not_final"
+        },
+        "fallback": {
+          "name": "espn_scoreboard",
+          "status": "unavailable",
+          "score_90m": null,
+          "source_url": "https://site.api.espn.com/apis/site/v2/sports/soccer/all/scoreboard?dates=20261017&limit=1000",
+          "error": "espn_exact_fixture_not_found",
+          "guardrail": "exact teams + kickoff + completed period 2 only"
+        }
+      },
       "nowscore_id": 3013730,
       "provider_match_id": "3013730"
     },
@@ -19355,7 +19371,7 @@
   },
   "paper_ledger": {
     "schema_version": "1.0",
-    "generated_at": "2026-10-17T21:18:42.120272+00:00",
+    "generated_at": "2026-10-17T21:34:44.253373+00:00",
     "policy": {
       "minimum_stake": 2.0,
       "stake_step": 0.01,
@@ -41089,7 +41105,7 @@
   },
   "calibration_status": {
     "schema_version": "1.0",
-    "generated_at": "2026-10-17T21:09:12.391727+00:00",
+    "generated_at": "2026-10-17T21:25:22.384026+00:00",
     "scope": {
       "since": null,
       "raw_reviews": 200,
@@ -42120,7 +42136,7 @@
   },
   "model_calibration": {
     "schema_version": "1.0",
-    "generated_at": "2026-10-17T21:09:12.972067+00:00",
+    "generated_at": "2026-10-17T21:25:23.059268+00:00",
     "status": "shadow_only",
     "active": false,
     "model_family": "recent_form_market_calibrated_poisson_v2",
