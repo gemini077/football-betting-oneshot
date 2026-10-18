@@ -5,12 +5,12 @@
   "open_bets": [],
   "real_bets": [],
   "target_date": "2026-10-18",
-  "generated_at": "2026-10-18T14:34:46.639713+08:00",
+  "generated_at": "2026-10-18T14:52:30.442408+08:00",
   "schedule_refreshed_at": null,
   "analysis_refreshed_at": "2026-10-18T14:32:28+08:00",
-  "result_refreshed_at": "2026-10-18T14:32:09.364463+08:00",
+  "result_refreshed_at": "2026-10-18T14:46:21.186485+08:00",
   "published_as_latest": true,
-  "latest_only": false,
+  "latest_only": true,
   "automatic_analysis": "owner_selected_fifo_plus_bounded_core_events",
   "automatic_betting": false,
   "requires_explicit_lock_confirmation": true,
@@ -1481,11 +1481,11 @@
       "after_extra_time": null,
       "kickoff": "2026-10-18T03:00+08:00",
       "bet_locked": false,
-      "classification": "赛果尚未最终确认，等待一次重试",
+      "classification": "赛果在有界重试后仍未确认",
       "prematch_report_url": "../analysis_reports/current/2026-10-17_周六029_巴伦西亚_vs_毕尔巴鄂.html",
       "postmatch_report_url": "",
       "review": null,
-      "verification_status": "retry_scheduled",
+      "verification_status": "expired_unresolved",
       "verification_issue": "result_not_final",
       "result_sources": {
         "primary": {
@@ -22571,7 +22571,7 @@
   },
   "paper_ledger": {
     "schema_version": "1.0",
-    "generated_at": "2026-10-18T06:34:54.302551+00:00",
+    "generated_at": "2026-10-18T06:52:38.360052+00:00",
     "policy": {
       "minimum_stake": 2.0,
       "stake_step": 0.01,
@@ -44305,7 +44305,7 @@
   },
   "calibration_status": {
     "schema_version": "1.0",
-    "generated_at": "2026-10-18T01:32:08.985912+00:00",
+    "generated_at": "2026-10-18T06:46:21.185206+00:00",
     "scope": {
       "since": null,
       "raw_reviews": 200,
@@ -45336,55 +45336,56 @@
   },
   "model_calibration": {
     "schema_version": "1.0",
-    "generated_at": "2026-07-24T08:13:26.408543+00:00",
+    "generated_at": "2026-10-18T06:46:21.847559+00:00",
     "status": "shadow_only",
     "active": false,
     "model_family": "recent_form_market_calibrated_poisson_v2",
     "compatible_model_versions": [
       "v0.16.3",
       "v0.17.1",
-      "v0.18.2"
+      "v0.18.2",
+      "v0.19.0"
     ],
     "sample": {
-      "compatible": 23,
-      "training": 16,
-      "holdout": 7,
-      "effective_weight": 9.2,
-      "through": "2026-07-24T06:30:00+08:00"
+      "compatible": 180,
+      "training": 172,
+      "holdout": 8,
+      "effective_weight": 72.0,
+      "through": "2026-10-18T02:45:00+08:00"
     },
     "policy": {
-      "strength": 0.3,
+      "strength": 0.6,
       "minimum_compatible_samples": 18,
       "full_review_samples": 40,
-      "walk_forward_holdout": 7,
+      "walk_forward_holdout": 8,
       "single_match_updates_forbidden": true,
       "minimum_relative_holdout_improvement": 0.01
     },
     "direction": {
       "approved": false,
       "logit_offsets": {
-        "home": 0.080285,
-        "draw": -0.160193,
-        "away": 0.079908
+        "home": 0.084288,
+        "draw": -0.0798,
+        "away": -0.004489
       },
       "validation": {
-        "brier_before": 0.627744,
-        "brier_after": 0.629348,
-        "relative_improvement": -0.002554
+        "brier_before": 0.477955,
+        "brier_after": 0.478398,
+        "relative_improvement": -0.000927
       }
     },
     "total_goals": {
       "approved": false,
-      "lambda_shift": 0.07125,
+      "lambda_shift": -0.002831,
       "validation": {
-        "mae_before": 1.528571,
-        "mae_after": 1.525518,
-        "relative_improvement": 0.001998
+        "mae_before": 1.09625,
+        "mae_after": 1.09625,
+        "relative_improvement": 0.0
       }
     },
     "dispersion": {
-      "approved": false,
-      "tail_mixture_weight": 0.092242,
+      "approved": true,
+      "tail_mixture_weight": 0.006395,
       "state": "shadow_until_40_samples"
     }
   },
