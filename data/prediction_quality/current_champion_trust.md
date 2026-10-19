@@ -1,6 +1,6 @@
 # Current Champion trust projection
 
-- Status: `AVAILABLE`; generated at `2026-10-19T11:24:00.629772+00:00`.
+- Status: `AVAILABLE`; generated at `2026-10-19T17:57:02.208570+00:00`.
 - Current model run: `RESOLVED`.
 - Denominator: `282` unique matches; settled `214`; pending `68`; unresolved `0`.
 - FT1X2: Top1 `0.607477`; log loss `0.907504`; Brier `0.530898`; RPS `0.193072`.
