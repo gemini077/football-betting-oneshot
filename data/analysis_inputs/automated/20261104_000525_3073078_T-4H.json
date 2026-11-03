@@ -1,0 +1,6033 @@
+{
+  "report": {
+    "model_name": "Football Betting OneShot",
+    "model_version": "v0.19.0",
+    "report_type": "确定性赛前分析",
+    "analysis_timestamp": "2026-11-03T16:05:43+00:00",
+    "final_execution_version": false,
+    "ai_provider": null,
+    "ai_model": null,
+    "market_checkpoint": {
+      "stage": "T-4H",
+      "scheduled_at": "2026-11-04T00:00:00+08:00",
+      "captured_at": "2026-11-04T00:05:25.324399+08:00",
+      "target_minutes_before": 240,
+      "actual_minutes_before": 234.58,
+      "lateness_minutes": 5.42,
+      "exact": false,
+      "capture_quality": "historical_recovery",
+      "historical_recovery": {
+        "status": "recovered",
+        "files": [
+          {
+            "file": "data/fetch_runs/20261104_000525_checkpoint_T_4H/20261104_000525_nowscore.json",
+            "status": "recovered",
+            "recovered_companies": 17,
+            "recovered_quotes": 48
+          }
+        ],
+        "recovered_quotes": 48
+      }
+    },
+    "checkpoint_health": {
+      "stage": "T-4H",
+      "scheduled_at": "2026-11-04T00:00:00+08:00",
+      "captured_at": "2026-11-04T00:05:25.324399+08:00",
+      "status": "historical_recovery",
+      "recovered_quotes": 48
+    }
+  },
+  "match": {
+    "business_date": "2026-11-03",
+    "match_id": "3073078",
+    "home": "马竞",
+    "away": "拜仁",
+    "match_num": "周二005",
+    "competition": "欧冠杯",
+    "league": "欧冠杯",
+    "kickoff_local": "2026-11-04T04:00+08:00",
+    "canonical_match_id": "FBOS-202611040400-a579bb1207",
+    "provider_match_id": "3073078"
+  },
+  "decisions": {
+    "unique_primary_dimension": "双方进球：是（模型63.5%）",
+    "primary_contract": {
+      "contract_id": "btts.yes",
+      "family": "btts",
+      "selection": "yes",
+      "label": "双方进球：是",
+      "line": null,
+      "model_probability": 0.634909,
+      "conservative_probability": 0.559909,
+      "push_probability": 0.0,
+      "fair_odds": 1.575,
+      "odds": null,
+      "reference_odds": null,
+      "market_probability": null,
+      "edge": null,
+      "ev": null,
+      "reference_ev": null,
+      "price_source": null,
+      "price_executable": false,
+      "scope": "90分钟含伤停，不含加时与点球"
+    },
+    "primary_selection_rule": {
+      "candidate_scope": "每场各玩法先选一个最佳方向，再跨玩法选一个唯一主维度",
+      "minimum_model_probability": 0.5,
+      "minimum_decimal_odds_or_fair_odds": 1.45,
+      "ranking": "保守概率 + 0.5×模型相对市场优势；同分取模型概率更高者",
+      "abstain_allowed": true
+    },
+    "dimension_predictions": {
+      "1x2": {
+        "contract_id": "1x2.away",
+        "family": "1x2",
+        "selection": "away",
+        "label": "胜平负：客胜",
+        "line": null,
+        "model_probability": 0.402848,
+        "conservative_probability": 0.327848,
+        "push_probability": 0.0,
+        "fair_odds": 2.4823,
+        "odds": null,
+        "reference_odds": 2.3,
+        "market_probability": 0.412033,
+        "edge": -0.009185,
+        "ev": null,
+        "reference_ev": -0.07345,
+        "price_source": "bookmaker_consensus_reference",
+        "price_executable": false,
+        "scope": "90分钟含伤停，不含加时与点球"
+      },
+      "double_chance": {
+        "contract_id": "double_chance.x2",
+        "family": "double_chance",
+        "selection": "x2",
+        "label": "客队不败（X2）",
+        "line": null,
+        "model_probability": 0.637264,
+        "conservative_probability": 0.562264,
+        "push_probability": 0.0,
+        "fair_odds": 1.5692,
+        "odds": null,
+        "reference_odds": 1.512,
+        "market_probability": 0.661219,
+        "edge": -0.023955,
+        "ev": null,
+        "reference_ev": -0.036229,
+        "price_source": "derived_no_vig_1x2_reference",
+        "price_executable": false,
+        "scope": "90分钟含伤停，不含加时与点球"
+      },
+      "btts": {
+        "contract_id": "btts.yes",
+        "family": "btts",
+        "selection": "yes",
+        "label": "双方进球：是",
+        "line": null,
+        "model_probability": 0.634909,
+        "conservative_probability": 0.559909,
+        "push_probability": 0.0,
+        "fair_odds": 1.575,
+        "odds": null,
+        "reference_odds": null,
+        "market_probability": null,
+        "edge": null,
+        "ev": null,
+        "reference_ev": null,
+        "price_source": null,
+        "price_executable": false,
+        "scope": "90分钟含伤停，不含加时与点球"
+      },
+      "total": {
+        "contract_id": "total.2.5.over",
+        "family": "total",
+        "selection": "over",
+        "label": "大小球：大2.5",
+        "line": 2.5,
+        "model_probability": 0.618005,
+        "conservative_probability": 0.543005,
+        "push_probability": 0.0,
+        "fair_odds": 1.6181,
+        "odds": null,
+        "reference_odds": 1.5,
+        "market_probability": null,
+        "edge": null,
+        "ev": null,
+        "reference_ev": -0.072992,
+        "price_source": "asian_total_consensus_reference",
+        "price_executable": false,
+        "scope": "90分钟含伤停，不含加时与点球"
+      },
+      "asian_handicap": {
+        "contract_id": "asian_handicap.0.5.home",
+        "family": "asian_handicap",
+        "selection": "home",
+        "label": "亚洲让球：主队+0.5",
+        "line": 0.5,
+        "model_probability": 0.597152,
+        "conservative_probability": 0.522152,
+        "push_probability": 0.0,
+        "fair_odds": 1.6746,
+        "odds": null,
+        "reference_odds": 1.83,
+        "market_probability": null,
+        "edge": null,
+        "ev": null,
+        "reference_ev": 0.092789,
+        "price_source": "asian_handicap_consensus_reference",
+        "price_executable": false,
+        "scope": "90分钟含伤停，不含加时与点球"
+      },
+      "exact_total": {
+        "contract_id": "exact_total.3",
+        "family": "exact_total",
+        "selection": "3",
+        "label": "精确总进球：3",
+        "line": null,
+        "model_probability": 0.222752,
+        "conservative_probability": 0.147752,
+        "push_probability": 0.0,
+        "fair_odds": 4.4893,
+        "odds": null,
+        "reference_odds": null,
+        "market_probability": null,
+        "edge": null,
+        "ev": null,
+        "reference_ev": null,
+        "price_source": null,
+        "price_executable": false,
+        "scope": "90分钟含伤停，不含加时与点球",
+        "goals": "3",
+        "consistency": {
+          "status": "aligned_with_total_dimension",
+          "total_contract_id": "total.2.5.over",
+          "total_selection": "over",
+          "total_line": 2.5,
+          "compatible_bucket_count": 4
+        }
+      },
+      "exact_score": {
+        "contract_id": "exact_score.1-1",
+        "family": "exact_score",
+        "selection": "1-1",
+        "label": "精确比分：1-1",
+        "line": null,
+        "model_probability": 0.104652,
+        "conservative_probability": 0.029652,
+        "push_probability": 0.0,
+        "fair_odds": 9.5555,
+        "odds": null,
+        "reference_odds": null,
+        "market_probability": null,
+        "edge": null,
+        "ev": null,
+        "reference_ev": null,
+        "price_source": null,
+        "price_executable": false,
+        "scope": "90分钟含伤停，不含加时与点球",
+        "score": "1-1"
+      }
+    },
+    "unique_score": "1-1",
+    "score_top3": [
+      {
+        "score": "1-1",
+        "probability": 0.104652,
+        "fair_odds": 9.5555,
+        "rank": 1
+      },
+      {
+        "score": "1-2",
+        "probability": 0.085913,
+        "fair_odds": 11.6396,
+        "rank": 2
+      },
+      {
+        "score": "2-1",
+        "probability": 0.081006,
+        "fair_odds": 12.3447,
+        "rank": 3
+      }
+    ],
+    "prediction_tier": "formal",
+    "formal_unique_score": "1-1",
+    "checkpoint_feature_summary": {
+      "snapshot_count": 4,
+      "state": "tracked",
+      "leader_reversals": 0,
+      "probability_delta": {
+        "home": -0.009931,
+        "draw": 0.001618,
+        "away": 0.008313
+      }
+    },
+    "score_reasoning": "正式唯一比分采用比分矩阵峰值（单格概率10.5%；符合平局主剧本、符合双方进球倾向、净胜球接近亚洲让球中枢+0.25）。情景选择器建议1-2，当前仅作影子候选，待样本外验证后再决定是否覆盖。",
+    "score_selection_trace": {
+      "method": "matrix_map_with_scenario_challenger_v1",
+      "selected_score": "1-1",
+      "selected_probability": 0.104652,
+      "mathematical_first_score": "1-1",
+      "scenario_selected_score": "1-2",
+      "scenario_selected_probability": 0.085913,
+      "model_outcome_leader": "away",
+      "market_outcome_leader": "away",
+      "total_goal_centre": 3.0,
+      "asian_handicap_median": 0.25,
+      "btts_yes": true,
+      "confidence": "中",
+      "utility_gap_to_second": 0.301547,
+      "main_risk": "裁判公开样本的牌数与红牌率偏高，比分右尾和比赛状态突变风险高于基础泊松假设",
+      "selected_factors": [
+        "符合平局主剧本",
+        "符合双方进球倾向",
+        "净胜球接近亚洲让球中枢+0.25"
+      ],
+      "candidates": [
+        {
+          "rank": 1,
+          "score": "1-2",
+          "matrix_probability": 0.085913,
+          "scenario_score": 1.008663,
+          "factor_contributions": {
+            "比分矩阵": 0.4515,
+            "模型方向": 0.18,
+            "总进球中枢": 0.14,
+            "双方进球": 0.08,
+            "市场方向": 0.1,
+            "亚洲让球": 0.0571,
+            "比赛剧本": 0.0
+          },
+          "decision": "challenger_selected",
+          "rejection_reason": null
+        },
+        {
+          "rank": 2,
+          "score": "1-3",
+          "matrix_probability": 0.04702,
+          "scenario_score": 0.707116,
+          "factor_contributions": {
+            "比分矩阵": 0.2471,
+            "模型方向": 0.18,
+            "总进球中枢": 0.06,
+            "双方进球": 0.08,
+            "市场方向": 0.1,
+            "亚洲让球": 0.0,
+            "比赛剧本": 0.04
+          },
+          "decision": "rejected",
+          "rejection_reason": "综合情景分低于候选，不按相邻比分算命中"
+        },
+        {
+          "rank": 3,
+          "score": "0-1",
+          "matrix_probability": 0.0676,
+          "scenario_score": 0.622415,
+          "factor_contributions": {
+            "比分矩阵": 0.3553,
+            "模型方向": 0.18,
+            "总进球中枢": 0.0,
+            "双方进球": -0.04,
+            "市场方向": 0.1,
+            "亚洲让球": 0.0571,
+            "比赛剧本": -0.03
+          },
+          "decision": "rejected",
+          "rejection_reason": "综合情景分低于候选，不按相邻比分算命中"
+        },
+        {
+          "rank": 4,
+          "score": "1-1",
+          "matrix_probability": 0.104652,
+          "scenario_score": 0.605714,
+          "factor_contributions": {
+            "比分矩阵": 0.55,
+            "模型方向": -0.12,
+            "总进球中枢": 0.06,
+            "双方进球": 0.08,
+            "市场方向": -0.05,
+            "亚洲让球": 0.0857,
+            "比赛剧本": 0.0
+          },
+          "decision": "matrix_selected",
+          "rejection_reason": null
+        },
+        {
+          "rank": 5,
+          "score": "0-2",
+          "matrix_probability": 0.055496,
+          "scenario_score": 0.591659,
+          "factor_contributions": {
+            "比分矩阵": 0.2917,
+            "模型方向": 0.18,
+            "总进球中枢": 0.06,
+            "双方进球": -0.04,
+            "市场方向": 0.1,
+            "亚洲让球": 0.0,
+            "比赛剧本": 0.0
+          },
+          "decision": "rejected",
+          "rejection_reason": "综合情景分低于候选，不按相邻比分算命中"
+        },
+        {
+          "rank": 6,
+          "score": "2-1",
+          "matrix_probability": 0.081006,
+          "scenario_score": 0.504301,
+          "factor_contributions": {
+            "比分矩阵": 0.4257,
+            "模型方向": -0.12,
+            "总进球中枢": 0.14,
+            "双方进球": 0.08,
+            "市场方向": -0.05,
+            "亚洲让球": 0.0286,
+            "比赛剧本": 0.0
+          },
+          "decision": "rejected",
+          "rejection_reason": "综合情景分低于候选，不按相邻比分算命中"
+        },
+        {
+          "rank": 7,
+          "score": "2-2",
+          "matrix_probability": 0.066502,
+          "scenario_score": 0.445215,
+          "factor_contributions": {
+            "比分矩阵": 0.3495,
+            "模型方向": -0.12,
+            "总进球中枢": 0.06,
+            "双方进球": 0.08,
+            "市场方向": -0.05,
+            "亚洲让球": 0.0857,
+            "比赛剧本": 0.04
+          },
+          "decision": "rejected",
+          "rejection_reason": "综合情景分低于候选，不按相邻比分算命中"
+        },
+        {
+          "rank": 8,
+          "score": "1-0",
+          "matrix_probability": 0.063739,
+          "scenario_score": 0.123551,
+          "factor_contributions": {
+            "比分矩阵": 0.335,
+            "模型方向": -0.12,
+            "总进球中枢": 0.0,
+            "双方进球": -0.04,
+            "市场方向": -0.05,
+            "亚洲让球": 0.0286,
+            "比赛剧本": -0.03
+          },
+          "decision": "rejected",
+          "rejection_reason": "综合情景分低于候选，不按相邻比分算命中"
+        }
+      ],
+      "rule": "比分预测与比分投注分离；只有取得可成交赔率且EV通过，才生成模拟注单。"
+    },
+    "mathematical_first": "90分钟主胜36.3%、平局23.4%、客胜40.3%；λ=1.55-1.64。",
+    "market_first": "多公司去水共识主胜33.9%、平局24.9%、客胜41.2%；大小球中轴3.00。",
+    "match_story": "双方预期进球接近，比赛更可能由先入球、定位球或临场换人打破均衡；总进球中枢偏高；早段进球会显著放大开放对攻和右尾比分风险；教练剧本：主队教练主场PPG 2.29、客队教练客场PPG 2.28（样本 414/74 场），差距不足以单独改写主线；裁判剧本：莱特歇在326场公开样本中场均双方合计黄牌约3.85、红牌约0.24，比赛中断与红牌尾部风险偏高，领先方未必能平稳控场；裁判历史样本下主队胜率更高（主45% / 客31%），仅作为剧本倾向，不视为因果优势。",
+    "market_conflict": "多公司市场对客胜的定价比模型更强0.9%，不能把市场热度直接当成模型优势",
+    "score_vs_outcome_explanation": "唯一比分1-1只是单个比分格的最高点；胜平负主线客胜是多个比分格合计，二者不要求同方向。",
+    "maximum_error_points": [
+      "马竞近10个主场胜率70%，客胜主线可能低估主场韧性",
+      "裁判公开样本的牌数与红牌率偏高，比分右尾和比赛状态突变风险高于基础泊松假设",
+      "若早段进球、红牌或比赛节奏偏离基准，总进球与比分尾部会同步变化",
+      "首发或关键伤停与当前假设不一致，会直接改变双方λ"
+    ],
+    "value_judgement": "仅完成模型概率与市场基线；须取得用户渠道即时赔率后才计算EV。",
+    "final_state": "空仓｜未锁单",
+    "data_grade": "B",
+    "checkpoint_count": 4
+  },
+  "model": {
+    "status": "确定性融合模型（可核验近期攻防 + 市场校准）",
+    "method": "recent_form_market_calibrated_poisson_v2",
+    "lambda_home": 1.548109,
+    "lambda_away": 1.641891,
+    "rho": 0.0,
+    "expected_goals": 3.19,
+    "probabilities": {
+      "home": 0.362736,
+      "draw": 0.234417,
+      "away": 0.402848
+    },
+    "total_goals_buckets": [
+      {
+        "goals": "0",
+        "probability": 0.041172
+      },
+      {
+        "goals": "1",
+        "probability": 0.131338
+      },
+      {
+        "goals": "2",
+        "probability": 0.209485
+      },
+      {
+        "goals": "3",
+        "probability": 0.222752
+      },
+      {
+        "goals": "4",
+        "probability": 0.177645
+      },
+      {
+        "goals": "5",
+        "probability": 0.113337
+      },
+      {
+        "goals": "6+",
+        "probability": 0.104271
+      }
+    ],
+    "btts": {
+      "yes": 0.634909,
+      "no": 0.365091,
+      "judgement": "双方进球偏是"
+    },
+    "score_probabilities": [
+      {
+        "score": "1-1",
+        "probability": 0.104652,
+        "fair_odds": 9.5555,
+        "rank": 1
+      },
+      {
+        "score": "1-2",
+        "probability": 0.085913,
+        "fair_odds": 11.6396,
+        "rank": 2
+      },
+      {
+        "score": "2-1",
+        "probability": 0.081006,
+        "fair_odds": 12.3447,
+        "rank": 3
+      },
+      {
+        "score": "0-1",
+        "probability": 0.0676,
+        "fair_odds": 14.793,
+        "rank": 4
+      },
+      {
+        "score": "2-2",
+        "probability": 0.066502,
+        "fair_odds": 15.0372,
+        "rank": 5
+      },
+      {
+        "score": "1-0",
+        "probability": 0.063739,
+        "fair_odds": 15.6891,
+        "rank": 6
+      },
+      {
+        "score": "0-2",
+        "probability": 0.055496,
+        "fair_odds": 18.0194,
+        "rank": 7
+      },
+      {
+        "score": "2-0",
+        "probability": 0.049337,
+        "fair_odds": 20.2687,
+        "rank": 8
+      },
+      {
+        "score": "1-3",
+        "probability": 0.04702,
+        "fair_odds": 21.2675,
+        "rank": 9
+      },
+      {
+        "score": "3-1",
+        "probability": 0.041802,
+        "fair_odds": 23.9222,
+        "rank": 10
+      }
+    ],
+    "market_predictions": [
+      {
+        "contract_id": "1x2.home",
+        "family": "1x2",
+        "selection": "home",
+        "label": "胜平负：主胜",
+        "line": null,
+        "model_probability": 0.362736,
+        "conservative_probability": 0.287736,
+        "push_probability": 0.0,
+        "fair_odds": 2.7568,
+        "odds": null,
+        "reference_odds": 2.8,
+        "market_probability": 0.338781,
+        "edge": 0.023955,
+        "ev": null,
+        "reference_ev": 0.01566,
+        "price_source": "bookmaker_consensus_reference",
+        "price_executable": false,
+        "scope": "90分钟含伤停，不含加时与点球"
+      },
+      {
+        "contract_id": "1x2.draw",
+        "family": "1x2",
+        "selection": "draw",
+        "label": "胜平负：平局",
+        "line": null,
+        "model_probability": 0.234417,
+        "conservative_probability": 0.159417,
+        "push_probability": 0.0,
+        "fair_odds": 4.2659,
+        "odds": null,
+        "reference_odds": 3.8,
+        "market_probability": 0.249187,
+        "edge": -0.01477,
+        "ev": null,
+        "reference_ev": -0.109217,
+        "price_source": "bookmaker_consensus_reference",
+        "price_executable": false,
+        "scope": "90分钟含伤停，不含加时与点球"
+      },
+      {
+        "contract_id": "1x2.away",
+        "family": "1x2",
+        "selection": "away",
+        "label": "胜平负：客胜",
+        "line": null,
+        "model_probability": 0.402848,
+        "conservative_probability": 0.327848,
+        "push_probability": 0.0,
+        "fair_odds": 2.4823,
+        "odds": null,
+        "reference_odds": 2.3,
+        "market_probability": 0.412033,
+        "edge": -0.009185,
+        "ev": null,
+        "reference_ev": -0.07345,
+        "price_source": "bookmaker_consensus_reference",
+        "price_executable": false,
+        "scope": "90分钟含伤停，不含加时与点球"
+      },
+      {
+        "contract_id": "double_chance.1x",
+        "family": "double_chance",
+        "selection": "1x",
+        "label": "主队不败（1X）",
+        "line": null,
+        "model_probability": 0.597152,
+        "conservative_probability": 0.522152,
+        "push_probability": 0.0,
+        "fair_odds": 1.6746,
+        "odds": null,
+        "reference_odds": 1.701,
+        "market_probability": 0.587967,
+        "edge": 0.009185,
+        "ev": null,
+        "reference_ev": 0.015622,
+        "price_source": "derived_no_vig_1x2_reference",
+        "price_executable": false,
+        "scope": "90分钟含伤停，不含加时与点球"
+      },
+      {
+        "contract_id": "double_chance.x2",
+        "family": "double_chance",
+        "selection": "x2",
+        "label": "客队不败（X2）",
+        "line": null,
+        "model_probability": 0.637264,
+        "conservative_probability": 0.562264,
+        "push_probability": 0.0,
+        "fair_odds": 1.5692,
+        "odds": null,
+        "reference_odds": 1.512,
+        "market_probability": 0.661219,
+        "edge": -0.023955,
+        "ev": null,
+        "reference_ev": -0.036229,
+        "price_source": "derived_no_vig_1x2_reference",
+        "price_executable": false,
+        "scope": "90分钟含伤停，不含加时与点球"
+      },
+      {
+        "contract_id": "double_chance.12",
+        "family": "double_chance",
+        "selection": "12",
+        "label": "不平（12）",
+        "line": null,
+        "model_probability": 0.765583,
+        "conservative_probability": 0.690583,
+        "push_probability": 0.0,
+        "fair_odds": 1.3062,
+        "odds": null,
+        "reference_odds": 1.332,
+        "market_probability": 0.750813,
+        "edge": 0.01477,
+        "ev": null,
+        "reference_ev": 0.019672,
+        "price_source": "derived_no_vig_1x2_reference",
+        "price_executable": false,
+        "scope": "90分钟含伤停，不含加时与点球"
+      },
+      {
+        "contract_id": "btts.yes",
+        "family": "btts",
+        "selection": "yes",
+        "label": "双方进球：是",
+        "line": null,
+        "model_probability": 0.634909,
+        "conservative_probability": 0.559909,
+        "push_probability": 0.0,
+        "fair_odds": 1.575,
+        "odds": null,
+        "reference_odds": null,
+        "market_probability": null,
+        "edge": null,
+        "ev": null,
+        "reference_ev": null,
+        "price_source": null,
+        "price_executable": false,
+        "scope": "90分钟含伤停，不含加时与点球"
+      },
+      {
+        "contract_id": "btts.no",
+        "family": "btts",
+        "selection": "no",
+        "label": "双方进球：否",
+        "line": null,
+        "model_probability": 0.365091,
+        "conservative_probability": 0.290091,
+        "push_probability": 0.0,
+        "fair_odds": 2.739,
+        "odds": null,
+        "reference_odds": null,
+        "market_probability": null,
+        "edge": null,
+        "ev": null,
+        "reference_ev": null,
+        "price_source": null,
+        "price_executable": false,
+        "scope": "90分钟含伤停，不含加时与点球"
+      },
+      {
+        "contract_id": "total.2.5.over",
+        "family": "total",
+        "selection": "over",
+        "label": "大小球：大2.5",
+        "line": 2.5,
+        "model_probability": 0.618005,
+        "conservative_probability": 0.543005,
+        "push_probability": 0.0,
+        "fair_odds": 1.6181,
+        "odds": null,
+        "reference_odds": 1.5,
+        "market_probability": null,
+        "edge": null,
+        "ev": null,
+        "reference_ev": -0.072992,
+        "price_source": "asian_total_consensus_reference",
+        "price_executable": false,
+        "scope": "90分钟含伤停，不含加时与点球"
+      },
+      {
+        "contract_id": "total.2.5.under",
+        "family": "total",
+        "selection": "under",
+        "label": "大小球：小2.5",
+        "line": 2.5,
+        "model_probability": 0.381995,
+        "conservative_probability": 0.306995,
+        "push_probability": 0.0,
+        "fair_odds": 2.6178,
+        "odds": null,
+        "reference_odds": 2.45,
+        "market_probability": null,
+        "edge": null,
+        "ev": null,
+        "reference_ev": -0.064113,
+        "price_source": "asian_total_consensus_reference",
+        "price_executable": false,
+        "scope": "90分钟含伤停，不含加时与点球"
+      },
+      {
+        "contract_id": "total.3.over",
+        "family": "total",
+        "selection": "over",
+        "label": "大小球：大3",
+        "line": 3.0,
+        "model_probability": 0.508529,
+        "conservative_probability": 0.433529,
+        "push_probability": 0.222752,
+        "fair_odds": 1.9665,
+        "odds": null,
+        "reference_odds": 1.84,
+        "market_probability": null,
+        "edge": null,
+        "ev": null,
+        "reference_ev": 0.04517,
+        "price_source": "asian_total_consensus_reference",
+        "price_executable": false,
+        "scope": "90分钟含伤停，不含加时与点球"
+      },
+      {
+        "contract_id": "total.3.under",
+        "family": "total",
+        "selection": "under",
+        "label": "大小球：小3",
+        "line": 3.0,
+        "model_probability": 0.491471,
+        "conservative_probability": 0.416471,
+        "push_probability": 0.222752,
+        "fair_odds": 2.0347,
+        "odds": null,
+        "reference_odds": 2.04,
+        "market_probability": null,
+        "edge": null,
+        "ev": null,
+        "reference_ev": 0.115876,
+        "price_source": "asian_total_consensus_reference",
+        "price_executable": false,
+        "scope": "90分钟含伤停，不含加时与点球"
+      },
+      {
+        "contract_id": "total.3.5.over",
+        "family": "total",
+        "selection": "over",
+        "label": "大小球：大3.5",
+        "line": 3.5,
+        "model_probability": 0.395253,
+        "conservative_probability": 0.320253,
+        "push_probability": 0.0,
+        "fair_odds": 2.53,
+        "odds": null,
+        "reference_odds": 2.25,
+        "market_probability": null,
+        "edge": null,
+        "ev": null,
+        "reference_ev": -0.11068,
+        "price_source": "asian_total_consensus_reference",
+        "price_executable": false,
+        "scope": "90分钟含伤停，不含加时与点球"
+      },
+      {
+        "contract_id": "total.3.5.under",
+        "family": "total",
+        "selection": "under",
+        "label": "大小球：小3.5",
+        "line": 3.5,
+        "model_probability": 0.604747,
+        "conservative_probability": 0.529747,
+        "push_probability": 0.0,
+        "fair_odds": 1.6536,
+        "odds": null,
+        "reference_odds": 1.6,
+        "market_probability": null,
+        "edge": null,
+        "ev": null,
+        "reference_ev": -0.032405,
+        "price_source": "asian_total_consensus_reference",
+        "price_executable": false,
+        "scope": "90分钟含伤停，不含加时与点球"
+      },
+      {
+        "contract_id": "asian_handicap.0.home",
+        "family": "asian_handicap",
+        "selection": "home",
+        "label": "亚洲让球：主队+0",
+        "line": 0.0,
+        "model_probability": 0.473803,
+        "conservative_probability": 0.398803,
+        "push_probability": 0.234417,
+        "fair_odds": 2.1106,
+        "odds": null,
+        "reference_odds": 2.05,
+        "market_probability": null,
+        "edge": null,
+        "ev": null,
+        "reference_ev": 0.094646,
+        "price_source": "asian_handicap_consensus_reference",
+        "price_executable": false,
+        "scope": "90分钟含伤停，不含加时与点球"
+      },
+      {
+        "contract_id": "asian_handicap.0.away",
+        "family": "asian_handicap",
+        "selection": "away",
+        "label": "亚洲让球：客队-0",
+        "line": 0.0,
+        "model_probability": 0.526197,
+        "conservative_probability": 0.451197,
+        "push_probability": 0.234417,
+        "fair_odds": 1.9004,
+        "odds": null,
+        "reference_odds": 1.735,
+        "market_probability": null,
+        "edge": null,
+        "ev": null,
+        "reference_ev": 0.024019,
+        "price_source": "asian_handicap_consensus_reference",
+        "price_executable": false,
+        "scope": "90分钟含伤停，不含加时与点球"
+      },
+      {
+        "contract_id": "asian_handicap.0.25.home",
+        "family": "asian_handicap",
+        "selection": "home",
+        "label": "亚洲让球：主队+0.25",
+        "line": 0.25,
+        "model_probability": 0.543666,
+        "conservative_probability": 0.468666,
+        "push_probability": 0.117208,
+        "fair_odds": 1.8394,
+        "odds": null,
+        "reference_odds": 1.865,
+        "market_probability": null,
+        "edge": null,
+        "ev": null,
+        "reference_ev": 0.067424,
+        "price_source": "asian_handicap_consensus_reference",
+        "price_executable": false,
+        "scope": "90分钟含伤停，不含加时与点球"
+      },
+      {
+        "contract_id": "asian_handicap.0.25.away",
+        "family": "asian_handicap",
+        "selection": "away",
+        "label": "亚洲让球：客队-0.25",
+        "line": 0.25,
+        "model_probability": 0.456334,
+        "conservative_probability": 0.381334,
+        "push_probability": 0.117208,
+        "fair_odds": 2.1914,
+        "odds": null,
+        "reference_odds": 2.035,
+        "market_probability": null,
+        "edge": null,
+        "ev": null,
+        "reference_ev": -0.007639,
+        "price_source": "asian_handicap_consensus_reference",
+        "price_executable": false,
+        "scope": "90分钟含伤停，不含加时与点球"
+      },
+      {
+        "contract_id": "asian_handicap.0.5.home",
+        "family": "asian_handicap",
+        "selection": "home",
+        "label": "亚洲让球：主队+0.5",
+        "line": 0.5,
+        "model_probability": 0.597152,
+        "conservative_probability": 0.522152,
+        "push_probability": 0.0,
+        "fair_odds": 1.6746,
+        "odds": null,
+        "reference_odds": 1.83,
+        "market_probability": null,
+        "edge": null,
+        "ev": null,
+        "reference_ev": 0.092789,
+        "price_source": "asian_handicap_consensus_reference",
+        "price_executable": false,
+        "scope": "90分钟含伤停，不含加时与点球"
+      },
+      {
+        "contract_id": "asian_handicap.0.5.away",
+        "family": "asian_handicap",
+        "selection": "away",
+        "label": "亚洲让球：客队-0.5",
+        "line": 0.5,
+        "model_probability": 0.402848,
+        "conservative_probability": 0.327848,
+        "push_probability": 0.0,
+        "fair_odds": 2.4823,
+        "odds": null,
+        "reference_odds": 1.91,
+        "market_probability": null,
+        "edge": null,
+        "ev": null,
+        "reference_ev": -0.230561,
+        "price_source": "asian_handicap_consensus_reference",
+        "price_executable": false,
+        "scope": "90分钟含伤停，不含加时与点球"
+      },
+      {
+        "contract_id": "exact_total.3",
+        "family": "exact_total",
+        "selection": "3",
+        "label": "精确总进球：3",
+        "line": null,
+        "model_probability": 0.222752,
+        "conservative_probability": 0.147752,
+        "push_probability": 0.0,
+        "fair_odds": 4.4893,
+        "odds": null,
+        "reference_odds": null,
+        "market_probability": null,
+        "edge": null,
+        "ev": null,
+        "reference_ev": null,
+        "price_source": null,
+        "price_executable": false,
+        "scope": "90分钟含伤停，不含加时与点球",
+        "goals": "3",
+        "consistency": {
+          "status": "aligned_with_total_dimension",
+          "total_contract_id": "total.2.5.over",
+          "total_selection": "over",
+          "total_line": 2.5,
+          "compatible_bucket_count": 4
+        }
+      },
+      {
+        "contract_id": "exact_score.1-1",
+        "family": "exact_score",
+        "selection": "1-1",
+        "label": "精确比分：1-1",
+        "line": null,
+        "model_probability": 0.104652,
+        "conservative_probability": 0.029652,
+        "push_probability": 0.0,
+        "fair_odds": 9.5555,
+        "odds": null,
+        "reference_odds": null,
+        "market_probability": null,
+        "edge": null,
+        "ev": null,
+        "reference_ev": null,
+        "price_source": null,
+        "price_executable": false,
+        "scope": "90分钟含伤停，不含加时与点球",
+        "score": "1-1"
+      }
+    ],
+    "dimension_predictions": {
+      "1x2": {
+        "contract_id": "1x2.away",
+        "family": "1x2",
+        "selection": "away",
+        "label": "胜平负：客胜",
+        "line": null,
+        "model_probability": 0.402848,
+        "conservative_probability": 0.327848,
+        "push_probability": 0.0,
+        "fair_odds": 2.4823,
+        "odds": null,
+        "reference_odds": 2.3,
+        "market_probability": 0.412033,
+        "edge": -0.009185,
+        "ev": null,
+        "reference_ev": -0.07345,
+        "price_source": "bookmaker_consensus_reference",
+        "price_executable": false,
+        "scope": "90分钟含伤停，不含加时与点球"
+      },
+      "double_chance": {
+        "contract_id": "double_chance.x2",
+        "family": "double_chance",
+        "selection": "x2",
+        "label": "客队不败（X2）",
+        "line": null,
+        "model_probability": 0.637264,
+        "conservative_probability": 0.562264,
+        "push_probability": 0.0,
+        "fair_odds": 1.5692,
+        "odds": null,
+        "reference_odds": 1.512,
+        "market_probability": 0.661219,
+        "edge": -0.023955,
+        "ev": null,
+        "reference_ev": -0.036229,
+        "price_source": "derived_no_vig_1x2_reference",
+        "price_executable": false,
+        "scope": "90分钟含伤停，不含加时与点球"
+      },
+      "btts": {
+        "contract_id": "btts.yes",
+        "family": "btts",
+        "selection": "yes",
+        "label": "双方进球：是",
+        "line": null,
+        "model_probability": 0.634909,
+        "conservative_probability": 0.559909,
+        "push_probability": 0.0,
+        "fair_odds": 1.575,
+        "odds": null,
+        "reference_odds": null,
+        "market_probability": null,
+        "edge": null,
+        "ev": null,
+        "reference_ev": null,
+        "price_source": null,
+        "price_executable": false,
+        "scope": "90分钟含伤停，不含加时与点球"
+      },
+      "total": {
+        "contract_id": "total.2.5.over",
+        "family": "total",
+        "selection": "over",
+        "label": "大小球：大2.5",
+        "line": 2.5,
+        "model_probability": 0.618005,
+        "conservative_probability": 0.543005,
+        "push_probability": 0.0,
+        "fair_odds": 1.6181,
+        "odds": null,
+        "reference_odds": 1.5,
+        "market_probability": null,
+        "edge": null,
+        "ev": null,
+        "reference_ev": -0.072992,
+        "price_source": "asian_total_consensus_reference",
+        "price_executable": false,
+        "scope": "90分钟含伤停，不含加时与点球"
+      },
+      "asian_handicap": {
+        "contract_id": "asian_handicap.0.5.home",
+        "family": "asian_handicap",
+        "selection": "home",
+        "label": "亚洲让球：主队+0.5",
+        "line": 0.5,
+        "model_probability": 0.597152,
+        "conservative_probability": 0.522152,
+        "push_probability": 0.0,
+        "fair_odds": 1.6746,
+        "odds": null,
+        "reference_odds": 1.83,
+        "market_probability": null,
+        "edge": null,
+        "ev": null,
+        "reference_ev": 0.092789,
+        "price_source": "asian_handicap_consensus_reference",
+        "price_executable": false,
+        "scope": "90分钟含伤停，不含加时与点球"
+      },
+      "exact_total": {
+        "contract_id": "exact_total.3",
+        "family": "exact_total",
+        "selection": "3",
+        "label": "精确总进球：3",
+        "line": null,
+        "model_probability": 0.222752,
+        "conservative_probability": 0.147752,
+        "push_probability": 0.0,
+        "fair_odds": 4.4893,
+        "odds": null,
+        "reference_odds": null,
+        "market_probability": null,
+        "edge": null,
+        "ev": null,
+        "reference_ev": null,
+        "price_source": null,
+        "price_executable": false,
+        "scope": "90分钟含伤停，不含加时与点球",
+        "goals": "3",
+        "consistency": {
+          "status": "aligned_with_total_dimension",
+          "total_contract_id": "total.2.5.over",
+          "total_selection": "over",
+          "total_line": 2.5,
+          "compatible_bucket_count": 4
+        }
+      },
+      "exact_score": {
+        "contract_id": "exact_score.1-1",
+        "family": "exact_score",
+        "selection": "1-1",
+        "label": "精确比分：1-1",
+        "line": null,
+        "model_probability": 0.104652,
+        "conservative_probability": 0.029652,
+        "push_probability": 0.0,
+        "fair_odds": 9.5555,
+        "odds": null,
+        "reference_odds": null,
+        "market_probability": null,
+        "edge": null,
+        "ev": null,
+        "reference_ev": null,
+        "price_source": null,
+        "price_executable": false,
+        "scope": "90分钟含伤停，不含加时与点球",
+        "score": "1-1"
+      }
+    },
+    "total_line_analysis": [
+      {
+        "line": 2.5,
+        "over": {
+          "win_equivalent_probability": 0.618005,
+          "loss_equivalent_probability": 0.381995,
+          "push_equivalent_probability": 0.0,
+          "fair_odds": 1.6181
+        },
+        "under": {
+          "win_equivalent_probability": 0.381995,
+          "loss_equivalent_probability": 0.618005,
+          "push_equivalent_probability": 0.0,
+          "fair_odds": 2.6178
+        }
+      },
+      {
+        "line": 2.75,
+        "over": {
+          "win_equivalent_probability": 0.506629,
+          "loss_equivalent_probability": 0.381995,
+          "push_equivalent_probability": 0.111376,
+          "fair_odds": 1.754
+        },
+        "under": {
+          "win_equivalent_probability": 0.381995,
+          "loss_equivalent_probability": 0.506629,
+          "push_equivalent_probability": 0.111376,
+          "fair_odds": 2.3263
+        }
+      },
+      {
+        "line": 3.0,
+        "over": {
+          "win_equivalent_probability": 0.395253,
+          "loss_equivalent_probability": 0.381995,
+          "push_equivalent_probability": 0.222752,
+          "fair_odds": 1.9665
+        },
+        "under": {
+          "win_equivalent_probability": 0.381995,
+          "loss_equivalent_probability": 0.395253,
+          "push_equivalent_probability": 0.222752,
+          "fair_odds": 2.0347
+        }
+      },
+      {
+        "line": 3.25,
+        "over": {
+          "win_equivalent_probability": 0.395253,
+          "loss_equivalent_probability": 0.493371,
+          "push_equivalent_probability": 0.111376,
+          "fair_odds": 2.2482
+        },
+        "under": {
+          "win_equivalent_probability": 0.493371,
+          "loss_equivalent_probability": 0.395253,
+          "push_equivalent_probability": 0.111376,
+          "fair_odds": 1.8011
+        }
+      },
+      {
+        "line": 3.5,
+        "over": {
+          "win_equivalent_probability": 0.395253,
+          "loss_equivalent_probability": 0.604747,
+          "push_equivalent_probability": 0.0,
+          "fair_odds": 2.53
+        },
+        "under": {
+          "win_equivalent_probability": 0.604747,
+          "loss_equivalent_probability": 0.395253,
+          "push_equivalent_probability": 0.0,
+          "fair_odds": 1.6536
+        }
+      }
+    ],
+    "calibration": {
+      "form_lambda_home": 1.633333,
+      "form_lambda_away": 1.683333,
+      "market_total_line_median": 3.0,
+      "market_probabilities": {
+        "home": 0.3387806635430713,
+        "draw": 0.2491867759889783,
+        "away": 0.41203256046795045
+      },
+      "form_weight": 0.6,
+      "market_weight": 0.4,
+      "form_source": "500.com赛前数据快照",
+      "venue_proxy_used": false,
+      "closed_loop": {
+        "status": "no_artifact",
+        "active": false,
+        "strength": 0.0,
+        "direction_applied": false,
+        "total_goals_applied": false,
+        "dispersion_applied": false,
+        "sample": {}
+      },
+      "checkpoint_features": {
+        "snapshot_count": 4,
+        "state": "tracked",
+        "first_stage": "T-8H",
+        "latest_stage": "T-4H",
+        "first_captured_at": "2026-11-03T20:02:37.614701+08:00",
+        "latest_captured_at": "2026-11-04T00:05:25.324399+08:00",
+        "probability_delta": {
+          "home": -0.009931,
+          "draw": 0.001618,
+          "away": 0.008313
+        },
+        "asian_handicap_delta": 0.0,
+        "total_line_delta": 0.0,
+        "leader_reversals": 0,
+        "latest_leader": "away",
+        "latest_company_count": 17,
+        "latest_dispersion": 0.162846,
+        "points": [
+          {
+            "captured_at": "2026-11-03T20:02:37.614701+08:00",
+            "probabilities": {
+              "home": 0.348712,
+              "draw": 0.247569,
+              "away": 0.40372
+            },
+            "leader": "away",
+            "asian_handicap": 0.25,
+            "total_line": 3.0,
+            "company_count": 18,
+            "dispersion": 0.156151,
+            "stage": "T-8H"
+          },
+          {
+            "captured_at": "2026-11-03T22:04:14.742690+08:00",
+            "probabilities": {
+              "home": 0.344625,
+              "draw": 0.24895,
+              "away": 0.406425
+            },
+            "leader": "away",
+            "asian_handicap": 0.25,
+            "total_line": 3.0,
+            "company_count": 18,
+            "dispersion": 0.157476,
+            "stage": "T-6H"
+          },
+          {
+            "captured_at": "2026-11-04T00:05:25+08:00",
+            "probabilities": {
+              "home": 0.338781,
+              "draw": 0.249187,
+              "away": 0.412033
+            },
+            "leader": "away",
+            "asian_handicap": 0.25,
+            "total_line": 3.0,
+            "company_count": 17,
+            "dispersion": 0.162846,
+            "stage": "current"
+          },
+          {
+            "captured_at": "2026-11-04T00:05:25.324399+08:00",
+            "probabilities": {
+              "home": 0.338781,
+              "draw": 0.249187,
+              "away": 0.412033
+            },
+            "leader": "away",
+            "asian_handicap": 0.25,
+            "total_line": 3.0,
+            "company_count": 17,
+            "dispersion": 0.162846,
+            "stage": "T-4H"
+          }
+        ]
+      }
+    },
+    "limitations": [
+      "近期样本含不同赛事与对手强度，尚未完成逐队Elo/xG对手校正",
+      "确认首发、即时伤停、天气与临场战术需在开赛前另行修正",
+      "市场信息用于校准，因此该概率不是完全独立于赔率的纯基本面概率"
+    ]
+  },
+  "data_quality": {
+    "status": "模型已计算，临场信息待补",
+    "missing": [
+      "确认首发",
+      "即时伤停",
+      "用户渠道即时赔率"
+    ],
+    "notes": [
+      "近期攻防来源：500.com赛前数据快照。",
+      "模型数值由固定公式生成，DeepSeek不参与概率计算。"
+    ],
+    "overall": "FORM_AND_MARKET_MODEL"
+  },
+  "fundamentals": {
+    "status": "近期攻防已核验；未能唯一匹配外部赛程",
+    "items": [
+      {
+        "label": "外部赛程",
+        "value": "已按开赛时间与主客队核验，候选11场，未强行匹配"
+      }
+    ],
+    "structured_form": {
+      "status": "Nowscore赛前背景已核验",
+      "checked_at": "2026-11-03T16:05:43+00:00",
+      "items": [
+        {
+          "label": "外部赛程",
+          "value": "已按开赛时间与主客队核验，候选11场，未强行匹配"
+        },
+        "教练：主队 施蒙尼；客队 高柏尼。",
+        "裁判：莱特歇；公开执法样本 326 场。",
+        "Nowscore盘路历史已读取 60 场，仅作风格与盘口复核，不直接改写概率。",
+        "教练剧本：主队教练主场PPG 2.29、客队教练客场PPG 2.28（样本 414/74 场），差距不足以单独改写主线。",
+        "裁判剧本：莱特歇在326场公开样本中场均双方合计黄牌约3.85、红牌约0.24，比赛中断与红牌尾部风险偏高，领先方未必能平稳控场。",
+        "裁判历史样本下主队胜率更高（主45% / 客31%），仅作为剧本倾向，不视为因果优势。"
+      ],
+      "sources": [
+        "https://live.nowscore.com/info/coach/3073078.htm?l=1",
+        "https://live.nowscore.com/info/referee/3073078.htm?l=1",
+        "https://live.nowscore.com/panlu/3073078.html"
+      ],
+      "recent_form": {
+        "home_overall": {
+          "matches": 10,
+          "wins": 8,
+          "draws": 1,
+          "losses": 1,
+          "goals_for": 19,
+          "goals_against": 5
+        },
+        "home_home": {
+          "matches": 10,
+          "wins": 7,
+          "draws": 2,
+          "losses": 1,
+          "goals_for": 19,
+          "goals_against": 6
+        },
+        "away_overall": {
+          "matches": 10,
+          "wins": 6,
+          "draws": 4,
+          "losses": 0,
+          "goals_for": 38,
+          "goals_against": 13
+        },
+        "away_away": {
+          "matches": 10,
+          "wins": 6,
+          "draws": 3,
+          "losses": 1,
+          "goals_for": 23,
+          "goals_against": 14
+        }
+      },
+      "form_source": null,
+      "metric": "recent actual goals, not xG",
+      "nowscore_context": {
+        "coach": {
+          "home": {
+            "name": "施蒙尼",
+            "birth_date": "1970-04-28",
+            "nationality": "阿根廷",
+            "coach_records": [
+              {
+                "competition_or_team": "阿甲",
+                "matches": 7,
+                "wins": 2,
+                "draws": 2,
+                "losses": 3,
+                "goals_for": 4,
+                "goals_against": 7,
+                "points_per_match": 1.14,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "阿甲",
+                "matches": 7,
+                "wins": 3,
+                "draws": 1,
+                "losses": 3,
+                "goals_for": 7,
+                "goals_against": 7,
+                "points_per_match": 1.43,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "阿甲",
+                "matches": 28,
+                "wins": 17,
+                "draws": 9,
+                "losses": 2,
+                "goals_for": 52,
+                "goals_against": 22,
+                "points_per_match": 2.14,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "阿甲",
+                "matches": 30,
+                "wins": 16,
+                "draws": 6,
+                "losses": 8,
+                "goals_for": 40,
+                "goals_against": 27,
+                "points_per_match": 1.8,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "阿甲",
+                "matches": 16,
+                "wins": 4,
+                "draws": 6,
+                "losses": 6,
+                "goals_for": 14,
+                "goals_against": 17,
+                "points_per_match": 1.12,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "阿甲",
+                "matches": 16,
+                "wins": 10,
+                "draws": 4,
+                "losses": 2,
+                "goals_for": 27,
+                "goals_against": 14,
+                "points_per_match": 2.12,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "阿甲",
+                "matches": 19,
+                "wins": 8,
+                "draws": 3,
+                "losses": 8,
+                "goals_for": 22,
+                "goals_against": 18,
+                "points_per_match": 1.42,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "阿甲",
+                "matches": 20,
+                "wins": 8,
+                "draws": 6,
+                "losses": 6,
+                "goals_for": 25,
+                "goals_against": 20,
+                "points_per_match": 1.5,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "阿甲",
+                "matches": 10,
+                "wins": 2,
+                "draws": 7,
+                "losses": 1,
+                "goals_for": 5,
+                "goals_against": 3,
+                "points_per_match": 1.3,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "阿甲",
+                "matches": 9,
+                "wins": 5,
+                "draws": 3,
+                "losses": 1,
+                "goals_for": 11,
+                "goals_against": 5,
+                "points_per_match": 2.0,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "西甲",
+                "matches": 284,
+                "wins": 138,
+                "draws": 74,
+                "losses": 72,
+                "goals_for": 397,
+                "goals_against": 262,
+                "points_per_match": 1.72,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "西甲",
+                "matches": 281,
+                "wins": 206,
+                "draws": 49,
+                "losses": 26,
+                "goals_for": 563,
+                "goals_against": 192,
+                "points_per_match": 2.37,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "意甲",
+                "matches": 10,
+                "wins": 1,
+                "draws": 3,
+                "losses": 6,
+                "goals_for": 7,
+                "goals_against": 17,
+                "points_per_match": 0.6,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "意甲",
+                "matches": 8,
+                "wins": 6,
+                "draws": 0,
+                "losses": 2,
+                "goals_for": 15,
+                "goals_against": 10,
+                "points_per_match": 2.25,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "球會友誼",
+                "matches": 1,
+                "wins": 0,
+                "draws": 1,
+                "losses": 0,
+                "goals_for": 1,
+                "goals_against": 1,
+                "points_per_match": 1.0,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "球會友誼",
+                "matches": 1,
+                "wins": 1,
+                "draws": 0,
+                "losses": 0,
+                "goals_for": 2,
+                "goals_against": 1,
+                "points_per_match": 3.0,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "球會友誼",
+                "matches": 63,
+                "wins": 39,
+                "draws": 13,
+                "losses": 11,
+                "goals_for": 111,
+                "goals_against": 51,
+                "points_per_match": 2.06,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "球會友誼",
+                "matches": 14,
+                "wins": 8,
+                "draws": 6,
+                "losses": 0,
+                "goals_for": 26,
+                "goals_against": 7,
+                "points_per_match": 2.14,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "西盃",
+                "matches": 30,
+                "wins": 18,
+                "draws": 4,
+                "losses": 8,
+                "goals_for": 63,
+                "goals_against": 29,
+                "points_per_match": 1.93,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "西盃",
+                "matches": 45,
+                "wins": 23,
+                "draws": 15,
+                "losses": 7,
+                "goals_for": 86,
+                "goals_against": 42,
+                "points_per_match": 1.87,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "解放者杯",
+                "matches": 1,
+                "wins": 0,
+                "draws": 0,
+                "losses": 1,
+                "goals_for": 0,
+                "goals_against": 1,
+                "points_per_match": 0.0,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "解放者杯",
+                "matches": 4,
+                "wins": 3,
+                "draws": 1,
+                "losses": 0,
+                "goals_for": 11,
+                "goals_against": 3,
+                "points_per_match": 2.5,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "解放者杯",
+                "matches": 4,
+                "wins": 1,
+                "draws": 0,
+                "losses": 3,
+                "goals_for": 6,
+                "goals_against": 9,
+                "points_per_match": 0.75,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "解放者杯",
+                "matches": 1,
+                "wins": 1,
+                "draws": 0,
+                "losses": 0,
+                "goals_for": 2,
+                "goals_against": 0,
+                "points_per_match": 3.0,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "歐冠盃",
+                "matches": 68,
+                "wins": 22,
+                "draws": 17,
+                "losses": 29,
+                "goals_for": 82,
+                "goals_against": 92,
+                "points_per_match": 1.22,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "歐冠盃",
+                "matches": 66,
+                "wins": 43,
+                "draws": 15,
+                "losses": 8,
+                "goals_for": 122,
+                "goals_against": 46,
+                "points_per_match": 2.18,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "歐超杯",
+                "matches": 2,
+                "wins": 1,
+                "draws": 1,
+                "losses": 0,
+                "goals_for": 6,
+                "goals_against": 3,
+                "points_per_match": 2.0,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "歐霸盃",
+                "matches": 13,
+                "wins": 9,
+                "draws": 1,
+                "losses": 3,
+                "goals_for": 26,
+                "goals_against": 9,
+                "points_per_match": 2.15,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "歐霸盃",
+                "matches": 13,
+                "wins": 12,
+                "draws": 0,
+                "losses": 1,
+                "goals_for": 24,
+                "goals_against": 7,
+                "points_per_match": 2.77,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "南美盃",
+                "matches": 1,
+                "wins": 1,
+                "draws": 0,
+                "losses": 0,
+                "goals_for": 2,
+                "goals_against": 1,
+                "points_per_match": 3.0,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "南美盃",
+                "matches": 1,
+                "wins": 0,
+                "draws": 0,
+                "losses": 1,
+                "goals_for": 0,
+                "goals_against": 2,
+                "points_per_match": 0.0,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "南美盃",
+                "matches": 2,
+                "wins": 1,
+                "draws": 1,
+                "losses": 0,
+                "goals_for": 4,
+                "goals_against": 3,
+                "points_per_match": 2.0,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "南美盃",
+                "matches": 2,
+                "wins": 1,
+                "draws": 0,
+                "losses": 1,
+                "goals_for": 3,
+                "goals_against": 3,
+                "points_per_match": 1.5,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "南美盃",
+                "matches": 3,
+                "wins": 2,
+                "draws": 0,
+                "losses": 1,
+                "goals_for": 4,
+                "goals_against": 1,
+                "points_per_match": 2.0,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "南美盃",
+                "matches": 3,
+                "wins": 2,
+                "draws": 0,
+                "losses": 1,
+                "goals_for": 4,
+                "goals_against": 2,
+                "points_per_match": 2.0,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "世俱盃",
+                "matches": 1,
+                "wins": 1,
+                "draws": 0,
+                "losses": 0,
+                "goals_for": 1,
+                "goals_against": 0,
+                "points_per_match": 3.0,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "世俱盃",
+                "matches": 2,
+                "wins": 1,
+                "draws": 0,
+                "losses": 1,
+                "goals_for": 3,
+                "goals_against": 5,
+                "points_per_match": 1.5,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "阿夏賽",
+                "matches": 3,
+                "wins": 0,
+                "draws": 3,
+                "losses": 0,
+                "goals_for": 2,
+                "goals_against": 2,
+                "points_per_match": 1.0,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "阿夏賽",
+                "matches": 2,
+                "wins": 1,
+                "draws": 0,
+                "losses": 1,
+                "goals_for": 3,
+                "goals_against": 4,
+                "points_per_match": 1.5,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "阿夏賽",
+                "matches": 3,
+                "wins": 2,
+                "draws": 1,
+                "losses": 0,
+                "goals_for": 4,
+                "goals_against": 1,
+                "points_per_match": 2.33,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "阿夏賽",
+                "matches": 1,
+                "wins": 0,
+                "draws": 1,
+                "losses": 0,
+                "goals_for": 3,
+                "goals_against": 3,
+                "points_per_match": 1.0,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "阿夏賽",
+                "matches": 1,
+                "wins": 0,
+                "draws": 1,
+                "losses": 0,
+                "goals_for": 2,
+                "goals_against": 2,
+                "points_per_match": 1.0,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "西超杯",
+                "matches": 4,
+                "wins": 1,
+                "draws": 1,
+                "losses": 2,
+                "goals_for": 4,
+                "goals_against": 5,
+                "points_per_match": 1.0,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "西超杯",
+                "matches": 5,
+                "wins": 1,
+                "draws": 4,
+                "losses": 0,
+                "goals_for": 7,
+                "goals_against": 6,
+                "points_per_match": 1.4,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "奧迪盃",
+                "matches": 2,
+                "wins": 1,
+                "draws": 1,
+                "losses": 0,
+                "goals_for": 3,
+                "goals_against": 2,
+                "points_per_match": 2.0,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "阿根廷盃",
+                "matches": 1,
+                "wins": 1,
+                "draws": 0,
+                "losses": 0,
+                "goals_for": 2,
+                "goals_against": 0,
+                "points_per_match": 3.0,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "國際冠軍盃",
+                "matches": 3,
+                "wins": 1,
+                "draws": 1,
+                "losses": 1,
+                "goals_for": 3,
+                "goals_against": 3,
+                "points_per_match": 1.33,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "國際冠軍盃",
+                "matches": 4,
+                "wins": 2,
+                "draws": 1,
+                "losses": 1,
+                "goals_for": 10,
+                "goals_against": 6,
+                "points_per_match": 1.75,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "阿甲",
+                "matches": 14,
+                "wins": 5,
+                "draws": 3,
+                "losses": 6,
+                "goals_for": 11,
+                "goals_against": 14,
+                "points_per_match": 1.29,
+                "venue_flag": ""
+              },
+              {
+                "competition_or_team": "阿甲",
+                "matches": 58,
+                "wins": 33,
+                "draws": 15,
+                "losses": 10,
+                "goals_for": 92,
+                "goals_against": 49,
+                "points_per_match": 1.97,
+                "venue_flag": ""
+              }
+            ],
+            "team_records": [
+              {
+                "competition_or_team": "競賽會",
+                "matches": 7,
+                "wins": 2,
+                "draws": 2,
+                "losses": 3,
+                "goals_for": 4,
+                "goals_against": 7,
+                "points_per_match": 1.14,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "競賽會",
+                "matches": 7,
+                "wins": 3,
+                "draws": 1,
+                "losses": 3,
+                "goals_for": 7,
+                "goals_against": 7,
+                "points_per_match": 1.43,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "學生隊",
+                "matches": 29,
+                "wins": 18,
+                "draws": 9,
+                "losses": 2,
+                "goals_for": 54,
+                "goals_against": 23,
+                "points_per_match": 2.17,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "學生隊",
+                "matches": 35,
+                "wins": 16,
+                "draws": 9,
+                "losses": 10,
+                "goals_for": 42,
+                "goals_against": 32,
+                "points_per_match": 1.63,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "河床",
+                "matches": 25,
+                "wins": 7,
+                "draws": 8,
+                "losses": 10,
+                "goals_for": 28,
+                "goals_against": 34,
+                "points_per_match": 1.16,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "河床",
+                "matches": 25,
+                "wins": 16,
+                "draws": 6,
+                "losses": 3,
+                "goals_for": 45,
+                "goals_against": 21,
+                "points_per_match": 2.16,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "聖羅倫素",
+                "matches": 23,
+                "wins": 10,
+                "draws": 4,
+                "losses": 9,
+                "goals_for": 29,
+                "goals_against": 23,
+                "points_per_match": 1.48,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "聖羅倫素",
+                "matches": 25,
+                "wins": 11,
+                "draws": 7,
+                "losses": 7,
+                "goals_for": 33,
+                "goals_against": 23,
+                "points_per_match": 1.6,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "競賽會",
+                "matches": 10,
+                "wins": 2,
+                "draws": 7,
+                "losses": 1,
+                "goals_for": 5,
+                "goals_against": 3,
+                "points_per_match": 1.3,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "競賽會",
+                "matches": 11,
+                "wins": 7,
+                "draws": 3,
+                "losses": 1,
+                "goals_for": 15,
+                "goals_against": 6,
+                "points_per_match": 2.18,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "馬德里體育會",
+                "matches": 486,
+                "wins": 236,
+                "draws": 126,
+                "losses": 124,
+                "goals_for": 728,
+                "goals_against": 476,
+                "points_per_match": 1.72,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "馬德里體育會",
+                "matches": 414,
+                "wins": 291,
+                "draws": 77,
+                "losses": 46,
+                "goals_for": 809,
+                "goals_against": 291,
+                "points_per_match": 2.29,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "卡坦尼亞",
+                "matches": 10,
+                "wins": 1,
+                "draws": 3,
+                "losses": 6,
+                "goals_for": 7,
+                "goals_against": 17,
+                "points_per_match": 0.6,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "卡坦尼亞",
+                "matches": 8,
+                "wins": 6,
+                "draws": 0,
+                "losses": 2,
+                "goals_for": 15,
+                "goals_against": 10,
+                "points_per_match": 2.25,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "競賽會",
+                "matches": 14,
+                "wins": 5,
+                "draws": 3,
+                "losses": 6,
+                "goals_for": 11,
+                "goals_against": 14,
+                "points_per_match": 1.29,
+                "venue_flag": ""
+              },
+              {
+                "competition_or_team": "學生隊",
+                "matches": 64,
+                "wins": 34,
+                "draws": 18,
+                "losses": 12,
+                "goals_for": 96,
+                "goals_against": 55,
+                "points_per_match": 1.88,
+                "venue_flag": ""
+              },
+              {
+                "competition_or_team": "河床",
+                "matches": 50,
+                "wins": 23,
+                "draws": 14,
+                "losses": 13,
+                "goals_for": 73,
+                "goals_against": 55,
+                "points_per_match": 1.66,
+                "venue_flag": ""
+              },
+              {
+                "competition_or_team": "聖羅倫素",
+                "matches": 48,
+                "wins": 21,
+                "draws": 11,
+                "losses": 16,
+                "goals_for": 62,
+                "goals_against": 46,
+                "points_per_match": 1.54,
+                "venue_flag": ""
+              },
+              {
+                "competition_or_team": "競賽會",
+                "matches": 21,
+                "wins": 9,
+                "draws": 10,
+                "losses": 2,
+                "goals_for": 20,
+                "goals_against": 9,
+                "points_per_match": 1.76,
+                "venue_flag": ""
+              },
+              {
+                "competition_or_team": "馬德里體育會",
+                "matches": 900,
+                "wins": 527,
+                "draws": 203,
+                "losses": 170,
+                "goals_for": 1537,
+                "goals_against": 767,
+                "points_per_match": 1.98,
+                "venue_flag": ""
+              },
+              {
+                "competition_or_team": "卡坦尼亞",
+                "matches": 18,
+                "wins": 7,
+                "draws": 3,
+                "losses": 8,
+                "goals_for": 22,
+                "goals_against": 27,
+                "points_per_match": 1.33,
+                "venue_flag": ""
+              },
+              {
+                "competition_or_team": "競賽會",
+                "matches": 18,
+                "wins": 9,
+                "draws": 5,
+                "losses": 4,
+                "goals_for": 19,
+                "goals_against": 13,
+                "points_per_match": 1.78,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "競賽會",
+                "matches": 17,
+                "wins": 5,
+                "draws": 8,
+                "losses": 4,
+                "goals_for": 12,
+                "goals_against": 10,
+                "points_per_match": 1.35,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "學生隊",
+                "matches": 29,
+                "wins": 18,
+                "draws": 9,
+                "losses": 2,
+                "goals_for": 54,
+                "goals_against": 23,
+                "points_per_match": 2.17,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "學生隊",
+                "matches": 35,
+                "wins": 16,
+                "draws": 9,
+                "losses": 10,
+                "goals_for": 42,
+                "goals_against": 32,
+                "points_per_match": 1.63,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "河床",
+                "matches": 25,
+                "wins": 7,
+                "draws": 8,
+                "losses": 10,
+                "goals_for": 28,
+                "goals_against": 34,
+                "points_per_match": 1.16,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "河床",
+                "matches": 25,
+                "wins": 16,
+                "draws": 6,
+                "losses": 3,
+                "goals_for": 45,
+                "goals_against": 21,
+                "points_per_match": 2.16,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "聖羅倫素",
+                "matches": 23,
+                "wins": 10,
+                "draws": 4,
+                "losses": 9,
+                "goals_for": 29,
+                "goals_against": 23,
+                "points_per_match": 1.48,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "聖羅倫素",
+                "matches": 25,
+                "wins": 11,
+                "draws": 7,
+                "losses": 7,
+                "goals_for": 33,
+                "goals_against": 23,
+                "points_per_match": 1.6,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "馬德里體育會",
+                "matches": 486,
+                "wins": 236,
+                "draws": 126,
+                "losses": 124,
+                "goals_for": 728,
+                "goals_against": 476,
+                "points_per_match": 1.72,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "馬德里體育會",
+                "matches": 414,
+                "wins": 291,
+                "draws": 77,
+                "losses": 46,
+                "goals_for": 809,
+                "goals_against": 291,
+                "points_per_match": 2.29,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "卡坦尼亞",
+                "matches": 10,
+                "wins": 1,
+                "draws": 3,
+                "losses": 6,
+                "goals_for": 7,
+                "goals_against": 17,
+                "points_per_match": 0.6,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "卡坦尼亞",
+                "matches": 8,
+                "wins": 6,
+                "draws": 0,
+                "losses": 2,
+                "goals_for": 15,
+                "goals_against": 10,
+                "points_per_match": 2.25,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "競賽會",
+                "matches": 35,
+                "wins": 14,
+                "draws": 13,
+                "losses": 8,
+                "goals_for": 31,
+                "goals_against": 23,
+                "points_per_match": 1.57,
+                "venue_flag": ""
+              },
+              {
+                "competition_or_team": "學生隊",
+                "matches": 64,
+                "wins": 34,
+                "draws": 18,
+                "losses": 12,
+                "goals_for": 96,
+                "goals_against": 55,
+                "points_per_match": 1.88,
+                "venue_flag": ""
+              },
+              {
+                "competition_or_team": "河床",
+                "matches": 50,
+                "wins": 23,
+                "draws": 14,
+                "losses": 13,
+                "goals_for": 73,
+                "goals_against": 55,
+                "points_per_match": 1.66,
+                "venue_flag": ""
+              },
+              {
+                "competition_or_team": "聖羅倫素",
+                "matches": 48,
+                "wins": 21,
+                "draws": 11,
+                "losses": 16,
+                "goals_for": 62,
+                "goals_against": 46,
+                "points_per_match": 1.54,
+                "venue_flag": ""
+              },
+              {
+                "competition_or_team": "馬德里體育會",
+                "matches": 900,
+                "wins": 527,
+                "draws": 203,
+                "losses": 170,
+                "goals_for": 1537,
+                "goals_against": 767,
+                "points_per_match": 1.98,
+                "venue_flag": ""
+              },
+              {
+                "competition_or_team": "卡坦尼亞",
+                "matches": 18,
+                "wins": 7,
+                "draws": 3,
+                "losses": 8,
+                "goals_for": 22,
+                "goals_against": 27,
+                "points_per_match": 1.33,
+                "venue_flag": ""
+              }
+            ]
+          },
+          "away": {
+            "name": "高柏尼",
+            "birth_date": "1986-04-10",
+            "nationality": "比利时",
+            "coach_records": [
+              {
+                "competition_or_team": "比甲",
+                "matches": 15,
+                "wins": 4,
+                "draws": 6,
+                "losses": 5,
+                "goals_for": 18,
+                "goals_against": 19,
+                "points_per_match": 1.2,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "比甲",
+                "matches": 15,
+                "wins": 7,
+                "draws": 5,
+                "losses": 3,
+                "goals_for": 29,
+                "goals_against": 12,
+                "points_per_match": 1.73,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "比甲",
+                "matches": 39,
+                "wins": 15,
+                "draws": 13,
+                "losses": 11,
+                "goals_for": 64,
+                "goals_against": 46,
+                "points_per_match": 1.49,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "比甲",
+                "matches": 40,
+                "wins": 20,
+                "draws": 15,
+                "losses": 5,
+                "goals_for": 74,
+                "goals_against": 40,
+                "points_per_match": 1.88,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "德甲",
+                "matches": 38,
+                "wins": 31,
+                "draws": 5,
+                "losses": 2,
+                "goals_for": 141,
+                "goals_against": 39,
+                "points_per_match": 2.58,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "德甲",
+                "matches": 38,
+                "wins": 27,
+                "draws": 10,
+                "losses": 1,
+                "goals_for": 107,
+                "goals_against": 37,
+                "points_per_match": 2.39,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "英超",
+                "matches": 19,
+                "wins": 2,
+                "draws": 4,
+                "losses": 13,
+                "goals_for": 19,
+                "goals_against": 43,
+                "points_per_match": 0.53,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "英超",
+                "matches": 19,
+                "wins": 3,
+                "draws": 5,
+                "losses": 11,
+                "goals_for": 22,
+                "goals_against": 35,
+                "points_per_match": 0.74,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "英冠",
+                "matches": 23,
+                "wins": 16,
+                "draws": 6,
+                "losses": 1,
+                "goals_for": 49,
+                "goals_against": 15,
+                "points_per_match": 2.35,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "英冠",
+                "matches": 23,
+                "wins": 13,
+                "draws": 8,
+                "losses": 2,
+                "goals_for": 38,
+                "goals_against": 20,
+                "points_per_match": 2.04,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "球會友誼",
+                "matches": 6,
+                "wins": 3,
+                "draws": 2,
+                "losses": 1,
+                "goals_for": 8,
+                "goals_against": 7,
+                "points_per_match": 1.83,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "球會友誼",
+                "matches": 8,
+                "wins": 3,
+                "draws": 1,
+                "losses": 4,
+                "goals_for": 10,
+                "goals_against": 12,
+                "points_per_match": 1.25,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "球會友誼",
+                "matches": 7,
+                "wins": 3,
+                "draws": 2,
+                "losses": 2,
+                "goals_for": 12,
+                "goals_against": 7,
+                "points_per_match": 1.57,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "球會友誼",
+                "matches": 3,
+                "wins": 1,
+                "draws": 2,
+                "losses": 0,
+                "goals_for": 4,
+                "goals_against": 1,
+                "points_per_match": 1.67,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "球會友誼",
+                "matches": 6,
+                "wins": 2,
+                "draws": 1,
+                "losses": 3,
+                "goals_for": 6,
+                "goals_against": 8,
+                "points_per_match": 1.17,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "球會友誼",
+                "matches": 1,
+                "wins": 1,
+                "draws": 0,
+                "losses": 0,
+                "goals_for": 1,
+                "goals_against": 0,
+                "points_per_match": 3.0,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "球會友誼",
+                "matches": 9,
+                "wins": 7,
+                "draws": 1,
+                "losses": 1,
+                "goals_for": 26,
+                "goals_against": 10,
+                "points_per_match": 2.44,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "球會友誼",
+                "matches": 4,
+                "wins": 4,
+                "draws": 0,
+                "losses": 0,
+                "goals_for": 11,
+                "goals_against": 2,
+                "points_per_match": 3.0,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "德國盃",
+                "matches": 4,
+                "wins": 3,
+                "draws": 0,
+                "losses": 1,
+                "goals_for": 11,
+                "goals_against": 2,
+                "points_per_match": 2.25,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "德國盃",
+                "matches": 7,
+                "wins": 7,
+                "draws": 0,
+                "losses": 0,
+                "goals_for": 24,
+                "goals_against": 6,
+                "points_per_match": 3.0,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "英聯盃",
+                "matches": 5,
+                "wins": 3,
+                "draws": 0,
+                "losses": 2,
+                "goals_for": 6,
+                "goals_against": 5,
+                "points_per_match": 1.8,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "英聯盃",
+                "matches": 1,
+                "wins": 1,
+                "draws": 0,
+                "losses": 0,
+                "goals_for": 3,
+                "goals_against": 1,
+                "points_per_match": 3.0,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "英足總盃",
+                "matches": 4,
+                "wins": 1,
+                "draws": 1,
+                "losses": 2,
+                "goals_for": 4,
+                "goals_against": 9,
+                "points_per_match": 1.0,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "英足總盃",
+                "matches": 2,
+                "wins": 2,
+                "draws": 0,
+                "losses": 0,
+                "goals_for": 3,
+                "goals_against": 1,
+                "points_per_match": 3.0,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "歐冠盃",
+                "matches": 16,
+                "wins": 12,
+                "draws": 3,
+                "losses": 1,
+                "goals_for": 47,
+                "goals_against": 15,
+                "points_per_match": 2.44,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "歐冠盃",
+                "matches": 15,
+                "wins": 8,
+                "draws": 2,
+                "losses": 5,
+                "goals_for": 37,
+                "goals_against": 28,
+                "points_per_match": 1.73,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "比利時盃",
+                "matches": 1,
+                "wins": 0,
+                "draws": 0,
+                "losses": 1,
+                "goals_for": 0,
+                "goals_against": 2,
+                "points_per_match": 0.0,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "比利時盃",
+                "matches": 2,
+                "wins": 1,
+                "draws": 1,
+                "losses": 0,
+                "goals_for": 5,
+                "goals_against": 4,
+                "points_per_match": 2.0,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "比利時盃",
+                "matches": 6,
+                "wins": 3,
+                "draws": 3,
+                "losses": 0,
+                "goals_for": 19,
+                "goals_against": 6,
+                "points_per_match": 2.0,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "比利時盃",
+                "matches": 4,
+                "wins": 3,
+                "draws": 0,
+                "losses": 1,
+                "goals_for": 8,
+                "goals_against": 3,
+                "points_per_match": 2.25,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "世俱盃",
+                "matches": 3,
+                "wins": 1,
+                "draws": 0,
+                "losses": 2,
+                "goals_for": 4,
+                "goals_against": 5,
+                "points_per_match": 1.0,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "世俱盃",
+                "matches": 2,
+                "wins": 2,
+                "draws": 0,
+                "losses": 0,
+                "goals_for": 12,
+                "goals_against": 1,
+                "points_per_match": 3.0,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "德超盃",
+                "matches": 2,
+                "wins": 2,
+                "draws": 0,
+                "losses": 0,
+                "goals_for": 4,
+                "goals_against": 2,
+                "points_per_match": 3.0,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "德電信盃",
+                "matches": 2,
+                "wins": 2,
+                "draws": 0,
+                "losses": 0,
+                "goals_for": 7,
+                "goals_against": 1,
+                "points_per_match": 3.0,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "歐協聯",
+                "matches": 2,
+                "wins": 1,
+                "draws": 0,
+                "losses": 1,
+                "goals_for": 4,
+                "goals_against": 2,
+                "points_per_match": 1.5,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "歐協聯",
+                "matches": 2,
+                "wins": 1,
+                "draws": 1,
+                "losses": 0,
+                "goals_for": 5,
+                "goals_against": 4,
+                "points_per_match": 2.0,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "比甲",
+                "matches": 30,
+                "wins": 11,
+                "draws": 11,
+                "losses": 8,
+                "goals_for": 47,
+                "goals_against": 31,
+                "points_per_match": 1.47,
+                "venue_flag": ""
+              },
+              {
+                "competition_or_team": "比甲",
+                "matches": 79,
+                "wins": 35,
+                "draws": 28,
+                "losses": 16,
+                "goals_for": 138,
+                "goals_against": 86,
+                "points_per_match": 1.68,
+                "venue_flag": ""
+              },
+              {
+                "competition_or_team": "德甲",
+                "matches": 76,
+                "wins": 58,
+                "draws": 15,
+                "losses": 3,
+                "goals_for": 248,
+                "goals_against": 76,
+                "points_per_match": 2.49,
+                "venue_flag": ""
+              },
+              {
+                "competition_or_team": "英超",
+                "matches": 38,
+                "wins": 5,
+                "draws": 9,
+                "losses": 24,
+                "goals_for": 41,
+                "goals_against": 78,
+                "points_per_match": 0.63,
+                "venue_flag": ""
+              },
+              {
+                "competition_or_team": "英冠",
+                "matches": 46,
+                "wins": 29,
+                "draws": 14,
+                "losses": 3,
+                "goals_for": 87,
+                "goals_against": 35,
+                "points_per_match": 2.2,
+                "venue_flag": ""
+              },
+              {
+                "competition_or_team": "球會友誼",
+                "matches": 14,
+                "wins": 6,
+                "draws": 3,
+                "losses": 5,
+                "goals_for": 18,
+                "goals_against": 19,
+                "points_per_match": 1.5,
+                "venue_flag": ""
+              },
+              {
+                "competition_or_team": "球會友誼",
+                "matches": 10,
+                "wins": 4,
+                "draws": 4,
+                "losses": 2,
+                "goals_for": 16,
+                "goals_against": 8,
+                "points_per_match": 1.6,
+                "venue_flag": ""
+              },
+              {
+                "competition_or_team": "球會友誼",
+                "matches": 7,
+                "wins": 3,
+                "draws": 1,
+                "losses": 3,
+                "goals_for": 7,
+                "goals_against": 8,
+                "points_per_match": 1.43,
+                "venue_flag": ""
+              },
+              {
+                "competition_or_team": "球會友誼",
+                "matches": 13,
+                "wins": 11,
+                "draws": 1,
+                "losses": 1,
+                "goals_for": 37,
+                "goals_against": 12,
+                "points_per_match": 2.62,
+                "venue_flag": ""
+              },
+              {
+                "competition_or_team": "德國盃",
+                "matches": 11,
+                "wins": 10,
+                "draws": 0,
+                "losses": 1,
+                "goals_for": 35,
+                "goals_against": 8,
+                "points_per_match": 2.73,
+                "venue_flag": ""
+              },
+              {
+                "competition_or_team": "英聯盃",
+                "matches": 6,
+                "wins": 4,
+                "draws": 0,
+                "losses": 2,
+                "goals_for": 9,
+                "goals_against": 6,
+                "points_per_match": 2.0,
+                "venue_flag": ""
+              },
+              {
+                "competition_or_team": "英足總盃",
+                "matches": 6,
+                "wins": 3,
+                "draws": 1,
+                "losses": 2,
+                "goals_for": 7,
+                "goals_against": 10,
+                "points_per_match": 1.67,
+                "venue_flag": ""
+              },
+              {
+                "competition_or_team": "歐冠盃",
+                "matches": 31,
+                "wins": 20,
+                "draws": 5,
+                "losses": 6,
+                "goals_for": 84,
+                "goals_against": 43,
+                "points_per_match": 2.1,
+                "venue_flag": ""
+              },
+              {
+                "competition_or_team": "比利時盃",
+                "matches": 3,
+                "wins": 1,
+                "draws": 1,
+                "losses": 1,
+                "goals_for": 5,
+                "goals_against": 6,
+                "points_per_match": 1.33,
+                "venue_flag": ""
+              }
+            ],
+            "team_records": [
+              {
+                "competition_or_team": "安德列治",
+                "matches": 23,
+                "wins": 8,
+                "draws": 9,
+                "losses": 6,
+                "goals_for": 31,
+                "goals_against": 30,
+                "points_per_match": 1.43,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "安德列治",
+                "matches": 24,
+                "wins": 10,
+                "draws": 6,
+                "losses": 8,
+                "goals_for": 39,
+                "goals_against": 26,
+                "points_per_match": 1.5,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "安德列治",
+                "matches": 50,
+                "wins": 20,
+                "draws": 18,
+                "losses": 12,
+                "goals_for": 91,
+                "goals_against": 55,
+                "points_per_match": 1.56,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "安德列治",
+                "matches": 53,
+                "wins": 27,
+                "draws": 18,
+                "losses": 8,
+                "goals_for": 99,
+                "goals_against": 54,
+                "points_per_match": 1.87,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "拜仁慕尼黑",
+                "matches": 66,
+                "wins": 54,
+                "draws": 8,
+                "losses": 4,
+                "goals_for": 229,
+                "goals_against": 60,
+                "points_per_match": 2.58,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "拜仁慕尼黑",
+                "matches": 74,
+                "wins": 52,
+                "draws": 13,
+                "losses": 9,
+                "goals_for": 202,
+                "goals_against": 88,
+                "points_per_match": 2.28,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "般尼",
+                "matches": 46,
+                "wins": 22,
+                "draws": 10,
+                "losses": 14,
+                "goals_for": 75,
+                "goals_against": 60,
+                "points_per_match": 1.65,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "般尼",
+                "matches": 57,
+                "wins": 22,
+                "draws": 15,
+                "losses": 20,
+                "goals_for": 76,
+                "goals_against": 77,
+                "points_per_match": 1.42,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "安德列治",
+                "matches": 47,
+                "wins": 18,
+                "draws": 15,
+                "losses": 14,
+                "goals_for": 70,
+                "goals_against": 56,
+                "points_per_match": 1.47,
+                "venue_flag": ""
+              },
+              {
+                "competition_or_team": "安德列治",
+                "matches": 103,
+                "wins": 47,
+                "draws": 36,
+                "losses": 20,
+                "goals_for": 190,
+                "goals_against": 109,
+                "points_per_match": 1.72,
+                "venue_flag": ""
+              },
+              {
+                "competition_or_team": "拜仁慕尼黑",
+                "matches": 140,
+                "wins": 106,
+                "draws": 21,
+                "losses": 13,
+                "goals_for": 431,
+                "goals_against": 148,
+                "points_per_match": 2.42,
+                "venue_flag": ""
+              },
+              {
+                "competition_or_team": "般尼",
+                "matches": 103,
+                "wins": 44,
+                "draws": 25,
+                "losses": 34,
+                "goals_for": 151,
+                "goals_against": 137,
+                "points_per_match": 1.52,
+                "venue_flag": ""
+              },
+              {
+                "competition_or_team": "安德列治",
+                "matches": 73,
+                "wins": 28,
+                "draws": 27,
+                "losses": 18,
+                "goals_for": 122,
+                "goals_against": 85,
+                "points_per_match": 1.52,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "安德列治",
+                "matches": 77,
+                "wins": 37,
+                "draws": 24,
+                "losses": 16,
+                "goals_for": 138,
+                "goals_against": 80,
+                "points_per_match": 1.75,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "拜仁慕尼黑",
+                "matches": 66,
+                "wins": 54,
+                "draws": 8,
+                "losses": 4,
+                "goals_for": 229,
+                "goals_against": 60,
+                "points_per_match": 2.58,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "拜仁慕尼黑",
+                "matches": 74,
+                "wins": 52,
+                "draws": 13,
+                "losses": 9,
+                "goals_for": 202,
+                "goals_against": 88,
+                "points_per_match": 2.28,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "般尼",
+                "matches": 46,
+                "wins": 22,
+                "draws": 10,
+                "losses": 14,
+                "goals_for": 75,
+                "goals_against": 60,
+                "points_per_match": 1.65,
+                "venue_flag": "1"
+              },
+              {
+                "competition_or_team": "般尼",
+                "matches": 57,
+                "wins": 22,
+                "draws": 15,
+                "losses": 20,
+                "goals_for": 76,
+                "goals_against": 77,
+                "points_per_match": 1.42,
+                "venue_flag": "0"
+              },
+              {
+                "competition_or_team": "安德列治",
+                "matches": 150,
+                "wins": 65,
+                "draws": 51,
+                "losses": 34,
+                "goals_for": 260,
+                "goals_against": 165,
+                "points_per_match": 1.64,
+                "venue_flag": ""
+              },
+              {
+                "competition_or_team": "拜仁慕尼黑",
+                "matches": 140,
+                "wins": 106,
+                "draws": 21,
+                "losses": 13,
+                "goals_for": 431,
+                "goals_against": 148,
+                "points_per_match": 2.42,
+                "venue_flag": ""
+              },
+              {
+                "competition_or_team": "般尼",
+                "matches": 103,
+                "wins": 44,
+                "draws": 25,
+                "losses": 34,
+                "goals_for": 151,
+                "goals_against": 137,
+                "points_per_match": 1.52,
+                "venue_flag": ""
+              }
+            ]
+          }
+        },
+        "referee": {
+          "name": "莱特歇",
+          "birth_date": "",
+          "nationality": "法国",
+          "summaries": [
+            {
+              "competition": "所有赛事",
+              "matches": 326,
+              "home": {
+                "side": "home",
+                "wins": 147,
+                "draws": 77,
+                "losses": 102,
+                "avg_fouls": 10.87,
+                "avg_yellow": 1.83,
+                "avg_red": 0.11,
+                "win_rate": "45%"
+              },
+              "away": {
+                "side": "away",
+                "wins": 102,
+                "draws": 77,
+                "losses": 147,
+                "avg_fouls": 10.84,
+                "avg_yellow": 2.02,
+                "avg_red": 0.13,
+                "win_rate": "31%"
+              }
+            }
+          ],
+          "home_team_history_count": 2,
+          "away_team_history_count": 3
+        },
+        "panlu": {
+          "matches": [
+            {
+              "match_id": 3018851,
+              "competition": "德甲",
+              "kickoff": "26-11-01 01:30",
+              "home_team": "拜仁慕尼黑",
+              "away_team": "多蒙特",
+              "home_team_id": 88,
+              "away_team_id": 99,
+              "full_time": {
+                "home": 2,
+                "away": 2
+              },
+              "half_time": {
+                "home": 1,
+                "away": 0
+              },
+              "asian_line": 1.75,
+              "total_line": 4,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 3013748,
+              "competition": "西甲",
+              "kickoff": "26-10-31 21:00",
+              "home_team": "利雲特",
+              "away_team": "馬德里體育會",
+              "home_team_id": 103,
+              "away_team_id": 109,
+              "full_time": {
+                "home": 0,
+                "away": 2
+              },
+              "half_time": {
+                "home": 0,
+                "away": 1
+              },
+              "asian_line": -1,
+              "total_line": 3,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 3086950,
+              "competition": "德國盃",
+              "kickoff": "26-10-29 03:45",
+              "home_team": "拜仁慕尼黑",
+              "away_team": "馬德堡",
+              "home_team_id": 88,
+              "away_team_id": 2760,
+              "full_time": {
+                "home": 6,
+                "away": 1
+              },
+              "half_time": {
+                "home": 2,
+                "away": 1
+              },
+              "asian_line": 3.75,
+              "total_line": 4.5,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 3018843,
+              "competition": "德甲",
+              "kickoff": "26-10-26 00:30",
+              "home_team": "費雷堡",
+              "away_team": "拜仁慕尼黑",
+              "home_team_id": 172,
+              "away_team_id": 88,
+              "full_time": {
+                "home": 1,
+                "away": 3
+              },
+              "half_time": {
+                "home": 0,
+                "away": 2
+              },
+              "asian_line": -1.5,
+              "total_line": 4,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 3013734,
+              "competition": "西甲",
+              "kickoff": "26-10-25 03:00",
+              "home_team": "馬德里體育會",
+              "away_team": "拉科魯尼亞",
+              "home_team_id": 109,
+              "away_team_id": 93,
+              "full_time": {
+                "home": 1,
+                "away": 0
+              },
+              "half_time": {
+                "home": 0,
+                "away": 0
+              },
+              "asian_line": 1.75,
+              "total_line": 3,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 3073080,
+              "competition": "歐冠盃",
+              "kickoff": "26-10-22 03:00",
+              "home_team": "拜仁慕尼黑",
+              "away_team": "阿仙奴",
+              "home_team_id": 88,
+              "away_team_id": 19,
+              "full_time": {
+                "home": 2,
+                "away": 2
+              },
+              "half_time": {
+                "home": 1,
+                "away": 1
+              },
+              "asian_line": 0.25,
+              "total_line": 3,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 3073110,
+              "competition": "歐冠盃",
+              "kickoff": "26-10-21 03:00",
+              "home_team": "史特加",
+              "away_team": "馬德里體育會",
+              "home_team_id": 155,
+              "away_team_id": 109,
+              "full_time": {
+                "home": 1,
+                "away": 1
+              },
+              "half_time": {
+                "home": 1,
+                "away": 0
+              },
+              "asian_line": -0.25,
+              "total_line": 3,
+              "provider_flags": [
+                0,
+                1
+              ]
+            },
+            {
+              "match_id": 3018832,
+              "competition": "德甲",
+              "kickoff": "26-10-18 00:30",
+              "home_team": "拜仁慕尼黑",
+              "away_team": "RB萊比錫",
+              "home_team_id": 88,
+              "away_team_id": 13201,
+              "full_time": {
+                "home": 6,
+                "away": 1
+              },
+              "half_time": {
+                "home": 3,
+                "away": 0
+              },
+              "asian_line": 2,
+              "total_line": 4.25,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 3013725,
+              "competition": "西甲",
+              "kickoff": "26-10-17 20:00",
+              "home_team": "愛斯賓奴",
+              "away_team": "馬德里體育會",
+              "home_team_id": 100,
+              "away_team_id": 109,
+              "full_time": {
+                "home": 0,
+                "away": 1
+              },
+              "half_time": {
+                "home": 0,
+                "away": 0
+              },
+              "asian_line": -0.5,
+              "total_line": 2.5,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 3073134,
+              "competition": "歐冠盃",
+              "kickoff": "26-10-14 03:00",
+              "home_team": "維京",
+              "away_team": "拜仁慕尼黑",
+              "home_team_id": 495,
+              "away_team_id": 88,
+              "full_time": {
+                "home": 3,
+                "away": 3
+              },
+              "half_time": {
+                "home": 2,
+                "away": 0
+              },
+              "asian_line": -2.75,
+              "total_line": 4.25,
+              "provider_flags": [
+                0,
+                1
+              ]
+            },
+            {
+              "match_id": 3073105,
+              "competition": "歐冠盃",
+              "kickoff": "26-10-14 03:00",
+              "home_team": "馬德里體育會",
+              "away_team": "曼聯",
+              "home_team_id": 109,
+              "away_team_id": 27,
+              "full_time": {
+                "home": 2,
+                "away": 0
+              },
+              "half_time": {
+                "home": 1,
+                "away": 0
+              },
+              "asian_line": 0.25,
+              "total_line": 3.25,
+              "provider_flags": [
+                0,
+                1
+              ]
+            },
+            {
+              "match_id": 3013712,
+              "competition": "西甲",
+              "kickoff": "26-10-10 22:15",
+              "home_team": "艾拉維斯",
+              "away_team": "馬德里體育會",
+              "home_team_id": 137,
+              "away_team_id": 109,
+              "full_time": {
+                "home": 1,
+                "away": 2
+              },
+              "half_time": {
+                "home": 1,
+                "away": 1
+              },
+              "asian_line": -0.5,
+              "total_line": 2.5,
+              "provider_flags": [
+                1,
+                0
+              ]
+            },
+            {
+              "match_id": 3018822,
+              "competition": "德甲",
+              "kickoff": "26-10-10 21:30",
+              "home_team": "奧格斯堡",
+              "away_team": "拜仁慕尼黑",
+              "home_team_id": 1135,
+              "away_team_id": 88,
+              "full_time": {
+                "home": 2,
+                "away": 2
+              },
+              "half_time": {
+                "home": 1,
+                "away": 0
+              },
+              "asian_line": -2,
+              "total_line": 4.5,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 3013703,
+              "competition": "西甲",
+              "kickoff": "26-09-20 22:15",
+              "home_team": "馬德里體育會",
+              "away_team": "皇家馬德里",
+              "home_team_id": 109,
+              "away_team_id": 82,
+              "full_time": {
+                "home": 2,
+                "away": 1
+              },
+              "half_time": {
+                "home": 0,
+                "away": 0
+              },
+              "asian_line": -0.5,
+              "total_line": 3.25,
+              "provider_flags": [
+                0,
+                1
+              ]
+            },
+            {
+              "match_id": 3018814,
+              "competition": "德甲",
+              "kickoff": "26-09-19 02:30",
+              "home_team": "拜仁慕尼黑",
+              "away_team": "柏林聯",
+              "home_team_id": 88,
+              "away_team_id": 1087,
+              "full_time": {
+                "home": 7,
+                "away": 0
+              },
+              "half_time": {
+                "home": 3,
+                "away": 0
+              },
+              "asian_line": 2.75,
+              "total_line": 4.25,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 3013693,
+              "competition": "西甲",
+              "kickoff": "26-09-17 01:00",
+              "home_team": "馬德里體育會",
+              "away_team": "奧沙辛拿",
+              "home_team_id": 109,
+              "away_team_id": 94,
+              "full_time": {
+                "home": 4,
+                "away": 0
+              },
+              "half_time": {
+                "home": 1,
+                "away": 0
+              },
+              "asian_line": 1,
+              "total_line": 2.75,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 3013689,
+              "competition": "西甲",
+              "kickoff": "26-09-14 03:00",
+              "home_team": "皇家蘇斯達",
+              "away_team": "馬德里體育會",
+              "home_team_id": 106,
+              "away_team_id": 109,
+              "full_time": {
+                "home": 0,
+                "away": 3
+              },
+              "half_time": {
+                "home": 0,
+                "away": 0
+              },
+              "asian_line": -0.25,
+              "total_line": 2.75,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 3018806,
+              "competition": "德甲",
+              "kickoff": "26-09-13 23:30",
+              "home_team": "艾華斯堡",
+              "away_team": "拜仁慕尼黑",
+              "home_team_id": 1076,
+              "away_team_id": 88,
+              "full_time": {
+                "home": 1,
+                "away": 2
+              },
+              "half_time": {
+                "home": 0,
+                "away": 1
+              },
+              "asian_line": -2.25,
+              "total_line": 4,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 3073130,
+              "competition": "歐冠盃",
+              "kickoff": "26-09-11 03:00",
+              "home_team": "拜仁慕尼黑",
+              "away_team": "波杜基林特",
+              "home_team_id": 88,
+              "away_team_id": 472,
+              "full_time": {
+                "home": 5,
+                "away": 0
+              },
+              "half_time": {
+                "home": 0,
+                "away": 0
+              },
+              "asian_line": 2.5,
+              "total_line": 4.25,
+              "provider_flags": [
+                0,
+                1
+              ]
+            },
+            {
+              "match_id": 3073079,
+              "competition": "歐冠盃",
+              "kickoff": "26-09-10 03:00",
+              "home_team": "利物浦",
+              "away_team": "馬德里體育會",
+              "home_team_id": 25,
+              "away_team_id": 109,
+              "full_time": {
+                "home": 2,
+                "away": 1
+              },
+              "half_time": {
+                "home": 1,
+                "away": 1
+              },
+              "asian_line": 0.75,
+              "total_line": 2.5,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 3018801,
+              "competition": "德甲",
+              "kickoff": "26-09-06 00:30",
+              "home_team": "史浩克零四",
+              "away_team": "拜仁慕尼黑",
+              "home_team_id": 151,
+              "away_team_id": 88,
+              "full_time": {
+                "home": 0,
+                "away": 0
+              },
+              "half_time": {
+                "home": 0,
+                "away": 0
+              },
+              "asian_line": -2.25,
+              "total_line": 3.75,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 3013673,
+              "competition": "西甲",
+              "kickoff": "26-09-05 22:15",
+              "home_team": "畢爾包",
+              "away_team": "馬德里體育會",
+              "home_team_id": 92,
+              "away_team_id": 109,
+              "full_time": {
+                "home": 3,
+                "away": 0
+              },
+              "half_time": {
+                "home": 0,
+                "away": 0
+              },
+              "asian_line": 0,
+              "total_line": 2.5,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2995152,
+              "competition": "德國盃",
+              "kickoff": "26-09-03 02:45",
+              "home_team": "奧斯納布克",
+              "away_team": "拜仁慕尼黑",
+              "home_team_id": 1121,
+              "away_team_id": 88,
+              "full_time": {
+                "home": 1,
+                "away": 4
+              },
+              "half_time": {
+                "home": 1,
+                "away": 2
+              },
+              "asian_line": -3.75,
+              "total_line": 4.75,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 3013671,
+              "competition": "西甲",
+              "kickoff": "26-08-30 03:30",
+              "home_team": "西維爾",
+              "away_team": "馬德里體育會",
+              "home_team_id": 86,
+              "away_team_id": 109,
+              "full_time": {
+                "home": 1,
+                "away": 3
+              },
+              "half_time": {
+                "home": 0,
+                "away": 3
+              },
+              "asian_line": -0.5,
+              "total_line": 2.5,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 3018786,
+              "competition": "德甲",
+              "kickoff": "26-08-29 02:30",
+              "home_team": "拜仁慕尼黑",
+              "away_team": "史特加",
+              "home_team_id": 88,
+              "away_team_id": 155,
+              "full_time": {
+                "home": 5,
+                "away": 1
+              },
+              "half_time": {
+                "home": 1,
+                "away": 0
+              },
+              "asian_line": 1.75,
+              "total_line": 4,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 3013653,
+              "competition": "西甲",
+              "kickoff": "26-08-23 23:00",
+              "home_team": "馬德里體育會",
+              "away_team": "維拉利爾",
+              "home_team_id": 109,
+              "away_team_id": 107,
+              "full_time": {
+                "home": 2,
+                "away": 2
+              },
+              "half_time": {
+                "home": 0,
+                "away": 0
+              },
+              "asian_line": 0.5,
+              "total_line": 2.5,
+              "provider_flags": [
+                1,
+                0
+              ]
+            },
+            {
+              "match_id": 2991174,
+              "competition": "德超盃",
+              "kickoff": "26-08-23 02:30",
+              "home_team": "多蒙特",
+              "away_team": "拜仁慕尼黑",
+              "home_team_id": 99,
+              "away_team_id": 88,
+              "full_time": {
+                "home": 1,
+                "away": 2
+              },
+              "half_time": {
+                "home": 0,
+                "away": 2
+              },
+              "asian_line": -1,
+              "total_line": 3.5,
+              "provider_flags": [
+                1,
+                0
+              ]
+            },
+            {
+              "match_id": 3013643,
+              "competition": "西甲",
+              "kickoff": "26-08-20 03:00",
+              "home_team": "馬德里體育會",
+              "away_team": "馬拉加",
+              "home_team_id": 109,
+              "away_team_id": 102,
+              "full_time": {
+                "home": 2,
+                "away": 0
+              },
+              "half_time": {
+                "home": 0,
+                "away": 0
+              },
+              "asian_line": 1.75,
+              "total_line": 2.75,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 3067632,
+              "competition": "球會友誼",
+              "kickoff": "26-08-19 00:00",
+              "home_team": "海登咸",
+              "away_team": "拜仁慕尼黑",
+              "home_team_id": 8371,
+              "away_team_id": 88,
+              "full_time": {
+                "home": 2,
+                "away": 4
+              },
+              "half_time": {
+                "home": 2,
+                "away": 1
+              },
+              "asian_line": -2.25,
+              "total_line": 3.75,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 3062216,
+              "competition": "德電信盃",
+              "kickoff": "26-08-15 21:30",
+              "home_team": "拜仁慕尼黑",
+              "away_team": "RB萊比錫",
+              "home_team_id": 88,
+              "away_team_id": 13201,
+              "full_time": {
+                "home": 3,
+                "away": 1
+              },
+              "half_time": {
+                "home": 1,
+                "away": 0
+              },
+              "asian_line": 1.5,
+              "total_line": 3.75,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 3058343,
+              "competition": "球會友誼",
+              "kickoff": "26-08-14 23:30",
+              "home_team": "馬賽",
+              "away_team": "馬德里體育會",
+              "home_team_id": 211,
+              "away_team_id": 109,
+              "full_time": {
+                "home": 1,
+                "away": 2
+              },
+              "half_time": {
+                "home": 1,
+                "away": 1
+              },
+              "asian_line": -0.25,
+              "total_line": 3,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 3055956,
+              "competition": "球會友誼",
+              "kickoff": "26-08-09 19:00",
+              "home_team": "曼城",
+              "away_team": "馬德里體育會",
+              "home_team_id": 26,
+              "away_team_id": 109,
+              "full_time": {
+                "home": 3,
+                "away": 1
+              },
+              "half_time": {
+                "home": 0,
+                "away": 1
+              },
+              "asian_line": 0.5,
+              "total_line": 2.75,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 3050158,
+              "competition": "球會友誼",
+              "kickoff": "26-08-07 20:00",
+              "home_team": "拜仁慕尼黑",
+              "away_team": "阿士東維拉",
+              "home_team_id": 88,
+              "away_team_id": 20,
+              "full_time": {
+                "home": 2,
+                "away": 1
+              },
+              "half_time": {
+                "home": 1,
+                "away": 0
+              },
+              "asian_line": 0.5,
+              "total_line": 3,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 3049947,
+              "competition": "球會友誼",
+              "kickoff": "26-08-04 19:00",
+              "home_team": "濟州SK",
+              "away_team": "拜仁慕尼黑",
+              "home_team_id": 4075,
+              "away_team_id": 88,
+              "full_time": {
+                "home": 1,
+                "away": 2
+              },
+              "half_time": {
+                "home": 1,
+                "away": 2
+              },
+              "asian_line": -2.5,
+              "total_line": 4.25,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 3048999,
+              "competition": "球會友誼",
+              "kickoff": "26-08-01 21:00",
+              "home_team": "曼聯",
+              "away_team": "馬德里體育會",
+              "home_team_id": 27,
+              "away_team_id": 109,
+              "full_time": {
+                "home": 2,
+                "away": 1
+              },
+              "half_time": {
+                "home": 0,
+                "away": 1
+              },
+              "asian_line": 0.25,
+              "total_line": 3,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 3047804,
+              "competition": "球會友誼",
+              "kickoff": "26-07-30 02:30",
+              "home_team": "馬德里體育會",
+              "away_team": "加泰",
+              "home_team_id": 109,
+              "away_team_id": 98,
+              "full_time": {
+                "home": 4,
+                "away": 1
+              },
+              "half_time": {
+                "home": 2,
+                "away": 1
+              },
+              "asian_line": 0.5,
+              "total_line": 2.5,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 3040549,
+              "competition": "球會友誼",
+              "kickoff": "26-07-25 21:30",
+              "home_team": "韋恩",
+              "away_team": "拜仁慕尼黑",
+              "home_team_id": 1082,
+              "away_team_id": 88,
+              "full_time": {
+                "home": 2,
+                "away": 1
+              },
+              "half_time": {
+                "home": 1,
+                "away": 0
+              },
+              "asian_line": -1.5,
+              "total_line": 4.25,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2804673,
+              "competition": "西甲",
+              "kickoff": "26-05-25 03:00",
+              "home_team": "維拉利爾",
+              "away_team": "馬德里體育會",
+              "home_team_id": 107,
+              "away_team_id": 109,
+              "full_time": {
+                "home": 5,
+                "away": 1
+              },
+              "half_time": {
+                "home": 4,
+                "away": 1
+              },
+              "asian_line": 0,
+              "total_line": 3.25,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2979138,
+              "competition": "德國盃",
+              "kickoff": "26-05-24 02:00",
+              "home_team": "拜仁慕尼黑",
+              "away_team": "史特加",
+              "home_team_id": 88,
+              "away_team_id": 155,
+              "full_time": {
+                "home": 3,
+                "away": 0
+              },
+              "half_time": {
+                "home": 0,
+                "away": 0
+              },
+              "asian_line": 1.5,
+              "total_line": 3.5,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2804655,
+              "competition": "西甲",
+              "kickoff": "26-05-18 01:00",
+              "home_team": "馬德里體育會",
+              "away_team": "傑羅納",
+              "home_team_id": 109,
+              "away_team_id": 982,
+              "full_time": {
+                "home": 1,
+                "away": 0
+              },
+              "half_time": {
+                "home": 1,
+                "away": 0
+              },
+              "asian_line": 0.5,
+              "total_line": 2.75,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2799705,
+              "competition": "德甲",
+              "kickoff": "26-05-16 21:30",
+              "home_team": "拜仁慕尼黑",
+              "away_team": "科隆",
+              "home_team_id": 88,
+              "away_team_id": 490,
+              "full_time": {
+                "home": 5,
+                "away": 1
+              },
+              "half_time": {
+                "home": 3,
+                "away": 1
+              },
+              "asian_line": 2.25,
+              "total_line": 4.25,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2804650,
+              "competition": "西甲",
+              "kickoff": "26-05-13 03:30",
+              "home_team": "奧沙辛拿",
+              "away_team": "馬德里體育會",
+              "home_team_id": 94,
+              "away_team_id": 109,
+              "full_time": {
+                "home": 1,
+                "away": 2
+              },
+              "half_time": {
+                "home": 0,
+                "away": 1
+              },
+              "asian_line": 0,
+              "total_line": 2.5,
+              "provider_flags": [
+                0,
+                1
+              ]
+            },
+            {
+              "match_id": 2799703,
+              "competition": "德甲",
+              "kickoff": "26-05-10 00:30",
+              "home_team": "沃爾夫斯堡",
+              "away_team": "拜仁慕尼黑",
+              "home_team_id": 149,
+              "away_team_id": 88,
+              "full_time": {
+                "home": 0,
+                "away": 1
+              },
+              "half_time": {
+                "home": 0,
+                "away": 0
+              },
+              "asian_line": -1.25,
+              "total_line": 4,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2804635,
+              "competition": "西甲",
+              "kickoff": "26-05-10 00:30",
+              "home_team": "馬德里體育會",
+              "away_team": "切爾達",
+              "home_team_id": 109,
+              "away_team_id": 114,
+              "full_time": {
+                "home": 0,
+                "away": 1
+              },
+              "half_time": {
+                "home": 0,
+                "away": 0
+              },
+              "asian_line": 0.5,
+              "total_line": 2.75,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2976378,
+              "competition": "歐冠盃",
+              "kickoff": "26-05-07 03:00",
+              "home_team": "拜仁慕尼黑",
+              "away_team": "巴黎聖日門",
+              "home_team_id": 88,
+              "away_team_id": 271,
+              "full_time": {
+                "home": 1,
+                "away": 1
+              },
+              "half_time": {
+                "home": 0,
+                "away": 1
+              },
+              "asian_line": 0.75,
+              "total_line": 4,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2976377,
+              "competition": "歐冠盃",
+              "kickoff": "26-05-06 03:00",
+              "home_team": "阿仙奴",
+              "away_team": "馬德里體育會",
+              "home_team_id": 19,
+              "away_team_id": 109,
+              "full_time": {
+                "home": 1,
+                "away": 0
+              },
+              "half_time": {
+                "home": 1,
+                "away": 0
+              },
+              "asian_line": 1,
+              "total_line": 2.5,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2804632,
+              "competition": "西甲",
+              "kickoff": "26-05-02 22:15",
+              "home_team": "華倫西亞",
+              "away_team": "馬德里體育會",
+              "home_team_id": 91,
+              "away_team_id": 109,
+              "full_time": {
+                "home": 0,
+                "away": 2
+              },
+              "half_time": {
+                "home": 0,
+                "away": 0
+              },
+              "asian_line": 0.5,
+              "total_line": 2.5,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2799687,
+              "competition": "德甲",
+              "kickoff": "26-05-02 21:30",
+              "home_team": "拜仁慕尼黑",
+              "away_team": "海登咸",
+              "home_team_id": 88,
+              "away_team_id": 8371,
+              "full_time": {
+                "home": 3,
+                "away": 3
+              },
+              "half_time": {
+                "home": 1,
+                "away": 2
+              },
+              "asian_line": 2.75,
+              "total_line": 4,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2976375,
+              "competition": "歐冠盃",
+              "kickoff": "26-04-30 03:00",
+              "home_team": "馬德里體育會",
+              "away_team": "阿仙奴",
+              "home_team_id": 109,
+              "away_team_id": 19,
+              "full_time": {
+                "home": 1,
+                "away": 1
+              },
+              "half_time": {
+                "home": 0,
+                "away": 1
+              },
+              "asian_line": -0.25,
+              "total_line": 2.25,
+              "provider_flags": [
+                0,
+                0
+              ]
+            },
+            {
+              "match_id": 2976376,
+              "competition": "歐冠盃",
+              "kickoff": "26-04-29 03:00",
+              "home_team": "巴黎聖日門",
+              "away_team": "拜仁慕尼黑",
+              "home_team_id": 271,
+              "away_team_id": 88,
+              "full_time": {
+                "home": 5,
+                "away": 4
+              },
+              "half_time": {
+                "home": 3,
+                "away": 2
+              },
+              "asian_line": 0,
+              "total_line": 3.25,
+              "provider_flags": [
+                0,
+                0
+              ]
+            }
+          ],
+          "count": 60
+        },
+        "script_context": {
+          "coach": {
+            "home_record": {
+              "competition_or_team": "馬德里體育會",
+              "matches": 414,
+              "wins": 291,
+              "draws": 77,
+              "losses": 46,
+              "goals_for": 809,
+              "goals_against": 291,
+              "points_per_match": 2.29,
+              "venue_flag": "1"
+            },
+            "away_record": {
+              "competition_or_team": "拜仁慕尼黑",
+              "matches": 74,
+              "wins": 52,
+              "draws": 13,
+              "losses": 9,
+              "goals_for": 202,
+              "goals_against": 88,
+              "points_per_match": 2.28,
+              "venue_flag": "0"
+            }
+          },
+          "referee": {
+            "name": "莱特歇",
+            "sample": 326,
+            "combined_yellow": 3.85,
+            "combined_red": 0.24
+          },
+          "effects": [
+            "教练剧本：主队教练主场PPG 2.29、客队教练客场PPG 2.28（样本 414/74 场），差距不足以单独改写主线。",
+            "裁判剧本：莱特歇在326场公开样本中场均双方合计黄牌约3.85、红牌约0.24，比赛中断与红牌尾部风险偏高，领先方未必能平稳控场。",
+            "裁判历史样本下主队胜率更高（主45% / 客31%），仅作为剧本倾向，不视为因果优势。"
+          ],
+          "risks": [
+            "裁判公开样本的牌数与红牌率偏高，比分右尾和比赛状态突变风险高于基础泊松假设"
+          ],
+          "model_usage": "match_script_and_uncertainty_only_not_probability_override"
+        },
+        "items": [
+          "教练：主队 施蒙尼；客队 高柏尼。",
+          "裁判：莱特歇；公开执法样本 326 场。",
+          "Nowscore盘路历史已读取 60 场，仅作风格与盘口复核，不直接改写概率。",
+          "教练剧本：主队教练主场PPG 2.29、客队教练客场PPG 2.28（样本 414/74 场），差距不足以单独改写主线。",
+          "裁判剧本：莱特歇在326场公开样本中场均双方合计黄牌约3.85、红牌约0.24，比赛中断与红牌尾部风险偏高，领先方未必能平稳控场。",
+          "裁判历史样本下主队胜率更高（主45% / 客31%），仅作为剧本倾向，不视为因果优势。"
+        ],
+        "status": "Nowscore赛前背景已核验",
+        "sources": [
+          "https://live.nowscore.com/info/coach/3073078.htm?l=1",
+          "https://live.nowscore.com/info/referee/3073078.htm?l=1",
+          "https://live.nowscore.com/panlu/3073078.html"
+        ]
+      }
+    },
+    "sources": [],
+    "recent_form": {},
+    "form_source": null,
+    "checked_at": "2026-11-03T16:05:43+00:00"
+  },
+  "evidence_chain": [
+    {
+      "title": "足球维度",
+      "items": [
+        "马竞近10个主场7胜2平1负，拜仁近10个客场6胜3平1负",
+        "近期主客场攻防推导λ：马竞1.63，拜仁1.68",
+        "双方预期进球接近，比赛更可能由先入球、定位球或临场换人打破均衡；总进球中枢偏高；早段进球会显著放大开放对攻和右尾比分风险；教练剧本：主队教练主场PPG 2.29、客队教练客场PPG 2.28（样本 414/74 场），差距不足以单独改写主线；裁判剧本：莱特歇在326场公开样本中场均双方合计黄牌约3.85、红牌约0.24，比赛中断与红牌尾部风险偏高，领先方未必能平稳控场；裁判历史样本下主队胜率更高（主45% / 客31%），仅作为剧本倾向，不视为因果优势。"
+      ]
+    },
+    {
+      "title": "教练、裁判与历史盘路",
+      "items": [
+        "教练：主队 施蒙尼；客队 高柏尼。",
+        "裁判：莱特歇；公开执法样本 326 场。",
+        "Nowscore盘路历史已读取 60 场，仅作风格与盘口复核，不直接改写概率。",
+        "教练剧本：主队教练主场PPG 2.29、客队教练客场PPG 2.28（样本 414/74 场），差距不足以单独改写主线。",
+        "裁判剧本：莱特歇在326场公开样本中场均双方合计黄牌约3.85、红牌约0.24，比赛中断与红牌尾部风险偏高，领先方未必能平稳控场。",
+        "裁判历史样本下主队胜率更高（主45% / 客31%），仅作为剧本倾向，不视为因果优势。",
+        "这些信息用于解释比赛脚本与风险点；在完成历史校准前，不直接机械增减胜平负概率。"
+      ]
+    },
+    {
+      "title": "市场维度",
+      "items": [
+        "去水共识：主胜33.9%、平局24.9%、客胜41.2%",
+        "大小球中轴：3.0；市场占40%校准权重，不替代模型。",
+        "多公司市场对客胜的定价比模型更强0.9%，不能把市场热度直接当成模型优势"
+      ]
+    },
+    {
+      "title": "执行维度",
+      "items": [
+        "每个玩法分别展示当前价、模型概率、EV与最低可接受赔率；低于门槛一律不过线。",
+        "执行价额外要求8%安全边际；模型包含市场校准，因此正EV只是价格复核信号。",
+        "唯一比分1-1只是单个比分格的最高点；胜平负主线客胜是多个比分格合计，二者不要求同方向。"
+      ]
+    },
+    {
+      "title": "模型与临场核验",
+      "items": [
+        "公开事实核验状态：Nowscore赛前背景已核验。",
+        "确认首发、关键伤停、天气或盘口换线与假设冲突时，必须重算而非沿用旧报告。"
+      ]
+    }
+  ],
+  "betting": {
+    "candidates": [],
+    "state": "空仓｜未锁单",
+    "execution_authorized": false,
+    "lock_state_changed": false,
+    "bankroll_state_changed": false,
+    "price_audit": [
+      {
+        "market": "SPF主胜",
+        "model_probability": 0.362736,
+        "conservative_probability": 0.287736,
+        "minimum_acceptable_decimal_odds": 3.753,
+        "odds": null,
+        "ev": null,
+        "audit_role": "模型价格门槛，不是投注指令"
+      },
+      {
+        "market": "SPF平局",
+        "model_probability": 0.234417,
+        "conservative_probability": 0.159417,
+        "minimum_acceptable_decimal_odds": 6.775,
+        "odds": null,
+        "ev": null,
+        "audit_role": "模型价格门槛，不是投注指令"
+      },
+      {
+        "market": "SPF客胜",
+        "model_probability": 0.402848,
+        "conservative_probability": 0.327848,
+        "minimum_acceptable_decimal_odds": 3.294,
+        "odds": null,
+        "ev": null,
+        "audit_role": "模型价格门槛，不是投注指令"
+      },
+      {
+        "market": "澳门 大3",
+        "model_probability": 0.395253,
+        "push_probability": 0.222752,
+        "odds": 1.8,
+        "ev": -0.065792,
+        "minimum_acceptable_decimal_odds": 2.124,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "澳门 小3",
+        "model_probability": 0.381995,
+        "push_probability": 0.222752,
+        "odds": 2.0,
+        "ev": -0.013259,
+        "minimum_acceptable_decimal_odds": 2.197,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "皇冠 大3",
+        "model_probability": 0.395253,
+        "push_probability": 0.222752,
+        "odds": 1.84,
+        "ev": -0.049982,
+        "minimum_acceptable_decimal_odds": 2.124,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "皇冠 小3",
+        "model_probability": 0.381995,
+        "push_probability": 0.222752,
+        "odds": 2.04,
+        "ev": 0.002021,
+        "minimum_acceptable_decimal_odds": 2.197,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "立博 大2.5",
+        "model_probability": 0.618005,
+        "push_probability": 0.0,
+        "odds": 1.5,
+        "ev": -0.072992,
+        "minimum_acceptable_decimal_odds": 1.748,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "立博 小2.5",
+        "model_probability": 0.381995,
+        "push_probability": 0.0,
+        "odds": 2.45,
+        "ev": -0.064113,
+        "minimum_acceptable_decimal_odds": 2.827,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "bet365 大3",
+        "model_probability": 0.395253,
+        "push_probability": 0.222752,
+        "odds": 1.83,
+        "ev": -0.053934,
+        "minimum_acceptable_decimal_odds": 2.124,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "bet365 小3",
+        "model_probability": 0.381995,
+        "push_probability": 0.222752,
+        "odds": 2.03,
+        "ev": -0.001799,
+        "minimum_acceptable_decimal_odds": 2.197,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "威廉希尔 大3.5",
+        "model_probability": 0.395253,
+        "push_probability": 0.0,
+        "odds": 2.25,
+        "ev": -0.11068,
+        "minimum_acceptable_decimal_odds": 2.732,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "威廉希尔 小3.5",
+        "model_probability": 0.604747,
+        "push_probability": 0.0,
+        "odds": 1.62,
+        "ev": -0.020311,
+        "minimum_acceptable_decimal_odds": 1.786,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "易胜博 大3",
+        "model_probability": 0.395253,
+        "push_probability": 0.222752,
+        "odds": 1.84,
+        "ev": -0.049982,
+        "minimum_acceptable_decimal_odds": 2.124,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "易胜博 小3",
+        "model_probability": 0.381995,
+        "push_probability": 0.222752,
+        "odds": 2.08,
+        "ev": 0.017301,
+        "minimum_acceptable_decimal_odds": 2.197,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "澳门 主-0",
+        "model_probability": 0.362736,
+        "push_probability": 0.234417,
+        "odds": 2.1,
+        "ev": -0.003838,
+        "minimum_acceptable_decimal_odds": 2.279,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "澳门 客+0",
+        "model_probability": 0.402848,
+        "push_probability": 0.234417,
+        "odds": 1.74,
+        "ev": -0.064628,
+        "minimum_acceptable_decimal_odds": 2.052,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "皇冠 主+0.25",
+        "model_probability": 0.479944,
+        "push_probability": 0.117208,
+        "odds": 1.86,
+        "ev": 0.009904,
+        "minimum_acceptable_decimal_odds": 1.987,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "皇冠 客-0.25",
+        "model_probability": 0.402848,
+        "push_probability": 0.117208,
+        "odds": 2.03,
+        "ev": -0.065011,
+        "minimum_acceptable_decimal_odds": 2.367,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "bet365 主+0.25",
+        "model_probability": 0.479944,
+        "push_probability": 0.117208,
+        "odds": 1.85,
+        "ev": 0.005105,
+        "minimum_acceptable_decimal_odds": 1.987,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "bet365 客-0.25",
+        "model_probability": 0.402848,
+        "push_probability": 0.117208,
+        "odds": 2.0,
+        "ev": -0.077096,
+        "minimum_acceptable_decimal_odds": 2.367,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "威廉希尔 主+0.25",
+        "model_probability": 0.479944,
+        "push_probability": 0.117208,
+        "odds": 1.7,
+        "ev": -0.066887,
+        "minimum_acceptable_decimal_odds": 1.987,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "威廉希尔 客-0.25",
+        "model_probability": 0.402848,
+        "push_probability": 0.117208,
+        "odds": 1.95,
+        "ev": -0.097239,
+        "minimum_acceptable_decimal_odds": 2.367,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "易胜博 主+0.25",
+        "model_probability": 0.479944,
+        "push_probability": 0.117208,
+        "odds": 1.88,
+        "ev": 0.019503,
+        "minimum_acceptable_decimal_odds": 1.987,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "易胜博 客-0.25",
+        "model_probability": 0.402848,
+        "push_probability": 0.117208,
+        "odds": 2.06,
+        "ev": -0.052926,
+        "minimum_acceptable_decimal_odds": 2.367,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "伟德 主+0.25",
+        "model_probability": 0.479944,
+        "push_probability": 0.117208,
+        "odds": 1.84,
+        "ev": 0.000305,
+        "minimum_acceptable_decimal_odds": 1.987,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      },
+      {
+        "market": "伟德 客-0.25",
+        "model_probability": 0.402848,
+        "push_probability": 0.117208,
+        "odds": 2.02,
+        "ev": -0.069039,
+        "minimum_acceptable_decimal_odds": 2.367,
+        "audit_role": "市场校准模型的价格复核，非独立套利信号"
+      }
+    ]
+  },
+  "automation": {
+    "provider": "fixed-python-core",
+    "generated_at": "2026-11-03T16:05:43+00:00",
+    "owner_authorized_request": true,
+    "llm_used": false,
+    "prompt_version": "fixed-python-core.none",
+    "market_refresh": {
+      "stage": "T-4H",
+      "scheduled_at": "2026-11-04T00:00:00+08:00",
+      "captured_at": "2026-11-04T00:05:25.324399+08:00",
+      "target_minutes_before": 240,
+      "actual_minutes_before": 234.58,
+      "lateness_minutes": 5.42,
+      "exact": false,
+      "capture_quality": "historical_recovery",
+      "historical_recovery": {
+        "status": "recovered",
+        "files": [
+          {
+            "file": "data/fetch_runs/20261104_000525_checkpoint_T_4H/20261104_000525_nowscore.json",
+            "status": "recovered",
+            "recovered_companies": 17,
+            "recovered_quotes": 48
+          }
+        ],
+        "recovered_quotes": 48
+      },
+      "model_recalculated": true,
+      "execution_authorized": false,
+      "lock_state_changed": false,
+      "bankroll_state_changed": false
+    }
+  },
+  "_prediction_time_exact_distribution_state": {
+    "effective_matrix": [
+      {
+        "home_goals": 0,
+        "away_goals": 0,
+        "probability": 0.04117187231525314
+      },
+      {
+        "home_goals": 0,
+        "away_goals": 1,
+        "probability": 0.06759974295217593
+      },
+      {
+        "home_goals": 0,
+        "away_goals": 2,
+        "probability": 0.05549571819578498
+      },
+      {
+        "home_goals": 0,
+        "away_goals": 3,
+        "probability": 0.030372647425053034
+      },
+      {
+        "home_goals": 0,
+        "away_goals": 4,
+        "probability": 0.012467147127712725
+      },
+      {
+        "home_goals": 0,
+        "away_goals": 5,
+        "probability": 0.004093940322787367
+      },
+      {
+        "home_goals": 0,
+        "away_goals": 6,
+        "probability": 0.0011203008992923776
+      },
+      {
+        "home_goals": 0,
+        "away_goals": 7,
+        "probability": 0.0002627732012260898
+      },
+      {
+        "home_goals": 0,
+        "away_goals": 8,
+        "probability": 5.393063230641317e-05
+      },
+      {
+        "home_goals": 0,
+        "away_goals": 9,
+        "probability": 9.838693468650784e-06
+      },
+      {
+        "home_goals": 0,
+        "away_goals": 10,
+        "probability": 1.6154066163749488e-06
+      },
+      {
+        "home_goals": 0,
+        "away_goals": 11,
+        "probability": 2.4112020236895953e-07
+      },
+      {
+        "home_goals": 0,
+        "away_goals": 12,
+        "probability": 3.299109882573823e-08
+      },
+      {
+        "home_goals": 1,
+        "away_goals": 0,
+        "probability": 0.06373852973348161
+      },
+      {
+        "home_goals": 1,
+        "away_goals": 1,
+        "probability": 0.10465174362587129
+      },
+      {
+        "home_goals": 1,
+        "away_goals": 2,
+        "probability": 0.085913398769395
+      },
+      {
+        "home_goals": 1,
+        "away_goals": 3,
+        "probability": 0.04702015677506828
+      },
+      {
+        "home_goals": 1,
+        "away_goals": 4,
+        "probability": 0.01930049772346676
+      },
+      {
+        "home_goals": 1,
+        "away_goals": 5,
+        "probability": 0.006337864233937438
+      },
+      {
+        "home_goals": 1,
+        "away_goals": 6,
+        "probability": 0.0017343474601600555
+      },
+      {
+        "home_goals": 1,
+        "away_goals": 7,
+        "probability": 0.0004068014534599213
+      },
+      {
+        "home_goals": 1,
+        "away_goals": 8,
+        "probability": 8.3490475839601e-05
+      },
+      {
+        "home_goals": 1,
+        "away_goals": 9,
+        "probability": 1.5231366001246512e-05
+      },
+      {
+        "home_goals": 1,
+        "away_goals": 10,
+        "probability": 2.500824880177532e-06
+      },
+      {
+        "home_goals": 1,
+        "away_goals": 11,
+        "probability": 3.732802596481223e-07
+      },
+      {
+        "home_goals": 1,
+        "away_goals": 12,
+        "probability": 5.1073803915045906e-08
+      },
+      {
+        "home_goals": 2,
+        "away_goals": 0,
+        "probability": 0.04933708311196754
+      },
+      {
+        "home_goals": 2,
+        "away_goals": 1,
+        "probability": 0.08100613231386973
+      },
+      {
+        "home_goals": 2,
+        "away_goals": 2,
+        "probability": 0.06650163587458262
+      },
+      {
+        "home_goals": 2,
+        "away_goals": 3,
+        "probability": 0.03639615460930041
+      },
+      {
+        "home_goals": 2,
+        "away_goals": 4,
+        "probability": 0.014939633284085888
+      },
+      {
+        "home_goals": 2,
+        "away_goals": 5,
+        "probability": 0.00490585107265005
+      },
+      {
+        "home_goals": 2,
+        "away_goals": 6,
+        "probability": 0.0013424791118455642
+      },
+      {
+        "home_goals": 2,
+        "away_goals": 7,
+        "probability": 0.00031488641491017057
+      },
+      {
+        "home_goals": 2,
+        "away_goals": 8,
+        "probability": 6.462616195855432e-05
+      },
+      {
+        "home_goals": 2,
+        "away_goals": 9,
+        "probability": 1.178990437110053e-05
+      },
+      {
+        "home_goals": 2,
+        "away_goals": 10,
+        "probability": 1.935774255818492e-06
+      },
+      {
+        "home_goals": 2,
+        "away_goals": 11,
+        "probability": 2.889391906484797e-07
+      },
+      {
+        "home_goals": 2,
+        "away_goals": 12,
+        "probability": 3.9533897614793817e-08
+      },
+      {
+        "home_goals": 3,
+        "away_goals": 0,
+        "probability": 0.02545972093776892
+      },
+      {
+        "home_goals": 3,
+        "away_goals": 1,
+        "probability": 0.04180209677735975
+      },
+      {
+        "home_goals": 3,
+        "away_goals": 2,
+        "probability": 0.03431725153733911
+      },
+      {
+        "home_goals": 3,
+        "away_goals": 3,
+        "probability": 0.01878173335577492
+      },
+      {
+        "home_goals": 3,
+        "away_goals": 4,
+        "probability": 0.007709391604327911
+      },
+      {
+        "home_goals": 3,
+        "away_goals": 5,
+        "probability": 0.00253159675022676
+      },
+      {
+        "home_goals": 3,
+        "away_goals": 6,
+        "probability": 0.0006927678208053853
+      },
+      {
+        "home_goals": 3,
+        "away_goals": 7,
+        "probability": 0.00016249278929833657
+      },
+      {
+        "home_goals": 3,
+        "away_goals": 8,
+        "probability": 3.3349439102627857e-05
+      },
+      {
+        "home_goals": 3,
+        "away_goals": 9,
+        "probability": 6.084017461875259e-06
+      },
+      {
+        "home_goals": 3,
+        "away_goals": 10,
+        "probability": 9.989295929759044e-07
+      },
+      {
+        "home_goals": 3,
+        "away_goals": 11,
+        "probability": 1.4910308226370819e-07
+      },
+      {
+        "home_goals": 3,
+        "away_goals": 12,
+        "probability": 2.0400922336059832e-08
+      },
+      {
+        "home_goals": 4,
+        "away_goals": 0,
+        "probability": 0.00985360325353078
+      },
+      {
+        "home_goals": 4,
+        "away_goals": 1,
+        "probability": 0.01617854641127485
+      },
+      {
+        "home_goals": 4,
+        "away_goals": 2,
+        "probability": 0.013281708084196753
+      },
+      {
+        "home_goals": 4,
+        "away_goals": 3,
+        "probability": 0.007269040746902591
+      },
+      {
+        "home_goals": 4,
+        "away_goals": 4,
+        "probability": 0.002983743866668059
+      },
+      {
+        "home_goals": 4,
+        "away_goals": 5,
+        "probability": 0.000979796677097764
+      },
+      {
+        "home_goals": 4,
+        "away_goals": 6,
+        "probability": 0.00026811995582020585
+      },
+      {
+        "home_goals": 4,
+        "away_goals": 7,
+        "probability": 6.288912126016772e-05
+      },
+      {
+        "home_goals": 4,
+        "away_goals": 8,
+        "probability": 1.2907138395126388e-05
+      },
+      {
+        "home_goals": 4,
+        "away_goals": 9,
+        "probability": 2.3546799434057587e-06
+      },
+      {
+        "home_goals": 4,
+        "away_goals": 10,
+        "probability": 3.866128741730864e-07
+      },
+      {
+        "home_goals": 4,
+        "away_goals": 11,
+        "probability": 5.77069410971278e-08
+      },
+      {
+        "home_goals": 4,
+        "away_goals": 12,
+        "probability": 7.89571084447416e-09
+      },
+      {
+        "home_goals": 5,
+        "away_goals": 0,
+        "probability": 0.003050889593497667
+      },
+      {
+        "home_goals": 5,
+        "away_goals": 1,
+        "probability": 0.005009229376714654
+      },
+      {
+        "home_goals": 5,
+        "away_goals": 2,
+        "probability": 0.0041123053095759735
+      },
+      {
+        "home_goals": 5,
+        "away_goals": 3,
+        "probability": 0.0022506529031894058
+      },
+      {
+        "home_goals": 5,
+        "away_goals": 4,
+        "probability": 0.0009238319098364577
+      },
+      {
+        "home_goals": 5,
+        "away_goals": 5,
+        "probability": 0.00030336633300412645
+      },
+      {
+        "home_goals": 5,
+        "away_goals": 6,
+        "probability": 8.301576204905652e-05
+      },
+      {
+        "home_goals": 5,
+        "away_goals": 7,
+        "probability": 1.9471837931784784e-05
+      },
+      {
+        "home_goals": 5,
+        "away_goals": 8,
+        "probability": 3.9963303979602705e-06
+      },
+      {
+        "home_goals": 5,
+        "away_goals": 9,
+        "probability": 7.290600555467012e-07
+      },
+      {
+        "home_goals": 5,
+        "away_goals": 10,
+        "probability": 1.19703743308748e-07
+      },
+      {
+        "home_goals": 5,
+        "away_goals": 11,
+        "probability": 1.786732239322955e-08
+      },
+      {
+        "home_goals": 5,
+        "away_goals": 12,
+        "probability": 2.4446835770499746e-09
+      },
+      {
+        "home_goals": 6,
+        "away_goals": 0,
+        "probability": 0.000787184737757151
+      },
+      {
+        "home_goals": 6,
+        "away_goals": 1,
+        "probability": 0.0012924718487613003
+      },
+      {
+        "home_goals": 6,
+        "away_goals": 2,
+        "probability": 0.00106104920466319
+      },
+      {
+        "home_goals": 6,
+        "away_goals": 3,
+        "probability": 0.0005807091869713959
+      },
+      {
+        "home_goals": 6,
+        "away_goals": 4,
+        "probability": 0.0002383653545596113
+      },
+      {
+        "home_goals": 6,
+        "away_goals": 5,
+        "probability": 7.82740049981374e-05
+      },
+      {
+        "home_goals": 6,
+        "away_goals": 6,
+        "probability": 2.141956923566614e-05
+      },
+      {
+        "home_goals": 6,
+        "away_goals": 7,
+        "probability": 5.024086636451884e-06
+      },
+      {
+        "home_goals": 6,
+        "away_goals": 8,
+        "probability": 1.0311255782621594e-06
+      },
+      {
+        "home_goals": 6,
+        "away_goals": 9,
+        "probability": 1.8811069068441617e-07
+      },
+      {
+        "home_goals": 6,
+        "away_goals": 10,
+        "probability": 3.088573247156351e-08
+      },
+      {
+        "home_goals": 6,
+        "away_goals": 11,
+        "probability": 4.610092584967097e-09
+      },
+      {
+        "home_goals": 6,
+        "away_goals": 12,
+        "probability": 6.307726128801225e-10
+      },
+      {
+        "home_goals": 7,
+        "away_goals": 0,
+        "probability": 0.00017409249495485882
+      },
+      {
+        "home_goals": 7,
+        "away_goals": 1,
+        "probability": 0.00028584096974602414
+      },
+      {
+        "home_goals": 7,
+        "away_goals": 2,
+        "probability": 0.0002346599145659126
+      },
+      {
+        "home_goals": 7,
+        "away_goals": 3,
+        "probability": 0.00012842869831432977
+      },
+      {
+        "home_goals": 7,
+        "away_goals": 4,
+        "probability": 5.2716493722067585e-05
+      },
+      {
+        "home_goals": 7,
+        "away_goals": 5,
+        "probability": 1.731095150429451e-05
+      },
+      {
+        "home_goals": 7,
+        "away_goals": 6,
+        "probability": 4.7371170580874e-06
+      },
+      {
+        "home_goals": 7,
+        "away_goals": 7,
+        "probability": 1.111118820597748e-06
+      },
+      {
+        "home_goals": 7,
+        "away_goals": 8,
+        "probability": 2.2804205407093484e-07
+      },
+      {
+        "home_goals": 7,
+        "away_goals": 9,
+        "probability": 4.160225408109322e-08
+      },
+      {
+        "home_goals": 7,
+        "away_goals": 10,
+        "probability": 6.830638307092793e-09
+      },
+      {
+        "home_goals": 7,
+        "away_goals": 11,
+        "probability": 1.0195605702119388e-09
+      },
+      {
+        "home_goals": 7,
+        "away_goals": 12,
+        "probability": 1.3950064407800222e-10
+      },
+      {
+        "home_goals": 8,
+        "away_goals": 0,
+        "probability": 3.368926114499695e-05
+      },
+      {
+        "home_goals": 8,
+        "away_goals": 1,
+        "probability": 5.531410804474899e-05
+      },
+      {
+        "home_goals": 8,
+        "away_goals": 2,
+        "probability": 4.540987906528399e-05
+      },
+      {
+        "home_goals": 8,
+        "away_goals": 3,
+        "probability": 2.4852696591805206e-05
+      },
+      {
+        "home_goals": 8,
+        "away_goals": 4,
+        "probability": 1.0201357181490383e-05
+      },
+      {
+        "home_goals": 8,
+        "away_goals": 5,
+        "probability": 3.3499041187718865e-06
+      },
+      {
+        "home_goals": 8,
+        "away_goals": 6,
+        "probability": 9.166964588893213e-07
+      },
+      {
+        "home_goals": 8,
+        "away_goals": 7,
+        "probability": 2.150165756424173e-07
+      },
+      {
+        "home_goals": 8,
+        "away_goals": 8,
+        "probability": 4.41292332195554e-08
+      },
+      {
+        "home_goals": 8,
+        "away_goals": 9,
+        "probability": 8.050600930969932e-09
+      },
+      {
+        "home_goals": 8,
+        "away_goals": 10,
+        "probability": 1.3218212409118356e-09
+      },
+      {
+        "home_goals": 8,
+        "away_goals": 11,
+        "probability": 1.9729881125500735e-10
+      },
+      {
+        "home_goals": 8,
+        "away_goals": 12,
+        "probability": 2.6995268402912412e-11
+      },
+      {
+        "home_goals": 9,
+        "away_goals": 0,
+        "probability": 5.794959445310145e-06
+      },
+      {
+        "home_goals": 9,
+        "away_goals": 1,
+        "probability": 9.514694059131259e-06
+      },
+      {
+        "home_goals": 9,
+        "away_goals": 2,
+        "probability": 7.811047160315594e-06
+      },
+      {
+        "home_goals": 9,
+        "away_goals": 3,
+        "probability": 4.274963711321899e-06
+      },
+      {
+        "home_goals": 9,
+        "away_goals": 4,
+        "probability": 1.7547565350105427e-06
+      },
+      {
+        "home_goals": 9,
+        "away_goals": 5,
+        "probability": 5.762239317273771e-07
+      },
+      {
+        "home_goals": 9,
+        "away_goals": 6,
+        "probability": 1.5768285270666822e-07
+      },
+      {
+        "home_goals": 9,
+        "away_goals": 7,
+        "probability": 3.6985445615874224e-08
+      },
+      {
+        "home_goals": 9,
+        "away_goals": 8,
+        "probability": 7.59076062129471e-09
+      },
+      {
+        "home_goals": 9,
+        "away_goals": 9,
+        "probability": 1.3848005067417476e-09
+      },
+      {
+        "home_goals": 9,
+        "away_goals": 10,
+        "probability": 2.2736920385596396e-10
+      },
+      {
+        "home_goals": 9,
+        "away_goals": 11,
+        "probability": 3.3937776340947166e-11
+      },
+      {
+        "home_goals": 9,
+        "away_goals": 12,
+        "probability": 4.643511917249972e-12
+      },
+      {
+        "home_goals": 10,
+        "away_goals": 0,
+        "probability": 8.971226571408103e-07
+      },
+      {
+        "home_goals": 10,
+        "away_goals": 1,
+        "probability": 1.4729779727997529e-06
+      },
+      {
+        "home_goals": 10,
+        "away_goals": 2,
+        "probability": 1.2092349307441043e-06
+      },
+      {
+        "home_goals": 10,
+        "away_goals": 3,
+        "probability": 6.618108099074686e-07
+      },
+      {
+        "home_goals": 10,
+        "away_goals": 4,
+        "probability": 2.7165536880467454e-07
+      },
+      {
+        "home_goals": 10,
+        "away_goals": 5,
+        "probability": 8.920572259703239e-08
+      },
+      {
+        "home_goals": 10,
+        "away_goals": 6,
+        "probability": 2.44110180823152e-08
+      },
+      {
+        "home_goals": 10,
+        "away_goals": 7,
+        "probability": 5.725748654428108e-09
+      },
+      {
+        "home_goals": 10,
+        "away_goals": 8,
+        "probability": 1.1751321821254398e-09
+      },
+      {
+        "home_goals": 10,
+        "away_goals": 9,
+        "probability": 2.1438215779465353e-10
+      },
+      {
+        "home_goals": 10,
+        "away_goals": 10,
+        "probability": 3.519922205501062e-11
+      },
+      {
+        "home_goals": 10,
+        "away_goals": 11,
+        "probability": 5.253936352062179e-12
+      },
+      {
+        "home_goals": 10,
+        "away_goals": 12,
+        "probability": 7.188660747297708e-13
+      },
+      {
+        "home_goals": 11,
+        "away_goals": 0,
+        "probability": 1.262584821344939e-07
+      },
+      {
+        "home_goals": 11,
+        "away_goals": 1,
+        "probability": 2.0730271561300035e-07
+      },
+      {
+        "home_goals": 11,
+        "away_goals": 2,
+        "probability": 1.7018427266829888e-07
+      },
+      {
+        "home_goals": 11,
+        "away_goals": 3,
+        "probability": 9.314136439873884e-08
+      },
+      {
+        "home_goals": 11,
+        "away_goals": 4,
+        "probability": 3.823200122743181e-08
+      },
+      {
+        "home_goals": 11,
+        "away_goals": 5,
+        "probability": 1.2554558780967473e-08
+      },
+      {
+        "home_goals": 11,
+        "away_goals": 6,
+        "probability": 3.4355370092353406e-09
+      },
+      {
+        "home_goals": 11,
+        "away_goals": 7,
+        "probability": 8.058255227838319e-10
+      },
+      {
+        "home_goals": 11,
+        "away_goals": 8,
+        "probability": 1.653847491662066e-10
+      },
+      {
+        "home_goals": 11,
+        "away_goals": 9,
+        "probability": 3.017153298316715e-11
+      },
+      {
+        "home_goals": 11,
+        "away_goals": 10,
+        "probability": 4.953838043890905e-12
+      },
+      {
+        "home_goals": 11,
+        "away_goals": 11,
+        "probability": 7.394240060291913e-13
+      },
+      {
+        "home_goals": 11,
+        "away_goals": 12,
+        "probability": 1.0117115951862153e-13
+      },
+      {
+        "home_goals": 12,
+        "away_goals": 0,
+        "probability": 1.6288486866336272e-08
+      },
+      {
+        "home_goals": 12,
+        "away_goals": 1,
+        "probability": 2.674392645573946e-08
+      },
+      {
+        "home_goals": 12,
+        "away_goals": 2,
+        "probability": 2.1955311384638075e-08
+      },
+      {
+        "home_goals": 12,
+        "away_goals": 3,
+        "probability": 1.2016078960187475e-08
+      },
+      {
+        "home_goals": 12,
+        "away_goals": 4,
+        "probability": 4.932274167555844e-09
+      },
+      {
+        "home_goals": 12,
+        "away_goals": 5,
+        "probability": 1.619651704656184e-09
+      },
+      {
+        "home_goals": 12,
+        "away_goals": 6,
+        "probability": 4.432153666644928e-10
+      },
+      {
+        "home_goals": 12,
+        "away_goals": 7,
+        "probability": 1.0395878536256425e-10
+      },
+      {
+        "home_goals": 12,
+        "away_goals": 8,
+        "probability": 2.1336129415974566e-11
+      },
+      {
+        "home_goals": 12,
+        "away_goals": 9,
+        "probability": 3.892400814782848e-12
+      },
+      {
+        "home_goals": 12,
+        "away_goals": 10,
+        "probability": 6.39089941140907e-13
+      },
+      {
+        "home_goals": 12,
+        "away_goals": 11,
+        "probability": 9.539238875080519e-14
+      },
+      {
+        "home_goals": 12,
+        "away_goals": 12,
+        "probability": 1.3051995202315711e-14
+      }
+    ],
+    "probability_state": {
+      "lambda_home": 1.5481086030150757,
+      "lambda_away": 1.6418913969849247,
+      "rho": 0.0
+    },
+    "production_path": {
+      "base_matrix": "risk_engine.dixon_coles_score_matrix(max_goals=12)",
+      "effective_stage": "after_approved_calibration_before_top_score_rows",
+      "top_score_projection": "automatic_model_core._model_rows(matrix)",
+      "calibration": {
+        "compatible": false,
+        "strength": 0.0,
+        "total_goals_applied": false,
+        "dispersion_applied": false,
+        "direction_applied": false
+      }
+    }
+  },
+  "live_ev_profiles": {
+    "active": true,
+    "overlay_primary": false,
+    "contract": {
+      "match_id": "3073078",
+      "market_code": "1",
+      "market_name": "全场独赢",
+      "handicap_line": "",
+      "selection_code": "2",
+      "selection_name": "拜仁",
+      "contract_type": "three_way_selection"
+    },
+    "probability": {
+      "point": 0.402848,
+      "conservative": 0.327848,
+      "confirmed_model_output": true,
+      "source": "recent_form_market_calibrated_poisson_v2",
+      "calibration_status": "market_calibrated_with_uncertainty_haircut_not_holdout_calibrated"
+    },
+    "price": {
+      "max_quote_age_ms": 15000
+    },
+    "execution": {
+      "minimum_conservative_ev": 0.08
+    }
+  },
+  "market": {
+    "official_spf": null,
+    "official_rqspf": null,
+    "official_market_baseline": null,
+    "interpretation": {
+      "money_flow": "没有可核验的交易所成交量；当前只能确认报价形成的两侧未拉开价格压力，不能称为真实资金流。",
+      "bookmaker_behaviour": "Sharp层方向不足；目的推断：当前更像分散调价和平衡风险，尚没有足够证据说明机构在主动表达单边方向。可信度：低。",
+      "market_pressure": "0家公司、0条轨迹：主胜降赔0家/升赔0家，亚洲盘主队加强0家/减弱0家，大小球升盘0家/降盘0家。综合价格压力偏向两侧未拉开。",
+      "model_impact": "市场方向尚未拉开，不改变模型主线，只保留观察。",
+      "purpose": "当前更像分散调价和平衡风险，尚没有足够证据说明机构在主动表达单边方向。",
+      "confidence": "低",
+      "late_market_weight": "normal",
+      "actual_volume_available": false
+    }
+  },
+  "decision_evolution": {
+    "latest": {
+      "kind": "micro_adjustment",
+      "headline": "概率微调：主胜下调1.0个百分点",
+      "summary": "模型已按新盘口重算；最大概率变化为1.0个百分点，未达到1.5个百分点的显著调整阈值，主方向、主维度与唯一比分维持不变。",
+      "changed": false,
+      "probability_delta": {
+        "home": -0.010099,
+        "draw": 0.007736,
+        "away": 0.002364
+      }
+    },
+    "history": [
+      {
+        "captured_at": "2026-11-02T19:47:43.617693+00:00",
+        "headline": "初始判断：客胜；首推比分1-1",
+        "summary": "模型建立初始比赛剧本，主维度为双方进球：是（模型66.6%）。0家公司、0条轨迹：主胜降赔0家/升赔0家，亚洲盘主队加强0家/减弱0家，大小球升盘0家/降盘0家。综合价格压力偏向两侧未拉开。；没有可核验的交易所成交量；当前只能确认报价形成的两侧未拉开价格压力，不能称为真实资金流。；Sharp层方向不足；目的推断：当前更像分散调价和平衡风险，尚没有足够证据说明机构在主动表达单边方向。可信度：低。；市场方向尚未拉开，不改变模型主线，只保留观察。",
+        "changed": true,
+        "score": "1-1",
+        "score_reasoning": "正式唯一比分采用比分矩阵峰值（单格概率9.7%；符合平局主剧本、符合双方进球倾向、净胜球接近亚洲让球中枢-0）。情景选择器建议1-2，当前仅作影子候选，待样本外验证后再决定是否覆盖。",
+        "score_selection_trace": {
+          "method": "matrix_map_with_scenario_challenger_v1",
+          "selected_score": "1-1",
+          "selected_probability": 0.096809,
+          "mathematical_first_score": "1-1",
+          "scenario_selected_score": "1-2",
+          "scenario_selected_probability": 0.083653,
+          "model_outcome_leader": "away",
+          "market_outcome_leader": "away",
+          "total_goal_centre": 3.5,
+          "asian_handicap_median": -0.0,
+          "btts_yes": true,
+          "confidence": "中",
+          "utility_gap_to_second": 0.204333,
+          "main_risk": "裁判公开样本的牌数与红牌率偏高，比分右尾和比赛状态突变风险高于基础泊松假设",
+          "selected_factors": [
+            "符合平局主剧本",
+            "符合双方进球倾向",
+            "净胜球接近亚洲让球中枢-0"
+          ],
+          "candidates": [
+            {
+              "rank": 1,
+              "score": "1-2",
+              "matrix_probability": 0.083653,
+              "scenario_score": 0.978118,
+              "factor_contributions": {
+                "比分矩阵": 0.4753,
+                "模型方向": 0.18,
+                "总进球中枢": 0.1,
+                "双方进球": 0.08,
+                "市场方向": 0.1,
+                "亚洲让球": 0.0429,
+                "比赛剧本": 0.0
+              },
+              "decision": "challenger_selected",
+              "rejection_reason": null
+            },
+            {
+              "rank": 2,
+              "score": "1-3",
+              "matrix_probability": 0.04819,
+              "scenario_score": 0.773785,
+              "factor_contributions": {
+                "比分矩阵": 0.2738,
+                "模型方向": 0.18,
+                "总进球中枢": 0.1,
+                "双方进球": 0.08,
+                "市场方向": 0.1,
+                "亚洲让球": 0.0,
+                "比赛剧本": 0.04
+              },
+              "decision": "rejected",
+              "rejection_reason": "综合情景分低于候选，不按相邻比分算命中"
+            },
+            {
+              "rank": 3,
+              "score": "0-1",
+              "matrix_probability": 0.058256,
+              "scenario_score": 0.583828,
+              "factor_contributions": {
+                "比分矩阵": 0.331,
+                "模型方向": 0.18,
+                "总进球中枢": 0.0,
+                "双方进球": -0.04,
+                "市场方向": 0.1,
+                "亚洲让球": 0.0429,
+                "比赛剧本": -0.03
+              },
+              "decision": "rejected",
+              "rejection_reason": "综合情景分低于候选，不按相邻比分算命中"
+            },
+            {
+              "rank": 4,
+              "score": "1-1",
+              "matrix_probability": 0.096809,
+              "scenario_score": 0.58,
+              "factor_contributions": {
+                "比分矩阵": 0.55,
+                "模型方向": -0.12,
+                "总进球中枢": 0.02,
+                "双方进球": 0.08,
+                "市场方向": -0.05,
+                "亚洲让球": 0.1,
+                "比赛剧本": 0.0
+              },
+              "decision": "matrix_selected",
+              "rejection_reason": null
+            },
+            {
+              "rank": 5,
+              "score": "0-2",
+              "matrix_probability": 0.05034,
+              "scenario_score": 0.545995,
+              "factor_contributions": {
+                "比分矩阵": 0.286,
+                "模型方向": 0.18,
+                "总进球中枢": 0.02,
+                "双方进球": -0.04,
+                "市场方向": 0.1,
+                "亚洲让球": 0.0,
+                "比赛剧本": 0.0
+              },
+              "decision": "rejected",
+              "rejection_reason": "综合情景分低于候选，不按相邻比分算命中"
+            },
+            {
+              "rank": 6,
+              "score": "2-2",
+              "matrix_probability": 0.069507,
+              "scenario_score": 0.544889,
+              "factor_contributions": {
+                "比分矩阵": 0.3949,
+                "模型方向": -0.12,
+                "总进球中枢": 0.1,
+                "双方进球": 0.08,
+                "市场方向": -0.05,
+                "亚洲让球": 0.1,
+                "比赛剧本": 0.04
+              },
+              "decision": "rejected",
+              "rejection_reason": "综合情景分低于候选，不按相邻比分算命中"
+            },
+            {
+              "rank": 7,
+              "score": "2-1",
+              "matrix_probability": 0.080437,
+              "scenario_score": 0.509847,
+              "factor_contributions": {
+                "比分矩阵": 0.457,
+                "模型方向": -0.12,
+                "总进球中枢": 0.1,
+                "双方进球": 0.08,
+                "市场方向": -0.05,
+                "亚洲让球": 0.0429,
+                "比赛剧本": 0.0
+              },
+              "decision": "rejected",
+              "rejection_reason": "综合情景分低于候选，不按相邻比分算命中"
+            },
+            {
+              "rank": 8,
+              "score": "3-1",
+              "matrix_probability": 0.044556,
+              "scenario_score": 0.303139,
+              "factor_contributions": {
+                "比分矩阵": 0.2531,
+                "模型方向": -0.12,
+                "总进球中枢": 0.1,
+                "双方进球": 0.08,
+                "市场方向": -0.05,
+                "亚洲让球": 0.0,
+                "比赛剧本": 0.04
+              },
+              "decision": "rejected",
+              "rejection_reason": "综合情景分低于候选，不按相邻比分算命中"
+            }
+          ],
+          "rule": "比分预测与比分投注分离；只有取得可成交赔率且EV通过，才生成模拟注单。"
+        }
+      },
+      {
+        "captured_at": "2026-11-04T00:05:25.324399+08:00",
+        "headline": "概率微调：主胜下调1.0个百分点",
+        "summary": "模型已按新盘口重算；最大概率变化为1.0个百分点，未达到1.5个百分点的显著调整阈值，主方向、主维度与唯一比分维持不变。",
+        "changed": false,
+        "score": "1-1",
+        "score_reasoning": "正式唯一比分采用比分矩阵峰值（单格概率10.5%；符合平局主剧本、符合双方进球倾向、净胜球接近亚洲让球中枢+0.25）。情景选择器建议1-2，当前仅作影子候选，待样本外验证后再决定是否覆盖。",
+        "score_selection_trace": {
+          "method": "matrix_map_with_scenario_challenger_v1",
+          "selected_score": "1-1",
+          "selected_probability": 0.104652,
+          "mathematical_first_score": "1-1",
+          "scenario_selected_score": "1-2",
+          "scenario_selected_probability": 0.085913,
+          "model_outcome_leader": "away",
+          "market_outcome_leader": "away",
+          "total_goal_centre": 3.0,
+          "asian_handicap_median": 0.25,
+          "btts_yes": true,
+          "confidence": "中",
+          "utility_gap_to_second": 0.301547,
+          "main_risk": "裁判公开样本的牌数与红牌率偏高，比分右尾和比赛状态突变风险高于基础泊松假设",
+          "selected_factors": [
+            "符合平局主剧本",
+            "符合双方进球倾向",
+            "净胜球接近亚洲让球中枢+0.25"
+          ],
+          "candidates": [
+            {
+              "rank": 1,
+              "score": "1-2",
+              "matrix_probability": 0.085913,
+              "scenario_score": 1.008663,
+              "factor_contributions": {
+                "比分矩阵": 0.4515,
+                "模型方向": 0.18,
+                "总进球中枢": 0.14,
+                "双方进球": 0.08,
+                "市场方向": 0.1,
+                "亚洲让球": 0.0571,
+                "比赛剧本": 0.0
+              },
+              "decision": "challenger_selected",
+              "rejection_reason": null
+            },
+            {
+              "rank": 2,
+              "score": "1-3",
+              "matrix_probability": 0.04702,
+              "scenario_score": 0.707116,
+              "factor_contributions": {
+                "比分矩阵": 0.2471,
+                "模型方向": 0.18,
+                "总进球中枢": 0.06,
+                "双方进球": 0.08,
+                "市场方向": 0.1,
+                "亚洲让球": 0.0,
+                "比赛剧本": 0.04
+              },
+              "decision": "rejected",
+              "rejection_reason": "综合情景分低于候选，不按相邻比分算命中"
+            },
+            {
+              "rank": 3,
+              "score": "0-1",
+              "matrix_probability": 0.0676,
+              "scenario_score": 0.622415,
+              "factor_contributions": {
+                "比分矩阵": 0.3553,
+                "模型方向": 0.18,
+                "总进球中枢": 0.0,
+                "双方进球": -0.04,
+                "市场方向": 0.1,
+                "亚洲让球": 0.0571,
+                "比赛剧本": -0.03
+              },
+              "decision": "rejected",
+              "rejection_reason": "综合情景分低于候选，不按相邻比分算命中"
+            },
+            {
+              "rank": 4,
+              "score": "1-1",
+              "matrix_probability": 0.104652,
+              "scenario_score": 0.605714,
+              "factor_contributions": {
+                "比分矩阵": 0.55,
+                "模型方向": -0.12,
+                "总进球中枢": 0.06,
+                "双方进球": 0.08,
+                "市场方向": -0.05,
+                "亚洲让球": 0.0857,
+                "比赛剧本": 0.0
+              },
+              "decision": "matrix_selected",
+              "rejection_reason": null
+            },
+            {
+              "rank": 5,
+              "score": "0-2",
+              "matrix_probability": 0.055496,
+              "scenario_score": 0.591659,
+              "factor_contributions": {
+                "比分矩阵": 0.2917,
+                "模型方向": 0.18,
+                "总进球中枢": 0.06,
+                "双方进球": -0.04,
+                "市场方向": 0.1,
+                "亚洲让球": 0.0,
+                "比赛剧本": 0.0
+              },
+              "decision": "rejected",
+              "rejection_reason": "综合情景分低于候选，不按相邻比分算命中"
+            },
+            {
+              "rank": 6,
+              "score": "2-1",
+              "matrix_probability": 0.081006,
+              "scenario_score": 0.504301,
+              "factor_contributions": {
+                "比分矩阵": 0.4257,
+                "模型方向": -0.12,
+                "总进球中枢": 0.14,
+                "双方进球": 0.08,
+                "市场方向": -0.05,
+                "亚洲让球": 0.0286,
+                "比赛剧本": 0.0
+              },
+              "decision": "rejected",
+              "rejection_reason": "综合情景分低于候选，不按相邻比分算命中"
+            },
+            {
+              "rank": 7,
+              "score": "2-2",
+              "matrix_probability": 0.066502,
+              "scenario_score": 0.445215,
+              "factor_contributions": {
+                "比分矩阵": 0.3495,
+                "模型方向": -0.12,
+                "总进球中枢": 0.06,
+                "双方进球": 0.08,
+                "市场方向": -0.05,
+                "亚洲让球": 0.0857,
+                "比赛剧本": 0.04
+              },
+              "decision": "rejected",
+              "rejection_reason": "综合情景分低于候选，不按相邻比分算命中"
+            },
+            {
+              "rank": 8,
+              "score": "1-0",
+              "matrix_probability": 0.063739,
+              "scenario_score": 0.123551,
+              "factor_contributions": {
+                "比分矩阵": 0.335,
+                "模型方向": -0.12,
+                "总进球中枢": 0.0,
+                "双方进球": -0.04,
+                "市场方向": -0.05,
+                "亚洲让球": 0.0286,
+                "比赛剧本": -0.03
+              },
+              "decision": "rejected",
+              "rejection_reason": "综合情景分低于候选，不按相邻比分算命中"
+            }
+          ],
+          "rule": "比分预测与比分投注分离；只有取得可成交赔率且EV通过，才生成模拟注单。"
+        }
+      }
+    ],
+    "internal_checkpoints_hidden": true
+  }
+}
